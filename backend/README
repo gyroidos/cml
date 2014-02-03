@@ -1,0 +1,53 @@
+Backend implemented in python.
+
+Requires: protobuf-compiler python-protobuf
+
+1. Make sure the device and the computer the script is executed on
+are in the same WLAN. Check if the /data/cml/stunnel-client.conf and
+/data/cml/device.conf on the device match the network situation at hand.
+2. Setup the stunnel
+	The makefile provides the target setup_stunnel which uses the config from
+	the git repo. Adapt this config to the network situation at hand. Make sure
+	that the paths to the cert, key and CA file are correct. The paths are
+	relative to the folder that stunnel is started from. Also check that the ip
+	addresses and ports match your network setup.
+3. Run the testsuites using the targets from the makefile (test_basic, test_log,
+test_wipe). If necessary adapt the ip addresses and ports the backend and the
+file server should bind to by editing the makefile.
+
+When testing the update function certain files need to be placed in the backend
+folder. The files that need to be present and their directory structure is shown here:
+trustme/
+└── operatingsystems
+    └── hammerhead
+        ├── a0os-version_number
+        │   ├── modem.img
+        │   ├── root.img
+        │   └── system.img
+        ├── a0os-version_number.cert
+        ├── a0os-version_number.conf
+        ├── a0os-version_number.sig
+        ├── a1os-version_number
+        │   ├── modem.img
+        │   ├── root.img
+        │   └── system.img
+        ├── a1os-version_number.cert
+        ├── a1os-version_number.conf
+        ├── a1os-version_number.sig
+        ├── a2os-version_number
+        │   ├── modem.img
+        │   ├── root.img
+        │   └── system.img
+        ├── a2os-version_number.cert
+        ├── a2os-version_number.conf
+        └── a2os-version_number.sig
+In order to run the update tests, acquire the files from the developer team at
+Fraunhofer AISEC.
+
+When the files are in place, make sure that stunnel is setup correctly. Then
+start the test with:
+./backend.py 127.0.0.1 8000 127.0.0.1 8888 update --conf conf --sig sig --cert cert
+Replace conf, sig and cert with the actual paths to the files. Do not exit the
+testsuite until all downloads are finished by the device. When the device has
+finished downloading, it will display a notification, instructing the user to
+restart the device in order to install the updates.

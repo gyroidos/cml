@@ -1,0 +1,102 @@
+/*
+ * This file is part of trust|me
+ * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ */
+
+option java_package = "de.fraunhofer.aisec.trustme";
+
+/**
+ * Supported hash algorithms.
+ */
+enum HashAlgo {
+	SHA1 = 1;
+	SHA256 = 2;
+	SHA512 = 3;
+}
+
+
+message DaemonToToken {
+	enum Code {
+		LOCK = 1;	// Locks the token
+		UNLOCK = 2;	// Unlocks the token (need [token_pin])
+
+		//CHANGE_PIN = 3;
+
+		WRAP_KEY = 10;	// Wraps a key ([unwrapped_key])
+		UNWRAP_KEY = 11;	// Unwraps a key ([wrapped_key])
+
+		DERIVE_KEY = 20;	// Derives a key from [pbdfk_salt] and [pbkdf_pass].
+
+		// crypto commands unrelated to actual secure element (FIXME move elsewhere?!)
+		CRYPTO_HASH_FILE = 50;		// compute hash for file [hash_file]
+		CRYPTO_VERIFY_FILE = 60;	// verify certificate and signature on data given in [verify_*_file]
+	}
+
+
+	required Code code = 1;
+
+	optional string token_pin = 2;	// for unlocking the token
+
+	optional bytes unwrapped_key = 10;	// for wrapping a key
+	optional bytes wrapped_key = 11;	// for (un)wrapping a key
+
+	optional string pbkdf_pass = 20;	// for key derivation
+	optional bytes pbkdf_salt = 21;	// for key derivation
+
+	optional HashAlgo hash_algo = 50;	// determines hash algorithm for hashing
+	optional string hash_file = 51;		// the full path to the file to hash
+
+	optional string verify_data_file = 60;	// file with data to verify
+	optional string verify_sig_file = 61;	// file with signature for data file
+	optional string verify_cert_file = 62;	// file with certificate
+}
+
+message TokenToDaemon {
+	enum Code {
+		DERIVED_KEY = 20;		// -> [derived_key]
+		UNLOCK_FAILED = 21;		// unlocking the token failed
+		UNLOCK_SUCCESSFUL = 22;	// unlocking the token succeeded
+		LOCK_FAILED = 23;		// locking the token failed
+		LOCK_SUCCESSFUL = 24;	// locking the token succeeded
+		PASSWD_WRONG = 25;		// wrong password to unlock the token
+		WRAPPED_KEY = 26;	// -> [wrapped_key] 
+		UNWRAPPED_KEY = 27;	// -> [unwrapped key]
+		LOCKED_TILL_REBOOT = 28;
+
+		CRYPTO_HASH_OK = 50;	// hash computed successfully and stored in hash_value
+		CRYPTO_HASH_ERROR = 51;	// some error occurred
+
+		CRYPTO_VERIFY_GOOD = 60;		// signature on data is valid
+		CRYPTO_VERIFY_ERROR = 61;		// some error occurred
+		CRYPTO_VERIFY_BAD_SIGNATURE = 62;	// signature on data is invalid
+		CRYPTO_VERIFY_BAD_CERTIFICATE = 63;	// certificate is invalid
+	}
+	required Code code = 1;
+
+
+	optional bytes unwrapped_key = 10;	// unwrapped key in response to UNWRAP_KEY
+	optional bytes wrapped_key = 11;	// wrapped key in response to WRAP_KEY
+
+	optional bytes derived_key = 20;	// derived key in response to DERIVE_KEY
+
+	optional bytes hash_value = 50;		// hash_value in reponse to CRYPTO_HASH_FILE
+}
+

@@ -1,0 +1,79 @@
+/*
+ * This file is part of trust|me
+ * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ */
+
+option java_package = "de.fraunhofer.aisec.trustme";
+
+message ContainerNotification {
+	enum Code {
+		POST_NOTIFICATION = 1;
+		CANCEL_NOTIFICATION = 2;
+		CANCEL_NOTIFICATION_BY_ID = 3;
+	}
+
+	enum ContainerNotificationPriority {
+		DEFAULT = 1;
+		MIN = 2;
+		LOW = 3;
+		HIGH = 4;
+		MAX = 5;
+	}
+
+	optional Code code = 1;
+	optional int32 id = 2;
+	optional string tag = 3;
+	optional string pkg_name = 4;
+
+	optional string title = 5;
+	optional string text = 6;
+
+	optional bytes original_icon = 7;
+	optional int32 original_icon_width = 8;
+	optional int32 original_icon_height = 9;
+
+	optional bytes custom_notification = 10;
+	optional int32 custom_notification_width = 11;
+	optional int32 custom_notification_height = 12;
+
+	optional ContainerNotificationPriority priority = 13;
+	optional bool no_clear = 14;
+	optional int64 timestamp = 15;
+
+	optional bool is_base = 16;
+	optional string custom_icon = 17;
+}
+
+message ContainerNotificationConfig {
+	enum BroadcastPolicy {
+		NO_RESTRICTIONS = 1;
+		ALLOW_POST = 2;
+		ALLOW_CANCEL = 3;
+		DENY_ALL = 4;
+	}
+
+	optional BroadcastPolicy foreground = 1 [default = ALLOW_CANCEL];
+	optional BroadcastPolicy background = 2 [default = NO_RESTRICTIONS];
+	repeated string disallowed_receivers_post = 3;
+	repeated string disallowed_receivers_cancel = 4;
+	optional bool hide_content = 5 [default = false];
+	optional string hidden_content_text = 6 [default = "Content hidden"];
+}
