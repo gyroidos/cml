@@ -576,9 +576,9 @@ c_service_send_notification_proto(c_service_t *service)
 	message_proto.source_id = container_get_notification_source_id(service->container);
 	message_proto.source_color = container_get_notification_source_color_rgb_string(service->container);
 
-	INFO("Sending container notification from %s to %s with timestamp %llu",
+	INFO("Sending container notification from %s to %s with timestamp %10lld",
 	     message_proto.source_id, container_get_name(service->container),
-	     container_notification->timestamp);
+	     (long long) container_notification->timestamp);
 	int ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
 	container_notification__free_unpacked(container_notification, NULL);
 

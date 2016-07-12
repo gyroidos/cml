@@ -90,7 +90,7 @@ input_device_clone_with_power_inject(int devin)
 	struct uinput_user_dev newdev;
 	memset(&newdev, 0, sizeof(newdev));
 
-	if (ioctl(devin, EVIOCGID, &newdev.id) == -1) {
+	if (ioctl(devin, (int) EVIOCGID, &newdev.id) == -1) {
 		ERROR_ERRNO("Could not read device id from input device");
 		return -1;
 	}
@@ -106,7 +106,7 @@ input_device_clone_with_power_inject(int devin)
 	uint8_t types[EV_MAX / CHAR_BIT + 1] = {0};
 
 	/* Read event types supported by input device into buffer */
-	if (ioctl(devin, EVIOCGBIT(0, sizeof(types)), types) == -1) {
+	if (ioctl(devin, (int) EVIOCGBIT(0, sizeof(types)), types) == -1) {
 		ERROR_ERRNO("Could not read event types information from input device");
 		return -1;
 	}
@@ -138,7 +138,7 @@ input_device_clone_with_power_inject(int devin)
 
 		/* Read the supported event codes for the current event type into buffer */
 		uint8_t codes[KEY_MAX / CHAR_BIT + 1] = {0};
-		if (ioctl(devin, EVIOCGBIT(i, sizeof(codes)), codes) == -1) {
+		if (ioctl(devin, (int) EVIOCGBIT(i, sizeof(codes)), codes) == -1) {
 			ERROR_ERRNO("Could not get event bits");
 			return -1;
 		}
@@ -279,7 +279,7 @@ input_handle(int fd, unsigned events, event_io_t *io, UNUSED void *data)
 	if (n <= 0) {
 		return;
 	} else {
-		DEBUG("%s: n=%d event %d:%d:%d", __func__, n,
+		DEBUG("%s: n=%ld event %d:%d:%d", __func__, n,
 		      event.type, event.code, event.value);
 
 		if (!(event.type == EV_KEY && event.code == KEY_POWER)) {

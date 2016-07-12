@@ -159,7 +159,7 @@ load_crypto_mapping_table(const char *real_blk_name,
 	tgt->next = crypt_params - buffer;
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		if (!ioctl(fd, DM_TABLE_LOAD, io)) {
+		if (!ioctl(fd, (int) DM_TABLE_LOAD, io)) {
 			break;
 		}
 		usleep(500000);
@@ -203,7 +203,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		if (!ioctl(fd, DM_DEV_CREATE, io)) {
+		if (!ioctl(fd, (int) DM_DEV_CREATE, io)) {
 			break;
 		}
 		usleep(500000);
@@ -227,7 +227,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 	/* Resume this device to activate it */
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
-	if (ioctl(fd, DM_DEV_SUSPEND, io)) {
+	if (ioctl(fd, (int) DM_DEV_SUSPEND, io)) {
 		ERROR_ERRNO("Cannot resume the dm-crypt device\n");
 		goto errout;
 	}
@@ -259,7 +259,7 @@ create_device_node(const char *name)
 	struct dm_ioctl *io = (struct dm_ioctl *) buffer;
 
 	ioctl_init(io, DEVMAPPER_BUFFER_SIZE, name, 0);
-	if (ioctl(fd, DM_DEV_STATUS, io)) {
+	if (ioctl(fd, (int) DM_DEV_STATUS, io)) {
 		if (errno != ENXIO) {
 			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
 		}
@@ -313,7 +313,7 @@ cryptfs_delete_blk_dev(const char *name)
 	io = (struct dm_ioctl *)buffer;
 
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
-	if (ioctl(fd, DM_DEV_REMOVE, io) < 0) {
+	if (ioctl(fd, (int) DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		ERROR("Cannot remove dm-crypt device");
 		goto error;
