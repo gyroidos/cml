@@ -25,7 +25,7 @@ LOCAL_PATH:= $(call my-dir)
 
 PLATFORM_VERSION_MAJOR = $(shell echo $(PLATFORM_VERSION) | cut -f1 -d.)
 
-CMLD_COMMON_CFLAGS := -pedantic -Wall -Wextra -Werror -std=c99 \
+CMLD_COMMON_CFLAGS := -pedantic -Wall -Wextra -Werror -std=gnu99 \
 	-DPLATFORM_VERSION_MAJOR=$(PLATFORM_VERSION_MAJOR)
 
 CMLD_COMMON_SRC_FILES := \
@@ -182,9 +182,15 @@ LOCAL_STATIC_LIBRARIES := \
 	libcutils \
 	liblog \
 	libprotobuf-c-text \
+	libext4_utils_static \
+	libsparse_static \
+	libz \
 	libselinux
 
-LOCAL_CFLAGS += $(CMLD_COMMON_CFLAGS)
+LOCAL_C_INCLUDES := \
+	system/extras/ext4_utils
+
+LOCAL_CFLAGS += $(CMLD_COMMON_CFLAGS) -Wno-zero-length-array -Wno-variadic-macros
 
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
 LOCAL_CFLAGS += -DDEBUG_BUILD
