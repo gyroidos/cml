@@ -771,6 +771,10 @@ c_vol_start_child(c_vol_t *vol)
 	DEBUG("Mounting %s", com_mnt);
 	if (mkdir(com_mnt, 0755) < 0 )
 		WARN_ERRNO("Could not mkdir %s", com_mnt);
+	if (is_selinux_enabled()) {
+		if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
+			ERROR_ERRNO("Could not set selabel for dir %s to \"%s\"", com_mnt, ICC_SHARED_DATA_TYPE);
+	}
 	if (mount("/data/cml/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
 		WARN_ERRNO("Could not mount %s", com_mnt);
 	mem_free(com_mnt);
@@ -780,6 +784,10 @@ c_vol_start_child(c_vol_t *vol)
 		DEBUG("Mounting %s", com_mnt);
 		if (mkdir(com_mnt, 0755) < 0 )
 			WARN_ERRNO("Could not mkdir %s", com_mnt);
+		if (is_selinux_enabled()) {
+			if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
+				ERROR_ERRNO("Could not set selabel for dir %s to \"%s\"", com_mnt, ICC_SHARED_DATA_TYPE);
+		}
 		if (mount("/data/cml/tpm2d/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
 			WARN_ERRNO("Could not mount %s", com_mnt);
 		mem_free(com_mnt);
