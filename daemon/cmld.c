@@ -1072,7 +1072,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	bool is_switchable = strcmp(c0os, "idsos") ? true : false;
 
 	container_t *new_a0 = container_new_internal(a0_uuid, "a0", false, a0_ns_net, privileged, a0_os, NULL,
-			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, true, is_switchable, NULL,
+			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, is_switchable, NULL,
 			      cmld_get_device_host_dns(), cmld_container_get_telephony_name());
 
 	/* depending on the storage of the a0 pointer, do ONE of the following: */
