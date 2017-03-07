@@ -637,7 +637,7 @@ tpm2_pcrread_free(tpm2d_pcr_strings_t *pcr_strings)
 }
 
 tpm2d_quote_strings_t *
-tpm2_quote_new(TPMI_DH_PCR pcr_indeces, TPMI_DH_OBJECT sig_key_handle,
+tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
@@ -651,7 +651,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indeces, TPMI_DH_OBJECT sig_key_handle,
 
 	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 
-	if (pcr_indeces > 23) {
+	if (pcr_indices > 23) {
 		ERROR("Exceeded maximum available PCR registers!");
 		return NULL;
 	}
@@ -660,8 +660,8 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indeces, TPMI_DH_OBJECT sig_key_handle,
 	in.PCRselect.pcrSelections[0].pcrSelect[0] = 0;
 	in.PCRselect.pcrSelections[0].pcrSelect[1] = 0;
 	in.PCRselect.pcrSelections[0].pcrSelect[2] = 0;
-	for (size_t i=0; i < pcr_indeces; ++i) {
-		in.PCRselect.pcrSelections[0].pcrSelect[pcr_indeces / 8] |= 1 << (pcr_indeces % 8);
+	for (size_t i=0; i < pcr_indices; ++i) {
+		in.PCRselect.pcrSelections[0].pcrSelect[pcr_indices / 8] |= 1 << (pcr_indices % 8);
 	}
 
 	in.signHandle = sig_key_handle;

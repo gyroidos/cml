@@ -66,6 +66,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 	case CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ: {
 		Pcr **out_pcrs = NULL;
 		int pcr_regs = 0;
+		int pcr_indices = 0;
 		tpm2d_pcr_strings_t** pcr_strings_array = NULL;
 		tpm2d_quote_strings_t *quote_strings = NULL;
 		char *attestation_pub_key = NULL;
@@ -90,6 +91,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 				goto err_att_req;
 				break;
 		}
+		pcr_indices = pcr_regs - 1;
 
 		pcr_strings_array = mem_alloc0(sizeof(tpm2d_pcr_strings_t*) * pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
@@ -99,7 +101,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 			TRACE("PCR%d: %s", i, pcr_strings_array[i]->pcr_str);
 		}
 
-		quote_strings = tpm2_quote_new(pcr_regs,
+		quote_strings = tpm2_quote_new(pcr_indices,
 				control->attestation_key_handle, TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
 		IF_NULL_GOTO_ERROR(quote_strings, err_att_req);
 
