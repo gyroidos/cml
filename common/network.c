@@ -78,7 +78,9 @@ network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *
 {
 	char *net = mem_printf("%s/%i", addr, subnet);
 	const char * const argv[] = {IP_PATH, "addr", action, net, "dev", interface, NULL};
-	return network_fork_and_execvp(IP_PATH, argv);
+	int ret = network_fork_and_execvp(IP_PATH, argv);
+	mem_free(net);
+	return ret;
 }
 
 int
