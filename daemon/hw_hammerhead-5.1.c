@@ -296,8 +296,6 @@ list_t*
 hardware_get_nw_name_list(void) {
 
 	list_t *nw_name_list = NULL;
-	nw_name_list = list_append(nw_name_list, "wlan0");
-	nw_name_list = list_append(nw_name_list, "rmnet0");
-	nw_name_list = list_append(nw_name_list, "p2p0");
+	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
