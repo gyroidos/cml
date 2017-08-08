@@ -32,9 +32,11 @@
 #include <dirent.h>
 #include <linux/if.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <inttypes.h>
+#include <signal.h>
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -42,7 +44,9 @@
 #include "common/list.h"
 #include "common/nl.h"
 #include "common/file.h"
+#include "common/dir.h"
 #include "common/network.h"
+#include "common/proc.h"
 #include "container.h"
 
 /* Offset for ipv4/mac address allocation, e.g. 127.1.(IPV4_SUBNET_OFFS+x).2
@@ -65,6 +69,8 @@
 /* ipv4 addresses for cmld and cont endpoints, where the subnet depends on the container */
 #define IPV4_CMLD_ADDRESS "127.1.%d.1"
 #define IPV4_CONT_ADDRESS "127.1.%d.2"
+#define IPV4_DHCP_RANGE_START "127.1.%d.50"
+#define IPV4_DHCP_RANGE_END "127.1.%d.61"
 
 /* routing */
 #define IP_ROUTE_LOCALNET_PATH "/proc/sys/net/ipv4/conf/%s/route_localnet"
@@ -789,6 +795,44 @@ c_net_setup_loopback()
 }
 
 static int
+c_net_write_dhcp_config(c_net_interface_t *ni)
+{
+	ASSERT(ni);
+
+	int bytes_written = 0;
+
+	char *conf_dir = mem_printf("/data/cml/communication/dnsmasq.d");
+	char *conf_file = mem_printf("%s/%s.conf", conf_dir, ni->veth_cmld_name);
+	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
+	char *ipv4_end  = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
+
+	// create config dir if not created yet
+	if (dir_mkdir_p(conf_dir, 0755) < 0) {
+		DEBUG_ERRNO("Could not mkdir %s", conf_dir);
+		return -1;
+	}
+
+	bytes_written = file_printf(conf_file, "interface=%s\n dhcp-range=%s,%s,1h", ni->veth_cmld_name,
+			ipv4_start, ipv4_end);
+
+	if (chmod(conf_file, 00644) < 0)
+		ERROR_ERRNO("changing of file access rights failed");
+
+	// restart dnsmasq a0's init while restart it
+	proc_killall(-1, "dnsmasq", SIGTERM);
+
+	mem_free(conf_dir);
+	mem_free(conf_file);
+	mem_free(ipv4_start);
+	mem_free(ipv4_end);
+
+	if (bytes_written > 0)
+		return 0;
+
+	return -1;
+}
+
+static int
 c_net_start_pre_clone_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
@@ -848,6 +892,10 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
 	/* Bring veth up */
 	if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
+		goto err;
+
+	/* Write dhcp config for dnsmasq */
+	if (c_net_write_dhcp_config(ni))
 		goto err;
 
 	return 0;
