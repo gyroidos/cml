@@ -277,13 +277,22 @@ container_new_internal(
 		DEBUG("List element in nw_names_list: %s", (char*)(elem->data));
 	}
 
-	container->net = c_net_new(container, ns_net, nw_name_list, adb_port);
+	list_t *nw_mv_name_list = NULL;
+	if (privileged && ns_net) {
+		nw_mv_name_list = hardware_get_nw_mv_name_list();
+		for (list_t* elem = nw_mv_name_list; elem != NULL; elem = elem->next) {
+			DEBUG("List element in nw_names_list: %s", (char*)(elem->data));
+		}
+	}
+
+	container->net = c_net_new(container, ns_net, nw_name_list, nw_mv_name_list, adb_port);
 	if (!container->net) {
 		WARN("Could not initialize net subsystem for container %s (UUID: %s)", container->name,
 		     uuid_string(container->uuid));
 		goto error;
 	}
 	list_delete(nw_name_list);
+	list_delete(nw_mv_name_list);
 
 	container->vol = c_vol_new(container);
 	if (!container->vol) {
@@ -443,9 +452,10 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 		return NULL;
 	}
 	ns_usr = false;
-	ns_net = !guestos_get_feature_vpn(os);
+	ns_net = container_config_has_netns(conf);
 
 	priv = guestos_is_privileged(os);
+	//priv |= !ns_net;
 
 	uint16_t adb_port = container_get_next_adb_port();
 
@@ -2078,23 +2088,23 @@ container_get_dns_server(const container_t *container)
 	return container->dns_server;
 }
 
-void
-container_set_radio_ip(container_t *container, char *ip)
+bool
+container_has_netns(const container_t *container)
 {
 	ASSERT(container);
-	c_properties_set_radio_ip(container->prop, ip);
+	return container->ns_net;
 }
 
-void
-container_set_radio_dns(container_t *container, char *dns)
+char *
+container_get_first_ip_new(container_t *container)
 {
 	ASSERT(container);
-	c_properties_set_radio_dns(container->prop, dns);
+	return c_net_get_ip_new(container->net);
 }
 
-void
-container_set_radio_gateway(container_t *container, char *gateway)
+char *
+container_get_first_subnet_new(container_t *container)
 {
 	ASSERT(container);
-	c_properties_set_radio_gateway(container->prop, gateway);
+	return c_net_get_subnet_new(container->net);
 }

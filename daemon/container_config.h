@@ -178,4 +178,10 @@ container_config_get_feature_list_new(const container_config_t *config);
 const char *
 container_config_get_dns_server(const container_config_t *config);
 
+/**
+ * Indicates whether the container has an own network namespace
+ */
+bool
+container_config_has_netns(const container_config_t *config);
+
 #endif /* C_CONFIG_H */

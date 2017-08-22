@@ -299,3 +299,24 @@ hardware_get_nw_name_list(void) {
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
+
+list_t*
+hardware_get_nw_mv_name_list(void)
+{
+	/*
+	 * this list should start with the first mobile data iface
+	 * which is usually rmnet0
+	 */
+	list_t *nw_name_list = NULL;
+	for (int i=0; i<8; ++i)
+		nw_name_list = list_append(nw_name_list, mem_printf("rmnet%d", i));
+	for (int i=0; i<9; ++i)
+		nw_name_list = list_append(nw_name_list, mem_printf("rev_rmnet%d", i));
+	return nw_name_list;
+}
+
+const char *
+hardware_get_radio_ifname(void)
+{
+	return "rmnet0";
+}

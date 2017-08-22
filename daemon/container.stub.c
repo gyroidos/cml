@@ -123,24 +123,3 @@ container_get_phone_number(container_t *container)
 	ASSERT(container);
 	return container->phone_number;
 }
-
-void
-container_set_radio_ip(container_t *container, char *ip)
-{
-	ASSERT(container);
-	INFO("STUB: c_properties_set_radio_ip(container->prop, ip=%s)", ip);
-}
-
-void
-container_set_radio_dns(container_t *container, char *dns)
-{
-	ASSERT(container);
-	INFO("STUB: c_properties_set_radio_dns(container->prop, dns=%s)", dns);
-}
-
-void
-container_set_radio_gateway(container_t *container, char *gateway)
-{
-	ASSERT(container);
-	INFO("STUB: c_properties_set_radio_gateway(container->prop, gateway=%s)", gateway);
-}

@@ -677,4 +677,19 @@ container_set_radio_gateway(container_t *container, char *gateway);
 const char*
 container_get_dns_server(const container_t *container);
 
+bool
+container_has_netns(const container_t *container);
+
+/**
+ * Returns the ip of the first interface set inside the container
+ */
+char *
+container_get_first_ip_new(container_t *container);
+
+/**
+ * Returns the subnet of the first interface set inside the container
+ */
+char *
+container_get_first_subnet_new(container_t *container);
+
 #endif /* CONTAINER_H */

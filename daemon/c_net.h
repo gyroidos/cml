@@ -42,7 +42,7 @@ typedef struct c_net c_net_t;
  * Creates a new instances of the c_net structure, which should be done by a container
  */
 c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, uint16_t adb_port);
+c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_mv_name_list, uint16_t adb_port);
 
 /**
  * Frees the struct
@@ -74,5 +74,21 @@ c_net_start_child(c_net_t *net);
  */
 void
 c_net_cleanup(c_net_t *net);
+
+/*
+ * return a new string with the containers ip address which is
+ * set on the first network interfcace.
+ * returns NULL if the container has no netns
+ */
+char *
+c_net_get_ip_new(c_net_t* net);
+
+/*
+ * return a new string with the containers subnet which is
+ * set on the first network interfcace.
+ * returns NULL if the container has no netns
+ */
+char *
+c_net_get_subnet_new(c_net_t* net);
 
 #endif /* C_NET_H */

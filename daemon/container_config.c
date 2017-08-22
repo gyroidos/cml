@@ -436,3 +436,11 @@ container_config_get_dns_server(const container_config_t *config)
 	ASSERT(config->cfg);
 	return config->cfg->dns_server;
 }
+
+bool
+container_config_has_netns(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->netns;
+}

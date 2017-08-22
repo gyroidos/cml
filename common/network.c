@@ -21,7 +21,10 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define LOGF_LOG_MIN_PRIO 2
+
 #include "network.h"
+#include "nl.h"
 #include "macro.h"
 #include "mem.h"
 #include "file.h"
@@ -31,9 +34,18 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/capability.h>
+#include <linux/netlink.h>
 
-#define IPTABLES_PATH "/sbin/iptables"
-#define IP_PATH "/sbin/ip"
+//#define IPTABLES_PATH "/sbin/iptables"
+//#define IP_PATH "/sbin/ip"
+
+#define IPTABLES_PATH "iptables"
+#define IP_PATH "ip"
+
+/* routing */
+#define IP_ROUTE_LOCALNET_PATH "/proc/sys/net/ipv4/conf/%s/route_localnet"
+
 #if PLATFORM_VERSION_MAJOR < 5
 #define IP_ROUTING_TABLE "main"
 #else
@@ -42,7 +54,17 @@
 #define IP_ROUTING_TABLE "99"
 #endif
 
+#define IP_ROUTING_TABLE_RADIO "1022"
+
 #define IP_FORWARD_FILE "/proc/sys/net/ipv4/ip_forward"
+
+/* Name of the loopback device */
+#define LOOPBACK_NAME "lo"
+#define LOOPBACK_OLD_PREFIX 8
+#define LOOPBACK_PREFIX 16
+#define LOCALHOST_IP "127.0.0.1"
+
+#define MAX_CAP_NUM (CAP_TO_INDEX(CAP_LAST_CAP) + 1)
 
 static int
 network_fork_and_execvp(const char *path, const char * const *argv)
@@ -54,6 +76,11 @@ network_fork_and_execvp(const char *path, const char * const *argv)
 	if (pid == -1) {    // error
 		ERROR_ERRNO("Could not fork '%s'", path);
 	} else if (pid == 0) {	    // child
+		/* Elevate privileges */
+		if (setresuid(0, 0, 0) == -1) {
+			ERROR_ERRNO("setresuid failed");
+			return -1;
+		}
 		// cast away const from char (!) for compatibility with legacy (not so clever) execv API
 		// see discussion at http://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html#tag_16_111_08
 		execvp(path, (char * const *)argv);
@@ -104,6 +131,29 @@ network_setup_default_route(const char *gateway, bool add)
 	DEBUG("%s default route via %s", add?"Adding":"Deleting", gateway);
 
 	const char * const argv[] = {"ip", "route", add?"replace":"del", "default", "via", gateway, NULL};
+	return network_fork_and_execvp(IP_PATH, argv);
+}
+
+int
+network_setup_default_route_radio(const char *gateway, bool add)
+{
+	ASSERT(gateway);
+	DEBUG("%s default route via %s", add?"Adding":"Deleting", gateway);
+
+	const char * const argv[] = {"ip", "route", add?"replace":"del", "default",
+			"via", gateway, "table", IP_ROUTING_TABLE_RADIO, NULL};
+	return network_fork_and_execvp(IP_PATH, argv);
+}
+
+int
+network_setup_route_radio(const char *net_dst, const char *dev, bool add)
+{
+	ASSERT(net_dst);
+	ASSERT(dev);
+	DEBUG("%s route to %s via %s", add?"Adding":"Deleting", net_dst, dev);
+
+	const char * const argv[] = {"ip", "route", add?"replace":"del", net_dst,
+			"dev", dev, "table", IP_ROUTING_TABLE_RADIO, NULL};
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
@@ -199,8 +249,118 @@ void
 network_enable_ip_forwarding(void)
 {
 	// enable IP forwarding
-	if (file_write(IP_FORWARD_FILE, "1", 1) <= 0)
+	if (file_write(IP_FORWARD_FILE, "1", 1) <= 0) {
 		ERROR_ERRNO("Could not enable IP forwarding.");
+		return;
+	}
 	INFO("IP forwarding enabled!");
+}
+
+/**
+ * This function brings the network interface ifi_name either ip or down,
+ * using either the flag IFF_UP or IFF_DOWN
+ * with a netlink message using the netlink socket.
+ */
+int
+network_set_flag(const char *ifi_name, const uint32_t flag)
+{
+	ASSERT(ifi_name && (flag == IFF_UP || flag == IFF_DOWN));
+
+	DEBUG("Bringing %s interface \"%s\"", flag==IFF_UP?"up":"down", ifi_name);
+
+	nl_sock_t *nl_sock = NULL;
+	unsigned int ifi_index;
+	nl_msg_t *req = NULL;
+
+	/* Get the interface index of the interface name */
+	if (!(ifi_index = if_nametoindex(ifi_name))) {
+		ERROR("net interface name '%s' could not be resolved", ifi_name);
+		return -1;
+	}
+
+	/* Open netlink socket */
+	if (!(nl_sock = nl_sock_routing_new())) {
+		ERROR("failed to allocate netlink socket");
+		return -1;
+	}
+
+	/* Create netlink message */
+	if (!(req = nl_msg_new())) {
+		ERROR("failed to allocate netlink message");
+		nl_sock_free(nl_sock);
+		return -1;
+	}
+
+	/* Prepare the request message */
+	struct ifinfomsg link_req = {
+		.ifi_family = AF_INET,
+		.ifi_index = ifi_index,	/* The index of the interface */
+		.ifi_change = flag,
+		.ifi_flags = flag
+	};
+
+	/* Fill netlink message header */
+	if (nl_msg_set_type(req, RTM_NEWLINK))
+			goto msg_err;
+
+	/* Set appropriate flags for request, creating new object, exclusive access and acknowledgment response */
+	if (nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK))
+		goto msg_err;
+
+	/* Fill link request header of request message */
+	if (nl_msg_set_link_req(req, &link_req))
+		goto msg_err;
+
+	/* Send request message and wait for the response message */
+	if (nl_msg_send_kernel_verify(nl_sock, req))
+		goto msg_err;
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+
+	return 0;
+
+	msg_err:
+		ERROR("failed to create/send netlink message");
+		nl_msg_free(req);
+		nl_sock_free(nl_sock);
+		return -1;
+}
+
+/**
+ * Enable or disable localnet routing for the given interface.
+ */
+static int
+network_route_localnet(const char *interface, bool enable)
+{
+	char *route_localnet_file = mem_printf(IP_ROUTE_LOCALNET_PATH, interface);
+	int error = 0;
+	if (file_write(route_localnet_file, enable?"1":"0", 1) <= 0) {
+		ERROR_ERRNO("Could not %s localnet routing for %s",
+				enable?"enable":"disable", interface);
+		error = -1;
+	}
+	mem_free(route_localnet_file);
+	return error;
+}
+
+/**
+ * Bring up the loopback interface and shrink its subnet.
+ */
+int
+network_setup_loopback()
+{
+	int ret = 0;
+
+	// bring interface up (no additional route necessary)
+	if (network_set_flag(LOOPBACK_NAME, IFF_UP))
+		return -1;
+	(void)network_remove_ip_addr_from_interface(LOCALHOST_IP, LOOPBACK_OLD_PREFIX, LOOPBACK_NAME);
+	ret = network_set_ip_addr_of_interface(LOCALHOST_IP, LOOPBACK_PREFIX, LOOPBACK_NAME);
+
+	// enable localnet routing for all interfaces
+	ret |= network_route_localnet("all", true);
+
+	return ret;
 }
 

@@ -34,6 +34,13 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
+#include <net/if.h>
+
+/* Bionic misses this flag */
+#ifndef IFF_DOWN
+#define IFF_DOWN 0x0
+#endif
+
 /**
  * Set address of an network interface
  */
@@ -53,10 +60,23 @@ int
 network_setup_default_route(const char *gateway, bool add);
 
 /**
+ * Setup (or remove) default gateway in routingtable for radio interface
+ * (usuall this is table with ID 1022 for rmnet0)
+ */
+int
+network_setup_default_route_radio(const char *gateway, bool add);
+
+/**
  * Setup (or remove) local network route.
  */
 int
 network_setup_route(const char *net_dst, const char *dev, bool add);
+
+/**
+ * Setup (or remove) local network route in table for mobile data device.
+ */
+int
+network_setup_route_radio(const char *net_dst, const char *dev, bool add);
 
 /**
  * Add (or remove) simple iptables rule.
@@ -87,6 +107,20 @@ network_delete_link(const char *dev);
  */
 void
 network_enable_ip_forwarding(void);
+
+/**
+ * This function brings the network interface ifi_name either ip or down,
+ * using either the flag IFF_UP or IFF_DOWN
+ * with a netlink message using the netlink socket.
+ */
+int
+network_set_flag(const char *ifi_name, const uint32_t flag);
+
+/**
+ * Bring up the loopback interface and shrink its subnet.
+ */
+int
+network_setup_loopback();
 
 #endif /* NETWORK_H */
 

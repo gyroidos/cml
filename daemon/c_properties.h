@@ -40,15 +40,6 @@ c_properties_set_property(c_properties_t *prop, const char *prop_name, const cha
 void
 c_properties_set_telephony_name(c_properties_t *prop, const char* name);
 
-void
-c_properties_set_radio_dns(c_properties_t *prop, const char* dns);
-
-void
-c_properties_set_radio_gateway(c_properties_t *prop, const char* gateway);
-
-void
-c_properties_set_radio_ip(c_properties_t *prop, const char* ip);
-
 /* Start hooks */
 int
 c_properties_start_child(c_properties_t *prop);

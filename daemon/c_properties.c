@@ -38,9 +38,6 @@
 struct c_properties {
 	const container_t *container;
 	char *telephony_name;
-	char *radio_ip;
-	char *radio_gateway;
-	char *radio_dns;
 };
 
 
@@ -67,13 +64,6 @@ c_properties_free(c_properties_t *prop)
 
 	if (prop->telephony_name)
 		mem_free(prop->telephony_name);
-	if (prop->radio_dns)
-		mem_free(prop->radio_dns);
-	if (prop->radio_gateway)
-		mem_free(prop->radio_gateway);
-	if (prop->radio_ip)
-		mem_free(prop->radio_ip);
-	mem_free(prop);
 }
 
 int
@@ -107,25 +97,11 @@ c_properties_start_child(c_properties_t *prop)
 			container_is_feature_enabled(prop->container, "telephony") ? "1": "0") < 0)
 		goto error;
 
-	if (c_properties_write_prop("ro.trustme.fakesignatures",
-			container_is_feature_enabled(prop->container, "gps") ? "0": "1") < 0)
+	if (c_properties_write_prop("ro.trustme.fakesignatures", "1") < 0 )
 		goto error;
 
 	if (c_properties_write_prop("ro.trustme.customnotification", "0") < 0)
 		goto error;
-
-	if (prop->radio_ip) {
-		if (c_properties_write_prop("ro.trustme.radio.ip", prop->radio_ip) < 0)
-			goto error;
-	}
-	if (prop->radio_gateway) {
-		if (c_properties_write_prop("ro.trustme.radio.gateway", prop->radio_gateway) < 0)
-			goto error;
-	}
-	if (prop->radio_dns) {
-		if (c_properties_write_prop("ro.trustme.radio.dns", prop->radio_dns) < 0)
-			goto error;
-	}
 
 	if (chmod(PROP_PATH_FACTORY, 00644) < 0)
 		ERROR_ERRNO("changing of file access rights failed");
@@ -146,26 +122,3 @@ c_properties_set_telephony_name(c_properties_t *prop, const char* name)
 	prop->telephony_name = mem_strdup(name);
 }
 
-void
-c_properties_set_radio_dns(c_properties_t *prop, const char* dns)
-{
-	if (prop->radio_dns)
-		mem_free(prop->radio_dns);
-	prop->radio_dns = mem_strdup(dns);
-}
-
-void
-c_properties_set_radio_gateway(c_properties_t *prop, const char* gateway)
-{
-	if (prop->radio_gateway)
-		mem_free(prop->radio_gateway);
-	prop->radio_gateway = mem_strdup(gateway);
-}
-
-void
-c_properties_set_radio_ip(c_properties_t *prop, const char* ip)
-{
-	if (prop->radio_ip)
-		mem_free(prop->radio_ip);
-	prop->radio_ip = mem_strdup(ip);
-}

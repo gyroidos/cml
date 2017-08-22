@@ -142,6 +142,27 @@ cmld_container_get_telephony_name()
 }
 
 container_t *
+cmld_container_get_c_root_netns()
+{
+	container_t *found = NULL;
+	container_t *found_a0 = NULL;
+
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *container = l->data;
+		if (!container_has_netns(container)) {
+			if (container == cmld_containers_get_a0()) {
+				found_a0 = container;
+			} else {
+				// first container without netns which is not a0
+				found = container;
+				break;
+			}
+		}
+	}
+	return ((found)? found : found_a0);
+}
+
+container_t *
 cmld_container_get_by_uuid(uuid_t *uuid)
 {
 	ASSERT(uuid);
@@ -511,6 +532,14 @@ cmld_mobile_change_cb(bool active)
 	/* TODO insert stuff that depends on mobile */
 	if (active) {
 		INFO("Global mobile data activated");
+		/* setup route over a0 with rild */
+		container_t *a0 = cmld_containers_get_a0();
+		char* a0_ipaddr = container_get_first_ip_new(a0);
+		char* a0_subnet = container_get_first_subnet_new(a0);
+		network_setup_route_radio(a0_subnet, hardware_get_radio_ifname(), true);
+		network_setup_default_route_radio(a0_ipaddr, true);
+		mem_free(a0_ipaddr);
+		mem_free(a0_subnet);
 	} else {
 		INFO("Global mobile data deactivated");
 	}
@@ -548,14 +577,23 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 	container_state_t state = container_get_state(container);
 	if (state == CONTAINER_STATE_RUNNING) {
 		container_oom_protect_service(container);
+		// enable ipforwarding when the container in root netns has started
+		if (!container_has_netns(container))
+				network_enable_ip_forwarding();
 		container_unregister_observer(container, cb);
 	}
 }
 
 static void
-cmld_connectivity_a0_cb(container_t *a0, UNUSED container_callback_t *cb, UNUSED void *data)
+cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
 {
-	container_connectivity_t conn = container_get_connectivity(a0);
+	container_connectivity_t conn = container_get_connectivity(c_root_netns);
+
+	if (container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) {
+		DEBUG("Container %s stopped, unregistering connectivity c_root_netns callback",
+				container_get_description(c_root_netns));
+		container_unregister_observer(c_root_netns, cb);
+	}
 
 	/* check if anything has changed and return if not */
 	if (cmld_connectivity == conn)
@@ -583,7 +621,7 @@ cmld_connectivity_a0_cb(container_t *a0, UNUSED container_callback_t *cb, UNUSED
 	///* set the connectivity in aX containers to the global state */
 	//for (list_t *l = cmld_containers_list; l; l = l->next) {
 	//	container_t *container = l->data;
-	//	if (container != a0) {
+	//	if (container != c_root_netns) {
 	//		container_set_connectivity(container, conn);
 	//	}
 	//}
@@ -607,9 +645,9 @@ cmld_connectivity_a0_cb(container_t *a0, UNUSED container_callback_t *cb, UNUSED
 //}
 
 static void
-cmld_airplane_mode_a0_cb(container_t *a0, UNUSED container_callback_t *cb, UNUSED void *data)
+cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
 {
-	bool mode = container_get_airplane_mode(a0);
+	bool mode = container_get_airplane_mode(c_root_netns);
 
 	/* check if anything has changed and return if not */
 	if (cmld_airplane_mode == mode)
@@ -623,7 +661,7 @@ cmld_airplane_mode_a0_cb(container_t *a0, UNUSED container_callback_t *cb, UNUSE
 	/* set the airplane mode in aX containers to the global state */
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
-		if (container != a0) {
+		if (container != c_root_netns) {
 			container_set_airplane_mode(container, mode);
 		}
 	}
@@ -698,14 +736,31 @@ cmld_container_start_finish()
 			ERROR("Could not register container event observer callback for %s",
 					container_get_description(container));
 		}
-		if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
-			ERROR("Could not register airplane mode observer callback for %s",
-					container_get_description(container));
-		}
 		if (!container_register_observer(container, &cmld_container_boot_complete_cb, NULL)) {
 			ERROR("Could not register container boot complete observer callback for %s",
 					container_get_description(container));
 		}
+		// first container without netns 'c_root_netns' is responsible for global cannectivity
+		if (container == cmld_container_get_c_root_netns()) {
+			INFO("Container %s is sharing root network namespace, connect global connectivity observers!",
+				container_get_description(container));
+
+			if (!container_register_observer(container, &cmld_connectivity_rootns_cb, NULL)) {
+				ERROR("Could not register connectivity observer callback for %s",
+						container_get_description(container));
+			}
+
+			if (!container_register_observer(container, &cmld_airplane_mode_rootns_cb, NULL)) {
+				ERROR("Could not register airplane_mode observer callback for %s",
+						container_get_description(container));
+			}
+		} else {
+			if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
+				ERROR("Could not register airplane mode observer callback for %s",
+						container_get_description(container));
+			}
+		}
+
 		if (container_start(container))
 			WARN("Start failed for container %s", container_get_description(container));
 
@@ -943,7 +998,6 @@ cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 		DEBUG("a0 booted successfully!");
 		container_oom_protect_service(container);
 		cmld_rename_logfiles();
-		network_enable_ip_forwarding();
 		container_unregister_observer(container, cb);
 
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
@@ -1067,7 +1121,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	mount_t *a0_mnt = mount_new();
 	guestos_fill_mount(a0_os, a0_mnt);
 	unsigned int a0_ram_limit = 1024;
-	bool a0_ns_net = false;
+	bool a0_ns_net = true;
 	bool privileged = true;
 	bool is_switchable = strcmp(c0os, "idsos") ? true : false;
 
@@ -1117,15 +1171,6 @@ cmld_init_a0(const char *path, const char *c0os)
 		return -1;
 	}
 
-	if (!container_register_observer(new_a0, &cmld_connectivity_a0_cb, NULL)) {
-		WARN("Could not register connectivity observer callback for a0");
-		return -1;
-	}
-
-	if (!container_register_observer(new_a0, &cmld_airplane_mode_a0_cb, NULL)) {
-		WARN("Could not register airplane_mode observer callback for a0");
-		return -1;
-	}
 	if (!container_register_observer(new_a0, &cmld_container_switch_to_container_cb, NULL)) {
 		WARN("Could not register container switch observer callback for a0");
 		return -1;
@@ -1145,6 +1190,9 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	 */
 	if (file_printf("/proc/sys/net/core/wmem_max", "%d", 1024*1024) < 0)
 		WARN("Could not increase max OS send buffer size");
+
+	/* configure loopback interface of root network namespace */
+	network_setup_loopback();
 
 	/* Temporary hardcoded configuration for trustme-x86 on qemu*/
 	DEBUG("Trying to configure eth0");
