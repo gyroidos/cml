@@ -916,6 +916,7 @@ container_start_child(void *data)
 	}
 
 	if ((strcmp(guestos_get_name(container->os), "idsos") != 0 ) &&
+				 (strncmp(guestos_get_name(container->os), "library", strlen("library")) != 0) &&
 				 (strcmp(guestos_get_name(container->os), "debos") != 0)) {
 		if (c_properties_start_child(container->prop) < 0) {
 			ret = CONTAINER_ERROR_PROP;
