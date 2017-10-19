@@ -43,6 +43,7 @@
 
 #define WORK_PATH "/tmp/trustx-converter"
 #define IMAGE_NAME_ROOT "root.img"
+#define MIN_INIT "/sbin/mini_init"
 
 int
 write_guestos_config(docker_config_t *config, const char* root_image_file, const char *image_path, const char* image_name, const char *image_tag)
@@ -113,9 +114,9 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 		init[index] = config->cmd[i];
 	}
 
-	cfg.init_path = init[0];
-	cfg.n_init_param = init_size - 1;
-	cfg.init_param = &init[1];
+	cfg.init_path = MIN_INIT;
+	cfg.n_init_param = init_size;
+	cfg.init_param = &init[0];
 
 	for (list_t *l = config->exposedports_list; l; l = l->next) {
 		docker_exposed_port_t* port = l->data;
@@ -195,6 +196,11 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 		}
 		mem_free(layer_file_name);
 	}
+
+	// will be used to bind mount the init wrapper by cmld
+	char *init_file_path = mem_printf("%s/%s", extracted_image_path, MIN_INIT);
+	file_printf(init_file_path, "dummy init file");
+	mem_free(init_file_path);
 
 	image_file = mem_printf("%s/%s", target_image_path, IMAGE_NAME_ROOT);
 	if (util_squash_image(extracted_image_path, extracted_pseudo_file, image_file) <0){
