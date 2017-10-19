@@ -36,6 +36,8 @@
 
 #include <unistd.h>
 #include <time.h>
+#include <inttypes.h>
+#include <string.h>
 
 #define BUF_SIZE 10*4096
 
@@ -46,22 +48,27 @@ int
 write_guestos_config(docker_config_t *config, const char* root_image_file, const char *image_path, const char* image_name, const char *image_tag)
 {
 	char *out_file;
+	char *out_image_path_versioned;
+	char *image_path_unversioned;
+
 	GuestOSConfig cfg = GUEST_OSCONFIG__INIT;
 
-	cfg.name = mem_strdup(image_name);
+	cfg.name = mem_printf("%s_%s", image_name, image_tag);
+
 	cfg.upstream_version = mem_strdup(image_tag);
-
-	out_file = mem_printf("%s/%s_%s.conf", image_path, cfg.name, image_tag);
-
 	cfg.hardware = "x86";
 	cfg.version = (int)time(NULL);
+
+	image_path_unversioned = mem_printf("%s/%s_%s", image_path, image_name, image_tag);
+	out_image_path_versioned = mem_printf("%s-%"PRId64, image_path_unversioned, cfg.version);
+	out_file = mem_printf("%s.conf", out_image_path_versioned);
 
 	cfg.n_mounts = list_length(config->volumes_list) + 1;
 	INFO("cfg.n_mounts: %d", cfg.n_mounts);
 	cfg.mounts = mem_new(GuestOSMount *, cfg.n_mounts);
 
 	GuestOSMount mount_root = GUEST_OSMOUNT__INIT;
-	mount_root.image_file = mem_strdup(IMAGE_NAME_ROOT);
+	mount_root.image_file = strtok(mem_strdup(IMAGE_NAME_ROOT), ".");
 	mount_root.mount_point = mem_strdup("/");
 	mount_root.fs_type = mem_strdup("squashfs");
 	mount_root.mount_type = GUEST_OSMOUNT__TYPE__SHARED;
@@ -131,6 +138,9 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 
 	protobuf_message_write_to_file(out_file, (ProtobufCMessage *)&cfg);
 
+	if(rename(image_path_unversioned, out_image_path_versioned) < 0)
+		ERROR_ERRNO("Can't rename dir %s", image_path_unversioned);
+
 	// free stuff
 	for (uint32_t j=0; j < cfg.n_mounts; ++j) {
 		mem_free(cfg.mounts[j]->image_file);
@@ -148,6 +158,8 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(description.en);
 	mem_free(description.de);
 	mem_free(init);
+	mem_free(image_path_unversioned);
+	mem_free(out_image_path_versioned);
 	mem_free(out_file);
 
 	return 0;
@@ -287,6 +299,12 @@ main(UNUSED int argc, char **argv)
 		return -1;
 	}
 	docker_config_t *config = docker_parse_config_new(buf);
+
+	// replace the slashes in docker image name to be compatible with trustme
+	// guestos names, e.g. library/debian -> library_debian
+	char *strp = image_name;
+	while ((strp = strchr(strp, '/')) != NULL )
+		*strp++ = '_';
 
 	char *trustx_image_path = mem_printf("%s/%s", WORK_PATH, "trustx_image");
 	if (dir_mkdir_p(trustx_image_path, 0755) < 0) {
