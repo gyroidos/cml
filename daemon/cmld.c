@@ -791,7 +791,10 @@ cmld_container_suspend_timeout_cb(UNUSED event_timer_t *timer, UNUSED void *data
 int
 cmld_container_start(container_t *container, const char *key, bool no_switch)
 {
-	ASSERT(container);
+	if (!container) {
+		WARN("Container does not exists!");
+		return -1;
+	}
 
 	// i think we should never support a thing like "background-starting" since it
 	// introduces so many problems...
