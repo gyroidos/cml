@@ -50,8 +50,11 @@ enum mount_type {
 	MOUNT_TYPE_SHARED_DATA = 7, /**< image file that contains data and can
 				      be mounted to multiple containers with
 				      different OSs */
-	MOUNT_TYPE_OVERLAY_RO = 8, /**< image file that contains ifeatures e.g. 
+	MOUNT_TYPE_OVERLAY_RO = 8, /**< image file that contains features e.g. 
 				      gps, camera ... as overly for system */
+	MOUNT_TYPE_SHARED_RW = 9,  /**< image file is shared by all containers of the operating
+				      system type and an individual writable tmpfs is mounted
+				      as overlay to each container */
 };
 
 mount_t *

@@ -71,7 +71,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mount_root.image_file = strtok(mem_strdup(IMAGE_NAME_ROOT), ".");
 	mount_root.mount_point = mem_strdup("/");
 	mount_root.fs_type = mem_strdup("squashfs");
-	mount_root.mount_type = GUEST_OSMOUNT__TYPE__SHARED;
+	mount_root.mount_type = GUEST_OSMOUNT__TYPE__SHARED_RW;
 
 	// add image_sha1 and image_sha256 values
 	mount_root.has_image_size = true;
