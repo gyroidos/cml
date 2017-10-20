@@ -161,6 +161,17 @@ docker_parse_config_new(const char *raw_file_buffer)
 		}
 	}
 
+	cJSON *jenv = cJSON_GetObjectItem(jconfig, "Env");
+	if (cJSON_IsArray(jenv)) {
+		config->env_size = cJSON_GetArraySize(jenv);
+		config->env = mem_alloc0(config->env_size*sizeof(char*));
+		for (int i=0; i < config->env_size; ++i) {
+			cJSON *item = cJSON_GetArrayItem(jenv, i);
+			if (item && item->type == cJSON_String)
+				config->env[i] = mem_strdup(item->valuestring);
+		}
+	}
+
 	cJSON *jcmd = cJSON_GetObjectItem(jconfig, "Cmd");
 	if (cJSON_IsArray(jcmd)) {
 		config->cmd_size = cJSON_GetArraySize(jcmd);
@@ -216,6 +227,12 @@ docker_config_free(docker_config_t* cfg)
 		mem_free(l->data);
 	}
 	list_delete(cfg->exposedports_list);
+
+	if (cfg->env) {
+		for (int i=0; i < cfg->env_size; ++i)
+			mem_free(cfg->env[i]);
+		mem_free(cfg->env);
+	}
 
 	if (cfg->cmd) {
 		for (int i=0; i < cfg->cmd_size; ++i)

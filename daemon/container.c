@@ -128,6 +128,7 @@ struct container {
 	int exit_status; /* if the container's init exited, here we store its exit status */
 
 	char **init_argv; /* command line parameters for init */
+	char **init_env; /* environment variables passed to init */
 
 	list_t *observer_list; /* list of function callbacks to be called when the state changes */
 	event_timer_t *stop_timer; /* timer to handle container stop timeout */
@@ -315,6 +316,7 @@ container_new_internal(
 
 	// construct an argv buffer for execve
 	container->init_argv = guestos_get_init_argv_new(os);
+	container->init_env = guestos_get_init_env_new(os);
 
 	container->feature_enabled_list = feature_enabled;
 	for (list_t* elem = container->feature_enabled_list; elem != NULL; elem = elem->next) {
@@ -485,6 +487,12 @@ container_free(container_t *container) {
 			mem_free(*arg);
 		}
 		mem_free(container->init_argv);
+	}
+	if (container->init_env) {
+		for (char **arg = container->init_env; *arg; arg++) {
+			mem_free(*arg);
+		}
+		mem_free(container->init_env);
 	}
 
 	for (list_t *l = container->feature_enabled_list; l; l = l->next) {
@@ -975,6 +983,10 @@ container_start_child(void *data)
 	for (char **arg = container->init_argv; *arg; arg++) {
 		DEBUG("\t%s", *arg);
 	}
+	DEBUG("init_env:");
+	for (char **arg = container->init_env; *arg; arg++) {
+		DEBUG("\t%s", *arg);
+	}
 
 	if (setcon("u:r:init:s0") < 0) {
 		WARN_ERRNO("Could not set security context init");
@@ -996,7 +1008,7 @@ container_start_child(void *data)
 		WARN("Closing all file descriptors failed, continuing anyway...");
 	}
 
-	execve(guestos_get_init(container->os), container->init_argv, NULL);
+	execve(guestos_get_init(container->os), container->init_argv, container->init_env);
 	WARN("Could not run exec for container %s", uuid_string(container->uuid));
 
 	return CONTAINER_ERROR;
