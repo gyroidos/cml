@@ -101,13 +101,25 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 		i++;
 	}
 
-	int init_size = config->entrypoint_size + config->cmd_size;
-	char **init = mem_new(char*, init_size);
+	cfg.n_init_env = config->env_size;
+	cfg.init_env = mem_new(char*, config->env_size);
+	for (int i=0; i < config->env_size; ++i) {
+		INFO("Env[%d]: %s", i, config->env[i]);
+		cfg.init_env[i] = config->env[i];
+	}
 
 	int index = 0;
-	for (; index < config->entrypoint_size; ++index) {
-		INFO("Config Entrypoint[%d]: %s", index, config->entrypoint[index]);
-		init[index] = config->entrypoint[index];
+	int init_size = config->entrypoint_size + config->cmd_size;
+	if (config->entrypoint_size == 1) {
+		init_size++;
+	}
+	char **init = mem_new(char*, init_size);
+	if (config->entrypoint_size == 1) {
+		init[index++] = mem_strdup("/bin/sh");
+	}
+	for (int i=0; i < config->entrypoint_size; ++i, ++index) {
+		INFO("Config Entrypoint[%d]: %s", i, config->entrypoint[i]);
+		init[index] = config->entrypoint[i];
 	}
 	for (int i=0; i < config->cmd_size; ++i, ++index) {
 		INFO("Config Cmd[%d]: %s", i, config->cmd[i]);

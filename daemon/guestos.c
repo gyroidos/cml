@@ -1002,6 +1002,13 @@ guestos_get_init_argv_new(const guestos_t *os)
 	return guestos_config_get_init_argv_new(os->cfg);
 }
 
+char **
+guestos_get_init_env_new(const guestos_t *os)
+{
+	ASSERT(os);
+	return guestos_config_get_init_env_new(os->cfg);
+}
+
 uint32_t
 guestos_get_min_ram_limit(const guestos_t *os)
 {

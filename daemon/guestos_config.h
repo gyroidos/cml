@@ -116,6 +116,12 @@ char **
 guestos_config_get_init_argv_new(const guestos_config_t *cfg);
 
 /**
+ * Constructs and allocates an new env buffer for execve
+ */
+char **
+guestos_config_get_init_env_new(const guestos_config_t *cfg);
+
+/**
  * Returns the minimum RAM configured in the GuestOS config.
  */
 uint32_t

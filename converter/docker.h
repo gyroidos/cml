@@ -54,6 +54,8 @@ typedef struct docker_config {
 	char *domainname;
 	char *user;
 	list_t *exposedports_list;
+	int env_size;
+	char **env;
 	int cmd_size;
 	char **cmd;
 	int entrypoint_size;
