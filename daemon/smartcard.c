@@ -140,7 +140,11 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				}
 				unsigned char key[TOKEN_KEY_LEN];
 				int keylen = hardware_get_random(key, sizeof(key));
-				ASSERT(keylen==sizeof(key));
+				DEBUG("SCD: keylen=%d, sizeof(key)=%d", keylen, sizeof(key));
+				if (keylen != sizeof(key)) {
+					ERROR("Failed to generate key for container, due to RNG Error!");
+					break;
+				}
 				// start container
 				smartcard_start_container_internal(startdata, key, keylen);
 				// wrap key via scd
