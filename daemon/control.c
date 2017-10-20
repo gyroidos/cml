@@ -586,12 +586,8 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 			if (start_params->has_no_switch)
 				no_switch = start_params->no_switch;
 		}
-		if (no_switch) {
-			res = cmld_container_start(container, key, no_switch);
-		} else {
-			// key is asserted to be the user entered passwd/pin
-			res = cmld_container_start_with_smartcard(container, key, no_switch);
-		}
+		// key is asserted to be the user entered passwd/pin
+		res = cmld_container_start_with_smartcard(container, key, no_switch);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:

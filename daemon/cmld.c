@@ -796,6 +796,11 @@ cmld_container_start(container_t *container, const char *key, bool no_switch)
 		return -1;
 	}
 
+	if (key) {
+		DEBUG("Setting container key for startup");
+		container_set_key(container, key);
+	}
+
 	// i think we should never support a thing like "background-starting" since it
 	// introduces so many problems...
 	// If we still want to support this in the future, have a look at container.c where
@@ -822,11 +827,6 @@ cmld_container_start(container_t *container, const char *key, bool no_switch)
 
 	/* set global variable to indicate that the given container should be resumed next */
 	cmld_container_to_resume = container;
-
-	if (key) {
-		DEBUG("Setting container key for startup");
-		container_set_key(container, key);
-	}
 
 	/* unregister foreground observer */
 	if (cmld_foreground_observer) {
