@@ -93,9 +93,15 @@ c_properties_start_child(c_properties_t *prop)
 			container_is_privileged(prop->container) ? "true" : "false" ) < 0)
 		goto error;
 
-	if (c_properties_write_prop("ro.trustme.telephony",
-			container_is_feature_enabled(prop->container, "telephony") ? "1": "0") < 0)
-		goto error;
+	if (container_is_feature_enabled(prop->container, "telephony")) {
+		if (c_properties_write_prop("ro.trustme.telephony", "1" ) < 0)
+			goto error;
+	} else {
+		if (c_properties_write_prop("ro.radio.noril", "yes") < 0)
+			goto error;
+		if (c_properties_write_prop("ro.trustme.telephony", "0" ) < 0)
+			goto error;
+	}
 
 	if (c_properties_write_prop("ro.trustme.fakesignatures", "1") < 0 )
 		goto error;
