@@ -210,10 +210,10 @@ guestos_config_get_init_env_new(const guestos_config_t *cfg)
 	ASSERT(cfg);
 
 	// construct an NULL terminated env buffer for execve
-	char **env = mem_new0(char *, cfg->n_env+1);
+	char **env = mem_new0(char *, cfg->n_init_env+1);
 
-	for (size_t i = 0; i < cfg->n_env; i++) {
-		env[i] = mem_strdup(cfg->env[i]);
+	for (size_t i = 0; i < cfg->n_init_env; i++) {
+		env[i] = mem_strdup(cfg->init_env[i]);
 	}
 	return env;
 }
