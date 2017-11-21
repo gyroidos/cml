@@ -44,11 +44,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#include <selinux/selinux.h>
-
-#include "ext4.h"
-#include "ext4_utils.h"
-
+#define MAKE_EXT4FS "make_ext4fs"
 
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
@@ -124,7 +120,7 @@ c_vol_check_image(c_vol_t *vol, const char *img)
 static int
 c_vol_create_image_empty(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
-	off64_t storage_size, offset;
+	off64_t storage_size;
 	int fd;
 
 	ASSERT(vol);
@@ -150,8 +146,7 @@ c_vol_create_image_empty(c_vol_t *vol, const char *img, const mount_entry_t *mnt
 		return -1;
 	}
 
-	offset = storage_size - 1LLU;
-	if (lseek64(fd, offset, SEEK_SET) < 0) {
+	if (lseek64(fd, storage_size - 1, SEEK_SET) < 0) {
 		ERROR_ERRNO("Could not lseek image file %s", img);
 		close(fd);
 		return -1;
@@ -246,42 +241,35 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 	return 0;
 }
 
-extern struct fs_info info;     /* magic global from ext4_utils */
-extern void reset_ext4fs_info();
-
 static int
 c_vol_format_image(const char *dev, const char *fs)
 {
-	unsigned int nr_sec;
-	int fd, ret = 0;
+	pid_t pid;
 
 	if (strcmp("ext4", fs)) {
 		ERROR("Could not create filesystem of type %s on %s", fs, dev);
 		return -1;
 	}
 
-	if ((fd = open(dev, O_WRONLY, 0644)) < 0) {
-		ERROR_ERRNO("Cannot open block device: %s\n", dev);
+	pid = fork();
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork to create filesystem for %s", dev);
 		return -1;
+	case 0:
+		execlp("/sbin/"MAKE_EXT4FS, MAKE_EXT4FS, dev, (char *) NULL);
+		ERROR_ERRNO("Could not execlp %s", MAKE_EXT4FS);
+		return -1;
+	default:
+		if (waitpid(pid, NULL, 0) != pid) {
+			ERROR_ERRNO("Could not waitpid for %s", MAKE_EXT4FS);
+			return -1;
+		}
+		return 0;
 	}
 
-	if ((ioctl(fd, BLKGETSIZE, &nr_sec)) == -1) {
-		ERROR_ERRNO("Cannot get block device size for %s", dev);
-		close(fd);
-		return -1;
-	}
-
-	/* Format the partition using the calculated length */
-	reset_ext4fs_info();
-	info.len = ((off64_t)nr_sec * 512);
-
-	/* Use make_ext4fs_internal to avoid wiping an already-wiped partition. */
-	ret = make_ext4fs_internal(fd, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL);
-	if (ret)
-		ERROR("make_ext4fs returned %d.", ret);
-
-	close(fd);
-	return ret;
+	return 0;
 }
 
 /**
