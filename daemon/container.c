@@ -59,6 +59,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <time.h>
 
 #include <selinux/selinux.h>
 #include <selinux/label.h>
@@ -160,6 +161,7 @@ struct container {
 	list_t *feature_enabled_list;
 
 	char *dns_server;
+	time_t time_started;
 };
 
 struct container_callback {
@@ -335,6 +337,8 @@ container_new_internal(
 	}
 
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
+
+	container->time_started = -1;
 
 	return container;
 
@@ -809,6 +813,7 @@ container_cleanup(container_t *container)
 	}
 
 	container_set_state(container, CONTAINER_STATE_STOPPED);
+	container->time_started = -1;
 }
 
 void
@@ -1120,6 +1125,8 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		WARN_ERRNO("write to sync socket failed");
 		goto error;
 	}
+
+	container->time_started = time(NULL);
 
 	/* Call all c_<module>_start_post_exec hooks */
 	/* Currently, there are none.. */
@@ -2124,4 +2131,11 @@ container_get_first_subnet_new(container_t *container)
 {
 	ASSERT(container);
 	return c_net_get_subnet_new(container->net);
+}
+
+time_t
+container_get_uptime(const container_t *container)
+{
+	time_t uptime = time(NULL) - container->time_started;
+	return (uptime < 0) ? 0 : uptime;
 }

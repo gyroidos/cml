@@ -692,4 +692,7 @@ container_get_first_ip_new(container_t *container);
 char *
 container_get_first_subnet_new(container_t *container);
 
+time_t
+container_get_uptime(const container_t *container);
+
 #endif /* CONTAINER_H */

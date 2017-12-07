@@ -256,6 +256,7 @@ control_container_status_new(const container_t *container)
 	c_status->has_foreground = true;
 	c_status->foreground = (cmld_containers_get_foreground() == container);
 	c_status->state = control_container_state_to_proto(container_get_state(container));
+	c_status->uptime = container_get_uptime(container);
 	return c_status;
 }
 
