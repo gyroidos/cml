@@ -677,4 +677,7 @@ container_set_radio_gateway(container_t *container, char *gateway);
 const char*
 container_get_dns_server(const container_t *container);
 
+time_t
+container_get_uptime(const container_t *container);
+
 #endif /* CONTAINER_H */
