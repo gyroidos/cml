@@ -162,6 +162,7 @@ struct container {
 
 	char *dns_server;
 	time_t time_started;
+	time_t time_created;
 };
 
 struct container_callback {
@@ -191,6 +192,34 @@ container_get_next_adb_port(void)
 {
 	static uint16_t next_free_adb_port = ADB_FWD_PORT_BASE + 1;
 	return next_free_adb_port++;
+}
+/*
+ * if we create the container for the first time, we store its creation time
+ * in a file, otherwise this functions reads the creation time from that file
+ */
+static time_t
+container_get_creation_time_from_file(container_t *container)
+{
+	time_t ret = -1;
+	char *file_name_created =
+		mem_printf("%s.created", container_get_images_dir(container));
+	if (!file_exists(file_name_created)) {
+		ret = time(NULL);
+		if (file_write(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
+			WARN("Failed to store creation time of container %s",
+				uuid_string(container_get_uuid(container)));
+		}
+	} else {
+		if (file_read(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
+			WARN("Failed to get creation time of container %s",
+				uuid_string(container_get_uuid(container)));
+		}
+	}
+	INFO("container %s was created at %s",
+		uuid_string(container_get_uuid(container)), ctime(&ret));
+
+	mem_free(file_name_created);
+	return ret;
 }
 
 container_t *
@@ -339,6 +368,7 @@ container_new_internal(
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
 
 	container->time_started = -1;
+	container->time_created = container_get_creation_time_from_file(container);
 
 	return container;
 
@@ -1158,6 +1188,7 @@ error:
 	close(fd);
 	container_kill(container);
 }
+
 
 int
 container_start(container_t *container)//, const char *key)
@@ -2136,6 +2167,17 @@ container_get_first_subnet_new(container_t *container)
 time_t
 container_get_uptime(const container_t *container)
 {
+	if (container->time_started < 0)
+		return 0;
+
 	time_t uptime = time(NULL) - container->time_started;
 	return (uptime < 0) ? 0 : uptime;
+}
+
+time_t
+container_get_creation_time(const container_t *container)
+{
+	if (container->time_created < 0)
+		return 0;
+	return container->time_created;
 }
