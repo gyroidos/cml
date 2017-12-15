@@ -96,5 +96,6 @@ message ContainerStatus {
 	optional bool foreground = 3 [default = false];
 	required ContainerState state = 4;
 	required uint64 uptime = 5;
+	required uint64 created = 6;
 	/* TBD more state values */
 }
