@@ -57,7 +57,7 @@ service_set_hostname(int fd)
 
 	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *) &msg);
 	if (msg_size < 0)
-		WARN("Could not send ireqest for hostname!, error: %d\n", msg_size);
+		WARN("Could not send ireqest for hostname!, error: %zd\n", msg_size);
 
 	resp = (CmldToServiceMessage *) protobuf_recv_message(fd, &cmld_to_service_message__descriptor);
 
@@ -101,7 +101,7 @@ service_set_dnsserver(int fd)
 
 	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *) &msg);
 	if (msg_size < 0)
-		WARN("Could not send reqest for dns_server!, error: %d\n", msg_size);
+		WARN("Could not send reqest for dns_server!, error: %zd\n", msg_size);
 
 	resp = (CmldToServiceMessage *) protobuf_recv_message(fd, &cmld_to_service_message__descriptor);
 
@@ -192,7 +192,7 @@ main(int argc, char **argv)
 
 	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) &msg);
 	if (msg_size < 0)
-		WARN("Could not send boot complete msg!, error: %d\n", msg_size);
+		WARN("Could not send boot complete msg!, error: %zd\n", msg_size);
 
 	fsync(sock);
 

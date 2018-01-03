@@ -345,7 +345,7 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 	DEBUG("Sending message on socket with fd %d to kernel", nl->fd);
 
 	TRACE("Message for transmission:");
-	TRACE("nl_msg{size:%lu,nlmsghdr:nlmsg_len: %u, nlmsg_type: %u,nlmsg_flags: %u, "
+	TRACE("nl_msg{size:%zu,nlmsghdr:nlmsg_len: %u, nlmsg_type: %u,nlmsg_flags: %u, "
 		"nlmsg_seq: %u, nlmsg_pid: %d", msg->size, msg->nlmsghdr.nlmsg_len,
 		msg->nlmsghdr.nlmsg_type, msg->nlmsghdr.nlmsg_flags,
 		msg->nlmsghdr.nlmsg_seq, msg->nlmsghdr.nlmsg_pid);

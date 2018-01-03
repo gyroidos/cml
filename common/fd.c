@@ -49,7 +49,7 @@ fd_write(int fd, const char *buf, size_t len)
 
 		remain -= ret;
 		buf += ret;
-		TRACE("Writing to fd %d: Wrote %d bytes, %lu bytes remaining.", fd, ret, remain);
+		TRACE("Writing to fd %d: Wrote %d bytes, %zu bytes remaining.", fd, ret, remain);
 
 		if (ret == 0)
 			break;
@@ -78,7 +78,7 @@ fd_read(int fd, char *buf, size_t len)
 
 		remain -= ret;
 		buf += ret;
-		TRACE("Reading from fd %d: Read %d bytes, %lu bytes remaining.", fd, ret, remain);
+		TRACE("Reading from fd %d: Read %d bytes, %zu bytes remaining.", fd, ret, remain);
 
 		if (ret == 0)
 			break;

@@ -279,7 +279,7 @@ input_handle(int fd, unsigned events, event_io_t *io, UNUSED void *data)
 	if (n <= 0) {
 		return;
 	} else {
-		DEBUG("%s: n=%ld event %d:%d:%d", __func__, n,
+		DEBUG("%s: n=%zd event %d:%d:%d", __func__, n,
 		      event.type, event.code, event.value);
 
 		if (!(event.type == EV_KEY && event.code == KEY_POWER)) {

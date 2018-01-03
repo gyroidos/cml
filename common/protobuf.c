@@ -49,7 +49,7 @@ protobuf_send_message(int fd, const ProtobufCMessage* message)
 	ssize_t bytes_sent = fd_write(fd, (char *) &(uint32_t){htonl(buflen)}, sizeof(uint32_t));
 	if (-1 == bytes_sent)
 		goto error_write;
-	TRACE("sent protobuf message length (%ld bytes sent, %zu bytes expected, len=%d)",
+	TRACE("sent protobuf message length (%zd bytes sent, %zu bytes expected, len=%d)",
 			bytes_sent, sizeof(uint32_t), buflen);
 	ASSERT((size_t)bytes_sent == sizeof(uint32_t));
 
@@ -69,7 +69,7 @@ protobuf_send_message(int fd, const ProtobufCMessage* message)
 	if (-1 == bytes_sent)
 		goto error_write;
 	fsync(fd); // make sure all data is written so that receiving client unblocks
-	TRACE("sent protobuf message data (%ld bytes sent, %d bytes expected)", bytes_sent, buflen);
+	TRACE("sent protobuf message data (%zd bytes sent, %u bytes expected)", bytes_sent, buflen);
 
 	ASSERT((size_t)bytes_sent == buflen);
 	return bytes_sent;
@@ -94,7 +94,7 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		return NULL;
 	}
 	buflen = ntohl(buflen);
-	TRACE("read protobuf message length (%ld bytes read, %zu bytes expected, len=%d)",
+	TRACE("read protobuf message length (%zd bytes read, %zu bytes expected, len=%d)",
 			bytes_read, sizeof(buflen), buflen);
 	if (((size_t)bytes_read != sizeof(buflen))) {
 		ERROR("Protocol violation closing link!");
@@ -114,10 +114,10 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		mem_free(buf);
 		goto error_read;
 	}
-	TRACE("read protobuf message data (%ld bytes read, %d bytes expected)", bytes_read, buflen);
+	TRACE("read protobuf message data (%zd bytes read, %u bytes expected)", bytes_read, buflen);
 
 	if ((size_t)bytes_read != buflen) {
-		ERROR("Dropped protobuf message (expected length : %ld bytes read != %d bytes expected)",
+		ERROR("Dropped protobuf message (expected length : %zd bytes read != %u bytes expected)",
 			bytes_read, buflen);
 		mem_free(buf);
 		goto error_read;
