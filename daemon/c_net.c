@@ -582,15 +582,21 @@ c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr,
 }
 
 static c_net_interface_t *
-c_net_interface_new(const char *if_name, const char *container_name)
+c_net_interface_new(const char *if_name)
 {
 	ASSERT(if_name);
-	ASSERT(container_name);
 
 	c_net_interface_t *ni = mem_new0(c_net_interface_t, 1);
 	ni->nw_name = mem_printf("%s", if_name);
-	ni->veth_cmld_name = mem_printf("%s_%s", container_name, ni->nw_name);
-	ni->veth_cont_name = mem_printf("c_%s_%s", container_name, ni->nw_name);
+
+	/* Get container offset based on currently started containers */
+	if ((ni->cont_offset = c_net_set_next_offset()) == -1) {
+		WARN_ERRNO("Maximum offset for Network interfaces reached!");
+		return NULL;
+	}
+
+	ni->veth_cmld_name = mem_printf("r_%d", ni->cont_offset);
+	ni->veth_cont_name = mem_printf("c_%d", ni->cont_offset);
 	return ni;
 }
 
@@ -614,11 +620,10 @@ c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_
 		return net;
 	}
 
-	const char *container_name = container_get_name(container);
 	for (list_t *l = nw_name_list; l; l = l->next) {
 		char *if_name = l->data;
 
-		c_net_interface_t *ni = c_net_interface_new(if_name, container_name);
+		c_net_interface_t *ni = c_net_interface_new(if_name);
 		ASSERT(ni);
 		net->interface_list = list_append(net->interface_list, ni);
 
@@ -632,7 +637,7 @@ c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_
 	}
 
 	if (adb_port > 0) {
-		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME, container_name);
+		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME);
 		net->interface_list = list_append(net->interface_list, ni_adb);
 	}
 
@@ -719,11 +724,6 @@ static int
 c_net_start_pre_clone_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
-
-	/* Get container offset based on currently started containers */
-	if ((ni->cont_offset = c_net_set_next_offset()) == -1) {
-		return -1;
-	}
 
 	/* Get root ns ipv4 address */
 	if (c_net_get_next_ipv4_cmld_addr(ni->cont_offset, &ni->ipv4_cmld_addr)) {
