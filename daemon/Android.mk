@@ -94,7 +94,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	guestos_config.c \
 	guestos_mgr.c \
 	hw_$(TRUSTME_HARDWARE)-$(PLATFORM_VERSION).c \
-	hw_qcom_generic.c \
 	display.c \
 	smartcard.c \
 	cmld.c \
@@ -161,7 +160,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	control.c \
 	power.c \
 	hw_$(TRUSTME_HARDWARE)-$(PLATFORM_VERSION).c \
-	hw_qcom_generic.c \
 	display.c \
 	crypto.proto \
 	guestos.c \

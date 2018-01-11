@@ -23,9 +23,9 @@
 
 /**
  *
- * @file hw_hammerhead.c
+ * @file hw_bullhead.c
  *
- * This unit represents the hardware interface device specific implementation for hammerhead (Nexus 5).
+ * This unit represents the hardware interface device specific implementation for bullhead (Nexus 5X).
  */
 
 #include "hardware.h"
@@ -57,113 +57,44 @@
 #define BOOT_BL_BRIGHTNESS 26
 
 /******************************************************************************/
-static const char *hw_hammerhead_devices_whitelist_base[] = {
-	/********/
-	/* MISC */
-	"c 10:37 rwm", // cpu_dma_latency
-	"c 10:39 rwm", // xt_qtaguid
-
-	/* probably radio/audio related */
-	"c 10:41 rwm", // msm_rtac
-	"c 10:42 rwm", // msm_acdb
-
-	/* android stuff */
-	"c 10:43 rwm", // system
-	"c 10:44 rwm", // radio
-	"c 10:45 rwm", // events
-	"c 10:46 rwm", // main
-	"c 10:47 rwm", // ashmem
-	"c 10:48 rwm", // binder
-	"c 10:51 rwm", // alarm
-
-	"c 10:52 rwm", // keychord
-	"c 10:54 rwm", // usb_accessory
-
-	"c 10:63 rwm", // bcm2079x
-	"c 10:86 rwm", // smem_log
-	"c 10:95 rwm", // ion
-
-#ifdef DEBUG_BUILD
-	/* ramdump for debugging */
-	"c 10:38 rwm", // ramdump_smem
-	"c 10:40 rwm", // ramdump_audio-ocmem
-
-	"c 10:88 rwm", // ramdump_venus
-	"c 10:89 rwm", // ramdump_smem-modem
-	"c 10:90 rwm", // ramdump_modem
-	"c 10:93 rwm", // ramdump_adsp
-#endif
-
-	/* qseecom,  kgsl-3d0 kernel graphics support layer. (Adreno stuff), diag */
-	"c 243:0 rwm", // qseecom
-	"c 244:0 rwm", // kgsl-3d0
-	"c 245:0 rwm", // diag
-	"c 247:99 rwm", //ttyHS99 serial  Bluetooth
-
-	"c 250:* rwm", // smdcntl*
-
-	"c 251:* rwm", // media*
-
-	"c 252:* rwm", // rtc*
-
-
-	/*************/
-	/* Block     */
-	//"b 179:0 rwm", // mmcblk0
-
+static const char *hw_bullhead_devices_whitelist_base[] = {
+	"a *:* rwm", // all
 	NULL
 };
 
 /**
  * List of devices allowed additionally in privileged containers.
  */
-static const char *hw_hammerhead_devices_whitelist_priv[] = {
-	"c 1:1 rwm", // /dev/mem
-
-	/* The following are all modem related and therefore currently necessary at least
-	 * for the privileged container */
-	/* It seems they are primarily used by the rmt_storage process */
-	"b 179:12 rwm", // mmcblk0p12 -> modemst1
-	"b 179:13 rwm", // mmcblk0p13 -> modemst2
-	"b 179:21 rwm", // mmcblk0p21 -> fsg
-	"b 179:22 rwm", // mmcblk0p22 -> fsc
-	/* the "ssd" partition does not seem to be strictly necessary, but since it is
-	 * definitely modem-related and we want to exclude sources of problems we still
-	 * allow a0 access to it */
-	"b 179:23 rwm", // mmcblk0p23 -> ssd
-
-	"c 241:* rwm", // uio (used by rmt_storage)
-	"c 249:0 rwm", // sensors
-	"c 254:0 rwm", // msm_thermal_query
-
+static const char *hw_bullhead_devices_whitelist_priv[] = {
+	"a *:* rwm", // all
 	NULL
 };
 
 /**
  * List of audio devices
  */
-static const char *hw_hammerhead_devices_whitelist_audio[] = {
+static const char *hw_bullhead_devices_whitelist_audio[] = {
 	"c 116:* rwm", // ALSA Audio
 	NULL
 };
 
-static char *hw_hammerhead_serial_number = NULL;
-static char *hw_hammerhead_name = NULL;
+static char *hw_bullhead_serial_number = NULL;
+static char *hw_bullhead_name = NULL;
 
 const char *
 hardware_get_name(void)
 {
-	if (hw_hammerhead_name == NULL) {
-		hw_hammerhead_name = mem_alloc0(PROPERTY_VALUE_MAX);
+	if (hw_bullhead_name == NULL) {
+		hw_bullhead_name = mem_alloc0(PROPERTY_VALUE_MAX);
 
-		if (!(property_get("ro.hardware", hw_hammerhead_name, NULL) > 0)) {
+		if (!(property_get("ro.hardware", hw_bullhead_name, NULL) > 0)) {
 			WARN("Failed to read hardware name property");
-			mem_free(hw_hammerhead_name);
-			hw_hammerhead_name = NULL;
+			mem_free(hw_bullhead_name);
+			hw_bullhead_name = NULL;
 		}
 	}
 
-	return hw_hammerhead_name;
+	return hw_bullhead_name;
 }
 
 const char *
@@ -177,35 +108,35 @@ const char *
 hardware_get_model(void)
 {
 	// TODO return the proper "hardware model"
-	return "hammerhead-model";
+	return "bullhead-model";
 }
 
 const char *
 hardware_get_serial_number(void)
 {
-	if (hw_hammerhead_serial_number == NULL) {
-		hw_hammerhead_serial_number = mem_alloc0(PROPERTY_VALUE_MAX);
+	if (hw_bullhead_serial_number == NULL) {
+		hw_bullhead_serial_number = mem_alloc0(PROPERTY_VALUE_MAX);
 
-		if (!(property_get("ro.boot.serialno", hw_hammerhead_serial_number, NULL) > 0)) {
+		if (!(property_get("ro.boot.serialno", hw_bullhead_serial_number, NULL) > 0)) {
 			WARN("Failed to read hardware serialno property");
-			mem_free(hw_hammerhead_serial_number);
-			hw_hammerhead_serial_number = NULL;
+			mem_free(hw_bullhead_serial_number);
+			hw_bullhead_serial_number = NULL;
 		}
 	}
 
-	return hw_hammerhead_serial_number;
+	return hw_bullhead_serial_number;
 }
 
 const char *
 hardware_get_bootimg_path(void)
 {
-	return "/dev/block/platform/msm_sdcc.1/by-name/boot";
+	return "/dev/block/platform/soc.0/f9824900.sdhci/by-name/boot";
 }
 
 const char *
 hardware_get_block_by_name_path(void)
 {
-	return "/dev/block/platform/msm_sdcc.1/by-name";
+	return "/dev/block/platform/soc.0/f9824900.sdhci/by-name";
 }
 
 int
@@ -258,25 +189,25 @@ hardware_is_led_on()
 const char *
 hardware_get_powerbutton_input_path(void)
 {
-	return "/dev/input/event0";
+	return "/dev/input/event2";
 }
 
 const char **
 hardware_get_devices_whitelist_base()
 {
-	return hw_hammerhead_devices_whitelist_base;
+	return hw_bullhead_devices_whitelist_base;
 }
 
 const char **
 hardware_get_devices_whitelist_priv()
 {
-	return hw_hammerhead_devices_whitelist_priv;
+	return hw_bullhead_devices_whitelist_priv;
 }
 
 const char **
 hardware_get_devices_whitelist_audio()
 {
-	return hw_hammerhead_devices_whitelist_audio;
+	return hw_bullhead_devices_whitelist_audio;
 }
 
 int
@@ -311,36 +242,33 @@ hardware_get_nw_mv_name_list(void)
 	 * which is usually rmnet0
 	 */
 	list_t *nw_name_list = NULL;
-	for (int i=0; i<8; ++i)
-		nw_name_list = list_append(nw_name_list, mem_printf("rmnet%d", i));
-	for (int i=0; i<9; ++i)
-		nw_name_list = list_append(nw_name_list, mem_printf("rev_rmnet%d", i));
+	nw_name_list = list_append(nw_name_list, "rmnet_ipa0");
 	return nw_name_list;
 }
 
 const char *
 hardware_get_radio_ifname(void)
 {
-	return "rmnet0";
+	return "rmnet_data0";
 }
 
 bool
 hardware_supports_systemv_ipc(void)
 {
-	return true;
+	return false;
 }
 
 const char *
 hardware_get_routing_table_radio(void)
 {
-	return "1022";
+	return "1004";
 }
 
 /*
  * keep this in sync with the corresponding
- * kernel header "include/linux/input.h"
+ * kernel header "include/uapi/linux/input.h"
  */
-#define KEY_POWER_INJECT        0x21d
+#define KEY_POWER_INJECT        0x2a0
 
 int
 hardware_get_key_power_inject(void)
@@ -348,7 +276,7 @@ hardware_get_key_power_inject(void)
 	return KEY_POWER_INJECT;
 }
 
-#define SYSFS_DISPLAY_POWER_STATE_FILE "/sys/devices/mdp.0/power/runtime_status"
+#define SYSFS_DISPLAY_POWER_STATE_FILE "/sys/devices/soc.0/fd900000.qcom,mdss_mdp/power/runtime_status"
 
 /******************************************************************************/
 
