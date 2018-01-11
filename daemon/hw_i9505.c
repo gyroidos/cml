@@ -256,3 +256,9 @@ hardware_get_active_cgroups_subsystems(void)
 {
 	return "cpu,memory,freezer,devices";
 }
+
+bool
+hardware_supports_systemv_ipc(void)
+{
+	return true;
+}

@@ -536,8 +536,10 @@ cmld_mobile_change_cb(bool active)
 		container_t *a0 = cmld_containers_get_a0();
 		char* a0_ipaddr = container_get_first_ip_new(a0);
 		char* a0_subnet = container_get_first_subnet_new(a0);
-		network_setup_route_radio(a0_subnet, hardware_get_radio_ifname(), true);
-		network_setup_default_route_radio(a0_ipaddr, true);
+		network_setup_route_table(hardware_get_routing_table_radio(),
+				a0_subnet, hardware_get_radio_ifname(), true);
+		network_setup_default_route_table(hardware_get_routing_table_radio(),
+				a0_ipaddr, true);
 		mem_free(a0_ipaddr);
 		mem_free(a0_subnet);
 	} else {

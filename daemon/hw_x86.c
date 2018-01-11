@@ -165,3 +165,9 @@ hardware_get_nw_name_list(void) {
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
+
+bool
+hardware_supports_systemv_ipc(void)
+{
+	return true;
+}

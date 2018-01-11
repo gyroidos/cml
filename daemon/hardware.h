@@ -217,5 +217,14 @@ hardware_get_nw_mv_name_list(void);
 const char *
 hardware_get_radio_ifname(void);
 
+bool
+hardware_supports_systemv_ipc(void);
+
+const char *
+hardware_get_routing_table_radio(void);
+
+int
+hardware_get_key_power_inject(void);
+
 #endif /* HARDWARE_H */
 

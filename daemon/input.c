@@ -39,8 +39,6 @@
 /* define the time a power button press must last to be a switch-to-a0 button press (in ms) */
 #define PB_SWITCH_TIMEOUT 500
 
-#define KEY_POWER_INJECT    0x21d
-
 #define UINPUT_PATH "/dev/uinput"
 
 #define CMLD_WAKE_LOCK_PB "PowerButtonPressed"
@@ -155,7 +153,7 @@ input_device_clone_with_power_inject(int devin)
 	}
 
 	/* Add the KEY_POWER_INJECT keybit to the newly created uinput device */
-	if (ioctl(newdev_fd, UI_SET_KEYBIT, KEY_POWER_INJECT)) {
+	if (ioctl(newdev_fd, UI_SET_KEYBIT, hardware_get_key_power_inject())) {
 		ERROR_ERRNO("Could not set KEYBIT for uinput device");
 		return -1;
 	}
@@ -217,7 +215,7 @@ input_inject_power_button(int value) {
 	memset(&event, 0, sizeof(event));
 
 	event.type = EV_KEY;
-	event.code = KEY_POWER_INJECT;
+	event.code = hardware_get_key_power_inject();
 	event.value = value;
 	int n = write(input_inject_fd, &event, sizeof(event));
 	if (n != sizeof(event)) {

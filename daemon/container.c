@@ -102,6 +102,7 @@ struct container {
 	mount_t *mnt;
 	bool ns_net;
 	bool ns_usr;
+	bool ns_ipc;
 	bool privileged;
 	char *config_filename;
 	char *images_dir;
@@ -236,6 +237,7 @@ container_new_internal(
 
 	container->ns_usr = ns_usr;
 	container->ns_net = ns_net;
+	container->ns_ipc = hardware_supports_systemv_ipc() ? true : false;
 	container->privileged = privileged;
 
 	/* Allow config_filename to be NULL for "configless"/"anonymous" containers */
@@ -1187,7 +1189,9 @@ container_start(container_t *container)//, const char *key)
 
 	/* Set namespaces for node */
 	/* set some basic and non-configurable namespaces */
-	clone_flags |= CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWIPC;
+	clone_flags |= CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID;
+	if (container->ns_ipc)
+		clone_flags |= CLONE_NEWIPC;
 	if (container->ns_usr)
 		clone_flags |= CLONE_NEWUSER;
 	if (container->ns_net)

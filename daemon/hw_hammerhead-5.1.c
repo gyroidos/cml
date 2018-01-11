@@ -320,3 +320,27 @@ hardware_get_radio_ifname(void)
 {
 	return "rmnet0";
 }
+
+bool
+hardware_supports_systemv_ipc(void)
+{
+	return true;
+}
+
+const char *
+hardware_get_routing_table_radio(void)
+{
+	return "1022";
+}
+
+/*
+ * keep this in sync with the corresponding
+ * kernel header "include/linux/input.h"
+ */
+#define KEY_POWER_INJECT        0x21d
+
+int
+hardware_get_key_power_inject(void)
+{
+	return KEY_POWER_INJECT;
+}

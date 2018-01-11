@@ -54,8 +54,6 @@
 #define IP_ROUTING_TABLE "99"
 #endif
 
-#define IP_ROUTING_TABLE_RADIO "1022"
-
 #define IP_FORWARD_FILE "/proc/sys/net/ipv4/ip_forward"
 
 /* Name of the loopback device */
@@ -135,25 +133,25 @@ network_setup_default_route(const char *gateway, bool add)
 }
 
 int
-network_setup_default_route_radio(const char *gateway, bool add)
+network_setup_default_route_table(const char *table_id, const char *gateway, bool add)
 {
 	ASSERT(gateway);
 	DEBUG("%s default route via %s", add?"Adding":"Deleting", gateway);
 
 	const char * const argv[] = {"ip", "route", add?"replace":"del", "default",
-			"via", gateway, "table", IP_ROUTING_TABLE_RADIO, NULL};
+			"via", gateway, "table", table_id, NULL};
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
 int
-network_setup_route_radio(const char *net_dst, const char *dev, bool add)
+network_setup_route_table(const char *table_id, const char *net_dst, const char *dev, bool add)
 {
 	ASSERT(net_dst);
 	ASSERT(dev);
 	DEBUG("%s route to %s via %s", add?"Adding":"Deleting", net_dst, dev);
 
 	const char * const argv[] = {"ip", "route", add?"replace":"del", net_dst,
-			"dev", dev, "table", IP_ROUTING_TABLE_RADIO, NULL};
+			"dev", dev, "table", table_id, NULL};
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
@@ -364,3 +362,18 @@ network_setup_loopback()
 	return ret;
 }
 
+int
+network_routing_rules_set_all_main(bool flush)
+{
+	if (flush) {
+		DEBUG("Flushing all ip routing rules!");
+		const char * const argv[] = {"ip", "rule", "flush", NULL};
+		if (network_fork_and_execvp(IP_PATH, argv))
+			WARN("Failed to flush routing rules");
+	}
+
+	DEBUG("Set rule to route all traffic through table %s", IP_ROUTING_TABLE);
+
+	const char * const argv2[] = {"ip", "rule", "add", "from", "all", "lookup", IP_ROUTING_TABLE, NULL};
+	return network_fork_and_execvp(IP_PATH, argv2);
+}

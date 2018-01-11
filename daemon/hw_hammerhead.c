@@ -295,3 +295,21 @@ hardware_get_nw_name_list(void) {
 	nw_name_list = list_append(nw_name_list, "p2p0");
 	return nw_name_list;
 }
+
+bool
+hardware_supports_systemv_ipc(void)
+{
+	return true;
+}
+
+/*
+ * keep this in sync with the corresponding
+ * kernel header "include/linux/input.h"
+ */
+#define KEY_POWER_INJECT        0x21d
+
+int
+hardware_get_key_power_inject(void)
+{
+	return KEY_POWER_INJECT;
+}

@@ -60,11 +60,12 @@ int
 network_setup_default_route(const char *gateway, bool add);
 
 /**
- * Setup (or remove) default gateway in routingtable for radio interface
+ * Setup (or remove) default gateway in routingtable with table_id
+ * e.g. used for radio interface
  * (usuall this is table with ID 1022 for rmnet0)
  */
 int
-network_setup_default_route_radio(const char *gateway, bool add);
+network_setup_default_route_table(const char *table_id, const char *gateway, bool add);
 
 /**
  * Setup (or remove) local network route.
@@ -73,10 +74,10 @@ int
 network_setup_route(const char *net_dst, const char *dev, bool add);
 
 /**
- * Setup (or remove) local network route in table for mobile data device.
+ * Setup (or remove) local network route in table with table_id
  */
 int
-network_setup_route_radio(const char *net_dst, const char *dev, bool add);
+network_setup_route_table(const char *table_id, const char *net_dst, const char *dev, bool add);
 
 /**
  * Add (or remove) simple iptables rule.
@@ -121,6 +122,13 @@ network_set_flag(const char *ifi_name, const uint32_t flag);
  */
 int
 network_setup_loopback();
+
+/*
+ * This functions sets a new rule to do all lookups through routing table main
+ * If paramter flush is set to true it also flushes any other rules before.
+ */
+int
+network_routing_rules_set_all_main(bool flush);
 
 #endif /* NETWORK_H */
 
