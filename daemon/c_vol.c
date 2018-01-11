@@ -44,6 +44,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include <selinux/selinux.h>
+
 #define MAKE_EXT4FS "make_ext4fs"
 
 #define ICC_SHARED_MOUNT "data/trustme-com"
