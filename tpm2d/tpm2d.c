@@ -123,7 +123,7 @@ main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 }
 
 int
-main(int argc, char **argv) {
+main(UNUSED int argc, char **argv) {
 
 	if (file_exists("/dev/log/main"))
 		logf_register(&logf_android_write, logf_android_new(argv[0]));

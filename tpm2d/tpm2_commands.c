@@ -538,7 +538,6 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	TPM_RC rc_del = TPM_RC_SUCCESS;
 	TSS_CONTEXT *tss_context = NULL;
 	PCR_Extend_In in;
-	TPMS_ATTEST tpms_attest;
 
 	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 
@@ -553,7 +552,7 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	in.digests.count = 1;
 
 	// pad and set data
-	in.digests.digests[0].hashAlg = TPM2D_HASH_ALGORITHM;
+	in.digests.digests[0].hashAlg = hash_alg;
 	memset((uint8_t *)&in.digests.digests[0].digest, 0, sizeof(TPMU_HA));
 	memcpy((uint8_t *)&in.digests.digests[0].digest, data, strlen(data));
 

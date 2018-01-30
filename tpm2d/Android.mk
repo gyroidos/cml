@@ -49,8 +49,8 @@ LOCAL_SRC_FILES := \
 
 LOCAL_STATIC_LIBRARIES := \
 	libprotobuf-c-text \
-	libcrypto_static \
 	libtss \
+	openssl_libcrypto_static \
 	libcutils \
 	liblog \
 	libdl-static \
