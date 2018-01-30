@@ -104,10 +104,8 @@ hardware_get_block_by_name_path(void)
 	return NULL;
 }
 
-static uint32_t led_color = 0;
-
 int
-hardware_set_led(uint32_t color, bool should_blink)
+hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
 {
 	return 0;
 }
@@ -166,8 +164,61 @@ hardware_get_nw_name_list(void) {
 	return nw_name_list;
 }
 
+list_t*
+hardware_get_nw_mv_name_list(void)
+{
+	return NULL;
+}
+
+const char *
+hardware_get_radio_ifname(void)
+{
+	return NULL;
+}
+
 bool
 hardware_supports_systemv_ipc(void)
 {
 	return true;
 }
+
+const char *
+hardware_get_routing_table_radio(void)
+{
+	return NULL;
+}
+
+int
+hardware_get_key_power_inject(void)
+{
+	return 0;
+}
+
+int
+hardware_get_random(unsigned char *buf, size_t len)
+{
+	const char *rnd = "/dev/hw_random";
+	const char *sw = "/dev/random";
+	if (!file_exists(rnd)) {
+		if (!file_exists(sw)) {
+			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
+			return -1;
+		}
+		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
+		rnd = sw;
+	}
+	return file_read(rnd, (char*)buf, len);
+}
+
+void
+hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len){}
+
+void
+hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len){}
+
+bool
+hardware_display_power_state(void)
+{
+	return false;
+}
+
