@@ -24,7 +24,11 @@
 #include "scd.h"
 
 #include "control.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/scd/device.pb-c.h"
+#else
+#include "device.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -35,10 +39,9 @@
 #include "common/file.h"
 #include "common/uuid.h"
 #include "common/protobuf.h"
+#include "common/reboot.h"
 #include "ssl_util.h"
 
-#include <cutils/properties.h>
-#include <cutils/android_reboot.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
@@ -116,7 +119,7 @@ provisioning_mode()
 	if (!file_exists(DEVICE_CONF)) {
 		INFO("Going back to bootloader mode, device config does not exist (Proper"
 		    "userdata image needs to be flashed first)");
-		android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");
+		reboot_reboot(REBOOT);
 	}
 
 	if (need_initialization) {
@@ -139,6 +142,7 @@ provisioning_mode()
 				FATAL("Failed to create CSR directory");
 			}
 
+#ifdef ANDROID
 			char *hw_serial = mem_alloc0(PROPERTY_VALUE_MAX);
 			char *hw_name = mem_alloc0(PROPERTY_VALUE_MAX);
 			bool property_read_failure = false;
@@ -156,6 +160,12 @@ provisioning_mode()
 			else
 				common_name = mem_printf("%s %s", "x86", "0000");
 			DEBUG("Using common name %s", common_name);
+#else
+			char *common_name = "common_name";
+			char *hw_serial = "hw_serial";
+			char *hw_name = "hw_unknown"; 
+#endif
+
 
 			// create device uuid and write to device.conf
 			uuid_t *dev_uuid = uuid_new(NULL);
@@ -281,11 +291,12 @@ main(int argc, char **argv) {
 
 	INFO("created control socket.");
 
+#ifdef ANDROID
 	/* trigger start of cmld */
 	if (property_set("trustme.provisioning.mode", "no") != 0) {
 		FATAL("Unable to set property. Cannot trigger CMLD");
 	}
-
+#endif
 
 	event_loop();
 	ssl_free();

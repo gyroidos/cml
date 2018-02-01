@@ -21,7 +21,11 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/control/control.pb-c.h"
+#else
+#include "control.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"

@@ -31,6 +31,10 @@
 #ifndef NL_H_
 #define NL_H_
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <stdint.h>
 #include <sys/socket.h>
 #include <linux/rtnetlink.h>

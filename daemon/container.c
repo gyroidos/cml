@@ -63,7 +63,10 @@
 
 #include <selinux/selinux.h>
 #include <selinux/label.h>
+
+#ifdef ANDROID
 #include <selinux/android.h>
+#endif
 
 #define CLONE_STACK_SIZE 8192
 /* Define some missing clone flags in BIONIC */
@@ -969,9 +972,11 @@ container_start_child(void *data)
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
 	}
+	// FIXME: why does c_properties_start_child lead to ERROR?
 
 	if ((strcmp(guestos_get_name(container->os), "idsos") != 0 ) &&
 				 (strncmp(guestos_get_name(container->os), "library", strlen("library")) != 0) &&
+				 (strcmp(guestos_get_name(container->os), "simae") != 0) &&
 				 (strcmp(guestos_get_name(container->os), "debos") != 0)) {
 		if (c_properties_start_child(container->prop) < 0) {
 			ret = CONTAINER_ERROR_PROP;

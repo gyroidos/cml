@@ -21,6 +21,7 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#include "nl.h"
 #include <sys/uio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -33,7 +34,6 @@
 
 #include "macro.h"
 #include "mem.h"
-#include "nl.h"
 
 /**
  * Default values for message and socket allocation

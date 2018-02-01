@@ -22,7 +22,11 @@
  */
 
 #include "container_config.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/container.pb-c.h"
+#else
+#include "container.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"

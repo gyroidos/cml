@@ -22,8 +22,13 @@
  */
 
 #include "control.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/control.pb-c.h"
 #include "device/fraunhofer/common/cml/daemon/container.pb-c.h"
+#else
+#include "control.pb-c.h"
+#include "container.pb-c.h"
+#endif
 
 #include "container.h"
 #include "guestos_mgr.h"

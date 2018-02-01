@@ -22,7 +22,11 @@
  */
 
 #include "control.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/scd/scd.pb-c.h"
+#else
+#include "scd.pb-c.h"
+#endif
 
 #include "softtoken.h"
 #include "ssl_util.h"

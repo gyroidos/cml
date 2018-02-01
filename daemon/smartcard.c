@@ -22,7 +22,11 @@
  */
 
 #include "smartcard.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/scd.pb-c.h"
+#else
+#include "scd.pb-c.h"
+#endif
 
 #include "cmld.h"
 #include "hardware.h"

@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <linux/loop.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include "common/loopdev.h"
 
@@ -36,20 +37,13 @@
 #define LOOP_CTL_GET_FREE 0x4C82
 #endif
 
-//#ifdef CML_ANDROID
+#ifdef ANDROID
 #define LOOP_DEV_PREFIX "/dev/block/loop"
-//#else
-//#define LOOP_DEV_PREFIX "/dev/loop"
-//#endif
+#else
+#define LOOP_DEV_PREFIX "/dev/loop"
+#endif
 
 #define LOOP_CONTROL "/dev/loop-control"
-
-#if PLATFORM_VERSION_MAJOR < 5
-/* fix missing header information in bionic, might become obsolete in the future */
-enum {
-    LO_FLAGS_AUTOCLEAR  = 4,
-};
-#endif
 
 char *
 loopdev_new(void)
