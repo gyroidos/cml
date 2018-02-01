@@ -834,7 +834,7 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 	if (c_net_move_ifi(ni->veth_cont_name, pid) < 0)
 		return -1;
 
-	if (ni->cont_offset == 0) {
+	if (ni->cont_offset == 0 && hardware_get_radio_ifname()) {
 		/* Rename the rootns first veth to the RADIO_IFACE_NAME name */
 		if (c_net_rename_ifi(ni->veth_cmld_name, hardware_get_radio_ifname()))
 			return -1;
