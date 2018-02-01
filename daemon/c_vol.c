@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _LARGEFILE64_SOURCE
+
 #include "c_vol.h"
 
 #include "common/macro.h"

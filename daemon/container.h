@@ -44,6 +44,7 @@
 
 #include <sys/types.h>
 #include <stdint.h>
+#include <errno.h>
 
 /**
  * Opaque container type.

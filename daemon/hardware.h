@@ -36,6 +36,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "common/list.h"
+#include <stddef.h>
 
 /**
  * Get the unique hardware name, e.g. hammerhead.

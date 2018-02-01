@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 /**
  * A structure to present an operating system partition table for a container.

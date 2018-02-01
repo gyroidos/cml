@@ -32,6 +32,7 @@
 #define DEVICE_H
 
 #include <sys/types.h>
+#include <stdint.h>
 typedef struct device_config device_config_t;
 
 /**

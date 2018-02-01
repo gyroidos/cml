@@ -35,6 +35,7 @@
 #include "common/mem.h"
 #include "common/dir.h"
 #include "common/network.h"
+#include "common/reboot.h"
 #include "display.h"
 #include "hardware.h"
 #include "mount.h"
@@ -52,8 +53,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdbool.h>
-#include <cutils/properties.h>
-#include <cutils/android_reboot.h>
 
 #define CMLD_CONTROL_SOCKET SOCK_PATH(control)
 
@@ -1045,7 +1044,7 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	DEBUG("Device shutdown: last container down; shutdown now");
 
 	#ifndef TRUSTME_DEBUG
-	android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+	reboot_reboot(POWER_OFF);
 	// should never arrive here, but in case the shutdown fails somehow, we exit
 	exit(0);
 	#endif /* TRUSTME_DEBUG */
@@ -1098,7 +1097,7 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 		/* all containers are down, so shut down */
 		DEBUG("Device shutdown: all containers already down; shutdown now");
 
-		android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+		reboot_reboot(POWER_OFF);
 		// should never arrive here, but in case the shutdown fails somehow, we exit
 		exit(0);
 	}
@@ -1117,7 +1116,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	}
 	if (flash_result > 0) {
 		INFO("Flashed %d image(s), rebooting device ...", flash_result);
-		android_reboot(ANDROID_RB_RESTART, 0, 0);
+		reboot_reboot(REBOOT);
 		FATAL("Failed to reboot!");
 	}
 
@@ -1270,7 +1269,7 @@ cmld_init(const char *path)
 	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
 
 	if (mount_debugfs() < 0)
-		FATAL("Could not mount debugfs");
+		WARN("Could not mount debugfs");
 	INFO("mounted debugfs");
 
 	if (power_init() < 0)
@@ -1463,5 +1462,5 @@ cmld_wipe_device() {
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINER_TOKENS_DIR);
 	dir_delete_folder(LOGFILE_DIR, "");
-	android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+	reboot_reboot(POWER_OFF);
 }

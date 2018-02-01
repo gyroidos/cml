@@ -337,10 +337,10 @@ logf_android_new(const char *name)
 	return mem_strdup(name);
 }
 
+#ifdef ANDROID
 void
 logf_android_write(logf_prio_t prio, const char *msg, void *data)
 {
-#ifdef ANDROID
 	int prio_android;
 
 	switch (prio) {
@@ -368,8 +368,12 @@ logf_android_write(logf_prio_t prio, const char *msg, void *data)
 	}
 
 	__android_log_write(prio_android, data, msg);
-#endif
 }
+#else
+void logf_android_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
+{ return; }
+#endif
+
 
 void *
 logf_klog_new(const char *name)
@@ -381,10 +385,10 @@ logf_klog_new(const char *name)
 	return mem_strdup(name);
 }
 
+#ifdef ANDROID
 void
 logf_klog_write(logf_prio_t prio, const char *msg, void *data)
 {
-#ifdef ANDROID
 	int prio_klog;
 
 	switch (prio) {
@@ -408,5 +412,10 @@ logf_klog_write(logf_prio_t prio, const char *msg, void *data)
 	}
 
 	klog_write(prio_klog, "<%u>%s[%u] %s %s\n", prio_klog, (char *) data, getpid(), prio_str(prio), msg);
-#endif
 }
+#else
+void 
+logf_klog_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
+{ return; }
+#endif
+

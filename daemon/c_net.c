@@ -26,16 +26,19 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <sys/socket.h>
-#include <linux/if_arp.h>
 #include <arpa/inet.h>
 #include <dirent.h>
-#include <linux/if.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <inttypes.h>
 #include <signal.h>
+
+#ifdef ANDROID
+#include <linux/if_arp.h>
+#include <linux/if.h>
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"

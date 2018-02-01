@@ -23,7 +23,11 @@
 
 #include "c_notification.h"
 #include "c_notification_config.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/c_notification.pb-c.h"
+#else
+#include "c_notification.pb-c.h"
+#endif
 
 #include <string.h>
 #include <time.h>
