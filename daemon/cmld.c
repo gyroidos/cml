@@ -1126,7 +1126,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	mount_t *a0_mnt = mount_new();
 	guestos_fill_mount(a0_os, a0_mnt);
 	unsigned int a0_ram_limit = 1024;
-	bool a0_ns_net = true;
+	bool a0_ns_net = strcmp(c0os, "idsos") ? true : false;
 	bool privileged = true;
 	bool is_switchable = strcmp(c0os, "idsos") ? true : false;
 
