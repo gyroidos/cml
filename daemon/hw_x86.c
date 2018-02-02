@@ -199,15 +199,18 @@ hardware_get_random(unsigned char *buf, size_t len)
 {
 	const char *rnd = "/dev/hw_random";
 	const char *sw = "/dev/random";
-	if (!file_exists(rnd)) {
+
+	size_t read = file_read(rnd, (char*)buf, len);
+	if (read == len) {
+		return len;
+	} else {
 		if (!file_exists(sw)) {
 			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
 			return -1;
 		}
 		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
-		rnd = sw;
+		return file_read(sw, (char*)buf, len);
 	}
-	return file_read(rnd, (char*)buf, len);
 }
 
 void
