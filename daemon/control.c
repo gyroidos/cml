@@ -582,6 +582,11 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		char *key = NULL;
 		bool no_switch = false;
+		if (NULL == container) {
+			WARN("Container does not exists!");
+			res = -1;
+			break;
+		}
 		ContainerStartParams *start_params = msg->container_start_params;
 		if (start_params) {
 			key = start_params->key;
