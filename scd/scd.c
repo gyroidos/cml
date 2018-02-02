@@ -240,10 +240,6 @@ provisioning_mode()
 		FATAL("Missing certificate chains, user token, or private key for device certificate");
 	}
 
-	if (property_set("trustme.provisioning.mode", "no") != 0) {
-		FATAL("Unable to set property. Cannot trigger CMLD");
-	}
-
 }
 
 static void
@@ -284,6 +280,12 @@ main(int argc, char **argv) {
 	}
 
 	INFO("created control socket.");
+
+	/* trigger start of cmld */
+	if (property_set("trustme.provisioning.mode", "no") != 0) {
+		FATAL("Unable to set property. Cannot trigger CMLD");
+	}
+
 
 	event_loop();
 	ssl_free();
