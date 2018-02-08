@@ -173,6 +173,13 @@ list_t *
 container_config_get_feature_list_new(const container_config_t *config);
 
 /**
+ * Provides the list of network interfaces assigned to the container from the container's config file
+ */
+
+list_t*
+container_config_get_net_ifaces_list_new(const container_config_t *config);
+
+/**
  * Get the dns_server ip addr set for the container.
  */
 const char *
