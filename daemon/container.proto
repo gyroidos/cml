@@ -61,6 +61,9 @@ message ContainerConfig {
 
 	optional string dns_server = 21;
 	optional bool netns = 22 [default = true];
+
+	// a list of network interfaces assigned to this container
+	repeated string net_ifaces = 23;
 }
 
 /**
