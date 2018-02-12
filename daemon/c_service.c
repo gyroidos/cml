@@ -22,8 +22,13 @@
  */
 
 #include "c_service.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/c_service.pb-c.h"
 #include "device/fraunhofer/common/cml/daemon/c_notification.pb-c.h"
+#else
+#include "c_service.pb-c.h"
+#include "c_notification.pb-c.h"
+#endif
 
 #include "container.h"
 

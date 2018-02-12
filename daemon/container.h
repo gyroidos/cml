@@ -44,6 +44,7 @@
 
 #include <sys/types.h>
 #include <stdint.h>
+#include <errno.h>
 
 /**
  * Opaque container type.
@@ -139,7 +140,8 @@ container_new_internal(
 	bool allow_container_switch,
 	list_t *feature_enabled,
 	const char *dns_server,
-	const char *telephony_name
+	const char *telephony_name,
+	list_t *net_ifaces
 );
 
 /**

@@ -22,7 +22,11 @@
  */
 
 #include "container_config.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/container.pb-c.h"
+#else
+#include "container.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -411,6 +415,19 @@ container_config_get_feature_list_new(const container_config_t *config)
 		}
 	}
 	return feature_list;
+}
+
+list_t *
+container_config_get_net_ifaces_list_new(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	list_t *net_ifaces_list = NULL;
+	for (size_t i = 0; i < config->cfg->n_net_ifaces; i++) {
+		net_ifaces_list = list_append(net_ifaces_list, mem_strdup(config->cfg->net_ifaces[i]));
+	}
+	return net_ifaces_list;
 }
 #if 0
 bool

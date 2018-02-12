@@ -63,7 +63,10 @@
 
 #include <selinux/selinux.h>
 #include <selinux/label.h>
+
+#ifdef ANDROID
 #include <selinux/android.h>
+#endif
 
 #define CLONE_STACK_SIZE 8192
 /* Define some missing clone flags in BIONIC */
@@ -240,7 +243,8 @@ container_new_internal(
 	bool allow_container_switch,
 	list_t *feature_enabled,
 	const char *dns_server,
-	const char *telephony_name
+	const char *telephony_name,
+	list_t *net_ifaces
 )
 {
 	container_t *container = mem_new0(container_t, 1);
@@ -319,6 +323,12 @@ container_new_internal(
 		}
 	}
 
+	// network interfaces from container config
+	for (list_t* elem = net_ifaces; elem != NULL; elem = elem->next) {
+                DEBUG("List element in net_ifaces: %s", (char*)(elem->data));
+		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(elem->data));
+        } 
+
 	container->net = c_net_new(container, ns_net, nw_name_list, nw_mv_name_list, adb_port);
 	if (!container->net) {
 		WARN("Could not initialize net subsystem for container %s (UUID: %s)", container->name,
@@ -327,6 +337,7 @@ container_new_internal(
 	}
 	list_delete(nw_name_list);
 	list_delete(nw_mv_name_list);
+	list_delete(net_ifaces);
 
 	container->vol = c_vol_new(container);
 	if (!container->vol) {
@@ -499,10 +510,12 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 
 	list_t *feature_enabled = container_config_get_feature_list_new(conf);
 
+	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
+
 	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
 
 	container_t *c = container_new_internal(uuid, name, ns_usr, ns_net, priv, os, config_filename,
-			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, allow_container_switch, feature_enabled, dns_server, NULL);
+			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, allow_container_switch, feature_enabled, dns_server, NULL, net_ifaces);
 	if (c)
 		container_config_write(conf);
 
@@ -969,9 +982,11 @@ container_start_child(void *data)
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
 	}
+	// FIXME: why does c_properties_start_child lead to ERROR?
 
 	if ((strcmp(guestos_get_name(container->os), "idsos") != 0 ) &&
 				 (strncmp(guestos_get_name(container->os), "library", strlen("library")) != 0) &&
+				 (strcmp(guestos_get_name(container->os), "simae") != 0) &&
 				 (strcmp(guestos_get_name(container->os), "debos") != 0)) {
 		if (c_properties_start_child(container->prop) < 0) {
 			ret = CONTAINER_ERROR_PROP;

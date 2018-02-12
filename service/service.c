@@ -21,7 +21,11 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/service/c_service.pb-c.h"
+#else
+#include "c_service.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -39,7 +43,7 @@
 
 #include "dumb_init.h"
 
-#define SERVICE_SOCKET "/dev/socket/cml-service"
+#define SERVICE_SOCKET SOCK_PATH(service)
 #define LOGFILE_PATH "/var/log/container.log"
 
 static logf_handler_t *service_logfile_handler = NULL;

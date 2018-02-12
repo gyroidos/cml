@@ -33,7 +33,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <fcntl.h>
+#include <errno.h>
+
+#ifdef ANDROID
 #include <cutils/sockets.h>
+#endif
 
 /* Add missing defines from linux/net.h: */
 /* Flags for socket, socketpair, accept4 */
@@ -47,7 +51,11 @@
 /**
  * Macro to get the path for a socket name.
  */
+#ifdef ANDROID
 #define SOCK_PATH(name) ANDROID_SOCKET_DIR"/cml-"#name
+#else
+#define SOCK_PATH(name) "/dev/cml-"#name
+#endif
 
 /**
  * Creates a new UNIX socket of the given type.
