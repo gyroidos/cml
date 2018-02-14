@@ -95,7 +95,6 @@ libcommon:
 cmld: libcommon ${PROTO_SRC} ${SRC_FILES}
 	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -o cmld
 
-
 .PHONY: clean
 clean:
 	rm -f cmld *.o *.pb-c.*
