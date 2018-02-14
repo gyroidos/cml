@@ -50,7 +50,9 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto
 libcommon: 
 	$(MAKE) -C common libcommon
 
-control: ${SRC_FILES} protobuf libcommon
+${SRC_FILES}: protobuf
+
+control: libcommon ${SRC_FILES}
 	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o control
 
 .PHONY: clean

@@ -44,6 +44,7 @@ SRC_FILES := \
 	common/logf.pb-c.c \
 	service.c
 
+${SRC_FILES}: protobuf
 
 .PHONY: all
 all: service
@@ -56,7 +57,7 @@ protobuf: c_service.proto container.proto c_notification.proto control.proto gue
 	protoc-c --c_out=. guestos.proto
 	$(MAKE) -C common protobuf
 
-service: ${SRC_FILES} protobuf
+service: ${SRC_FILES}
 	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
 
