@@ -30,19 +30,23 @@ TRUSTME_HARDWARE := ppc
 .PHONY: all
 all: cmld
 
+PROTO_SRC := \
+	container.pb-c.c \
+	control.pb-c.c \
+	guestos.pb-c.c \
+	common/logf.pb-c.c \
+	device.pb-c.c \
+	scd.pb-c.c \
+	c_notification.pb-c.c \
+	c_service.pb-c.c
+
 SRC_FILES := main.c \
 	cmld.c \
 	container.c \
 	common/uuid.c \
 	control.c \
 	container_config.c \
-	container.pb-c.c \
-	control.pb-c.c \
-	guestos.pb-c.c \
-	common/logf.pb-c.c \
 	device_config.c \
-	device.pb-c.c \
-	scd.pb-c.c \
 	common/file.c \
 	common/dir.c \
 	common/fd.c \
@@ -52,7 +56,6 @@ SRC_FILES := main.c \
 	guestos_config.c \
 	common/protobuf.c \
 	c_notification.c \
-	c_notification.pb-c.c \
 	c_notification_config.c \
 	download.c \
 	smartcard.c \
@@ -60,7 +63,6 @@ SRC_FILES := main.c \
 	c_cgroups.c \
 	c_properties.c \
 	c_service.c \
-	c_service.pb-c.c \
 	display.c \
 	c_net.c \
 	c_vol.c \
@@ -85,12 +87,13 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	protoc-c --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 
+${PROTO_SRC}: protobuf
+
 libcommon:
 	$(MAKE) -C common libcommon
 
-cmld: main.c cmld.c cmld.h protobuf libcommon
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -o cmld
-
+cmld: libcommon ${PROTO_SRC} ${SRC_FILES}
+	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -o cmld
 
 .PHONY: clean
 clean:

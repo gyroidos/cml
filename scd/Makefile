@@ -52,11 +52,12 @@ protobuf: device.proto scd.proto
 	protoc-c --c_out=. scd.proto
 	protoc-c --c_out=. device.proto
 
+${SRC_FILES}: protobuf
 
 libcommon:
 	$(MAKE) -C common libcommon
 
-scd: ${SRC_FILES} protobuf libcommon
+scd: libcommon ${SRC_FILES}
 	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -o scd
 
 
