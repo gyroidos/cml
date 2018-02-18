@@ -29,6 +29,7 @@ CMLD_COMMON_CFLAGS := -pedantic -Wall -Wextra -Werror -std=c99 \
 	-DPLATFORM_VERSION_MAJOR=$(PLATFORM_VERSION_MAJOR)
 
 CMLD_COMMON_SRC_FILES := \
+	common/reboot.c \
 	common/list.c \
 	common/logf.c \
 	common/mem.c

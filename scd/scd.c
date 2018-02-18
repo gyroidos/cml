@@ -25,6 +25,7 @@
 
 #include "control.h"
 #ifdef ANDROID
+#include <cutils/properties.h>
 #include "device/fraunhofer/common/cml/scd/device.pb-c.h"
 #else
 #include "device.pb-c.h"

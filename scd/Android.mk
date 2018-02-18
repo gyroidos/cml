@@ -41,6 +41,7 @@ LOCAL_SRC_FILES := \
 	common/fd.c \
 	common/uuid.c \
 	common/protobuf.c \
+	common/reboot.c \
 	scd.proto \
 	device.proto \
 	control.c \
