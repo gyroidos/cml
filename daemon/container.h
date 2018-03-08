@@ -694,6 +694,18 @@ container_get_first_ip_new(container_t *container);
 char *
 container_get_first_subnet_new(container_t *container);
 
+/**
+ * Adds a network interface to the container. If persistent is true, the config file will be modified accordingly
+ */
+int
+container_add_net_iface(container_t *container, const char *iface, bool persistent);
+
+/**
+ * Removes a network interface from the container. If persistent is true, the config file will be modified accordingly
+ */
+int
+container_remove_net_iface(container_t *container, const char *iface, bool persistent);
+
 time_t
 container_get_uptime(const container_t *container);
 

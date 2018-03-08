@@ -2196,3 +2196,29 @@ container_get_creation_time(const container_t *container)
 		return 0;
 	return container->time_created;
 }
+
+int
+container_add_net_iface(container_t *container, const char *iface, bool persistent){
+	ASSERT(container);
+	pid_t pid = container_get_pid(container);
+	int res = c_net_move_ifi(iface, pid);
+	if ( res || !persistent ) return res;
+	container_config_t *conf = container_config_new(container->config_filename, NULL,0);
+	container_config_append_net_ifaces(conf, iface);
+	container_config_write(conf);
+	container_config_free(conf);
+	return 0;
+}
+
+int
+container_remove_net_iface(container_t *container, const char *iface, bool persistent){
+	ASSERT(container);
+	pid_t pid = container_get_pid(container);
+	int res = c_net_remove_ifi(iface, pid);
+	if ( res || !persistent ) return res;
+	container_config_t *conf = container_config_new(container->config_filename, NULL,0);
+	container_config_remove_net_ifaces(conf, iface);
+	container_config_write(conf);
+	container_config_free(conf);
+	return 0;
+}

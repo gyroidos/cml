@@ -91,4 +91,20 @@ c_net_get_ip_new(c_net_t* net);
 char *
 c_net_get_subnet_new(c_net_t* net);
 
+/**
+ * This function moves the network interface to the corresponding namespace,
+ * specified by the pid (from root namespace to container namespace).
+ * It transmits a netlink message using the netlink socket
+ */
+int
+c_net_move_ifi(const char *ifi_name, const pid_t pid);
+
+
+/**
+ * This function removes the network interface from the corresponding namespace,
+ * specified by the pid
+ */
+int
+c_net_remove_ifi(const char *ifi_name, const pid_t pid);
+
 #endif /* C_NET_H */

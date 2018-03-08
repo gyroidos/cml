@@ -333,7 +333,7 @@ c_net_rename_ifi(const char *old_ifi_name, const char *new_ifi_name)
  * specified by the pid (from root namespace to container namespace).
  * It transmits a netlink message using the netlink socket
  */
-static int
+int
 c_net_move_ifi(const char *ifi_name, const pid_t pid)
 {
 	ASSERT(ifi_name);
@@ -399,6 +399,21 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid)
 		nl_sock_free(nl_sock);
 		return -1;
 }
+
+/**
+ * This function removes the network interface from the corresponding namespace,
+ * specified by the pid
+ */
+int
+c_net_remove_ifi(const char *ifi_name, const pid_t pid)
+{
+	ASSERT(ifi_name);
+	int ret = network_move_link_ns(pid, 1, ifi_name);
+	return ret;
+}
+
+
+
 
 /**
  * This function creates a veth pair veth1/veth2 (in the root namespace)

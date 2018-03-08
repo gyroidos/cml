@@ -191,4 +191,16 @@ container_config_get_dns_server(const container_config_t *config);
 bool
 container_config_has_netns(const container_config_t *config);
 
+
+/**
+ * Adds the given interface name to the list of network interfaces assigned to the container
+ */
+void container_config_append_net_ifaces(const container_config_t *config, const char *iface);
+
+/**
+ * Removes the given interface name from the list of network interfaces assigned to the container
+ */
+void
+container_config_remove_net_ifaces(const container_config_t *config, const char *iface);
+
 #endif /* C_CONFIG_H */
