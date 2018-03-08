@@ -61,6 +61,9 @@ static void print_usage(const char *cmd)
 	printf("   deny_audio <container-uuid>\n        Deny audio access to the specified container (cgroups).\n");
 	printf("   wipe <container-uuid>\n        Wipes the specified container.\n");
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n        (testing) Pushes the specified GuestOS config, signature, and certificate files.\n");
+	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
+	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
+	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
 	printf("\n");
 	exit(-1);
 }
@@ -108,6 +111,12 @@ static const struct option global_options[] = {
 static const struct option start_options[] = {
 	{"key",         optional_argument, 0, 'k'},
 	{"no-switch",   no_argument, 0, 'n'},
+	{0, 0, 0, 0}
+};
+
+static const struct option assign_iface_options[] = {
+	{"iface",	required_argument, 0, 'i'},
+	{"persistent",	no_argument, 0, 'p'},
 	{0, 0, 0, 0}
 };
 
@@ -253,6 +262,40 @@ int main(int argc, char *argv[])
 	} else if (!strcasecmp(command, "config")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 		has_response = true;
+	} else if (!strcasecmp(command, "ifaces")) {
+                msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
+                has_response = true;
+	} else if (!strcasecmp(command, "assign_iface") || !strcasecmp(command, "unassign_iface") ) {
+		AssignInterfaceParams assign_iface_params = ASSIGN_INTERFACE_PARAMS__INIT;
+		msg.assign_iface_params = &assign_iface_params;
+
+                optind--;
+                char **start_argv = &argv[optind];
+                int start_argc = argc - optind;
+                optind = 0; // reset optind to scan command-specific options
+                for (int c, option_index = 0; -1 != (c = getopt_long(start_argc, start_argv,
+                                                "i::p", assign_iface_options, &option_index)); ) {
+                        switch (c) {
+                        case 'i':
+                                assign_iface_params.iface_name = optarg;
+                                break;
+                        case 'p':
+                                assign_iface_params.has_persistent = true;
+                                assign_iface_params.persistent = true;
+                                break;
+                        default:
+                                print_usage(argv[0]);
+                                ASSERT(false); // never reached
+                        }
+                }
+                optind += argc - start_argc;    // adjust optind to be used with argv
+
+		if ( !strcasecmp(command, "assign_iface") ){
+	                msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE;
+		} else if ( !strcasecmp(command, "unassign_iface") ){
+                        msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE;
+		} else
+			ASSERT(false); // should never be reached
 	} else
 		print_usage(argv[0]);
 

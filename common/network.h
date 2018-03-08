@@ -33,6 +33,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include "list.h"
 
 #include <net/if.h>
 
@@ -129,6 +130,16 @@ network_setup_loopback();
  */
 int
 network_routing_rules_set_all_main(bool flush);
+
+/*
+ * Moves a network interface from one namespace specified by pid to another
+ */
+int network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface);
+
+/*
+ * Generates a list containing description lines of network links available in the namespace specified by the given pid
+ */
+int network_list_link_ns(pid_t pid, list_t** link_list);
 
 #endif /* NETWORK_H */
 

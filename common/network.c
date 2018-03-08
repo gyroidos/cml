@@ -42,6 +42,7 @@
 
 #define IPTABLES_PATH "iptables"
 #define IP_PATH "ip"
+#define NSENTER_PATH "nsenter"
 
 /* routing */
 #define IP_ROUTE_LOCALNET_PATH "/proc/sys/net/ipv4/conf/%s/route_localnet"
@@ -106,6 +107,43 @@ network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *
 	int ret = network_fork_and_execvp(IP_PATH, argv);
 	mem_free(net);
 	return ret;
+}
+
+int network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface){
+        char *src_pid_str = mem_printf("%d", src_pid);
+        char *dest_pid_str = mem_printf("%d", dest_pid);
+        const char * const argv[] = {NSENTER_PATH, "-t", src_pid_str, "-n", IP_PATH, "link", "set", interface, "netns", dest_pid_str, NULL};
+	DEBUG("NSENTER:");
+	for ( int i = 0; argv[i]; i++ )
+		DEBUG("-- %s", argv[i]);
+        int ret = network_fork_and_execvp(NSENTER_PATH, argv);
+	mem_free(src_pid_str);
+	mem_free(dest_pid_str);
+	return ret;
+}
+
+int network_list_link_ns(pid_t pid, list_t** link_list){
+        char *command = mem_printf("%s -t %d -n %s link", NSENTER_PATH, pid, IP_PATH);
+	FILE *fp;
+	int line_size = 1024;
+	char *line = mem_new0(char, line_size);
+
+	fp = popen(command, "r");
+	if ( fp == NULL ) return -1;
+	
+	int n = 0;
+	while (fgets(line + n, line_size-n, fp) != NULL ){
+		if ( n != 0 ) {
+			line[strnlen(line, line_size)-1] = 0;
+			*link_list = list_append(*link_list, mem_strdup(line));
+			n = 0;
+		} else {
+			n = strnlen(line, line_size);
+		}
+	}
+	pclose(fp);
+	mem_free(line);
+	return 0;
 }
 
 int

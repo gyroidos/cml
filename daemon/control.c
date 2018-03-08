@@ -631,6 +631,50 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		res = cmld_container_snapshot(container);
 		break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE : {
+		char *net_iface = msg->assign_iface_params->iface_name;
+		bool persistent = msg->assign_iface_params->persistent;
+		container_add_net_iface(container, net_iface, persistent);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE : {
+		char *net_iface = msg->assign_iface_params->iface_name;
+		bool persistent = msg->assign_iface_params->persistent;
+		container_remove_net_iface(container, net_iface, persistent);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES: {
+		pid_t pid = container_get_pid(container);
+		list_t *link_list = NULL;
+		network_list_link_ns(pid, &link_list);
+
+		// build and send response message to controller
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_IFACES;
+
+		size_t n = list_length(link_list);
+		char **results = mem_new(char *, n);
+
+		for (size_t i = 0; i < n; i++) {
+			char *link_line = list_nth_data(link_list, i);
+			results[i] = mem_strdup(link_line);
+			DEBUG("RESULT[%d] : %s", i, results[i]);
+		}
+
+		out.n_container_ifaces = n;
+		out.container_ifaces = results;
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			WARN("Could not send container network interfaces to MDM");
+		}
+
+		// collect garbage
+		list_delete(link_list);
+		for (size_t i = 0; i < n; i++)
+		mem_free(results[i]);
+		mem_free(results);
+        } break;
+
+
 	default:
 		WARN("Unknown ControllerToDaemon command: %d received", msg->command);
 		/* DO NOTHING */
