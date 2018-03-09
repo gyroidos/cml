@@ -45,12 +45,12 @@
 #define MAX_LOGFILE_AGE_IN_DAYS 14
 #define MAX_DAYS_IN_SECONDS MAX_LOGFILE_AGE_IN_DAYS * 24 * 60 * 60
 
-static int logcat_pid = 0;
+UNUSED static int logcat_pid = 0;
 static int kernel_log_pid = 0;
 static int copied_kernel_log_fd = -1;
 static int kernel_log_file_fd = -1;
 
-static void
+UNUSED static void
 panic_start_cml_logcat(void) {
 
 	DEBUG("Starting to read logcat");
@@ -142,10 +142,10 @@ panic_restart_child(int pid, void (*func)(void)) {
 					DEBUG("Child process still running, sending SIGKILL");
 					int ret_val = kill(pid, SIGKILL);
 					if (ret_val) {
-						ERROR_ERRNO("Could not send SIGKILL to %i. Child process could not be terminated.", logcat_pid);
+						ERROR_ERRNO("Could not send SIGKILL to %i. Child process could not be terminated.", pid);
 					}
 					else {
-						DEBUG("Successfully sent SIGKILL to child process %i.", logcat_pid);
+						DEBUG("Successfully sent SIGKILL to child process %i.", pid);
 					}
 				} else {
 					DEBUG("Child is killed");
@@ -160,19 +160,19 @@ panic_restart_child(int pid, void (*func)(void)) {
 static void
 panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data) {
 
-	if (logcat_pid > 0) {
+	if (kernel_log_pid > 0) {
 		DEBUG("Logfiles must be closed and new files opened");
 	}
 
-	DEBUG("Forking process for logcat");
-	int pid = panic_restart_child(logcat_pid, panic_start_cml_logcat);
-	if (pid > 0) {
-		logcat_pid = pid;
-	}
-	DEBUG("Started logcat with PID %d", logcat_pid);
+	//DEBUG("Forking process for logcat");
+	//int pid = panic_restart_child(logcat_pid, panic_start_cml_logcat);
+	//if (pid > 0) {
+	//	logcat_pid = pid;
+	//}
+	//DEBUG("Started logcat with PID %d", logcat_pid);
 
 	DEBUG("Forking process for kernel log");
-	pid = panic_restart_child(kernel_log_pid, panic_read_kernel_log);
+	int pid = panic_restart_child(kernel_log_pid, panic_read_kernel_log);
 	if (pid > 0) {
 		kernel_log_pid = pid;
 	}
