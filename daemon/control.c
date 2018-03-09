@@ -46,6 +46,7 @@
 #include "common/fd.h"
 #include "common/logf.h"
 #include "common/list.h"
+#include "common/network.h"
 
 #include <unistd.h>
 
@@ -658,7 +659,6 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		for (size_t i = 0; i < n; i++) {
 			char *link_line = list_nth_data(link_list, i);
 			results[i] = mem_strdup(link_line);
-			DEBUG("RESULT[%d] : %s", i, results[i]);
 		}
 
 		out.n_container_ifaces = n;
