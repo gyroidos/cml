@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 
 #define LED_R "/sys/class/leds/red/brightness"
 #define LED_G "/sys/class/leds/green/brightness"
@@ -345,11 +346,17 @@ hardware_get_random(unsigned char *buf, size_t len)
 void
 hardware_suspend_block(const char *name, size_t name_len)
 {
-	file_write(CMLD_PATH_WAKE_LOCK, name, name_len);
+	int ret = -1;
+	do {
+		ret = file_write(CMLD_PATH_WAKE_LOCK, name, name_len);
+	} while (ret == -1 && errno == EBUSY);
 }
 
 void
 hardware_suspend_unblock(const char *name, size_t name_len)
 {
-	file_write(CMLD_PATH_WAKE_UNLOCK, name, name_len);
+	int ret = -1;
+	do {
+		ret = file_write(CMLD_PATH_WAKE_UNLOCK, name, name_len);
+	} while (ret == -1 && errno == EBUSY);
 }
