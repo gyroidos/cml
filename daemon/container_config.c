@@ -463,43 +463,51 @@ container_config_has_netns(const container_config_t *config)
 }
 
 void
-container_config_append_net_ifaces(const container_config_t *config, const char *iface){
+container_config_append_net_ifaces(const container_config_t *config, const char *iface)
+{
 	ASSERT(config);
 	ASSERT(config->cfg);
 
 	int n = config->cfg->n_net_ifaces++;
 	char **old_net_ifaces = config->cfg->net_ifaces;
 
-	config->cfg->net_ifaces = mem_new0(char, n+1);
+	config->cfg->net_ifaces = mem_new0(char*, n+1);
 
 	for (int i = 0; i < n; i++) {
 		config->cfg->net_ifaces[i] = mem_strdup(old_net_ifaces[i]);
-		free(old_net_ifaces[i]);
+		mem_free(old_net_ifaces[i]);
 	}
-	if ( n > 0 )
-		free(old_net_ifaces);
+	if (n > 0)
+		mem_free(old_net_ifaces);
+
 	config->cfg->net_ifaces[n] = mem_strdup(iface);
 }
 
 void
-container_config_remove_net_ifaces(const container_config_t *config, const char *iface){
+container_config_remove_net_ifaces(const container_config_t *config, const char *iface)
+{
 	ASSERT(config);
 	ASSERT(config->cfg);
 
 	int n = config->cfg->n_net_ifaces;
 	int nremove = 0;
 	char **old_net_ifaces = config->cfg->net_ifaces;
-	for ( int i = 0; i < n; i++ )
-		if ( !strcmp(iface, old_net_ifaces[i]) ) nremove++;
-	if ( nremove == 0 ) return;
 
-	config->cfg->net_ifaces = mem_new0(char, n - nremove);
+	for (int i = 0; i < n; i++) {
+		if (!strcmp(iface, old_net_ifaces[i]))
+			nremove++;
+	}
+	if (nremove == 0)
+		return;
+
+	config->cfg->net_ifaces = mem_new0(char*, n - nremove);
 	config->cfg->n_net_ifaces = n - nremove;
+
 	for (int i = 0, j = 0; i < n; i++) {
-		if ( strcmp(iface, old_net_ifaces[i]) ) {
+		if (strcmp(iface, old_net_ifaces[i])) {
 			config->cfg->net_ifaces[j++] = mem_strdup(old_net_ifaces[i]);
 		}
-		free(old_net_ifaces[i]);
+		mem_free(old_net_ifaces[i]);
 	}
-	free(old_net_ifaces);
+	mem_free(old_net_ifaces);
 }
