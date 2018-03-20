@@ -1140,6 +1140,13 @@ cmld_init_a0(const char *path, const char *c0os)
 	//a0 = new_a0;
 
 	mem_free(a0_images_folder);
+
+	return 0;
+}
+
+static int
+cmld_start_a0(container_t *new_a0)
+{
 	INFO("Starting management container %s...", container_get_description(new_a0));
 
 	int *control_sock_p = mem_new0(int, 1);
@@ -1342,11 +1349,14 @@ cmld_init(const char *path)
 	else
 		INFO("Connected to smartcard daemon");
 
+	if (cmld_init_a0(containers_path, device_config_get_c0os(device_config)) < 0)
+		FATAL("Could not init a0");
+
 	if (cmld_load_containers(containers_path) < 0)
 		FATAL("Could not load containers");
 
-	if (cmld_init_a0(containers_path, device_config_get_c0os(device_config)) < 0)
-		FATAL("Could not init a0");
+	if (cmld_start_a0(cmld_containers_get_a0()) < 0)
+		FATAL("Could not start a0");
 
 	mem_free(containers_path);
 

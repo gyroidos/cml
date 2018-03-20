@@ -40,7 +40,7 @@ reboot_reboot(int cmd)
 		case REBOOT:
 			#ifdef ANDROID
 			// ANDROID_RB_RESTART is deprecated and no longer recommended to be used
-			res = android_reboot(ANDROID_RB_RESTART2, 0, 0);
+			res = android_reboot(ANDROID_RB_RESTART, 0, 0);
 			#else
 			res = reboot(RB_AUTOBOOT);
 			#endif
