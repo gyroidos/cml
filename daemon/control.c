@@ -356,6 +356,10 @@ control_send_message(control_message_t message, int fd)
 			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_LOCKED_TILL_REBOOT;
 			break;
 
+		case CONTROL_RESPONSE_CONTAINER_START_EEXIST:
+			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_EEXIST;
+			break;
+
 		default:
 			DEBUG("Unknown message `%d' (not sent)", message);
 			return -1;
@@ -590,7 +594,7 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		bool no_switch = false;
 		if (NULL == container) {
 			WARN("Container does not exists!");
-			res = -1;
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
 		ContainerStartParams *start_params = msg->container_start_params;
