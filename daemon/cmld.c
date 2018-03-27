@@ -1121,13 +1121,20 @@ cmld_init_a0(const char *path, const char *c0os)
 	}
 
 	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
+	char *a0_config_file = mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000.conf");
+	if (file_exists(a0_config_file)) {
+		// let do load_containers() do the rest
+		INFO("Load c0 config from file %s", a0_config_file);
+		goto out;
+	}
+
 	char *a0_images_folder = mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000");
 	mount_t *a0_mnt = mount_new();
 	guestos_fill_mount(a0_os, a0_mnt);
 	unsigned int a0_ram_limit = 1024;
-	bool a0_ns_net = strcmp(c0os, "idsos") ? true : false;
+	bool a0_ns_net = true;
 	bool privileged = true;
-	bool is_switchable = strcmp(c0os, "idsos") ? true : false;
+	bool is_switchable = false;
 
 	container_t *new_a0 = container_new_internal(a0_uuid, "a0", false, a0_ns_net, privileged, a0_os, NULL,
 			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, is_switchable, NULL,
@@ -1140,6 +1147,10 @@ cmld_init_a0(const char *path, const char *c0os)
 	//a0 = new_a0;
 
 	mem_free(a0_images_folder);
+
+out:
+	mem_free(a0_uuid);
+	mem_free(a0_config_file);
 
 	return 0;
 }
