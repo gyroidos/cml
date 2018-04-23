@@ -35,8 +35,6 @@
 #include "common/mem.h"
 #include "common/event.h"
 
-#include <cutils/properties.h>
-
 #define BOOT_BL_BRIGHTNESS 26
 
 /******************************************************************************/
