@@ -162,9 +162,9 @@ provisioning_mode()
 				common_name = mem_printf("%s %s", "x86", "0000");
 			DEBUG("Using common name %s", common_name);
 #else
-			char *common_name = "common_name";
-			char *hw_serial = "hw_serial";
-			char *hw_name = "hw_unknown"; 
+			char *common_name = mem_strdup("common_name");
+			char *hw_serial = mem_strdup("hw_serial");
+			char *hw_name = mem_strdup("hw_unknown");
 #endif
 
 
