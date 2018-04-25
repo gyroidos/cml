@@ -435,13 +435,15 @@ ssl_mkkeypair()
 	}
 
 	DEBUG("Public key pair generated");
-	BN_CTX_free(ctx);
 	BN_free(e);
+	BN_CTX_free(ctx);
 	return pk;
+
 error:
 	RSA_free(rsa);
-	BN_free(e);
 	EVP_PKEY_free(pk);
+	BN_free(e);
+	BN_CTX_free(ctx);
 	return NULL;
 }
 
@@ -1186,6 +1188,7 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 
 	if (EVP_PKEY_assign_RSA(key_evp_priv, key_rsa) == 0) {
 		ERROR("error assigning rsa priv key");
+		RSA_free(key_rsa);
 		goto error;
 	}
 
@@ -1284,9 +1287,9 @@ error:
 	BIO_free(csr);
 	BIO_free(cert);
 	BIO_free(key);
-	RSA_free(key_rsa);
 	X509_free(cert_x509);
 	X509_REQ_free(csr_x509);
+	// EVP_PKEY_free also frees rsa key if assigned
 	EVP_PKEY_free(key_evp_priv);
 	EVP_PKEY_free(key_evp_pub);
 	sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
