@@ -126,7 +126,10 @@ container_t *
 cmld_containers_get_a0()
 {
 	//return a0;
-	return list_nth_data(cmld_containers_list, 0);
+        uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
+        container_t *container = cmld_container_get_by_uuid(a0_uuid);
+        mem_free(a0_uuid);
+        return container;
 }
 
 const char *
