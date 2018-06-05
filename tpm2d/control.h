@@ -25,6 +25,7 @@
 #define TPM2D_CONTROL_H
 
 #include <unistd.h>
+#include <stdint.h>
 
 typedef struct tpm2d_control tpm2d_control_t;
 

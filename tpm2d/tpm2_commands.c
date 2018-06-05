@@ -354,16 +354,16 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 
 	// Table 134 - Definition of TPM2B_SENSITIVE_CREATE inSensitive
 	if (key_pwd == NULL)
-		in.inSensitive.t.sensitive.userAuth.t.size = 0;
+		in.inSensitive.sensitive.userAuth.t.size = 0;
 	else if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_StringCopy(
-				&in.inSensitive.t.sensitive.userAuth.b,
+				&in.inSensitive.sensitive.userAuth.b,
 				key_pwd, sizeof(TPMU_HA))))
 			return rc;
-	in.inSensitive.t.sensitive.data.t.size = 0;
+	in.inSensitive.sensitive.data.t.size = 0;
 
 	// fill in TPM2B_PUBLIC
 	if (TPM_RC_SUCCESS != (rc = tpm2_public_area_helper(
-			&in.inPublic.t.publicArea, object_attrs, key_type)))
+			&in.inPublic.publicArea, object_attrs, key_type)))
 		return rc;
 
 	// TPM2B_DATA outsideInfo
@@ -426,16 +426,16 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 
 	// Table 134 - Definition of TPM2B_SENSITIVE_CREATE inSensitive
 	if (key_pwd == NULL)
-		in.inSensitive.t.sensitive.userAuth.t.size = 0;
+		in.inSensitive.sensitive.userAuth.t.size = 0;
 	else if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_StringCopy(
-				&in.inSensitive.t.sensitive.userAuth.b,
+				&in.inSensitive.sensitive.userAuth.b,
 				key_pwd, sizeof(TPMU_HA))))
 			return rc;
-	in.inSensitive.t.sensitive.data.t.size = 0;
+	in.inSensitive.sensitive.data.t.size = 0;
 
 	// fill in TPM2B_PUBLIC
 	if (TPM_RC_SUCCESS != (rc = tpm2_public_area_helper(
-			&in.inPublic.t.publicArea, object_attrs, key_type)))
+			&in.inPublic.publicArea, object_attrs, key_type)))
 		return rc;
 
 	// TPM2B_DATA outsideInfo
@@ -542,7 +542,7 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 
 	if (strlen(data) > sizeof(TPMU_HA)) {
-		ERROR("Data length %d exceeds hash size %d!", strlen(data), sizeof(TPMU_HA));
+		ERROR("Data length %zu exceeds hash size %zu!", strlen(data), sizeof(TPMU_HA));
 		return EXIT_FAILURE;
 	}
 
@@ -701,7 +701,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	INT32 size_int32 = out.quoted.t.size;
+	uint32_t size_int32 = out.quoted.t.size;
         if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &size_int32)))
 		goto err;
         if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
