@@ -21,7 +21,11 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/tpm2_control/tpm2d.pb-c.h"
+#else
+#include "tpm2d.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"

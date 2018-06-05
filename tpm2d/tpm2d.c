@@ -24,7 +24,11 @@
 #include "tpm2d.h"
 
 #include "control.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/tpm2d/device.pb-c.h"
+#else
+#include "device.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/mem.h"

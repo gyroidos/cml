@@ -22,7 +22,11 @@
  */
 
 #include "control.h"
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/tpm2d/tpm2d.pb-c.h"
+#else
+#include "tpm2d.pb-c.h"
+#endif
 
 #include "tpm2d.h"
 
