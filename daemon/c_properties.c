@@ -109,6 +109,11 @@ c_properties_start_child(c_properties_t *prop)
 	if (c_properties_write_prop("ro.trustme.customnotification", "0") < 0)
 		goto error;
 
+	if (container_is_feature_enabled(prop->container, "camera")) {
+		if (c_properties_write_prop("ro.trustme.camera", "1" ) < 0)
+			goto error;
+	}
+
 	if (chmod(PROP_PATH_FACTORY, 00644) < 0)
 		ERROR_ERRNO("changing of file access rights failed");
 
