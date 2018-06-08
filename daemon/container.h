@@ -136,7 +136,6 @@ container_new_internal(
 	uint32_t color,
 	uint16_t adb_port,
 	bool allow_autostart,
-	bool allow_container_switch,
 	list_t *feature_enabled,
 	const char *dns_server,
 	list_t *net_ifaces
@@ -286,20 +285,6 @@ const char *
 container_get_config_filename(const container_t *container);
 
 /**
- * Returns true if the container's pid equals to the active namespace pid (device namespace)
- */
-bool
-container_is_active(container_t *container);
-
-/**
- * Sets the device namespace of the container to be the active one, i.e.
- * makes the container the foreground container.
- * Additionally also sets the /proc/dev_ns/ns_tag accordingly.
- */
-int
-container_set_active(container_t *container);
-
-/**
  * Get the information if the container should be privileged. This affects how the container
  * is handled by the trustme-lsm and which capabilities are dropped.
  */
@@ -307,8 +292,7 @@ bool
 container_is_privileged(const container_t *container);
 
 /**
- * Suspends the container before moving it into background, i.e. calling
- * container_set_active on another container
+ * Suspends the container before moving it into background
  */
 int
 container_suspend(container_t *container);
@@ -450,30 +434,6 @@ container_state_t
 container_get_state(const container_t *container);
 
 /**
- * Sets the switch-to-container request and notifies observers.
- */
-void
-container_set_switch_to_container(container_t *container, const char *target_container);
-
-/**
- * Returns the switch-to-container request status.
- */
-uuid_t *
-container_get_switch_to_container(container_t *container);
-
-/**
- * Sets the call active status and notifies observers.
- */
-void
-container_set_call_active(container_t *container, bool status);
-
-/**
- * Returns the call active status of this container.
- */
-bool
-container_is_call_active(const container_t *container);
-
-/**
  * Register a callback function which is always called when the container's
  * state changes.
  */
@@ -520,12 +480,6 @@ container_set_ram_limit(container_t *container, unsigned int ram_limit);
 //container_inject_input_event(container_t *container /*, input event */);
 
 void
-container_set_audio_active(container_t *container, bool active);
-
-bool
-container_is_audio_active(container_t *container);
-
-void
 container_set_connectivity(container_t *container, container_connectivity_t connectivity);
 
 container_connectivity_t
@@ -569,9 +523,6 @@ container_get_phone_number(container_t *container);
 
 bool
 container_get_allow_autostart(container_t *container);
-
-bool
-container_get_allow_container_switch(container_t *container);
 
 /*
  * Retrive the corresponding GuestOS which is running in this container

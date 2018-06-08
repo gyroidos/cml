@@ -60,7 +60,6 @@ struct smartcard {
 typedef struct smartcard_startdata {
 	smartcard_t *smartcard;
 	container_t* container;
-	bool no_switch;
 } smartcard_startdata_t;
 
 static char *
@@ -81,7 +80,7 @@ smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned ch
 	char *ascii_key = bytes_to_string_new(key, keylen);
 	//DEBUG("SCD: Container key (len=%d): %s", keylen, ascii_key);
 	DEBUG("SCD: %s: Starting...", container_get_name(startdata->container));
-	cmld_container_start(startdata->container, ascii_key, startdata->no_switch);
+	cmld_container_start(startdata->container, ascii_key);
 	mem_free(ascii_key);
 }
 
@@ -208,7 +207,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 }
 
 int
-smartcard_container_start_handler(smartcard_t* smartcard, container_t *container, const char *passwd, bool no_switch)
+smartcard_container_start_handler(smartcard_t* smartcard, container_t *container, const char *passwd)
 {
 	ASSERT(smartcard);
 	ASSERT(container);
@@ -220,7 +219,6 @@ smartcard_container_start_handler(smartcard_t* smartcard, container_t *container
 	// register callback handler
 	smartcard_startdata_t *startdata = mem_alloc(sizeof(smartcard_startdata_t));
 	startdata->smartcard = smartcard;
-	startdata->no_switch = no_switch;
 	startdata->container = container;
 
 	// TODO register timer if socket does not respond

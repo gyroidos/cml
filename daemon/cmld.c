@@ -42,7 +42,6 @@
 #include "power.h"
 #include "device_config.h"
 #include "control.h"
-#include "input.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "smartcard.h"
@@ -90,35 +89,11 @@ static container_callback_t *cmld_foreground_observer = NULL;
 static container_connectivity_t cmld_connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
 static bool cmld_airplane_mode = false;
 
-static bool cmld_switching_enabled = true;
-
-static bool cmld_display_on = true;
-
-/* If there is a container waiting to be resumed it will be stored in
- * this variable. It makes sense to make this global, since there is
- * always only exactly ONE container to be resumed next */
-static container_t *cmld_container_to_resume = NULL;
-
-struct cmld_switch_state {
-	container_t *container; /**< The container running before */
-	event_timer_t *timer;
-	display_sleep_t *display_sleep;
-	bool timed_out;
-	bool display_suspended;
-};
-
-static struct cmld_switch_state *cmld_switch_state = NULL;
-
 static char *cmld_device_uuid = NULL;
 static char *cmld_device_update_base_url = NULL;
 static char *cmld_device_host_dns = NULL;
 
-static int cmld_should_led_blink = 0;
-
 static char *cmld_shared_data_dir = NULL;
-
-static void
-cmld_display_sleep_cb(UNUSED void *data);
 
 /******************************************************************************/
 
@@ -269,55 +244,6 @@ cmld_load_containers(const char *path)
 	return 0;
 }
 
-container_t *
-cmld_containers_get_foreground(void)
-{
-	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		if (container_is_active(l->data)) {
-			return l->data;
-		}
-	}
-
-	return NULL;
-}
-
-static void
-cmld_containers_disable_switching()
-{
-	if (cmld_switching_enabled) {
-		DEBUG("Container switching disabled");
-		cmld_switching_enabled = false;
-		// Do not allow system going to deep sleep while starting the container
-		hardware_suspend_block(CMLD_WAKE_LOCK_STARTUP, sizeof(CMLD_WAKE_LOCK_STARTUP));
-	}
-}
-
-static void
-cmld_containers_disable_switching_and_pb()
-{
-	cmld_containers_disable_switching();
-	input_pb_injecting_disable();
-}
-
-static void
-cmld_containers_enable_switching()
-{
-	if (!cmld_switching_enabled) {
-		DEBUG("Container switching enabled");
-		hardware_suspend_unblock(CMLD_WAKE_LOCK_STARTUP, sizeof(CMLD_WAKE_LOCK_STARTUP));
-		cmld_switching_enabled = true;
-	}
-}
-
-static void
-cmld_containers_enable_switching_and_pb()
-{
-	cmld_containers_enable_switching();
-	input_pb_injecting_enable();
-}
-
-static container_t *container_with_active_call = NULL;
-
 /**
  * Checks if a filename in the /data/logs directory contains
  * "1970" and renames the found files with a new timestamp
@@ -364,97 +290,17 @@ cmld_foreground_observer_cb(container_t *container, UNUSED container_callback_t 
 {
 	DEBUG("Foreground observer callback called");
 
-	/* display turned on? */
-	if (container_is_screen_on(container) && !cmld_display_on) {
-		/* if the LED debugging is not active we want to switch off the LED if
-		 * the foreground container turns of the display */
-		if (!cmld_should_led_blink && !hardware_is_led_on()) {
-			DEBUG("Setting LED to color: %08x", container_get_color(container));
-			hardware_set_led(container_get_color(container), true);
-		}
-		cmld_display_on = true;
-	/* display turned off? */
-	} else if (!container_is_screen_on(container) && cmld_display_on) {
-		if (!cmld_should_led_blink && hardware_is_led_on()) {
-			DEBUG("Disabling LED");
-			hardware_set_led(0, true);
-		}
-		cmld_display_on = false;
-	}
-
-	if (container_get_state(container) == CONTAINER_STATE_BOOTING
-			&& cmld_containers_get_foreground() != container) {
-		DEBUG("Container now booting, switching it in foreground.");
-		if (container_set_active(container) < 0)
-			WARN("Set active failed for container %s", container_get_description(container));
+	if (container_get_state(container) == CONTAINER_STATE_BOOTING) {
+		DEBUG("Container now booting.");
 	} else if (container_get_state(container) == CONTAINER_STATE_STOPPED
 			&& cmld_containers_get_a0() != container) {
-		DEBUG("Foreground container stopped, trying to switch back to a0");
-		/* Make sure switching is enabled; this is important if the container is stopped without ever
-		 * reaching the RUNNING state */
-		cmld_containers_enable_switching_and_pb();
-		if (cmld_container_switch_to_a0() < 0)
-			WARN("Could not switch to a0");
-	} else if (container_get_state(container) == CONTAINER_STATE_RUNNING
-			&& !cmld_switching_enabled && !container_with_active_call) {
-		DEBUG("Container booted up successfully, re-enabling switching");
-		cmld_containers_enable_switching_and_pb();
+		DEBUG("Container stopped");
+	} else if (container_get_state(container) == CONTAINER_STATE_RUNNING) {
+		DEBUG("Container booted up successfully, set ksm aggressive");
 
 		/* Make KSM aggressive to immmediately share as many pages as
 		 * possible */
 		ksm_set_aggressive_for(CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT);
-	}
-}
-
-static void
-cmld_container_switch_to_container_cb(container_t *container, UNUSED container_callback_t *cb, UNUSED void *data)
-{
-	uuid_t *target = container_get_switch_to_container(container);
-	if (target) {
-		DEBUG("Request from container %s to switch to %s, switching...", container_get_description(container), uuid_string(target));
-		if (cmld_container_switch(cmld_container_get_by_uuid(target)) < 0)
-			ERROR("Could not switch to %s as requested by container %s", uuid_string(target), container_get_description(container));
-		container_set_switch_to_container(container, NULL);
-	}
-}
-
-static void
-cmld_container_call_active_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
-{
-	static container_t *container_switched_from = NULL;
-
-	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
-		DEBUG("Container %s stopped, unregistering call_active callback",
-				container_get_description(container));
-		container_unregister_observer(container, cb);
-	}
-
-	if (container_is_call_active(container)) {
-		// TODO security check: uuid_equals(container_get_uuid(container), DeviceConfig.telephony_uuid)
-		container_t *fg = cmld_containers_get_foreground();
-		if (container != fg) {
-			DEBUG("Active call in container %s, trying to switch to it", container_get_description(container));
-			if (cmld_container_switch(container) < 0) {
-				ERROR("Couldn't switch to container %s", container_get_description(container));
-				return;
-			}
-			container_switched_from = fg;
-		}
-		container_with_active_call = container;
-		cmld_containers_disable_switching();
-	}
-	else if (container_with_active_call == container) {
-		cmld_containers_enable_switching();
-		DEBUG("Call ended");
-		if (container_switched_from) {
-			DEBUG("Switching back to container %s", container_get_description(container_switched_from));
-			if (cmld_container_switch(container_switched_from) < 0) {
-				ERROR("Couldn't switch to container %s", container_get_description(container));
-				// We don't return here in order to reenable switching.
-			}
-			container_switched_from = NULL;
-		}
-		container_with_active_call = NULL;
 	}
 }
 
@@ -641,162 +487,47 @@ cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void 
 }
 
 static void
-cmld_container_start_finish()
+cmld_container_register_observers(container_t *container)
 {
-	// we want to start/resume the new container,
-	// so first clean up the cmld_switch_state...
-
-	if (cmld_switch_state) {
-		if (cmld_switch_state->timer) {
-			if (!cmld_switch_state->timed_out)
-				event_remove_timer(cmld_switch_state->timer);
-			event_timer_free(cmld_switch_state->timer);
-		}
-
-		if (!cmld_switch_state->display_suspended)
-			display_unregister_sleep_oneshot_cb(cmld_switch_state->display_sleep);
-
-		mem_free(cmld_switch_state);
-		cmld_switch_state = NULL;
-	}
-
-	// now start/resume the new container - if one is waiting to be resumed
-
-	container_t *container = cmld_container_to_resume;
-	if (!container) {
-		cmld_containers_disable_switching_and_pb();
-		return;
-	}
-
 	ASSERT(!cmld_foreground_observer);
-	cmld_foreground_observer = container_register_observer(container, &cmld_foreground_observer_cb, NULL);
+	container_callback_t *cmld_foreground_observer = container_register_observer(container, &cmld_foreground_observer_cb, NULL);
 	if (!cmld_foreground_observer) {
 		WARN("Could not register foreground watcher callback on container %s", container_get_description(container));
 	}
 
-	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
-		/* container is not running => start it */
-		DEBUG("Container %s is not running => start it", container_get_description(container));
+	/* container is not running => start it */
+	DEBUG("Container %s is not running => start it", container_get_description(container));
 
-		/* register callbacks which should be present while the container is running
-		 * ATTENTION: All these callbacks MUST deregister themselves as soon as the container is stopped */
-		if (!container_register_observer(container, &cmld_container_switch_to_container_cb, NULL)) {
-			ERROR("Could not register container event observer callback for %s",
-					container_get_description(container));
-		}
-		if (!container_register_observer(container, &cmld_container_call_active_cb, NULL)) {
-			ERROR("Could not register container event observer callback for %s",
-					container_get_description(container));
-		}
-		if (!container_register_observer(container, &cmld_container_boot_complete_cb, NULL)) {
-			ERROR("Could not register container boot complete observer callback for %s",
-					container_get_description(container));
-		}
-		// first container without netns 'c_root_netns' is responsible for global cannectivity
-		if (container == cmld_container_get_c_root_netns()) {
-			INFO("Container %s is sharing root network namespace, connect global connectivity observers!",
+	/* register callbacks which should be present while the container is running
+	 * ATTENTION: All these callbacks MUST deregister themselves as soon as the container is stopped */
+	if (!container_register_observer(container, &cmld_container_boot_complete_cb, NULL)) {
+		ERROR("Could not register container boot complete observer callback for %s",
 				container_get_description(container));
+	}
+	// first container without netns 'c_root_netns' is responsible for global cannectivity
+	if (container == cmld_container_get_c_root_netns()) {
+		INFO("Container %s is sharing root network namespace, connect global connectivity observers!",
+			container_get_description(container));
 
-			if (!container_register_observer(container, &cmld_connectivity_rootns_cb, NULL)) {
-				ERROR("Could not register connectivity observer callback for %s",
-						container_get_description(container));
-			}
-
-			if (!container_register_observer(container, &cmld_airplane_mode_rootns_cb, NULL)) {
-				ERROR("Could not register airplane_mode observer callback for %s",
-						container_get_description(container));
-			}
-		} else {
-			if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
-				ERROR("Could not register airplane mode observer callback for %s",
-						container_get_description(container));
-			}
+		if (!container_register_observer(container, &cmld_connectivity_rootns_cb, NULL)) {
+			ERROR("Could not register connectivity observer callback for %s",
+					container_get_description(container));
 		}
 
-		if (container_start(container))
-			WARN("Start failed for container %s", container_get_description(container));
-
-		/* Note that the container is set active in the cmld_foreground_observer_cb as soon as it has
-		 * the state CONTAINER_STATE_BOOTING */
-		/* disable switching until the container has booted up (see cmld_foreground_observer_cb) */
-		DEBUG("Disabling container switching for container startup");
-		cmld_containers_disable_switching_and_pb();
-		/* Note that the time the container has to boot up is limited by the startup implementation
-		 * in container.c. It should therefore be safe to disable the switching here without jeopardizing
-		 * the rest of the system, as the container is killed as soon as the timeout is hit, which
-		 * triggers the cmld_foreground_observer_cb which in turn re-enables switching. */
+		if (!container_register_observer(container, &cmld_airplane_mode_rootns_cb, NULL)) {
+			ERROR("Could not register airplane_mode observer callback for %s",
+					container_get_description(container));
+		}
 	} else {
-		if (container_set_active(container) < 0)
-			WARN("Set active failed for container %s", container_get_description(container));
-		if (container_resume(container) < 0)
-			WARN("Resume failed for container %s", container_get_description(container));
-		cmld_containers_enable_switching_and_pb();
-	}
-
-	hardware_set_led(container_get_color(container), !cmld_should_led_blink);
-
-	/* Reset the waiting container variable */
-	cmld_container_to_resume = NULL;
-}
-
-
-/* This function starts/resumes the container pointed to by cmld_container_to_resume.
- * It is called by cmld_fb_sleep_cb and by timers set in cmld_container_start */
-static void
-cmld_container_start_check_suspend()
-{
-	if (!cmld_switch_state->timed_out) {
-		if (!cmld_switch_state->display_suspended) {
-			DEBUG("Still waiting to start/resume next container...");
-			return;
-		} else {
-			if (display_is_on()) {
-				DEBUG("Display still on, re-send suspend request to active container");
-				cmld_switch_state->display_suspended = false;
-				if (container_suspend(cmld_switch_state->container) < 0)
-					WARN("Could not suspend foreground container");
-				DEBUG("re-registering display sleep callback...");
-				display_unregister_sleep_oneshot_cb(cmld_switch_state->display_sleep);
-				cmld_switch_state->display_sleep =
-					display_register_sleep_oneshot_cb(&cmld_display_sleep_cb, NULL);
-				if (!cmld_switch_state->display_sleep)
-					FATAL("Could not register display sleep callback");
-				return;
-			} else {
-				DEBUG("Can start/resume next container now...");
-			}
+		if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
+			ERROR("Could not register airplane mode observer callback for %s",
+					container_get_description(container));
 		}
-	} else { // timeout...
-		if (!cmld_switch_state->display_suspended)
-			WARN("Waiting for display suspend timed out");
-		WARN("Waiting for container going to background timed out, continuing anyway...");
 	}
-
-	cmld_container_start_finish();
-}
-
-
-static void
-cmld_display_sleep_cb(UNUSED void *data)
-{
-	DEBUG("Display should be suspended now");
-
-	cmld_display_on = false;
-
-	cmld_switch_state->display_suspended = true;
-	cmld_container_start_check_suspend();
-}
-
-static void
-cmld_container_suspend_timeout_cb(UNUSED event_timer_t *timer, UNUSED void *data)
-{
-	DEBUG("Timeout for suspending foreground container...");
-	cmld_switch_state->timed_out = true;
-	cmld_container_start_check_suspend();
 }
 
 int
-cmld_container_start(container_t *container, const char *key, bool no_switch)
+cmld_container_start(container_t *container, const char *key)
 {
 	if (!container) {
 		WARN("Container does not exists!");
@@ -808,11 +539,13 @@ cmld_container_start(container_t *container, const char *key, bool no_switch)
 		container_set_key(container, key);
 	}
 
-	// i think we should never support a thing like "background-starting" since it
-	// introduces so many problems...
-	// If we still want to support this in the future, have a look at container.c where
-	// the container is set active when starting which is contradicting to a "background-start"...
-	if (no_switch) {
+	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
+		/* container is not running => start it */
+		DEBUG("Container %s is not running => start it", container_get_description(container));
+
+		cmld_container_register_observers(container);
+
+		// We only support "background-start"...
 		if (!guestos_get_feature_bg_booting(container_get_guestos(container))) {
 			WARN("Guest OS of the container %s does not support background booting", container_get_description(container));
 			return -1;
@@ -821,107 +554,25 @@ cmld_container_start(container_t *container, const char *key, bool no_switch)
 			WARN("Start of background container %s failed", container_get_description(container));
 			return -1;
 		}
-		return 0;
-	}
-
-	if (!cmld_switching_enabled) {
-		WARN("Switching is currently disabled (foreground booting a container?)");
-		return -1;
-	}
-
-	/* do not allow power state changes while switching */
-	cmld_containers_disable_switching_and_pb();
-
-	/* set global variable to indicate that the given container should be resumed next */
-	cmld_container_to_resume = container;
-
-	/* unregister foreground observer */
-	if (cmld_foreground_observer) {
-		for (list_t *l = cmld_containers_list; l; l = l->next) {
-			container_unregister_observer(l->data, cmld_foreground_observer);
-		}
-		cmld_foreground_observer = NULL;
-	}
-
-	container_t *fg = cmld_containers_get_foreground();
-	if(!fg) {
-		DEBUG("No foreground container found, switching/starting container %s right away",
-				container_get_description(container));
-		cmld_container_start_finish();
-		return 0;
-	}
-
-	if (fg == container) {
-		DEBUG("Switching to fg container? Just resuming it...");
-		cmld_container_start_finish();
-		return 0;
-	}
-
-	DEBUG("Suspending foreground container %s", container_get_description(fg));
-	if (container_suspend(fg) < 0)
-		WARN("Could not suspend foreground container");
-
-	/* allocate a cmld_switch_state data structure */
-	/* if there is already a cmld_switch_state do nothing */
-	if (cmld_switch_state)
-		return 0;
-
-	cmld_switch_state = mem_new0(struct cmld_switch_state, 1);
-	cmld_switch_state->container = fg;
-
-	DEBUG("Registering timeout for container suspend...");
-	cmld_switch_state->timer = event_timer_new(CMLD_SUSPEND_TIMEOUT, 1, &cmld_container_suspend_timeout_cb, NULL);
-	event_add_timer(cmld_switch_state->timer);
-
-	if (display_is_on()) {
-		DEBUG("Registering display sleep callback...");
-		cmld_switch_state->display_sleep = display_register_sleep_oneshot_cb(&cmld_display_sleep_cb, NULL);
-		if (!cmld_switch_state->display_sleep)
-			FATAL("Could not register display sleep callback");
 	} else {
-		DEBUG("Display is already suspended");
-		cmld_switch_state->display_suspended = true;
+		DEBUG("Container %s has been already started", container_get_description(container));
 	}
-
-	cmld_container_start_check_suspend();
 	return 0;
 }
 
 int
-cmld_container_start_with_smartcard(container_t *container, const char *passwd, bool no_switch)
+cmld_container_start_with_smartcard(container_t *container, const char *passwd)
 {
 	ASSERT(container);
 	ASSERT(passwd);
 
-	return smartcard_container_start_handler(cmld_smartcard, container, passwd, no_switch);
+	return smartcard_container_start_handler(cmld_smartcard, container, passwd);
 }
 
 int
 cmld_get_control_gui_sock(void)
 {
 	return control_get_client_sock(cmld_control_gui);
-}
-
-// TODO: should we merge switch and start?
-int
-cmld_container_switch(container_t *container)
-{
-	ASSERT(container);
-
-	DEBUG("Trying to switch to container %s", container_get_description(container));
-
-	if (container_get_state(container) != CONTAINER_STATE_RUNNING) {
-		ERROR("Container %s not running, start first", container_get_description(container));
-		return -1;
-	}
-
-	return cmld_container_start(container, NULL, false);
-}
-
-int
-cmld_container_switch_to_a0()
-{
-	return cmld_container_switch(cmld_containers_get_a0());
 }
 
 /******************************************************************************/
@@ -959,7 +610,7 @@ cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 			container_t *container = l->data;
 			if (container_get_allow_autostart(container)) {
 				INFO("Autostarting container %s in background", container_get_name(container));
-				cmld_container_start(container, NULL, true);
+				cmld_container_start(container, NULL);
 			}
 		}
 	}
@@ -1085,10 +736,9 @@ cmld_init_a0(const char *path, const char *c0os)
 	unsigned int a0_ram_limit = 1024;
 	bool a0_ns_net = true;
 	bool privileged = true;
-	bool is_switchable = false;
 
 	container_t *new_a0 = container_new_internal(a0_uuid, "a0", false, a0_ns_net, privileged, a0_os, NULL,
-			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, is_switchable, NULL,
+			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, NULL,
 			      cmld_get_device_host_dns(), NULL);
 
 	/* depending on the storage of the a0 pointer, do ONE of the following: */
@@ -1133,19 +783,9 @@ cmld_start_a0(container_t *new_a0)
 	if (container_start(new_a0))
 		FATAL("Could not start management container");
 
-	hardware_set_led(container_get_color(new_a0), !cmld_should_led_blink);
-
-	if (container_set_active(new_a0) < 0)
-		WARN("Set active failed for container %s", container_get_description(new_a0));
-
 	/* register an observer to capture the shutdown command for the special container a0 */
 	if (!container_register_observer(new_a0, &cmld_shutdown_a0_cb, NULL)) {
 		WARN("Could not register observer shutdown callback for a0");
-		return -1;
-	}
-
-	if (!container_register_observer(new_a0, &cmld_container_switch_to_container_cb, NULL)) {
-		WARN("Could not register container switch observer callback for a0");
 		return -1;
 	}
 
@@ -1172,25 +812,6 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	//network_set_ip_addr_of_interface("10.0.2.15", 24, "eth0");
 	network_set_ip_addr_of_interface(host_addr, host_subnet, host_if);
 	network_setup_default_route(host_gateway, true);
-}
-
-static void
-cmld_cb_overwrite_led(UNUSED event_timer_t *timer, void *data)
-{
-	bool *led_on = data;
-
-	*led_on = !*led_on;
-
-	if (*led_on) {
-		hardware_set_led(0x00000000, false);
-		return;
-	}
-
-	container_t *active_container = cmld_containers_get_foreground();
-	if (active_container)
-		hardware_set_led(container_get_color(active_container), false);
-	else
-		hardware_set_led(0xffffff00, false);
 }
 
 int
@@ -1245,10 +866,6 @@ cmld_init(const char *path)
 		FATAL("Could not init power module");
 	INFO("power initialized.");
 
-	if (input_init() < 0)
-		FATAL("Could not init input module");
-	INFO("input initialized.");
-
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");
 	INFO("ksm initialized.");
@@ -1276,19 +893,6 @@ cmld_init(const char *path)
 		}
 	} else {
 		WARN("Could not get a valid MDM configuration from config file");
-	}
-
-	cmld_should_led_blink = device_config_get_should_led_blink(device_config);
-	if (cmld_should_led_blink) {
-		// setup the led blinking
-		DEBUG("led debug blinking on");
-		bool *led_on = mem_new0(bool, 1);
-		event_timer_t *led_timer = event_timer_new(500, EVENT_TIMER_REPEAT_FOREVER,
-							   &cmld_cb_overwrite_led, led_on);
-		event_add_timer(led_timer);
-	} else {
-		DEBUG("led debug blinking off");
-		hardware_set_led(0xffffff00, true); /* set led to white */
 	}
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);

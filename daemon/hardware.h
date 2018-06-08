@@ -131,15 +131,6 @@ const char *
 hardware_get_block_by_name_path(void);
 
 /**
- * Get the path the powerbutton input device
- * e.g. /dev/input/event0.
- * @return The path.
- */
-
-const char *
-hardware_get_powerbutton_input_path(void);
-
-/**
  * Set the color of the device LED by rgb values. Turn the LED off with value 0.
  * @param color The color value in #RRGGBBAA format.
  * @param should_blink If true let the LED blink (preferably done by hardware),
@@ -223,9 +214,6 @@ hardware_supports_systemv_ipc(void);
 
 const char *
 hardware_get_routing_table_radio(void);
-
-int
-hardware_get_key_power_inject(void);
 
 #endif /* HARDWARE_H */
 

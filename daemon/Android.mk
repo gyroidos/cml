@@ -162,7 +162,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	device_config.c \
 	device.proto \
 	mount.c \
-	input.c \
 	ksm.c \
 	smartcard.c \
 	cmld.c \

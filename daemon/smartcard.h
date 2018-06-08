@@ -36,7 +36,7 @@ smartcard_new(const char *path);
 
 int
 smartcard_container_start_handler(smartcard_t* smartcard, container_t *container,
-		const char *passwd, bool no_switch);
+		const char *passwd);
 
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...

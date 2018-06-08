@@ -69,7 +69,6 @@ SRC_FILES := main.c \
 	c_cap.c \
 	common/cryptfs.c \
 	common/reboot.c \
-	input.c \
 	power.c \
 	hw_$(TRUSTME_HARDWARE).c
 

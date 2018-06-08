@@ -111,12 +111,7 @@ struct container {
 	char *key;
 	uint32_t color;
 	bool allow_autostart;
-	bool allow_container_switch;
 	unsigned int ram_limit; /* maximum RAM space the container may use */
-
-	uuid_t *switch_to_container;
-	bool audio_active;
-	bool call_active;
 
 	container_connectivity_t connectivity;
 	bool airplane_mode;
@@ -235,7 +230,6 @@ container_new_internal(
 	uint32_t color,
 	uint16_t adb_port,
 	bool allow_autostart,
-	bool allow_container_switch,
 	list_t *feature_enabled,
 	const char *dns_server,
 	list_t *net_ifaces
@@ -250,9 +244,6 @@ container_new_internal(
 	container->mnt = mnt;
 	/* do not forget to update container->description in the setters of uuid and name */
 	container->description = mem_printf("%s (%s)", container->name, uuid_string(container->uuid));
-
-	container->switch_to_container = NULL;
-	container->call_active = false;
 
 	container->connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
 	container->airplane_mode = false;
@@ -281,7 +272,6 @@ container_new_internal(
 	container->color = color;
 
 	container->allow_autostart = allow_autostart;
-	container->allow_container_switch = allow_container_switch;
 
 	container->os = os;
 
@@ -407,7 +397,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 	uint64_t current_guestos_version;
 	uint64_t new_guestos_version;
 	bool allow_autostart;
-	bool allow_container_switch;
 	bool priv;
 
 	if (!existing_uuid) {
@@ -459,7 +448,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 	color = container_config_get_color(conf);
 
 	allow_autostart = container_config_get_allow_autostart(conf);
-	allow_container_switch = container_config_get_allow_container_switch(conf);
 
 	current_guestos_version = container_config_get_guestos_version(conf);
 	new_guestos_version = guestos_get_version(os);
@@ -495,7 +483,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
 
 	container_t *c = container_new_internal(uuid, name, ns_usr, ns_net, priv, os, config_filename,
-			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, allow_container_switch, feature_enabled, dns_server, net_ifaces);
+			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled, dns_server, net_ifaces);
 	if (c)
 		container_config_write(conf);
 
@@ -730,58 +718,6 @@ container_destroy(container_t *container) {
 	// cleanup container (submodules)
 	// call c_<module>_destroy() hooks in submodules, especially for c_vol to remove images
 	// remove config file (container->config_filename)
-	return 0;
-}
-
-bool
-container_is_active(container_t *container)
-{
-	ASSERT(container);
-
-	if (container->pid == -1 || container->state == CONTAINER_STATE_STOPPED) {
-		return false;
-	}
-
-	char *buf = file_read_new("/proc/dev_ns/active_ns_pid", 32);
-	if (!buf) {
-		WARN("Could not read /proc/dev_ns/active_ns_pid");
-		return false;
-	}
-
-	pid_t pid = atoi(buf);
-	mem_free(buf);
-
-	return container->pid == pid;
-}
-
-int
-container_set_active(container_t *container)
-{
-	ASSERT(container);
-
-	if (container->pid == -1 || container->state == CONTAINER_STATE_STOPPED) {
-		WARN("Cannot set container %s active since it has no PID yet...", container_get_description(container));
-		return -1;
-	}
-
-	if (container_is_active(container)) {
-	    DEBUG("Container is already active, doing nothing");
-	    return 0;
-	}
-
-	DEBUG("Setting active device namespace to pid %d", container->pid);
-
-	if (file_printf("/proc/dev_ns/active_ns_pid", "%d\n", container->pid) < 0) {
-		ERROR("Could not set active device namespave to pid %d", container->pid);
-		return -1;
-	}
-
-	// TODO: use description instead of name?
-	if (file_printf("/proc/dev_ns/ns_tag", "%d:%s\n", container->pid, container->name) < 0) {
-		ERROR("Could not set device namespace tag %d:%s", container->pid, container->name);
-		return -1;
-	}
-
 	return 0;
 }
 
@@ -1595,27 +1531,6 @@ container_get_state(const container_t *container)
 	return container->state;
 }
 
-void
-container_set_call_active(container_t *container, bool status)
-{
-	ASSERT(container);
-
-	if (container->call_active == status)
-		return;
-
-	DEBUG("Call active state in container %s: %d", container_get_description(container), status);
-	container->call_active = status;
-
-	container_notify_observers(container);
-}
-
-bool
-container_is_call_active(const container_t *container)
-{
-	ASSERT(container);
-	return container->call_active;
-}
-
 container_callback_t *
 container_register_observer(
 		container_t *container,
@@ -1696,69 +1611,6 @@ container_set_ram_limit(container_t *container, unsigned int ram_limit)
 
 	/* Note that the c_cgroups submodule gets the ram_limit value from its container reference */
 	return c_cgroups_set_ram_limit(container->cgroups);
-}
-
-void
-container_set_switch_to_container(container_t *container, const char *target_container)
-{
-	ASSERT(container);
-
-	if (!target_container) {
-		if (container->switch_to_container)
-			uuid_free(container->switch_to_container);
-		container->switch_to_container = NULL;
-		return;
-	}
-
-	uuid_t *tc = uuid_new(target_container);
-	if (!tc) {
-		WARN("Cannot switch to container %s: malformed UUID. Ignoring.", target_container);
-		return;
-	}
-
-	if (uuid_equals(container->switch_to_container, tc)) {
-		DEBUG("uuid %s equals %s; returning from container_set_switch_to_container", uuid_string(container->switch_to_container), uuid_string(tc));
-		return;
-	}
-
-	DEBUG("Setting container switch_to_container request to %s for container %s",
-			uuid_string(tc), container_get_description(container));
-
-	if (container->switch_to_container)
-		uuid_free(container->switch_to_container);
-	container->switch_to_container = tc;
-
-	container_notify_observers(container);
-}
-
-uuid_t *
-container_get_switch_to_container(container_t *container)
-{
-	ASSERT(container);
-	return container->switch_to_container;
-}
-
-void
-container_set_audio_active(container_t *container, bool active)
-{
-	ASSERT(container);
-
-	if (container->audio_active == active)
-		return;
-
-	DEBUG("Setting container audio state to %d for container %s",
-			active, container_get_description(container));
-
-	container->audio_active = active;
-
-	container_notify_observers(container);
-}
-
-bool
-container_is_audio_active(container_t *container)
-{
-	ASSERT(container);
-	return container->audio_active;
 }
 
 void
@@ -1900,13 +1752,6 @@ container_get_allow_autostart(container_t *container)
 {
 	ASSERT(container);
 	return container->allow_autostart;
-}
-
-bool
-container_get_allow_container_switch(container_t *container)
-{
-	ASSERT(container);
-	return container->allow_container_switch;
 }
 
 const guestos_t*

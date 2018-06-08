@@ -187,12 +187,6 @@ hardware_get_routing_table_radio(void)
 }
 
 int
-hardware_get_key_power_inject(void)
-{
-	return 0;
-}
-
-int
 hardware_get_random(unsigned char *buf, size_t len)
 {
 	const char *rnd = "/dev/hw_random";

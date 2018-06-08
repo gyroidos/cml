@@ -50,9 +50,8 @@ static void print_usage(const char *cmd)
 	printf("commands:\n");
 	printf("   list\n        Lists all containers.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
-	printf("   start <container-uuid> [--key=<key>] [--no-switch]\n        Starts the container with the given key (default: all '0') and switches to it (unless --no-switch is specified).\n");
+	printf("   start <container-uuid> [--key=<key>]\n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
-	printf("   switch <container-uuid>\n        Switches to the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
 	printf("   state <container-uuid>\n        Prints the state of the specified container.\n");
 	printf("   freeze <container-uuid>\n        Freeze the specified container.\n");
@@ -230,10 +229,6 @@ int main(int argc, char *argv[])
 			case 'k':
 				container_start_params.key = optarg ? optarg : DEFAULT_KEY;
 				break;
-			case 'n':
-				container_start_params.has_no_switch = true;
-				container_start_params.no_switch = true;
-				break;
 			default:
 				print_usage(argv[0]);
 				ASSERT(false); // never reached
@@ -242,8 +237,6 @@ int main(int argc, char *argv[])
 		optind += argc - start_argc;	// adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
-	} else if (!strcasecmp(command, "switch")) {
-		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_SWITCH;
 	} else if (!strcasecmp(command, "freeze")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE;
 	} else if (!strcasecmp(command, "unfreeze")) {

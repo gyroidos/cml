@@ -265,18 +265,6 @@ hardware_get_routing_table_radio(void)
 	return "1004";
 }
 
-/*
- * keep this in sync with the corresponding
- * kernel header "include/uapi/linux/input.h"
- */
-#define KEY_POWER_INJECT        0x2a0
-
-int
-hardware_get_key_power_inject(void)
-{
-	return KEY_POWER_INJECT;
-}
-
 #define SYSFS_DISPLAY_POWER_STATE_FILE "/sys/devices/soc.0/fd900000.qcom,mdss_mdp/power/runtime_status"
 
 /******************************************************************************/

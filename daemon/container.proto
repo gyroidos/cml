@@ -97,7 +97,6 @@ enum ContainerConnectivity {
 message ContainerStatus {
 	required string uuid = 1;
 	required string name = 2;
-	optional bool foreground = 3 [default = false];
 	required ContainerState state = 4;
 	required uint64 uptime = 5;
 	required uint64 created = 6;

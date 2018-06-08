@@ -79,29 +79,18 @@ cmld_container_destroy(container_t *container);
 container_t *
 cmld_containers_get_a0();
 
-int
-cmld_container_switch(container_t *container);
-
-int
-cmld_container_switch_to_a0();
-
 /**
- * Start a container or switch to it if it is already started and
- * not in foreground.
+ * Start a container if it is not already started
  *
  * @param container The container to be started.
  * @param key The key used to decrypt the containers images.
- * @param no_switch Indicates if the container should only be started or also be switched
- * to. ATTENTION: Currently it is only supported to start AND switch, i.e. no_switch MUST
- * be set to false. It is also possible that this flag is removed in the future and starting
- * always implicates switching.
  * @return 0 if success, -1 otherwise.
  */
 int
-cmld_container_start(container_t *container, const char *key, bool no_switch);
+cmld_container_start(container_t *container, const char *key);
 
 int
-cmld_container_start_with_smartcard(container_t *container, const char *passwd, bool no_switch);
+cmld_container_start_with_smartcard(container_t *container, const char *passwd);
 
 int
 cmld_get_control_gui_sock(void);
@@ -135,9 +124,6 @@ cmld_container_wipe(container_t *container);
 
 void
 cmld_wipe_device();
-
-container_t *
-cmld_containers_get_foreground();
 
 container_t *
 cmld_container_get_by_uuid(uuid_t *uuid);

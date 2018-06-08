@@ -226,17 +226,3 @@ hardware_get_nw_mv_name_list(void)
          */
         return NULL;
 }
-
-/*
- * keep this in sync with the corresponding
- * kernel header "include/uapi/linux/input.h"
- */
-// FIXME
-#define KEY_POWER_INJECT        0x2a0
-
-int
-hardware_get_key_power_inject(void)
-{
-        return KEY_POWER_INJECT;
-}
-

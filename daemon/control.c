@@ -259,8 +259,6 @@ control_container_status_new(const container_t *container)
 	container_status__init(c_status);
 	c_status->uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 	c_status->name = mem_strdup(container_get_name(container));
-	c_status->has_foreground = true;
-	c_status->foreground = (cmld_containers_get_foreground() == container);
 	c_status->state = control_container_state_to_proto(container_get_state(container));
 	c_status->uptime = container_get_uptime(container);
 	c_status->created = container_get_creation_time(container);
@@ -589,7 +587,6 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 	// Container-specific commands:
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		char *key = NULL;
-		bool no_switch = false;
 		if (NULL == container) {
 			WARN("Container does not exists!");
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
@@ -598,19 +595,13 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		ContainerStartParams *start_params = msg->container_start_params;
 		if (start_params) {
 			key = start_params->key;
-			if (start_params->has_no_switch)
-				no_switch = start_params->no_switch;
 		}
 		// key is asserted to be the user entered passwd/pin
-		res = cmld_container_start_with_smartcard(container, key, no_switch);
+		res = cmld_container_start_with_smartcard(container, key);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
 		res = cmld_container_stop(container);
-		break;
-
-	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_SWITCH:
-		res = cmld_container_switch(container);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE:

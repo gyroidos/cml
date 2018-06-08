@@ -139,37 +139,6 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 			container_set_screen_on(service->container, true);
 			break;
 
-		/*
-		case SERVICE_TO_CMLD_MESSAGE__CODE__WALLPAPER:
-			// TODO What's the non-painful way to extract the length and data from a ProtobufCMessage?
-			wallpaper_len = (*(ProtobufCBinaryData *) ((void *) ((uint8_t *) ((&message->wallpaper_data)) ))).len;
-			DEBUG("Received wallpaper data (%d bytes)", wallpaper_len);
-			// char *wallpaper_data = (char *) (*(ProtobufCBinaryData *) ((void *) ((uint8_t *) ((&message->wallpaper_data)) ))).data;
-			break;
-		*/
-
-		case SERVICE_TO_CMLD_MESSAGE__CODE__SWITCH_CONTAINER:
-			INFO("Received switch_container from container %s, target_container: %s",
-				 container_get_description(service->container), message->target_container);
-			if (container_get_allow_container_switch(service->container))
-				container_set_switch_to_container(service->container, message->target_container);
-			else
-				INFO("Container %s is not allowed to switch to other containers; ignoring",
-					container_get_description(service->container));
-			break;
-
-		case SERVICE_TO_CMLD_MESSAGE__CODE__CALL_ACTIVE:
-			INFO("Received a call active message from container %s",
-				container_get_description(service->container));
-			container_set_call_active(service->container, true);
-			break;
-
-		case SERVICE_TO_CMLD_MESSAGE__CODE__CALL_HANGUP:
-			INFO("Received a call hangup message from container %s",
-				container_get_description(service->container));
-			container_set_call_active(service->container, false);
-			break;
-
 		case SERVICE_TO_CMLD_MESSAGE__CODE__SHUTDOWN:
 			// check container state and take action if container is not
 			// stopped or just shutting down
