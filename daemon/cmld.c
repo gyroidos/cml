@@ -418,43 +418,6 @@ cmld_foreground_observer_cb(container_t *container, UNUSED container_callback_t 
 }
 
 static void
-cmld_container_notification_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
-{
-	DEBUG("Calling container notification callback");
-
-	container_t *fg = cmld_containers_get_foreground();
-
-	if (container_has_base_notification(container)
-	    && container_allows_notification(container, container == fg,
-					     container_get_name(container))) {
-		INFO("Container %s allowed to send base notification",
-		     container_get_name(container));
-		container_send_notification_from_cmld(container);
-	}
-
-	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		container_t *target = l->data;
-		if (target != container && container_get_state(target) == CONTAINER_STATE_RUNNING) {
-			//TODO this conditions should not be determined by
-			//the container name which is not unique
-			if (container_allows_notification(container, container == fg, container_get_name(target))) {
-				INFO("Container %s allowed to send notification"
-				     " to %s", container_get_name(container),
-				     container_get_name(target));
-				container_send_notification_to_target(container, target);
-			}
-		}
-	}
-	container_cleanup_notification(container);
-
-	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
-		DEBUG("Container %s stopped, unregistering event callback",
-				container_get_description(container));
-		container_unregister_observer(container, cb);
-	}
-}
-
-static void
 cmld_container_switch_to_container_cb(container_t *container, UNUSED container_callback_t *cb, UNUSED void *data)
 {
 	uuid_t *target = container_get_switch_to_container(container);
@@ -728,10 +691,6 @@ cmld_container_start_finish()
 
 		/* register callbacks which should be present while the container is running
 		 * ATTENTION: All these callbacks MUST deregister themselves as soon as the container is stopped */
-		if (!container_register_observer(container, &cmld_container_notification_cb, NULL)) {
-			ERROR("Could not register container event observer callback for %s",
-					container_get_description(container));
-		}
 		if (!container_register_observer(container, &cmld_container_switch_to_container_cb, NULL)) {
 			ERROR("Could not register container event observer callback for %s",
 					container_get_description(container));

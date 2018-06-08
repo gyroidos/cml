@@ -43,7 +43,6 @@
 #include "c_properties.h"
 #include "c_cap.h"
 #include "c_service.h"
-#include "c_notification.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
@@ -153,8 +152,6 @@ struct container {
 	c_properties_t *prop;
 	c_service_t *service;
 	// Wifi module?
-
-	c_notification_t *notification;
 
 	char *imei;
 	char *mac_address;
@@ -360,13 +357,6 @@ container_new_internal(
 		goto error;
 	}
 
-	container->notification = c_notification_new(container);
-	if (!container->notification) {
-		WARN("Could not initialize notification subsystem for container %s",
-				container_get_description(container));
-		goto error;
-	}
-
 	// construct an argv buffer for execve
 	container->init_argv = guestos_get_init_argv_new(os);
 	container->init_env = guestos_get_init_env_new(os);
@@ -567,8 +557,6 @@ container_free(container_t *container) {
 		c_cgroups_free(container->cgroups);
 	if (container->net)
 		c_net_free(container->net);
-	if (container->notification)
-		c_notification_free(container->notification);
 	if (container->prop)
 		c_properties_free(container->prop);
 	if (container->vol)
@@ -836,7 +824,6 @@ container_cleanup(container_t *container)
 	c_net_cleanup(container->net);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol);
-	c_notification_cleanup(container->notification);
 
 	container->pid = -1;
 
@@ -1630,141 +1617,6 @@ container_get_state(const container_t *container)
 	ASSERT(container);
 	return container->state;
 }
-
-void
-container_set_notification(
-		container_t *container,
-		int id,
-		char *tag,
-		char *pkg_name,
-		char *title,
-		char *text,
-		char *custom_icon) {
-	ASSERT(container);
-
-	int ret = c_notification_set_base(container->notification, id, tag,
-					  pkg_name, title, text, custom_icon);
-
-	if (ret == 0)
-		container_notify_observers(container);
-}
-
-uint8_t *
-container_get_notification_message(container_t *container) {
-	ASSERT(container);
-
-	return c_notification_get_filtered_packed_message(container->notification);
-}
-
-size_t
-container_get_notification_message_size(container_t *container) {
-	ASSERT(container);
-
-	return c_notification_get_packed_message_size(container->notification);
-}
-
-void
-container_set_notification_message(container_t *container, uint8_t *notification,
-				   size_t notification_size) {
-	ASSERT(container);
-
-	c_notification_set_packed_message(container->notification, notification,
-					  notification_size);
-	container_notify_observers(container);
-}
-
-char *
-container_get_notification_source_id(const container_t *container) {
-	ASSERT(container);
-
-	return c_notification_get_source_id(container->notification);
-}
-
-char *
-container_get_notification_source_name(const container_t *container) {
-	ASSERT(container);
-
-	return c_notification_get_source_name(container->notification);
-}
-
-char *
-container_get_notification_source_color_rgb_string(const container_t *container) {
-	ASSERT(container);
-
-	return c_notification_get_source_color_rgb_string(container->notification);
-}
-
-bool
-container_has_base_notification(const container_t *container) {
-	ASSERT(container);
-
-	return c_notification_is_base_notification(container->notification);
-}
-
-bool
-container_allows_notification(container_t *container, bool fg, const char *target_name) {
-	ASSERT(container);
-
-	return c_notification_allows_send_operation(container->notification,
-						    fg, target_name);
-}
-
-int
-container_send_notification_from_cmld(container_t *target) {
-	ASSERT(target);
-
-	c_notification_set_source_id(target->notification,
-				     uuid_string(container_get_uuid(target))); // TODO what should we use here?
-	c_notification_set_source_name(target->notification,
-				       container_get_name(target));
-	char *color_rgb_string = container_get_color_rgb_string(target);
-	c_notification_set_source_color_rgb_string(target->notification, color_rgb_string);
-	free(color_rgb_string);
-
-	int ret = c_service_send_message(target->service,
-					 C_SERVICE_MESSAGE_NOTIFICATION);
-	c_notification_cleanup(target->notification);
-
-	return ret;
-}
-
-int
-container_send_notification_to_target(container_t *container, container_t *target) {
-	ASSERT(container);
-	ASSERT(target);
-
-	size_t packed_size = c_notification_get_packed_message_size(container->notification);
-	uint8_t *packed_message = c_notification_get_packed_message(container->notification);
-
-	if (!packed_message || packed_size == 0) {
-		WARN("Container tries to send empty message (may be NULL)");
-		return -1;
-	}
-
-	c_notification_set_source_id(target->notification,
-				     uuid_string(container_get_uuid(container)));
-	c_notification_set_source_name(target->notification,
-				       container_get_name(container));
-	char *color_rgb_string = container_get_color_rgb_string(container);
-	c_notification_set_source_color_rgb_string(target->notification, color_rgb_string);
-	free(color_rgb_string);
-	c_notification_set_packed_message(target->notification, packed_message,
-					  packed_size);
-
-	int ret = c_service_send_message(target->service,
-					 C_SERVICE_MESSAGE_NOTIFICATION);
-	c_notification_cleanup(target->notification);
-
-	return ret;
-}
-
-void
-container_cleanup_notification(container_t *container) {
-	ASSERT(container);
-
-	c_notification_cleanup(container->notification);
-}
-
 
 void
 container_set_call_active(container_t *container, bool status)

@@ -106,9 +106,6 @@ c_properties_start_child(c_properties_t *prop)
 	if (c_properties_write_prop("ro.trustme.fakesignatures", "1") < 0 )
 		goto error;
 
-	if (c_properties_write_prop("ro.trustme.customnotification", "0") < 0)
-		goto error;
-
 	if (chmod(PROP_PATH_FACTORY, 00644) < 0)
 		ERROR_ERRNO("changing of file access rights failed");
 

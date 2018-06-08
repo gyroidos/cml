@@ -24,7 +24,6 @@
 option java_package = "de.fraunhofer.aisec.trustme.service";
 
 import "container.proto";
-import "c_notification.proto";
 
 message CmldToServiceMessage {
 	enum Code {
@@ -37,8 +36,6 @@ message CmldToServiceMessage {
 		AUDIO_SUSPEND = 5;
 		AUDIO_RESUME = 6;
 
-		NOTIFICATION = 12;
-
 		CONNECTIVITY_CHANGE = 14;
 		AIRPLANE_MODE_CHANGED = 15;
 		WIFI_USER_ENABLED_CHANGED = 16;
@@ -49,10 +46,8 @@ message CmldToServiceMessage {
 	required Code code = 1;
 
 	optional ContainerConnectivity connectivity = 6 [default = OFFLINE];
-	optional bytes notification_data = 7;
 	optional string source_id = 8;
 	optional string source_color = 9;
-	optional ContainerNotification notification = 10;
 	optional bool airplane_mode = 11;
 	optional bool wifi_user_enabled = 12;
 	optional string container_cfg_name = 13;
@@ -76,8 +71,6 @@ message ServiceToCmldMessage {
 		SHUTDOWN = 10;
 		MASTER_CLEAR = 11;
 
-		NOTIFICATION = 12;
-
 		SWITCH_CONTAINER = 13;
 
 		CONNECTIVITY_CHANGE = 14;
@@ -92,12 +85,10 @@ message ServiceToCmldMessage {
 
 	//optional bytes wallpaper_data = 4;
 	optional ContainerConnectivity connectivity = 6 [default = OFFLINE];
-	optional bytes notification_data = 7;
 	optional string imei = 8;
 	optional string mac = 9;
 	optional string phonenumber = 10;
 	optional bool airplane_mode = 11;
-	optional ContainerNotification notification = 12;
 	optional string target_container = 13;
 	optional bool wifi_user_enabled = 14;
 }

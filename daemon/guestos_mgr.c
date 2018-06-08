@@ -46,10 +46,9 @@
 #define GUESTOS_MGR_VERIFY_HASH_ALGO SHA512
 #define GUESTOS_MGR_FILE_MOVE_BLOCKSIZE 4096
 
-// Notification title and messages regarding trustme system updates.
+// Log title and messages regarding trustme system updates.
 #define GUESTOS_MGR_UPDATE_TITLE "Trustme Update"
 #define GUESTOS_MGR_UPDATE_DOWNLOAD "Downloading..."
-#define GUESTOS_MGR_UPDATE_DOWNLOAD_CUSTOM_ICON "stat_sys_download" // Android drawable resource
 #define GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI "Waiting for WiFi connection..."
 #define GUESTOS_MGR_UPDATE_SUCCESS "Reboot to install"
 #define GUESTOS_MGR_UPDATE_FAILED "Download failed"
@@ -68,9 +67,7 @@ guestos_mgr_purge_obsolete(void)
 		list_t *next = l->next;
 		guestos_t *os = l->data;
 		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
-		if ((latest && guestos_get_version(os) < guestos_get_version(latest)) ||
-				!strcmp(guestos_get_name(os), "a1os") ||  // update code, to be removed
-				!strcmp(guestos_get_name(os), "a2os") ) { // update code, to be removed
+		if ((latest && guestos_get_version(os) < guestos_get_version(latest))) {
 			guestos_list = list_unlink(guestos_list, l);
 			guestos_purge(os);
 			guestos_free(os);
@@ -191,18 +188,8 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED vo
 	IF_NULL_RETURN_ERROR(os);
 
 	if (!complete || count > 0) {
-		container_t *a0 = cmld_containers_get_a0();
-		IF_NULL_RETURN_WARN(a0);
-
-		container_set_notification(
-				a0,
-				1,
-				"guestos_mgr",
-				"cmld",
-				GUESTOS_MGR_UPDATE_TITLE,
-				complete ? GUESTOS_MGR_UPDATE_SUCCESS : GUESTOS_MGR_UPDATE_FAILED,
-				NULL);
-		container_send_notification_from_cmld(a0);
+		INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE,
+			complete ? GUESTOS_MGR_UPDATE_SUCCESS : GUESTOS_MGR_UPDATE_FAILED);
 	}
 }
 
@@ -321,18 +308,8 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 	// 3. register new os instance
 	guestos_list = list_append(guestos_list, os);
 
-	container_t *a0 = cmld_containers_get_a0();
-	if (a0) {
-		container_set_notification(
-				a0,
-				1,
-				"guestos_mgr",
-				"cmld",
-				GUESTOS_MGR_UPDATE_TITLE,
-				cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD : GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI,
-				cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD_CUSTOM_ICON : NULL);
-		container_send_notification_from_cmld(a0);
-	}
+	INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
+		 cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD : GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
 
 	// 4. trigger image download if os is used by a container
 	if (guestos_mgr_is_guestos_used_by_containers(os_name)) {

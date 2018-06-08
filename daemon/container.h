@@ -569,50 +569,6 @@ container_set_phone_number(container_t *container, char *phone_number);
 char*
 container_get_phone_number(container_t *container);
 
-void
-container_set_notification(
-		container_t *container,
-		int id,
-		char *tag,
-		char *pkg_name,
-		char *title,
-		char *text,
-		char *custom_icon);
-
-uint8_t *
-container_get_notification_message(container_t *container);
-
-size_t
-container_get_notification_message_size(container_t *container);
-
-void
-container_set_notification_message(container_t *container, uint8_t *notification,
-				   size_t notification_size);
-
-char *
-container_get_notification_source_id(const container_t *container);
-
-char *
-container_get_notification_source_name(const container_t *container);
-
-char *
-container_get_notification_source_color_rgb_string(const container_t *container);
-
-bool
-container_has_base_notification(const container_t *container);
-
-bool
-container_allows_notification(container_t *container, bool fg, const char *target_name);
-
-int
-container_send_notification_from_cmld(container_t *target);
-
-int
-container_send_notification_to_target(container_t *container, container_t *target);
-
-void
-container_cleanup_notification(container_t *container);
-
 bool
 container_get_allow_autostart(container_t *container);
 

@@ -37,7 +37,6 @@ PROTO_SRC := \
 	common/logf.pb-c.c \
 	device.pb-c.c \
 	scd.pb-c.c \
-	c_notification.pb-c.c \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
@@ -55,8 +54,6 @@ SRC_FILES := main.c \
 	guestos_mgr.c \
 	guestos_config.c \
 	common/protobuf.c \
-	c_notification.c \
-	c_notification_config.c \
 	download.c \
 	smartcard.c \
 	common/sock.c \
@@ -77,13 +74,12 @@ SRC_FILES := main.c \
 	power.c \
 	hw_$(TRUSTME_HARDWARE).c
 
-protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_notification.proto c_service.proto
+protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
 	protoc-c --c_out=. guestos.proto
 	protoc-c --c_out=. device.proto
 	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. c_notification.proto
 	protoc-c --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 

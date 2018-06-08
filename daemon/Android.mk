@@ -83,9 +83,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	c_net.c \
 	c_service.c \
 	c_service.proto \
-	c_notification.c \
-	c_notification.proto \
-	c_notification_config.c \
 	c_properties.c \
 	c_vol.c \
 	c_cap.c \
@@ -148,9 +145,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	c_net.c \
 	c_service.c \
 	c_service.proto \
-	c_notification.c \
-	c_notification.proto \
-	c_notification_config.c \
 	c_vol.c \
 	c_properties.c \
 	c_cap.c \
@@ -218,7 +212,7 @@ LOCAL_PROTOC_OPTIMIZE_TYPE := nano
 LOCAL_PROTOC_FLAGS := --proto_path=$(LOCAL_PATH)
 #LOCAL_PROTO_JAVA_OUTPUT_PARAMS := optional_field_style=accessors
 #LOCAL_PROTO_JAVA_OUTPUT_PARAMS := java_nano_generate_has=true
-LOCAL_SRC_FILES := c_service.proto container.proto c_notification.proto
+LOCAL_SRC_FILES := c_service.proto container.proto
 include $(BUILD_STATIC_JAVA_LIBRARY)
 
 

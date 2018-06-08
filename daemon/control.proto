@@ -80,11 +80,6 @@ message ControllerToDaemon {
 		OBSERVE_STATUS_START = 10;
 		OBSERVE_STATUS_STOP = 11;
 
-		// Starts or stops observing notifications.
-		// TODO not implemented yet
-		OBSERVE_NOTIFICATIONS_START = 12;
-		OBSERVE_NOTIFICATIONS_STOP = 13;
-
 		// Starts or stops observing log messages.
 		OBSERVE_LOG_START = 14;
 		OBSERVE_LOG_STOP = 15;
@@ -212,7 +207,6 @@ message DaemonToController {
 	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
 	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
 
-	optional string notification_text = 11;
 	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
 
 	optional Response response = 13;

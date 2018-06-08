@@ -565,8 +565,6 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 	// TODO
 	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_STATUS_START:
 	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_STATUS_STOP:
-	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_NOTIFICATIONS_START:
-	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_NOTIFICATIONS_STOP:
 		WARN("ControllerToDaemon command %d not implemented yet", msg->command);
 		break;
 

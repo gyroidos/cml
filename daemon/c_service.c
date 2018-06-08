@@ -24,10 +24,8 @@
 #include "c_service.h"
 #ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/c_service.pb-c.h"
-#include "device/fraunhofer/common/cml/daemon/c_notification.pb-c.h"
 #else
 #include "c_service.pb-c.h"
-#include "c_notification.pb-c.h"
 #endif
 
 #include "container.h"
@@ -194,29 +192,6 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 
 		case SERVICE_TO_CMLD_MESSAGE__CODE__MASTER_CLEAR:
 			container_wipe(service->container);
-			break;
-
-		case SERVICE_TO_CMLD_MESSAGE__CODE__NOTIFICATION:
-			INFO("Received a statusbar notification message from container %s",
-				container_get_description(service->container));
-
-			if (message->notification) {
-				// TODO Evaluate log message on post code:
-				// "Handle message -> notification code 0"
-				DEBUG("Handle message -> notification code %d",
-				      message->notification->code);
-
-				size_t packed_notification_size =
-					container_notification__get_packed_size(message->notification);
-				uint8_t *packed_notification = mem_alloc(packed_notification_size);
-
-				container_notification__pack(message->notification,
-							     packed_notification);
-				container_set_notification_message(service->container,
-								   packed_notification,
-								   packed_notification_size);
-				mem_free(packed_notification);
-			}
 			break;
 
 		case SERVICE_TO_CMLD_MESSAGE__CODE__CONNECTIVITY_CHANGE:
@@ -554,42 +529,6 @@ c_service_send_message_proto(c_service_t *service, unsigned int code)
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
 }
 
-static int
-c_service_send_notification_proto(c_service_t *service)
-{
-	ASSERT(service);
-	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
-	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__NOTIFICATION;
-
-	// TODO define a single method for receiving message and message size
-	// simultaneously because size can be changed when calling
-	// container_get_notification_messagget_notification_messagee
-	uint8_t *notification =
-		container_get_notification_message(service->container);
-	size_t notification_size =
-		container_get_notification_message_size(service->container);
-
-	ContainerNotification *container_notification =
-		container_notification__unpack(NULL, notification_size, notification);
-
-	if (!container_notification) {
-		ERROR("Unable to unpack container notification");
-		return -1;
-	}
-
-	message_proto.notification = container_notification;
-	message_proto.source_id = container_get_notification_source_id(service->container);
-	message_proto.source_color = container_get_notification_source_color_rgb_string(service->container);
-
-	INFO("Sending container notification from %s to %s with timestamp %10lld",
-	     message_proto.source_id, container_get_name(service->container),
-	     (long long) container_notification->timestamp);
-	int ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
-	container_notification__free_unpacked(container_notification, NULL);
-
-	return ret;
-}
-
 int
 c_service_send_message(c_service_t *service, c_service_message_t message)
 {
@@ -632,10 +571,6 @@ c_service_send_message(c_service_t *service, c_service_message_t message)
 
 		case C_SERVICE_MESSAGE_AUDIO_RESUME:
 			//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
-			break;
-
-		case C_SERVICE_MESSAGE_NOTIFICATION:
-			ret = c_service_send_notification_proto(service);
 			break;
 
 		default:
