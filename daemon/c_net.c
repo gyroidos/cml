@@ -948,6 +948,11 @@ c_net_start_child(c_net_t *net)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
+		/* mask ifname to avoid renaming interfaces in privileged container */
+		if (container_is_privileged(net->container)) {
+			mem_free(ni->nw_name);
+			ni->nw_name = mem_strdup(ni->veth_cont_name);
+		}
 		if (c_net_start_child_interface(ni) == -1)
 			return -1;
 	}
