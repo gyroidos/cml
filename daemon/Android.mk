@@ -83,7 +83,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	c_net.c \
 	c_service.c \
 	c_service.proto \
-	c_properties.c \
 	c_vol.c \
 	c_cap.c \
 	crypto.proto \
@@ -146,7 +145,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	c_service.c \
 	c_service.proto \
 	c_vol.c \
-	c_properties.c \
 	c_cap.c \
 	scd.proto \
 	control.proto \

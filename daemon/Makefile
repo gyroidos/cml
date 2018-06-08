@@ -58,7 +58,6 @@ SRC_FILES := main.c \
 	smartcard.c \
 	common/sock.c \
 	c_cgroups.c \
-	c_properties.c \
 	c_service.c \
 	display.c \
 	c_net.c \

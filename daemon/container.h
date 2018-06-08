@@ -78,7 +78,6 @@ typedef enum {
 enum container_error {
 	CONTAINER_ERROR = 1,
 	CONTAINER_ERROR_VOL,
-	CONTAINER_ERROR_PROP,
 	CONTAINER_ERROR_INPUT,
 	CONTAINER_ERROR_UEVENT,
 	CONTAINER_ERROR_CGROUPS,
@@ -140,7 +139,6 @@ container_new_internal(
 	bool allow_container_switch,
 	list_t *feature_enabled,
 	const char *dns_server,
-	const char *telephony_name,
 	list_t *net_ifaces
 );
 
@@ -616,9 +614,6 @@ container_enable_fhgapps(container_t *conatiner);
 
 void
 container_enable_telephony(container_t *conatiner);
-
-void
-container_set_telephony_name(container_t *container, const char *name);
 
 void
 container_set_radio_ip(container_t *container, char *ip);

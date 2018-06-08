@@ -40,7 +40,6 @@
 #include "c_cgroups.h"
 #include "c_net.h"
 #include "c_vol.h"
-#include "c_properties.h"
 #include "c_cap.h"
 #include "c_service.h"
 #include "container_config.h"
@@ -149,7 +148,6 @@ struct container {
 	c_net_t *net; /* encapsulates given network interfaces*/
 
 	c_vol_t *vol;
-	c_properties_t *prop;
 	c_service_t *service;
 	// Wifi module?
 
@@ -240,7 +238,6 @@ container_new_internal(
 	bool allow_container_switch,
 	list_t *feature_enabled,
 	const char *dns_server,
-	const char *telephony_name,
 	list_t *net_ifaces
 )
 {
@@ -339,13 +336,6 @@ container_new_internal(
 	container->vol = c_vol_new(container);
 	if (!container->vol) {
 		WARN("Could not initialize volume subsystem for container %s (UUID: %s)", container->name,
-		     uuid_string(container->uuid));
-		goto error;
-	}
-
-	container->prop = c_properties_new(container, telephony_name);
-	if (!container->prop) {
-		WARN("Could not initialize property subsystem for container %s (UUID: %s)", container->name,
 		     uuid_string(container->uuid));
 		goto error;
 	}
@@ -505,7 +495,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
 
 	container_t *c = container_new_internal(uuid, name, ns_usr, ns_net, priv, os, config_filename,
-			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, allow_container_switch, feature_enabled, dns_server, NULL, net_ifaces);
+			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, allow_container_switch, feature_enabled, dns_server, net_ifaces);
 	if (c)
 		container_config_write(conf);
 
@@ -557,8 +547,6 @@ container_free(container_t *container) {
 		c_cgroups_free(container->cgroups);
 	if (container->net)
 		c_net_free(container->net);
-	if (container->prop)
-		c_properties_free(container->prop);
 	if (container->vol)
 		c_vol_free(container->vol);
 	if (container->service)
@@ -968,17 +956,6 @@ container_start_child(void *data)
 	if (c_vol_start_child(container->vol) < 0) {
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
-	}
-	// FIXME: why does c_properties_start_child lead to ERROR?
-
-	if ((strcmp(guestos_get_name(container->os), "idsos") != 0 ) &&
-				 (strncmp(guestos_get_name(container->os), "library", strlen("library")) != 0) &&
-				 (strcmp(guestos_get_name(container->os), "simae") != 0) &&
-				 (strcmp(guestos_get_name(container->os), "debos") != 0)) {
-		if (c_properties_start_child(container->prop) < 0) {
-			ret = CONTAINER_ERROR_PROP;
-			goto error;
-		}
 	}
 
 	if (c_service_start_child(container->service) < 0) {
@@ -1994,13 +1971,6 @@ void
 container_enable_fhgapps(container_t* container)
 {
 	container_set_feature_enable(container, "fhgapps");
-}
-
-void
-container_set_telephony_name(container_t *container, const char *name)
-{
-	ASSERT(container);
-	c_properties_set_telephony_name(container->prop, name);
 }
 
 const char *
