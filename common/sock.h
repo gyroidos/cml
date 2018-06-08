@@ -52,10 +52,11 @@
  * Macro to get the path for a socket name.
  */
 #ifdef ANDROID
-#define SOCK_PATH(name) ANDROID_SOCKET_DIR"/cml-"#name
+#define CMLD_SOCKET_DIR ANDROID_SOCKET_DIR
 #else
-#define SOCK_PATH(name) "/dev/socket/cml-"#name
+#define CMLD_SOCKET_DIR "/dev/socket"
 #endif
+#define SOCK_PATH(name) CMLD_SOCKET_DIR"/cml-"#name
 
 /**
  * Creates a new UNIX socket of the given type.
