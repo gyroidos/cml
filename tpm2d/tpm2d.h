@@ -27,16 +27,24 @@
 #include <tss2/tss.h>
 
 #define TPM2D_KEY_HIERARCHY TPM_RH_OWNER
-#define TPM2D_PLATFORM_STORAGE_KEY_PERSIST_HANDLE 0x81800000
-#define TPM2D_OWNER_STORAGE_KEY_PERSIST_HANDLE 0x81000000
+#define TPM2D_PLATFORM_STORAGE_KEY_PERSIST_HANDLE	0x81800000
+#define TPM2D_PLATFORM_FDE_KEY_PERSIST_HANDLE		0x81800001
+#define TPM2D_OWNER_STORAGE_KEY_PERSIST_HANDLE		0x81000000
+#define TPM2D_OWNER_FDE_KEY_PERSIST_HANDLE		0x81000001
+#define TPM2D_FDE_NV_HANDLE				0x01000000
+
+// TODO proper auth handling (generate pws during provisioning)
 #define TPM2D_PRIMARY_STORAGE_KEY_PW "primary"
 #define TPM2D_ATTESTATION_KEY_PW "sig"
+#define TPM2D_FDE_KEY_PW "storage"
 
 #define TPM2D_BASE_DIR "/data/cml/tpm2d"
 #define TPM2D_TOKEN_DIR "tokens"
 #define TPM2D_SESSION_DIR "session"
 #define TPM2D_ATTESTATION_PRIV_FILE	TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_priv.bin"
 #define TPM2D_ATTESTATION_PUB_FILE	TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_pub.bin"
+#define TPM2D_FDE_PRIV_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/fde_priv.bin"
+#define TPM2D_FDE_PUB_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/fde_pub.bin"
 #define TPM2D_PS_PUB_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/ps_pub.bin"
 
 #define TPM2D_ASYM_ALGORITHM	TPM_ALG_RSA
@@ -44,7 +52,8 @@
 #define TPM2D_HASH_ALGORITHM 	TPM_ALG_SHA256
 
 typedef enum tpm2d_key_type {
-	TPM2D_KEY_TYPE_STORAGE = 1,
+	TPM2D_KEY_TYPE_STORAGE_U = 1,
+	TPM2D_KEY_TYPE_STORAGE_R,
 	TPM2D_KEY_TYPE_SIGNING_U,
 	TPM2D_KEY_TYPE_SIGNING_R
 } tpm2d_key_type_t;
@@ -110,8 +119,30 @@ tpm2_quote_free(tpm2d_quote_strings_t *quote_strings);
 char *
 tpm2_read_file_to_hex_string_new(const char *file_name);
 
-#endif // TPM2D_H
-
 TPM_RC
 tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_handle,
 						 TPMI_DH_PERSISTENT persist_handle);
+
+TPM_RC
+tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
+                         uint8_t *out_buffer, size_t *out_length);
+
+TPM_RC
+tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buffer,
+			size_t in_length, uint8_t *out_buffer, size_t *out_length);
+uint8_t *
+tpm2_getrandom_new(size_t rand_length);
+
+TPM_RC
+tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
+		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd);
+
+TPM_RC
+tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+					uint8_t *data, size_t data_length);
+
+TPM_RC
+tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+				uint8_t *out_buffer, size_t *out_length);
+
+#endif // TPM2D_H

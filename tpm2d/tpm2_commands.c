@@ -229,7 +229,11 @@ tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 	out_public_area->parameters.rsaDetail.exponent = 0;
 
 	switch (key_type) {
-		case TPM2D_KEY_TYPE_STORAGE:
+		case TPM2D_KEY_TYPE_STORAGE_U:
+			out_public_area->parameters.rsaDetail.symmetric.algorithm = TPM_ALG_NULL;
+			out_public_area->parameters.rsaDetail.scheme.scheme = TPM_ALG_NULL;
+			break;
+		case TPM2D_KEY_TYPE_STORAGE_R:
 			out_public_area->parameters.rsaDetail.symmetric.algorithm = TPM_ALG_AES;
 			out_public_area->parameters.rsaDetail.symmetric.keyBits.aes = 128;
 			out_public_area->parameters.rsaDetail.symmetric.mode.aes = TPM_ALG_CFB;
@@ -307,7 +311,12 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, 
 	out_public_area->authPolicy.t.size = 0;
 
 	switch (key_type) {
-		case TPM2D_KEY_TYPE_STORAGE:
+		case TPM2D_KEY_TYPE_STORAGE_U:
+			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_SIGN;
+			out_public_area->objectAttributes.val |= TPMA_OBJECT_DECRYPT;
+			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_RESTRICTED;
+			break;
+		case TPM2D_KEY_TYPE_STORAGE_R:
 			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_SIGN;
 			out_public_area->objectAttributes.val |= TPMA_OBJECT_DECRYPT;
 			out_public_area->objectAttributes.val |= TPMA_OBJECT_RESTRICTED;
@@ -760,6 +769,375 @@ tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_han
 		const char *num;
 		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
 		ERROR("CC_EvictControl failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	}
+
+	return rc;
+}
+
+TPM_RC
+tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
+			 uint8_t *out_buffer, size_t *out_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	RSA_Encrypt_In in;
+	RSA_Encrypt_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if (in_length > MAX_RSA_KEY_BYTES) {
+	    ERROR("Input buffer exceeds RSA Blocksize %zu\n", in_length);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+
+	in.keyHandle = key_handle;
+	/* Table 158 - Definition of {RSA} TPM2B_PUBLIC_KEY_RSA Structure */
+	in.message.t.size = (uint16_t)in_length;
+	memcpy(in.message.t.buffer, in_buffer, in_length);
+	/* Table 157 - Definition of {RSA} TPMT_RSA_DECRYPT Structure */
+	in.inScheme.scheme = TPM_ALG_OAEP;
+	in.inScheme.details.oaep.hashAlg = TPM2D_HASH_ALGORITHM;
+	/* Table 73 - Definition of TPM2B_DATA Structure */
+	in.label.t.size = 0;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_RSA_Encrypt,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_RSA_encrypt failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+		return rc;
+	}
+
+	TSS_PrintAll("RSA encrypted data", out.outData.t.buffer, out.outData.t.size);
+
+	// return handle to just created object
+	if (out.outData.t.size > *out_length) {
+		ERROR("Output buffer (size=%zu) is to small for encrypted data of size %u\n",
+						*out_length, out.outData.t.size);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+	memcpy(out_buffer, out.outData.t.buffer, out.outData.t.size);
+
+	return rc;
+}
+
+TPM_RC
+tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buffer,
+			size_t in_length, uint8_t *out_buffer, size_t *out_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	RSA_Decrypt_In in;
+	RSA_Decrypt_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if (in_length > MAX_RSA_KEY_BYTES) {
+	    ERROR("Input buffer exceeds RSA block size %zu\n", in_length);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+
+	in.keyHandle = key_handle;
+	/* Table 158 - Definition of {RSA} TPM2B_PUBLIC_KEY_RSA Structure */
+	in.cipherText.t.size = (uint16_t)in_length;
+	memcpy(in.cipherText.t.buffer, in_buffer, in_length);
+	/* Table 157 - Definition of {RSA} TPMT_RSA_DECRYPT Structure */
+	in.inScheme.scheme = TPM_ALG_OAEP;
+	in.inScheme.details.oaep.hashAlg = TPM2D_HASH_ALGORITHM;
+	/* Table 73 - Definition of TPM2B_DATA Structure */
+	in.label.t.size = 0;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_RSA_Decrypt,
+			TPM_RS_PW, key_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_RSA_decrypt failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+		return rc;
+	}
+
+	TSS_PrintAll("RSA Decrypted message", out.message.t.buffer, out.message.t.size);
+
+	// return handle to just created object
+	if (out.message.t.size > *out_length) {
+		ERROR("Output buffer (size=%zu) is to small for decrypted message of size %u\n",
+						*out_length, out.message.t.size);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+	memcpy(out_buffer, out.message.t.buffer, out.message.t.size);
+	*out_length = out.message.t.size;
+
+	return rc;
+}
+
+uint8_t *
+tpm2_getrandom_new(size_t rand_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	GetRandom_In in;
+	GetRandom_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
+
+	uint8_t *rand = mem_new0(uint8_t, rand_length);
+	size_t recv_bytes = 0;
+	do {
+		in.bytesRequested = rand_length - recv_bytes;
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_GetRandom,
+				TPM_RH_NULL, NULL, 0);
+		if (rc != TPM_RC_SUCCESS)
+			break;
+		memcpy(&rand[recv_bytes], out.randomBytes.t.buffer, out.randomBytes.t.size);
+		recv_bytes += out.randomBytes.t.size;
+	} while (recv_bytes < rand_length);
+
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_GetRandom failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+		mem_free(rand);
+		return NULL;
+	}
+
+	char *rand_hex = convert_bin_to_hex_new(rand, rand_length);
+	INFO("Generated Rand: %s", rand_hex);
+
+	mem_free(rand_hex);
+	return rand;
+}
+
+static size_t
+tpm2_nv_get_data_size(TSS_CONTEXT *tss_context, TPMI_RH_NV_INDEX nv_index_handle)
+{
+	NV_ReadPublic_In in;
+	NV_ReadPublic_Out out;
+	size_t data_size = 0;
+
+	IF_NULL_RETVAL_WARN(tss_context, 0);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return -1;
+	}
+
+	in.nvIndex = nv_index_handle;
+
+	if (TPM_RC_SUCCESS != TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_ReadPublic,
+				TPM_RH_NULL, NULL, 0))
+			return 0;
+
+	uint32_t nv_type = (out.nvPublic.nvPublic.attributes.val & TPMA_NVA_TPM_NT_MASK) >> 4;
+	if (nv_type == TPM_NT_ORDINARY) {
+		data_size = out.nvPublic.nvPublic.dataSize;
+	} else {
+		WARN("Only ORDINARY data have variable size!");
+	}
+	INFO("Data size of NV index %x is %zd", nv_index_handle, data_size);
+
+	return data_size;
+}
+
+static size_t
+tpm2_nv_get_max_buffer_size(TSS_CONTEXT *tss_context)
+{
+	GetCapability_In in;
+	GetCapability_Out out;
+
+	in.capability = TPM_CAP_TPM_PROPERTIES;
+	in.property = TPM_PT_NV_BUFFER_MAX;
+	in.propertyCount = 1;
+
+	// set a small default fallback value;
+	size_t buffer_size = 512;
+
+	IF_NULL_RETVAL_WARN(tss_context, buffer_size);
+
+	if (TPM_RC_SUCCESS != TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_GetCapability,
+				TPM_RH_NULL, NULL, 0)) {
+		ERROR("GetCapability failed, returning default value %zd", buffer_size);
+		return buffer_size;
+	}
+
+	if (out.capabilityData.data.tpmProperties.count > 0 &&
+			 out.capabilityData.data.tpmProperties.tpmProperty[0].property == TPM_PT_NV_BUFFER_MAX)
+		buffer_size = out.capabilityData.data.tpmProperties.tpmProperty[0].value;
+	else
+		ERROR("GetCapability failed, returning default value %zd", buffer_size);
+
+	INFO("NV buffer maximum size is set to %zd", buffer_size);
+	return buffer_size;
+}
+
+TPM_RC
+tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
+		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	NV_DefineSpace_In in;
+	TPMA_NV nv_attr;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	if (nv_pwd == NULL)
+		in.auth.b.size = 0;
+	else if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_StringCopy(&in.auth.b,
+					nv_pwd, sizeof(TPMU_HA))))
+		return rc;
+
+	in.authHandle = hierarchy;
+
+	nv_attr.val = 0;
+	if (hierarchy == TPM_RH_PLATFORM) {
+		nv_attr.val |= TPMA_NVA_PLATFORMCREATE;
+		nv_attr.val |= TPMA_NVA_PPWRITE;
+		nv_attr.val |= TPMA_NVA_PPREAD;
+	} else { // TPM_RH_OWNER
+		nv_attr.val |= TPMA_NVA_OWNERWRITE;
+		nv_attr.val |= TPMA_NVA_OWNERREAD;
+	}
+	nv_attr.val |= TPMA_NVA_ORDINARY;
+	nv_attr.val |= TPMA_NVA_AUTHREAD;
+	nv_attr.val |= TPMA_NVA_AUTHWRITE;
+
+	in.publicInfo.nvPublic.nvIndex = nv_index_handle;
+	in.publicInfo.nvPublic.nameAlg = TPM2D_HASH_ALGORITHM;
+	in.publicInfo.nvPublic.attributes = nv_attr;
+	in.publicInfo.nvPublic.dataSize = nv_size;
+	// set default empty policy
+	in.publicInfo.nvPublic.authPolicy.t.size = 0;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_DefineSpace,
+			TPM_RS_PW, hierarchy_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_NV_DefineSpace failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	}
+
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+					uint8_t *data, size_t data_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	NV_Write_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = nv_index_handle;
+	in.nvIndex = nv_index_handle;
+	in.offset = 0;
+
+	size_t buffer_max = tpm2_nv_get_max_buffer_size(tss_context);
+	if (data_length > buffer_max) {
+		INFO("Only one chunk is supported by this implementation!");
+		rc = TSS_RC_INSUFFICIENT_BUFFER;
+		goto err;
+	}
+	memcpy(in.data.b.buffer, data, data_length);
+	in.data.b.size = data_length;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Write,
+			TPM_RS_PW, nv_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_NV_Write failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	}
+
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+				uint8_t *out_buffer, size_t *out_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	NV_Read_In in;
+	NV_Read_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = nv_index_handle;
+	in.nvIndex = nv_index_handle;
+	in.offset = 0;
+
+	size_t data_size = tpm2_nv_get_data_size(tss_context, nv_index_handle);
+	size_t buffer_max = tpm2_nv_get_max_buffer_size(tss_context);
+	if (data_size > buffer_max) {
+		INFO("Only one chunk of size=%zd is supported by this implementation!", buffer_max);
+		rc = TSS_RC_INSUFFICIENT_BUFFER;
+		goto err;
+	}
+	if (data_size > *out_length) {
+		ERROR("Output buffer (size=%zd) is to small for nv data of size %zd\n",
+						*out_length, data_size);
+		rc = TSS_RC_INSUFFICIENT_BUFFER;
+		goto err;
+	}
+
+	in.size = data_size;
+
+	if (TPM_RC_SUCCESS != (rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
+			TPM_RS_PW, nv_pwd, 0,
+			TPM_RH_NULL, NULL, 0)))
+		goto err;
+
+	memcpy(out_buffer, out.data.b.buffer, out.data.b.size);
+
+	// set ouput length of caller
+	*out_length = out.data.b.size;
+
+	TSS_PrintAll("nv_read data: ", out_buffer, *out_length);
+
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_NV_Read failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
 	}
 
 	return rc;
