@@ -36,7 +36,38 @@
 
 #include <tss2/tssprint.h>
 
+static TSS_CONTEXT *tss_context = NULL;
+
 /************************************************************************************/
+
+void
+tss2_init(void)
+{
+	int ret;
+
+	if (tss_context) {
+		WARN("Context already exists");
+		return;
+	}
+
+	if (TPM_RC_SUCCESS != (ret = TSS_Create(&tss_context)))
+		FATAL("Cannot create tss context error code: %08x", ret);
+
+	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+}
+
+void
+tss2_destroy(void)
+{
+	int ret;
+	IF_NULL_RETURN_ERROR(tss_context);
+
+	if (TPM_RC_SUCCESS != (ret = TSS_Delete(tss_context)))
+		FATAL("Cannot destroy tss context error code: %08x", ret);
+
+	tss_context = NULL;
+}
+
 static char *
 convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
@@ -119,12 +150,8 @@ TPM_RC
 tpm2_powerup(void)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	if (TPM_RC_SUCCESS != (rc = TSS_TransmitPlatform(tss_context, TPM_SIGNAL_POWER_OFF, "TPM2_PowerOffPlatform")))
 		goto err;
@@ -134,10 +161,7 @@ tpm2_powerup(void)
 
 	rc = TSS_TransmitPlatform(tss_context, TPM_SIGNAL_NV_ON, "TPM2_NvOnPlatform");
 err:
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -152,23 +176,16 @@ TPM_RC
 tpm2_startup(TPM_SU startup_type)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-
 	Startup_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
 	in.startupType = startup_type;
-
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 			 TPM_CC_Startup, TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -183,21 +200,16 @@ TPM_RC
 tpm2_selftest(void)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-
 	SelfTest_In in;
-	in.fullTest = YES;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.fullTest = YES;
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 	                 TPM_CC_SelfTest, TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -333,11 +345,12 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 		const char *file_name_pub_key, uint32_t *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
+
 	CreatePrimary_In in;
 	CreatePrimary_Out out;
 	TPMA_OBJECT object_attrs;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	object_attrs.val = 0;
 	object_attrs.val |= TPMA_OBJECT_NODA;
@@ -372,20 +385,12 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	in.creationPCR.count = 0;
 
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	if (TPM_RC_SUCCESS != (rc = TSS_Create(&tss_context)))
-		return rc;
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_CreatePrimary,
 			TPM_RS_PW, hierachy_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -413,16 +418,14 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		const char *file_name_priv_key, const char *file_name_pub_key)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	Create_In in;
 	Create_Out out;
 	TPMA_OBJECT object_attrs;
 
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
 	in.parentHandle = parent_handle;
 	object_attrs.val = object_vals;
-
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 
 	// Table 134 - Definition of TPM2B_SENSITIVE_CREATE inSensitive
 	if (key_pwd == NULL)
@@ -443,17 +446,12 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 	// Table 102 - TPML_PCR_SELECTION creationPCR
 	in.creationPCR.count = 0;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_Create,
 			TPM_RS_PW, parent_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -487,14 +485,12 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 		uint32_t *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	Load_In in;
 	Load_Out out;
 
-        in.parentHandle = parent_handle;
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	in.parentHandle = parent_handle;
 
 	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructure(&in.inPrivate,
 			(UnmarshalFunction_t)TPM2B_PRIVATE_Unmarshal,
@@ -506,17 +502,12 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 			file_name_pub_key)))
 		return rc;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_Load,
 			TPM_RS_PW, parent_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -535,11 +526,9 @@ TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	PCR_Extend_In in;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	if (strlen(data) > sizeof(TPMU_HA)) {
 		ERROR("Data length %zu exceeds hash size %zu!", strlen(data), sizeof(TPMU_HA));
@@ -556,17 +545,12 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	memset((uint8_t *)&in.digests.digests[0].digest, 0, sizeof(TPMU_HA));
 	memcpy((uint8_t *)&in.digests.digests[0].digest, data, strlen(data));
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
-
 	rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Extend,
 			TPM_RS_PW, NULL, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -581,13 +565,11 @@ tpm2d_pcr_strings_t *
 tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	PCR_Read_In in;
 	PCR_Read_Out out;
 	tpm2d_pcr_strings_t *pcr_strings = NULL;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
 	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
 	in.pcrSelectionIn.count = 1;
@@ -599,16 +581,11 @@ tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 	in.pcrSelectionIn.pcrSelections[0].pcrSelect[2] = 0;
 	in.pcrSelectionIn.pcrSelections[0].pcrSelect[pcr_index / 8] = 1 << (pcr_index % 8);
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), NULL);
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Read,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
@@ -640,15 +617,13 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	Quote_In in;
 	Quote_Out out;
 	TPMS_ATTEST tpms_attest;
 	uint8_t *qualifying_data_bin = NULL;
 	tpm2d_quote_strings_t *quote_strings = NULL;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
 	if (pcr_indices > 23) {
 		ERROR("Exceeded maximum available PCR registers!");
@@ -676,8 +651,6 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 	in.PCRselect.count = 1;
 	in.PCRselect.pcrSelections[0].hash = TPM2D_HASH_ALGORITHM;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), NULL);
-
 	if (qualifying_data != NULL) {
 		int length;
 		qualifying_data_bin = convert_hex_to_bin_new(qualifying_data, &length);
@@ -693,9 +666,6 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			TPM_RS_PW, sig_key_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
 	if (rc != TPM_RC_SUCCESS)
 		goto err;
 
@@ -771,26 +741,20 @@ tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_han
 						 TPMI_DH_PERSISTENT persist_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-
 	EvictControl_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	in.auth = auth;
 	in.objectHandle = obj_handle;
 	in.persistentHandle = persist_handle;
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 			TPM_CC_EvictControl,
 			TPM_RS_PW, auth_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
+	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;

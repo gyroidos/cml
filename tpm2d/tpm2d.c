@@ -166,6 +166,8 @@ main(UNUSED int argc, char **argv) {
 	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, tpm2d_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
+	tss2_init();
+
 	tpm2d_init();
 
 	if (mkdir(TPM2D_SOCK_PATH, 0700) < 0 && errno != EEXIST)
@@ -176,9 +178,13 @@ main(UNUSED int argc, char **argv) {
 		FATAL("Could not init tpm2d_control socket");
 	}
 
+	tpm2d_fde_init();
+
 	INFO("created control socket.");
 
 	event_loop();
+
+	tss2_destroy();
 
 	return 0;
 }

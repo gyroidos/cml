@@ -60,6 +60,13 @@ typedef struct tpm2d_quote_strings {
 	char *signature_str;
 } tpm2d_quote_strings_t;
 
+
+void
+tss2_init(void);
+
+void
+tss2_destroy(void);
+
 TPM_RC
 tpm2_powerup(void);
 
