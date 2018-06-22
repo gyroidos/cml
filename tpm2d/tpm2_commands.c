@@ -68,7 +68,7 @@ tss2_destroy(void)
 	tss_context = NULL;
 }
 
-static char *
+char *
 convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	char *hex = mem_alloc0(sizeof(char)*length*2 + 1);
@@ -81,7 +81,7 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-static uint8_t *
+uint8_t *
 convert_hex_to_bin_new(const char *hex_str, int *out_length)
 {
 	int len = strlen(hex_str);

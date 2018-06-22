@@ -29,6 +29,7 @@
 #endif
 
 #include "tpm2d.h"
+#include "nvmcrypt.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -150,6 +151,12 @@ err_att_req:
 			tpm2_quote_free(quote_strings);
 		if (attestation_pub_key)
 			mem_free(attestation_pub_key);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
+		if (msg->dmcrypt_device)
+			nvmcrypt_dm_setup(msg->dmcrypt_device);
+		else
+			WARN("Received DMCRYPT_SETUP, without device parameter, doing nothing!");
 	} break;
 	default:
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);

@@ -44,6 +44,7 @@ message Pcr {
 message ControllerToTpm {
 	enum Code {
 		INTERNAL_ATTESTATION_REQ = 1;
+		DMCRYPT_SETUP = 2;
 	}
 
 	required Code code = 1;
@@ -58,6 +59,10 @@ message ControllerToTpm {
 	//  - for BASIC, the default PCRs are PCRs 0 to 10
 	//  - for ALL  , the default PCRs are PCRs 0 to 23
 	optional int32 pcrs = 4;
+
+	// if command FDE_DM_SETUP this is the blk device which is used
+	// as pysical device for the mapping
+	optional string dmcrypt_device = 5;
 }
 
 message TpmToController {

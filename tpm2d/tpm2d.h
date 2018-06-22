@@ -76,6 +76,13 @@ tss2_init(void);
 void
 tss2_destroy(void);
 
+char *
+convert_bin_to_hex_new(const uint8_t *bin, int length);
+
+uint8_t *
+convert_hex_to_bin_new(const char *hex_str, int *out_length);
+
+
 TPM_RC
 tpm2_powerup(void);
 

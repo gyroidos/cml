@@ -51,7 +51,6 @@ static uint32_t tpm2d_ps_key_handle = 0;
 static uint32_t tpm2d_as_key_handle = 0;
 
 static uint32_t persist_ps_handle = 0;
-static uint32_t persist_fde_handle = 0;
 
 static void
 tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
@@ -71,10 +70,8 @@ tpm2d_init(void)
 
 	if (TPM2D_KEY_HIERARCHY == TPM_RH_OWNER) {
 		persist_ps_handle = TPM2D_OWNER_STORAGE_KEY_PERSIST_HANDLE;
-		persist_fde_handle = TPM2D_OWNER_FDE_KEY_PERSIST_HANDLE;
 	} else {
 		persist_ps_handle = TPM2D_PLATFORM_STORAGE_KEY_PERSIST_HANDLE;
-		persist_fde_handle = TPM2D_PLATFORM_FDE_KEY_PERSIST_HANDLE;
 	}
 
 	if (!file_is_dir(TPM2D_BASE_DIR)) {
@@ -147,65 +144,6 @@ tpm2d_init(void)
 }
 
 static void
-tpm2d_fde_init(void)
-{
-	int ret = 0;
-	size_t key_len = 64;
-	uint8_t *fde_key = mem_new(uint8_t, 64);
-
-	ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, TPM2D_FDE_KEY_PW, fde_key, &key_len);
-
-	if (TPM_RC_SUCCESS == ret) {
-		INFO("Loaded FDE Key from NVRAM");
-		return;
-	}
-
-	mem_free(fde_key);
-
-	if (TPM_RC_HANDLE != ret)
-		FATAL("nv_read returned with unexpected error %08x", ret);
-
-	INFO("The Handle %x does not yet exist, creating a new FDE Key");
-
-	// generate 64 byte random data as input for 512bit AES-XTS key
-	fde_key = tpm2_getrandom_new(key_len);
-
-	size_t verify_key_len = 64;
-	uint8_t *verify_key = mem_new(uint8_t, 64);
-
-	if (fde_key == NULL) {
-		ERROR("Failed to generate fde key!");
-		goto err;
-	}
-
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_definespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE,
-						key_len, NULL, TPM2D_FDE_KEY_PW))) {
-		ERROR("Failed to generate nv area for fde key with error code: %08x", ret);
-		goto err;
-	}
-
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_write(TPM2D_FDE_NV_HANDLE, TPM2D_FDE_KEY_PW, fde_key, key_len))) {
-		ERROR("Failed to write fde key to nv area with error code: %08x", ret);
-		goto err;
-	}
-
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, TPM2D_FDE_KEY_PW, verify_key, &verify_key_len))) {
-		ERROR("Failed to read fde key from nv area with error code: %08x", ret);
-		goto err;
-	}
-
-	if (key_len != verify_key_len)
-		ERROR("FDE-Key verification process failed! key size missmatch!");
-	if (memcmp(fde_key, verify_key, key_len) != 0)
-		ERROR("FDE-Key verification process failed! byte copare missmatch!");
-err:
-	if (fde_key)
-		mem_free(fde_key);
-	if (verify_key)
-		mem_free(verify_key);
-}
-
-static void
 main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	FATAL("Received SIGINT...");
@@ -242,8 +180,6 @@ main(UNUSED int argc, char **argv) {
 	if (!tpm2d_control_cmld) {
 		FATAL("Could not init tpm2d_control socket");
 	}
-
-	tpm2d_fde_init();
 
 	INFO("created control socket.");
 

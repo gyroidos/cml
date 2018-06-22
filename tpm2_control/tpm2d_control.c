@@ -44,10 +44,11 @@
 static void print_usage(const char *cmd)
 {
 	printf("\n");
-	printf("Usage: %s\n", cmd);
+	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("   test\n        Test TPM connection\n");
+	printf("   attestation_test\n    Test TPM attestation request\n");
+	printf("   dmcrypt_setup <device path>\n        Setup device mapper with tpm2d's internal disk encryption key\n");
 	printf("\n");
 	exit(-1);
 }
@@ -81,7 +82,7 @@ static void send_message(const char *socket_file, ControllerToTpm *msg, bool has
 }
 
 static const struct option global_options[] = {
-	{"test",   required_argument, 0, 't'},
+	{"socket",   required_argument, 0, 's'},
 	{"help",     no_argument, 0, 'h'},
 	{0, 0, 0, 0}
 };
@@ -92,11 +93,11 @@ int main(int argc, char *argv[])
 
 	bool has_response = false;
 	const char *socket_file = TPM2D_SOCKET;
-	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, "+t:h",
+	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, "+s:h",
 					global_options, &option_index)); ) {
 		switch (c) {
-		case 't':
-			DEBUG("Sending test command to TPM");
+		case 's':
+			socket_file = optarg;
 			break;
 		default: // includes cases 'h' and '?'
 			print_usage(argv[0]);
@@ -116,10 +117,20 @@ int main(int argc, char *argv[])
 	ControllerToTpm msg = CONTROLLER_TO_TPM__INIT;
 
 	const char *command = argv[optind++];
-	if (!strcasecmp(command, "test")) {
+	if (!strcasecmp(command, "attestation_test")) {
+		DEBUG("Sending test command to TPM");
 		msg.code = CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ;
 		msg.qualifyingdata = "deadbeef";
 		has_response = true;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "dmcrypt_setup")) {
+		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP;
+		if (optind != argc-1)
+			print_usage(argv[0]);
+
+		msg.dmcrypt_device = argv[optind];
+		DEBUG("Sending DMCRYPT_SETUP command TPM");
 		goto send_message;
 	}
 

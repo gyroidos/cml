@@ -33,10 +33,12 @@ SRC_FILES := \
 	common/fd.c \
 	common/sock.c \
 	common/protobuf.c \
+	common/cryptfs.c \
 	device.pb-c.c \
 	tpm2d.pb-c.c \
 	control.c \
 	tpm2_commands.c \
+	nvmcrypt.c \
 	tpm2d.c \
 
 
