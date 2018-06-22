@@ -45,17 +45,16 @@
 
 #define DM_CRYPT_BUF_SIZE 4096
 
-#define KEY_LEN_BYTES 32
-
 #define TABLE_LOAD_RETRIES 10
 
-//#ifdef CML_ANDROID
+#ifdef ANDROID
 #define DEV_MAPPER "/dev/device-mapper"
-//#else
-//#define DEV_MAPPER "/dev/mapper/control"
-//#endif
-
 #define CRYPT_PATH_PREFIX "/dev/block/dm-"
+#else
+#define DEV_MAPPER "/dev/mapper/control"
+#define CRYPT_PATH_PREFIX "/dev/mapper/"
+#endif
+
 #define CRYPTO_TYPE "aes-xts-plain64"
 
 /* taken from vold */
@@ -78,16 +77,14 @@ ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flag
 		strncpy(io->name, name, sizeof(io->name));
 }
 
-static unsigned int
+static unsigned long
 get_blkdev_size(int fd)
 {
-	unsigned int nr_sec;
+	unsigned long nr_sec;
 
 	if ((ioctl(fd, BLKGETSIZE, &nr_sec)) == -1) {
 		nr_sec = -1;
 	}
-	close(fd);
-
 	return nr_sec;
 }
 
@@ -182,11 +179,14 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 	int fd;
 	int retval = -1;
 	int load_count;
-	int fs_size;
+	unsigned long fs_size;
 	int i;
 
 	/* Update the fs_size field to be the size of the volume */
-	fd = open(real_blk_name, O_RDONLY);
+	if ((fd = open(real_blk_name, O_RDONLY)) < 0) {
+		ERROR("Cannot open volume %s", real_blk_name);
+		return -1;
+	}
 	fs_size = get_blkdev_size(fd);
 	close(fd);
 	if (fs_size == 0) {
