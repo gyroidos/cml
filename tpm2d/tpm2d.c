@@ -89,6 +89,8 @@ tpm2d_init(void)
 	if (setenv("TPM_DATA_DIR", TPM2D_BASE_DIR"/session", 1) < 0)
 		FATAL_ERRNO("Could not set environment!");
 
+	tss2_init();
+
 	// if no real hw tpm exists, powerup the simulator
 	if (!file_exists("/dev/tpm0")) {
 		if (TPM_RC_SUCCESS != (ret = tpm2_powerup()))
@@ -230,8 +232,6 @@ main(UNUSED int argc, char **argv) {
 
 	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, tpm2d_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
-
-	tss2_init();
 
 	tpm2d_init();
 
