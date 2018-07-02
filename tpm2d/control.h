@@ -30,6 +30,6 @@
 typedef struct tpm2d_control tpm2d_control_t;
 
 tpm2d_control_t *
-tpm2d_control_new(const char *path, uint32_t as_key_handle);
+tpm2d_control_new(const char *path);
 
 #endif /* TPM2D_CONTROL_H */

@@ -92,6 +92,10 @@ tpm2_startup(TPM_SU startup_type);
 TPM_RC
 tpm2_selftest(void);
 
+#ifndef TPM2D_NVMCRYPT_ONLY
+TPMI_DH_OBJECT
+tpm2d_get_as_key_handle(void);
+
 TPM_RC
 tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 		const char *hierachy_pwd, const char *key_pwd,
@@ -137,6 +141,8 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 TPM_RC
 tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buffer,
 			size_t in_length, uint8_t *out_buffer, size_t *out_length);
+#endif // ndef TPM2D_NVMCRYPT_ONLY
+
 uint8_t *
 tpm2_getrandom_new(size_t rand_length);
 

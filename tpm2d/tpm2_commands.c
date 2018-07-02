@@ -109,6 +109,7 @@ err:
 	return NULL;
 }
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 static char *
 halg_id_to_string_new(TPM_ALG_ID alg_id)
 {
@@ -143,6 +144,7 @@ err:
 	mem_free(bin_stream);
 	return hex_stream;
 }
+#endif
 
 /************************************************************************************/
 
@@ -220,6 +222,7 @@ tpm2_selftest(void)
 	return rc;
 }
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 static TPM_RC
 tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 {
@@ -877,6 +880,7 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 
 	return rc;
 }
+#endif // ndef TPM2D_NVMCRYPT_ONLY
 
 uint8_t *
 tpm2_getrandom_new(size_t rand_length)

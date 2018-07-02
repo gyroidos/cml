@@ -47,7 +47,6 @@
 
 struct tpm2d_control {
 	int sock;		// listen socket fd
-	TPMI_DH_OBJECT attestation_key_handle;
 };
 
 UNUSED static list_t *control_list = NULL;
@@ -55,6 +54,10 @@ UNUSED static list_t *control_list = NULL;
 static void
 tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
+	ASSERT(control);
+
+	TRACE("Handle message from client fd=%d", fd);
+
 	if (NULL == msg) {
 		WARN("msg=NULL, returning");
 		return;
@@ -68,6 +71,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 	}
 
 	switch(msg->code) {
+#ifndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ: {
 		Pcr **out_pcrs = NULL;
 		int pcr_regs = 0;
@@ -107,7 +111,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		}
 
 		quote_strings = tpm2_quote_new(pcr_indices,
-				control->attestation_key_handle, TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
+				tpm2d_get_as_key_handle(), TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
 		IF_NULL_GOTO_ERROR(quote_strings, err_att_req);
 
 		attestation_pub_key = tpm2_read_file_to_hex_string_new(TPM2D_ATTESTATION_PUB_FILE);
@@ -152,6 +156,7 @@ err_att_req:
 		if (attestation_pub_key)
 			mem_free(attestation_pub_key);
 	} break;
+#endif // ndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
 		if (msg->dmcrypt_device)
 			nvmcrypt_dm_setup(msg->dmcrypt_device);
@@ -238,7 +243,7 @@ tpm2d_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 }
 
 tpm2d_control_t *
-tpm2d_control_new(const char *path, uint32_t as_key_handle)
+tpm2d_control_new(const char *path)
 {
 	int sock = sock_unix_create_and_bind(SOCK_STREAM | SOCK_NONBLOCK, path);
 	if (sock < 0) {
@@ -252,7 +257,6 @@ tpm2d_control_new(const char *path, uint32_t as_key_handle)
 
 	tpm2d_control_t *tpm2d_control = mem_new0(tpm2d_control_t, 1);
 	tpm2d_control->sock = sock;
-	tpm2d_control->attestation_key_handle = as_key_handle;
 
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, tpm2d_control_cb_accept, tpm2d_control);
 	event_add_io(event);
