@@ -39,7 +39,7 @@
 #include <sys/stat.h>
 
 #define CONTROL_SOCKET SOCK_PATH(control)
-
+#define RUN_PATH "run"
 #define DEFAULT_KEY "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
 static void print_usage(const char *cmd)
@@ -63,43 +63,48 @@ static void print_usage(const char *cmd)
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
+	printf("   run <command> [<arg_1> ... <arg_n>] <container-uuid>\n        Runs the specified command with the given arguments inside the specified container.\n");
 	printf("\n");
 	exit(-1);
 }
 
-static void send_message(const char *socket_file, ControllerToDaemon *msg, bool has_response)
+static int sock_connect(const char *socket_file)
 {
-	// send message
-	//protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) msg);
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, socket_file);
 	if (sock < 0) {
 		exit(-3);
 	}
+	return sock;
+}
+
+static void send_message(int sock, ControllerToDaemon *msg)
+{
 	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) msg);
 	if (msg_size < 0) {
+		printf("error sending message\n");
 		exit(-4);
 	}
-	// recv response if applicable
-	// TODO for now just dump the response in text format
-	if (has_response) {
-		DaemonToController *resp = (DaemonToController *) protobuf_recv_message(sock, &daemon_to_controller__descriptor);
-		if (!resp) {
-			exit(-5);
-		}
+}
 
-		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
-		protobuf_free_message((ProtobufCMessage *) resp);
+static DaemonToController* recv_message(int sock)
+{
+	DaemonToController *resp = (DaemonToController *) protobuf_recv_message(sock, &daemon_to_controller__descriptor);
+	if (!resp) {
+		printf("error receiving message\n");
+		exit(-5);
 	}
+	return resp;
+}
 
-	fsync(sock);
-
+static void sock_disconnect(int sock)
+{
 	// give cmld some time to handle message before closing socket
-	if (!has_response)
-		usleep(200 * 1000);
-
+	fsync(sock);
+	usleep(200 * 1000);
 	shutdown(sock, SHUT_RDWR);
 	close(sock);
 }
+
 
 static const struct option global_options[] = {
 	{"socket",   required_argument, 0, 's'},
@@ -125,6 +130,8 @@ int main(int argc, char *argv[])
 
 	bool has_response = false;
 	const char *socket_file = CONTROL_SOCKET;
+	int sock = 0;
+
 	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, "+s:h",
 					global_options, &option_index)); ) {
 		switch (c) {
@@ -289,6 +296,12 @@ int main(int argc, char *argv[])
                         msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE;
 		} else
 			ASSERT(false); // should never be reached
+	} else if (!strcasecmp(command, "run") ) {
+		if ( optind > argc-2 )
+			print_usage(argv[0]);
+		has_response = true;
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_PID;
+		optind = argc-1;
 	} else
 		print_usage(argv[0]);
 
@@ -301,7 +314,34 @@ int main(int argc, char *argv[])
 	msg.container_uuids[0] = argv[optind];
 
 send_message:
-	send_message(socket_file, &msg, has_response);
+	sock = sock_connect(socket_file);
+	send_message(sock, &msg);
+
+	// recv response if applicable
+	if (has_response){
+		DaemonToController *resp = recv_message(sock);
+
+		// do command-specific response processing
+		if (!strcasecmp(command, "run") ){
+			pid_t pid = resp->container_pid;
+		        int run_argc = argc - 1;
+			char **run_argv = mem_new(char *, run_argc + 1);
+			run_argv[0] = mem_strdup(RUN_PATH);
+			run_argv[1] = mem_printf("%u", pid);
+			for ( int i = 2; i < run_argc; i++ ){
+				run_argv[i] = mem_strdup(argv[i]);
+			}
+			run_argv[run_argc] = NULL;
+
+			// execute command
+			execvp(run_argv[0], run_argv);
+			ERROR_ERRNO("run failed");
+		} else {
+			// TODO for now just dump the response in text format
+			protobuf_free_message((ProtobufCMessage *) resp);
+		}
+	}
+	sock_disconnect(sock);
 
 	return 0;
 }
