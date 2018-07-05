@@ -75,6 +75,9 @@ message ControllerToDaemon {
 		//This is a debugging feature!
 		GET_LAST_LOG = 5;
 
+		// Returns a namespace PID for the given container UUID
+		GET_CONTAINER_PID = 6;
+
 		// Starts or stops observing the status.
 		// TODO not implemented yet
 		OBSERVE_STATUS_START = 10;
@@ -177,6 +180,7 @@ message DaemonToController {
 		CONTAINER_CONFIG = 4;		// -> [container_config], [container_uuids]
 
 		CONTAINER_IFACES = 5;		// -> [container_ifaces]
+		CONTAINER_PID = 6;		// -> [container_pid]
 
 		STATUS_CHANGED = 10;		// -> [log_message]
 		NOTIFICATION = 11;		// -> [log_message]
@@ -206,6 +210,7 @@ message DaemonToController {
 	repeated ContainerStatus container_status = 7;		// ContainerStatus(es) for GET_CONTAINER_STATUS
 	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
 	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
+	optional uint32 container_pid = 10;			// PID of the container's namespace
 
 	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
 

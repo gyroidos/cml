@@ -667,6 +667,17 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		mem_free(results);
         } break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_PID: {
+		pid_t pid = container_get_pid(container);
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_PID;
+		out.has_container_pid = true;
+		out.container_pid = pid;
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			WARN("Could not send container PID to MDM");
+		}
+        } break;
+
 
 	default:
 		WARN("Unknown ControllerToDaemon command: %d received", msg->command);
