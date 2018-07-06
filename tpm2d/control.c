@@ -163,6 +163,10 @@ err_att_req:
 		else
 			WARN("Received DMCRYPT_SETUP, without device parameter, doing nothing!");
 	} break;
+	case CONTROLLER_TO_TPM__CODE__EXIT: {
+		INFO("Received EXIT command!");
+		tpm2d_exit();
+	} break;
 	default:
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);
 		break;

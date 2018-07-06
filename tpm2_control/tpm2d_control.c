@@ -47,8 +47,9 @@ static void print_usage(const char *cmd)
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("   attestation_test\n    Test TPM attestation request\n");
-	printf("   dmcrypt_setup <device path>\n        Setup device mapper with tpm2d's internal disk encryption key\n");
+	printf("\tattestation_test\n\t\tTest TPM attestation request\n");
+	printf("\tdmcrypt_setup <device path>\n\t\tSetup device mapper with tpm2d's internal disk encryption key\n");
+	printf("\texit\n\t\tStop TPM2D daemon\n");
 	printf("\n");
 	exit(-1);
 }
@@ -131,6 +132,11 @@ int main(int argc, char *argv[])
 
 		msg.dmcrypt_device = argv[optind];
 		DEBUG("Sending DMCRYPT_SETUP command TPM");
+		goto send_message;
+	}
+	if (!strcasecmp(command, "exit")) {
+		msg.code = CONTROLLER_TO_TPM__CODE__EXIT;
+		DEBUG("Sending EXIT command to TPM2D");
 		goto send_message;
 	}
 

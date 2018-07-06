@@ -71,6 +71,9 @@ typedef struct tpm2d_quote_strings {
 
 
 void
+tpm2d_exit(void);
+
+void
 tss2_init(void);
 
 void

@@ -45,6 +45,7 @@ message ControllerToTpm {
 	enum Code {
 		INTERNAL_ATTESTATION_REQ = 1;
 		DMCRYPT_SETUP = 2;
+		EXIT = 3;
 	}
 
 	required Code code = 1;

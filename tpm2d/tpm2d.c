@@ -162,10 +162,25 @@ tpm2d_init(void)
 	INFO("Sucessfully initialized TPM2.0");
 }
 
+void
+tpm2d_exit(void)
+{
+	INFO("Cleaning up tss2 and exit");
+	tss2_destroy();
+	exit(0);
+}
+
 static void
 main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	FATAL("Received SIGINT...");
+}
+
+static void
+main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+{
+	INFO("Received SIGTERM...");
+	tpm2d_exit();
 }
 
 int
@@ -184,8 +199,10 @@ main(UNUSED int argc, char **argv) {
 
 	event_init();
 
-	event_signal_t *sig = event_signal_new(SIGINT, &main_sigint_cb, NULL);
-	event_add_signal(sig);
+	event_signal_t *sig_int = event_signal_new(SIGINT, &main_sigint_cb, NULL);
+	event_add_signal(sig_int);
+	event_signal_t *sig_term = event_signal_new(SIGTERM, &main_sigterm_cb, NULL);
+	event_add_signal(sig_term);
 
 	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, tpm2d_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
