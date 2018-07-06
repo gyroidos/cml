@@ -25,6 +25,6 @@
 #define FDE_H
 
 void
-nvmcrypt_dm_setup(const char* device_path);
+nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
 
 #endif // FDE_H

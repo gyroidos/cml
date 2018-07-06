@@ -159,7 +159,7 @@ err_att_req:
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
 		if (msg->dmcrypt_device)
-			nvmcrypt_dm_setup(msg->dmcrypt_device);
+			nvmcrypt_dm_setup(msg->dmcrypt_device, msg->fde_pw);
 		else
 			WARN("Received DMCRYPT_SETUP, without device parameter, doing nothing!");
 	} break;

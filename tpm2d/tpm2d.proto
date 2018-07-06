@@ -64,6 +64,8 @@ message ControllerToTpm {
 	// if command FDE_DM_SETUP this is the blk device which is used
 	// as pysical device for the mapping
 	optional string dmcrypt_device = 5;
+	// passphrase for nv index of tpm
+	optional string fde_pw = 6;
 }
 
 message TpmToController {

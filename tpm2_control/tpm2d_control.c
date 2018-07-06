@@ -48,7 +48,7 @@ static void print_usage(const char *cmd)
 	printf("\n");
 	printf("commands:\n");
 	printf("\tattestation_test\n\t\tTest TPM attestation request\n");
-	printf("\tdmcrypt_setup <device path>\n\t\tSetup device mapper with tpm2d's internal disk encryption key\n");
+	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, passwod for corresponding nvindex\n");
 	printf("\texit\n\t\tStop TPM2D daemon\n");
 	printf("\n");
 	exit(-1);
@@ -127,10 +127,13 @@ int main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "dmcrypt_setup")) {
 		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP;
-		if (optind != argc-1)
+		if (optind >= argc)
 			print_usage(argv[0]);
 
-		msg.dmcrypt_device = argv[optind];
+		msg.dmcrypt_device = argv[optind++];
+		if (optind < argc)
+			msg.fde_pw = argv[optind++];
+
 		DEBUG("Sending DMCRYPT_SETUP command TPM");
 		goto send_message;
 	}

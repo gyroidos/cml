@@ -36,7 +36,6 @@
 // TODO proper auth handling (generate pws during provisioning)
 #define TPM2D_PRIMARY_STORAGE_KEY_PW "primary"
 #define TPM2D_ATTESTATION_KEY_PW "sig"
-#define TPM2D_FDE_KEY_PW "storage"
 
 #define TPM2D_BASE_DIR "/data/cml/tpm2d"
 #define TPM2D_TOKEN_DIR "tokens"

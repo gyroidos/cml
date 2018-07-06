@@ -32,13 +32,13 @@
 #define FDE_KEY_LEN 64
 
 static uint8_t *
-nvmcrypt_load_key_new(void)
+nvmcrypt_load_key_new(const char * fde_key_pw)
 {
 	int ret = 0;
 	size_t key_len = FDE_KEY_LEN;
 	uint8_t *fde_key = mem_new(uint8_t, FDE_KEY_LEN);
 
-	ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, TPM2D_FDE_KEY_PW, fde_key, &key_len);
+	ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, &key_len);
 
 	if (TPM_RC_SUCCESS == ret) {
 		INFO("Loaded FDE Key from NVRAM");
@@ -64,17 +64,17 @@ nvmcrypt_load_key_new(void)
 	}
 
 	if (TPM_RC_SUCCESS != (ret = tpm2_nv_definespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE,
-						key_len, NULL, TPM2D_FDE_KEY_PW))) {
+						key_len, NULL, fde_key_pw))) {
 		ERROR("Failed to generate nv area for fde key with error code: %08x", ret);
 		goto err;
 	}
 
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_write(TPM2D_FDE_NV_HANDLE, TPM2D_FDE_KEY_PW, fde_key, key_len))) {
+	if (TPM_RC_SUCCESS != (ret = tpm2_nv_write(TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, key_len))) {
 		ERROR("Failed to write fde key to nv area with error code: %08x", ret);
 		goto err;
 	}
 
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, TPM2D_FDE_KEY_PW, verify_key, &verify_key_len))) {
+	if (TPM_RC_SUCCESS != (ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, fde_key_pw, verify_key, &verify_key_len))) {
 		ERROR("Failed to read fde key from nv area with error code: %08x", ret);
 		goto err;
 	}
@@ -100,14 +100,14 @@ err:
 }
 
 void
-nvmcrypt_dm_setup(const char* device_path)
+nvmcrypt_dm_setup(const char* device_path, const char *fde_pw)
 {
 	ASSERT(device_path);
 
 	IF_FALSE_RETURN_ERROR(file_exists(device_path));
 	char *dev_name = basename(device_path);
 
-	uint8_t * key = nvmcrypt_load_key_new();
+	uint8_t * key = nvmcrypt_load_key_new(fde_pw);
 	IF_NULL_RETURN_ERROR(key);
 
 	// cryptfs_setup_volume_new expects an ascii string as key
