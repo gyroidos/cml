@@ -51,6 +51,27 @@ struct tpm2d_control {
 
 UNUSED static list_t *control_list = NULL;
 
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+static TpmToController__FdeResponse
+tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
+{
+	switch (state) {
+	case FDE_OK:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_OK;
+	case FDE_AUTH_FAILED:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_AUTH_FAILED;
+	case FDE_KEYGEN_FAILED:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_KEYGEN_FAILED;
+	case FDE_NO_DEVICE:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_NO_DEVICE;
+	case FDE_UNEXPECTED_ERROR:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_UNEXPECTED_ERROR;
+	default:
+		FATAL("Unhandled value for nvmcrypt_fde_state_t: %d", state);
+	}
+}
 static void
 tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
@@ -158,10 +179,13 @@ err_att_req:
 	} break;
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
-		if (msg->dmcrypt_device)
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
+		out.has_response = true;
+		nvmcrypt_fde_state_t state =
 			nvmcrypt_dm_setup(msg->dmcrypt_device, msg->fde_pw);
-		else
-			WARN("Received DMCRYPT_SETUP, without device parameter, doing nothing!");
+		out.response = tpm2d_control_fdestate_to_proto(state);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	case CONTROLLER_TO_TPM__CODE__EXIT: {
 		INFO("Received EXIT command!");

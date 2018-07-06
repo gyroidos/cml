@@ -31,6 +31,8 @@
 
 #define FDE_KEY_LEN 64
 
+static nvmcrypt_fde_state_t fde_state = FDE_UNEXPECTED_ERROR;
+
 static uint8_t *
 nvmcrypt_load_key_new(const char * fde_key_pw)
 {
@@ -41,14 +43,23 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 	ret = tpm2_nv_read(TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, &key_len);
 
 	if (TPM_RC_SUCCESS == ret) {
+		fde_state = FDE_OK;
 		INFO("Loaded FDE Key from NVRAM");
 		return fde_key;
 	}
 
 	mem_free(fde_key);
 
-	if ((ret & TPM_RCS_HANDLE) != TPM_RCS_HANDLE)
-		FATAL("nv_read returned with unexpected error %08x", ret);
+	if ((ret & TPM_RC_AUTH_FAIL) == TPM_RC_AUTH_FAIL) {
+		fde_state = FDE_AUTH_FAILED;
+		return NULL;
+	}
+	else if ((ret & TPM_RCS_HANDLE) != TPM_RCS_HANDLE) {
+		WARN("nv_read returned with unexpected error %08x", ret);
+		fde_state = FDE_UNEXPECTED_ERROR;
+		return NULL;
+	}
+
 
 	INFO("The Handle %x does not yet exist, creating a new FDE Key", TPM2D_FDE_NV_HANDLE);
 
@@ -89,8 +100,11 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 	}
 
 	mem_free(verify_key);
+
+	fde_state = FDE_OK;
 	return fde_key;
 err:
+	fde_state = FDE_KEYGEN_FAILED;
 	if (verify_key)
 		mem_free(verify_key);
 	if (fde_key)
@@ -99,16 +113,14 @@ err:
 	return NULL;
 }
 
-void
+nvmcrypt_fde_state_t
 nvmcrypt_dm_setup(const char* device_path, const char *fde_pw)
 {
-	ASSERT(device_path);
-
-	IF_FALSE_RETURN_ERROR(file_exists(device_path));
+	IF_TRUE_RETVAL(device_path == NULL || !file_exists(device_path), FDE_NO_DEVICE);
 	char *dev_name = basename(device_path);
 
 	uint8_t * key = nvmcrypt_load_key_new(fde_pw);
-	IF_NULL_RETURN_ERROR(key);
+	IF_NULL_RETVAL(key, fde_state);
 
 	// cryptfs_setup_volume_new expects an ascii string as key
 	char * ascii_key = convert_bin_to_hex_new(key, FDE_KEY_LEN);
@@ -117,10 +129,13 @@ nvmcrypt_dm_setup(const char* device_path, const char *fde_pw)
 
 	char* mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key);
 
-	if (mapped_path == NULL)
+	if (mapped_path == NULL) {
 		ERROR("Failed to setup device mapping for %s", device_path);
+		fde_state = FDE_NO_DEVICE;
+	}
 
 	mem_free(mapped_path);
 	mem_free(ascii_key);
 	mem_free(key);
+	return fde_state;
 }

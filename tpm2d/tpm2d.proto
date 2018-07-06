@@ -71,6 +71,14 @@ message ControllerToTpm {
 message TpmToController {
 	enum Code {
 		INTERNAL_ATTESTATION_RES = 1;
+		FDE_RESPONSE = 2;			// -> [response]
+	}
+	enum FdeResponse {
+		FDE_OK = 1;
+		FDE_AUTH_FAILED = 2;
+		FDE_KEYGEN_FAILED = 3;
+		FDE_NO_DEVICE = 4;
+		FDE_UNEXPECTED_ERROR = 5;
 	}
 
 	required Code code = 1;
@@ -93,4 +101,5 @@ message TpmToController {
 	// an _optional_ URI to a certificate that includes the public key
 	optional string certificate_uri = 7;
 
+	optional FdeResponse response = 8;
 }

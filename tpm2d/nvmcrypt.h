@@ -24,7 +24,15 @@
 #ifndef FDE_H
 #define FDE_H
 
-void
+typedef enum nvmcrypt_fde_state {
+	FDE_OK = 1,
+	FDE_AUTH_FAILED,
+	FDE_KEYGEN_FAILED,
+	FDE_NO_DEVICE,
+	FDE_UNEXPECTED_ERROR
+} nvmcrypt_fde_state_t;
+
+nvmcrypt_fde_state_t
 nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
 
 #endif // FDE_H

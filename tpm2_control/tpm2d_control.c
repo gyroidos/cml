@@ -126,6 +126,7 @@ int main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "dmcrypt_setup")) {
+		has_response = true;
 		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP;
 		if (optind >= argc)
 			print_usage(argv[0]);
