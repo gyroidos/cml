@@ -46,9 +46,10 @@
 #define TPM2D_FDE_PUB_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/fde_pub.bin"
 #define TPM2D_PS_PUB_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/ps_pub.bin"
 
-#define TPM2D_ASYM_ALGORITHM	TPM_ALG_RSA
-#define TPM2D_CURVE_ID		TPM_ECC_NONE
-#define TPM2D_HASH_ALGORITHM 	TPM_ALG_SHA256
+#define TPM2D_ASYM_ALGORITHM		TPM_ALG_ECC
+#define TPM2D_CURVE_ID			TPM_ECC_NIST_P256
+#define TPM2D_HASH_ALGORITHM		TPM_ALG_SHA256
+#define TPM2D_SYM_SESSION_ALGORITHM 	TPM_ALG_AES
 
 typedef enum tpm2d_key_type {
 	TPM2D_KEY_TYPE_STORAGE_U = 1,
@@ -72,6 +73,9 @@ typedef struct tpm2d_quote_strings {
 void
 tpm2d_exit(void);
 
+TPMI_DH_OBJECT
+tpm2d_get_salt_key_handle(void);
+
 void
 tss2_init(void);
 
@@ -84,7 +88,6 @@ convert_bin_to_hex_new(const uint8_t *bin, int length);
 uint8_t *
 convert_hex_to_bin_new(const char *hex_str, int *out_length);
 
-
 TPM_RC
 tpm2_powerup(void);
 
@@ -94,15 +97,12 @@ tpm2_startup(TPM_SU startup_type);
 TPM_RC
 tpm2_selftest(void);
 
-#ifndef TPM2D_NVMCRYPT_ONLY
-TPMI_DH_OBJECT
-tpm2d_get_as_key_handle(void);
-
 TPM_RC
 tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 		const char *hierachy_pwd, const char *key_pwd,
 		const char *file_name_pub_key, uint32_t *out_handle);
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 TPM_RC
 tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		uint32_t object_vals, const char *parent_pwd, const char *key_pwd,
@@ -112,6 +112,9 @@ TPM_RC
 tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 		const char *file_name_priv_key, const char *file_name_pub_key,
 		uint32_t *out_handle);
+
+TPMI_DH_OBJECT
+tpm2d_get_as_key_handle(void);
 
 TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data);

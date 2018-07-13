@@ -47,6 +47,8 @@
 static tpm2d_control_t *tpm2d_control_cmld = NULL;
 static logf_handler_t *tpm2d_logfile_handler = NULL;
 
+static uint32_t tpm2d_salt_key_handle = 0;
+
 #ifndef TPM2D_NVMCRYPT_ONLY
 static uint32_t tpm2d_ps_key_handle = 0;
 static uint32_t tpm2d_as_key_handle = 0;
@@ -61,6 +63,23 @@ tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_unregister(tpm2d_logfile_handler);
 	tpm2d_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-tpm2d"));
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);
+}
+
+static void
+tpm2d_setup_salt_key(void)
+{
+	// create primary key in NULL hierarchy wwhcih is used for session encryption
+	int ret;
+	if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R,
+			NULL, NULL, NULL, &tpm2d_salt_key_handle))) {
+		FATAL("Failed to create primary key for session encryption with error code: %08x", ret);
+	}
+}
+
+TPMI_DH_OBJECT
+tpm2d_get_salt_key_handle(void)
+{
+	return tpm2d_salt_key_handle;
 }
 
 #ifndef TPM2D_NVMCRYPT_ONLY
@@ -153,6 +172,9 @@ tpm2d_init(void)
 
 	if (TPM_RC_SUCCESS != (ret = tpm2_selftest()))
 		FATAL("selftest failed with error code: %08x", ret);
+
+	// create salt key for session encryption
+	tpm2d_setup_salt_key();
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 	tpm2d_setup_keys();

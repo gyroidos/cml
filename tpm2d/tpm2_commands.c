@@ -53,7 +53,7 @@ tss2_init(void)
 	if (TPM_RC_SUCCESS != (ret = TSS_Create(&tss_context)))
 		FATAL("Cannot create tss context error code: %08x", ret);
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "2");
 }
 
 void
@@ -222,7 +222,92 @@ tpm2_selftest(void)
 	return rc;
 }
 
-#ifndef TPM2D_NVMCRYPT_ONLY
+
+static TPM_RC
+tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
+		TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
+{
+	TPM_RC rc;
+	StartAuthSession_In in;
+	StartAuthSession_Out out;
+	StartAuthSession_Extra extra;
+
+	in.sessionType = session_type;
+
+	/* bind password */
+	in.bind = bind_handle;
+	if (in.bind != TPM_RH_NULL)
+		extra.bindPassword = bind_pwd;
+
+	/* salt key default NULL*/
+	in.tpmKey = tpm2d_get_salt_key_handle();
+	/* encryptedSalt (not required) */
+	in.encryptedSalt.b.size = 0;
+	/* nonceCaller (not required) */
+	in.nonceCaller.t.size = 0;
+
+	/* parameter encryption */
+	in.symmetric.algorithm = TPM2D_SYM_SESSION_ALGORITHM;
+	if (in.symmetric.algorithm == TPM_ALG_XOR) {
+	    /* Table 61 - Definition of (TPM_ALG_ID) TPMI_ALG_SYM Type */
+	    /* Table 125 - Definition of TPMU_SYM_KEY_BITS Union */
+	    in.symmetric.keyBits.xorr = TPM2D_HASH_ALGORITHM;
+	    /* Table 126 - Definition of TPMU_SYM_MODE Union */
+	    in.symmetric.mode.sym = TPM_ALG_NULL;
+	}
+	else { /* TPM_ALG_AES */
+	    /* Table 61 - Definition of (TPM_ALG_ID) TPMI_ALG_SYM Type */
+	    /* Table 125 - Definition of TPMU_SYM_KEY_BITS Union */
+	    in.symmetric.keyBits.aes = 128;
+	    /* Table 126 - Definition of TPMU_SYM_MODE Union */
+	    /* Table 63 - Definition of (TPM_ALG_ID) TPMI_ALG_SYM_MODE Type */
+	    in.symmetric.mode.aes = TPM_ALG_CFB;
+	}
+
+	/* authHash */
+	in.authHash = TPM2D_HASH_ALGORITHM;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in,(EXTRA_PARAMETERS *)&extra, TPM_CC_StartAuthSession,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_StartAuthSession failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+		return rc;
+	}
+
+	// return handle to just created object
+	*out_session_handle = out.sessionHandle;
+
+	return rc;
+}
+
+static TPM_RC
+tpm2_flushcontext(TPMI_DH_CONTEXT handle)
+{
+	TPM_RC rc;
+	FlushContext_In in;
+
+	in.flushHandle = handle;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_FlushContext,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_FlushContext failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	}
+	return rc;
+}
+
 static TPM_RC
 tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 {
@@ -286,6 +371,17 @@ tpm2_fill_ecc_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 			out_public_area->parameters.eccDetail.curveID = TPM2D_CURVE_ID;
 			out_public_area->parameters.eccDetail.kdf.scheme = TPM_ALG_NULL;
 			break;
+		case TPM2D_KEY_TYPE_STORAGE_U:
+		case TPM2D_KEY_TYPE_STORAGE_R:
+			out_public_area->parameters.eccDetail.symmetric.algorithm = TPM_ALG_AES;
+			out_public_area->parameters.eccDetail.symmetric.keyBits.aes = 128;
+			out_public_area->parameters.eccDetail.symmetric.mode.aes = TPM_ALG_CFB;
+			out_public_area->parameters.eccDetail.scheme.scheme = TPM_ALG_NULL;
+			out_public_area->parameters.eccDetail.scheme.details.anySig.hashAlg = 0;
+			out_public_area->parameters.eccDetail.curveID = TPM2D_CURVE_ID;
+			out_public_area->parameters.eccDetail.kdf.scheme = TPM_ALG_NULL;
+			out_public_area->parameters.eccDetail.kdf.details.mgf1.hashAlg = 0;
+			break;
 		default:
 			ERROR("Keytype not supported for ecc keys!");
 			return TPM_RC_VALUE;
@@ -345,6 +441,8 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, 
 		rc = tpm2_fill_rsa_details(out_public_area, key_type);
 	} else {
 		// TPM2D_ASYM_ALGORITHM == TPM_ALG_ECC
+		out_public_area->unique.ecc.x.t.size = 0;
+		out_public_area->unique.ecc.y.t.size = 0;
 		rc = tpm2_fill_ecc_details(out_public_area, key_type);
 	}
 
@@ -424,6 +522,7 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	return rc;
 }
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 TPM_RC
 tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		uint32_t object_vals, const char *parent_pwd, const char *key_pwd,
@@ -886,10 +985,15 @@ uint8_t *
 tpm2_getrandom_new(size_t rand_length)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
 	GetRandom_In in;
 	GetRandom_Out out;
 
 	IF_NULL_RETVAL_ERROR(tss_context, NULL);
+
+	// since we use this to generate symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, TPM_RH_NULL, NULL);
+	if (TPM_RC_SUCCESS != rc) return NULL;
 
 	uint8_t *rand = mem_new0(uint8_t, rand_length);
 	size_t recv_bytes = 0;
@@ -897,6 +1001,7 @@ tpm2_getrandom_new(size_t rand_length)
 		in.bytesRequested = rand_length - recv_bytes;
 		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_GetRandom,
+				se_handle, NULL, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
 				TPM_RH_NULL, NULL, 0);
 		if (rc != TPM_RC_SUCCESS)
 			break;
@@ -918,6 +1023,10 @@ tpm2_getrandom_new(size_t rand_length)
 	INFO("Generated Rand: %s", rand_hex);
 
 	mem_free(rand_hex);
+
+	if (TPM_RC_SUCCESS != tpm2_flushcontext(se_handle))
+		WARN("Flush failed, maybe session handle was allready flushed.");
+
 	return rand;
 }
 
@@ -989,7 +1098,8 @@ TPM_RC
 tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
 		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd)
 {
-	TPM_RC rc = TPM_RC_SUCCESS;
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
 	NV_DefineSpace_In in;
 	TPMA_NV nv_attr;
 
@@ -1028,17 +1138,26 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 	// set default empty policy
 	in.publicInfo.nvPublic.authPolicy.t.size = 0;
 
+	// since we use this to store symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
 	rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_DefineSpace,
-			TPM_RS_PW, hierarchy_pwd, 0,
+			//TPM_RS_PW, hierarchy_pwd, 0,
+			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
 
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
 	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
 		const char *submsg;
 		const char *num;
 		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
 		ERROR("CC_NV_DefineSpace failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	} else {
+		rc = rc_flush;
 	}
 
 	return rc;
@@ -1048,11 +1167,11 @@ TPM_RC
 tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 					uint8_t *data, size_t data_length)
 {
-	TPM_RC rc = TPM_RC_SUCCESS;
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
 	NV_Write_In in;
 
 	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
-
 	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
 		ERROR("bad index handle %x", nv_index_handle);
 		return TSS_RC_BAD_HANDLE_NUMBER;
@@ -1071,10 +1190,17 @@ tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	memcpy(in.data.b.buffer, data, data_length);
 	in.data.b.size = data_length;
 
+	// since we use this to read symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
 	rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Write,
-			TPM_RS_PW, nv_pwd, 0,
+			//TPM_RS_PW, nv_pwd, 0,
+			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
 err:
 	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
@@ -1082,6 +1208,8 @@ err:
 		const char *num;
 		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
 		ERROR("CC_NV_Write failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	} else {
+		rc = rc_flush;
 	}
 
 	return rc;
@@ -1091,7 +1219,8 @@ TPM_RC
 tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 				uint8_t *out_buffer, size_t *out_length)
 {
-	TPM_RC rc = TPM_RC_SUCCESS;
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
 	NV_Read_In in;
 	NV_Read_Out out;
 
@@ -1122,11 +1251,18 @@ tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 
 	in.size = data_size;
 
-	if (TPM_RC_SUCCESS != (rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
-			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
-			TPM_RS_PW, nv_pwd, 0,
-			TPM_RH_NULL, NULL, 0)))
+	// since we use this to read symetric keys, start an encrypted transport
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
+	if (TPM_RC_SUCCESS != rc)
 		goto err;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
+			//TPM_RS_PW, nv_pwd, 0,
+			se_handle, 0, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+	if (TPM_RC_SUCCESS != rc)
+		goto flush;
 
 	memcpy(out_buffer, out.data.b.buffer, out.data.b.size);
 
@@ -1135,6 +1271,9 @@ tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 
 	TSS_PrintAll("nv_read data: ", out_buffer, *out_length);
 
+flush:
+	rc_flush = tpm2_flushcontext(se_handle);
+
 err:
 	if (TPM_RC_SUCCESS != rc) {
 		const char *msg;
@@ -1142,7 +1281,8 @@ err:
 		const char *num;
 		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
 		ERROR("CC_NV_Read failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	} else {
+		rc = rc_flush;
 	}
-
 	return rc;
 }
