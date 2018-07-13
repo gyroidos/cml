@@ -58,16 +58,16 @@ typedef enum tpm2d_key_type {
 	TPM2D_KEY_TYPE_SIGNING_R
 } tpm2d_key_type_t;
 
-typedef struct tpm2d_pcr_strings {
+typedef struct tpm2d_pcr_string {
 	char *halg_str;
 	char *pcr_str;
-} tpm2d_pcr_strings_t;
+} tpm2d_pcr_string_t;
 
-typedef struct tpm2d_quote_strings {
+typedef struct tpm2d_quote_string {
 	char *halg_str;
 	char *quoted_str;
 	char *signature_str;
-} tpm2d_quote_strings_t;
+} tpm2d_quote_string_t;
 
 
 void
@@ -119,18 +119,18 @@ tpm2d_get_as_key_handle(void);
 TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data);
 
-tpm2d_pcr_strings_t *
+tpm2d_pcr_string_t *
 tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg);
 
 void
-tpm2_pcrread_free(tpm2d_pcr_strings_t *pcr_strings);
+tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string);
 
-tpm2d_quote_strings_t *
+tpm2d_quote_string_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data);
 
 void
-tpm2_quote_free(tpm2d_quote_strings_t *quote_strings);
+tpm2_quote_free(tpm2d_quote_string_t *quote_string);
 
 char *
 tpm2_read_file_to_hex_string_new(const char *file_name);

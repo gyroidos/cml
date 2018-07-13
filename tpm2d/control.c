@@ -97,8 +97,8 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		Pcr **out_pcrs = NULL;
 		int pcr_regs = 0;
 		int pcr_indices = 0;
-		tpm2d_pcr_strings_t** pcr_strings_array = NULL;
-		tpm2d_quote_strings_t *quote_strings = NULL;
+		tpm2d_pcr_string_t** pcr_string_array = NULL;
+		tpm2d_quote_string_t *quote_string = NULL;
 		char *attestation_pub_key = NULL;
 
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
@@ -123,17 +123,17 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		}
 		pcr_indices = pcr_regs - 1;
 
-		pcr_strings_array = mem_alloc0(sizeof(tpm2d_pcr_strings_t*) * pcr_regs);
+		pcr_string_array = mem_alloc0(sizeof(tpm2d_pcr_string_t*) * pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			pcr_strings_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
+			pcr_string_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
 
-			IF_NULL_GOTO_ERROR(pcr_strings_array[i], err_att_req);
-			TRACE("PCR%d: %s", i, pcr_strings_array[i]->pcr_str);
+			IF_NULL_GOTO_ERROR(pcr_string_array[i], err_att_req);
+			TRACE("PCR%d: %s", i, pcr_string_array[i]->pcr_str);
 		}
 
-		quote_strings = tpm2_quote_new(pcr_indices,
+		quote_string = tpm2_quote_new(pcr_indices,
 				tpm2d_get_as_key_handle(), TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
-		IF_NULL_GOTO_ERROR(quote_strings, err_att_req);
+		IF_NULL_GOTO_ERROR(quote_string, err_att_req);
 
 		attestation_pub_key = tpm2_read_file_to_hex_string_new(TPM2D_ATTESTATION_PUB_FILE);
 		IF_NULL_GOTO_ERROR(attestation_pub_key, err_att_req);
@@ -141,7 +141,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		Pcr out_pcr = PCR__INIT;
 		out_pcrs = mem_new(Pcr *, pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			out_pcr.value = pcr_strings_array[i]->pcr_str;
+			out_pcr.value = pcr_string_array[i]->pcr_str;
 			out_pcr.has_number = true;
 			out_pcr.number = i;
 			out_pcrs[i] = mem_alloc(sizeof(Pcr));
@@ -150,9 +150,9 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 
 		out.has_atype = true;
 		out.atype = msg->atype;
-		out.halg = quote_strings->halg_str;
-		out.quoted = quote_strings->quoted_str;
-		out.signature = quote_strings->signature_str;
+		out.halg = quote_string->halg_str;
+		out.quoted = quote_string->quoted_str;
+		out.signature = quote_string->signature_str;
 		out.n_pcr_values = pcr_regs;
 		out.pcr_values = out_pcrs;
 
@@ -161,19 +161,19 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 err_att_req:
-		if (pcr_strings_array)
+		if (pcr_string_array)
 			for (int i=0; i < pcr_regs; ++i) {
-				if (pcr_strings_array[i])
-					tpm2_pcrread_free(pcr_strings_array[i]);
+				if (pcr_string_array[i])
+					tpm2_pcrread_free(pcr_string_array[i]);
 				if (out_pcrs && out_pcrs[i])
 					mem_free(out_pcrs[i]);
 			}
 		if (out_pcrs)
 			mem_free(out_pcrs);
-		if (pcr_strings_array)
-			mem_free(pcr_strings_array);
-		if (quote_strings)
-			tpm2_quote_free(quote_strings);
+		if (pcr_string_array)
+			mem_free(pcr_string_array);
+		if (quote_string)
+			tpm2_quote_free(quote_string);
 		if (attestation_pub_key)
 			mem_free(attestation_pub_key);
 	} break;

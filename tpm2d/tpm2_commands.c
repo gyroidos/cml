@@ -672,13 +672,13 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	return rc;
 }
 
-tpm2d_pcr_strings_t *
+tpm2d_pcr_string_t *
 tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	PCR_Read_In in;
 	PCR_Read_Out out;
-	tpm2d_pcr_strings_t *pcr_strings = NULL;
+	tpm2d_pcr_string_t *pcr_string = NULL;
 
 	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
@@ -706,24 +706,24 @@ tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 	}
 
 	// finally fill the output structure with converted hex strings needed for protobuf
-	pcr_strings = mem_alloc0(sizeof(tpm2d_pcr_strings_t));
-	pcr_strings->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
-	pcr_strings->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
+	pcr_string = mem_alloc0(sizeof(tpm2d_pcr_string_t));
+	pcr_string->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
+	pcr_string->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
 						out.pcrValues.digests[0].t.size);
-	return pcr_strings;
+	return pcr_string;
 }
 
 void
-tpm2_pcrread_free(tpm2d_pcr_strings_t *pcr_strings)
+tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string)
 {
-	if (pcr_strings->halg_str)
-		mem_free(pcr_strings->halg_str);
-	if (pcr_strings->pcr_str)
-		mem_free(pcr_strings->pcr_str);
-	mem_free(pcr_strings);
+	if (pcr_string->halg_str)
+		mem_free(pcr_string->halg_str);
+	if (pcr_string->pcr_str)
+		mem_free(pcr_string->pcr_str);
+	mem_free(pcr_string);
 }
 
-tpm2d_quote_strings_t *
+tpm2d_quote_string_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data)
 {
@@ -732,7 +732,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 	Quote_Out out;
 	TPMS_ATTEST tpms_attest;
 	uint8_t *qualifying_data_bin = NULL;
-	tpm2d_quote_strings_t *quote_strings = NULL;
+	tpm2d_quote_string_t *quote_string = NULL;
 
 	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
@@ -789,11 +789,11 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 		goto err;
 
 	// finally fill the output structure with converted hex strings needed for protobuf
-	quote_strings = mem_alloc0(sizeof(tpm2d_quote_strings_t));
-	quote_strings->halg_str = halg_id_to_string_new(in.PCRselect.pcrSelections[0].hash);
-	quote_strings->quoted_str = convert_bin_to_hex_new(out.quoted.t.attestationData,
+	quote_string = mem_alloc0(sizeof(tpm2d_quote_string_t));
+	quote_string->halg_str = halg_id_to_string_new(in.PCRselect.pcrSelections[0].hash);
+	quote_string->quoted_str = convert_bin_to_hex_new(out.quoted.t.attestationData,
 							out.quoted.t.size);
-	quote_strings->signature_str = tpm2d_marshal_structure_new(&out.signature,
+	quote_string->signature_str = tpm2d_marshal_structure_new(&out.signature,
 					(MarshalFunction_t)TSS_TPMT_SIGNATURE_Marshal);
 
 	if (in.inScheme.scheme == TPM_ALG_RSASSA) {
@@ -803,7 +803,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	if (qualifying_data_bin)
 		mem_free(qualifying_data_bin);
-	return quote_strings;
+	return quote_string;
 err:
 	{
 		const char *msg;
@@ -818,15 +818,15 @@ err:
 }
 
 void
-tpm2_quote_free(tpm2d_quote_strings_t* quote_strings)
+tpm2_quote_free(tpm2d_quote_string_t* quote_string)
 {
-	if (quote_strings->halg_str)
-		mem_free(quote_strings->halg_str);
-	if (quote_strings->quoted_str)
-		mem_free(quote_strings->quoted_str);
-	if (quote_strings->signature_str)
-		mem_free(quote_strings->signature_str);
-	mem_free(quote_strings);
+	if (quote_string->halg_str)
+		mem_free(quote_string->halg_str);
+	if (quote_string->quoted_str)
+		mem_free(quote_string->quoted_str);
+	if (quote_string->signature_str)
+		mem_free(quote_string->signature_str);
+	mem_free(quote_string);
 }
 
 char *
