@@ -50,6 +50,7 @@ static void print_usage(const char *cmd)
 	printf("\tattestation_test\n\t\tTest TPM attestation request\n");
 	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, passwod for corresponding nvindex\n");
 	printf("\texit\n\t\tStop TPM2D daemon\n");
+	printf("\tgetrandom <size>\n\t\tRequest some random date of size size from TPM\n");
 	printf("\n");
 	exit(-1);
 }
@@ -141,6 +142,18 @@ int main(int argc, char *argv[])
 	if (!strcasecmp(command, "exit")) {
 		msg.code = CONTROLLER_TO_TPM__CODE__EXIT;
 		DEBUG("Sending EXIT command to TPM2D");
+		goto send_message;
+	}
+	if (!strcasecmp(command, "getrandom")) {
+		has_response = true;
+		msg.code = CONTROLLER_TO_TPM__CODE__RANDOM_REQ;
+		if (optind >= argc)
+			print_usage(argv[0]);
+
+		msg.has_rand_size = true;
+		msg.rand_size = atoi(argv[optind++]);
+
+		DEBUG("Sending GETRANDOM command TPM");
 		goto send_message;
 	}
 

@@ -191,6 +191,18 @@ err_att_req:
 		INFO("Received EXIT command!");
 		tpm2d_exit();
 	} break;
+	case CONTROLLER_TO_TPM__CODE__RANDOM_REQ: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__RANDOM_RESPONSE;
+		uint8_t * rand = tpm2_getrandom_new(msg->rand_size);
+		char *rand_hex = convert_bin_to_hex_new(rand, msg->rand_size);
+		out.rand_data = rand_hex;
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (rand)
+			mem_free(rand);
+		if (rand_hex)
+			mem_free(rand_hex);
+	} break;
 	default:
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);
 		break;

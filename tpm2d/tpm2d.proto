@@ -46,6 +46,7 @@ message ControllerToTpm {
 		INTERNAL_ATTESTATION_REQ = 1;
 		DMCRYPT_SETUP = 2;
 		EXIT = 3;
+		RANDOM_REQ = 4;
 	}
 
 	required Code code = 1;
@@ -66,12 +67,15 @@ message ControllerToTpm {
 	optional string dmcrypt_device = 5;
 	// passphrase for nv index of tpm
 	optional string fde_pw = 6;
+	// amount of random data requested
+	optional int32 rand_size = 7;
 }
 
 message TpmToController {
 	enum Code {
 		INTERNAL_ATTESTATION_RES = 1;
 		FDE_RESPONSE = 2;			// -> [response]
+		RANDOM_RESPONSE = 3;
 	}
 	enum FdeResponse {
 		FDE_OK = 1;
@@ -102,4 +106,6 @@ message TpmToController {
 	optional string certificate_uri = 7;
 
 	optional FdeResponse response = 8;
+
+	optional string rand_data = 9;
 }
