@@ -54,6 +54,15 @@
 
 #define CGROUPS_FREEZER_RETRIES		CGROUPS_FREEZER_TIMEOUT/CGROUPS_FREEZER_RETRY_INTERVAL
 
+ /* List of 2-element int arrays, representing maj:min of devices allowed to be used in the running containers.
+  * wildcard '*' is mapped to -1 */
+list_t* global_allowed_devs_list = NULL;
+
+/* List of 2-element int arrays, representing maj:min of devices exclusively assigned to the running containers.
+  * wildcard '*' is mapped to -1 */
+list_t* global_assigned_devs_list = NULL;
+
+
 struct c_cgroups {
 	container_t *container; // weak reference
 	char *cgroup_path;
@@ -61,6 +70,10 @@ struct c_cgroups {
 	event_inotify_t *inotify_freezer_state;
 	event_timer_t *freeze_timer; /* timer to handle a container freeze timeout */
 	int freezer_retries;
+	list_t* assigned_devs; /* list of 2 element int arrays, representing maj:min of exclusively assigned devices.
+				  wildcard '*' is mapped to -1 */
+	list_t* allowed_devs; /* list of 2 element int arrays, representing maj:min of devices allowed to be accessed.
+				  wildcard '*' is mapped to -1 */
 };
 
 c_cgroups_t *
@@ -72,7 +85,8 @@ c_cgroups_new(container_t *container)
 
 	cgroups->inotify_freezer_state = NULL;
 	cgroups->freeze_timer = NULL;
-
+	cgroups->assigned_devs = NULL;
+	cgroups->allowed_devs = NULL;
 	return cgroups;
 }
 
@@ -158,24 +172,126 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 	NULL
 };
 
+/* extracts major and minor device numbers from a rule as an int array {major, minor} */
+static int* c_cgroups_dev_from_rule(const char* rule){
+	int* ret = mem_new0(int, 2);
+	char* rule_cp = mem_strdup(rule);
+	char* pointer;
+	char* type;
+	char* dev;
+
+	type = strtok_r(rule_cp, " ", &pointer);
+	dev = strtok_r(NULL, " ", &pointer);
+	pointer = NULL;
+	char* maj_str = strtok_r(dev, ":", &pointer);
+	char* min_str = strtok_r(NULL, ":", &pointer);
+	ret[0] = -1;
+	ret[1] = -1;
+	if (strncmp("*", maj_str, 1)) ret[0] = atoi(maj_str);
+	if (strncmp("*", min_str, 1)) ret[1] = atoi(min_str);
+	mem_free(rule_cp);
+	return ret;
+}
+
+static void
+c_cgroups_list_add(list_t **list, const int* dev)
+{
+	int* dev_copy = mem_new0(int, 2);
+        memcpy(dev_copy, dev, sizeof(int) * 2);
+	*list = list_append(*list, dev_copy);
+}
+
+static void
+c_cgroups_list_remove(list_t **list, const int* dev)
+{
+	for (list_t* elem = *list; elem != NULL; elem = elem->next) {
+		int* dev_elem = (int*) elem->data;
+		if ( (dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1]) ) {
+			*list = list_unlink(*list, elem);
+			break;
+		}
+	}
+}
+
+static int
+c_cgroups_list_contains_match(const list_t* list, const int* dev)
+{
+	for (const list_t* elem = list;  elem != NULL; elem = elem->next) {
+		const int* dev_elem = (const int*) elem->data;
+		if ( (dev_elem[0] == -1) || (dev[0] == -1) ) return 1;
+		if ( dev_elem[0] != dev[0] ) continue;
+		if ( (dev[1] == -1) || (dev_elem[1] == -1) || (dev[1] == dev_elem[1]) ) return 1;
+	}
+	return 0;
+}
+
+static void
+c_cgroups_add_allowed(c_cgroups_t *cgroups, const int* dev)
+{
+	c_cgroups_list_add(&global_allowed_devs_list, dev);
+	c_cgroups_list_add(&cgroups->allowed_devs, dev);
+}
+
+static void
+c_cgroups_add_assigned(c_cgroups_t *cgroups, const int* dev)
+{
+	c_cgroups_list_add(&global_assigned_devs_list, dev);
+	c_cgroups_list_add(&cgroups->assigned_devs, dev);
+}
+
+static int
+c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
+{
+	char *path = mem_printf("%s/devices.allow", cgroups->cgroup_path);
+	if (file_write(path, rule, -1) == -1) {
+		ERROR_ERRNO("Failed to write to %s", path);
+		mem_free(path);
+		return -1;
+	}
+
+	mem_free(path);
+	return 0;
+}
+
 int
 c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
 {
 	ASSERT(cgroups);
 	ASSERT(rule);
 
-	char *path = mem_printf("%s/devices.allow", cgroups->cgroup_path);
+	int* dev = c_cgroups_dev_from_rule(rule);
+	if ( c_cgroups_list_contains_match(global_assigned_devs_list, dev) ){
+		WARN("Unable to allow rule %s: device busy (already assigned to another container)", rule);
+		mem_free(dev);
+		return 0;
+	}
+	c_cgroups_add_allowed(cgroups, dev);
+	mem_free(dev);
+	return c_cgroups_allow_rule(cgroups, rule);
+}
 
-	if (file_write(path, rule, -1) == -1) {
-		ERROR_ERRNO("Failed to write to %s", path);
-		goto error;
+int
+c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
+{
+	ASSERT(cgroups);
+	ASSERT(rule);
+
+	int* dev = c_cgroups_dev_from_rule(rule);
+	if ( c_cgroups_list_contains_match(global_allowed_devs_list, dev) ){
+		ERROR("Unable to exclusively assign device according to rule %s: device busy (already available to another container)", rule);
+		mem_free(dev);
+		return -1;
 	}
 
-	mem_free(path);
+	if ( c_cgroups_allow_rule(cgroups, rule) < 0 ) {
+		mem_free(dev);
+		return -1;
+	}
+
+	c_cgroups_add_allowed(cgroups, dev);
+	c_cgroups_add_assigned(cgroups, dev);
+	mem_free(dev);
 	return 0;
-error:
-	mem_free(path);
-	return -1;
 }
 
 int
@@ -234,6 +350,20 @@ c_cgroups_devices_deny_list(c_cgroups_t *cgroups, const char **list)
 	return 0;
 }
 
+static int
+c_cgroups_devices_assign_list(c_cgroups_t *cgroups, const char** list)
+{
+	if (!list) return 0;
+
+	for (int i = 0; list[i]; i++) {
+		if ( c_cgroups_devices_assign(cgroups, list[i]) < 0) {
+			return -1;
+		}
+	}
+	return 0;
+}
+
+
 int
 c_cgroups_devices_allow_all(c_cgroups_t *cgroups)
 {
@@ -249,6 +379,7 @@ c_cgroups_devices_deny_all(c_cgroups_t *cgroups)
 
 	return c_cgroups_devices_deny(cgroups, "a");
 }
+
 
 int
 c_cgroups_devices_allow_audio(c_cgroups_t *cgroups)
@@ -322,6 +453,25 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 			return -1;
 		}
 	}
+
+
+	/* allow container specific device whitelist */
+	const char** container_dev_whitelist = container_get_dev_allow_list(cgroups->container);
+	if (c_cgroups_devices_allow_list(cgroups, container_dev_whitelist) < 0) {
+		ERROR("Could not initialize container specific device whitelist for container %s",
+			container_get_description(cgroups->container));
+		return -1;
+	}
+	DEBUG("Applied containers whitelist");
+
+	/* apply container specific exclusive device assignment */
+	const char** container_dev_assignlist = container_get_dev_assign_list(cgroups->container);
+	if (c_cgroups_devices_assign_list(cgroups, container_dev_assignlist) < 0) {
+		ERROR("Could not initialize container specific device assignmet list for container %s",
+			container_get_description(cgroups->container));
+		return -1;
+	}
+	DEBUG("Applied containers assign list");
 
 	/* Print out the initialized devices whitelist */
 	char *list_path = mem_printf("%s/devices.list", cgroups->cgroup_path);
@@ -722,5 +872,18 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 		}
 		INFO("Successfully removed cgroup for container %s", container_get_description(cgroups->container));
 	}
-}
 
+	/* free assigned devices */
+	for (list_t* elem = cgroups->assigned_devs; elem != NULL; elem = elem->next) {
+		int* dev_elem = (int*) elem->data;
+		c_cgroups_list_remove(&global_assigned_devs_list, dev_elem);
+	}
+	/* free allowed devices */
+	for (list_t* elem = cgroups->allowed_devs; elem != NULL; elem = elem->next) {
+		int* dev_elem = (int*) elem->data;
+		c_cgroups_list_remove(&global_allowed_devs_list, dev_elem);
+	}
+
+
+	list_delete(cgroups->assigned_devs);
+}

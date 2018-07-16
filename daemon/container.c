@@ -153,6 +153,12 @@ struct container {
 	/* list of enabled features checked against during overlay mounts */
 	list_t *feature_enabled_list;
 
+	// list of allowed devices (rules)
+	char **device_allowed_list;
+
+	// list of exclusively assigned devices (rules)
+	char **device_assigned_list;
+
 	char *dns_server;
 	time_t time_started;
 	time_t time_created;
@@ -232,7 +238,9 @@ container_new_internal(
 	bool allow_autostart,
 	list_t *feature_enabled,
 	const char *dns_server,
-	list_t *net_ifaces
+	list_t *net_ifaces,
+	char **allowed_devices,
+	char **assigned_devices
 )
 {
 	container_t *container = mem_new0(container_t, 1);
@@ -311,7 +319,7 @@ container_new_internal(
 	for (list_t* elem = net_ifaces; elem != NULL; elem = elem->next) {
                 DEBUG("List element in net_ifaces: %s", (char*)(elem->data));
 		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(elem->data));
-        } 
+        }
 
 	container->net = c_net_new(container, ns_net, nw_name_list, nw_mv_name_list, adb_port);
 	if (!container->net) {
@@ -350,6 +358,8 @@ container_new_internal(
 
 	container->time_started = -1;
 	container->time_created = container_get_creation_time_from_file(container);
+	container->device_allowed_list = allowed_devices;
+	container->device_assigned_list = assigned_devices;
 
 	return container;
 
@@ -398,6 +408,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 	uint64_t new_guestos_version;
 	bool allow_autostart;
 	bool priv;
+	char** allowed_devices;
+	char** assigned_devices;
 
 	if (!existing_uuid) {
 		uuid = uuid_new(NULL);
@@ -482,8 +494,11 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 
 	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
 
+	allowed_devices = container_config_get_dev_allow_list_new(conf);
+	assigned_devices = container_config_get_dev_assign_list_new(conf);
 	container_t *c = container_new_internal(uuid, name, ns_usr, ns_net, priv, os, config_filename,
-			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled, dns_server, net_ifaces);
+			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled,
+			dns_server, net_ifaces, allowed_devices, assigned_devices);
 	if (c)
 		container_config_write(conf);
 
@@ -547,7 +562,8 @@ container_free(container_t *container) {
 		mem_free(container->phone_number);
 	if (container->dns_server)
 		mem_free(container->dns_server);
-
+	mem_free(container->device_allowed_list);
+	mem_free(container->device_assigned_list);
 	mem_free(container);
 }
 
@@ -1888,4 +1904,14 @@ container_remove_net_iface(container_t *container, const char *iface, bool persi
 	container_config_write(conf);
 	container_config_free(conf);
 	return 0;
+}
+
+const char **
+container_get_dev_allow_list(const container_t *container){
+	return container->device_allowed_list;
+}
+
+const char **
+container_get_dev_assign_list(const container_t *container){
+	return container->device_assigned_list;
 }

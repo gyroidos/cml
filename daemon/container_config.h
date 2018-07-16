@@ -180,6 +180,20 @@ list_t*
 container_config_get_net_ifaces_list_new(const container_config_t *config);
 
 /**
+ * Provides the list of hardware devices explicitely allowed for the container from the container's config file
+ */
+
+char **
+container_config_get_dev_allow_list_new(const container_config_t *config);
+
+/**
+ * Provides the list of hardware devices exclusively assigned to the container from the container's config file
+ */
+
+char **
+container_config_get_dev_assign_list_new(const container_config_t *config);
+
+/**
  * Get the dns_server ip addr set for the container.
  */
 const char *
@@ -202,5 +216,6 @@ void container_config_append_net_ifaces(const container_config_t *config, const 
  */
 void
 container_config_remove_net_ifaces(const container_config_t *config, const char *iface);
+
 
 #endif /* C_CONFIG_H */
