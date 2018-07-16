@@ -38,7 +38,6 @@ SRC_FILES := \
 	dumb_init.c \
 	c_service.pb-c.c \
 	container.pb-c.c \
-	c_notification.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c \
 	common/logf.pb-c.c \
@@ -49,10 +48,9 @@ ${SRC_FILES}: protobuf
 .PHONY: all
 all: service
 
-protobuf: c_service.proto container.proto c_notification.proto control.proto guestos.proto common/logf.proto
+protobuf: c_service.proto container.proto control.proto guestos.proto common/logf.proto
 	protoc-c --c_out=. c_service.proto
 	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. c_notification.proto
 	protoc-c --c_out=. control.proto
 	protoc-c --c_out=. guestos.proto
 	$(MAKE) -C common protobuf
