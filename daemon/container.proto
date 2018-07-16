@@ -64,6 +64,12 @@ message ContainerConfig {
 
 	// a list of network interfaces assigned to this container
 	repeated string net_ifaces = 23;
+
+	// a list of devices explicitely allowed for this container
+	repeated string allow_dev = 25;
+
+	// a list of devices exclusively assigned to this container
+	repeated string assign_dev = 26;
 }
 
 /**

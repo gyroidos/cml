@@ -39,24 +39,21 @@
 
 /******************************************************************************/
 static const char *hw_ppc_devices_whitelist_base[] = {
-	"a *:* rwm", // allow all FIXME
-	NULL
+	NULL // deny all
 };
 
 /**
  * List of devices allowed additionally in privileged containers.
  */
 static const char *hw_ppc_devices_whitelist_priv[] = {
-	"a *:* rwm", // allow all FIXME
-	NULL
+	NULL // deny all
 };
 
 /**
  * List of audio devices
  */
 static const char *hw_ppc_devices_whitelist_audio[] = {
-	"a *:* rwm", // allow all FIXME
-	NULL
+	NULL // deny all
 };
 
 static char *hw_ppc_serial_number = "00000000";

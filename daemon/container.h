@@ -138,7 +138,9 @@ container_new_internal(
 	bool allow_autostart,
 	list_t *feature_enabled,
 	const char *dns_server,
-	list_t *net_ifaces
+	list_t *net_ifaces,
+	char **allowed_devices,
+	char **assigned_devices
 );
 
 /**
@@ -607,6 +609,10 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
  */
 int
 container_remove_net_iface(container_t *container, const char *iface, bool persistent);
+
+const char **container_get_dev_allow_list(const container_t *container);
+
+const char **container_get_dev_assign_list(const container_t *container);
 
 time_t
 container_get_uptime(const container_t *container);

@@ -429,6 +429,34 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 	}
 	return net_ifaces_list;
 }
+
+char**
+container_config_get_dev_allow_list_new(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	char** dev_whitelist = mem_new0(char *, config->cfg->n_allow_dev + 1);
+	for (size_t i = 0; i < config->cfg->n_allow_dev; i++) {
+		dev_whitelist[i] = mem_strdup(config->cfg->allow_dev[i]);
+	}
+	dev_whitelist[config->cfg->n_allow_dev] = NULL;
+	return dev_whitelist;
+}
+
+char**
+container_config_get_dev_assign_list_new(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	char** dev_assign_list = mem_new0(char *, config->cfg->n_assign_dev + 1);
+	for (size_t i = 0; i < config->cfg->n_assign_dev; i++) {
+		dev_assign_list[i] = mem_strdup(config->cfg->assign_dev[i]);
+	}
+	dev_assign_list[config->cfg->n_assign_dev] = NULL;
+	return dev_assign_list;
+}
+
 #if 0
 bool
 container_config_get_autostart(container_config_t *config)
