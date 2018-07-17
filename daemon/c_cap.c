@@ -61,7 +61,7 @@ c_cap_start_child(const container_t *container)
 	/* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
 	/* 22 */ C_CAP_DROP(CAP_SYS_BOOT);
 
-	/* 23 */ C_CAP_DROP(CAP_SYS_NICE);
+	///* 23 */ C_CAP_DROP(CAP_SYS_NICE); /* Is needed for some usecases*/
 	///* 24 */ C_CAP_DROP(CAP_SYS_RESOURCE); /* does NOT work */
 	/* 26 */ C_CAP_DROP(CAP_SYS_TTY_CONFIG);
 	/* 28 */ C_CAP_DROP(CAP_LEASE);
