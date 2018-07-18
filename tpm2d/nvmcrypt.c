@@ -21,6 +21,10 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+// for gnu version of basename
+#define _GNU_SOURCE
+#include <string.h>
+
 #include "nvmcrypt.h"
 #include "tpm2d.h"
 

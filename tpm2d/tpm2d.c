@@ -158,6 +158,14 @@ tpm2d_init(void)
 	if (setenv("TPM_DATA_DIR", TPM2D_BASE_DIR"/session", 1) < 0)
 		FATAL_ERRNO("Could not set environment!");
 
+	// if real hw tpm exists, setup environment
+	if (file_exists("/dev/tpm0")) {
+		if (setenv("TPM_INTERFACE_TYPE", "dev", 1) < 0)
+			FATAL_ERRNO("Could not set environment!");
+		if (setenv("TPM_DEVICE", "/dev/tpm0", 1) < 0)
+			FATAL_ERRNO("Could not set environment!");
+	}
+
 	tss2_init();
 
 	// if no real hw tpm exists, powerup the simulator

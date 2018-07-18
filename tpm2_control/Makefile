@@ -22,7 +22,7 @@
 #
 
 
-LOCAL_CFLAGS := -pedantic -Wall -Wextra -Werror -std=c99 \
+LOCAL_CFLAGS := -pedantic -Wall -Wextra -Werror -std=gnu99 \
 	-I.. -I../include -Icommon -DDEBUG_BUILD
 
 SRC_FILES := \
