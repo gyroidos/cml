@@ -21,9 +21,19 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef FDE_H
-#define FDE_H
+/**
+ * @file nvmcrypt.h
+ *
+ * The nvmcrypt module implements the encryption for non-volatile memory
+ * using the tpm's nvram as a secure key storage.
+ */
 
+#ifndef NVMCRYPT_H
+#define NVMCRYPT_H
+
+/**
+ * Enum defining the error states of the key generation process
+ */
 typedef enum nvmcrypt_fde_state {
 	FDE_OK = 1,
 	FDE_AUTH_FAILED,
@@ -32,7 +42,24 @@ typedef enum nvmcrypt_fde_state {
 	FDE_UNEXPECTED_ERROR
 } nvmcrypt_fde_state_t;
 
+/**
+ * Setup an encrypted device mapping for a given block device
+ * e.g. /dev/sda using the given password (which can be NULL)
+ * will result in a /dev/mapper/sda blockdevice which is then
+ * transparently de/encrypted with the stored encryption key in
+ * the TPM.
+ *
+ * This function will check if the encryption key already exist
+ * in the TPM's nvram and then use the fde_pw to auroize the
+ * read access to the nvindex which contains the encryption key.
+ * Otherwise it just creates a new random key, stores it the TPM's
+ * nvram and binding the autorization to the given fde_pw.
+ *
+ *  @param device_path path to the real blockdevice
+ *  @param fde_pw password which will authorize the access to the
+ *  		real key stored inside an nvindex of the TPM.
+ */
 nvmcrypt_fde_state_t
 nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
 
-#endif // FDE_H
+#endif // NVMCRYPT_H
