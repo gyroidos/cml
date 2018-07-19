@@ -47,6 +47,7 @@ message ControllerToTpm {
 		DMCRYPT_SETUP = 2;
 		EXIT = 3;
 		RANDOM_REQ = 4;
+		CLEAR = 5;
 	}
 
 	required Code code = 1;
@@ -65,8 +66,8 @@ message ControllerToTpm {
 	// if command FDE_DM_SETUP this is the blk device which is used
 	// as pysical device for the mapping
 	optional string dmcrypt_device = 5;
-	// passphrase for nv index of tpm
-	optional string fde_pw = 6;
+	// passphrase for for command, e.g., nv index auth of tpm
+	optional string password = 6;
 	// amount of random data requested
 	optional int32 rand_size = 7;
 }
@@ -74,8 +75,13 @@ message ControllerToTpm {
 message TpmToController {
 	enum Code {
 		INTERNAL_ATTESTATION_RES = 1;
-		FDE_RESPONSE = 2;			// -> [response]
-		RANDOM_RESPONSE = 3;
+		GENERIC_RESPONSE = 2;			// -> [response]
+		FDE_RESPONSE = 3;
+		RANDOM_RESPONSE = 4;
+	}
+	enum GenericResponse {
+		CMD_OK = 1;
+		CMD_FAILED = 2;
 	}
 	enum FdeResponse {
 		FDE_OK = 1;
@@ -105,7 +111,9 @@ message TpmToController {
 	// an _optional_ URI to a certificate that includes the public key
 	optional string certificate_uri = 7;
 
-	optional FdeResponse response = 8;
+	optional GenericResponse response = 8;
 
-	optional string rand_data = 9;
+	optional FdeResponse fde_response = 9;
+
+	optional string rand_data = 10;
 }

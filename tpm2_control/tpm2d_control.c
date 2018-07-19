@@ -51,6 +51,7 @@ static void print_usage(const char *cmd)
 	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, passwod for corresponding nvindex\n");
 	printf("\texit\n\t\tStop TPM2D daemon\n");
 	printf("\tgetrandom <size>\n\t\tRequest some random date of size size from TPM\n");
+	printf("\tclear <passwd>\n\t\tClear TPM using lockout password\n");
 	printf("\n");
 	exit(-1);
 }
@@ -134,7 +135,7 @@ int main(int argc, char *argv[])
 
 		msg.dmcrypt_device = argv[optind++];
 		if (optind < argc)
-			msg.fde_pw = argv[optind++];
+			msg.password = argv[optind++];
 
 		DEBUG("Sending DMCRYPT_SETUP command TPM");
 		goto send_message;
@@ -154,6 +155,15 @@ int main(int argc, char *argv[])
 		msg.rand_size = atoi(argv[optind++]);
 
 		DEBUG("Sending GETRANDOM command TPM");
+		goto send_message;
+	}
+	if (!strcasecmp(command, "clear")) {
+		has_response = true;
+		msg.code = CONTROLLER_TO_TPM__CODE__CLEAR;
+		if (optind < argc)
+			msg.password = argv[optind++];
+
+		DEBUG("Sending CLEAR command to TPM");
 		goto send_message;
 	}
 

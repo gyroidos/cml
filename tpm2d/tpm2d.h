@@ -139,12 +139,29 @@ TPM_RC
 tpm2_selftest(void);
 
 /**
+ * Function which clears the complete state of the TPM
+ *
+ * This function can be used to do a factory reset of the TPM,
+ * it uses the LOCKOUT hierarchy.
+ *
+ * @param lockout_pwd passord for the lockout handle
+ */
+TPM_RC
+tpm2_clear(const char *lockout_pwd);
+
+/**
  * Function to generate the primary key of an hierarchy
  */
 TPM_RC
 tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 		const char *hierachy_pwd, const char *key_pwd,
 		const char *file_name_pub_key, uint32_t *out_handle);
+
+/**
+ * Function to flush loaded objects out of the transient memory of the TPM
+ */
+TPM_RC
+tpm2_flushcontext(TPMI_DH_CONTEXT handle);
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 TPM_RC

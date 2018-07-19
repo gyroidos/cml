@@ -45,6 +45,14 @@
 typedef struct tpm2d_control tpm2d_control_t;
 
 /**
+ * Enum defining generic responses to commands
+ */
+typedef enum control_generic_response {
+	CMD_OK = 1,
+	CMD_FAILED
+} control_generic_response_t; 
+
+/**
  * Creates a new tpm2d_control_t object listening on a UNIX socket bound to the specified file.
  *
  * @param path path of the socket file to bind the socket to

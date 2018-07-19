@@ -54,6 +54,22 @@ UNUSED static list_t *control_list = NULL;
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
+static TpmToController__GenericResponse
+tpm2d_control_resp_to_proto(control_generic_response_t resp)
+{
+	switch (resp) {
+	case CMD_OK:
+		return TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK;
+	case CMD_FAILED:
+		return TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_FAILED;
+	default:
+		FATAL("Unhandled value for control_generic_response_t: %d", resp);
+	}
+}
+
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
 static TpmToController__FdeResponse
 tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 {
@@ -72,6 +88,7 @@ tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 		FATAL("Unhandled value for nvmcrypt_fde_state_t: %d", state);
 	}
 }
+
 static void
 tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
@@ -181,10 +198,10 @@ err_att_req:
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
 		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
-		out.has_response = true;
+		out.has_fde_response = true;
 		nvmcrypt_fde_state_t state =
-			nvmcrypt_dm_setup(msg->dmcrypt_device, msg->fde_pw);
-		out.response = tpm2d_control_fdestate_to_proto(state);
+			nvmcrypt_dm_setup(msg->dmcrypt_device, msg->password);
+		out.fde_response = tpm2d_control_fdestate_to_proto(state);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	case CONTROLLER_TO_TPM__CODE__EXIT: {
@@ -202,6 +219,15 @@ err_att_req:
 			mem_free(rand);
 		if (rand_hex)
 			mem_free(rand_hex);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__CLEAR: {
+		INFO("Received Clear command!");
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_response = true;
+		int ret = tpm2_clear(msg->password);
+		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);
