@@ -58,6 +58,10 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 		fde_state = FDE_AUTH_FAILED;
 		return NULL;
 	}
+	else if ((ret & TPM_RC_NV_LOCKED) == TPM_RC_NV_LOCKED) {
+		fde_state = FDE_KEY_ACCESS_LOCKED;
+		return NULL;
+	}
 	else if ((ret & TPM_RCS_HANDLE) != TPM_RCS_HANDLE) {
 		WARN("nv_read returned with unexpected error %08x", ret);
 		fde_state = FDE_UNEXPECTED_ERROR;
@@ -141,5 +145,13 @@ nvmcrypt_dm_setup(const char* device_path, const char *fde_pw)
 	mem_free(mapped_path);
 	mem_free(ascii_key);
 	mem_free(key);
+	return fde_state;
+}
+
+nvmcrypt_fde_state_t
+nvmcrypt_dm_lock(const char *fde_pw)
+{
+	if (TPM_RC_SUCCESS == tpm2_nv_readlock(TPM2D_FDE_NV_HANDLE, fde_pw))
+		fde_state = FDE_KEY_ACCESS_LOCKED;
 	return fde_state;
 }

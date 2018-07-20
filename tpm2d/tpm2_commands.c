@@ -1155,6 +1155,9 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 	nv_attr.val |= TPMA_NVA_AUTHREAD;
 	nv_attr.val |= TPMA_NVA_AUTHWRITE;
 
+	// needed to allow readlock
+	nv_attr.val |= TPMA_NVA_READ_STCLEAR;
+
 	in.publicInfo.nvPublic.nvIndex = nv_index_handle;
 	in.publicInfo.nvPublic.nameAlg = TPM2D_HASH_ALGORITHM;
 	in.publicInfo.nvPublic.attributes = nv_attr;
@@ -1305,6 +1308,49 @@ err:
 		const char *num;
 		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
 		ERROR("CC_NV_Read failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	} else {
+		rc = rc_flush;
+	}
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	NV_ReadLock_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = nv_index_handle;
+	in.nvIndex = nv_index_handle;
+
+	// since we use this to read symetric keys, start an encrypted transport
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
+	if (TPM_RC_SUCCESS != rc)
+		goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_ReadLock,
+			//TPM_RS_PW, nv_pwd, 0,
+			se_handle, 0, TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		const char *msg;
+		const char *submsg;
+		const char *num;
+		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
+		ERROR("CC_NV_ReadLock failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
 	} else {
 		rc = rc_flush;
 	}

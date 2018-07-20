@@ -39,6 +39,7 @@ typedef enum nvmcrypt_fde_state {
 	FDE_AUTH_FAILED,
 	FDE_KEYGEN_FAILED,
 	FDE_NO_DEVICE,
+	FDE_KEY_ACCESS_LOCKED,
 	FDE_UNEXPECTED_ERROR
 } nvmcrypt_fde_state_t;
 
@@ -61,5 +62,17 @@ typedef enum nvmcrypt_fde_state {
  */
 nvmcrypt_fde_state_t
 nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
+
+/**
+ * This funktion locks the nvm key inside the TPM for further reading
+ *
+ * Internally the corresponding nvindex is locked. Returns the fdestate
+ * after executing the command.
+ *
+ * @param fde_pw password which will authorize the access to the
+ *  		real key stored inside an nvindex of the TPM.
+ */
+nvmcrypt_fde_state_t
+nvmcrypt_dm_lock(const char *fde_pw);
 
 #endif // NVMCRYPT_H

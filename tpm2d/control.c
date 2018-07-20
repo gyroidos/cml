@@ -82,6 +82,8 @@ tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_KEYGEN_FAILED;
 	case FDE_NO_DEVICE:
 		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_NO_DEVICE;
+	case FDE_KEY_ACCESS_LOCKED:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_KEY_ACCESS_LOCKED;
 	case FDE_UNEXPECTED_ERROR:
 		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_UNEXPECTED_ERROR;
 	default:
@@ -227,6 +229,14 @@ err_att_req:
 		out.has_response = true;
 		int ret = tpm2_clear(msg->password);
 		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__DMCRYPT_LOCK: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_fde_response = true;
+		nvmcrypt_fde_state_t state = nvmcrypt_dm_lock(msg->password);
+		out.fde_response = tpm2d_control_fdestate_to_proto(state);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:

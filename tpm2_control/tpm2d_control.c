@@ -48,7 +48,8 @@ static void print_usage(const char *cmd)
 	printf("\n");
 	printf("commands:\n");
 	printf("\tattestation_test\n\t\tTest TPM attestation request\n");
-	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, passwod for corresponding nvindex\n");
+	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, password for corresponding nvindex\n");
+	printf("\tdmcrypt_lock <passwd>\n\t\tLocks further dmsetup attampts by locking tpm2d's internal disk encryption key, password for corresponding nvindex\n");
 	printf("\texit\n\t\tStop TPM2D daemon\n");
 	printf("\tgetrandom <size>\n\t\tRequest some random date of size size from TPM\n");
 	printf("\tclear <passwd>\n\t\tClear TPM using lockout password\n");
@@ -164,6 +165,15 @@ int main(int argc, char *argv[])
 			msg.password = argv[optind++];
 
 		DEBUG("Sending CLEAR command to TPM");
+		goto send_message;
+	}
+	if (!strcasecmp(command, "dmcrypt_lock")) {
+		has_response = true;
+		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_LOCK;
+		if (optind < argc)
+			msg.password = argv[optind++];
+
+		DEBUG("Sending DMCRYPT_LOCK command to TPM");
 		goto send_message;
 	}
 

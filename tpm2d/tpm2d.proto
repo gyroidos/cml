@@ -48,6 +48,7 @@ message ControllerToTpm {
 		EXIT = 3;
 		RANDOM_REQ = 4;
 		CLEAR = 5;
+		DMCRYPT_LOCK = 6;
 	}
 
 	required Code code = 1;
@@ -88,7 +89,8 @@ message TpmToController {
 		FDE_AUTH_FAILED = 2;
 		FDE_KEYGEN_FAILED = 3;
 		FDE_NO_DEVICE = 4;
-		FDE_UNEXPECTED_ERROR = 5;
+		FDE_KEY_ACCESS_LOCKED = 5;
+		FDE_UNEXPECTED_ERROR = 6;
 	}
 
 	required Code code = 1;

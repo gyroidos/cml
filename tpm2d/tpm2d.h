@@ -224,4 +224,7 @@ TPM_RC
 tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 				uint8_t *out_buffer, size_t *out_length);
 
+TPM_RC
+tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd);
+
 #endif // TPM2D_H
