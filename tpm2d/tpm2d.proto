@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+syntax = "proto2";
+
 // type of attestation in the IDS context
 enum IdsAttestationType {
   // kernel + core container (PCR 0 to 10)

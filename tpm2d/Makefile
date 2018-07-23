@@ -35,7 +35,6 @@ SRC_FILES := \
 	common/sock.c \
 	common/protobuf.c \
 	common/cryptfs.c \
-	device.pb-c.c \
 	tpm2d.pb-c.c \
 	control.c \
 	tpm2_commands.c \
@@ -47,9 +46,8 @@ SRC_FILES := \
 all: tpm2d
 
 
-protobuf: device.proto tpm2d.proto
+protobuf: tpm2d.proto
 	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. device.proto
 
 ${SRC_FILES}: protobuf
 
