@@ -239,6 +239,14 @@ err_att_req:
 		out.fde_response = tpm2d_control_fdestate_to_proto(state);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
+	case CONTROLLER_TO_TPM__CODE__CHANGE_OWNER_PWD: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_response = true;
+		int ret = tpm2_hierarchychangeauth(TPM_RH_OWNER, msg->password, msg->password_new);
+		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
 	default:
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);
 		break;

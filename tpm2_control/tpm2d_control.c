@@ -53,6 +53,7 @@ static void print_usage(const char *cmd)
 	printf("\texit\n\t\tStop TPM2D daemon\n");
 	printf("\tgetrandom <size>\n\t\tRequest some random date of size size from TPM\n");
 	printf("\tclear <passwd>\n\t\tClear TPM using lockout password\n");
+	printf("\tchange_owner <passwd> <new passwd>\n\t\tiChanges the password for the owner hierarchy of the TPM\n");
 	printf("\n");
 	exit(-1);
 }
@@ -174,6 +175,18 @@ int main(int argc, char *argv[])
 			msg.password = argv[optind++];
 
 		DEBUG("Sending DMCRYPT_LOCK command to TPM");
+		goto send_message;
+	}
+	if (!strcasecmp(command, "change_owner")) {
+		has_response = true;
+		msg.code = CONTROLLER_TO_TPM__CODE__CHANGE_OWNER_PWD;
+		if (optind < argc)
+			msg.password = argv[optind++];
+
+		if (optind < argc)
+			msg.password_new = argv[optind++];
+
+		DEBUG("Sending CHNAGE_OWNER_PWD command TPM");
 		goto send_message;
 	}
 

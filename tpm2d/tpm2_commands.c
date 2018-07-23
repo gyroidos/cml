@@ -947,6 +947,42 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 }
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 
+TPM_RC
+tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
+			const char *new_pwd)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	HierarchyChangeAuth_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.authHandle = hierarchy;
+
+	if (new_pwd == NULL)
+		in.newAuth.b.size = 0;
+	else if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_StringCopy(&in.newAuth.b,
+					new_pwd, sizeof(TPMU_HA))))
+		return rc;
+
+	// since we use this to store symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, old_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_HierarchyChangeAuth,
+			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR("CC_HierarchyChangeAuth");
+	} else {
+		rc = rc_flush;
+	}
+	return rc;
+}
 uint8_t *
 tpm2_getrandom_new(size_t rand_length)
 {

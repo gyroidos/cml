@@ -49,6 +49,7 @@ message ControllerToTpm {
 		RANDOM_REQ = 4;
 		CLEAR = 5;
 		DMCRYPT_LOCK = 6;
+		CHANGE_OWNER_PWD = 7;
 	}
 
 	required Code code = 1;
@@ -71,6 +72,9 @@ message ControllerToTpm {
 	optional string password = 6;
 	// amount of random data requested
 	optional int32 rand_size = 7;
+
+	// new passphrase for auth changing commands, e.g., change owner auth of tpm
+	optional string password_new = 8;
 }
 
 message TpmToController {

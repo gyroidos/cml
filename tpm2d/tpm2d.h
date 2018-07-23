@@ -209,6 +209,10 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 			size_t in_length, uint8_t *out_buffer, size_t *out_length);
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 
+TPM_RC
+tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
+			const char *new_pwd);
+
 uint8_t *
 tpm2_getrandom_new(size_t rand_length);
 
