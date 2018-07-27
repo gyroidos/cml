@@ -228,6 +228,7 @@ err_att_req:
 		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
 		out.has_response = true;
 		int ret = tpm2_clear(msg->password);
+		ret |= tpm2_dictionaryattacklockreset(msg->password);
 		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;

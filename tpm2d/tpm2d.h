@@ -150,6 +150,14 @@ TPM_RC
 tpm2_clear(const char *lockout_pwd);
 
 /**
+ * Funtion to reset the DA failed counter
+ *
+ * @param lockout_pwd passord for the lockout handle
+ */
+TPM_RC
+tpm2_dictionaryattacklockreset(const char *lockout_pwd);
+
+/**
  * Function to generate the primary key of an hierarchy
  */
 TPM_RC

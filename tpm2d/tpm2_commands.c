@@ -236,6 +236,26 @@ tpm2_clear(const char *lockout_pwd)
 	return rc;
 }
 
+TPM_RC
+tpm2_dictionaryattacklockreset(const char *lockout_pwd)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	DictionaryAttackLockReset_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.lockHandle = TPM_RH_LOCKOUT;
+
+	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
+			TPM_CC_DictionaryAttackLockReset, TPM_RS_PW, lockout_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR("CC_DictionaryAttackLockReset");
+
+	return rc;
+}
+
 static TPM_RC
 tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
 		TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
