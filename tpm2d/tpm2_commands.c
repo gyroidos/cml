@@ -38,7 +38,7 @@
 
 static TSS_CONTEXT *tss_context = NULL;
 
-#define TSS_TPM_CMD_ERROR(cc_string) \
+#define TSS_TPM_CMD_ERROR(rc, cc_string) \
 { \
 	const char *msg; \
 	const char *submsg; \
@@ -173,7 +173,7 @@ tpm2_powerup(void)
 	rc = TSS_TransmitPlatform(tss_context, TPM_SIGNAL_NV_ON, "TPM2_NvOnPlatform");
 err:
 	if (TPM_RC_SUCCESS != rc) 
-		TSS_TPM_CMD_ERROR("CC_PowerUp");
+		TSS_TPM_CMD_ERROR(rc, "CC_PowerUp");
 
 	return rc;
 }
@@ -192,7 +192,7 @@ tpm2_startup(TPM_SU startup_type)
 			 TPM_CC_Startup, TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_StartUp");
+		TSS_TPM_CMD_ERROR(rc, "CC_StartUp");
 
 	return rc;
 }
@@ -211,7 +211,7 @@ tpm2_selftest(void)
 	                 TPM_CC_SelfTest, TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_SelfTest");
+		TSS_TPM_CMD_ERROR(rc, "CC_SelfTest");
 
 	return rc;
 }
@@ -231,7 +231,7 @@ tpm2_clear(const char *lockout_pwd)
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_Clear");
+		TSS_TPM_CMD_ERROR(rc, "CC_Clear");
 
 	return rc;
 }
@@ -251,7 +251,7 @@ tpm2_dictionaryattacklockreset(const char *lockout_pwd)
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_DictionaryAttackLockReset");
+		TSS_TPM_CMD_ERROR(rc, "CC_DictionaryAttackLockReset");
 
 	return rc;
 }
@@ -305,7 +305,7 @@ tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_han
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_StartAuthSession");
+		TSS_TPM_CMD_ERROR(rc, "CC_StartAuthSession");
 		return rc;
 	}
 
@@ -328,7 +328,7 @@ tpm2_flushcontext(TPMI_DH_CONTEXT handle)
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_FlushContext");
+		TSS_TPM_CMD_ERROR(rc, "CC_FlushContext");
 
 	return rc;
 }
@@ -526,7 +526,7 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_CreatePrimary");
+		TSS_TPM_CMD_ERROR(rc, "CC_CreatePrimary");
 		return rc;
 	}
 
@@ -584,7 +584,7 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_Create");
+		TSS_TPM_CMD_ERROR(rc, "CC_Create");
 		return rc;
 	}
 
@@ -636,7 +636,7 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_Load");
+		TSS_TPM_CMD_ERROR(rc, "CC_Load");
 		return rc;
 	}
 
@@ -675,7 +675,7 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_PCR_Extend");
+		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Extend");
 
 	return rc;
 }
@@ -705,7 +705,7 @@ tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_PCR_Read");
+		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Read");
 		return NULL;
 	}
 
@@ -809,7 +809,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 		mem_free(qualifying_data_bin);
 	return quote_string;
 err:
-	TSS_TPM_CMD_ERROR("CC_Quote");
+	TSS_TPM_CMD_ERROR(rc, "CC_Quote");
 
 	if (qualifying_data_bin)
 		mem_free(qualifying_data_bin);
@@ -865,7 +865,7 @@ tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_han
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc)
-		TSS_TPM_CMD_ERROR("CC_EvictControl");
+		TSS_TPM_CMD_ERROR(rc, "CC_EvictControl");
 
 	return rc;
 }
@@ -900,7 +900,7 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_RSA_encrypt");
+		TSS_TPM_CMD_ERROR(rc, "CC_RSA_encrypt");
 		return rc;
 	}
 
@@ -948,7 +948,7 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 			TPM_RH_NULL, NULL, 0);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_RSA_decrypt");
+		TSS_TPM_CMD_ERROR(rc, "CC_RSA_decrypt");
 		return rc;
 	}
 
@@ -997,7 +997,7 @@ tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_HierarchyChangeAuth");
+		TSS_TPM_CMD_ERROR(rc, "CC_HierarchyChangeAuth");
 	} else {
 		rc = rc_flush;
 	}
@@ -1032,7 +1032,7 @@ tpm2_getrandom_new(size_t rand_length)
 	} while (recv_bytes < rand_length);
 
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_GetRandom");
+		TSS_TPM_CMD_ERROR(rc, "CC_GetRandom");
 		mem_free(rand);
 		return NULL;
 	}
@@ -1172,7 +1172,7 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_NV_DefineSpace");
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_DefineSpace");
 	} else {
 		rc = rc_flush;
 	}
@@ -1220,7 +1220,7 @@ tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_NV_Write");
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_Write");
 	} else {
 		rc = rc_flush;
 	}
@@ -1289,7 +1289,7 @@ flush:
 
 err:
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_NV_Read");
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_Read");
 	} else {
 		rc = rc_flush;
 	}
@@ -1328,7 +1328,7 @@ tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
 
 err:
 	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR("CC_NV_ReadLock");
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_ReadLock");
 	} else {
 		rc = rc_flush;
 	}
