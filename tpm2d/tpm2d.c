@@ -22,6 +22,7 @@
  */
 
 #include "tpm2d.h"
+#include "nvmcrypt.h"
 
 #include "control.h"
 
@@ -35,9 +36,12 @@
 #include "common/protobuf.h"
 
 #include <signal.h>
+#include <getopt.h>
 
 #define TPM2D_SOCK_PATH TPM2D_BASE_DIR "/communication"
 #define TPM2D_CONTROL_SOCKET TPM2D_SOCK_PATH "/control.sock"
+
+static bool use_simulator = false;
 
 static tpm2d_control_t *tpm2d_control_cmld = NULL;
 static logf_handler_t *tpm2d_logfile_handler = NULL;
@@ -111,6 +115,9 @@ tpm2d_setup_keys(void)
 			FATAL("Failed to persist platform key with error code: %08x", ret);
 		}
 		INFO("Persisted PS key with handle %08x -> %08x", tpm2d_ps_key_handle, persist_ps_handle);
+		if (TPM_RC_SUCCESS != (ret = tpm2_flushcontext(tpm2d_ps_key_handle))) {
+			ERROR("flushing transient object handle of platform key storage key");
+		}
 
 	}
 	if (!file_exists(TPM2D_ATTESTATION_PRIV_FILE)) {
@@ -154,7 +161,7 @@ tpm2d_init(void)
 		FATAL_ERRNO("Could not set environment!");
 
 	// if real hw tpm exists, setup environment
-	if (file_exists("/dev/tpm0")) {
+	if (file_exists("/dev/tpm0") && !use_simulator) {
 		if (setenv("TPM_INTERFACE_TYPE", "dev", 1) < 0)
 			FATAL_ERRNO("Could not set environment!");
 		if (setenv("TPM_DEVICE", "/dev/tpm0", 1) < 0)
@@ -164,13 +171,14 @@ tpm2d_init(void)
 	tss2_init();
 
 	// if no real hw tpm exists, powerup the simulator
-	if (!file_exists("/dev/tpm0")) {
-		if (TPM_RC_SUCCESS != (ret = tpm2_powerup()))
-			FATAL("powerup failed with error code: %08x", ret);
+	if (!file_exists("/dev/tpm0") || use_simulator) {
+		// startup not needed for ibm simulator
+		//if (TPM_RC_SUCCESS != (ret = tpm2_powerup()))
+		//	FATAL("powerup failed with error code: %08x", ret);
 
-		// startup should be made by uefi/bios, thus also only for simulator
-		if (TPM_RC_SUCCESS != (ret = tpm2_startup(TPM_SU_CLEAR)))
-			FATAL("startup failed with error code: %08x", ret);
+		//// startup should be made by uefi/bios, thus also only for simulator
+		//if (TPM_RC_SUCCESS != (ret = tpm2_startup(TPM_SU_CLEAR)))
+		//	FATAL("startup failed with error code: %08x", ret);
 	}
 
 	if (TPM_RC_SUCCESS != (ret = tpm2_selftest()))
@@ -180,7 +188,13 @@ tpm2d_init(void)
 	tpm2d_setup_salt_key();
 
 #ifndef TPM2D_NVMCRYPT_ONLY
+	// initialize nvm_crypt_submodule
+	nvmcrypt_init(true);
+
 	tpm2d_setup_keys();
+#else
+	// initialize nvm_crypt_submodule
+	nvmcrypt_init(false);
 #endif
 
 	mem_free(session_dir);
@@ -210,6 +224,23 @@ main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data
 	tpm2d_exit();
 }
 
+static void
+print_usage(const char *cmd)
+{
+	printf("\n");
+	printf("Usage: %s [-s] \n", cmd);
+	printf("\n");
+	printf("\t use -s option to connect to simulator, otherwise /dev/tpm0 ist used");
+	printf("\n");
+	exit(-1);
+}
+
+static const struct option global_options[] = {
+	{"sim",  no_argument, 0, 's'},
+	{"help", no_argument, 0, 'h'},
+	{0, 0, 0, 0}
+};
+
 int
 main(UNUSED int argc, char **argv) {
 
@@ -218,6 +249,17 @@ main(UNUSED int argc, char **argv) {
 	else
 		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
+
+	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, ":sh",
+					global_options, &option_index)); ) {
+		switch (c) {
+		case 's':
+			use_simulator = true;
+			break;
+		default: // includes cases 'h' and '?'
+			print_usage(argv[0]);
+		}
+	}
 
 	tpm2d_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-tpm2d"));
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);

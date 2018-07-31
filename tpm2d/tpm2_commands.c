@@ -36,6 +36,8 @@
 
 #include <tss2/tssprint.h>
 
+#include <openssl/sha.h>
+
 static TSS_CONTEXT *tss_context = NULL;
 
 #define TSS_TPM_CMD_ERROR(rc, cc_string) \
@@ -62,7 +64,7 @@ tss2_init(void)
 	if (TPM_RC_SUCCESS != (ret = TSS_Create(&tss_context)))
 		FATAL("Cannot create tss context error code: %08x", ret);
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "2");
+	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 }
 
 void
@@ -118,7 +120,6 @@ err:
 	return NULL;
 }
 
-#ifndef TPM2D_NVMCRYPT_ONLY
 static char *
 halg_id_to_string_new(TPM_ALG_ID alg_id)
 {
@@ -134,6 +135,7 @@ halg_id_to_string_new(TPM_ALG_ID alg_id)
 	}
 }
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 static char *
 tpm2d_marshal_structure_new(void *structure, MarshalFunction_t marshal_function)
 {
@@ -256,7 +258,7 @@ tpm2_dictionaryattacklockreset(const char *lockout_pwd)
 	return rc;
 }
 
-static TPM_RC
+TPM_RC
 tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
 		TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
 {
@@ -264,6 +266,8 @@ tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_han
 	StartAuthSession_In in;
 	StartAuthSession_Out out;
 	StartAuthSession_Extra extra;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	in.sessionType = session_type;
 
@@ -313,6 +317,153 @@ tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_han
 	*out_session_handle = out.sessionHandle;
 
 	return rc;
+}
+
+TPM_RC
+tpm2_policyauthvalue(TPMI_SH_POLICY se_handle)
+{
+	TPM_RC rc;
+	PolicyAuthValue_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.policySession = se_handle;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyAuthValue,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyAuthValue");
+
+        return rc;
+}
+
+TPM_RC
+tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask,
+				tpm2d_pcr_string_t *pcrs[], size_t pcrs_size)
+{
+	TPM_RC rc;
+	PolicyPCR_In in;
+
+	SHA_CTX sha1;
+	SHA256_CTX sha256;
+	SHA512_CTX sha384;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	TPM_ALG_ID hash_alg = TPM2D_HASH_ALGORITHM;
+
+	in.pcrDigest.b.size = 0;
+
+	in.policySession = se_handle;
+	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
+	in.pcrs.count = 1; // use default hash only
+	/* Table 85 - Definition of TPMS_PCR_SELECTION Structure - pcrSelections */
+	in.pcrs.pcrSelections[0].hash = hash_alg;
+	in.pcrs.pcrSelections[0].sizeofSelect = 3;
+	in.pcrs.pcrSelections[0].pcrSelect[0] = (pcr_mask >>  0) & 0xff;
+	in.pcrs.pcrSelections[0].pcrSelect[1] = (pcr_mask >>  8) & 0xff;
+	in.pcrs.pcrSelections[0].pcrSelect[2] = (pcr_mask >> 16) & 0xff;
+
+	if (pcrs_size > 0) {
+		switch (hash_alg) {
+		case TPM_ALG_SHA1:
+			in.pcrDigest.b.size = 20;
+			SHA1_Init(&sha1);
+			for (size_t i=0; i < pcrs_size; ++i) {
+				SHA1_Update(&sha1, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
+			}
+			SHA1_Final(in.pcrDigest.b.buffer, &sha1);
+			TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+			break;
+		case TPM_ALG_SHA256:
+			in.pcrDigest.b.size = 32;
+			SHA256_Init(&sha256);
+			for (size_t i=0; i < pcrs_size; ++i) {
+				SHA256_Update(&sha256, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
+			}
+			SHA256_Final(in.pcrDigest.b.buffer, &sha256);
+			TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+			break;
+		case TPM_ALG_SHA384:
+			in.pcrDigest.b.size = 48;
+			SHA384_Init(&sha384);
+			for (size_t i=0; i < pcrs_size; ++i)
+				SHA384_Update(&sha384, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+			SHA384_Final(in.pcrDigest.b.buffer, &sha384);
+			break;
+		default:
+			return TSS_RC_BAD_HASH_ALGORITHM;
+		}
+	}
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyPCR,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyPCR");
+
+        return rc;
+}
+
+TPM_RC
+tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest,
+				size_t out_digest_len)
+{
+	TPM_RC rc;
+	PolicyGetDigest_In in;
+	PolicyGetDigest_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.policySession = se_handle;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyGetDigest,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyGetDigest");
+		return rc;
+	}
+
+	TSS_PrintAll("policy digest: ", out.policyDigest.t.buffer, out.policyDigest.t.size);
+
+	//rc = TSS_File_WriteBinaryFile(out.policyDigest.t.buffer, out.policyDigest.t.size, out_file);
+
+	if (out_digest_len < out.policyDigest.t.size) {
+		ERROR("Digest size %d exceeds outputbuffer of size %zu\n", out.policyDigest.t.size,
+				out_digest_len);
+		return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+
+	memcpy(out_digest, out.policyDigest.t.buffer, out.policyDigest.t.size);
+	out_digest_len = out.policyDigest.t.size;
+	return rc;
+}
+
+TPM_RC
+tpm2_policyrestart(TPMI_SH_POLICY se_handle)
+{
+	TPM_RC rc;
+	PolicyRestart_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.sessionHandle = se_handle;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyRestart,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyRestart");
+
+        return rc;
 }
 
 TPM_RC
@@ -680,53 +831,6 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	return rc;
 }
 
-tpm2d_pcr_string_t *
-tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
-{
-	TPM_RC rc = TPM_RC_SUCCESS;
-	PCR_Read_In in;
-	PCR_Read_Out out;
-	tpm2d_pcr_string_t *pcr_string = NULL;
-
-	IF_NULL_RETVAL_ERROR(tss_context, NULL);
-
-	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
-	in.pcrSelectionIn.count = 1;
-	/* Table 85 - Definition of TPMS_PCR_SELECTION Structure */
-	in.pcrSelectionIn.pcrSelections[0].hash = hash_alg;
-	in.pcrSelectionIn.pcrSelections[0].sizeofSelect = 3;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[0] = 0;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[1] = 0;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[2] = 0;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[pcr_index / 8] = 1 << (pcr_index % 8);
-
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
-			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Read,
-			TPM_RH_NULL, NULL, 0);
-
-	if (TPM_RC_SUCCESS != rc) {
-		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Read");
-		return NULL;
-	}
-
-	// finally fill the output structure with converted hex strings needed for protobuf
-	pcr_string = mem_alloc0(sizeof(tpm2d_pcr_string_t));
-	pcr_string->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
-	pcr_string->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
-						out.pcrValues.digests[0].t.size);
-	return pcr_string;
-}
-
-void
-tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string)
-{
-	if (pcr_string->halg_str)
-		mem_free(pcr_string->halg_str);
-	if (pcr_string->pcr_str)
-		mem_free(pcr_string->pcr_str);
-	mem_free(pcr_string);
-}
-
 tpm2d_quote_string_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data)
@@ -786,7 +890,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	uint32_t size_int32 = out.quoted.t.size;
+	int32_t size_int32 = out.quoted.t.size;
         if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &size_int32)))
 		goto err;
         if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
@@ -1003,6 +1107,7 @@ err:
 	}
 	return rc;
 }
+
 uint8_t *
 tpm2_getrandom_new(size_t rand_length)
 {
@@ -1048,8 +1153,72 @@ tpm2_getrandom_new(size_t rand_length)
 	return rand;
 }
 
-static size_t
-tpm2_nv_get_data_size(TSS_CONTEXT *tss_context, TPMI_RH_NV_INDEX nv_index_handle)
+tpm2d_pcr_string_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	PCR_Read_In in;
+	PCR_Read_Out out;
+	tpm2d_pcr_string_t *pcr_string = NULL;
+
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
+
+	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
+	in.pcrSelectionIn.count = 1;
+	/* Table 85 - Definition of TPMS_PCR_SELECTION Structure */
+	in.pcrSelectionIn.pcrSelections[0].hash = hash_alg;
+	in.pcrSelectionIn.pcrSelections[0].sizeofSelect = 3;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[0] = 0;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[1] = 0;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[2] = 0;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[pcr_index / 8] = 1 << (pcr_index % 8);
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Read,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Read");
+		return NULL;
+	}
+
+	if (out.pcrValues.count == 0) {
+		WARN("CC_PCR_Read returned no values. Seems PCRs are not initialized, reboot System!");
+		return NULL;
+	}
+
+	INFO("out.pcrValues.digests[0].t.size %d", out.pcrValues.digests[0].t.size);
+
+	// finally fill the output structure with converted hex strings needed for protobuf
+	pcr_string = mem_alloc0(sizeof(tpm2d_pcr_string_t));
+	pcr_string->is_hex = is_hex;
+	pcr_string->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
+	if (is_hex) {
+		pcr_string->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
+						out.pcrValues.digests[0].t.size);
+		pcr_string->pcr_size = strlen(pcr_string->pcr_str+1);
+	} else {
+		pcr_string->pcr_str = mem_alloc0(sizeof(uint8_t) * out.pcrValues.digests[0].t.size);
+		memcpy(pcr_string->pcr_str, out.pcrValues.digests[0].t.buffer, 
+						out.pcrValues.digests[0].t.size);
+		pcr_string->pcr_size = out.pcrValues.digests[0].t.size;
+	}
+	return pcr_string;
+}
+
+void
+tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string)
+{
+	if (pcr_string->halg_str)
+		mem_free(pcr_string->halg_str);
+	if (pcr_string->pcr_str)
+		mem_free(pcr_string->pcr_str);
+	mem_free(pcr_string);
+}
+
+
+size_t
+tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle)
 {
 	NV_ReadPublic_In in;
 	NV_ReadPublic_Out out;
@@ -1114,7 +1283,8 @@ tpm2_nv_get_max_buffer_size(TSS_CONTEXT *tss_context)
 
 TPM_RC
 tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
-		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd)
+		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd,
+		uint8_t *policy_digest)
 {
 	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
 	TPMI_SH_AUTH_SESSION se_handle;
@@ -1146,7 +1316,7 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 		nv_attr.val |= TPMA_NVA_OWNERREAD;
 	}
 	nv_attr.val |= TPMA_NVA_ORDINARY;
-	nv_attr.val |= TPMA_NVA_AUTHREAD;
+	//nv_attr.val |= TPMA_NVA_AUTHREAD;
 	nv_attr.val |= TPMA_NVA_AUTHWRITE;
 
 	// needed to allow readlock
@@ -1154,10 +1324,33 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 
 	in.publicInfo.nvPublic.nvIndex = nv_index_handle;
 	in.publicInfo.nvPublic.nameAlg = TPM2D_HASH_ALGORITHM;
-	in.publicInfo.nvPublic.attributes = nv_attr;
 	in.publicInfo.nvPublic.dataSize = nv_size;
-	// set default empty policy
-	in.publicInfo.nvPublic.authPolicy.t.size = 0;
+
+	// set policy
+	if (policy_digest) {
+		in.publicInfo.nvPublic.authPolicy.b.size = TPM2D_DIGEST_SIZE;
+		memcpy(&in.publicInfo.nvPublic.authPolicy.b.buffer, policy_digest, TPM2D_DIGEST_SIZE);
+		//rc = TSS_File_Read2B(&in.publicInfo.nvPublic.authPolicy.b, sizeof(TPMU_HA),
+		// 		policy_digest_file);
+		//if (TPM_RC_SUCCESS != rc) {
+		//	ERROR("Failed to read policy digest!");
+		//	goto err;
+		//}
+		if (in.publicInfo.nvPublic.authPolicy.b.size != TPM2D_DIGEST_SIZE) {
+			ERROR("digest size mismatch!");
+			rc = TPM_RC_POLICY;
+			goto err;
+		}
+
+		nv_attr.val |= TPMA_NVA_POLICYREAD;
+		//nv_attr.val |= TPMA_NVA_POLICYWRITE;
+	} else { // set default empty policy
+		in.publicInfo.nvPublic.authPolicy.t.size = 0;
+		nv_attr.val |= TPMA_NVA_AUTHREAD;
+		//nv_attr.val |= TPMA_NVA_AUTHWRITE;
+	}
+
+	in.publicInfo.nvPublic.attributes = nv_attr;
 
 	// since we use this to store symetric keys, start an encrypted transport */
 	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
@@ -1173,6 +1366,45 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 err:
 	if (TPM_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_NV_DefineSpace");
+	} else {
+		rc = rc_flush;
+	}
+
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
+					const char *hierarchy_pwd)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	NV_UndefineSpace_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = hierarchy;
+	in.nvIndex = nv_index_handle;
+
+	// since we use this to store symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_UndefineSpace,
+			//TPM_RS_PW, hierarchy_pwd, 0,
+			se_handle, 0, TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_UndefineSpace");
 	} else {
 		rc = rc_flush;
 	}
@@ -1211,11 +1443,12 @@ tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
 	if (TPM_RC_SUCCESS != rc) goto err;
 
-	rc = TSS_Execute(tss_context, NULL,
+	do {
+		rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Write,
-			//TPM_RS_PW, nv_pwd, 0,
-			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
+			se_handle, NULL, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
@@ -1224,16 +1457,16 @@ err:
 	} else {
 		rc = rc_flush;
 	}
-
 	return rc;
 }
 
 TPM_RC
-tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 				uint8_t *out_buffer, size_t *out_length)
 {
 	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
+	TPMI_SH_AUTH_SESSION auth_se_handle;
+
 	NV_Read_In in;
 	NV_Read_Out out;
 
@@ -1248,7 +1481,7 @@ tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	in.nvIndex = nv_index_handle;
 	in.offset = 0;
 
-	size_t data_size = tpm2_nv_get_data_size(tss_context, nv_index_handle);
+	size_t data_size = tpm2_nv_get_data_size(nv_index_handle);
 	size_t buffer_max = tpm2_nv_get_max_buffer_size(tss_context);
 	if (data_size > buffer_max) {
 		INFO("Only one chunk of size=%zd is supported by this implementation!", buffer_max);
@@ -1265,15 +1498,22 @@ tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	in.size = data_size;
 
 	// since we use this to read symetric keys, start an encrypted transport
-	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
-	if (TPM_RC_SUCCESS != rc)
-		goto err;
+	if (se_handle == TPM_RH_NULL) {
+		rc = tpm2_startauthsession(TPM_SE_HMAC, &auth_se_handle, nv_index_handle, nv_pwd);
+		if (TPM_RC_SUCCESS != rc)
+			goto err;
+	} else {
+		INFO("Using provided se_handle");
+		auth_se_handle = se_handle;
+	}
 
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+	do {
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
-			//TPM_RS_PW, nv_pwd, 0,
-			se_handle, 0, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
+			auth_se_handle, NULL, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
+
 	if (TPM_RC_SUCCESS != rc)
 		goto flush;
 
@@ -1285,7 +1525,7 @@ tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	TSS_PrintAll("nv_read data: ", out_buffer, *out_length);
 
 flush:
-	rc_flush = tpm2_flushcontext(se_handle);
+	rc_flush = tpm2_flushcontext(auth_se_handle);
 
 err:
 	if (TPM_RC_SUCCESS != rc) {

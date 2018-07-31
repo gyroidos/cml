@@ -52,6 +52,7 @@ message ControllerToTpm {
 		CLEAR = 5;
 		DMCRYPT_LOCK = 6;
 		CHANGE_OWNER_PWD = 7;
+		DMCRYPT_RESET = 8;
 	}
 
 	required Code code = 1;
@@ -96,7 +97,8 @@ message TpmToController {
 		FDE_KEYGEN_FAILED = 3;
 		FDE_NO_DEVICE = 4;
 		FDE_KEY_ACCESS_LOCKED = 5;
-		FDE_UNEXPECTED_ERROR = 6;
+		FDE_RESET = 6;
+		FDE_UNEXPECTED_ERROR = 7;
 	}
 
 	required Code code = 1;

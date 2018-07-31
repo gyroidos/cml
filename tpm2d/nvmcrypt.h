@@ -31,6 +31,8 @@
 #ifndef NVMCRYPT_H
 #define NVMCRYPT_H
 
+#include <stdbool.h>
+
 /**
  * Enum defining the error states of the key generation process
  */
@@ -40,8 +42,21 @@ typedef enum nvmcrypt_fde_state {
 	FDE_KEYGEN_FAILED,
 	FDE_NO_DEVICE,
 	FDE_KEY_ACCESS_LOCKED,
+	FDE_RESET,
 	FDE_UNEXPECTED_ERROR
 } nvmcrypt_fde_state_t;
+
+/**
+ * Initialize nvmcrypt submodule
+ *
+ * This includes setting up the access policy for FDE Key
+ *
+ * @param use_secure_boot_policy indicates weather the PCR 7
+ * 	which holds secure boot state should be used to bind
+ * 	the key index to.
+ */
+void
+nvmcrypt_init(bool use_secure_boot_policy);
 
 /**
  * Setup an encrypted device mapping for a given block device
@@ -64,7 +79,7 @@ nvmcrypt_fde_state_t
 nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
 
 /**
- * This funktion locks the nvm key inside the TPM for further reading
+ * This function locks the nvm key inside the TPM for further reading
  *
  * Internally the corresponding nvindex is locked. Returns the fdestate
  * after executing the command.
@@ -74,5 +89,17 @@ nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
  */
 nvmcrypt_fde_state_t
 nvmcrypt_dm_lock(const char *fde_pw);
+
+/**
+ * This function deletes the nvm key from the TPM
+ *
+ * Internally the corresponding nvindex is idestroyed. Returns the fdestate
+ * after executing the command.
+ *
+ * @param owner/platform password which will authorize the access to the
+ *  		the corresponding internally used nvindex of the TPM.
+ */
+nvmcrypt_fde_state_t
+nvmcrypt_dm_reset(const char *hierarchy_pw);
 
 #endif // NVMCRYPT_H

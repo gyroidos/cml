@@ -84,6 +84,8 @@ tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_NO_DEVICE;
 	case FDE_KEY_ACCESS_LOCKED:
 		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_KEY_ACCESS_LOCKED;
+	case FDE_RESET:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_RESET;
 	case FDE_UNEXPECTED_ERROR:
 		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_UNEXPECTED_ERROR;
 	default:
@@ -144,7 +146,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 
 		pcr_string_array = mem_alloc0(sizeof(tpm2d_pcr_string_t*) * pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			pcr_string_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
+			pcr_string_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM, true);
 
 			IF_NULL_GOTO_ERROR(pcr_string_array[i], err_att_req);
 			TRACE("PCR%d: %s", i, pcr_string_array[i]->pcr_str);
@@ -234,7 +236,7 @@ err_att_req:
 	} break;
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_LOCK: {
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
-		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
 		out.has_fde_response = true;
 		nvmcrypt_fde_state_t state = nvmcrypt_dm_lock(msg->password);
 		out.fde_response = tpm2d_control_fdestate_to_proto(state);
@@ -246,6 +248,14 @@ err_att_req:
 		out.has_response = true;
 		int ret = tpm2_hierarchychangeauth(TPM_RH_OWNER, msg->password, msg->password_new);
 		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__DMCRYPT_RESET: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
+		out.has_fde_response = true;
+		nvmcrypt_fde_state_t state = nvmcrypt_dm_reset(msg->password);
+		out.fde_response = tpm2d_control_fdestate_to_proto(state);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:

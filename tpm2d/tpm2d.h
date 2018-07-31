@@ -26,9 +26,14 @@
 
 #include <tss2/tss.h>
 
+#include <stdbool.h>
+
 #define TPM2D_ASYM_ALGORITHM		TPM_ALG_ECC
 #define TPM2D_CURVE_ID			TPM_ECC_NIST_P256
-#define TPM2D_HASH_ALGORITHM		TPM_ALG_SHA256
+//#define TPM2D_HASH_ALGORITHM		TPM_ALG_SHA256
+#define TPM2D_HASH_ALGORITHM		TPM_ALG_SHA1
+//#define TPM2D_DIGEST_SIZE		32
+#define TPM2D_DIGEST_SIZE		20
 #define TPM2D_SYM_SESSION_ALGORITHM 	TPM_ALG_AES
 
 #define TPM2D_KEY_HIERARCHY		TPM_RH_OWNER
@@ -70,6 +75,8 @@ typedef enum tpm2d_key_type {
 } tpm2d_key_type_t;
 
 typedef struct tpm2d_pcr_string {
+	bool is_hex; // if true stirng is hexreprestation, otherwise binary of size pcr_size
+	size_t pcr_size;
 	char *halg_str;
 	char *pcr_str;
 } tpm2d_pcr_string_t;
@@ -188,12 +195,6 @@ tpm2d_get_as_key_handle(void);
 TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data);
 
-tpm2d_pcr_string_t *
-tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg);
-
-void
-tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string);
-
 tpm2d_quote_string_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data);
@@ -221,22 +222,53 @@ TPM_RC
 tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
 			const char *new_pwd);
 
+tpm2d_pcr_string_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex);
+
+void
+tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string);
+
 uint8_t *
 tpm2_getrandom_new(size_t rand_length);
 
+size_t
+tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle);
+
 TPM_RC
 tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
-		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd);
+		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd,
+		uint8_t *policy_digest);
+TPM_RC
+tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
+					const char *hierarchy_pwd);
 
 TPM_RC
 tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 					uint8_t *data, size_t data_length);
 
 TPM_RC
-tpm2_nv_read(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 				uint8_t *out_buffer, size_t *out_length);
 
 TPM_RC
 tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd);
+
+
+TPM_RC
+tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
+		TPMI_DH_OBJECT bind_handle, const char *bind_pwd);
+TPM_RC
+tpm2_policyauthvalue(TPMI_SH_POLICY se_handle);
+
+TPM_RC
+tpm2_policypcr(TPMI_SH_POLICY se_handle, uint32_t pcr_mask,
+				tpm2d_pcr_string_t *pcrs[], size_t pcrs_size);
+
+TPM_RC
+tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest,
+				size_t out_digest_len);
+
+TPM_RC
+tpm2_policyrestart(TPMI_SH_POLICY se_handle);
 
 #endif // TPM2D_H

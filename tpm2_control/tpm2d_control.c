@@ -189,6 +189,15 @@ int main(int argc, char *argv[])
 		DEBUG("Sending CHNAGE_OWNER_PWD command TPM");
 		goto send_message;
 	}
+	if (!strcasecmp(command, "dmcrypt_reset")) {
+		has_response = true;
+		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_RESET;
+		if (optind < argc)
+			msg.password = argv[optind++];
+
+		DEBUG("Sending DMCRYPT_REST command TPM");
+		goto send_message;
+	}
 
 send_message:
 	send_message(socket_file, &msg, has_response);
