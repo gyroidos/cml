@@ -25,7 +25,8 @@ tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
 	-DTPM_POSIX
 
-LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -Wextra -Werror $(tss_cflags)
+LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon -Wextra -Werror $(tss_cflags)
+LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
 
 SRC_FILES := \
 	common/dir.c \
@@ -33,10 +34,11 @@ SRC_FILES := \
 	common/fd.c \
 	common/sock.c \
 	common/protobuf.c \
-	device.pb-c.c \
+	common/cryptfs.c \
 	tpm2d.pb-c.c \
 	control.c \
 	tpm2_commands.c \
+	nvmcrypt.c \
 	tpm2d.c \
 
 
@@ -44,9 +46,8 @@ SRC_FILES := \
 all: tpm2d
 
 
-protobuf: device.proto tpm2d.proto
+protobuf: tpm2d.proto
 	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. device.proto
 
 ${SRC_FILES}: protobuf
 
@@ -54,7 +55,7 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 tpm2d: libcommon ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -libmtss -lcrypto -Lcommon -lcommon -o tpm2d
+	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -ltss -lcrypto -Lcommon -lcommon -o tpm2d
 
 
 .PHONY: clean

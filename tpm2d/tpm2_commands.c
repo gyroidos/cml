@@ -36,8 +36,50 @@
 
 #include <tss2/tssprint.h>
 
+#include <openssl/sha.h>
+
+static TSS_CONTEXT *tss_context = NULL;
+
+#define TSS_TPM_CMD_ERROR(rc, cc_string) \
+{ \
+	const char *msg; \
+	const char *submsg; \
+	const char *num; \
+	TSS_ResponseCode_toString(&msg, &submsg, &num, rc); \
+	ERROR("%s failed, rc %08x: %s%s%s\n", cc_string, rc, msg, submsg, num); \
+}
+
 /************************************************************************************/
-static char *
+
+void
+tss2_init(void)
+{
+	int ret;
+
+	if (tss_context) {
+		WARN("Context already exists");
+		return;
+	}
+
+	if (TPM_RC_SUCCESS != (ret = TSS_Create(&tss_context)))
+		FATAL("Cannot create tss context error code: %08x", ret);
+
+	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+}
+
+void
+tss2_destroy(void)
+{
+	int ret;
+	IF_NULL_RETURN_ERROR(tss_context);
+
+	if (TPM_RC_SUCCESS != (ret = TSS_Delete(tss_context)))
+		FATAL("Cannot destroy tss context error code: %08x", ret);
+
+	tss_context = NULL;
+}
+
+char *
 convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	char *hex = mem_alloc0(sizeof(char)*length*2 + 1);
@@ -50,7 +92,7 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-static uint8_t *
+uint8_t *
 convert_hex_to_bin_new(const char *hex_str, int *out_length)
 {
 	int len = strlen(hex_str);
@@ -93,6 +135,7 @@ halg_id_to_string_new(TPM_ALG_ID alg_id)
 	}
 }
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 static char *
 tpm2d_marshal_structure_new(void *structure, MarshalFunction_t marshal_function)
 {
@@ -112,6 +155,7 @@ err:
 	mem_free(bin_stream);
 	return hex_stream;
 }
+#endif
 
 /************************************************************************************/
 
@@ -119,12 +163,8 @@ TPM_RC
 tpm2_powerup(void)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	if (TPM_RC_SUCCESS != (rc = TSS_TransmitPlatform(tss_context, TPM_SIGNAL_POWER_OFF, "TPM2_PowerOffPlatform")))
 		goto err;
@@ -134,16 +174,8 @@ tpm2_powerup(void)
 
 	rc = TSS_TransmitPlatform(tss_context, TPM_SIGNAL_NV_ON, "TPM2_NvOnPlatform");
 err:
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_PowerUp failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
-	}
+	if (TPM_RC_SUCCESS != rc) 
+		TSS_TPM_CMD_ERROR(rc, "CC_PowerUp");
 
 	return rc;
 }
@@ -152,29 +184,17 @@ TPM_RC
 tpm2_startup(TPM_SU startup_type)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-
 	Startup_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
 	in.startupType = startup_type;
-
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 			 TPM_CC_Startup, TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_StartUp failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
-	}
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_StartUp");
 
 	return rc;
 }
@@ -183,27 +203,283 @@ TPM_RC
 tpm2_selftest(void)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-
 	SelfTest_In in;
-	in.fullTest = YES;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.fullTest = YES;
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 	                 TPM_CC_SelfTest, TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_SelfTest failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_SelfTest");
+
+	return rc;
+}
+
+TPM_RC
+tpm2_clear(const char *lockout_pwd)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	Clear_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+	
+	in.authHandle = TPM_RH_LOCKOUT;
+
+	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
+			TPM_CC_Clear, TPM_RS_PW, lockout_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_Clear");
+
+	return rc;
+}
+
+TPM_RC
+tpm2_dictionaryattacklockreset(const char *lockout_pwd)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	DictionaryAttackLockReset_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.lockHandle = TPM_RH_LOCKOUT;
+
+	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
+			TPM_CC_DictionaryAttackLockReset, TPM_RS_PW, lockout_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_DictionaryAttackLockReset");
+
+	return rc;
+}
+
+TPM_RC
+tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
+		TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
+{
+	TPM_RC rc;
+	StartAuthSession_In in;
+	StartAuthSession_Out out;
+	StartAuthSession_Extra extra;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.sessionType = session_type;
+
+	/* bind password */
+	in.bind = bind_handle;
+	if (in.bind != TPM_RH_NULL)
+		extra.bindPassword = bind_pwd;
+
+	/* salt key default NULL*/
+	in.tpmKey = tpm2d_get_salt_key_handle();
+	/* encryptedSalt (not required) */
+	in.encryptedSalt.b.size = 0;
+	/* nonceCaller (not required) */
+	in.nonceCaller.t.size = 0;
+
+	/* parameter encryption */
+	in.symmetric.algorithm = TPM2D_SYM_SESSION_ALGORITHM;
+	if (in.symmetric.algorithm == TPM_ALG_XOR) {
+	    /* Table 61 - Definition of (TPM_ALG_ID) TPMI_ALG_SYM Type */
+	    /* Table 125 - Definition of TPMU_SYM_KEY_BITS Union */
+	    in.symmetric.keyBits.xorr = TPM2D_HASH_ALGORITHM;
+	    /* Table 126 - Definition of TPMU_SYM_MODE Union */
+	    in.symmetric.mode.sym = TPM_ALG_NULL;
 	}
+	else { /* TPM_ALG_AES */
+	    /* Table 61 - Definition of (TPM_ALG_ID) TPMI_ALG_SYM Type */
+	    /* Table 125 - Definition of TPMU_SYM_KEY_BITS Union */
+	    in.symmetric.keyBits.aes = 128;
+	    /* Table 126 - Definition of TPMU_SYM_MODE Union */
+	    /* Table 63 - Definition of (TPM_ALG_ID) TPMI_ALG_SYM_MODE Type */
+	    in.symmetric.mode.aes = TPM_ALG_CFB;
+	}
+
+	/* authHash */
+	in.authHash = TPM2D_HASH_ALGORITHM;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in,(EXTRA_PARAMETERS *)&extra, TPM_CC_StartAuthSession,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_StartAuthSession");
+		return rc;
+	}
+
+	// return handle to just created object
+	*out_session_handle = out.sessionHandle;
+
+	return rc;
+}
+
+TPM_RC
+tpm2_policyauthvalue(TPMI_SH_POLICY se_handle)
+{
+	TPM_RC rc;
+	PolicyAuthValue_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.policySession = se_handle;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyAuthValue,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyAuthValue");
+
+        return rc;
+}
+
+TPM_RC
+tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask,
+				tpm2d_pcr_string_t *pcrs[], size_t pcrs_size)
+{
+	TPM_RC rc;
+	PolicyPCR_In in;
+
+	SHA_CTX sha1;
+	SHA256_CTX sha256;
+	SHA512_CTX sha384;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	TPM_ALG_ID hash_alg = TPM2D_HASH_ALGORITHM;
+
+	in.pcrDigest.b.size = 0;
+
+	in.policySession = se_handle;
+	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
+	in.pcrs.count = 1; // use default hash only
+	/* Table 85 - Definition of TPMS_PCR_SELECTION Structure - pcrSelections */
+	in.pcrs.pcrSelections[0].hash = hash_alg;
+	in.pcrs.pcrSelections[0].sizeofSelect = 3;
+	in.pcrs.pcrSelections[0].pcrSelect[0] = (pcr_mask >>  0) & 0xff;
+	in.pcrs.pcrSelections[0].pcrSelect[1] = (pcr_mask >>  8) & 0xff;
+	in.pcrs.pcrSelections[0].pcrSelect[2] = (pcr_mask >> 16) & 0xff;
+
+	if (pcrs_size > 0) {
+		switch (hash_alg) {
+		case TPM_ALG_SHA1:
+			in.pcrDigest.b.size = 20;
+			SHA1_Init(&sha1);
+			for (size_t i=0; i < pcrs_size; ++i) {
+				SHA1_Update(&sha1, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
+			}
+			SHA1_Final(in.pcrDigest.b.buffer, &sha1);
+			TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+			break;
+		case TPM_ALG_SHA256:
+			in.pcrDigest.b.size = 32;
+			SHA256_Init(&sha256);
+			for (size_t i=0; i < pcrs_size; ++i) {
+				SHA256_Update(&sha256, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
+			}
+			SHA256_Final(in.pcrDigest.b.buffer, &sha256);
+			TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+			break;
+		case TPM_ALG_SHA384:
+			in.pcrDigest.b.size = 48;
+			SHA384_Init(&sha384);
+			for (size_t i=0; i < pcrs_size; ++i)
+				SHA384_Update(&sha384, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+			SHA384_Final(in.pcrDigest.b.buffer, &sha384);
+			break;
+		default:
+			return TSS_RC_BAD_HASH_ALGORITHM;
+		}
+	}
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyPCR,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyPCR");
+
+        return rc;
+}
+
+TPM_RC
+tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest,
+				size_t out_digest_len)
+{
+	TPM_RC rc;
+	PolicyGetDigest_In in;
+	PolicyGetDigest_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.policySession = se_handle;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyGetDigest,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyGetDigest");
+		return rc;
+	}
+
+	TSS_PrintAll("policy digest: ", out.policyDigest.t.buffer, out.policyDigest.t.size);
+
+	//rc = TSS_File_WriteBinaryFile(out.policyDigest.t.buffer, out.policyDigest.t.size, out_file);
+
+	if (out_digest_len < out.policyDigest.t.size) {
+		ERROR("Digest size %d exceeds outputbuffer of size %zu\n", out.policyDigest.t.size,
+				out_digest_len);
+		return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+
+	memcpy(out_digest, out.policyDigest.t.buffer, out.policyDigest.t.size);
+	out_digest_len = out.policyDigest.t.size;
+	return rc;
+}
+
+TPM_RC
+tpm2_policyrestart(TPMI_SH_POLICY se_handle)
+{
+	TPM_RC rc;
+	PolicyRestart_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.sessionHandle = se_handle;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyRestart,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PolicyRestart");
+
+        return rc;
+}
+
+TPM_RC
+tpm2_flushcontext(TPMI_DH_CONTEXT handle)
+{
+	TPM_RC rc;
+	FlushContext_In in;
+
+	in.flushHandle = handle;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_FlushContext,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_FlushContext");
 
 	return rc;
 }
@@ -217,7 +493,11 @@ tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 	out_public_area->parameters.rsaDetail.exponent = 0;
 
 	switch (key_type) {
-		case TPM2D_KEY_TYPE_STORAGE:
+		case TPM2D_KEY_TYPE_STORAGE_U:
+			out_public_area->parameters.rsaDetail.symmetric.algorithm = TPM_ALG_NULL;
+			out_public_area->parameters.rsaDetail.scheme.scheme = TPM_ALG_NULL;
+			break;
+		case TPM2D_KEY_TYPE_STORAGE_R:
 			out_public_area->parameters.rsaDetail.symmetric.algorithm = TPM_ALG_AES;
 			out_public_area->parameters.rsaDetail.symmetric.keyBits.aes = 128;
 			out_public_area->parameters.rsaDetail.symmetric.mode.aes = TPM_ALG_CFB;
@@ -267,6 +547,17 @@ tpm2_fill_ecc_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 			out_public_area->parameters.eccDetail.curveID = TPM2D_CURVE_ID;
 			out_public_area->parameters.eccDetail.kdf.scheme = TPM_ALG_NULL;
 			break;
+		case TPM2D_KEY_TYPE_STORAGE_U:
+		case TPM2D_KEY_TYPE_STORAGE_R:
+			out_public_area->parameters.eccDetail.symmetric.algorithm = TPM_ALG_AES;
+			out_public_area->parameters.eccDetail.symmetric.keyBits.aes = 128;
+			out_public_area->parameters.eccDetail.symmetric.mode.aes = TPM_ALG_CFB;
+			out_public_area->parameters.eccDetail.scheme.scheme = TPM_ALG_NULL;
+			out_public_area->parameters.eccDetail.scheme.details.anySig.hashAlg = 0;
+			out_public_area->parameters.eccDetail.curveID = TPM2D_CURVE_ID;
+			out_public_area->parameters.eccDetail.kdf.scheme = TPM_ALG_NULL;
+			out_public_area->parameters.eccDetail.kdf.details.mgf1.hashAlg = 0;
+			break;
 		default:
 			ERROR("Keytype not supported for ecc keys!");
 			return TPM_RC_VALUE;
@@ -295,7 +586,12 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, 
 	out_public_area->authPolicy.t.size = 0;
 
 	switch (key_type) {
-		case TPM2D_KEY_TYPE_STORAGE:
+		case TPM2D_KEY_TYPE_STORAGE_U:
+			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_SIGN;
+			out_public_area->objectAttributes.val |= TPMA_OBJECT_DECRYPT;
+			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_RESTRICTED;
+			break;
+		case TPM2D_KEY_TYPE_STORAGE_R:
 			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_SIGN;
 			out_public_area->objectAttributes.val |= TPMA_OBJECT_DECRYPT;
 			out_public_area->objectAttributes.val |= TPMA_OBJECT_RESTRICTED;
@@ -321,6 +617,8 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, 
 		rc = tpm2_fill_rsa_details(out_public_area, key_type);
 	} else {
 		// TPM2D_ASYM_ALGORITHM == TPM_ALG_ECC
+		out_public_area->unique.ecc.x.t.size = 0;
+		out_public_area->unique.ecc.y.t.size = 0;
 		rc = tpm2_fill_ecc_details(out_public_area, key_type);
 	}
 
@@ -333,11 +631,12 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 		const char *file_name_pub_key, uint32_t *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
+
 	CreatePrimary_In in;
 	CreatePrimary_Out out;
 	TPMA_OBJECT object_attrs;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	object_attrs.val = 0;
 	object_attrs.val |= TPMA_OBJECT_NODA;
@@ -372,25 +671,13 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	in.creationPCR.count = 0;
 
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	if (TPM_RC_SUCCESS != (rc = TSS_Create(&tss_context)))
-		return rc;
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_CreatePrimary,
 			TPM_RS_PW, hierachy_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_CreatePrimary failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_CreatePrimary");
 		return rc;
 	}
 
@@ -407,22 +694,21 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	return rc;
 }
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 TPM_RC
 tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		uint32_t object_vals, const char *parent_pwd, const char *key_pwd,
 		const char *file_name_priv_key, const char *file_name_pub_key)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	Create_In in;
 	Create_Out out;
 	TPMA_OBJECT object_attrs;
 
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
 	in.parentHandle = parent_handle;
 	object_attrs.val = object_vals;
-
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 
 	// Table 134 - Definition of TPM2B_SENSITIVE_CREATE inSensitive
 	if (key_pwd == NULL)
@@ -443,22 +729,13 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 	// Table 102 - TPML_PCR_SELECTION creationPCR
 	in.creationPCR.count = 0;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_Create,
 			TPM_RS_PW, parent_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_Create failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_Create");
 		return rc;
 	}
 
@@ -487,14 +764,12 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 		uint32_t *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	Load_In in;
 	Load_Out out;
 
-        in.parentHandle = parent_handle;
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	in.parentHandle = parent_handle;
 
 	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructure(&in.inPrivate,
 			(UnmarshalFunction_t)TPM2B_PRIVATE_Unmarshal,
@@ -506,22 +781,13 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 			file_name_pub_key)))
 		return rc;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
-
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_Load,
 			TPM_RS_PW, parent_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_Load failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_Load");
 		return rc;
 	}
 
@@ -535,11 +801,9 @@ TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	PCR_Extend_In in;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	if (strlen(data) > sizeof(TPMU_HA)) {
 		ERROR("Data length %zu exceeds hash size %zu!", strlen(data), sizeof(TPMU_HA));
@@ -556,99 +820,29 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	memset((uint8_t *)&in.digests.digests[0].digest, 0, sizeof(TPMU_HA));
 	memcpy((uint8_t *)&in.digests.digests[0].digest, data, strlen(data));
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
-
 	rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Extend,
 			TPM_RS_PW, NULL, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_PCR_Extend failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
-	}
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Extend");
 
 	return rc;
 }
 
-tpm2d_pcr_strings_t *
-tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
-{
-	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-	PCR_Read_In in;
-	PCR_Read_Out out;
-	tpm2d_pcr_strings_t *pcr_strings = NULL;
-
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
-
-	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
-	in.pcrSelectionIn.count = 1;
-	/* Table 85 - Definition of TPMS_PCR_SELECTION Structure */
-	in.pcrSelectionIn.pcrSelections[0].hash = hash_alg;
-	in.pcrSelectionIn.pcrSelections[0].sizeofSelect = 3;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[0] = 0;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[1] = 0;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[2] = 0;
-	in.pcrSelectionIn.pcrSelections[0].pcrSelect[pcr_index / 8] = 1 << (pcr_index % 8);
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), NULL);
-
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
-			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Read,
-			TPM_RH_NULL, NULL, 0);
-
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_PCR_Read failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
-		return NULL;
-	}
-
-	// finally fill the output structure with converted hex strings needed for protobuf
-	pcr_strings = mem_alloc0(sizeof(tpm2d_pcr_strings_t));
-	pcr_strings->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
-	pcr_strings->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
-						out.pcrValues.digests[0].t.size);
-	return pcr_strings;
-}
-
-void
-tpm2_pcrread_free(tpm2d_pcr_strings_t *pcr_strings)
-{
-	if (pcr_strings->halg_str)
-		mem_free(pcr_strings->halg_str);
-	if (pcr_strings->pcr_str)
-		mem_free(pcr_strings->pcr_str);
-	mem_free(pcr_strings);
-}
-
-tpm2d_quote_strings_t *
+tpm2d_quote_string_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			const char *sig_key_pwd, const char *qualifying_data)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
 	Quote_In in;
 	Quote_Out out;
 	TPMS_ATTEST tpms_attest;
 	uint8_t *qualifying_data_bin = NULL;
-	tpm2d_quote_strings_t *quote_strings = NULL;
+	tpm2d_quote_string_t *quote_string = NULL;
 
-	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
 	if (pcr_indices > 23) {
 		ERROR("Exceeded maximum available PCR registers!");
@@ -676,8 +870,6 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 	in.PCRselect.count = 1;
 	in.PCRselect.pcrSelections[0].hash = TPM2D_HASH_ALGORITHM;
 
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), NULL);
-
 	if (qualifying_data != NULL) {
 		int length;
 		qualifying_data_bin = convert_hex_to_bin_new(qualifying_data, &length);
@@ -693,26 +885,23 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 			TPM_RS_PW, sig_key_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
 	if (rc != TPM_RC_SUCCESS)
 		goto err;
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	uint32_t size_int32 = out.quoted.t.size;
+	int32_t size_int32 = out.quoted.t.size;
         if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &size_int32)))
 		goto err;
         if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
 		goto err;
 
 	// finally fill the output structure with converted hex strings needed for protobuf
-	quote_strings = mem_alloc0(sizeof(tpm2d_quote_strings_t));
-	quote_strings->halg_str = halg_id_to_string_new(in.PCRselect.pcrSelections[0].hash);
-	quote_strings->quoted_str = convert_bin_to_hex_new(out.quoted.t.attestationData,
+	quote_string = mem_alloc0(sizeof(tpm2d_quote_string_t));
+	quote_string->halg_str = halg_id_to_string_new(in.PCRselect.pcrSelections[0].hash);
+	quote_string->quoted_str = convert_bin_to_hex_new(out.quoted.t.attestationData,
 							out.quoted.t.size);
-	quote_strings->signature_str = tpm2d_marshal_structure_new(&out.signature,
+	quote_string->signature_str = tpm2d_marshal_structure_new(&out.signature,
 					(MarshalFunction_t)TSS_TPMT_SIGNATURE_Marshal);
 
 	if (in.inScheme.scheme == TPM_ALG_RSASSA) {
@@ -722,30 +911,25 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	if (qualifying_data_bin)
 		mem_free(qualifying_data_bin);
-	return quote_strings;
+	return quote_string;
 err:
-	{
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_Quote failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
-	}
+	TSS_TPM_CMD_ERROR(rc, "CC_Quote");
+
 	if (qualifying_data_bin)
 		mem_free(qualifying_data_bin);
 	return NULL;
 }
 
 void
-tpm2_quote_free(tpm2d_quote_strings_t* quote_strings)
+tpm2_quote_free(tpm2d_quote_string_t* quote_string)
 {
-	if (quote_strings->halg_str)
-		mem_free(quote_strings->halg_str);
-	if (quote_strings->quoted_str)
-		mem_free(quote_strings->quoted_str);
-	if (quote_strings->signature_str)
-		mem_free(quote_strings->signature_str);
-	mem_free(quote_strings);
+	if (quote_string->halg_str)
+		mem_free(quote_string->halg_str);
+	if (quote_string->quoted_str)
+		mem_free(quote_string->quoted_str);
+	if (quote_string->signature_str)
+		mem_free(quote_string->signature_str);
+	mem_free(quote_string);
 }
 
 char *
@@ -771,32 +955,622 @@ tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_han
 						 TPMI_DH_PERSISTENT persist_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
-	TPM_RC rc_del = TPM_RC_SUCCESS;
-	TSS_CONTEXT *tss_context = NULL;
-
 	EvictControl_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
 	in.auth = auth;
 	in.objectHandle = obj_handle;
 	in.persistentHandle = persist_handle;
-
-	IF_FALSE_RETVAL(TPM_RC_SUCCESS == (rc = TSS_Create(&tss_context)), rc);
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 			TPM_CC_EvictControl,
 			TPM_RS_PW, auth_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
 
-	rc_del = TSS_Delete(tss_context);
-	if (rc == TPM_RC_SUCCESS)
-		rc = rc_del;
-	else {
-		const char *msg;
-		const char *submsg;
-		const char *num;
-		TSS_ResponseCode_toString(&msg, &submsg, &num, rc);
-		ERROR("CC_EvictControl failed, rc %08x: %s%s%s\n", rc, msg, submsg, num);
+	if (TPM_RC_SUCCESS != rc)
+		TSS_TPM_CMD_ERROR(rc, "CC_EvictControl");
+
+	return rc;
+}
+
+TPM_RC
+tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
+			 uint8_t *out_buffer, size_t *out_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	RSA_Encrypt_In in;
+	RSA_Encrypt_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if (in_length > MAX_RSA_KEY_BYTES) {
+	    ERROR("Input buffer exceeds RSA Blocksize %zu\n", in_length);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
 	}
 
+	in.keyHandle = key_handle;
+	/* Table 158 - Definition of {RSA} TPM2B_PUBLIC_KEY_RSA Structure */
+	in.message.t.size = (uint16_t)in_length;
+	memcpy(in.message.t.buffer, in_buffer, in_length);
+	/* Table 157 - Definition of {RSA} TPMT_RSA_DECRYPT Structure */
+	in.inScheme.scheme = TPM_ALG_OAEP;
+	in.inScheme.details.oaep.hashAlg = TPM2D_HASH_ALGORITHM;
+	/* Table 73 - Definition of TPM2B_DATA Structure */
+	in.label.t.size = 0;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_RSA_Encrypt,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_RSA_encrypt");
+		return rc;
+	}
+
+	TSS_PrintAll("RSA encrypted data", out.outData.t.buffer, out.outData.t.size);
+
+	// return handle to just created object
+	if (out.outData.t.size > *out_length) {
+		ERROR("Output buffer (size=%zu) is to small for encrypted data of size %u\n",
+						*out_length, out.outData.t.size);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+	memcpy(out_buffer, out.outData.t.buffer, out.outData.t.size);
+
+	return rc;
+}
+
+TPM_RC
+tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buffer,
+			size_t in_length, uint8_t *out_buffer, size_t *out_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	RSA_Decrypt_In in;
+	RSA_Decrypt_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if (in_length > MAX_RSA_KEY_BYTES) {
+	    ERROR("Input buffer exceeds RSA block size %zu\n", in_length);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+
+	in.keyHandle = key_handle;
+	/* Table 158 - Definition of {RSA} TPM2B_PUBLIC_KEY_RSA Structure */
+	in.cipherText.t.size = (uint16_t)in_length;
+	memcpy(in.cipherText.t.buffer, in_buffer, in_length);
+	/* Table 157 - Definition of {RSA} TPMT_RSA_DECRYPT Structure */
+	in.inScheme.scheme = TPM_ALG_OAEP;
+	in.inScheme.details.oaep.hashAlg = TPM2D_HASH_ALGORITHM;
+	/* Table 73 - Definition of TPM2B_DATA Structure */
+	in.label.t.size = 0;
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_RSA_Decrypt,
+			TPM_RS_PW, key_pwd, 0,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_RSA_decrypt");
+		return rc;
+	}
+
+	TSS_PrintAll("RSA Decrypted message", out.message.t.buffer, out.message.t.size);
+
+	// return handle to just created object
+	if (out.message.t.size > *out_length) {
+		ERROR("Output buffer (size=%zu) is to small for decrypted message of size %u\n",
+						*out_length, out.message.t.size);
+	    return TSS_RC_INSUFFICIENT_BUFFER;
+	}
+	memcpy(out_buffer, out.message.t.buffer, out.message.t.size);
+	*out_length = out.message.t.size;
+
+	return rc;
+}
+#endif // ndef TPM2D_NVMCRYPT_ONLY
+
+TPM_RC
+tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
+			const char *new_pwd)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	HierarchyChangeAuth_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	in.authHandle = hierarchy;
+
+	if (new_pwd == NULL)
+		in.newAuth.b.size = 0;
+	else if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_StringCopy(&in.newAuth.b,
+					new_pwd, sizeof(TPMU_HA))))
+		return rc;
+
+	// since we use this to store symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, old_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_HierarchyChangeAuth,
+			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_HierarchyChangeAuth");
+	} else {
+		rc = rc_flush;
+	}
+	return rc;
+}
+
+uint8_t *
+tpm2_getrandom_new(size_t rand_length)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	GetRandom_In in;
+	GetRandom_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
+
+	// since we use this to generate symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, TPM_RH_NULL, NULL);
+	if (TPM_RC_SUCCESS != rc) return NULL;
+
+	uint8_t *rand = mem_new0(uint8_t, rand_length);
+	size_t recv_bytes = 0;
+	do {
+		in.bytesRequested = rand_length - recv_bytes;
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_GetRandom,
+				se_handle, NULL, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
+				TPM_RH_NULL, NULL, 0);
+		if (rc != TPM_RC_SUCCESS)
+			break;
+		memcpy(&rand[recv_bytes], out.randomBytes.t.buffer, out.randomBytes.t.size);
+		recv_bytes += out.randomBytes.t.size;
+	} while (recv_bytes < rand_length);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_GetRandom");
+		mem_free(rand);
+		return NULL;
+	}
+
+	char *rand_hex = convert_bin_to_hex_new(rand, rand_length);
+	INFO("Generated Rand: %s", rand_hex);
+
+	mem_free(rand_hex);
+
+	if (TPM_RC_SUCCESS != tpm2_flushcontext(se_handle))
+		WARN("Flush failed, maybe session handle was allready flushed.");
+
+	return rand;
+}
+
+tpm2d_pcr_string_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex)
+{
+	TPM_RC rc = TPM_RC_SUCCESS;
+	PCR_Read_In in;
+	PCR_Read_Out out;
+	tpm2d_pcr_string_t *pcr_string = NULL;
+
+	IF_NULL_RETVAL_ERROR(tss_context, NULL);
+
+	/* Table 102 - Definition of TPML_PCR_SELECTION Structure */
+	in.pcrSelectionIn.count = 1;
+	/* Table 85 - Definition of TPMS_PCR_SELECTION Structure */
+	in.pcrSelectionIn.pcrSelections[0].hash = hash_alg;
+	in.pcrSelectionIn.pcrSelections[0].sizeofSelect = 3;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[0] = 0;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[1] = 0;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[2] = 0;
+	in.pcrSelectionIn.pcrSelections[0].pcrSelect[pcr_index / 8] = 1 << (pcr_index % 8);
+
+	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Read,
+			TPM_RH_NULL, NULL, 0);
+
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Read");
+		return NULL;
+	}
+
+	if (out.pcrValues.count == 0) {
+		WARN("CC_PCR_Read returned no values. Seems PCRs are not initialized, reboot System!");
+		return NULL;
+	}
+
+	INFO("out.pcrValues.digests[0].t.size %d", out.pcrValues.digests[0].t.size);
+
+	// finally fill the output structure with converted hex strings needed for protobuf
+	pcr_string = mem_alloc0(sizeof(tpm2d_pcr_string_t));
+	pcr_string->is_hex = is_hex;
+	pcr_string->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
+	if (is_hex) {
+		pcr_string->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
+						out.pcrValues.digests[0].t.size);
+		pcr_string->pcr_size = strlen(pcr_string->pcr_str+1);
+	} else {
+		pcr_string->pcr_str = mem_alloc0(sizeof(uint8_t) * out.pcrValues.digests[0].t.size);
+		memcpy(pcr_string->pcr_str, out.pcrValues.digests[0].t.buffer, 
+						out.pcrValues.digests[0].t.size);
+		pcr_string->pcr_size = out.pcrValues.digests[0].t.size;
+	}
+	return pcr_string;
+}
+
+void
+tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string)
+{
+	if (pcr_string->halg_str)
+		mem_free(pcr_string->halg_str);
+	if (pcr_string->pcr_str)
+		mem_free(pcr_string->pcr_str);
+	mem_free(pcr_string);
+}
+
+
+size_t
+tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle)
+{
+	NV_ReadPublic_In in;
+	NV_ReadPublic_Out out;
+	size_t data_size = 0;
+
+	IF_NULL_RETVAL_WARN(tss_context, 0);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return -1;
+	}
+
+	in.nvIndex = nv_index_handle;
+
+	if (TPM_RC_SUCCESS != TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_ReadPublic,
+				TPM_RH_NULL, NULL, 0))
+			return 0;
+
+	uint32_t nv_type = (out.nvPublic.nvPublic.attributes.val & TPMA_NVA_TPM_NT_MASK) >> 4;
+	if (nv_type == TPM_NT_ORDINARY) {
+		data_size = out.nvPublic.nvPublic.dataSize;
+	} else {
+		WARN("Only ORDINARY data have variable size!");
+	}
+	INFO("Data size of NV index %x is %zd", nv_index_handle, data_size);
+
+	return data_size;
+}
+
+static size_t
+tpm2_nv_get_max_buffer_size(TSS_CONTEXT *tss_context)
+{
+	GetCapability_In in;
+	GetCapability_Out out;
+
+	in.capability = TPM_CAP_TPM_PROPERTIES;
+	in.property = TPM_PT_NV_BUFFER_MAX;
+	in.propertyCount = 1;
+
+	// set a small default fallback value;
+	size_t buffer_size = 512;
+
+	IF_NULL_RETVAL_WARN(tss_context, buffer_size);
+
+	if (TPM_RC_SUCCESS != TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_GetCapability,
+				TPM_RH_NULL, NULL, 0)) {
+		ERROR("GetCapability failed, returning default value %zd", buffer_size);
+		return buffer_size;
+	}
+
+	if (out.capabilityData.data.tpmProperties.count > 0 &&
+			 out.capabilityData.data.tpmProperties.tpmProperty[0].property == TPM_PT_NV_BUFFER_MAX)
+		buffer_size = out.capabilityData.data.tpmProperties.tpmProperty[0].value;
+	else
+		ERROR("GetCapability failed, returning default value %zd", buffer_size);
+
+	INFO("NV buffer maximum size is set to %zd", buffer_size);
+	return buffer_size;
+}
+
+TPM_RC
+tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
+		size_t nv_size, const char *hierarchy_pwd, const char *nv_pwd,
+		uint8_t *policy_digest)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	NV_DefineSpace_In in;
+	TPMA_NV nv_attr;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	if (nv_pwd == NULL)
+		in.auth.b.size = 0;
+	else if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_StringCopy(&in.auth.b,
+					nv_pwd, sizeof(TPMU_HA))))
+		return rc;
+
+	in.authHandle = hierarchy;
+
+	nv_attr.val = 0;
+	if (hierarchy == TPM_RH_PLATFORM) {
+		nv_attr.val |= TPMA_NVA_PLATFORMCREATE;
+		nv_attr.val |= TPMA_NVA_PPWRITE;
+		nv_attr.val |= TPMA_NVA_PPREAD;
+	} else { // TPM_RH_OWNER
+		nv_attr.val |= TPMA_NVA_OWNERWRITE;
+		nv_attr.val |= TPMA_NVA_OWNERREAD;
+	}
+	nv_attr.val |= TPMA_NVA_ORDINARY;
+	//nv_attr.val |= TPMA_NVA_AUTHREAD;
+	nv_attr.val |= TPMA_NVA_AUTHWRITE;
+
+	// needed to allow readlock
+	nv_attr.val |= TPMA_NVA_READ_STCLEAR;
+
+	in.publicInfo.nvPublic.nvIndex = nv_index_handle;
+	in.publicInfo.nvPublic.nameAlg = TPM2D_HASH_ALGORITHM;
+	in.publicInfo.nvPublic.dataSize = nv_size;
+
+	// set policy
+	if (policy_digest) {
+		in.publicInfo.nvPublic.authPolicy.b.size = TPM2D_DIGEST_SIZE;
+		memcpy(&in.publicInfo.nvPublic.authPolicy.b.buffer, policy_digest, TPM2D_DIGEST_SIZE);
+		//rc = TSS_File_Read2B(&in.publicInfo.nvPublic.authPolicy.b, sizeof(TPMU_HA),
+		// 		policy_digest_file);
+		//if (TPM_RC_SUCCESS != rc) {
+		//	ERROR("Failed to read policy digest!");
+		//	goto err;
+		//}
+		if (in.publicInfo.nvPublic.authPolicy.b.size != TPM2D_DIGEST_SIZE) {
+			ERROR("digest size mismatch!");
+			rc = TPM_RC_POLICY;
+			goto err;
+		}
+
+		nv_attr.val |= TPMA_NVA_POLICYREAD;
+		//nv_attr.val |= TPMA_NVA_POLICYWRITE;
+	} else { // set default empty policy
+		in.publicInfo.nvPublic.authPolicy.t.size = 0;
+		nv_attr.val |= TPMA_NVA_AUTHREAD;
+		//nv_attr.val |= TPMA_NVA_AUTHWRITE;
+	}
+
+	in.publicInfo.nvPublic.attributes = nv_attr;
+
+	// since we use this to store symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_DefineSpace,
+			//TPM_RS_PW, hierarchy_pwd, 0,
+			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_DefineSpace");
+	} else {
+		rc = rc_flush;
+	}
+
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
+					const char *hierarchy_pwd)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	NV_UndefineSpace_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = hierarchy;
+	in.nvIndex = nv_index_handle;
+
+	// since we use this to store symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_UndefineSpace,
+			//TPM_RS_PW, hierarchy_pwd, 0,
+			se_handle, 0, TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_UndefineSpace");
+	} else {
+		rc = rc_flush;
+	}
+
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+					uint8_t *data, size_t data_length)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	NV_Write_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = nv_index_handle;
+	in.nvIndex = nv_index_handle;
+	in.offset = 0;
+
+	size_t buffer_max = tpm2_nv_get_max_buffer_size(tss_context);
+	if (data_length > buffer_max) {
+		INFO("Only one chunk is supported by this implementation!");
+		rc = TSS_RC_INSUFFICIENT_BUFFER;
+		goto err;
+	}
+	memcpy(in.data.b.buffer, data, data_length);
+	in.data.b.size = data_length;
+
+	// since we use this to read symetric keys, start an encrypted transport */
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
+	if (TPM_RC_SUCCESS != rc) goto err;
+
+	do {
+		rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Write,
+			se_handle, NULL, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_Write");
+	} else {
+		rc = rc_flush;
+	}
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
+				uint8_t *out_buffer, size_t *out_length)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION auth_se_handle;
+
+	NV_Read_In in;
+	NV_Read_Out out;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = nv_index_handle;
+	in.nvIndex = nv_index_handle;
+	in.offset = 0;
+
+	size_t data_size = tpm2_nv_get_data_size(nv_index_handle);
+	size_t buffer_max = tpm2_nv_get_max_buffer_size(tss_context);
+	if (data_size > buffer_max) {
+		INFO("Only one chunk of size=%zd is supported by this implementation!", buffer_max);
+		rc = TSS_RC_INSUFFICIENT_BUFFER;
+		goto err;
+	}
+	if (data_size > *out_length) {
+		ERROR("Output buffer (size=%zd) is to small for nv data of size %zd\n",
+						*out_length, data_size);
+		rc = TSS_RC_INSUFFICIENT_BUFFER;
+		goto err;
+	}
+
+	in.size = data_size;
+
+	// since we use this to read symetric keys, start an encrypted transport
+	if (se_handle == TPM_RH_NULL) {
+		rc = tpm2_startauthsession(TPM_SE_HMAC, &auth_se_handle, nv_index_handle, nv_pwd);
+		if (TPM_RC_SUCCESS != rc)
+			goto err;
+	} else {
+		INFO("Using provided se_handle");
+		auth_se_handle = se_handle;
+	}
+
+	do {
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
+			auth_se_handle, NULL, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
+
+	if (TPM_RC_SUCCESS != rc)
+		goto flush;
+
+	memcpy(out_buffer, out.data.b.buffer, out.data.b.size);
+
+	// set ouput length of caller
+	*out_length = out.data.b.size;
+
+	TSS_PrintAll("nv_read data: ", out_buffer, *out_length);
+
+flush:
+	rc_flush = tpm2_flushcontext(auth_se_handle);
+
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_Read");
+	} else {
+		rc = rc_flush;
+	}
+	return rc;
+}
+
+TPM_RC
+tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
+{
+	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
+	TPMI_SH_AUTH_SESSION se_handle;
+	NV_ReadLock_In in;
+
+	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
+
+	if ((nv_index_handle >> 24) != TPM_HT_NV_INDEX) {
+		ERROR("bad index handle %x", nv_index_handle);
+		return TSS_RC_BAD_HANDLE_NUMBER;
+	}
+
+	in.authHandle = nv_index_handle;
+	in.nvIndex = nv_index_handle;
+
+	// since we use this to read symetric keys, start an encrypted transport
+	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
+	if (TPM_RC_SUCCESS != rc)
+		goto err;
+
+	rc = TSS_Execute(tss_context, NULL,
+			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_ReadLock,
+			//TPM_RS_PW, nv_pwd, 0,
+			se_handle, 0, TPMA_SESSION_CONTINUESESSION,
+			TPM_RH_NULL, NULL, 0);
+
+	rc_flush = tpm2_flushcontext(se_handle);
+
+err:
+	if (TPM_RC_SUCCESS != rc) {
+		TSS_TPM_CMD_ERROR(rc, "CC_NV_ReadLock");
+	} else {
+		rc = rc_flush;
+	}
 	return rc;
 }

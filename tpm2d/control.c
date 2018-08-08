@@ -29,6 +29,7 @@
 #endif
 
 #include "tpm2d.h"
+#include "nvmcrypt.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -46,14 +47,59 @@
 
 struct tpm2d_control {
 	int sock;		// listen socket fd
-	TPMI_DH_OBJECT attestation_key_handle;
 };
 
 UNUSED static list_t *control_list = NULL;
 
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+static TpmToController__GenericResponse
+tpm2d_control_resp_to_proto(control_generic_response_t resp)
+{
+	switch (resp) {
+	case CMD_OK:
+		return TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK;
+	case CMD_FAILED:
+		return TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_FAILED;
+	default:
+		FATAL("Unhandled value for control_generic_response_t: %d", resp);
+	}
+}
+
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+static TpmToController__FdeResponse
+tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
+{
+	switch (state) {
+	case FDE_OK:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_OK;
+	case FDE_AUTH_FAILED:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_AUTH_FAILED;
+	case FDE_KEYGEN_FAILED:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_KEYGEN_FAILED;
+	case FDE_NO_DEVICE:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_NO_DEVICE;
+	case FDE_KEY_ACCESS_LOCKED:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_KEY_ACCESS_LOCKED;
+	case FDE_RESET:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_RESET;
+	case FDE_UNEXPECTED_ERROR:
+		return TPM_TO_CONTROLLER__FDE_RESPONSE__FDE_UNEXPECTED_ERROR;
+	default:
+		FATAL("Unhandled value for nvmcrypt_fde_state_t: %d", state);
+	}
+}
+
 static void
 tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
+	ASSERT(control);
+
+	TRACE("Handle message from client fd=%d", fd);
+
 	if (NULL == msg) {
 		WARN("msg=NULL, returning");
 		return;
@@ -67,12 +113,13 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 	}
 
 	switch(msg->code) {
+#ifndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ: {
 		Pcr **out_pcrs = NULL;
 		int pcr_regs = 0;
 		int pcr_indices = 0;
-		tpm2d_pcr_strings_t** pcr_strings_array = NULL;
-		tpm2d_quote_strings_t *quote_strings = NULL;
+		tpm2d_pcr_string_t** pcr_string_array = NULL;
+		tpm2d_quote_string_t *quote_string = NULL;
 		char *attestation_pub_key = NULL;
 
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
@@ -97,17 +144,17 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		}
 		pcr_indices = pcr_regs - 1;
 
-		pcr_strings_array = mem_alloc0(sizeof(tpm2d_pcr_strings_t*) * pcr_regs);
+		pcr_string_array = mem_alloc0(sizeof(tpm2d_pcr_string_t*) * pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			pcr_strings_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
+			pcr_string_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM, true);
 
-			IF_NULL_GOTO_ERROR(pcr_strings_array[i], err_att_req);
-			TRACE("PCR%d: %s", i, pcr_strings_array[i]->pcr_str);
+			IF_NULL_GOTO_ERROR(pcr_string_array[i], err_att_req);
+			TRACE("PCR%d: %s", i, pcr_string_array[i]->pcr_str);
 		}
 
-		quote_strings = tpm2_quote_new(pcr_indices,
-				control->attestation_key_handle, TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
-		IF_NULL_GOTO_ERROR(quote_strings, err_att_req);
+		quote_string = tpm2_quote_new(pcr_indices,
+				tpm2d_get_as_key_handle(), TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
+		IF_NULL_GOTO_ERROR(quote_string, err_att_req);
 
 		attestation_pub_key = tpm2_read_file_to_hex_string_new(TPM2D_ATTESTATION_PUB_FILE);
 		IF_NULL_GOTO_ERROR(attestation_pub_key, err_att_req);
@@ -115,7 +162,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		Pcr out_pcr = PCR__INIT;
 		out_pcrs = mem_new(Pcr *, pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			out_pcr.value = pcr_strings_array[i]->pcr_str;
+			out_pcr.value = pcr_string_array[i]->pcr_str;
 			out_pcr.has_number = true;
 			out_pcr.number = i;
 			out_pcrs[i] = mem_alloc(sizeof(Pcr));
@@ -124,9 +171,9 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 
 		out.has_atype = true;
 		out.atype = msg->atype;
-		out.halg = quote_strings->halg_str;
-		out.quoted = quote_strings->quoted_str;
-		out.signature = quote_strings->signature_str;
+		out.halg = quote_string->halg_str;
+		out.quoted = quote_string->quoted_str;
+		out.signature = quote_string->signature_str;
 		out.n_pcr_values = pcr_regs;
 		out.pcr_values = out_pcrs;
 
@@ -135,21 +182,81 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 err_att_req:
-		if (pcr_strings_array)
+		if (pcr_string_array)
 			for (int i=0; i < pcr_regs; ++i) {
-				if (pcr_strings_array[i])
-					tpm2_pcrread_free(pcr_strings_array[i]);
+				if (pcr_string_array[i])
+					tpm2_pcrread_free(pcr_string_array[i]);
 				if (out_pcrs && out_pcrs[i])
 					mem_free(out_pcrs[i]);
 			}
 		if (out_pcrs)
 			mem_free(out_pcrs);
-		if (pcr_strings_array)
-			mem_free(pcr_strings_array);
-		if (quote_strings)
-			tpm2_quote_free(quote_strings);
+		if (pcr_string_array)
+			mem_free(pcr_string_array);
+		if (quote_string)
+			tpm2_quote_free(quote_string);
 		if (attestation_pub_key)
 			mem_free(attestation_pub_key);
+	} break;
+#endif // ndef TPM2D_NVMCRYPT_ONLY
+	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
+		out.has_fde_response = true;
+		nvmcrypt_fde_state_t state =
+			nvmcrypt_dm_setup(msg->dmcrypt_device, msg->password);
+		out.fde_response = tpm2d_control_fdestate_to_proto(state);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__EXIT: {
+		INFO("Received EXIT command!");
+		tpm2d_exit();
+	} break;
+	case CONTROLLER_TO_TPM__CODE__RANDOM_REQ: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__RANDOM_RESPONSE;
+		uint8_t * rand = tpm2_getrandom_new(msg->rand_size);
+		char *rand_hex = convert_bin_to_hex_new(rand, msg->rand_size);
+		out.rand_data = rand_hex;
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (rand)
+			mem_free(rand);
+		if (rand_hex)
+			mem_free(rand_hex);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__CLEAR: {
+		INFO("Received Clear command!");
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_response = true;
+		int ret = tpm2_clear(msg->password);
+		ret |= tpm2_dictionaryattacklockreset(msg->password);
+		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__DMCRYPT_LOCK: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
+		out.has_fde_response = true;
+		nvmcrypt_fde_state_t state = nvmcrypt_dm_lock(msg->password);
+		out.fde_response = tpm2d_control_fdestate_to_proto(state);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__CHANGE_OWNER_PWD: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_response = true;
+		int ret = tpm2_hierarchychangeauth(TPM_RH_OWNER, msg->password, msg->password_new);
+		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__DMCRYPT_RESET: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
+		out.has_fde_response = true;
+		nvmcrypt_fde_state_t state = nvmcrypt_dm_reset(msg->password);
+		out.fde_response = tpm2d_control_fdestate_to_proto(state);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);
@@ -231,7 +338,7 @@ tpm2d_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 }
 
 tpm2d_control_t *
-tpm2d_control_new(const char *path, uint32_t as_key_handle)
+tpm2d_control_new(const char *path)
 {
 	int sock = sock_unix_create_and_bind(SOCK_STREAM | SOCK_NONBLOCK, path);
 	if (sock < 0) {
@@ -245,7 +352,6 @@ tpm2d_control_new(const char *path, uint32_t as_key_handle)
 
 	tpm2d_control_t *tpm2d_control = mem_new0(tpm2d_control_t, 1);
 	tpm2d_control->sock = sock;
-	tpm2d_control->attestation_key_handle = as_key_handle;
 
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, tpm2d_control_cb_accept, tpm2d_control);
 	event_add_io(event);
