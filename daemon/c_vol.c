@@ -48,7 +48,11 @@
 
 #include <selinux/selinux.h>
 
+#ifdef ANDORID
 #define MAKE_EXT4FS "make_ext4fs"
+#else
+#define MAKE_EXT4FS "mkfs.ext4"
+#endif
 
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
@@ -358,6 +362,10 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	else
 		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
 
+	// try to create mount point before mount, usually not necessary...
+	if (dir_mkdir_p(dir, 0755) < 0)
+		DEBUG_ERRNO("Could not mkdir %s", dir);
+
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags, mount_entry_get_mount_data(mntent)) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
@@ -444,10 +452,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			DEBUG("Waiting for %s", dev);
 		}
 	}
-
-	// try to create mount point before mount, usually not necessary...
-	if (dir_mkdir_p(dir, 0755) < 0)
-		DEBUG_ERRNO("Could not mkdir %s", dir);
 
 	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW) {
 		// create mountpoints for lower and upper dev
