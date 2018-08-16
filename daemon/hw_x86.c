@@ -145,10 +145,20 @@ hardware_backlight_on()
 	return 0;
 }
 
-const char *
+list_t*
 hardware_get_active_cgroups_subsystems(void)
 {
-	return "cpu,memory,freezer,devices";
+	list_t *subsys_list = NULL;
+	subsys_list = list_append(subsys_list, "net_cls,net_prio");
+	subsys_list = list_append(subsys_list, "devices");
+	subsys_list = list_append(subsys_list, "cpuset");
+	subsys_list = list_append(subsys_list, "memory");
+	subsys_list = list_append(subsys_list, "perf_event");
+	subsys_list = list_append(subsys_list, "cpu,cpuacct");
+	subsys_list = list_append(subsys_list, "blkio");
+	subsys_list = list_append(subsys_list, "freezer");
+	subsys_list = list_append(subsys_list, "pids");
+	return subsys_list;
 }
 
 list_t*

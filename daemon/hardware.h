@@ -184,9 +184,9 @@ void
 hardware_suspend_unblock(const char *name, size_t name_len);
 
 /**
- * Returns the string of the active cgroups subsystems
+ * Returns a list containing strings of the active cgroups subsystems
  */
-const char*
+list_t*
 hardware_get_active_cgroups_subsystems(void);
 
 /**
