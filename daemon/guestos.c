@@ -268,10 +268,12 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 		goto cleanup;
 	}
 	if (thorough) {
-		char *sha1 = smartcard_crypto_hash_file_block_new(img_path, SHA1);
-		bool match = mount_entry_match_sha1(e, sha1);
-		mem_free(sha1);
-		if (match) {
+		bool match = false;
+		if (mount_entry_get_sha256(e) == NULL) { // fallback to sha1
+			char *sha1 = smartcard_crypto_hash_file_block_new(img_path, SHA1);
+			match = mount_entry_match_sha1(e, sha1);
+			mem_free(sha1);
+		} else {
 			char *sha256 = smartcard_crypto_hash_file_block_new(img_path, SHA256);
 			match = mount_entry_match_sha256(e, sha256);
 			mem_free(sha256);
