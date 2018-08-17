@@ -54,7 +54,7 @@
 #ifdef ANDROID
 #define CMLD_SOCKET_DIR ANDROID_SOCKET_DIR
 #else
-#define CMLD_SOCKET_DIR "/dev/socket"
+#define CMLD_SOCKET_DIR "/run/socket"
 #endif
 #define SOCK_PATH(name) CMLD_SOCKET_DIR"/cml-"#name
 

@@ -934,8 +934,11 @@ c_vol_start_child(c_vol_t *vol)
 	char* mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	char* devfstype =
 		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" : "tmpfs";
+	unsigned long devopts = MS_RELATIME | MS_NOSUID;
+	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container)))
+		devopts += MS_RDONLY;
 
-	if (mount(devfstype, "/dev", devfstype, MS_RELATIME | MS_NOSUID, mount_data) < 0)
+	if (mount(devfstype, "/dev", devfstype, devopts, mount_data) < 0)
 		WARN_ERRNO("Could not mount /dev");
 
 	c_vol_fixup_logdev();
@@ -947,8 +950,12 @@ c_vol_start_child(c_vol_t *vol)
 	if (mount("devpts", "/dev/pts", "devpts", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount /dev/pts");
 
-	if (mkdir("/dev/socket", 0755) < 0)
-		WARN_ERRNO("Could not mkdir /dev/socket");
+	DEBUG("Mounting /run");
+	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME| MS_NOSUID| MS_NODEV, mount_data) < 0)
+		WARN_ERRNO("Could not mount /run");
+
+	if (mkdir("/run/socket", 0755) < 0)
+		WARN_ERRNO("Could not mkdir /run/socket");
 
 	mem_free(root);
 	return 0;
