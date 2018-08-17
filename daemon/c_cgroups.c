@@ -211,6 +211,7 @@ c_cgroups_list_remove(list_t **list, const int* dev)
 		int* dev_elem = (int*) elem->data;
 		if ( (dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1]) ) {
 			*list = list_unlink(*list, elem);
+			mem_free(elem->data);
 			break;
 		}
 	}
