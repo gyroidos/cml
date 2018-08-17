@@ -90,7 +90,7 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	if (-1 == bytes_read)
 		goto error_read;
 	if (0 == bytes_read) {// EOF / remote end closed the connection
-		DEBUG("EOF reached on fd %d (remote end closed connection?)", fd);
+		DEBUG("client on fd %d closed connection.", fd);
 		return NULL;
 	}
 	buflen = ntohl(buflen);
