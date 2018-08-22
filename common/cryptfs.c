@@ -315,7 +315,8 @@ cryptfs_delete_blk_dev(const char *name)
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 	if (ioctl(fd, (int) DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
-		ERROR("Cannot remove dm-crypt device");
+		if (errno != ENXIO)
+			ERROR_ERRNO("Cannot remove dm-crypt device");
 		goto error;
 	}
 
@@ -324,6 +325,7 @@ cryptfs_delete_blk_dev(const char *name)
 	unlink(device);
 	mem_free(device);
 
+	DEBUG("Successfully deleted dm-crypt device");
 	/* We made it here with no errors.  Woot! */
 	ret = 0;
 

@@ -953,6 +953,13 @@ container_start_child(void *data)
 		return 0;
 	}
 
+#ifdef CLONE_NEWCGROUP
+	// Try to span a new cgroup namspace, ignor if kernel does not support it
+	if (unshare(CLONE_NEWCGROUP) == -1)
+               WARN_ERRNO("Could not unshare cgroup namespace");
+	INFO("Successfully created new cgroup namespace");
+#endif
+
 	DEBUG("Will start %s after closing filedescriptors of %s",
 			guestos_get_init(container->os),
 			container_get_description(container));

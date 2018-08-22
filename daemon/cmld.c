@@ -862,9 +862,11 @@ cmld_init(const char *path)
 		WARN("Could not mount debugfs");
 	INFO("mounted debugfs");
 
+#ifdef ANDROID
 	if (power_init() < 0)
 		FATAL("Could not init power module");
 	INFO("power initialized.");
+#endif
 
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");

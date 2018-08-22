@@ -164,10 +164,15 @@ hardware_backlight_on()
 	return 0;
 }
 
-const char *
+list_t *
 hardware_get_active_cgroups_subsystems(void)
 {
-	return "cpu,memory,freezer,devices";
+	list_t *subsys_list = NULL;
+	subsys_list = list_append(subsys_list, "devices");
+	subsys_list = list_append(subsys_list, "cpu");
+	subsys_list = list_append(subsys_list, "memory");
+	subsys_list = list_append(subsys_list, "freezer");
+	return subsys_list;
 }
 
 list_t*

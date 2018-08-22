@@ -48,7 +48,11 @@
 
 #include <selinux/selinux.h>
 
+#ifdef ANDORID
 #define MAKE_EXT4FS "make_ext4fs"
+#else
+#define MAKE_EXT4FS "mkfs.ext4"
+#endif
 
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
@@ -358,6 +362,10 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	else
 		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
 
+	// try to create mount point before mount, usually not necessary...
+	if (dir_mkdir_p(dir, 0755) < 0)
+		DEBUG_ERRNO("Could not mkdir %s", dir);
+
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags, mount_entry_get_mount_data(mntent)) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
@@ -444,10 +452,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			DEBUG("Waiting for %s", dev);
 		}
 	}
-
-	// try to create mount point before mount, usually not necessary...
-	if (dir_mkdir_p(dir, 0755) < 0)
-		DEBUG_ERRNO("Could not mkdir %s", dir);
 
 	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW) {
 		// create mountpoints for lower and upper dev
@@ -930,8 +934,11 @@ c_vol_start_child(c_vol_t *vol)
 	char* mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	char* devfstype =
 		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" : "tmpfs";
+	unsigned long devopts = MS_RELATIME | MS_NOSUID;
+	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container)))
+		devopts += MS_RDONLY;
 
-	if (mount(devfstype, "/dev", devfstype, MS_RELATIME | MS_NOSUID, mount_data) < 0)
+	if (mount(devfstype, "/dev", devfstype, devopts, mount_data) < 0)
 		WARN_ERRNO("Could not mount /dev");
 
 	c_vol_fixup_logdev();
@@ -943,8 +950,12 @@ c_vol_start_child(c_vol_t *vol)
 	if (mount("devpts", "/dev/pts", "devpts", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount /dev/pts");
 
-	if (mkdir("/dev/socket", 0755) < 0)
-		WARN_ERRNO("Could not mkdir /dev/socket");
+	DEBUG("Mounting /run");
+	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME| MS_NOSUID| MS_NODEV, mount_data) < 0)
+		WARN_ERRNO("Could not mount /run");
+
+	if (mkdir("/run/socket", 0755) < 0)
+		WARN_ERRNO("Could not mkdir /run/socket");
 
 	mem_free(root);
 	return 0;

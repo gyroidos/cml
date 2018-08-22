@@ -40,8 +40,9 @@
 #include <unistd.h>
 #include <libgen.h>
 
+#include <sched.h>
+
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
-#define CONTAINER_HIERARCHY CGROUPS_FOLDER "/trustme-containers"
 
 // FIXME: currently replaced by hardware_get_active_cgroups_subsystems() to
 // work-around a buggy kernel cgroups implementation for the "deb" device.
@@ -66,6 +67,7 @@ list_t* global_assigned_devs_list = NULL;
 struct c_cgroups {
 	container_t *container; // weak reference
 	char *cgroup_path;
+	list_t *active_cgroups;
 
 	event_inotify_t *inotify_freezer_state;
 	event_timer_t *freeze_timer; /* timer to handle a container freeze timeout */
@@ -81,7 +83,8 @@ c_cgroups_new(container_t *container)
 {
 	c_cgroups_t *cgroups = mem_new0(c_cgroups_t, 1);
 	cgroups->container = container;
-	cgroups->cgroup_path = mem_printf("%s/%s", CONTAINER_HIERARCHY, uuid_string(container_get_uuid(cgroups->container)));
+	//cgroups->cgroup_path = mem_printf("%s/%s", CONTAINER_HIERARCHY, uuid_string(container_get_uuid(cgroups->container)));
+	cgroups->active_cgroups = hardware_get_active_cgroups_subsystems();
 
 	cgroups->inotify_freezer_state = NULL;
 	cgroups->freeze_timer = NULL;
@@ -208,6 +211,7 @@ c_cgroups_list_remove(list_t **list, const int* dev)
 		int* dev_elem = (int*) elem->data;
 		if ( (dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1]) ) {
 			*list = list_unlink(*list, elem);
+			mem_free(elem->data);
 			break;
 		}
 	}
@@ -242,14 +246,28 @@ c_cgroups_add_assigned(c_cgroups_t *cgroups, const int* dev)
 static int
 c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 {
-	char *path = mem_printf("%s/devices.allow", cgroups->cgroup_path);
+	// first allow in host-side list, which cannot manipulated by container (if namspaced)
+	char *path = mem_printf("%s/devices/%s/devices.allow", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	if (file_write(path, rule, -1) == -1) {
 		ERROR_ERRNO("Failed to write to %s", path);
 		mem_free(path);
 		return -1;
 	}
-
 	mem_free(path);
+
+	// second allow in child list of container
+	char *path_child = mem_printf("%s/devices/%s/child/devices.allow", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
+	if (file_exists(path_child)) {
+		if (file_write(path, rule, -1) == -1) {
+			ERROR_ERRNO("Failed to write to %s", path);
+			mem_free(path_child);
+			return -1;
+		}
+	}
+	mem_free(path_child);
+
 	return 0;
 }
 
@@ -300,7 +318,9 @@ c_cgroups_devices_deny(c_cgroups_t *cgroups, const char *rule)
 	ASSERT(cgroups);
 	ASSERT(rule);
 
-	char *path = mem_printf("%s/devices.deny", cgroups->cgroup_path);
+	// will automatically deny access to all sub folders including child
+	char *path = mem_printf("%s/devices/%s/devices.deny", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 
 	if (file_write(path, rule, -1) == -1) {
 		ERROR_ERRNO("Failed to write to %s", path);
@@ -474,7 +494,8 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 	DEBUG("Applied containers assign list");
 
 	/* Print out the initialized devices whitelist */
-	char *list_path = mem_printf("%s/devices.list", cgroups->cgroup_path);
+	char *list_path = mem_printf("%s/devices/%s/devices.allow", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	char *list_output = file_read_new(list_path, 10000);
 	DEBUG("Devices whitelist for container %s:", container_get_description(cgroups->container));
 	DEBUG("%s", list_output);
@@ -505,7 +526,8 @@ c_cgroups_freeze(c_cgroups_t *cgroups)
 
 	// TODO think about where to check for unnecessary state changes, currently done in container.c
 
-	char *freezer_state_path = mem_printf("%s/freezer.state", cgroups->cgroup_path);
+	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	if (file_write(freezer_state_path, "FROZEN", -1) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
 		mem_free(freezer_state_path);
@@ -522,7 +544,8 @@ c_cgroups_unfreeze(c_cgroups_t *cgroups)
 
 	// TODO think about where to check for unnecessary state changes
 
-	char *freezer_state_path = mem_printf("%s/freezer.state", cgroups->cgroup_path);
+	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	if (file_write(freezer_state_path, "THAWED", -1) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
 		mem_free(freezer_state_path);
@@ -572,7 +595,8 @@ c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask, UNUSED
 
 	ASSERT(cgroups);
 
-	char *freezer_state_path = mem_printf("%s/freezer.state", cgroups->cgroup_path);
+	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	char *state = file_read_new(freezer_state_path, 10);
 	mem_free(freezer_state_path);
 
@@ -615,7 +639,8 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 	INFO("Trying to set RAM limit of container %s to %d MBytes",
 			container_get_description(cgroups->container),
 			container_get_ram_limit(cgroups->container));
-	char *limit_in_bytes_path = mem_printf("%s/%s", cgroups->cgroup_path, "memory.limit_in_bytes");
+	char *limit_in_bytes_path = mem_printf("%s/memory/%s/memory.limit_in_bytes", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	if (!file_exists(limit_in_bytes_path)) {
 		ERROR("%s file not found (cgroups or cgroups memory subsystem not mounted?)", limit_in_bytes_path);
 		return -1;
@@ -731,6 +756,40 @@ c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 	mem_free(dev_path);
 }
 
+static int
+c_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path)
+{
+	int ret;
+	if (mkdir(mount_path, 0755) && errno != EEXIST) {
+		ERROR_ERRNO("Could not create cgroup subsys directory %s", mount_path);
+		return -1;
+	}
+
+	INFO("Mounting cgroups subsystems %s", subsys);
+	ret = mount(NULL, mount_path, "cgroup", MS_NOEXEC|MS_NODEV|MS_NOSUID|MS_RELATIME, subsys);
+	if (ret == -1) {
+		if (errno == EBUSY) {
+			INFO("cgroup %s already mounted", subsys);
+		} else {
+			ERROR_ERRNO("Error mounting cgroups subsystems %s", subsys);
+			return -1;
+		}
+	}
+	if (!strcmp(subsys, "memory")) {
+		char *use_hierarchy = mem_printf("%s/memory.use_hierarchy", mount_path);
+		if (file_printf(use_hierarchy, "1") < 0)
+			WARN_ERRNO("Cloning default setting to child cgroups failes!");
+		mem_free(use_hierarchy);
+	}
+	if (strcmp(subsys, "devices")) {
+		char *cgroup_clone_children = mem_printf("%s/cgroup.clone_children", mount_path);
+		if (file_printf(cgroup_clone_children, "1") < 0)
+			WARN_ERRNO("Cloning default setting to child cgroups failes!");
+		mem_free(cgroup_clone_children);
+	}
+	return ret;
+}
+
 /*******************/
 /* Hooks */
 
@@ -741,42 +800,47 @@ c_cgroups_start_pre_clone(c_cgroups_t *cgroups)
 
 	// mount cgroups control stuff if not already done (necessary globally once)
 
-	if (!file_exists(CONTAINER_HIERARCHY)) {
-		if (mkdir(CGROUPS_FOLDER, 0755) && errno != EEXIST) {
-			ERROR_ERRNO("Could not create cgroup mount directory");
-			return -1;
-		}
-
-		INFO("Mounting cgroups tmpfs");
-		if (mount(NULL, CGROUPS_FOLDER, "tmpfs", 0, NULL) == -1 && errno != EBUSY) {
-			ERROR_ERRNO("Could not mount tmpfs for cgroups");
-			return -1;
-		}
-
-		INFO("Creating cgroups default hierarchy folder in %s", CONTAINER_HIERARCHY);
-		if (mkdir(CONTAINER_HIERARCHY, 0755) == -1 && errno != EEXIST) {
-			ERROR_ERRNO("Could not create cgroups hierarchy folder");
-			goto error;
-		}
+	if (mkdir(CGROUPS_FOLDER, 0755) && errno != EEXIST) {
+		ERROR_ERRNO("Could not create cgroup mount directory");
+		return -1;
 	}
 
-	INFO("Mounting cgroups");
-	const char *subsystems = hardware_get_active_cgroups_subsystems();
-	int ret = mount(NULL, CONTAINER_HIERARCHY, "cgroup", 0, subsystems);
-	if (ret == -1) {
-		if (errno == EBUSY) {
-			INFO("cgroups already mounted");
-		} else {
-			ERROR_ERRNO("Error mounting cgroups subsystems %s into %s", subsystems,
-				    CONTAINER_HIERARCHY);
-			goto error;
-		}
+	INFO("Mounting cgroups tmpfs");
+	if (mount(NULL, CGROUPS_FOLDER, "tmpfs", MS_NOEXEC|MS_NODEV|MS_NOSUID|MS_RELATIME, "mode=755") == -1 && errno != EBUSY) {
+		ERROR_ERRNO("Could not mount tmpfs for cgroups");
+		return -1;
 	}
 
-	INFO("cgroups mounted successfully");
+	// skip if allready mount
+	if (errno == EBUSY)
+		return 0;
+
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *mount_path = mem_printf("%s/%s", CGROUPS_FOLDER, subsys);
+		if (c_cgroups_create_and_mount_subsys(subsys, mount_path) < 0) {
+			mem_free(mount_path);
+			goto error;
+		}
+		mem_free(mount_path);
+	}
+
+	// create a named hierarchy for systemd containers
+	if (c_cgroups_create_and_mount_subsys("none,name=systemd", CGROUPS_FOLDER"/systemd") < 0) {
+		goto error;
+	}
+
+	INFO("cgroups created successfully");
 	return 0;
 
 error:
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_path = mem_printf("%s/%s", CGROUPS_FOLDER, subsys);
+		umount(subsys_path);
+		mem_free(subsys_path);
+	}
+	umount(CGROUPS_FOLDER"/systemd");
 	umount(CGROUPS_FOLDER);
 	return -1;
 }
@@ -786,19 +850,27 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
-	INFO("Creating cgroup for container %s", container_get_description(cgroups->container));
-	/* the cgroup is created simply by creating a directory in our default hierarchy */
-	if (mkdir(cgroups->cgroup_path, 0755) && errno != EEXIST) {
-		ERROR_ERRNO("Could not create cgroup for container %s", container_get_description(cgroups->container));
-		return -1;
+	// temporarily add systemd to list
+	cgroups->active_cgroups = list_prepend(cgroups->active_cgroups, "systemd");
+
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_path = mem_printf("%s/%s/%s", CGROUPS_FOLDER, subsys,
+				uuid_string(container_get_uuid(cgroups->container)));
+
+		INFO("Creating cgroup subsys in %s", subsys_path);
+		/* the cgroup is created simply by creating a directory in our default hierarchy */
+		if (mkdir(subsys_path, 0755) && errno != EEXIST) {
+			ERROR_ERRNO("Could not create cgroup %s for container %s", subsys, container_get_description(cgroups->container));
+			mem_free(subsys_path);
+			goto error;
+		}
+		mem_free(subsys_path);
 	}
 
-	/* assign the container to the cgroup */
-	char *cgroup_tasks = mem_printf("%s/tasks", cgroups->cgroup_path);
-	if (file_printf(cgroup_tasks, "%d", container_get_pid(cgroups->container)) == -1) {
-		ERROR("Could not add container %s to its cgroup under %s", container_get_description(cgroups->container), cgroups->cgroup_path);
-		goto error;
-	}
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
+
 
 	///* initialize memory subsystem to limit ram to cgroups->ram_limit */
 	//if (c_cgroups_set_ram_limit(cgroups) < 0) {
@@ -807,16 +879,16 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 	//}
 
 	/* initialize freezer subsystem */
-	char *freezer_state_path = mem_printf("%s/freezer.state", cgroups->cgroup_path);
+	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
+				uuid_string(container_get_uuid(cgroups->container)));
 	cgroups->inotify_freezer_state = event_inotify_new(freezer_state_path, IN_MODIFY, &c_cgroups_freezer_state_cb, cgroups);
 	event_add_inotify(cgroups->inotify_freezer_state);
 	mem_free(freezer_state_path);
 
-	mem_free(cgroup_tasks);
 	return 0;
-
 error:
-	mem_free(cgroup_tasks);
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
 	return -1;
 }
 
@@ -830,7 +902,47 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 	//return 0;
 
 	/* initialize devices subsystem */
-	return c_cgroups_devices_init(cgroups);
+	if (c_cgroups_devices_init(cgroups) < 0) {
+		ERROR_ERRNO("devices init failed!");
+		return -1;
+	}
+
+	// temporarily add systemd to list
+	cgroups->active_cgroups = list_prepend(cgroups->active_cgroups, "systemd");
+
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_child_path = mem_printf("%s/%s/%s/child", CGROUPS_FOLDER, subsys,
+				uuid_string(container_get_uuid(cgroups->container)));
+		char *cgroup_tasks = mem_printf("%s/tasks", subsys_child_path);
+
+
+		INFO("Creating cgroup subsys in %s", subsys_child_path);
+		/* the cgroup is created simply by creating a directory in our default hierarchy */
+		if (mkdir(subsys_child_path, 0755) && errno != EEXIST) {
+			ERROR_ERRNO("Could not create child %s for container %s", subsys, container_get_description(cgroups->container));
+			mem_free(cgroup_tasks);
+			mem_free(subsys_child_path);
+			goto error;
+		}
+
+		/* assign the container to the cgroup */
+		if (file_printf(cgroup_tasks, "%d", container_get_pid(cgroups->container)) == -1) {
+			ERROR_ERRNO("Could not add container %s to its cgroup under %s", container_get_description(cgroups->container), subsys_child_path);
+			mem_free(cgroup_tasks);
+			mem_free(subsys_child_path);
+			goto error;
+		}
+	}
+
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
+
+	return 0;
+error:
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
+	return -1;
 }
 
 int
@@ -842,14 +954,20 @@ c_cgroups_start_child(c_cgroups_t *cgroups)
 
 	/* We are doing our best to umount the cgroups related directories in child
 	 * but we do not stop if it does not work */
-	if (umount(CONTAINER_HIERARCHY) < 0) {
-		WARN_ERRNO("Could not umount %s", CONTAINER_HIERARCHY);
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_path = mem_printf("%s/%s", CGROUPS_FOLDER, subsys);
+		if (umount(subsys_path) < 0) {
+			WARN_ERRNO("Could not umount %s", subsys_path);
+		}
+		mem_free(subsys_path);
 	}
 	if (umount(CGROUPS_FOLDER) < 0) {
 		WARN_ERRNO("Could not umount %s", CGROUPS_FOLDER);
 	}
 
 	return 0;
+
 }
 
 void
@@ -864,14 +982,35 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 
 	c_cgroups_cleanup_freeze_timer(cgroups);
 
-	/* remove the cgroup if it exists */
-	if (file_exists(cgroups->cgroup_path) && file_is_dir(cgroups->cgroup_path)) {
-		INFO("Trying to remove cgroup for container %s", container_get_description(cgroups->container));
-		if (rmdir(cgroups->cgroup_path) == -1) {
-			ERROR_ERRNO("Could not remove cgroup for container %s", container_get_description(cgroups->container));
+	/* remove the cgroup if it exists and free the subsys list */
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_child_path = mem_printf("%s/%s/%s/child", CGROUPS_FOLDER, subsys,
+				uuid_string(container_get_uuid(cgroups->container)));
+		char *subsys_path = mem_printf("%s/%s/%s", CGROUPS_FOLDER, subsys,
+				uuid_string(container_get_uuid(cgroups->container)));
+
+		if (file_exists(subsys_child_path) && file_is_dir(subsys_child_path)) {
+			INFO("Trying to remove child's cgroup subsys %s for container %s",
+				subsys, container_get_description(cgroups->container));
+			if (rmdir(subsys_child_path) == -1) {
+				WARN_ERRNO("Could not remove child's cgroup %s for container %s",
+					subsys, container_get_description(cgroups->container));
+			}
 		}
-		INFO("Successfully removed cgroup for container %s", container_get_description(cgroups->container));
+		mem_free(subsys_child_path);
+
+		if (file_exists(subsys_path) && file_is_dir(subsys_path)) {
+			INFO("Trying to remove cgroup subsys %s for container %s",
+				subsys, container_get_description(cgroups->container));
+			if (rmdir(subsys_path) == -1) {
+				WARN_ERRNO("Could not remove cgroup %s for container %s",
+					subsys, container_get_description(cgroups->container));
+			}
+		}
+		mem_free(subsys_path);
 	}
+	list_delete(cgroups->active_cgroups);
 
 	/* free assigned devices */
 	for (list_t* elem = cgroups->assigned_devs; elem != NULL; elem = elem->next) {
@@ -883,7 +1022,6 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 		int* dev_elem = (int*) elem->data;
 		c_cgroups_list_remove(&global_allowed_devs_list, dev_elem);
 	}
-
 
 	list_delete(cgroups->assigned_devs);
 }
