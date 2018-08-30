@@ -84,8 +84,6 @@ static control_t *cmld_control_cml = NULL;
 
 static smartcard_t *cmld_smartcard = NULL;
 
-static container_callback_t *cmld_foreground_observer = NULL;
-
 static container_connectivity_t cmld_connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
 static bool cmld_airplane_mode = false;
 
@@ -285,25 +283,6 @@ cmld_rename_logfiles() {
 
 }
 
-static void
-cmld_foreground_observer_cb(container_t *container, UNUSED container_callback_t *cb, UNUSED void *data)
-{
-	DEBUG("Foreground observer callback called");
-
-	if (container_get_state(container) == CONTAINER_STATE_BOOTING) {
-		DEBUG("Container now booting.");
-	} else if (container_get_state(container) == CONTAINER_STATE_STOPPED
-			&& cmld_containers_get_a0() != container) {
-		DEBUG("Container stopped");
-	} else if (container_get_state(container) == CONTAINER_STATE_RUNNING) {
-		DEBUG("Container booted up successfully, set ksm aggressive");
-
-		/* Make KSM aggressive to immmediately share as many pages as
-		 * possible */
-		ksm_set_aggressive_for(CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT);
-	}
-}
-
 /**
  * This function is called every time the state of the wifi connection changes from
  * offline to online and vice versa.
@@ -383,6 +362,10 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 		if (!container_has_netns(container))
 				network_enable_ip_forwarding();
 		container_unregister_observer(container, cb);
+
+		/* Make KSM aggressive to immmediately share as many pages as
+		 * possible */
+		ksm_set_aggressive_for(CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT);
 	}
 }
 
@@ -489,12 +472,6 @@ cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void 
 static void
 cmld_container_register_observers(container_t *container)
 {
-	ASSERT(!cmld_foreground_observer);
-	container_callback_t *cmld_foreground_observer = container_register_observer(container, &cmld_foreground_observer_cb, NULL);
-	if (!cmld_foreground_observer) {
-		WARN("Could not register foreground watcher callback on container %s", container_get_description(container));
-	}
-
 	/* container is not running => start it */
 	DEBUG("Container %s is not running => start it", container_get_description(container));
 
@@ -771,12 +748,6 @@ cmld_start_a0(container_t *new_a0)
 	if (!container_register_observer(new_a0, &cmld_a0_boot_complete_cb, NULL)) {
 		WARN("Could not register observer boot complete callback on a0");
 		return -1;
-	}
-
-	ASSERT(!cmld_foreground_observer);
-	cmld_foreground_observer = container_register_observer(new_a0, &cmld_foreground_observer_cb, NULL);
-	if (!cmld_foreground_observer) {
-		WARN("Could not register foreground watcher callback on a0");
 	}
 
 	container_set_key(new_a0, A0_KEY);
