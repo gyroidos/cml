@@ -687,6 +687,7 @@ c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 {
 	if (network_set_flag(if_name, up?IFF_UP:IFF_DOWN))
 		return -1;
+#ifdef ANDROID
 	// setup proper route to subnet via interface
 	int error = network_setup_route(subnet, if_name, up);
 	if (error) {
@@ -696,6 +697,7 @@ c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 		}
 		WARN("Failed to setup route %s (already %s)", subnet, up?"exists":"removed");
 	}
+#endif
 	return 0;
 }
 
