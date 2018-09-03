@@ -870,6 +870,21 @@ c_vol_start_child(c_vol_t *vol)
 	}
 	mem_free(com_mnt_data);
 
+	// remount proc to reflect namespace change
+	if (umount("/proc") < 0 && errno != ENOENT) {
+		ERROR_ERRNO("Could not umount /proc");
+		goto error;
+	}
+	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not remount /proc");
+		goto error;
+	}
+
+	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM) {
+		mem_free(root);
+		return 0;
+	}
+
 	if (umount2("/data", MNT_DETACH) < 0 && errno != ENOENT) {
 		ERROR_ERRNO("Could not umount /data");
 		goto error;
@@ -894,11 +909,6 @@ c_vol_start_child(c_vol_t *vol)
 		ERROR_ERRNO("Could not move mount for container start");
 		goto error;
 	}
-
-	char *mount_output = file_read_new("/proc/self/mounts", 2048);
-	INFO("Mounted filesystems:");
-	INFO("%s", mount_output);
-	mem_free(mount_output);
 
 	if (chroot(".") < 0) {
 		ERROR_ERRNO("Could not chroot to . for container start");
@@ -956,6 +966,11 @@ c_vol_start_child(c_vol_t *vol)
 
 	if (mkdir("/run/socket", 0755) < 0)
 		WARN_ERRNO("Could not mkdir /run/socket");
+
+	char *mount_output = file_read_new("/proc/self/mounts", 2048);
+	INFO("Mounted filesystems:");
+	INFO("%s", mount_output);
+	mem_free(mount_output);
 
 	mem_free(root);
 	return 0;

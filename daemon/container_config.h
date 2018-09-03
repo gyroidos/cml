@@ -35,6 +35,7 @@
 
 #include "common/list.h"
 
+#include "container.h"
 #include "mount.h"
 
 #include <stdint.h>
@@ -121,6 +122,9 @@ container_config_get_color(const container_config_t *config);
 
 void
 container_config_set_color(container_config_t *config, uint32_t color);
+
+container_type_t
+container_config_get_type(const container_config_t *config);
 
 uint64_t
 container_config_get_guestos_version(const container_config_t *config);
