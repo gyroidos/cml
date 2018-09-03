@@ -21,12 +21,22 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+syntax = "proto2";
+
 option java_package = "de.fraunhofer.aisec.trustme";
 
 message ContainerImageSize {
 	required string image_name = 1; // virtual name of the image file in guestos
 	required uint64 image_size = 2; // size (bytes) of the image file
 	optional string image_file = 3; // name of alternat image file which overwrites image_name of guestos config
+}
+
+/**
+ * Type of container KVM|CONTAINER
+ */
+enum ContainerType {
+	CONTAINER = 1;
+	KVM = 2	;
 }
 
 message ContainerConfig {
@@ -43,6 +53,9 @@ message ContainerConfig {
 	optional uint32 ram_limit = 5 [ default = 1024 ];      // unit = MBytes
 
 	required fixed32 color = 6;
+
+	// type of container, e.g. KVM or CONTAINER
+	required ContainerType type = 7 [ default = CONTAINER ];
 
 	// Flags indicating the allows for containers:
 	optional bool allow_internet = 10 [default = false];
@@ -103,6 +116,7 @@ enum ContainerConnectivity {
 message ContainerStatus {
 	required string uuid = 1;
 	required string name = 2;
+	required ContainerType type = 3;
 	required ContainerState state = 4;
 	required uint64 uptime = 5;
 	required uint64 created = 6;

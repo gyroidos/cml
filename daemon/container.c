@@ -58,6 +58,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <pty.h>
 
 #include <selinux/selinux.h>
 #include <selinux/label.h>
@@ -101,6 +102,7 @@ struct container {
 	container_state_t state;
 	uuid_t *uuid;
 	char *name;
+	container_type_t type;
 	mount_t *mnt;
 	bool ns_net;
 	bool ns_usr;
@@ -225,6 +227,7 @@ container_t *
 container_new_internal(
 	const uuid_t *uuid,
 	const char *name,
+	container_type_t type,
 	bool ns_usr,
 	bool ns_net,
 	bool privileged,
@@ -249,6 +252,7 @@ container_new_internal(
 
 	container->uuid = uuid_new(uuid_string(uuid));
 	container->name = mem_strdup(name);
+	container->type = type;
 	container->mnt = mnt;
 	/* do not forget to update container->description in the setters of uuid and name */
 	container->description = mem_printf("%s (%s)", container->name, uuid_string(container->uuid));
@@ -486,6 +490,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 	priv = guestos_is_privileged(os);
 	//priv |= !ns_net;
 
+	container_type_t type = container_config_get_type(conf);
+
 	uint16_t adb_port = container_get_next_adb_port();
 
 	list_t *feature_enabled = container_config_get_feature_list_new(conf);
@@ -496,7 +502,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
-	container_t *c = container_new_internal(uuid, name, ns_usr, ns_net, priv, os, config_filename,
+	container_t *c = container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
 			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled,
 			dns_server, net_ifaces, allowed_devices, assigned_devices);
 	if (c)
@@ -861,6 +867,7 @@ container_start_child(void *data)
 	int ret = 0;
 
 	container_t *container = data;
+	char *kvm_root = mem_printf("/tmp/%s", uuid_string(container->uuid));
 
 	close(container->sync_sock_parent);
 
@@ -920,8 +927,9 @@ container_start_child(void *data)
 		goto error;
 	}
 
-	if (chdir("/") < 0) {
-		WARN_ERRNO("Could not chdir to \"/\" in container %s", uuid_string(container->uuid));
+	char* root = (container->type == CONTAINER_TYPE_KVM) ? kvm_root : "/";
+	if (chdir(root) < 0) {
+		WARN_ERRNO("Could not chdir to \"%s\" in container %s", root, uuid_string(container->uuid));
 		goto error;
 	}
 
@@ -956,8 +964,9 @@ container_start_child(void *data)
 #ifdef CLONE_NEWCGROUP
 	// Try to span a new cgroup namspace, ignor if kernel does not support it
 	if (unshare(CLONE_NEWCGROUP) == -1)
-               WARN_ERRNO("Could not unshare cgroup namespace");
-	INFO("Successfully created new cgroup namespace");
+		WARN_ERRNO("Could not unshare cgroup namespace, not supported by kernel.");
+	else
+		INFO("Successfully created new cgroup namespace");
 #endif
 
 	DEBUG("Will start %s after closing filedescriptors of %s",
@@ -985,6 +994,32 @@ container_start_child(void *data)
 
 	if (hardware_backlight_on() < 0) {
 		WARN("Could not turn on backlight for container start...");
+	}
+
+	if (container->type == CONTAINER_TYPE_KVM) {
+		int fd_master;
+		int pid = forkpty(&fd_master, NULL, NULL, NULL);
+
+		if (pid == -1) {
+			ERROR_ERRNO("Forkpty() failed!");
+			goto error;
+		}
+		if (pid == 0) { // child
+			const char *argv[] = { "/usr/bin/lkvm", "run", "-d", kvm_root, NULL};
+			execv(argv[0], argv);
+			WARN("Could not run exec for kvm container %s", uuid_string(container->uuid));
+		} else { // parent
+			char buffer[128];
+			ssize_t read_bytes;
+			char *kvm_log =
+				mem_printf("%s.kvm.log", container_get_images_dir(container));
+			read_bytes = read(fd_master, buffer, 128);
+			file_write(kvm_log, buffer, read_bytes);
+			while (read_bytes = read(fd_master, buffer, 128)) {
+				file_write_append(kvm_log, buffer, read_bytes);
+			}
+			return CONTAINER_ERROR;
+		}
 	}
 
 	DEBUG("After closing all file descriptors no further debugging info can be printed");
@@ -1552,6 +1587,13 @@ container_get_state(const container_t *container)
 {
 	ASSERT(container);
 	return container->state;
+}
+
+container_type_t
+container_get_type(const container_t *container)
+{
+	ASSERT(container);
+	return container->type;
 }
 
 container_callback_t *

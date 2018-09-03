@@ -22,7 +22,7 @@
  */
 
 // uncomment to prevent reboot
-//#define TRUSTME_DEBUG
+#define TRUSTME_DEBUG
 
 #include "cmld.h"
 
@@ -714,7 +714,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	bool a0_ns_net = true;
 	bool privileged = true;
 
-	container_t *new_a0 = container_new_internal(a0_uuid, "a0", false, a0_ns_net, privileged, a0_os, NULL,
+	container_t *new_a0 = container_new_internal(a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net, privileged, a0_os, NULL,
 			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, NULL,
 			      cmld_get_device_host_dns(), NULL, NULL, NULL);
 

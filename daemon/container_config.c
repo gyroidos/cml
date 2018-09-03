@@ -60,6 +60,22 @@ static const char *container_config_features[C_CONFIG_FEATURES_LEN] = {
 	"fhgapps",
 };
 
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+container_type_t
+container_config_proto_to_type(ContainerType type)
+{
+	switch (type) {
+	case CONTAINER_TYPE__CONTAINER:
+		return CONTAINER_TYPE_CONTAINER;
+	case CONTAINER_TYPE__KVM:
+		return CONTAINER_TYPE_KVM;
+	default:
+		FATAL("Unhandled value for ContainerType: %d", type);
+	}
+}
+
 /*
  * TODO: replace dummy implementation by protobuf config files
  * For now name AND os are "a0" or "a1" or "a2"
@@ -340,6 +356,14 @@ container_config_set_color(container_config_t *config, uint32_t color)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	config->cfg->color = color;
+}
+
+container_type_t
+container_config_get_type(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return container_config_proto_to_type(config->cfg->type);
 }
 
 uint64_t

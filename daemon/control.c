@@ -244,6 +244,22 @@ control_container_state_to_proto(container_state_t state)
 		FATAL("Unhandled value for container_state_t: %d", state);
 	}
 }
+/**
+
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+ContainerType
+control_container_type_to_proto(container_type_t type)
+{
+	switch (type) {
+	case CONTAINER_TYPE_CONTAINER:
+		return CONTAINER_TYPE__CONTAINER;
+	case CONTAINER_TYPE_KVM:
+		return CONTAINER_TYPE__KVM;
+	default:
+		FATAL("Unhandled value for container_type_t: %d", type);
+	}
+}
 
 /**
  * Get the ContainerStatus for the given container.
@@ -259,6 +275,7 @@ control_container_status_new(const container_t *container)
 	container_status__init(c_status);
 	c_status->uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 	c_status->name = mem_strdup(container_get_name(container));
+	c_status->type = control_container_type_to_proto(container_get_type(container));
 	c_status->state = control_container_state_to_proto(container_get_state(container));
 	c_status->uptime = container_get_uptime(container);
 	c_status->created = container_get_creation_time(container);

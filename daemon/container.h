@@ -59,6 +59,17 @@ typedef struct container container_t;
 typedef struct container_callback container_callback_t;
 
 /**
+ * Represents the type of a container. Could be either
+ * CONTAINER_TYPE_CONTAINER for a namspaced os-level virtualized
+ * or CONTAINER_TYPE_KVM for a full virtulized execution of the
+ * child's init process.
+ */
+typedef enum {
+	CONTAINER_TYPE_CONTAINER = 1,
+	CONTAINER_TYPE_KVM,
+} container_type_t;
+
+/**
  * Represents the current container state.
  */
 typedef enum {
@@ -125,6 +136,7 @@ container_t *
 container_new_internal(
 	const uuid_t *uuid,
 	const char *name,
+	container_type_t type,
 	bool ns_usr,
 	bool ns_net,
 	bool privileged,
@@ -434,6 +446,12 @@ container_set_state(container_t *container, container_state_t state);
  */
 container_state_t
 container_get_state(const container_t *container);
+
+/**
+ * Returns the the type of the container.
+ */
+container_type_t
+container_get_type(const container_t *container);
 
 /**
  * Register a callback function which is always called when the container's
