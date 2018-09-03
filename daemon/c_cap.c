@@ -53,17 +53,15 @@ c_cap_start_child(const container_t *container)
 	/* 15 */ C_CAP_DROP(CAP_IPC_OWNER);
 	/* 16 */ C_CAP_DROP(CAP_SYS_MODULE);
 	///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
-	/* 18 */ C_CAP_DROP(CAP_SYS_CHROOT);
 #ifndef DEBUG_BUILD
 	/* 19 */ C_CAP_DROP(CAP_SYS_PTRACE);
 #endif
 	/* 20 */ C_CAP_DROP(CAP_SYS_PACCT);
-	/* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
+	///* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
 	/* 22 */ C_CAP_DROP(CAP_SYS_BOOT);
 
 	///* 23 */ C_CAP_DROP(CAP_SYS_NICE); /* Is needed for some usecases*/
 	///* 24 */ C_CAP_DROP(CAP_SYS_RESOURCE); /* does NOT work */
-	/* 26 */ C_CAP_DROP(CAP_SYS_TTY_CONFIG);
 	/* 28 */ C_CAP_DROP(CAP_LEASE);
 
 	///* 29 */ C_CAP_DROP(CAP_AUDIT_WRITE); /* needed for console/X11 login */
@@ -79,7 +77,9 @@ c_cap_start_child(const container_t *container)
 
 	/* Use the following for dropping caps only in unprivileged containers */
 	if (!container_is_privileged(container)) {
+	/* 18 */ C_CAP_DROP(CAP_SYS_CHROOT);
 	/* 25 */ C_CAP_DROP(CAP_SYS_TIME);
+	/* 26 */ C_CAP_DROP(CAP_SYS_TTY_CONFIG);
 	}
 
 	return 0;
