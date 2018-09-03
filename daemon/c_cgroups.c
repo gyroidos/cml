@@ -494,7 +494,7 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 	DEBUG("Applied containers assign list");
 
 	/* Print out the initialized devices whitelist */
-	char *list_path = mem_printf("%s/devices/%s/devices.allow", CGROUPS_FOLDER,
+	char *list_path = mem_printf("%s/devices/%s/devices.list", CGROUPS_FOLDER,
 				uuid_string(container_get_uuid(cgroups->container)));
 	char *list_output = file_read_new(list_path, 10000);
 	DEBUG("Devices whitelist for container %s:", container_get_description(cgroups->container));
