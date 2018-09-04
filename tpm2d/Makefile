@@ -55,7 +55,7 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 tpm2d: libcommon ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -ltss -lcrypto -Lcommon -lcommon -o tpm2d
+	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -libmtss -lcrypto -Lcommon -lcommon -o tpm2d
 
 
 .PHONY: clean
