@@ -338,6 +338,7 @@ send_message:
 			ERROR_ERRNO("run failed");
 		} else {
 			// TODO for now just dump the response in text format
+			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
 			protobuf_free_message((ProtobufCMessage *) resp);
 		}
 	}
