@@ -285,6 +285,11 @@ main(int argc, char **argv) {
 
 	ssl_init();
 
+	DEBUG("Try to create directory for socket if not existing");
+	if (dir_mkdir_p(CMLD_SOCKET_DIR, 0755) < 0) {
+		FATAL("Could not create directory for scd_control socket");
+	}
+
 	scd_control_cmld = scd_control_new(SCD_CONTROL_SOCKET);
 	if (!scd_control_cmld) {
 		FATAL("Could not init scd_control socket");
