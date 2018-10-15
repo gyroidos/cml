@@ -48,6 +48,7 @@
 
 static logf_handler_t *service_logfile_handler = NULL;
 
+#ifndef BOOT_COMPLETE_ONLY
 static int
 service_set_hostname(int fd)
 {
@@ -124,6 +125,7 @@ service_set_dnsserver(int fd)
 
 	return rc;
 }
+#endif /* ndef BOOT_COMPLETE_ONLY */
 
 static int
 service_fork_execvp(char *prog, char **argv)
@@ -172,6 +174,7 @@ main(int argc, char **argv)
 		FATAL("Could not connect to service on socket file %s. Aborting.", socket_file);
 	}
 
+#ifndef BOOT_COMPLETE_ONLY
 	// set hostname received from cmld
 	if (service_set_hostname(sock) < 0)
 		WARN("Failed to set hostname");
@@ -185,6 +188,7 @@ main(int argc, char **argv)
 		DEBUG("Sucessfully setup DNS server");
 
 	INFO("Minimal init done, going to start child, %s ...", argv[1]);
+#endif
 
 
 	ServiceToCmldMessage msg = SERVICE_TO_CMLD_MESSAGE__INIT;
