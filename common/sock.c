@@ -127,6 +127,29 @@ sock_inet_create(int type)
 }
 
 int
+sock_inet_bind(int sock, const char *ip, int port)
+{
+	MAKE_SOCKADDR_IN(addr, ip, port);
+	int res = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
+	if (-1 == res)
+		WARN_ERRNO("Failed to bind INET socket to %s:%d.", ip, port);
+	return res;
+}
+
+int
+sock_inet_create_and_bind(int type, const char *ip, int port)
+{
+	int sock = sock_inet_create(type);
+	if (-1 != sock) {
+		if (-1 == sock_inet_bind(sock, ip, port)) {
+			close(sock);
+			sock = -1;
+		}
+	}
+	return sock;
+}
+
+int
 sock_inet_connect(int sock, const char *ip, int port)
 {
 	MAKE_SOCKADDR_IN(addr, ip, port);

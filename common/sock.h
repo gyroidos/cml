@@ -156,6 +156,31 @@ int
 sock_inet_connect(int sock, const char *ip, int port);
 
 /**
+ * Binds the given INET socket to the specified ip/port.
+ * Note that this is currently IPv4 only.
+ *
+ * @param sock  the INET socket file descriptor to bind
+ * @param ip    ipv4 addr to bind the socket to
+ * @param port  port to bind the socket to
+ * @return  0 on success, -1 on error
+ */
+int
+sock_inet_bind(int sock, const char *ip, int port);
+
+/**
+ * Creates a new INET socket of the given type and binds it to the specified host/port.
+ * Note that this is currently IPv4 only.
+ *
+ * @param type  type of the socket (e.g. SOCK_STREAM, SOCK_SEQPACKET, ...)
+ *              (bitwise OR with SOCK_NONBLOCK saves extra call to fcntl)
+ * @param ip  	ipv4 addr to connect to
+ * @param port	port number
+ * @return      the new and connected inet socket file descriptor, or -1 on error
+ */
+int
+sock_inet_create_and_bind(int type, const char *ip, int port);
+
+/**
  * Creates a new INET socket of the given type and connects it to the specified host/port.
  * Note that this function is agnostic to the IP version, i.e. it can open a IPv6
  * connection as well as an IPv4 connection transparently.
