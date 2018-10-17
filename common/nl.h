@@ -67,6 +67,16 @@ nl_sock_t *
 nl_sock_routing_new();
 
 /**
+ * Allocates, opens and returns a nl_sock object of family NETLINK_XFRM with various netlink options.
+ * Depending on the protocol, the socket options are implicitly set.
+ * Priviledges are required, because this socket is using a RCVBUFFORCE flag option overwriting
+ * the max recv-buf file.
+ * @return Pointer to nl_sock; NULL in case of failure
+ */
+nl_sock_t *
+nl_sock_xfrm_new();
+
+/**
  * Allocates, opens and returns a nl_sock object of a different netlink family than the other
  * sock_*_new functions without specific netlink options.
  * @return Pointer to nl_sock; NULL in case of failure

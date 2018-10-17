@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <asm/types.h>
 #include <linux/netlink.h>
+#include <linux/xfrm.h>
 
 #include "macro.h"
 #include "mem.h"
@@ -150,6 +151,35 @@ nl_sock_conf_route_sock(nl_sock_t *sock)
 	return 0;
 }
 
+static inline uint32_t
+nl_mgrp(uint32_t group)
+{
+	if (group > 31) {
+		FATAL("Group exeeds uint32, Use setsockopt for this group %d\n", group);
+	}
+	return group ? (1 << (group - 1)) : 0;
+}
+
+/**
+ * Configures a created nl_sock as xfrm nl socket for receiving sa specific kernel msg's
+ * @param nl_sock The socket to be configured
+ * @return failure: -1, success: 0
+ */
+static int
+nl_sock_conf_xfrm_sock(nl_sock_t *sock)
+{
+	ASSERT(sock);
+
+	// use default netlink conf
+	nl_sock_conf_route_sock(sock);
+
+	// subscribe to sa related events
+	sock->local.nl_groups =	nl_mgrp(XFRMNLGRP_ACQUIRE) |
+				nl_mgrp(XFRMNLGRP_EXPIRE) |
+				nl_mgrp(XFRMNLGRP_SA);
+	return 0;
+}
+
 /**
  * Configures a created nl_sock as a uevent nl socket for receiving all kernel msg's
  * @param nl_sock The socket to be configured
@@ -179,7 +209,8 @@ nl_sock_conf_uevent_sock(nl_sock_t *sock)
 
 /**
  * Creates a new netlink socket of a specified protocol.
- * Currently supported protocols: NETLINK_KOBJECT_UEVENT, NETLINK_ROUTE.
+ * Currently supported protocols:
+ * 	NETLINK_KOBJECT_UEVENT, NETLINK_ROUTE, NETLINK_XFRM.
  * Should be called only by nl_sock_*_new functions.
  * @param protocol Netlink Protocol Family
  */
@@ -208,6 +239,9 @@ nl_sock_new(int protocol)
 	} else if (protocol == NETLINK_ROUTE) {
 		if (nl_sock_conf_route_sock(ret))
 			return NULL;
+	} else if (protocol == NETLINK_XFRM) {
+		if (nl_sock_conf_xfrm_sock(ret))
+			return NULL;
 	}
 
 	/* Bind on the local socket. Kernel sets address pid automatically. */
@@ -229,7 +263,7 @@ nl_sock_new(int protocol)
 
 	return ret;
 
-	err:
+err:
 	nl_sock_free(ret);
 	return NULL;
 }
@@ -246,6 +280,13 @@ nl_sock_routing_new()
 {
 	TRACE("Creating routing nl socket");
 	return nl_sock_new(NETLINK_ROUTE);
+}
+
+nl_sock_t *
+nl_sock_xfrm_new()
+{
+	TRACE("Creating xfrm nl socket");
+	return nl_sock_new(NETLINK_XFRM);
 }
 
 nl_sock_t *
