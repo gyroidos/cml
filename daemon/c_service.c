@@ -509,6 +509,11 @@ c_service_send_message(c_service_t *service, c_service_message_t message)
 			 "We ignore this for now because the Trustme Service is probably still booting...", message);
 		// TODO in the future, we should maybe buffer 'message' and try to resend
 		// it once the Trustme Service has connected.
+
+		// If we want to shut the container down, return -1 
+		// to have it killed immediately, not waiting for the timeout
+		if (message == C_SERVICE_MESSAGE_SHUTDOWN) return -1;
+
 		return 0;
 	}
 
