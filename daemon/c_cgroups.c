@@ -210,8 +210,8 @@ c_cgroups_list_remove(list_t **list, const int* dev)
 	for (list_t* elem = *list; elem != NULL; elem = elem->next) {
 		int* dev_elem = (int*) elem->data;
 		if ( (dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1]) ) {
-			*list = list_unlink(*list, elem);
 			mem_free(elem->data);
+			*list = list_unlink(*list, elem);
 			break;
 		}
 	}
@@ -1016,7 +1016,6 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 		}
 		mem_free(subsys_path);
 	}
-	list_delete(cgroups->active_cgroups);
 
 	/* free assigned devices */
 	for (list_t* elem = cgroups->assigned_devs; elem != NULL; elem = elem->next) {
