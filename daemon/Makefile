@@ -24,6 +24,7 @@
 
 CC ?= gcc
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD
+LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
 
 TRUSTME_HARDWARE := ppc
 
@@ -87,7 +88,7 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 cmld: libcommon ${PROTO_SRC} ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -o cmld
+	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} ${LDLIBS} -o cmld
 
 
 .PHONY: clean
