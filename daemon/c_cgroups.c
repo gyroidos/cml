@@ -772,7 +772,7 @@ c_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path)
 	}
 
 	INFO("Mounting cgroups subsystems %s", subsys);
-	ret = mount(NULL, mount_path, "cgroup", MS_NOEXEC|MS_NODEV|MS_NOSUID|MS_RELATIME, subsys);
+	ret = mount("cgroup", mount_path, "cgroup", MS_NOEXEC|MS_NODEV|MS_NOSUID|MS_RELATIME, subsys);
 	if (ret == -1) {
 		if (errno == EBUSY) {
 			INFO("cgroup %s already mounted", subsys);
@@ -806,13 +806,18 @@ c_cgroups_start_pre_clone(c_cgroups_t *cgroups)
 
 	// mount cgroups control stuff if not already done (necessary globally once)
 
+	// tmpfs does not always result in EBUSY if already mounted
+	if (file_is_mountpoint(CGROUPS_FOLDER))
+		return 0;
+
+
 	if (mkdir(CGROUPS_FOLDER, 0755) && errno != EEXIST) {
 		ERROR_ERRNO("Could not create cgroup mount directory");
 		return -1;
 	}
 
 	INFO("Mounting cgroups tmpfs");
-	if (mount(NULL, CGROUPS_FOLDER, "tmpfs", MS_NOEXEC|MS_NODEV|MS_NOSUID|MS_RELATIME, "mode=755") == -1 && errno != EBUSY) {
+	if (mount("cgroup", CGROUPS_FOLDER, "tmpfs", MS_NOEXEC|MS_NODEV|MS_NOSUID|MS_RELATIME, "mode=755") == -1 && errno != EBUSY) {
 		ERROR_ERRNO("Could not mount tmpfs for cgroups");
 		return -1;
 	}

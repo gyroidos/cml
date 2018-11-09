@@ -45,6 +45,10 @@ file_is_link(const char *file);
 bool
 file_is_dir(const char *file);
 
+bool
+file_is_mountpoint(const char *file);
+
+
 /**
  * Copy a file.
  * @param in_file The file to be read.

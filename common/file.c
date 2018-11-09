@@ -70,6 +70,21 @@ file_is_dir(const char *file)
 	return !lstat(file, &s) && S_ISDIR(s.st_mode);
 }
 
+bool
+file_is_mountpoint(const char *file)
+{
+	bool ret;
+	struct stat s, s_parent;
+	char *parent = mem_printf("%s/..", file);
+
+	ret = !lstat(file, &s);
+	ret &= !lstat(parent, &s_parent);
+	ret &= (s.st_dev != s_parent.st_dev);
+
+	mem_free(parent);
+	return ret;
+}
+
 int
 file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek)
 {
