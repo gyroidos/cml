@@ -49,6 +49,7 @@ static void print_usage(const char *cmd)
 	printf("\n");
 	printf("commands:\n");
 	printf("   list\n        Lists all containers.\n");
+	printf("   reload\n        Reloads containers ifrom config files.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
 	printf("   start <container-uuid> [--key=<key>]\n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
@@ -159,6 +160,10 @@ int main(int argc, char *argv[])
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 		has_response = true;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "reload")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__RELOAD_CONTAINERS;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "wipe_device")) {

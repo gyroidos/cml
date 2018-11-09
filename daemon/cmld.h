@@ -47,6 +47,14 @@ int
 cmld_init(const char *path);
 
 /**
+ * Reloads all containers from storage path.
+ *
+ * @return 0 on success, -1 on error
+ */
+int
+cmld_reload_containers(void);
+
+/**
  * Create a container by cloning from another one.
  *
  * @param container The container object to clone from.
