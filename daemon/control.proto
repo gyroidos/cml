@@ -95,6 +95,9 @@ message ControllerToDaemon {
 		// Images will be updated later.
 		PUSH_GUESTOS_CONFIG = 20;
 
+		// Reloads containers from config files, e.g. if a new container should be created
+		RELOAD_CONTAINERS = 21;
+
 		// TODO (optional) REMOVE_CONTAINER, REMOVE_GUESTOS
 		// How to remove? Send same package_info as during install and delete list of files?
 		// TODO: Are there other files/settings/configs to be managed remotely (install/update/remove)?

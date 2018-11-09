@@ -210,8 +210,12 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 
 	uuid_t *uuid = uuid_new(prefix);
 	if (uuid) {
-		container_t *c = container_new(path, uuid, NULL, 0);
-		mem_free(uuid);
+		container_t *c = cmld_container_get_by_uuid(uuid);
+		if (c) {
+			DEBUG("Not loading %s for already created container %s.", name, container_get_name(c));
+			goto cleanup;
+		}
+		c = container_new(path, uuid, NULL, 0);
 		if (c) {
 			DEBUG("Loaded existing container %s from %s", container_get_name(c), name);
 			cmld_containers_list = list_append(cmld_containers_list, c);
@@ -222,6 +226,8 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 	WARN("Could not create new container object from %s", name);
 
 cleanup:
+	if (uuid)
+		mem_free(uuid);
 	mem_free(dir);
 	mem_free(prefix);
 	return res;
@@ -240,6 +246,17 @@ cmld_load_containers(const char *path)
 
 	WARN("No container configs found on storage");
 	return 0;
+}
+
+int
+cmld_reload_containers(void)
+{
+	int ret = -1;
+	char *path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
+	ret = cmld_load_containers(path);
+
+	mem_free(path);
+	return ret;
 }
 
 /**

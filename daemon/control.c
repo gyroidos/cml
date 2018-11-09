@@ -597,6 +597,10 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		}
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__RELOAD_CONTAINERS: {
+		cmld_reload_containers();
+	} break;
+
 	case CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE: {
 		cmld_wipe_device();
 	} break;
