@@ -435,14 +435,14 @@ ssl_mkkeypair()
 	}
 
 	DEBUG("Public key pair generated");
-	BN_free(e);
+	//BN_free(e);
 	BN_CTX_free(ctx);
 	return pk;
 
 error:
 	RSA_free(rsa);
 	EVP_PKEY_free(pk);
-	BN_free(e);
+	//BN_free(e);
 	BN_CTX_free(ctx);
 	return NULL;
 }
@@ -478,8 +478,11 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 		return res;
 	}
 
-	EVP_CIPHER_CTX ctx;
-	EVP_CIPHER_CTX_init(&ctx);
+	EVP_CIPHER_CTX *ctx;
+	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
+		ERROR("Allocating EVP cipher failed!");
+		return res;
+	}
 
 	unsigned char *tmpkey = mem_alloc(EVP_PKEY_size(pkey));
 	int tmpkeylen = 0;
@@ -489,19 +492,19 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type) - 1);
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
-	if (!EVP_SealInit(&ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1))
+	if (!EVP_SealInit(ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1))
 	{
 		WARN("EVP_SealInit failed.");
 		goto cleanup;
 	}
 
 	int outlen = 0, tmplen = 0;
-	if (!EVP_SealUpdate(&ctx, out, &tmplen, plain_key, plain_key_len)) {
+	if (!EVP_SealUpdate(ctx, out, &tmplen, plain_key, plain_key_len)) {
 		WARN("EVP_SealUpdate failed.");
 		goto cleanup;
 	}
 	outlen += tmplen;
-	if (!EVP_SealFinal(&ctx, out+tmplen, &tmplen)) {
+	if (!EVP_SealFinal(ctx, out+tmplen, &tmplen)) {
 		WARN("EVP_SealFinal failed.");
 		goto cleanup;
 	}
@@ -524,7 +527,7 @@ cleanup:
 	mem_free(tmpkey);
 	mem_free(iv_buf);
 	mem_free(out);
-	EVP_CIPHER_CTX_cleanup(&ctx);
+	EVP_CIPHER_CTX_free(ctx);
 	return res;
 }
 
@@ -548,37 +551,40 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 	int iv_len = EVP_CIPHER_iv_length(type);
 	if (wrapped_key_len < 2*sizeof(int)+iv_len) {
 		WARN("Given wrapped key is invalid/corrupted.");
-		goto cleanup;
+		return res;
 	}
 	int tmpkeylen = *((int*)wrapped_key); wrapped_key += sizeof(int);
 	int keylen = *((int*)wrapped_key); wrapped_key += sizeof(int);
 	if (wrapped_key_len != 2*sizeof(int)+iv_len+tmpkeylen+keylen) {
 		WARN("Given wrapped key is invalid/corrupted.");
-		goto cleanup;
+		return res;
 	}
 	const unsigned char *iv_buf = wrapped_key; wrapped_key += iv_len;
 	const unsigned char *tmpkey = wrapped_key; wrapped_key += tmpkeylen;
 	const unsigned char *key = wrapped_key;
 
-	EVP_CIPHER_CTX ctx;
-	EVP_CIPHER_CTX_init(&ctx);
+	EVP_CIPHER_CTX *ctx;
+	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
+		ERROR("Allocating EVP cipher failed!");
+		return res;
+	}
 
 	unsigned char *out = mem_alloc(keylen + EVP_CIPHER_block_size(type));
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
-	if (!EVP_OpenInit(&ctx, type, tmpkey, tmpkeylen, iv_buf, pkey))
+	if (!EVP_OpenInit(ctx, type, tmpkey, tmpkeylen, iv_buf, pkey))
 	{
 		WARN("EVP_OpenInit failed.");
 		goto cleanup;
 	}
 
 	int outlen = 0, tmplen = 0;
-	if (!EVP_OpenUpdate(&ctx, out, &tmplen, key, keylen)) {
+	if (!EVP_OpenUpdate(ctx, out, &tmplen, key, keylen)) {
 		WARN("EVP_OpenUpdate failed.");
 		goto cleanup;
 	}
 	outlen += tmplen;
-	if (!EVP_OpenFinal(&ctx, out+tmplen, &tmplen)) {
+	if (!EVP_OpenFinal(ctx, out+tmplen, &tmplen)) {
 		WARN("EVP_OpenFinal failed.");
 		goto cleanup;
 	}
@@ -589,7 +595,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 
 	res = 0;
 cleanup:
-	EVP_CIPHER_CTX_cleanup(&ctx);
+	EVP_CIPHER_CTX_free(ctx);
 	return res;
 }
 
@@ -676,9 +682,9 @@ int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_fil
 	}
 
 	int verify_ret = X509_verify_cert(context);
-	const char *verify_string = X509_verify_cert_error_string(context->error);
+	const char *verify_string = X509_verify_cert_error_string(X509_STORE_CTX_get_error(context));
 
-	INFO("Verification return status: %s", X509_verify_cert_error_string(context->error));
+	INFO("Verification return status: %s", verify_string);
 
 	if (verify_ret == 1) {
 		DEBUG("Certificate verification successful");
@@ -731,6 +737,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file,
 	unsigned char *signature = NULL;
 	unsigned int siglen;
 	const EVP_MD *hash_fct;
+	EVP_MD_CTX *md_ctx = NULL;
 
 	//load certificate, verify and get public key
 	if (!(fp = fopen(cert_file, "rb"))) {
@@ -788,9 +795,17 @@ ssl_verify_signature(const char *cert_file, const char *signature_file,
 		goto error;
 	}
 
-	EVP_MD_CTX c;
-	EVP_MD_CTX_init(&c);
-	EVP_VerifyInit(&c, hash_fct);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX _md_ctx;
+	md_ctx = &_md_ctx;
+	EVP_MD_CTX_init(md_ctx);
+#else
+	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
+		ERROR("Allocating EVP_MD failed!");
+		goto error;
+	}
+#endif
+	EVP_VerifyInit(md_ctx, hash_fct);
 
 	int len = 0;
 	unsigned char buffer[SIGN_HASH_BUFFER_SIZE];
@@ -802,7 +817,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file,
 	}
 
 	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-		if (!EVP_VerifyUpdate(&c, buffer, len)) {
+		if (!EVP_VerifyUpdate(md_ctx, buffer, len)) {
 			ERROR("Error in signature verification (reading/hashing signed file failed");
 			ret = -2;
 			goto error;
@@ -813,7 +828,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file,
 
 	DEBUG("File hash computed to verify signature");
 
-	ret = EVP_VerifyFinal(&c, signature, siglen, key);
+	ret = EVP_VerifyFinal(md_ctx, signature, siglen, key);
 	if (ret != 1) {
 		DEBUG("Signature verification error");
 		// any error
@@ -835,6 +850,12 @@ error:
 		EVP_PKEY_free(key);
 	if (signature)
 		mem_free(signature);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX_cleanup(md_ctx);
+#else
+	if (md_ctx)
+		EVP_MD_CTX_free(md_ctx);
+#endif
 	return ret;
 }
 
@@ -846,6 +867,7 @@ unsigned char *ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, c
 	unsigned char *ret;
 	FILE *fp = NULL;
 	const EVP_MD *hash_fct;
+	EVP_MD_CTX *md_ctx = NULL;
 
 	if (!(fp = fopen(file_to_hash, "rb"))) {
 		ERROR("Error in file hasing (opening hash file)");
@@ -858,34 +880,49 @@ unsigned char *ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, c
 		return NULL;
 	}
 
-	EVP_MD_CTX c;
-	EVP_MD_CTX_init(&c);
-	EVP_DigestInit(&c, hash_fct);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX _md_ctx;
+	md_ctx = &_md_ctx;
+	EVP_MD_CTX_init(md_ctx);
+#else
+	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
+		ERROR("Allocating EVP_MD failed!");
+		return NULL;
+	}
+#endif
+	EVP_DigestInit(md_ctx, hash_fct);
 
 	int len = 0;
 	unsigned char buffer[SIGN_HASH_BUFFER_SIZE];
 
 	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-		if (!EVP_DigestUpdate(&c, buffer, len)) {
+		if (!EVP_DigestUpdate(md_ctx, buffer, len)) {
 			ERROR("Error in file hashing (reading/hashing file failed");
 			fclose(fp);
-			return NULL;
+			goto error;
 		}
 	}
 	fclose(fp);
 
 	ret = (unsigned char *) mem_alloc0(EVP_MAX_MD_SIZE);
-	if (EVP_DigestFinal(&c, ret, calc_len) != 1) {
+	if (EVP_DigestFinal(md_ctx, ret, calc_len) != 1) {
 		ERROR("Error in file hashing (computing hash)");
-		return NULL;
+		mem_free(ret);
+		ret = NULL;
+		goto error;
 	}
-
 	/* DEBUG OUTPUT
 	char *string = mem_alloc0(*calc_len*2+1);
 	for (unsigned int i = 0;  i < *calc_len;  i++) snprintf(string+2*i, 3, "%02x", ret[i]);
 	DEBUG("Calc hash: %s", string);
 	*/
 
+error:
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX_cleanup(md_ctx);
+#else
+	EVP_MD_CTX_free(md_ctx);
+#endif
 	return ret;
 }
 
