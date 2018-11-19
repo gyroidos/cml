@@ -30,6 +30,7 @@
 
 #include "tpm2d.h"
 #include "nvmcrypt.h"
+#include "ek.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -156,7 +157,11 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 				tpm2d_get_as_key_handle(), TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
 		IF_NULL_GOTO_ERROR(quote_string, err_att_req);
 
+#if TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT
+		attestation_pub_key = ek_get_certificate_new(TPM2D_ASYM_ALGORITHM);
+#else
 		attestation_pub_key = tpm2_read_file_to_hex_string_new(TPM2D_ATTESTATION_PUB_FILE);
+#endif
 		IF_NULL_GOTO_ERROR(attestation_pub_key, err_att_req);
 
 		Pcr out_pcr = PCR__INIT;

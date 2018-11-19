@@ -193,6 +193,10 @@ tpm2_startup(TPM_SU startup_type)
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 			 TPM_CC_Startup, TPM_RH_NULL, NULL, 0);
 
+	if (TPM_RC_INITIALIZE == rc) {
+		WARN("Already initialized, returing Success.");
+		return TPM_RC_SUCCESS;
+	}
 	if (TPM_RC_SUCCESS != rc)
 		TSS_TPM_CMD_ERROR(rc, "CC_StartUp");
 
@@ -508,6 +512,7 @@ tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 			out_public_area->parameters.rsaDetail.scheme.scheme = TPM_ALG_NULL;
 			break;
 		case TPM2D_KEY_TYPE_SIGNING_R:
+		case TPM2D_KEY_TYPE_SIGNING_EK:
 			out_public_area->parameters.rsaDetail.symmetric.algorithm = TPM_ALG_NULL;
 			out_public_area->parameters.rsaDetail.scheme.scheme = TPM_ALG_RSASSA;
 			out_public_area->parameters.rsaDetail.scheme.details.rsassa.hashAlg =
@@ -536,6 +541,7 @@ tpm2_fill_ecc_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 			out_public_area->parameters.eccDetail.kdf.scheme = TPM_ALG_NULL;
 			break;
 		case TPM2D_KEY_TYPE_SIGNING_R:
+		case TPM2D_KEY_TYPE_SIGNING_EK:
 			// non-storage keys require TPM_ALG_NULL set for the symmetric algorithm
 			out_public_area->parameters.eccDetail.symmetric.algorithm = TPM_ALG_NULL;
 
@@ -566,6 +572,13 @@ tpm2_fill_ecc_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 
 	return TPM_RC_SUCCESS;
 }
+
+// default IWG policy for EK primary key
+static uint8_t ek_iwg_policy[] = {
+       0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xB3, 0xF8, 0x1A, 0x90, 0xCC,
+       0x8D, 0x46, 0xA5, 0xD7, 0x24, 0xFD, 0x52, 0xD7, 0x6E, 0x06, 0x52,
+       0x0B, 0x64, 0xF2, 0xA1, 0xDA, 0x1B, 0x33, 0x14, 0x69, 0xAA
+};
 
 static TPM_RC
 tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, tpm2d_key_type_t key_type)
@@ -601,6 +614,11 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, 
 			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_DECRYPT;
 			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_RESTRICTED;
 			break;
+		case TPM2D_KEY_TYPE_SIGNING_EK:
+			out_public_area->objectAttributes.val |= TPMA_OBJECT_ADMINWITHPOLICY;
+			out_public_area->authPolicy.t.size = sizeof(ek_iwg_policy);
+			memcpy(&out_public_area->authPolicy.t.buffer, ek_iwg_policy,
+				       sizeof(ek_iwg_policy)); // fallthrough
 		case TPM2D_KEY_TYPE_SIGNING_R:
 			out_public_area->objectAttributes.val |= TPMA_OBJECT_SIGN;
 			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_DECRYPT;
@@ -638,6 +656,8 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 
 	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
+	// set some default key attr overwritten by tpm2_public_area helper
+	// depending on key_type
 	object_attrs.val = 0;
 	object_attrs.val |= TPMA_OBJECT_NODA;
 	object_attrs.val |= TPMA_OBJECT_SENSITIVEDATAORIGIN;
@@ -660,7 +680,7 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 			return rc;
 	in.inSensitive.sensitive.data.t.size = 0;
 
-	// fill in TPM2B_PUBLIC
+	// fill in TPM2B_PUBLIC (and overwrite object_attrs)
 	if (TPM_RC_SUCCESS != (rc = tpm2_public_area_helper(
 			&in.inPublic.publicArea, object_attrs, key_type)))
 		return rc;
@@ -880,10 +900,12 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 	} else
 		in.qualifyingData.t.size = 0;
 
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+	do {
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_Quote,
 			TPM_RS_PW, sig_key_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	if (rc != TPM_RC_SUCCESS)
 		goto err;
@@ -963,10 +985,12 @@ tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_han
 	in.objectHandle = obj_handle;
 	in.persistentHandle = persist_handle;
 
-	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
+	do {
+		rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
 			TPM_CC_EvictControl,
 			TPM_RS_PW, auth_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	if (TPM_RC_SUCCESS != rc)
 		TSS_TPM_CMD_ERROR(rc, "CC_EvictControl");
@@ -999,9 +1023,11 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 	/* Table 73 - Definition of TPM2B_DATA Structure */
 	in.label.t.size = 0;
 
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+	do {
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_RSA_Encrypt,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	if (TPM_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_RSA_encrypt");
@@ -1046,10 +1072,12 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 	/* Table 73 - Definition of TPM2B_DATA Structure */
 	in.label.t.size = 0;
 
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+	do {
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_RSA_Decrypt,
 			TPM_RS_PW, key_pwd, 0,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	if (TPM_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_RSA_decrypt");
@@ -1093,10 +1121,12 @@ tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
 	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, old_pwd);
 	if (TPM_RC_SUCCESS != rc) goto err;
 
-	rc = TSS_Execute(tss_context, NULL,
+	do {
+		rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_HierarchyChangeAuth,
 			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
@@ -1173,9 +1203,11 @@ tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex)
 	in.pcrSelectionIn.pcrSelections[0].pcrSelect[2] = 0;
 	in.pcrSelectionIn.pcrSelections[0].pcrSelect[pcr_index / 8] = 1 << (pcr_index % 8);
 
-	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+	do {
+		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Read,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	if (TPM_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_PCR_Read");
@@ -1356,11 +1388,13 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
 	if (TPM_RC_SUCCESS != rc) goto err;
 
-	rc = TSS_Execute(tss_context, NULL,
+	do {
+		rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_DefineSpace,
 			//TPM_RS_PW, hierarchy_pwd, 0,
 			se_handle, 0, TPMA_SESSION_DECRYPT|TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
@@ -1395,11 +1429,13 @@ tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_han
 	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
 	if (TPM_RC_SUCCESS != rc) goto err;
 
-	rc = TSS_Execute(tss_context, NULL,
+	do {
+		rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_UndefineSpace,
 			//TPM_RS_PW, hierarchy_pwd, 0,
 			se_handle, 0, TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
@@ -1558,11 +1594,13 @@ tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
 	if (TPM_RC_SUCCESS != rc)
 		goto err;
 
-	rc = TSS_Execute(tss_context, NULL,
+	do {
+		rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_ReadLock,
 			//TPM_RS_PW, nv_pwd, 0,
 			se_handle, 0, TPMA_SESSION_CONTINUESESSION,
 			TPM_RH_NULL, NULL, 0);
+	} while (TPM_RC_RETRY == rc);
 
 	rc_flush = tpm2_flushcontext(se_handle);
 

@@ -26,7 +26,7 @@ tss_cflags := \
 	-DTPM_POSIX
 
 LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon -Wextra -Werror $(tss_cflags)
-LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
+#LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
 
 SRC_FILES := \
 	common/dir.c \
@@ -39,7 +39,8 @@ SRC_FILES := \
 	control.c \
 	tpm2_commands.c \
 	nvmcrypt.c \
-	tpm2d.c \
+	ek.c \
+	tpm2d.c
 
 
 .PHONY: all
