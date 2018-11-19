@@ -890,7 +890,7 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	int32_t size_int32 = out.quoted.t.size;
+	uint32_t size_int32 = out.quoted.t.size;
         if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &size_int32)))
 		goto err;
         if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
