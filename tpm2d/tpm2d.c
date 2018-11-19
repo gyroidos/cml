@@ -49,10 +49,12 @@ static logf_handler_t *tpm2d_logfile_handler = NULL;
 static uint32_t tpm2d_salt_key_handle = 0;
 
 #ifndef TPM2D_NVMCRYPT_ONLY
-static uint32_t tpm2d_ps_key_handle = 0;
 static uint32_t tpm2d_as_key_handle = 0;
+#if TPM2D_KEY_HIERARCHY != TPM_RH_ENDORSEMENT
 
+static uint32_t tpm2d_ps_key_handle = 0;
 static uint32_t persist_ps_handle = 0;
+#endif
 #endif
 
 static void
@@ -88,6 +90,20 @@ tpm2d_get_as_key_handle(void)
 	return tpm2d_as_key_handle;
 }
 
+#if TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT
+static void
+tpm2d_setup_keys(void)
+{
+	int ret = 0;
+	// create ek
+	if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM2D_KEY_HIERARCHY,
+			TPM2D_KEY_TYPE_SIGNING_EK, NULL, TPM2D_ATTESTATION_KEY_PW, NULL,
+			&tpm2d_as_key_handle))) {
+		FATAL("Failed to create primary endorsement key with error code: %08x", ret);
+	}
+	INFO("Created EK with handle %08x", tpm2d_as_key_handle);
+}
+#else
 static void
 tpm2d_setup_keys(void)
 {
@@ -140,7 +156,8 @@ tpm2d_setup_keys(void)
 	INFO("Loaded signing key for attestation.");
 	mem_free(token_dir);
 }
-#endif
+#endif /* ndef TPM2D_NVMCRYPT_ONLY */
+#endif /* TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT */
 
 static void
 tpm2d_init(void)
@@ -177,8 +194,8 @@ tpm2d_init(void)
 		//	FATAL("powerup failed with error code: %08x", ret);
 
 		//// startup should be made by uefi/bios, thus also only for simulator
-		//if (TPM_RC_SUCCESS != (ret = tpm2_startup(TPM_SU_CLEAR)))
-		//	FATAL("startup failed with error code: %08x", ret);
+		if (TPM_RC_SUCCESS != (ret = tpm2_startup(TPM_SU_CLEAR)))
+			FATAL("startup failed with error code: %08x", ret);
 	}
 
 	if (TPM_RC_SUCCESS != (ret = tpm2_selftest()))
@@ -207,6 +224,11 @@ tpm2d_exit(void)
 	INFO("Cleaning up tss2 and exit");
 	if (tpm2d_salt_key_handle)
 		tpm2_flushcontext(tpm2d_salt_key_handle);
+#ifndef TPM2D_NVMCRYPT_ONLY
+	if (tpm2d_as_key_handle)
+		tpm2_flushcontext(tpm2d_as_key_handle);
+#endif
+
 	tss2_destroy();
 	exit(0);
 }
@@ -214,7 +236,8 @@ tpm2d_exit(void)
 static void
 main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
-	FATAL("Received SIGINT...");
+	INFO("Received SIGINT...");
+	tpm2d_exit();
 }
 
 static void
