@@ -53,6 +53,7 @@
 #else
 #define MAKE_EXT4FS "mkfs.ext4"
 #endif
+#define BTRFSTUNE "btrfstune"
 
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
@@ -173,6 +174,30 @@ c_vol_create_image_empty(c_vol_t *vol, const char *img, const mount_entry_t *mnt
 }
 
 static int
+c_vol_btrfs_regen_uuid(const char *dev)
+{
+	pid_t pid = fork();
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork to regen uuid for %s", dev);
+		return -1;
+	case 0:
+		execlp("/usr/bin/"BTRFSTUNE, BTRFSTUNE, "-f", "-u", dev, (char *) NULL);
+		ERROR_ERRNO("Could not execlp %s", BTRFSTUNE);
+		return -1;
+	default:
+		if (waitpid(pid, NULL, 0) != pid) {
+			ERROR_ERRNO("Could not waitpid for %s", BTRFSTUNE);
+			return -1;
+		}
+		return 0;
+	}
+
+	return 0;
+}
+
+static int
 c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
 	const char *dir;
@@ -191,6 +216,11 @@ c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mnte
 	ret = file_copy(src, img, -1, 512, 0);
 	if (ret < 0)
 		ERROR("Could not copy file %s to %s", src, img);
+
+	if (!strcmp("btrfs", mount_entry_get_fs(mntent))) {
+		INFO("Regenerate UUID for btrfs filesystem on %s", img);
+		ret = c_vol_btrfs_regen_uuid(img);
+	}
 
 	mem_free(src);
 	return ret;
