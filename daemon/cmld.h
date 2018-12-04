@@ -192,5 +192,12 @@ cmld_is_internet_active(void);
 const char *
 cmld_get_device_host_dns(void);
 
+/**
+ * Get the name of the (privileged) core container from the device config
+ */
+const char *
+cmld_get_c0os(void);
+
+
 #endif /* CMLD_H */
 

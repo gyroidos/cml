@@ -90,6 +90,7 @@ static bool cmld_airplane_mode = false;
 static char *cmld_device_uuid = NULL;
 static char *cmld_device_update_base_url = NULL;
 static char *cmld_device_host_dns = NULL;
+static char *cmld_c0os_name = NULL;
 
 static char *cmld_shared_data_dir = NULL;
 
@@ -706,6 +707,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	/* Get the a0 guestos */
 	guestos_t *a0_os = guestos_mgr_get_latest_by_name(c0os, true);
 	// TODO discuss if flashing should be done here or elsewhere
+
 	int flash_result = guestos_images_flash(a0_os);
 	if (flash_result < 0) {
 		FATAL("Failed to verify and/or flash a0 images!");
@@ -845,6 +847,9 @@ cmld_init(const char *path)
 
 	const char *host_dns = device_config_get_host_dns(device_config);
 	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
+
+	const char *c0os_name = device_config_get_c0os(device_config);
+	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
 	if (mount_debugfs() < 0)
 		WARN("Could not mount debugfs");
@@ -1029,4 +1034,9 @@ cmld_wipe_device() {
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINER_TOKENS_DIR);
 	dir_delete_folder(LOGFILE_DIR, "");
 	reboot_reboot(POWER_OFF);
+}
+
+const char *
+cmld_get_c0os(void){
+	return cmld_c0os_name;
 }
