@@ -50,8 +50,6 @@ struct guestos {
 };
 
 #define GUESTOS_MAX_DOWNLOAD_ATTEMPTS 3
-#define GUESTOS_PRIVILEGED_NAME1 "a0os"
-#define GUESTOS_PRIVILEGED_NAME2 "idsos"
 #define GUESTOS_FLASHED_FILE "flash_complete"	// TODO check contents of partitions instead!
 #define GUESTOS_FLASH_BLOCKSIZE 512 // blocksize in bytes for flashing partitions
 #define GUESTOS_VERIFY_BLOCKSIZE 4096 // blocksize in bytes for verifying partitions
@@ -168,9 +166,7 @@ bool
 guestos_is_privileged(const guestos_t *os)
 {
 	bool ispriv = false;
-	// TODO better way to distinguish privileged "a0os" from other GuestOSes?
-	ispriv |= !strncmp(guestos_get_name(os), GUESTOS_PRIVILEGED_NAME1, sizeof(GUESTOS_PRIVILEGED_NAME1));
-	ispriv |= !strncmp(guestos_get_name(os), GUESTOS_PRIVILEGED_NAME2, sizeof(GUESTOS_PRIVILEGED_NAME2));
+	ispriv |= !strcmp(guestos_get_name(os), cmld_get_c0os());
 	ispriv |= guestos_get_feature_vpn(os);
 
 	return ispriv;
