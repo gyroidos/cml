@@ -689,16 +689,15 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 
 	container_unregister_observer(a0, cb);
 
-	#ifndef TRUSTME_DEBUG
 	if (shutdown_now) {
 		/* all containers are down, so shut down */
 		DEBUG("Device shutdown: all containers already down; shutdown now");
-
+#ifndef TRUSTME_DEBUG
 		reboot_reboot(POWER_OFF);
 		// should never arrive here, but in case the shutdown fails somehow, we exit
 		exit(0);
+#endif /* TRUSTME_DEBUG */
 	}
-	#endif /* TRUSTME_DEBUG */
 }
 
 static int

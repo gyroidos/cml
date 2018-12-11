@@ -23,7 +23,8 @@
 
 
 CC ?= gcc
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -pedantic -Wall -Wextra -Werror
+LOCAL_CFLAGS += -DDEBUG_BUILD
 LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
 
 TRUSTME_HARDWARE := ppc

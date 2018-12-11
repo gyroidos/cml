@@ -697,6 +697,8 @@ c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 		}
 		WARN("Failed to setup route %s (already %s)", subnet, up?"exists":"removed");
 	}
+#else
+	TRACE("Skipping network_setup_route(%s,%s,%d)", subnet, if_name, up);
 #endif
 	return 0;
 }
