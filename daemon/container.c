@@ -1015,7 +1015,7 @@ container_start_child(void *data)
 				mem_printf("%s.kvm.log", container_get_images_dir(container));
 			read_bytes = read(fd_master, buffer, 128);
 			file_write(kvm_log, buffer, read_bytes);
-			while (read_bytes = read(fd_master, buffer, 128)) {
+			while ((read_bytes = read(fd_master, buffer, 128))) {
 				file_write_append(kvm_log, buffer, read_bytes);
 			}
 			return CONTAINER_ERROR;

@@ -180,39 +180,42 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 };
 
 /* extracts major and minor device numbers from a rule as an int array {major, minor} */
-static int* c_cgroups_dev_from_rule(const char* rule){
-	int* ret = mem_new0(int, 2);
-	char* rule_cp = mem_strdup(rule);
-	char* pointer;
-	char* type;
-	char* dev;
+static int *
+c_cgroups_dev_from_rule(const char *rule)
+{
+	int *ret = mem_new0(int, 2);
+	char *rule_cp = mem_strdup(rule);
+	char *pointer;
+	UNUSED char *type;
+	char *dev;
 
 	type = strtok_r(rule_cp, " ", &pointer);
 	dev = strtok_r(NULL, " ", &pointer);
 	pointer = NULL;
-	char* maj_str = strtok_r(dev, ":", &pointer);
-	char* min_str = strtok_r(NULL, ":", &pointer);
+	char *maj_str = strtok_r(dev, ":", &pointer);
+	char *min_str = strtok_r(NULL, ":", &pointer);
 	ret[0] = -1;
 	ret[1] = -1;
 	if (strncmp("*", maj_str, 1)) ret[0] = atoi(maj_str);
 	if (strncmp("*", min_str, 1)) ret[1] = atoi(min_str);
+
 	mem_free(rule_cp);
 	return ret;
 }
 
 static void
-c_cgroups_list_add(list_t **list, const int* dev)
+c_cgroups_list_add(list_t **list, const int *dev)
 {
-	int* dev_copy = mem_new0(int, 2);
+	int *dev_copy = mem_new0(int, 2);
         memcpy(dev_copy, dev, sizeof(int) * 2);
 	*list = list_append(*list, dev_copy);
 }
 
 static void
-c_cgroups_list_remove(list_t **list, const int* dev)
+c_cgroups_list_remove(list_t **list, const int *dev)
 {
-	for (list_t* elem = *list; elem != NULL; elem = elem->next) {
-		int* dev_elem = (int*) elem->data;
+	for (list_t *elem = *list; elem != NULL; elem = elem->next) {
+		int *dev_elem = (int*) elem->data;
 		if ( (dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1]) ) {
 			mem_free(elem->data);
 			*list = list_unlink(*list, elem);
@@ -222,10 +225,10 @@ c_cgroups_list_remove(list_t **list, const int* dev)
 }
 
 static int
-c_cgroups_list_contains_match(const list_t* list, const int* dev)
+c_cgroups_list_contains_match(const list_t *list, const int *dev)
 {
-	for (const list_t* elem = list;  elem != NULL; elem = elem->next) {
-		const int* dev_elem = (const int*) elem->data;
+	for (const list_t *elem = list;  elem != NULL; elem = elem->next) {
+		const int *dev_elem = (const int*) elem->data;
 		if ( (dev_elem[0] == -1) || (dev[0] == -1) ) return 1;
 		if ( dev_elem[0] != dev[0] ) continue;
 		if ( (dev[1] == -1) || (dev_elem[1] == -1) || (dev[1] == dev_elem[1]) ) return 1;

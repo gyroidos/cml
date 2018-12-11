@@ -99,10 +99,8 @@ hardware_get_block_by_name_path(void)
 	return NULL;
 }
 
-static uint32_t led_color = 0;
-
 int
-hardware_set_led(uint32_t color, bool should_blink)
+hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
 {
 	return 0;
 }
@@ -151,6 +149,17 @@ hardware_get_random(unsigned char *buf, size_t len)
         }
 }
 
+void
+hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len){}
+
+void
+hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len){}
+
+bool
+hardware_display_power_state(void)
+{
+	return false;
+}
 
 const char **
 hardware_get_devices_whitelist_audio()
@@ -181,24 +190,6 @@ hardware_get_nw_name_list(void) {
 	list_t *nw_name_list = NULL;
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
-}
-
-bool
-hardware_display_power_state(void)
-{
-	return false;//no display by default
-}
-
-void
-hardware_suspend_block(const char *name, size_t name_len)
-{
-        return;//do nothing
-}
-
-void
-hardware_suspend_unblock(const char *name, size_t name_len)
-{
-	return;//do nothing
 }
 
 const char *
