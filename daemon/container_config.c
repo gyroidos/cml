@@ -384,22 +384,6 @@ container_config_set_guestos_version(container_config_t *config, uint64_t guesto
 }
 
 bool
-container_config_get_allow_container_switch(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->allow_container_switch;
-}
-
-void
-container_config_set_allow_container_switch(container_config_t *config, bool allow_container_switch)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	config->cfg->allow_container_switch = allow_container_switch;
-}
-
-bool
 container_config_get_allow_autostart(const container_config_t *config)
 {
 	ASSERT(config);

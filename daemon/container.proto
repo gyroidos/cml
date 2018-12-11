@@ -58,14 +58,6 @@ message ContainerConfig {
 	required ContainerType type = 7 [ default = CONTAINER ];
 
 	// Flags indicating the allows for containers:
-	optional bool allow_internet = 10 [default = false];
-	// white/blacklist of allowed/disallowed ip connections
-	repeated string internet_rules = 11;
-	optional bool allow_sensor_gps = 12 [default = false];
-	optional bool allow_camera = 13 [default = false];
-	optional bool allow_audio_microphone = 14 [default = false];
-	optional bool allow_audio_speakers = 15 [default = false];
-	optional bool allow_container_switch = 16 [default = true]; // allow 'home-button switching' and 'notification switching'
 	optional bool allow_autostart = 17 [default = false];
 	// TODO: add further features as necessary
 
