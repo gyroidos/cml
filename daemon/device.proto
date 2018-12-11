@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+syntax = "proto2";
+
 message DeviceConfig {
 	// unique uuid. may change due to user change.
 	// may be generated if no uuid is available.
