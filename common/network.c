@@ -22,6 +22,7 @@
  */
 
 #define LOGF_LOG_MIN_PRIO 2
+#define _GNU_SOURCE
 
 #include "network.h"
 #include "nl.h"

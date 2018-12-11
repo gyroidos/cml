@@ -1005,7 +1005,7 @@ container_start_child(void *data)
 			goto error;
 		}
 		if (pid == 0) { // child
-			const char *argv[] = { "/usr/bin/lkvm", "run", "-d", kvm_root, NULL};
+			char * const argv[] = { "/usr/bin/lkvm", "run", "-d", kvm_root, NULL};
 			execv(argv[0], argv);
 			WARN("Could not run exec for kvm container %s", uuid_string(container->uuid));
 		} else { // parent
@@ -1957,10 +1957,10 @@ container_remove_net_iface(container_t *container, const char *iface, bool persi
 
 const char **
 container_get_dev_allow_list(const container_t *container){
-	return container->device_allowed_list;
+	return (const char**) container->device_allowed_list;
 }
 
 const char **
 container_get_dev_assign_list(const container_t *container){
-	return container->device_assigned_list;
+	return (const char**) container->device_assigned_list;
 }

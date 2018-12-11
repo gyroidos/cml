@@ -21,6 +21,10 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+// for gnu version of basename
+#define _GNU_SOURCE
+#include <string.h>
+
 #include "c_cgroups.h"
 
 #include "hardware.h"
@@ -34,11 +38,11 @@
 #include <stdint.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/inotify.h>
 #include <errno.h>
 #include <unistd.h>
-#include <libgen.h>
 
 #include <sched.h>
 
