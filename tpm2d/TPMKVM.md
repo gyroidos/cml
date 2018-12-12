@@ -89,7 +89,7 @@ of the _virtual_ TPM.
 
 ```
 mkdir /tmp/swtpmqemu
-sudo --tpm2 --tpmstate /tmp/swtpmqemu/ --create-ek-cert
+sudo swtpm_setup --tpm2 --tpmstate /tmp/swtpmqemu/ --create-ek-cert
 ```
 If you do not want to run the provisioning as root, you
 have to provide own configs located in user writable location
