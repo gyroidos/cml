@@ -27,14 +27,14 @@
 #include "common/macro.h"
 #include "common/file.h"
 
-#include <tss2/tss.h>
-#include <tss2/tssutils.h>
-#include <tss2/tssresponsecode.h>
-#include <tss2/tssmarshal.h>
-#include <tss2/tsstransmit.h>
-#include <tss2/Unmarshal_fp.h>
+#include <ibmtss/tss.h>
+#include <ibmtss/tssutils.h>
+#include <ibmtss/tssresponsecode.h>
+#include <ibmtss/tssmarshal.h>
+#include <ibmtss/tsstransmit.h>
+#include <ibmtss/Unmarshal_fp.h>
 
-#include <tss2/tssprint.h>
+#include <ibmtss/tssprint.h>
 
 #include <openssl/sha.h>
 
@@ -912,10 +912,10 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	uint32_t size_int32 = out.quoted.t.size;
-        if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &size_int32)))
+	int buf_size = out.quoted.t.size;
+	if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &buf_size)))
 		goto err;
-        if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
+	if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
 		goto err;
 
 	// finally fill the output structure with converted hex strings needed for protobuf

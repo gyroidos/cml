@@ -24,7 +24,7 @@
 #ifndef TPM2D_H
 #define TPM2D_H
 
-#include <tss2/tss.h>
+#include <ibmtss/tss.h>
 
 #include <stdbool.h>
 
