@@ -30,6 +30,7 @@
 
 #include "tpm2d.h"
 #include "nvmcrypt.h"
+#include "ml.h"
 #include "ek.h"
 
 #include "common/macro.h"
@@ -94,6 +95,24 @@ tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 	}
 }
 
+static TPM_ALG_ID
+tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
+{
+	INFO("Get algid for hash_len: %d", hash_alg_len);
+
+	switch(hash_alg_len) {
+		case HASH_ALG_LEN__SHA1:
+			return TPM_ALG_SHA1;
+		case HASH_ALG_LEN__SHA256:
+			return TPM_ALG_SHA256;
+		case HASH_ALG_LEN__SHA384:
+			return TPM_ALG_SHA384;
+	default:
+		ERROR("Unsupported value for HashAlgLen: %d", hash_alg_len);
+		return TPM_ALG_NULL;
+	}
+}
+
 static void
 tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
@@ -129,7 +148,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		switch (msg->atype) {
 			case IDS_ATTESTATION_TYPE__BASIC:
 				TRACE("atype BASIC");
-				pcr_regs = 11;
+				pcr_regs = 12;
 				break;
 			case IDS_ATTESTATION_TYPE__ALL:
 				TRACE("atype ALL");
@@ -184,9 +203,16 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 
 		out.certificate_uri = attestation_pub_key;
 
+		out.n_ml_entry = ml_get_measurement_list_len();
+		out.ml_entry = ml_get_measurement_list_strings_new();
+
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 err_att_req:
+		for (size_t i=0; i< out.n_ml_entry; ++i) {
+			mem_free(out.ml_entry[i]);
+		}
+
 		if (pcr_string_array)
 			for (int i=0; i < pcr_regs; ++i) {
 				if (pcr_string_array[i])
@@ -261,6 +287,16 @@ err_att_req:
 		out.has_fde_response = true;
 		nvmcrypt_fde_state_t state = nvmcrypt_dm_reset(msg->password);
 		out.fde_response = tpm2d_control_fdestate_to_proto(state);
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case CONTROLLER_TO_TPM__CODE__ML_APPEND: {
+		TpmToController out = TPM_TO_CONTROLLER__INIT;
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_response = true;
+		int ret = ml_measurement_list_append(msg->ml_filename,
+				tpm2d_control_get_algid_from_proto(msg->ml_hashalg),
+				msg->ml_datahash.data, msg->ml_datahash.len);
+		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:

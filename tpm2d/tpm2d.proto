@@ -35,6 +35,12 @@ enum IdsAttestationType {
   ADVANCED = 2;
 }
 
+enum HashAlgLen {
+  SHA1   = 20;
+  SHA256 = 32;
+  SHA384 = 48;
+}
+
 message Pcr {
   // the PCR number (usually between 0 and 23)
   optional int32 number = 1;
@@ -53,6 +59,7 @@ message ControllerToTpm {
 		DMCRYPT_LOCK = 6;
 		CHANGE_OWNER_PWD = 7;
 		DMCRYPT_RESET = 8;
+		ML_APPEND = 9;
 	}
 
 	required Code code = 1;
@@ -64,7 +71,7 @@ message ControllerToTpm {
 	optional string qualifyingData = 3;
 
 	// pcr bitmask for AttestationType ADVANCED only
-	//  - for BASIC, the default PCRs are PCRs 0 to 10
+	//  - for BASIC, the default PCRs are PCRs 0 to 11
 	//  - for ALL  , the default PCRs are PCRs 0 to 23
 	optional int32 pcrs = 4;
 
@@ -78,6 +85,11 @@ message ControllerToTpm {
 
 	// new passphrase for auth changing commands, e.g., change owner auth of tpm
 	optional string password_new = 8;
+
+	// file to be measured, e.g., the container readonly filesystem images
+	optional string ml_filename = 9;
+	optional bytes ml_datahash = 10;
+	optional HashAlgLen ml_hashalg = 11;
 }
 
 message TpmToController {
@@ -87,6 +99,7 @@ message TpmToController {
 		FDE_RESPONSE = 3;
 		RANDOM_RESPONSE = 4;
 	}
+
 	enum GenericResponse {
 		CMD_OK = 1;
 		CMD_FAILED = 2;
@@ -126,4 +139,7 @@ message TpmToController {
 	optional FdeResponse fde_response = 9;
 
 	optional string rand_data = 10;
+
+	// the measurement list in ima style hex strings
+	repeated string ml_entry = 11;
 }

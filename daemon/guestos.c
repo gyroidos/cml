@@ -27,6 +27,7 @@
 #include "hardware.h"
 #include "download.h"
 #include "smartcard.h"
+#include "tss.h"
 #include "cmld.h"
 
 #include "common/macro.h"
@@ -238,6 +239,34 @@ check_mount_image_cb_sha1(const char *hash_string, UNUSED const char *hash_file,
 	check_mount_image_free(task);
 }
 
+static uint8_t *
+convert_hex_to_bin_new(const char *hex_str, int *out_length)
+{
+	int len = strlen(hex_str);
+	int i = 0, j = 0;
+	*out_length = (len+1)/2;
+
+	uint8_t *bin = mem_alloc0(*out_length);
+
+	if (len % 2 == 1)
+	{
+		// odd length -> we need to pad
+		IF_FALSE_GOTO(sscanf(&(hex_str[0]), "%1hhx", &(bin[0])) == 1, err);
+		i = j = 1;
+	}
+
+	for (; i < len; i+=2, j++)
+	{
+		IF_FALSE_GOTO(sscanf(&(hex_str[i]), "%2hhx", &(bin[j])) == 1, err);
+	}
+
+	return bin;
+err:
+	ERROR("Converstion of hex string to bin failed!");
+	mem_free(bin);
+	return NULL;
+}
+
 guestos_check_mount_image_result_t
 guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, bool thorough)
 {
@@ -272,6 +301,13 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 		} else {
 			char *sha256 = smartcard_crypto_hash_file_block_new(img_path, SHA256);
 			match = mount_entry_match_sha256(e, sha256);
+			if (match) { // will only be executed if hash matches to signed config
+				int sha256_bin_len;
+				uint8_t *sha256_bin =
+					convert_hex_to_bin_new(sha256, &sha256_bin_len);
+				tss_ml_append(img_path, sha256_bin, sha256_bin_len, TSS_SHA256);
+				mem_free(sha256_bin);
+			}
 			mem_free(sha256);
 		}
 		if (!match)

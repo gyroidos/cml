@@ -45,6 +45,7 @@
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "smartcard.h"
+#include "tss.h"
 #include "ksm.h"
 
 #include <dirent.h>
@@ -863,6 +864,11 @@ cmld_init(const char *path)
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");
 	INFO("ksm initialized.");
+
+	if (tss_init() < 0)
+		WARN("Plattform does not support TSS / TPM 2.0");
+	else
+		INFO("tss initialized.");
 
 	/* the control module sets up a local or remote socket, registers a
 	 * callback (via event_) and parses incoming commands
