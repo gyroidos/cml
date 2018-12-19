@@ -27,7 +27,7 @@ LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -pedantic -Wall -Wextra -W
 LOCAL_CFLAGS += -DDEBUG_BUILD
 LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
 
-TRUSTME_HARDWARE := ppc
+TRUSTME_HARDWARE := x86
 
 .PHONY: all
 all: cmld
@@ -39,6 +39,7 @@ PROTO_SRC := \
 	common/logf.pb-c.c \
 	device.pb-c.c \
 	scd.pb-c.c \
+	tpm2d.pb-c.c \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
@@ -58,6 +59,7 @@ SRC_FILES := main.c \
 	common/protobuf.c \
 	download.c \
 	smartcard.c \
+	tss.c \
 	common/sock.c \
 	c_cgroups.c \
 	c_service.c \
@@ -80,6 +82,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	protoc-c --c_out=. guestos.proto
 	protoc-c --c_out=. device.proto
 	protoc-c --c_out=. scd.proto
+	protoc-c --c_out=. tpm2d.proto
 	protoc-c --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 

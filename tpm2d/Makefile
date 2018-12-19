@@ -39,6 +39,7 @@ SRC_FILES := \
 	control.c \
 	tpm2_commands.c \
 	nvmcrypt.c \
+	ml.c \
 	ek.c \
 	tpm2d.c
 

@@ -818,15 +818,15 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 }
 
 TPM_RC
-tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
+tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	PCR_Extend_In in;
 
 	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
-	if (strlen(data) > sizeof(TPMU_HA)) {
-		ERROR("Data length %zu exceeds hash size %zu!", strlen(data), sizeof(TPMU_HA));
+	if (data_len > sizeof(TPMU_HA)) {
+		ERROR("Data length %zu exceeds hash size %zu!", data_len, sizeof(TPMU_HA));
 		return EXIT_FAILURE;
 	}
 
@@ -838,7 +838,7 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const char *data)
 	// pad and set data
 	in.digests.digests[0].hashAlg = hash_alg;
 	memset((uint8_t *)&in.digests.digests[0].digest, 0, sizeof(TPMU_HA));
-	memcpy((uint8_t *)&in.digests.digests[0].digest, data, strlen(data));
+	memcpy((uint8_t *)&in.digests.digests[0].digest, data, data_len);
 
 	rc = TSS_Execute(tss_context, NULL,
 			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Extend,
