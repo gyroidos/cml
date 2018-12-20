@@ -852,8 +852,9 @@ cmld_init(const char *path)
 	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
 	if (mount_debugfs() < 0)
-		WARN("Could not mount debugfs");
-	INFO("mounted debugfs");
+		WARN("Could not mount debugfs (already mounted?)");
+	else
+		INFO("mounted debugfs");
 
 #ifdef ANDROID
 	if (power_init() < 0)
@@ -863,7 +864,8 @@ cmld_init(const char *path)
 
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");
-	INFO("ksm initialized.");
+	else
+		INFO("ksm initialized.");
 
 	if (tss_init() < 0)
 		WARN("Plattform does not support TSS / TPM 2.0");
