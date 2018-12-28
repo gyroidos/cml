@@ -95,6 +95,8 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		// Note: this is the upper img for overlayfs
 	case MOUNT_TYPE_EMPTY:
 	case MOUNT_TYPE_COPY:
+	case MOUNT_TYPE_OVERLAY_RW:
+		// Note: this is the upper img for overlayfs
 		dir = container_get_images_dir(vol->container);
 		break;
 	default:
@@ -139,7 +141,18 @@ c_vol_create_image_empty(c_vol_t *vol, const char *img, const mount_entry_t *mnt
 	ASSERT(mntent);
 
 	// minimal storage size is 10 MB
-	storage_size = MAX(mount_entry_get_size(mntent), 10);
+	switch (mount_entry_get_type(mntent)) {
+	case MOUNT_TYPE_OVERLAY_RW:
+		storage_size = MAX(mount_entry_get_data_size(mntent), 10);
+		break;
+	case MOUNT_TYPE_EMPTY:
+		storage_size = MAX(mount_entry_get_size(mntent), 10);
+		break;
+	default:
+		ERROR("create_image_empty is not supported for mount type %d of %s",
+				mount_entry_get_type(mntent), mount_entry_get_img(mntent));
+		return 0;
+	}
 	storage_size *= 1024 * 1024;
 
 	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long) storage_size);
@@ -263,6 +276,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 	case MOUNT_TYPE_SHARED:
 	case MOUNT_TYPE_SHARED_RW:
 	case MOUNT_TYPE_SHARED_DATA:
+	case MOUNT_TYPE_OVERLAY_RW:
 		return c_vol_create_image_empty(vol, img, mntent);
 	case MOUNT_TYPE_FLASH:
 		return -1; // we cannot create such image files
@@ -326,12 +340,14 @@ static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 {
 	char *img, *dev, *dir, *lower_dir, *upper_dir, *lower_dev, *lower_img, *work_dir;
+	char *overlayfs_mount_dir;
 	int fd = 0;
 	bool new_image = false;
 	unsigned long mountflags = MS_NOATIME | MS_NODEV; // default mountflags for most image types
 	bool encrypted = false;	    // TODO: should we encrypt all img files except shared images?
 
 	img = dev = dir = lower_dir = upper_dir = lower_dev = lower_img = work_dir = NULL;
+	overlayfs_mount_dir = NULL;
 
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
@@ -343,6 +359,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	case MOUNT_TYPE_SHARED_RW:
 	case MOUNT_TYPE_DEVICE_RW:
 		break;	    // stick to defaults
+	case MOUNT_TYPE_OVERLAY_RW:
 	case MOUNT_TYPE_EMPTY:
 		encrypted = true;	    // create as encrypted image
 		break;
@@ -358,10 +375,16 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		goto error;
 	}
 
-	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_DATA) {
+	if ((mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_DATA) || 
+			(mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)) {
 
-		lower_img = mem_printf("%s/%s.img", cmld_get_shared_data_dir(),
+		if(mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_DATA) {
+			lower_img = mem_printf("%s/%s.img", cmld_get_shared_data_dir(),
 				mount_entry_get_img(mntent));
+		} else { // (mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)
+			lower_img = mem_printf("%s/%s.img", guestos_get_dir(container_get_os(vol->container)),
+				mount_entry_get_img(mntent));
+		}
 
 		if (c_vol_check_image(vol, lower_img) < 0) {
 			WARN("Shared data image %s not found. Ignoring.", lower_img);
@@ -422,7 +445,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	// way to go
 	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED
 			|| mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW
-			|| mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
+			|| mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO
+			|| mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW) {
 		if (guestos_check_mount_image_block(container_get_os(vol->container), mntent, true)
 				!= CHECK_IMAGE_GOOD) {
 			ERROR("Cannot mount image %s: image file is corrupted", img);
@@ -485,25 +509,22 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 
 	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW) {
 		// create mountpoints for lower and upper dev
-		char *overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs", uuid_string(container_get_uuid(vol->container)));
+		overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs", uuid_string(container_get_uuid(vol->container)));
 		lower_dir = mem_printf("%s/%s/lower", overlayfs_mount_dir, mount_entry_get_img(mntent));
 		upper_dir = mem_printf("%s/%s/upper", overlayfs_mount_dir, mount_entry_get_img(mntent));
 		work_dir = mem_printf("%s/%s/work", overlayfs_mount_dir, mount_entry_get_img(mntent));
 
 		if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir overlayfs dir %s", overlayfs_mount_dir);
-			mem_free(overlayfs_mount_dir);
 			goto error;
 		}
 
 		// mount rw tmpfs for upper and work dir
 		if (mount("tmpfs", overlayfs_mount_dir, "tmpfs", mountflags, mount_entry_get_mount_data(mntent)) < 0) {
 			ERROR_ERRNO("Could not mount tmpfs to %s", overlayfs_mount_dir);
-			mem_free(overlayfs_mount_dir);
 			goto error;
 		}
 		DEBUG("Successfully mounted tmpfs to %s", overlayfs_mount_dir);
-		mem_free(overlayfs_mount_dir);
 
 		if (dir_mkdir_p(lower_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir lower dir %s", lower_dir);
@@ -549,18 +570,45 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		goto final;
 	}
 
-	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_DATA) {
+	if ((mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_DATA) ||
+			(mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)) {
+		if(new_image) {
+			if (c_vol_format_image(dev, "ext4") < 0) {
+				ERROR("Could not format image %s using %s", img, dev);
+				goto error;
+			}
+			DEBUG("Successfully formatted new image %s using %s", img, dev);
+		}
+
+		/*
+		 * mount rw image for overlayfs lower, upper and work dir
+		 * (at least upper and work need to be on the same fs)
+		 */
+		overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs", uuid_string(container_get_uuid(vol->container)));
+		if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir overlayfs mount dir: %s", overlayfs_mount_dir);
+			goto error;
+		}
+		if (mount(dev, overlayfs_mount_dir, "ext4", MS_NOATIME | MS_NODEV, mount_entry_get_mount_data(mntent)) < 0) {
+			ERROR_ERRNO("Could not mount %s using %s to %s", img, dev, overlayfs_mount_dir);
+			goto error;
+		}
+		DEBUG("Successfully mounted %s using %s to %s", img, dev, upper_dir);
+
 		// create mountpoints for lower and upper dev
-		char *overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs", uuid_string(container_get_uuid(vol->container)));
-		lower_dir = mem_printf("%s/%s-lower", overlayfs_mount_dir, mount_entry_get_dir(mntent));
-		upper_dir = mem_printf("%s/%s-upper", overlayfs_mount_dir, mount_entry_get_dir(mntent));
-		mem_free(overlayfs_mount_dir);
+		lower_dir = mem_printf("%s/%s-lower", overlayfs_mount_dir, mount_entry_get_img(mntent));
+		upper_dir = mem_printf("%s/%s-upper", overlayfs_mount_dir, mount_entry_get_img(mntent));
+		work_dir = mem_printf("%s/%s-work", overlayfs_mount_dir, mount_entry_get_img(mntent));
 		if (dir_mkdir_p(lower_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir lower dir %s", lower_dir);
 			goto error;
 		}
 		if (dir_mkdir_p(upper_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
+			goto error;
+		}
+		if (dir_mkdir_p(work_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
 			goto error;
 		}
 
@@ -571,26 +619,21 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		}
 		DEBUG("Successfully mounted %s using %s to %s", lower_img, lower_dev, lower_dir);
 
-		if(new_image) {
-			if (c_vol_format_image(dev, "ext4") < 0) {
-				ERROR("Could not format image %s using %s", img, dev);
-				goto error;
-			}
-			DEBUG("Successfully formatted new image %s using %s", img, dev);
-		}
 
-		// mount rw upper
-		if (mount(dev, upper_dir, "ext4", MS_NOATIME | MS_NODEV, mount_entry_get_mount_data(mntent)) < 0) {
-			ERROR_ERRNO("Could not mount %s using %s to %s", img, dev, upper_dir);
-			goto error;
-		}
-		DEBUG("Successfully mounted %s using %s to %s", img, dev, upper_dir);
-
-		DEBUG("Mounting overlayfs: upper_dir=%s, upper_img=%s, lower_dir=%s, lower_img=%s, target dir=%s",
-				upper_dir, img, lower_dir, lower_img, dir);
+		DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, upper_img=%s, lower_dir=%s, lower_img=%s, target dir=%s",
+				work_dir, upper_dir, img, lower_dir, lower_img, dir);
 		// mount overlayfs to dir
 		// create mount option string
-		char *overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s",
+		char *overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
+				lower_dir, upper_dir, work_dir);
+		if (mount("overlay", dir, "overlay", 0, overlayfs_options) >= 0) {
+			mem_free(overlayfs_options);
+			goto final;
+		}
+		mem_free(overlayfs_options);
+
+		WARN_ERRNO("Could not mount overlay retrying with older overlayfs");
+		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s",
 				lower_dir, upper_dir);
 		if (mount("overlayfs", dir, "overlayfs", 0, overlayfs_options) < 0) {
 			ERROR_ERRNO("Could not mount overlayfs");
@@ -709,6 +752,8 @@ final:
 		mem_free(upper_dir);
 	if (work_dir)
 		mem_free(work_dir);
+	if (overlayfs_mount_dir)
+		mem_free(overlayfs_mount_dir);
 	if (fd)
 		close(fd);
 	return 0;
@@ -730,6 +775,8 @@ error:
 		mem_free(upper_dir);
 	if (work_dir)
 		mem_free(work_dir);
+	if (overlayfs_mount_dir)
+		mem_free(overlayfs_mount_dir);
 	if (fd)
 		close(fd);
 	return -1;
