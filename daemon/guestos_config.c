@@ -109,6 +109,8 @@ guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 		return MOUNT_TYPE_OVERLAY_RO;
 	case GUEST_OSMOUNT__TYPE__SHARED_RW:
 		return MOUNT_TYPE_SHARED_RW;
+	case GUEST_OSMOUNT__TYPE__OVERLAY_RW:
+		return MOUNT_TYPE_OVERLAY_RW;
 	default:
 		FATAL("Invalid protobuf mount type %d.", mt);
 	}
@@ -152,6 +154,7 @@ guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
 				guestos_config_mount_type_from_protobuf(m->mount_type),
 				m->image_file, m->mount_point, m->fs_type, m->def_size);
 		mount_entry_set_size(e, m->image_size);
+		mount_entry_set_data_size(e, m->data_size);
 		if (m->image_sha1)
 			mount_entry_set_sha1(e, m->image_sha1);
 		if (m->image_sha2_256)

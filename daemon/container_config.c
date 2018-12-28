@@ -313,6 +313,9 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) {
 			uint64_t size = cfg->image_sizes[i]->image_size;
 			mount_entry_set_size(mntent, size);
+		} else if (mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW) {
+			uint64_t size = cfg->image_sizes[i]->image_size;
+			mount_entry_set_data_size(mntent, size);
 		}
 		else {
 			ERROR("Forbidden: Cannot override image size for mount entry \"%s\" "
