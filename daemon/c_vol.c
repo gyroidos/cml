@@ -962,6 +962,29 @@ c_vol_start_child(c_vol_t *vol)
 		return 0;
 	}
 
+	DEBUG("Mounting /dev");
+	char* mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
+	char* devfstype =
+		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" : "tmpfs";
+	unsigned long devopts = MS_RELATIME | MS_NOSUID;
+	char *dev_mnt = mem_printf("%s/%s/", root, "dev");
+
+	if (mkdir(dev_mnt, 0755) < 0)
+		WARN_ERRNO("Could not mkdir %s", dev_mnt);
+
+	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container))) {
+		devopts |= MS_BIND;
+		if (mount("/dev", dev_mnt, devfstype, devopts, mount_data) < 0)
+			WARN_ERRNO("Could not bind mount /dev");
+
+		devopts |= MS_RDONLY | MS_REMOUNT;
+		if (mount("/dev", dev_mnt, devfstype, devopts, mount_data) < 0)
+			WARN_ERRNO("Could not remount /dev (ro)");
+	} else {
+		if (mount(devfstype, dev_mnt, devfstype, devopts, mount_data) < 0)
+			WARN_ERRNO("Could not mount /dev");
+	}
+
 	if (umount2("/data", MNT_DETACH) < 0 && errno != ENOENT) {
 		ERROR_ERRNO("Could not umount /data");
 		goto error;
@@ -998,10 +1021,14 @@ c_vol_start_child(c_vol_t *vol)
 	/* TODO: do we want this mounting configurabel somewhere? */
 
 	DEBUG("Mounting /proc");
+	if (mkdir("/proc", 0755) < 0)
+		WARN_ERRNO("Could not mkdir /proc");
 	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount /proc");
 
 	DEBUG("Mounting /sys");
+	if (mkdir("/sys", 0755) < 0)
+		WARN_ERRNO("Could not mkdir /sys");
 	if (mount("sys", "/sys", "sysfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount /sys");
 
@@ -1017,17 +1044,6 @@ c_vol_start_child(c_vol_t *vol)
 	if (mount("securityfs", "/sys/kernel/security", "securityfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount securityfs to /sys/kernel/security");
 
-	DEBUG("Mounting /dev");
-	char* mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
-	char* devfstype =
-		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" : "tmpfs";
-	unsigned long devopts = MS_RELATIME | MS_NOSUID;
-	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container)))
-		devopts += MS_RDONLY;
-
-	if (mount(devfstype, "/dev", devfstype, devopts, mount_data) < 0)
-		WARN_ERRNO("Could not mount /dev");
-
 	c_vol_fixup_logdev();
 
 	if (mkdir("/dev/pts", 0755) < 0)
@@ -1038,6 +1054,8 @@ c_vol_start_child(c_vol_t *vol)
 		WARN_ERRNO("Could not mount /dev/pts");
 
 	DEBUG("Mounting /run");
+	if (mkdir("/run", 0755) < 0)
+		WARN_ERRNO("Could not mkdir /run");
 	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME| MS_NOSUID| MS_NODEV, mount_data) < 0)
 		WARN_ERRNO("Could not mount /run");
 
