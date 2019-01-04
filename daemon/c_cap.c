@@ -76,7 +76,8 @@ c_cap_start_child(const container_t *container)
 	///* 35 */ C_CAP_DROP(CAP_WAKE_ALARM); /* needed by alarm driver */
 
 	/* Use the following for dropping caps only in unprivileged containers */
-	if (!container_is_privileged(container)) {
+	if (!container_is_privileged(container) &&
+		container_get_state(container) != CONTAINER_STATE_SETUP) {
 	/* 18 */ C_CAP_DROP(CAP_SYS_CHROOT);
 	/* 25 */ C_CAP_DROP(CAP_SYS_TIME);
 	/* 26 */ C_CAP_DROP(CAP_SYS_TTY_CONFIG);

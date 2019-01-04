@@ -964,7 +964,8 @@ cmld_container_stop(container_t *container)
 
 	DEBUG("Trying to stop container %s", container_get_description(container));
 
-	if (container_get_state(container) != CONTAINER_STATE_RUNNING) {
+	if (!((container_get_state(container) == CONTAINER_STATE_RUNNING) ||
+		(container_get_state(container) == CONTAINER_STATE_SETUP))) {
 		ERROR("Container %s not running, unable to stop", container_get_description(container));
 		return -1;
 	}

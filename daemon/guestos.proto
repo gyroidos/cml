@@ -84,6 +84,7 @@ message GuestOSConfig {
 	optional string init_path = 6 [default = "/init"];  // path to the init binary, e.g. "/init"
 	repeated string init_param = 7; // parameters (argv) for init
 	repeated string init_env = 8;	// environment variables
+	repeated GuestOSMount mounts_setup = 9;      // list of mounts for setup mode of a container
 
 	// Flags indicating the features supported by the OS:
 	optional bool feature_phone = 20 [default = false];

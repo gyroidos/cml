@@ -104,6 +104,7 @@ struct container {
 	char *name;
 	container_type_t type;
 	mount_t *mnt;
+	mount_t *mnt_setup;
 	bool ns_net;
 	bool ns_usr;
 	bool ns_ipc;
@@ -164,6 +165,8 @@ struct container {
 	char *dns_server;
 	time_t time_started;
 	time_t time_created;
+
+	bool setup_mode;
 };
 
 struct container_callback {
@@ -254,6 +257,10 @@ container_new_internal(
 	container->name = mem_strdup(name);
 	container->type = type;
 	container->mnt = mnt;
+
+	container->mnt_setup = mount_new();
+	guestos_fill_mount_setup(os, container->mnt_setup);
+
 	/* do not forget to update container->description in the setters of uuid and name */
 	container->description = mem_printf("%s (%s)", container->name, uuid_string(container->uuid));
 
@@ -364,6 +371,8 @@ container_new_internal(
 	container->time_created = container_get_creation_time_from_file(container);
 	container->device_allowed_list = allowed_devices;
 	container->device_assigned_list = assigned_devices;
+
+	container->setup_mode = false;
 
 	return container;
 
@@ -551,6 +560,8 @@ container_free(container_t *container) {
 
 	if (container->mnt)
 		mount_free(container->mnt);
+	if (container->mnt_setup)
+		mount_free(container->mnt_setup);
 
 	if (container->cgroups)
 		c_cgroups_free(container->cgroups);
@@ -585,6 +596,13 @@ container_get_mount(const container_t *container)
 {
 	ASSERT(container);
 	return container->mnt;
+}
+
+const mount_t *
+container_get_mount_setup(const container_t *container)
+{
+	ASSERT(container);
+	return container->mnt_setup;
 }
 
 const guestos_t *
@@ -881,7 +899,6 @@ container_start_child(void *data)
 	}
 
 	DEBUG("Received message from parent %d", msg);
-
 	if (msg == CONTAINER_START_SYNC_MSG_STOP) {
 		DEBUG("Received stop message, exiting...");
 		return 0;
@@ -1022,10 +1039,11 @@ container_start_child(void *data)
 		}
 	}
 
-	DEBUG("After closing all file descriptors no further debugging info can be printed");
-
-	if (container_close_all_fds()) {
-		WARN("Closing all file descriptors failed, continuing anyway...");
+	if (container_get_state(container) != CONTAINER_STATE_SETUP) {
+		DEBUG("After closing all file descriptors no further debugging info can be printed");
+		if (container_close_all_fds()) {
+			WARN("Closing all file descriptors failed, continuing anyway...");
+		}
 	}
 
 	execve(guestos_get_init(container->os), container->init_argv, container->init_env);
@@ -1115,12 +1133,15 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		goto error_pre_exec;
 	}
 
-	container_set_state(container, CONTAINER_STATE_BOOTING);
+	// skip setup of start timer and maintain SETUP state if in SETUP mode
+	if (container_get_state(container) != CONTAINER_STATE_SETUP) {
+		container_set_state(container, CONTAINER_STATE_BOOTING);
 
-	/* register a timer to kill the container if it does not come up in time */
-	container->start_timer = event_timer_new(CONTAINER_START_TIMEOUT, 1,
-		&container_start_timeout_cb, container);
-	event_add_timer(container->start_timer);
+		/* register a timer to kill the container if it does not come up in time */
+		container->start_timer = event_timer_new(CONTAINER_START_TIMEOUT, 1,
+			&container_start_timeout_cb, container);
+		event_add_timer(container->start_timer);
+	}
 
 	/* Notify child to do its exec */
 	char msg_go = CONTAINER_START_SYNC_MSG_GO;
@@ -1234,6 +1255,12 @@ container_start(container_t *container)//, const char *key)
 	/*********************************************************/
 	/* CLONE */
 
+	// activate setup mode in perent and child
+	if (container->setup_mode) {
+		container_set_state(container, CONTAINER_STATE_SETUP);
+		INFO("Container in setup mode!");
+	}
+
 	/* TODO find out if stack is only necessary with CLONE_VM */
 	pid_t container_pid = clone(container_start_child, container_stack_high, clone_flags, container);
 	if (container_pid < 0) {
@@ -1346,6 +1373,10 @@ container_stop(container_t *container)
 		&container_stop_timeout_cb, container);
 	event_add_timer(container_stop_timer);
 	container->stop_timer = container_stop_timer;
+
+	/* remove setup_mode for next run */
+	if (container_get_state(container) == CONTAINER_STATE_SETUP)
+		container_set_setup_mode(container, false);
 
 	/* set state to shutting down (notifies observers) */
 	container_set_state(container, CONTAINER_STATE_SHUTTING_DOWN);
@@ -1575,6 +1606,17 @@ container_set_state(container_t *container, container_state_t state)
 
 	if (container->state == state)
 		return;
+
+	// maintaining SETUP state in following cases
+	if (container->state == CONTAINER_STATE_SETUP) {
+		switch(state) {
+			case CONTAINER_STATE_BOOTING:
+			case CONTAINER_STATE_RUNNING:
+				return;
+			default:
+				break;
+		}
+	}
 
 	DEBUG("Setting container state: %d", state);
 	container->state = state;
@@ -1963,4 +2005,14 @@ container_get_dev_allow_list(const container_t *container){
 const char **
 container_get_dev_assign_list(const container_t *container){
 	return (const char**) container->device_assigned_list;
+}
+
+void
+container_set_setup_mode(container_t *container, bool setup)
+{
+	ASSERT(container);
+	if (container->setup_mode == setup)
+		return;
+
+	container->setup_mode = setup;
 }

@@ -343,8 +343,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	char *overlayfs_mount_dir;
 	int fd = 0;
 	bool new_image = false;
-	unsigned long mountflags = MS_NOATIME | MS_NODEV; // default mountflags for most image types
 	bool encrypted = false;	    // TODO: should we encrypt all img files except shared images?
+	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
+
+	// default mountflags for most image types
+	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
 
 	img = dev = dir = lower_dir = upper_dir = lower_dev = lower_img = work_dir = NULL;
 	overlayfs_mount_dir = NULL;
@@ -825,19 +828,45 @@ c_vol_mount_images(c_vol_t *vol, const char *root)
 	 * name space will be deleted in this case anyway.
 	 */
 
+	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
+
+	// in setup mode mount container images under {root}/setup subfolder
+	char *c_root = mem_printf("%s%s", root, (setup_mode) ? "/setup":"");
+
+	if (setup_mode) {
+		n = mount_get_count(container_get_mount_setup(vol->container));
+		for (i = 0; i < n; i++) {
+			const mount_entry_t *mntent;
+
+			mntent = mount_get_entry(container_get_mount_setup(vol->container), i);
+
+			if (c_vol_mount_image(vol, root, mntent) < 0) {
+				goto err;
+			}
+		}
+
+		// create mount point for setup
+		if (dir_mkdir_p(c_root, 0755) < 0)
+			DEBUG_ERRNO("Could not mkdir %s", c_root);
+	}
+
 	n = mount_get_count(container_get_mount(vol->container));
 	for (i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
 
 		mntent = mount_get_entry(container_get_mount(vol->container), i);
 
-		if (c_vol_mount_image(vol, root, mntent) < 0) {
+		if (c_vol_mount_image(vol, c_root, mntent) < 0) {
 			c_vol_cleanup_dm(vol);
-			return -1;
+			goto err;
 		}
 	}
-
+	mem_free(c_root);
 	return 0;
+err:
+	c_vol_cleanup_dm(vol);
+	mem_free(c_root);
+	return -1;
 }
 
 static void

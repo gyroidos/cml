@@ -142,14 +142,15 @@ guestos_config_mount_type_to_protobuf(enum mount_type mt)
 }
 #endif // currently unused
 
-void
-guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
+static void
+guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount_t *mount)
 {
-	ASSERT(cfg);
 	ASSERT(mount);
 
-	for (size_t i = 0; i < cfg->n_mounts; i++) {
-		GuestOSMount *m = cfg->mounts[i];
+	IF_NULL_RETURN(mounts);
+
+	for (size_t i = 0; i < n_mounts; i++) {
+		GuestOSMount *m = mounts[i];
 		mount_entry_t *e = mount_add_entry(mount,
 				guestos_config_mount_type_from_protobuf(m->mount_type),
 				m->image_file, m->mount_point, m->fs_type, m->def_size);
@@ -163,6 +164,20 @@ guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
 			mount_entry_set_mount_data(e, m->mount_data);
 
 	}
+}
+
+void
+guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
+{
+	ASSERT(cfg);
+	guestos_config_fill_mount_internal(cfg->mounts, cfg->n_mounts, mount);
+}
+
+void
+guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
+{
+	ASSERT(cfg);
+	guestos_config_fill_mount_internal(cfg->mounts_setup, cfg->n_mounts_setup, mount);
 }
 
 

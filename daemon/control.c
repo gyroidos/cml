@@ -240,6 +240,8 @@ control_container_state_to_proto(container_state_t state)
 		return CONTAINER_STATE__ZOMBIE;
 	case CONTAINER_STATE_SHUTTING_DOWN:
 		return CONTAINER_STATE__SHUTDOWN;
+	case CONTAINER_STATE_SETUP:
+		return CONTAINER_STATE__SETUP;
 	default:
 		FATAL("Unhandled value for container_state_t: %d", state);
 	}
@@ -616,6 +618,10 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		ContainerStartParams *start_params = msg->container_start_params;
 		if (start_params) {
 			key = start_params->key;
+			if (start_params->has_setup) {
+				INFO("Setting Setup mode for Container!");
+				container_set_setup_mode(container, start_params->setup);
+			}
 		}
 		// key is asserted to be the user entered passwd/pin
 		res = cmld_container_start_with_smartcard(container, key);

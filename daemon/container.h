@@ -80,7 +80,8 @@ typedef enum {
 	CONTAINER_STATE_FREEZING,
 	CONTAINER_STATE_FROZEN,
 	CONTAINER_STATE_ZOMBIE,
-	CONTAINER_STATE_SHUTTING_DOWN
+	CONTAINER_STATE_SHUTTING_DOWN,
+	CONTAINER_STATE_SETUP
 } container_state_t;
 
 /**
@@ -205,6 +206,13 @@ container_get_uuid(const container_t *container);
  */
 const mount_t *
 container_get_mount(const container_t *container);
+
+/**
+ * Return the partition table of additional mounts for the
+ * container's root in setup mode.
+ */
+const mount_t *
+container_get_mount_setup(const container_t *container);
 
 /**
  * Return the associated guest OS object for the container.
@@ -637,5 +645,8 @@ container_get_uptime(const container_t *container);
 
 time_t
 container_get_creation_time(const container_t *container);
+
+void
+container_set_setup_mode(container_t *container, bool setup);
 
 #endif /* CONTAINER_H */

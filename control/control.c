@@ -51,7 +51,7 @@ static void print_usage(const char *cmd)
 	printf("   list\n        Lists all containers.\n");
 	printf("   reload\n        Reloads containers ifrom config files.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
-	printf("   start <container-uuid> [--key=<key>]\n        Starts the container with the given key (default: all '0') .\n");
+	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
 	printf("   state <container-uuid>\n        Prints the state of the specified container.\n");
@@ -116,6 +116,7 @@ static const struct option global_options[] = {
 static const struct option start_options[] = {
 	{"key",         optional_argument, 0, 'k'},
 	{"no-switch",   no_argument, 0, 'n'},
+	{"setup",       no_argument, 0, 's'},
 	{0, 0, 0, 0}
 };
 
@@ -236,10 +237,14 @@ int main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0; -1 != (c = getopt_long(start_argc, start_argv,
-						"k::n", start_options, &option_index)); ) {
+						"k::s", start_options, &option_index)); ) {
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg ? optarg : DEFAULT_KEY;
+				break;
+			case 's':
+                                container_start_params.has_setup = true;
+                                container_start_params.setup = true;
 				break;
 			default:
 				print_usage(argv[0]);
