@@ -83,6 +83,14 @@ guestos_config_write_to_file(const guestos_config_t *cfg, const char *file);
 void
 guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mnt);
 
+/**
+ * Fills the given mount struct with the setup mounts provided by the given GuestOS config.
+ * @param cfg the guestos_config_t instance
+ * @param mnt the mount_t struct to fill
+ */
+void
+guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mnt);
+
 /******************************************************************************/
 
 /**

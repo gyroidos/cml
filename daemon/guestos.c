@@ -329,7 +329,8 @@ guestos_images_are_complete(const guestos_t *os, bool thorough)
 
 	bool res = true;
 	mount_t *mnt = mount_new(); // need to get "mounts" to get image URLs... feels wrong
-	guestos_fill_mount(os, mnt);
+	guestos_fill_mount(os, mnt); // append mounts to be checked
+	guestos_fill_mount_setup(os, mnt); // append setup mode mounts to be check
 	size_t n = mount_get_count(mnt);
 	for (size_t i = 0; i < n; i++) {
 		mount_entry_t *e = mount_get_entry(mnt, i);
@@ -999,6 +1000,13 @@ guestos_fill_mount(const guestos_t *os, mount_t *mount)
 {
 	ASSERT(os);
 	guestos_config_fill_mount(os->cfg, mount);
+}
+
+void
+guestos_fill_mount_setup(const guestos_t *os, mount_t *mount)
+{
+	ASSERT(os);
+	guestos_config_fill_mount_setup(os->cfg, mount);
 }
 
 const char *

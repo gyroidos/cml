@@ -38,6 +38,7 @@ message ContainerStartParams {
 	// Note: This message may change in the future!
 	optional string key = 1 [ default = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" ];
 	optional bool no_switch = 2 [default = false];
+	optional bool setup = 3 [default = false];
 }
 
 message AssignInterfaceParams {

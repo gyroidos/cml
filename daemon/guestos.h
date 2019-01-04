@@ -236,6 +236,9 @@ guestos_get_raw_ptr(const guestos_t *os);
 void
 guestos_fill_mount(const guestos_t *os, mount_t *mnt);
 
+void
+guestos_fill_mount_setup(const guestos_t *os, mount_t *mnt);
+
 const char *
 guestos_get_name(const guestos_t *os);
 

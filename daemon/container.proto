@@ -90,6 +90,7 @@ enum ContainerState {
 	FROZEN = 6;
 	ZOMBIE = 7;
 	SHUTDOWN = 8;
+	SETUP = 9;
 }
 
 /**
