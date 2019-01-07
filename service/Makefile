@@ -58,6 +58,9 @@ protobuf: c_service.proto container.proto control.proto guestos.proto common/log
 service: ${SRC_FILES}
 	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
+service-static: ${SRC_FILES}
+	${CC} -static ${LOCAL_CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
+
 
 .PHONY: clean
 clean:
