@@ -58,7 +58,7 @@
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
 #define ICC_SHARED_DATA_TYPE "u:object_r:trustme-com:s0"
-#define MIN_INIT "/sbin/mini_init"
+#define CSERVICE_TARGET "/sbin/cservice"
 
 #define is_selinux_disabled() !file_exists("/sys/fs/selinux")
 #define is_selinux_enabled() file_exists("/sys/fs/selinux")
@@ -938,11 +938,17 @@ c_vol_start_child(c_vol_t *vol)
 		ERROR("Could not mount images for container start");
 		goto error;
 	}
-	/* Bind-mount cml-service-container binary */
-	char *cservice_mnt = mem_printf("%s/%s", root, MIN_INIT);
-	if (mount("/sbin/cml-service-container", cservice_mnt, "bind", MS_BIND | MS_NOSUID, 0) < 0)
-		WARN_ERRNO("Could not mount %s", cservice_mnt);
-	mem_free(cservice_mnt);
+
+	/*
+	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
+	 * Remeber, This will only succeed if /sbin exists on a writable fs
+	 */
+	char *cservice_bin = mem_printf("%s/%s", root, CSERVICE_TARGET);
+	if (file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0))
+		WARN_ERRNO("Could not copy %s to container", cservice_bin);
+	else if (chmod(cservice_bin, 0755))
+		WARN_ERRNO("Could not set %s executable", cservice_bin);
+	mem_free(cservice_bin);
 
 	/* Bind-mount shared mount for communication */
 	// TODO: properly secure this against intercontainer attacks
