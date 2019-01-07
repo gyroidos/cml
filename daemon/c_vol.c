@@ -957,7 +957,7 @@ c_vol_start_child(c_vol_t *vol)
 	if(is_selinux_enabled())
 		com_mnt_data = mem_printf("defcontext=%s", ICC_SHARED_DATA_TYPE);
 	DEBUG("Mounting %s", com_mnt);
-	if (mkdir(com_mnt, 0755) < 0 )
+	if (mkdir(com_mnt, 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir %s", com_mnt);
 	if (is_selinux_enabled()) {
 		if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
@@ -970,7 +970,7 @@ c_vol_start_child(c_vol_t *vol)
 	if (guestos_is_privileged(container_get_guestos(vol->container))) {
 		com_mnt = mem_printf("%s/%s/", root, TPM2D_SHARED_MOUNT);
 		DEBUG("Mounting %s", com_mnt);
-		if (mkdir(com_mnt, 0755) < 0 )
+		if (mkdir(com_mnt, 0755) < 0 && errno != EEXIST)
 			WARN_ERRNO("Could not mkdir %s", com_mnt);
 		if (is_selinux_enabled()) {
 			if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
@@ -1004,7 +1004,7 @@ c_vol_start_child(c_vol_t *vol)
 	unsigned long devopts = MS_RELATIME | MS_NOSUID;
 	char *dev_mnt = mem_printf("%s/%s/", root, "dev");
 
-	if (mkdir(dev_mnt, 0755) < 0)
+	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir %s", dev_mnt);
 
 	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container))) {
@@ -1056,13 +1056,13 @@ c_vol_start_child(c_vol_t *vol)
 	/* TODO: do we want this mounting configurabel somewhere? */
 
 	DEBUG("Mounting /proc");
-	if (mkdir("/proc", 0755) < 0)
+	if (mkdir("/proc", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /proc");
 	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount /proc");
 
 	DEBUG("Mounting /sys");
-	if (mkdir("/sys", 0755) < 0)
+	if (mkdir("/sys", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /sys");
 	if (mount("sys", "/sys", "sysfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount /sys");
@@ -1081,7 +1081,7 @@ c_vol_start_child(c_vol_t *vol)
 
 	c_vol_fixup_logdev();
 
-	if (mkdir("/dev/pts", 0755) < 0)
+	if (mkdir("/dev/pts", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /dev/pts");
 
 	DEBUG("Mounting /dev/pts");
@@ -1089,7 +1089,7 @@ c_vol_start_child(c_vol_t *vol)
 		WARN_ERRNO("Could not mount /dev/pts");
 
 	DEBUG("Mounting /run");
-	if (mkdir("/run", 0755) < 0)
+	if (mkdir("/run", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /run");
 	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME| MS_NOSUID| MS_NODEV, mount_data) < 0)
 		WARN_ERRNO("Could not mount /run");
