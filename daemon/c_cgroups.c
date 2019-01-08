@@ -987,6 +987,26 @@ c_cgroups_start_child(c_cgroups_t *cgroups)
 	return 0;
 
 }
+static int
+c_cgroups_cleanup_subsys_remove_cb(const char *path, const char* name, UNUSED void *data)
+{
+	int ret = 0;
+	char *file_to_remove = mem_printf("%s/%s", path, name);
+	if (file_is_dir(file_to_remove)) {
+		TRACE("Removing cgroup subsys in %s is dir", file_to_remove);
+		if (dir_foreach(file_to_remove, &c_cgroups_cleanup_subsys_remove_cb, NULL) < 0) {
+			ERROR_ERRNO("Could not delete cgroup subsys contents in %s", file_to_remove);
+			ret--;
+		}
+		TRACE("Removing now empty subsys %s", file_to_remove);
+		if (rmdir(file_to_remove) < 0) {
+			ERROR_ERRNO("Could not delete cgroup subsys %s", file_to_remove);
+			ret--;
+		}
+	}
+	mem_free(file_to_remove);
+	return ret;
+}
 
 void
 c_cgroups_cleanup(c_cgroups_t *cgroups)
@@ -1003,26 +1023,16 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 	/* remove the cgroup if it exists and free the subsys list */
 	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
 		char *subsys = l->data;
-		char *subsys_child_path = mem_printf("%s/%s/%s/child", CGROUPS_FOLDER, subsys,
-				uuid_string(container_get_uuid(cgroups->container)));
 		char *subsys_path = mem_printf("%s/%s/%s", CGROUPS_FOLDER, subsys,
 				uuid_string(container_get_uuid(cgroups->container)));
 
-		if (file_exists(subsys_child_path) && file_is_dir(subsys_child_path)) {
-			INFO("Trying to remove child's cgroup subsys %s for container %s",
-				subsys, container_get_description(cgroups->container));
-			if (rmdir(subsys_child_path) == -1) {
-				WARN_ERRNO("Could not remove child's cgroup %s for container %s",
-					subsys, container_get_description(cgroups->container));
-			}
-		}
-		mem_free(subsys_child_path);
-
 		if (file_exists(subsys_path) && file_is_dir(subsys_path)) {
-			INFO("Trying to remove cgroup subsys %s for container %s",
-				subsys, container_get_description(cgroups->container));
-			if (rmdir(subsys_path) == -1) {
+			/* recursively remove all subfolders which the container may have created */
+			if (dir_foreach(subsys_path, &c_cgroups_cleanup_subsys_remove_cb, NULL) < 0) {
 				WARN_ERRNO("Could not remove cgroup %s for container %s",
+					subsys, container_get_description(cgroups->container));
+			} else {
+				INFO("Removed cgroup subsys %s for container %s",
 					subsys, container_get_description(cgroups->container));
 			}
 		}
