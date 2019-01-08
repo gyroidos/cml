@@ -491,9 +491,6 @@ cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void 
 static void
 cmld_container_register_observers(container_t *container)
 {
-	/* container is not running => start it */
-	DEBUG("Container %s is not running => start it", container_get_description(container));
-
 	/* register callbacks which should be present while the container is running
 	 * ATTENTION: All these callbacks MUST deregister themselves as soon as the container is stopped */
 	if (!container_register_observer(container, &cmld_container_boot_complete_cb, NULL)) {

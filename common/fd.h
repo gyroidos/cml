@@ -64,4 +64,13 @@ fd_read(int fd, char *buf, size_t len);
 int
 fd_make_non_blocking(int fd);
 
+/**
+ * Checks if the given fd is closed
+ *
+ * @param fd the file discriptor
+ * @return 1 if fd is closed, 0 if fd is open and ready to use
+ */
+int
+fd_is_closed(int fd);
+
 #endif  // FD_H

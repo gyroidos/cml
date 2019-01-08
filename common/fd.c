@@ -106,3 +106,10 @@ fd_make_non_blocking(int fd)
 
 	return res;
 }
+
+int
+fd_is_closed(int fd)
+{
+	errno = 0;
+	return fcntl(fd, F_GETFD) == -1 && errno == EBADF;
+}

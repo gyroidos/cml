@@ -31,6 +31,7 @@
 #include "container.h"
 
 #include "common/event.h"
+#include "common/fd.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
@@ -242,6 +243,15 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 
 	ServiceToCmldMessage *message = (ServiceToCmldMessage *) protobuf_recv_message(fd, &service_to_cmld_message__descriptor);
 	if (!message) {
+		if (fd_is_closed(fd)) {
+			// EOF received in protobuf_recv_message
+			// disconnect local side of already disconnected client side
+			service->sock_connected = -1;
+			event_remove_io(io);
+			event_io_free(io);
+			service->event_io_sock_connected = NULL;
+			return;
+		}
 		WARN("Failed to receive and decode protobuf ServiceToCmldMessage");
 		return;
 	}
