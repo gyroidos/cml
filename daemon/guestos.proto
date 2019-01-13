@@ -50,7 +50,7 @@ message GuestOSMount {
 		SHARED_DATA = 7; // image shared between different containers and OSs
 		OVERLAY_RO = 8; // read only overlay images e.g. for system features
 		SHARED_RW = 9; // image shared by all containers of same OS type (writable tmpfs as overlay)
-		OVERLAY_RW = 10; // image shared by all containers of same OS type (writable persitent fs per container as overlay)
+		OVERLAY_RW = 10; // similar to EMPTY image, however overlayed on given mount_point (writable persitent fs as overlay)
 	}
 	required Type mount_type = 4;   // type of the image file
 
@@ -67,7 +67,6 @@ message GuestOSMount {
 	// TODO add further hashes as necessary
 
 	optional string mount_data = 13;  // mount_data used for mount syscall, e.g. "context=" for selinux
-	optional uint64 data_size = 14;	// size (MBytes) of the additional data image in case of OVERLAY_RW
 }
 
 
