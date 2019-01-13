@@ -42,7 +42,6 @@ struct mount_entry {
 	char *fs_type; /**< file system type of the mount, e.g. ext4 */
 	uint64_t default_size; /**< default size for EMPTY images */
 	uint64_t image_size; /**< size overwriting default_size */
-	uint64_t data_size; /**< data image size overwriting default_size */
 	// TODO: add list of hash, min/max size for EMPTY images, etc.
 	char* sha1;
 	char* sha256;
@@ -69,7 +68,6 @@ mount_add_entry(mount_t *mnt, enum mount_type type, const char *image_file,
 	mntent->fs_type = mem_strdup(fs_type);
 	mntent->default_size = default_size;
 	mntent->image_size = 0;
-	mntent->data_size = 0;
 	mntent->sha1 = NULL;
 	mntent->sha256 = NULL;
 	mntent->mount_data = NULL;
@@ -181,19 +179,6 @@ mount_entry_set_size(mount_entry_t *mntent, uint64_t size)
 {
 	ASSERT(mntent);
 	mntent->image_size = size;
-}
-uint64_t
-mount_entry_get_data_size(const mount_entry_t *mntent)
-{
-	ASSERT(mntent);
-	return mntent->data_size ? mntent->data_size : mntent->default_size;
-}
-
-void
-mount_entry_set_data_size(mount_entry_t *mntent, uint64_t size)
-{
-	ASSERT(mntent);
-	mntent->data_size = size;
 }
 
 char *

@@ -109,14 +109,6 @@ void
 mount_entry_set_size(mount_entry_t *mntent, uint64_t size);
 
 /**
- * Sets the size of the additional data image of the mount entry.
- * This is used for image file containing the persitent writable
- * overlay in case of mount_type = OVERLAY_RW.
- */
-void
-mount_entry_set_data_size(mount_entry_t *mntent, uint64_t size);
-
-/**
  * Returns a string with the SHA1 hash of the mount entry.
  */
 char *
@@ -187,14 +179,6 @@ mount_entry_get_fs(const mount_entry_t *mntent);
  */
 uint64_t
 mount_entry_get_size(const mount_entry_t *mntent);
-
-/**
- * Returns the size of the additional data image of the mount entry.
- * This is used for image file containing the persitent writable
- * overlay in case of mount_type = OVERLAY_RW.
- */
-uint64_t
-mount_entry_get_data_size(const mount_entry_t *mntent);
 
 /**
   * Sets the mount_data used for mounting the mount entry
