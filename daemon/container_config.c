@@ -38,6 +38,7 @@
 
 #include "guestos.h"
 #include "guestos_mgr.h"
+#include "hardware.h"
 
 struct container_config {
 	char *file;
@@ -546,4 +547,32 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 		mem_free(old_net_ifaces[i]);
 	}
 	mem_free(old_net_ifaces);
+}
+
+list_t *
+container_config_get_vnet_cfg_list_new(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	list_t *if_cfg_list = NULL;
+	for (size_t i=0; i < config->cfg->n_vnet_configs; ++i) {
+		container_vnet_cfg_t *if_cfg = mem_new0(container_vnet_cfg_t, 1);
+		if_cfg->vnet_name = mem_strdup(config->cfg->vnet_configs[i]->if_name);
+		if_cfg->configure = config->cfg->vnet_configs[i]->configure;
+		if_cfg_list = list_append(if_cfg_list, if_cfg);
+	}
+
+	if (if_cfg_list == NULL) {
+		list_t *nw_name_list = hardware_get_nw_name_list();
+		for (list_t* l = nw_name_list; l != NULL; l = l->next) {
+			char *if_name = l->data;
+			container_vnet_cfg_t *if_cfg = mem_new0(container_vnet_cfg_t, 1);
+			if_cfg->vnet_name = mem_strdup(if_name);
+			if_cfg->configure = true;
+			if_cfg_list = list_append(if_cfg_list, if_cfg);
+		}
+		list_delete(nw_name_list);
+	}
+	return if_cfg_list;
 }

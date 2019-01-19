@@ -70,6 +70,17 @@ typedef enum {
 } container_type_t;
 
 /**
+ * Structure to define the configuration for a virtual network
+ * interface in a container. It defines the name and if cmld
+ * should configure it in its c_net submodule.
+ */
+typedef struct container_vnet_cfg {
+	char *vnet_name;
+	bool configure;
+} container_vnet_cfg_t;
+
+
+/**
  * Represents the current container state.
  */
 typedef enum {
@@ -153,7 +164,8 @@ container_new_internal(
 	const char *dns_server,
 	list_t *net_ifaces,
 	char **allowed_devices,
-	char **assigned_devices
+	char **assigned_devices,
+	list_t *vnet_cfg_list
 );
 
 /**

@@ -80,6 +80,7 @@
 /* Network interface structure with interface specific settings */
 typedef struct {
 	char *nw_name; //!< Name of the network device
+	bool configure; // do ip/routing configuration
 	char *veth_cmld_name; //!< associated veth name in root ns
 	char *veth_cont_name; //!< veth name in the container's ns
 	char *subnet;	      //!< string with subnet (x.x.x.x/y)
@@ -600,12 +601,13 @@ c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr,
 }
 
 static c_net_interface_t *
-c_net_interface_new(const char *if_name)
+c_net_interface_new(const char *if_name, bool configure)
 {
 	ASSERT(if_name);
 
 	c_net_interface_t *ni = mem_new0(c_net_interface_t, 1);
 	ni->nw_name = mem_printf("%s", if_name);
+	ni->configure = configure;
 
 	/* Get container offset based on currently started containers */
 	if ((ni->cont_offset = c_net_set_next_offset()) == -1) {
@@ -623,7 +625,7 @@ c_net_interface_new(const char *if_name)
  * @return the c_net_t network structure which holds networking information for a container.
  */
 c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_mv_name_list, uint16_t adb_port)
+c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list, uint16_t adb_port)
 {
 	ASSERT(container);
 
@@ -638,10 +640,10 @@ c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_
 		return net;
 	}
 
-	for (list_t *l = nw_name_list; l; l = l->next) {
-		char *if_name = l->data;
+	for (list_t *l = vnet_cfg_list; l; l = l->next) {
+		container_vnet_cfg_t *cfg = l->data;
 
-		c_net_interface_t *ni = c_net_interface_new(if_name);
+		c_net_interface_t *ni = c_net_interface_new(cfg->vnet_name, cfg->configure);
 		ASSERT(ni);
 		net->interface_list = list_append(net->interface_list, ni);
 
@@ -655,7 +657,7 @@ c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_
 	}
 
 	if (adb_port > 0) {
-		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME);
+		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME, true);
 		net->interface_list = list_append(net->interface_list, ni_adb);
 	}
 
@@ -747,21 +749,23 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
-	/* Get root ns ipv4 address */
-	if (c_net_get_next_ipv4_cmld_addr(ni->cont_offset, &ni->ipv4_cmld_addr)) {
-		ERROR("failed to retrieve a root ns ip address");
-		goto err;
-	}
+	if (ni->configure) {
+		/* Get root ns ipv4 address */
+		if (c_net_get_next_ipv4_cmld_addr(ni->cont_offset, &ni->ipv4_cmld_addr)) {
+			ERROR("failed to retrieve a root ns ip address");
+			goto err;
+		}
 
-	/* Get container ns ipv4 address */
-	if (c_net_get_next_ipv4_cont_addr(ni->cont_offset, &ni->ipv4_cont_addr)) {
-		ERROR("failed to retrieve an ip container address");
-		goto err;
-	}
-	/* Get corresponding bcaddress */
-	if (c_net_get_next_ipv4_bcaddr(&ni->ipv4_cont_addr, &ni->ipv4_bc_addr)) {
-		ERROR("failed to retrieve the ip container broadcast address");
-		goto err;
+		/* Get container ns ipv4 address */
+		if (c_net_get_next_ipv4_cont_addr(ni->cont_offset, &ni->ipv4_cont_addr)) {
+			ERROR("failed to retrieve an ip container address");
+			goto err;
+		}
+		/* Get corresponding bcaddress */
+		if (c_net_get_next_ipv4_bcaddr(&ni->ipv4_cont_addr, &ni->ipv4_bc_addr)) {
+			ERROR("failed to retrieve the ip container broadcast address");
+			goto err;
+		}
 	}
 
 	/* Create free veth pair from container name, check if the interfaces are free */
@@ -781,23 +785,25 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name))
 		goto err;
 
-	DEBUG("Set root ns ipv4 address");
+	if (ni->configure) {
+		DEBUG("Set root ns ipv4 address");
 
-	/* Set IPv4 address */
-	if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr, &ni->ipv4_bc_addr))
-		goto err;
-
-	// set subnet string
-	uint32_t ip = ntohl(ni->ipv4_cmld_addr.s_addr);
-	uint32_t mask = ~(((uint32_t)-1) >> IPV4_PREFIX);
-	struct in_addr net = { .s_addr = htonl(ip & mask) };
-	ni->subnet = mem_printf("%s/%d", inet_ntoa(net), IPV4_PREFIX);
-	IF_NULL_GOTO_ERROR(ni->subnet, err);
-
-	/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
-	if (ni->cont_offset > 0) {
-		if (c_net_write_dhcp_config(ni))
+		/* Set IPv4 address */
+		if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr, &ni->ipv4_bc_addr))
 			goto err;
+
+		// set subnet string
+		uint32_t ip = ntohl(ni->ipv4_cmld_addr.s_addr);
+		uint32_t mask = ~(((uint32_t)-1) >> IPV4_PREFIX);
+		struct in_addr net = { .s_addr = htonl(ip & mask) };
+		ni->subnet = mem_printf("%s/%d", inet_ntoa(net), IPV4_PREFIX);
+		IF_NULL_GOTO_ERROR(ni->subnet, err);
+
+		/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
+		if (ni->cont_offset > 0) {
+			if (c_net_write_dhcp_config(ni))
+				goto err;
+		}
 	}
 
 	return 0;
@@ -830,6 +836,8 @@ c_net_start_pre_clone(c_net_t *net)
 
 		if (c_net_start_pre_clone_interface(ni) == -1)
 			return -1;
+		if (!ni->configure)
+			continue;
 
 		if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
 			if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT, true))
@@ -864,6 +872,9 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 		mem_free(ni->veth_cmld_name);
 		ni->veth_cmld_name = mem_strdup(hardware_get_radio_ifname());
 	}
+
+	if (!ni->configure)
+		return 0;
 
 	DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
 	/* Bring veth up */
@@ -917,6 +928,12 @@ c_net_start_child_interface(c_net_interface_t *ni)
 	if (c_net_rename_ifi(ni->veth_cont_name, ni->nw_name))
 		return -1;
 
+	/* Skip IPv4 setup if interface has no config */
+	if (!ni->configure) {
+		DEBUG("Leave %s interface unconfigured. (Manual configuration detected)", ni->nw_name);
+		return 0;
+	}
+
 	DEBUG("set ipv4 (addr: %s) for %s", inet_ntoa(ni->ipv4_cont_addr), ni->nw_name);
 
 	/* Set IPv4 address */
@@ -958,7 +975,8 @@ c_net_start_child(c_net_t *net)
 
 	// setup default route for first ni
 	c_net_interface_t* first_ni = list_nth_data(net->interface_list, 0);
-	network_setup_default_route(inet_ntoa(first_ni->ipv4_cmld_addr), true);
+	if (first_ni->configure)
+		network_setup_default_route(inet_ntoa(first_ni->ipv4_cmld_addr), true);
 
 	return 0;
 }
@@ -1006,6 +1024,10 @@ c_net_cleanup(c_net_t *net)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
+		if (!ni->configure) {
+			c_net_cleanup_interface(ni);
+			continue;
+		}
 		if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
 			if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT, false))
 				WARN("Failed to remove port forwarding from %" PRIu16 " to %s:%" PRIu16,

@@ -246,7 +246,8 @@ container_new_internal(
 	const char *dns_server,
 	list_t *net_ifaces,
 	char **allowed_devices,
-	char **assigned_devices
+	char **assigned_devices,
+	list_t *vnet_cfg_list
 )
 {
 	container_t *container = mem_new0(container_t, 1);
@@ -313,9 +314,11 @@ container_new_internal(
 		goto error;
 	}
 
-	list_t *nw_name_list = hardware_get_nw_name_list();
-	for (list_t* elem = nw_name_list; elem != NULL; elem = elem->next) {
-		DEBUG("List element in nw_names_list: %s", (char*)(elem->data));
+	// virtual network interfaces from container config
+	for (list_t* elem = vnet_cfg_list; elem != NULL; elem = elem->next) {
+		container_vnet_cfg_t *vnet_cfg = elem->data;
+		DEBUG("vnet: %s will be added to conatiner (%s)", vnet_cfg->vnet_name,
+				(vnet_cfg->configure) ? "configured":"unconfigured");
 	}
 
 	list_t *nw_mv_name_list = NULL;
@@ -332,13 +335,12 @@ container_new_internal(
 		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(elem->data));
         }
 
-	container->net = c_net_new(container, ns_net, nw_name_list, nw_mv_name_list, adb_port);
+	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list, adb_port);
 	if (!container->net) {
 		WARN("Could not initialize net subsystem for container %s (UUID: %s)", container->name,
 		     uuid_string(container->uuid));
 		goto error;
 	}
-	list_delete(nw_name_list);
 	list_delete(nw_mv_name_list);
 	list_delete(net_ifaces);
 
@@ -509,15 +511,25 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const char *c
 
 	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
 
+	list_t *vnet_cfg_list = container_config_get_vnet_cfg_list_new(conf);
+
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
 	container_t *c = container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
 			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled,
-			dns_server, net_ifaces, allowed_devices, assigned_devices);
+			dns_server, net_ifaces, allowed_devices, assigned_devices, vnet_cfg_list);
 	if (c)
 		container_config_write(conf);
 
 	uuid_free(uuid);
+
+	for (list_t *l = vnet_cfg_list; l; l = l->next) {
+		container_vnet_cfg_t *vnet_cfg = l->data;
+		mem_free(vnet_cfg->vnet_name);
+		mem_free(vnet_cfg);
+	}
+	list_delete(vnet_cfg_list);
+
 	//container_config_free(conf); // TODO: really think about this... This is bad!!
 	return c;
 }

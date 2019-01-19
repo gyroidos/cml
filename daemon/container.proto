@@ -31,6 +31,12 @@ message ContainerImageSize {
 	optional string image_file = 3; // name of alternat image file which overwrites image_name of guestos config
 }
 
+message ContainerVnetConfig {
+	required string if_name = 1; // name of virtual veth endpoint in container
+	required bool configure = 2; // should cmld configure the interface or leav it unconfigured
+	// TODO Define configuration, for now just use hardcoded default config in c_net
+}
+
 /**
  * Type of container KVM|CONTAINER
  */
@@ -75,6 +81,9 @@ message ContainerConfig {
 
 	// a list of devices exclusively assigned to this container
 	repeated string assign_dev = 26;
+
+	// list of virtual network interface configuration
+	repeated ContainerVnetConfig vnet_configs = 27;
 }
 
 /**

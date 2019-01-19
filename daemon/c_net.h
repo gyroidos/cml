@@ -42,7 +42,7 @@ typedef struct c_net c_net_t;
  * Creates a new instances of the c_net structure, which should be done by a container
  */
 c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *nw_name_list, list_t *nw_mv_name_list, uint16_t adb_port);
+c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list, uint16_t adb_port);
 
 /**
  * Frees the struct
