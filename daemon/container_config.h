@@ -221,5 +221,11 @@ void container_config_append_net_ifaces(const container_config_t *config, const 
 void
 container_config_remove_net_ifaces(const container_config_t *config, const char *iface);
 
+/**
+ * Reads the container config for vnet interfaces and returns a list of the
+ * corresponding container_vnet_cfg structures.
+ */
+list_t *
+container_config_get_vnet_cfg_list_new(const container_config_t *config);
 
 #endif /* C_CONFIG_H */
