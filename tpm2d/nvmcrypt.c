@@ -66,7 +66,7 @@ nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session
 	// mask PCR 7
 	ret = tpm2_policypcr(*session_handle, 0x80, pcrs, pcrs_len);
 cleanup:
-	for (size_t i; i < pcrs_len; ++i)
+	for (size_t i=0; i < pcrs_len; ++i)
 		if (pcrs[i]) tpm2_pcrread_free(pcrs[i]);
 	if (pcrs)
 		mem_free(pcrs);

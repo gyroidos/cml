@@ -93,6 +93,8 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	hw_$(TRUSTME_HARDWARE)-$(PLATFORM_VERSION).c \
 	display.c \
 	smartcard.c \
+	tss.c \
+	tpm2d.proto \
 	cmld.c \
 	mount.c \
 	container.test.c
@@ -164,6 +166,8 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	mount.c \
 	ksm.c \
 	smartcard.c \
+	tss.c \
+	tpm2d.proto \
 	cmld.c \
 	main.c
 

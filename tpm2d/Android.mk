@@ -25,9 +25,11 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 tss_cflags := \
-        -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
-        -ggdb -O0 -c \
-        -DTPM_ENCRYPT_SESSIONS_DEFAULT="\"0\""
+	-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
+	-ggdb -O0 -c \
+	-DTPM_ENCRYPT_SESSIONS_DEFAULT="\"0\"" \
+	-DTPM_TPM20 \
+	-DTPM_POSIX
 
 LOCAL_MODULE := cml-tpm2d
 LOCAL_MODULE_TAGS := optional
@@ -41,15 +43,20 @@ LOCAL_SRC_FILES := \
 	common/file.c \
 	common/fd.c \
 	common/protobuf.c \
+	common/cryptfs.c \
 	tpm2d.proto \
-	device.proto \
 	control.c \
 	tpm2_commands.c \
+	nvmcrypt.c \
+	ml.c \
+	ek.c \
 	tpm2d.c \
+
+LOCAL_WHOLE_STATIC_LIBRARIES := \
+	libibmtss
 
 LOCAL_STATIC_LIBRARIES := \
 	libprotobuf-c-text \
-	libtss \
 	openssl_libcrypto_static \
 	libcutils \
 	liblog \
@@ -63,7 +70,9 @@ ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
 LOCAL_CFLAGS += -DDEBUG_BUILD
 endif
 
-LOCAL_C_INCLUDES += external/ibmtpm20tss/utils
+LOCAL_C_INCLUDES += \
+	external/ibmtpm20tss/utils \
+	external/openssl_legacy/include
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT_SBIN)
