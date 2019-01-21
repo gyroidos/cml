@@ -940,20 +940,36 @@ cmld_container_create_clone(container_t *container)
 }
 
 container_t *
-cmld_container_create_from_config(const char *config, size_t config_len)
+cmld_container_create_from_config(const uint8_t *config, size_t config_len)
 {
 	ASSERT(config);
 	ASSERT(config_len);
-	ASSERT(0);
-	return NULL;
+	char *path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
+	IF_NULL_RETVAL(path, NULL);
+
+	container_t *c = container_new(path, NULL, config, config_len);
+	if (c) {
+		DEBUG("Created container %s (uuid=%s).", container_get_name(c),
+				uuid_string(container_get_uuid(c)));
+		cmld_containers_list = list_append(cmld_containers_list, c);
+	} else {
+		WARN("Could not create new container object from config");
+	}
+	mem_free(path);
+	return c;
 }
 
 int
 cmld_container_destroy(container_t *container)
 {
+	int ret;
 	ASSERT(container);
-	ASSERT(0);
-	return 0;
+
+	ret = container_destroy(container);
+	cmld_containers_list = list_remove(cmld_containers_list, container);
+	container_free(container);
+
+	return ret;
 }
 
 int

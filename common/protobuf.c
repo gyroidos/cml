@@ -226,7 +226,7 @@ protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor 
 }
 
 ProtobufCMessage *
-protobuf_message_new_from_buf(unsigned char *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor)
+protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(buf);
 	ASSERT(descriptor);

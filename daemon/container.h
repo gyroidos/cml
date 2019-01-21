@@ -177,17 +177,17 @@ container_new_internal(
  * present in the given store_path and is loaded from there.
  *
  * !uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config string and a random
+ * created in the given store_path using the given config buffer and a random
  * UUID.
  *
  * uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config string and the given
+ * created in the given store_path using the given config buffer and the given
  * UUID.
  *
  * @return The new container object or NULL if something went wrong.
  */
 container_t *
-container_new(const char *store_path, const uuid_t *uuid, const char *config, size_t config_len);
+container_new(const char *store_path, const uuid_t *uuid, const uint8_t *config, size_t config_len);
 
 /*
 container_t *

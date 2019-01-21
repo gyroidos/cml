@@ -197,6 +197,7 @@ container_get_next_adb_port(void)
 	static uint16_t next_free_adb_port = ADB_FWD_PORT_BASE + 1;
 	return next_free_adb_port++;
 }
+
 /*
  * if we create the container for the first time, we store its creation time
  * in a file, otherwise this functions reads the creation time from that file
@@ -391,11 +392,11 @@ error:
  * present in the given store_path and is loaded from there.
  *
  * !uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config string and a random
+ * created in the given store_path using the given config buffer and a random
  * UUID.
  *
  * uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config string and the given
+ * created in the given store_path using the given config buffer and the given
  * UUID.
  *
  * @return The new container object or NULL if something went wrong.
@@ -403,7 +404,7 @@ error:
  */
 /* TODO Error handling */
 container_t *
-container_new(const char *store_path, const uuid_t *existing_uuid, const char *config,
+container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
 		size_t config_len)
 {
 	ASSERT(store_path);
@@ -762,15 +763,33 @@ container_is_privileged(const container_t *container)
 }
 
 int
-container_destroy(container_t *container) {
+container_destroy(container_t *container)
+{
+	int ret;
 	ASSERT(container);
 
-	// TODO implement
-	// shutdown container
-	// cleanup container (submodules)
-	// call c_<module>_destroy() hooks in submodules, especially for c_vol to remove images
-	// remove config file (container->config_filename)
-	return 0;
+	INFO("Destroying conatiner %s with uuid=%s", container_get_name(container),
+				uuid_string(container_get_uuid(container)));
+
+	if (file_is_dir(container_get_images_dir(container))) {
+		/* call to wipe will stop and cleanup container.
+		 * however, wipe only removes data images not configs */
+		if ((ret = container_wipe(container))) {
+			ERROR("Could not wipe container");
+			return ret;
+		}
+		if (rmdir(container_get_images_dir(container)))
+			WARN("Could not delete leftover container dir");
+	}
+	char *file_name_created =
+		mem_printf("%s.created", container_get_images_dir(container));
+	if (file_exists(file_name_created))
+		ret = unlink(file_name_created);
+	mem_free(file_name_created);
+
+	if ((ret = unlink(container_get_config_filename(container))))
+		ERROR_ERRNO("Can't delete config file!");
+	return ret;
 }
 
 int

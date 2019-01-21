@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -607,11 +607,74 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		cmld_wipe_device();
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
+		char **cuuid_str = NULL;
+		ContainerConfig **ccfg = NULL;
+
+		// build default response message for controller
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_CONFIG;
+		out.n_container_configs = 0;
+		out.n_container_uuids = 0;
+
+		if (!msg->has_container_config_file) {
+			WARN("CREATE_CONTAINER without config file does not work, doing nothing...");
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to CREATE");
+			break;
+		}
+		container_t *c = cmld_container_create_from_config(
+				msg->container_config_file.data,
+				msg->container_config_file.len);
+		if (NULL == c) {
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to CREATE");
+			break;
+		}
+
+		ccfg = mem_new(ContainerConfig *, 1);
+		ccfg[0] = (ContainerConfig *) protobuf_message_new_from_textfile(
+						container_get_config_filename(c),
+						&container_config__descriptor);
+		cuuid_str = mem_new(char *, 1);
+		cuuid_str[0] = mem_strdup(uuid_string(container_get_uuid(c)));
+
+		if (!ccfg[0]) {
+			ERROR("Failed to get new config for %s", cuuid_str[0]);
+			mem_free(ccfg);
+			mem_free(cuuid_str[0]);
+			mem_free(cuuid_str);
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to CREATE");
+			break;
+		}
+		// build and send response message to controller
+		out.n_container_configs = 1;
+		out.container_configs = ccfg;
+		out.n_container_uuids = 1;
+		out.container_uuids = cuuid_str;
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			WARN("Could not send container config as Response to CREATE");
+		}
+		mem_free(cuuid_str[0]);
+		mem_free(cuuid_str);
+		protobuf_free_message((ProtobufCMessage *) ccfg[0]);
+		mem_free(ccfg);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER:
+		if (NULL == container) {
+			INFO("Container does not exist, nothing to destroy!");
+			break;
+		}
+		res = cmld_container_destroy(container);
+		break;
+
 	// Container-specific commands:
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		char *key = NULL;
 		if (NULL == container) {
-			WARN("Container does not exists!");
+			WARN("Container does not exist!");
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}

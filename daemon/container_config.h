@@ -49,14 +49,14 @@ typedef struct container_config container_config_t;
  *
  * @param filename Representation of the config on disk. Must NOT be NULL. If
  * the file exists it is used to initially fill the container_config object. 
- * @param buf Config string to initialize the config object. If the config
- * file at filename already exists, the config string supersedes the content
+ * @param buf Config buffer to initialize the config object. If the config
+ * file at filename already exists, the config buffer supersedes the content
  * of the config file.
  * @param len Length of the given buf.
  * @return The new container_config_t object or NULL on an error.
  */
 container_config_t *
-container_config_new(const char *file, const char *buf, size_t len);
+container_config_new(const char *file, const uint8_t *buf, size_t len);
 
 /**
  * Release the container_config_t object.
