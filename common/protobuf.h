@@ -108,7 +108,7 @@ ProtobufCMessage *
 protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor);
 
 ProtobufCMessage *
-protobuf_message_new_from_buf(unsigned char *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor);
+protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor);
 
 /**
  * Writes a textual representation of the given protobuf message to the given file.

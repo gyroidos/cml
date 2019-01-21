@@ -101,7 +101,13 @@ message ControllerToDaemon {
 		// Reloads containers from config files, e.g. if a new container should be created
 		RELOAD_CONTAINERS = 21;
 
-		// TODO (optional) REMOVE_CONTAINER, REMOVE_GUESTOS
+		// Creates a container, answers with CONTAINER_CONFIGS
+		CREATE_CONTAINER = 22;
+
+		// Removes container config and destroys created container image files
+		REMOVE_CONTAINER = 23;
+
+		// TODO (optional) REMOVE_GUESTOS
 		// How to remove? Send same package_info as during install and delete list of files?
 		// TODO: Are there other files/settings/configs to be managed remotely (install/update/remove)?
 
@@ -147,6 +153,7 @@ message ControllerToDaemon {
 
 		// List network interfaces assigned to a container
 		CONTAINER_LIST_IFACES = 112;
+
 	}
 	required Command command = 1;
 
@@ -159,6 +166,7 @@ message ControllerToDaemon {
 	repeated string container_uuids = 10;		// container UUID(s) for GET_CONTAINER_* and CONTAINER_*
 	optional ContainerStartParams container_start_params = 11;	// start parameters for CONTAINER_START
 	optional AssignInterfaceParams assign_iface_params = 12;	// parameter for CONTAINER_ASSIGNIFACE / CONTAINER_UNASSIGNIFACE
+	optional bytes container_config_file = 13;		// new container config for CREATE_CNTAINER
 
 	// Daemon
 	optional bytes guestos_config_file = 20;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG

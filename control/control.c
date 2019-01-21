@@ -49,8 +49,10 @@ static void print_usage(const char *cmd)
 	printf("\n");
 	printf("commands:\n");
 	printf("   list\n        Lists all containers.\n");
-	printf("   reload\n        Reloads containers ifrom config files.\n");
+	printf("   reload\n        Reloads containers from config files.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
+	printf("   create <container.conf>\n        Creates a container from the given config file.\n");
+	printf("   remove <container-uuid>\n        Removes the specified container (completely).\n");
 	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
@@ -227,8 +229,37 @@ int main(int argc, char *argv[])
 		goto send_message;
 	}
 
+	if (!strcasecmp(command, "create")) {
+		has_response = true;
+		// need exactly one more argument (container config file)
+		if (optind != argc-1)
+			print_usage(argv[0]);
+
+		const char* cfgfile = argv[optind++];
+		off_t cfglen = file_size(cfgfile);
+		if (cfglen < 0) {
+			ERROR("Error accessing container config file %s.", cfgfile);
+			exit(-2);
+		}
+
+		unsigned char *cfg = mem_alloc(cfglen);
+		if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
+			ERROR("Error reading %s. Aborting.", cfgfile);
+			exit(-2);
+		}
+		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER;
+		msg.has_container_config_file = true;
+		msg.container_config_file.len = cfglen;
+		msg.container_config_file.data = cfg;
+		goto send_message;
+	}
+
 	ContainerStartParams container_start_params = CONTAINER_START_PARAMS__INIT;
-	if (!strcasecmp(command, "start")) {
+	if (!strcasecmp(command, "remove")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER;
+	} else if (!strcasecmp(command, "start")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
 		msg.container_start_params = &container_start_params;
 		// parse specific options for start command

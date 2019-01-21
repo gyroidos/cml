@@ -64,13 +64,13 @@ container_t *
 cmld_container_create_clone(container_t *container);
 
 /**
- * Create a container by providing a config string.
+ * Create a container by providing a config buffer.
  *
- * @param config The config for the new container in form of a string.
+ * @param config The config for the new container in form of a buffer.
  * @return The container of the newly created container.
  */
 container_t *
-cmld_container_create_from_config(const char *config, size_t config_len);
+cmld_container_create_from_config(const uint8_t *config, size_t config_len);
 
 /**
  * Create a container from a config file.
