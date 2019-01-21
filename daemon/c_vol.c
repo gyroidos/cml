@@ -31,6 +31,7 @@
 #include "common/loopdev.h"
 #include "common/cryptfs.h"
 #include "common/dir.h"
+#include "common/sock.h"
 
 #include "cmld.h"
 #include "hardware.h"
@@ -1094,8 +1095,10 @@ c_vol_start_child(c_vol_t *vol)
 	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME| MS_NOSUID| MS_NODEV, mount_data) < 0)
 		WARN_ERRNO("Could not mount /run");
 
-	if (mkdir("/run/socket", 0755) < 0)
-		WARN_ERRNO("Could not mkdir /run/socket");
+	if (mkdir(CMLD_SOCKET_DIR, 0755) < 0 && errno != EEXIST)
+		WARN_ERRNO("Could not mkdir " CMLD_SOCKET_DIR);
+	if (mount("tmpfs", CMLD_SOCKET_DIR, "tmpfs", MS_RELATIME | MS_NOSUID, mount_data) < 0)
+		WARN_ERRNO("Could not mount " CMLD_SOCKET_DIR);
 
 	char *mount_output = file_read_new("/proc/self/mounts", 2048);
 	INFO("Mounted filesystems:");

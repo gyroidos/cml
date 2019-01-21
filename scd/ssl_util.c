@@ -864,7 +864,7 @@ unsigned char *ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, c
 	ASSERT(file_to_hash);
 	ASSERT(hash_algo);
 
-	unsigned char *ret;
+	unsigned char *ret = NULL;
 	FILE *fp = NULL;
 	const EVP_MD *hash_fct;
 	EVP_MD_CTX *md_ctx = NULL;

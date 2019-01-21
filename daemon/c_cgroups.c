@@ -671,7 +671,9 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 	return 0;
 }
 
+#ifndef _BSD_SOURCE
 #define _BSD_SOURCE             /* See feature_test_macros(7) */
+#endif
 
 static void
 c_cgroups_devices_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event_inotify_t *inotify, void *data)

@@ -191,6 +191,8 @@ cmld_is_internet_active(void)
 static int
 cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 {
+	uuid_t *uuid = NULL;
+
 	/* we should check for config files here, because the images
 	 * might not be synced to the device from the mdm, but the config files
 	 * should be always there
@@ -210,7 +212,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 		goto cleanup;
 	}
 
-	uuid_t *uuid = uuid_new(prefix);
+	uuid = uuid_new(prefix);
 	if (uuid) {
 		container_t *c = cmld_container_get_by_uuid(uuid);
 		if (c) {
