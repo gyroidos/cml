@@ -3,6 +3,10 @@
 This short howto describes howto build and setup
 the [swtpm] (https://github.com/stefanberger/swtpm) as TPM 2.0 emulation in KVM for testing the CML.
 
+For testing purpose you can build and run
+tpm2d and swtpm directly on your host machine.
+See [tpm2d and swtpm on host](#tpm2d-and-swtpm-on-host)
+
 
 ## Install dependencies for swtpm and libtpms
 
@@ -52,14 +56,13 @@ Full list of swtpm/INSTALL:
 ## Install and built swtpm/libtpms
 > See also: https://github.com/stefanberger/libtpms/blob/master/INSTALL
 
-We need TPM 2.0 emulation only, thus I provide a patch for
-swtpm which allows to build without tpm-tools and trousers.
 
 ```
 git clone https://github.com/stefanberger/libtpms.git
-git clone https://github.com/quitschbo/swtpm.git
+git clone https://github.com/stefanberger/swtpm.git
 ```
 
+We need TPM 2.0 emulation only, thus activate tpm2 emulation.
 ```
 cd libtpms
 ./autogen.sh --with-tpm2 --with-openssl
@@ -95,12 +98,14 @@ If you do not want to run the provisioning as root, you
 have to provide own configs located in user writable location
 and specify `--config` (See `man swtpm_setup`).
 
-### run the emulator
+### run the emulator for qemu/kvm
 ```
 swtpm socket --tpmstate dir=/tmp/swtpmqemu --tpm2 \
 	--ctrl type=unixio,path=/tmp/swtpmqemu/swtpm-sock
 ```
+
 ### run qemu/kvm
+
 Following example runs a yocto build of CML using the tpm emulator
 ```
 kvm -m 2048 -cpu host --bios OVMF.fd -serial mon:stdio \
@@ -109,4 +114,35 @@ kvm -m 2048 -cpu host --bios OVMF.fd -serial mon:stdio \
 	-chardev socket,id=chrtpm,path=/tmp/swtpmqemu/swtpm-sock \
 	-tpmdev emulator,id=tpm0,chardev=chrtpm \
 	-device tpm-tis,tpmdev=tpm0
+```
+
+# tpm2d and swtpm on host
+You can driectly run tpm2d stand-alone for testing purpose
+on your build host machine adn use swtpm without qemu.
+
+## build
+Build and install swtpm as described above.
+Further, do the provisioning (EK) as described above.
+
+For tpm2d you also need libibmtss v1331 in your host:
+```
+git clone https://git.code.sf.net/p/ibmtpm20tss/tss ibmtpm20tss-tss
+git checkout v1331
+cd ibmtpm20tss-tss/utils
+make
+cp libibmtss.so* /usr/local/lib
+ldconfig -a
+```
+
+### run the emulator for direct use (without qemu)
+```
+swtpm socket --tpmstate dir=/tmp/swtpmqemu --tpm2 \
+	--server type=tcp,port=2321 --ctrl type=tcp,port=2322
+```
+### run tpm2d using swtp directly
+
+```
+swtpm_ioctl -i --tcp localhost:2322
+swtpm_bios --tpm2 --tcp localhost:2321
+tpm2d -s
 ```

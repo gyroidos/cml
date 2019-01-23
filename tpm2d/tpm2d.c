@@ -183,20 +183,14 @@ tpm2d_init(void)
 			FATAL_ERRNO("Could not set environment!");
 		if (setenv("TPM_DEVICE", "/dev/tpm0", 1) < 0)
 			FATAL_ERRNO("Could not set environment!");
+	} else {
+		if (setenv("TPM_INTERFACE_TYPE", "socsim", 1) < 0)
+			FATAL_ERRNO("Could not set environment!");
+		if (setenv("TPM_SERVER_TYPE", "raw", 1) < 0)
+			FATAL_ERRNO("Could not set environment!");
 	}
 
 	tss2_init();
-
-	// if no real hw tpm exists, powerup the simulator
-	if (!file_exists("/dev/tpm0") || use_simulator) {
-		// startup not needed for ibm simulator
-		//if (TPM_RC_SUCCESS != (ret = tpm2_powerup()))
-		//	FATAL("powerup failed with error code: %08x", ret);
-
-		//// startup should be made by uefi/bios, thus also only for simulator
-		if (TPM_RC_SUCCESS != (ret = tpm2_startup(TPM_SU_CLEAR)))
-			FATAL("startup failed with error code: %08x", ret);
-	}
 
 	if (TPM_RC_SUCCESS != (ret = tpm2_selftest()))
 		FATAL("selftest failed with error code: %08x", ret);
