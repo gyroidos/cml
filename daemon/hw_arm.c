@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2018 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -35,7 +35,7 @@
 #include "common/mem.h"
 #include "common/event.h"
 
-
+#define BOOT_BL_BRIGHTNESS 26
 
 /******************************************************************************/
 static const char *hw_arm_devices_whitelist_base[] = {
@@ -76,7 +76,7 @@ const char *
 hardware_get_model(void)
 {
 	// TODO return the proper "hardware model"
-	return "PowerPC";
+	return "Generic ARM";
 }
 
 const char *
@@ -99,10 +99,8 @@ hardware_get_block_by_name_path(void)
 	return NULL;
 }
 
-static uint32_t led_color = 0;
-
 int
-hardware_set_led(uint32_t color, bool should_blink)
+hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
 {
 	return 0;
 }
@@ -131,27 +129,6 @@ hardware_get_devices_whitelist_priv()
 	return hw_arm_devices_whitelist_priv;
 }
 
-
-int
-hardware_get_random(unsigned char *buf, size_t len)
-{
-        const char *rnd = "/dev/hwrng";
-        const char *sw = "/dev/random";
-
-        size_t read = file_read(rnd, (char*)buf, len);
-        if (read == len) {
-                return len;
-        } else {
-                if (!file_exists(sw)) {
-                        ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
-                        return -1;
-                }
-                WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
-                return file_read(sw, (char*)buf, len);
-        }
-}
-
-
 const char **
 hardware_get_devices_whitelist_audio()
 {
@@ -161,17 +138,26 @@ hardware_get_devices_whitelist_audio()
 int
 hardware_backlight_on()
 {
+	if (file_printf("/sys/class/leds/lcd-backlight/brightness", "%d", BOOT_BL_BRIGHTNESS) < 0) {
+		WARN_ERRNO("Could not write brightness file");
+		return -1;
+	}
 	return 0;
 }
 
-list_t *
+list_t*
 hardware_get_active_cgroups_subsystems(void)
 {
 	list_t *subsys_list = NULL;
+	subsys_list = list_append(subsys_list, "net_cls,net_prio");
 	subsys_list = list_append(subsys_list, "devices");
-	subsys_list = list_append(subsys_list, "cpu");
+	subsys_list = list_append(subsys_list, "cpuset");
 	subsys_list = list_append(subsys_list, "memory");
+	subsys_list = list_append(subsys_list, "perf_event");
+	subsys_list = list_append(subsys_list, "cpu,cpuacct");
+	subsys_list = list_append(subsys_list, "blkio");
 	subsys_list = list_append(subsys_list, "freezer");
+	subsys_list = list_append(subsys_list, "pids");
 	return subsys_list;
 }
 
@@ -183,48 +169,58 @@ hardware_get_nw_name_list(void) {
 	return nw_name_list;
 }
 
-bool
-hardware_display_power_state(void)
+list_t*
+hardware_get_nw_mv_name_list(void)
 {
-	return false;//no display by default
-}
-
-void
-hardware_suspend_block(const char *name, size_t name_len)
-{
-        return;//do nothing
-}
-
-void
-hardware_suspend_unblock(const char *name, size_t name_len)
-{
-	return;//do nothing
-}
-
-const char *
-hardware_get_routing_table_radio(void)
-{
-        return "";
+	return NULL;
 }
 
 const char *
 hardware_get_radio_ifname(void)
 {
-        return NULL;
+	return NULL;
 }
 
 bool
 hardware_supports_systemv_ipc(void)
 {
-        return false;
+	return true;
 }
 
-list_t*
-hardware_get_nw_mv_name_list(void)
+const char *
+hardware_get_routing_table_radio(void)
 {
-        /*
-         * this list should start with the first mobile data iface
-         * which is usually rmnet0
-         */
-        return NULL;
+	return NULL;
 }
+
+int
+hardware_get_random(unsigned char *buf, size_t len)
+{
+	const char *rnd = "/dev/hwrng";
+	const char *sw = "/dev/random";
+
+	size_t read = file_read(rnd, (char*)buf, len);
+	if (read == len) {
+		return len;
+	} else {
+		if (!file_exists(sw)) {
+			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
+			return -1;
+		}
+		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
+		return file_read(sw, (char*)buf, len);
+	}
+}
+
+void
+hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len){}
+
+void
+hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len){}
+
+bool
+hardware_display_power_state(void)
+{
+	return false;
+}
+
