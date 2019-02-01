@@ -59,6 +59,17 @@ list_append(list_t *list, void *data)
 ;
 
 /**
+ * Joins two lists by appending list_append to list. If one of
+ * the lists is NULL, the head of the respectiv other list is returned.
+ *
+ * @param list The head of list; may be NULL.
+ * @param list The head of the list to be appended; may be NULL.
+ * @return The head of new joind list.
+ */
+list_t *
+list_join(list_t *list, list_t *list_append);
+
+/**
  * Returns true if and only if the list contains the element.
  *
  * @param list The head of the list.
