@@ -41,6 +41,18 @@ list_append(list_t *list, void *data)
 	return tail ? list : e; // return head of list
 }
 
+list_t *
+list_join(list_t *list, list_t *list_append)
+{
+	IF_NULL_RETVAL(list, list_append);
+	IF_NULL_RETVAL(list_append, list);
+
+	list_t *l_tail = list_tail(list);
+	l_tail->next = list_append;
+
+	return list;
+}
+
 bool
 list_contains(const list_t *list, const list_t *elem)
 {
