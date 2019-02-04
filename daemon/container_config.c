@@ -499,9 +499,10 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 
 	list_t *if_cfg_list = NULL;
 	for (size_t i=0; i < config->cfg->n_vnet_configs; ++i) {
-		container_vnet_cfg_t *if_cfg = mem_new0(container_vnet_cfg_t, 1);
-		if_cfg->vnet_name = mem_strdup(config->cfg->vnet_configs[i]->if_name);
-		if_cfg->configure = config->cfg->vnet_configs[i]->configure;
+		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(
+			config->cfg->vnet_configs[i]->if_name, NULL,
+			config->cfg->vnet_configs[i]->configure
+		);
 		if_cfg_list = list_append(if_cfg_list, if_cfg);
 	}
 
@@ -509,9 +510,8 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 		list_t *nw_name_list = hardware_get_nw_name_list();
 		for (list_t* l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
-			container_vnet_cfg_t *if_cfg = mem_new0(container_vnet_cfg_t, 1);
-			if_cfg->vnet_name = mem_strdup(if_name);
-			if_cfg->configure = true;
+			container_vnet_cfg_t *if_cfg =
+				container_vnet_cfg_new(if_name, NULL, true);
 			if_cfg_list = list_append(if_cfg_list, if_cfg);
 		}
 		list_delete(nw_name_list);

@@ -1096,3 +1096,16 @@ c_net_get_subnet_new(c_net_t* net)
 	c_net_interface_t *ni0 = list_nth_data(net->interface_list, 0);
 	return mem_strdup(ni0->subnet);
 }
+
+list_t *
+c_net_get_interface_mapping_new(c_net_t *net)
+{
+	list_t *mapping = NULL;
+	for (list_t *l = net->interface_list; l; l = l->next) {
+		c_net_interface_t *ni = l->data;
+		container_vnet_cfg_t* vnet_cfg = container_vnet_cfg_new(
+			ni->nw_name, ni->veth_cmld_name, ni->configure);
+		mapping = list_append(mapping, vnet_cfg);
+	}
+	return mapping;
+}
