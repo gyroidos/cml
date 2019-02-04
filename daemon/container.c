@@ -2047,3 +2047,31 @@ container_set_setup_mode(container_t *container, bool setup)
 
 	container->setup_mode = setup;
 }
+
+container_vnet_cfg_t *
+container_vnet_cfg_new(const char *if_name, const char *rootns_name, bool configure)
+{
+	IF_NULL_RETVAL(if_name, NULL);
+	container_vnet_cfg_t* vnet_cfg = mem_new(container_vnet_cfg_t, 1);
+	vnet_cfg->vnet_name = mem_strdup(if_name);
+	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
+	vnet_cfg->configure = configure;
+	return vnet_cfg;
+}
+
+void
+container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
+{
+	IF_NULL_RETURN(vnet_cfg);
+	if (vnet_cfg->vnet_name)
+		mem_free(vnet_cfg->vnet_name);
+	if (vnet_cfg->rootns_name)
+		mem_free(vnet_cfg->rootns_name);
+	mem_free(vnet_cfg);
+}
+
+list_t *
+container_get_vnet_runtime_cfg_new(container_t *container)
+{
+	return c_net_get_interface_mapping_new(container->net);
+}

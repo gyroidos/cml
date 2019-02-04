@@ -76,6 +76,7 @@ typedef enum {
  */
 typedef struct container_vnet_cfg {
 	char *vnet_name;
+	char *rootns_name;
 	bool configure;
 } container_vnet_cfg_t;
 
@@ -660,5 +661,26 @@ container_get_creation_time(const container_t *container);
 
 void
 container_set_setup_mode(container_t *container, bool setup);
+
+/**
+ * Initialize a container_vnet_cfg_t data structure and allocate needed memory
+ */
+container_vnet_cfg_t *
+container_vnet_cfg_new(const char *if_name, const char *rootns_name, bool configure);
+
+/**
+ * Free all memory used by a container_vnet_cfg_t data structure
+ */
+void
+container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
+
+/**
+ * This function provides the container's runtime config
+ * of veth interfaces in form of a container_vnet_cfg_t* list.
+ * The elements contain the veth name inside the container and
+ * the runtime generated interface name of the rootns endpoint.
+ */
+list_t *
+container_get_vnet_runtime_cfg_new(container_t *container);
 
 #endif /* CONTAINER_H */

@@ -107,4 +107,12 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid);
 int
 c_net_remove_ifi(const char *ifi_name, const pid_t pid);
 
+/**
+ * This funtion provides a list of conatiner_net_cfg_t* objects
+ * which contain the name of an interface inside the container and the
+ * corresponding interface name of the endpoint in the root network namespace.
+ */
+list_t *
+c_net_get_interface_mapping_new(c_net_t *net);
+
 #endif /* C_NET_H */

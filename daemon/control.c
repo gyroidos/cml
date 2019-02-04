@@ -529,6 +529,37 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 						container_get_name(container));
 					continue;
 				}
+				// overwrite vnet config with runtime configuration
+				size_t n_vnet_configs =
+					results[number_of_configs]->n_vnet_configs;
+				for (size_t i = 0; i < n_vnet_configs; ++i) {
+					protobuf_free_message((ProtobufCMessage *)
+						results[number_of_configs]->vnet_configs[i]);
+					TRACE("freed config time results[%zu]->vnet_configs[%zu]",
+							number_of_configs, i);
+				}
+				mem_free(results[number_of_configs]->vnet_configs);
+				list_t *vnet_runtime_cfg_list = container_get_vnet_runtime_cfg_new(container);
+				int vnet_config_len = list_length(vnet_runtime_cfg_list);
+				ContainerVnetConfig **vnet_configs = mem_new0(ContainerVnetConfig*, vnet_config_len);
+				for (int i = 0; i < vnet_config_len; ++i) {
+					container_vnet_cfg_t *vnet_cfg = list_nth_data(vnet_runtime_cfg_list, i);
+					vnet_configs[i] = mem_new0(ContainerVnetConfig, 1);
+					container_vnet_config__init(vnet_configs[i]);
+					vnet_configs[i]->if_name = mem_strdup(vnet_cfg->vnet_name);
+					vnet_configs[i]->if_rootns_name = mem_strdup(vnet_cfg->rootns_name);
+					vnet_configs[i]->configure = vnet_cfg->configure;
+					TRACE("setup runtime vnet_configs[%d] vnetc: %s, vnetr: %s (%s)", i,
+						vnet_configs[i]->if_name,
+						vnet_configs[i]->if_rootns_name,
+						vnet_configs[i]->configure ? "configured" : "manual"
+					);
+					mem_free(vnet_cfg);
+				}
+				list_delete(vnet_runtime_cfg_list);
+				results[number_of_configs]->n_vnet_configs = vnet_config_len;
+				results[number_of_configs]->vnet_configs = vnet_configs;
+
 				const char *uuid = uuid_string(container_get_uuid(container));
 				result_uuids[number_of_configs] = mem_strdup(uuid);
 				number_of_configs++;
