@@ -792,13 +792,13 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 	in.parentHandle = parent_handle;
 
 	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructure(&in.inPrivate,
-			(UnmarshalFunction_t)TPM2B_PRIVATE_Unmarshal,
+			(UnmarshalFunction_t)TSS_TPM2B_PRIVATE_Unmarshalu,
 			file_name_priv_key)))
 		return rc;
 
-	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructure(&in.inPublic,
-			(UnmarshalFunction_t)TPM2B_PUBLIC_Unmarshal,
-			file_name_pub_key)))
+	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructureFlag(&in.inPublic,
+			(UnmarshalFunctionFlag_t)TSS_TPM2B_PUBLIC_Unmarshalu,
+			false, file_name_pub_key)))
 		return rc;
 
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
@@ -912,8 +912,8 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	int buf_size = out.quoted.t.size;
-	if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &buf_size)))
+	uint32_t buf_size = out.quoted.t.size;
+	if (TPM_RC_SUCCESS != (rc = TSS_TPMS_ATTEST_Unmarshalu(&tpms_attest, &buf_byte, &buf_size)))
 		goto err;
 	if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
 		goto err;
