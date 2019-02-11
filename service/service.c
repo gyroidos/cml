@@ -186,10 +186,6 @@ main(int argc, char **argv)
 
 	INFO("Minimal init done, going to start child, %s ...", argv[1]);
 
-	if (do_init) {
-		if (service_fork_execvp(argv[1], &argv[1]))
-			WARN("Error starting child!");
-	}
 
 	ServiceToCmldMessage msg = SERVICE_TO_CMLD_MESSAGE__INIT;
 	msg.code = SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED;
@@ -205,7 +201,14 @@ main(int argc, char **argv)
 	shutdown(sock, SHUT_WR);
 	close(sock);
 
-	if (!do_init)
+	if (do_init) {
+		if (!strcmp(argv[1], "init")){
+			argv[1] = "/sbin/init";
+			execvp(argv[1], &argv[1]);
+			WARN("Error starting container init!");
+		} else if (service_fork_execvp(argv[1], &argv[1]))
+			WARN("Error starting child!");
+	} else
 		return 0;
 
 	INFO("Going to handle signals ...");
