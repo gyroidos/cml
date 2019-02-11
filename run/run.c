@@ -47,7 +47,7 @@ usage(char *pname)
 	exit(-1);
 }
 
-#define MAX_NS 6
+#define MAX_NS 10
 int fd[MAX_NS] = {0};
 
 static int
