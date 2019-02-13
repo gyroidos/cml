@@ -25,6 +25,7 @@
 #include "nvmcrypt.h"
 
 #include "control.h"
+#include "rcontrol.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -40,10 +41,12 @@
 
 #define TPM2D_SOCK_PATH TPM2D_BASE_DIR "/communication"
 #define TPM2D_CONTROL_SOCKET TPM2D_SOCK_PATH "/control.sock"
+#define TPM2D_RCONTROL_PORT 9505
 
 static bool use_simulator = false;
 
 static tpm2d_control_t *tpm2d_control_cmld = NULL;
+static tpm2d_rcontrol_t *tpm2d_rcontrol_attest = NULL;
 static logf_handler_t *tpm2d_logfile_handler = NULL;
 
 static uint32_t tpm2d_salt_key_handle = 0;
@@ -299,6 +302,10 @@ main(UNUSED int argc, char **argv) {
                 FATAL_ERRNO("Could not mkdir communictaions dir: %s", TPM2D_SOCK_PATH);
 
 	tpm2d_control_cmld = tpm2d_control_new(TPM2D_CONTROL_SOCKET);
+	if (!tpm2d_control_cmld) {
+		FATAL("Could not init tpm2d_control socket");
+	}
+	tpm2d_rcontrol_attest = tpm2d_rcontrol_new("0.0.0.0", TPM2D_RCONTROL_PORT);
 	if (!tpm2d_control_cmld) {
 		FATAL("Could not init tpm2d_control socket");
 	}
