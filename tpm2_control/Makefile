@@ -30,6 +30,7 @@ SRC_FILES := \
 	common/sock.c \
 	common/file.c \
 	common/fd.c \
+	attestation.pb-c.c \
 	tpm2d.pb-c.c \
 	common/logf.pb-c.c \
 	tpm2d_control.c
@@ -37,7 +38,8 @@ SRC_FILES := \
 .PHONY: all
 all: tpm2_control
 
-protobuf: tpm2d.proto common/logf.proto
+protobuf: attestation.proto tpm2d.proto
+	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
 	$(MAKE) -C common protobuf
 

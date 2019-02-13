@@ -39,6 +39,7 @@ PROTO_SRC := \
 	common/logf.pb-c.c \
 	device.pb-c.c \
 	scd.pb-c.c \
+	attestation.pb-c.c \
 	tpm2d.pb-c.c \
 	c_service.pb-c.c
 
@@ -83,6 +84,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	protoc-c --c_out=. guestos.proto
 	protoc-c --c_out=. device.proto
 	protoc-c --c_out=. scd.proto
+	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
 	protoc-c --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
