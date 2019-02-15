@@ -27,6 +27,10 @@
 #include "common/mem.h"
 #include "common/list.h"
 
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+
 #define CONTAINER_PCR_INDEX 11
 
 typedef struct ml_elem {
@@ -38,7 +42,7 @@ typedef struct ml_elem {
 } ml_elem_t;
 
 static list_t *measurement_list = NULL;
-static int measurement_list_len = 0;
+static size_t measurement_list_len = 0;
 
 int
 ml_measurement_list_append(const char *filename, TPM_ALG_ID algid,
@@ -97,12 +101,43 @@ halg_id_to_ima_string(TPM_ALG_ID alg_id)
 	}
 }
 
-char **
-ml_get_measurement_list_strings_new(void)
+static list_t *
+ml_get_ima_ml_string_list_new(void)
 {
-	char **strings = mem_new0(char*, measurement_list_len);
+	FILE *fp;
+	char *line = NULL; // will be malloced by getline
+	size_t line_len = 0;
+
+	fp = fopen("/sys/kernel/security/ima/ascii_runtime_measurements", "r");
+	IF_NULL_RETVAL(fp, NULL);
+
+	list_t *ima_list = NULL;
+	while (-1 != getline(&line, &line_len, fp)) {
+		line[line_len-1] = '\0'; // overwrite '\n'
+		ima_list = list_append(ima_list, mem_strdup(line));
+	}
+
+	fclose(fp);
+	if(line)
+		mem_free(line);
+	return ima_list;
+}
+
+char **
+ml_get_measurement_list_strings_new(size_t *strings_len)
+{
+	list_t *ima_strings_list = ml_get_ima_ml_string_list_new();
+	*strings_len = measurement_list_len + list_length(ima_strings_list);
+	char **strings = mem_new0(char*, *strings_len);
 
 	int i=0;
+	for (list_t *l = ima_strings_list; l; l = l->next, ++i) {
+		char *ima_ml_string = l->data;
+		strings[i] = ima_ml_string;
+		INFO("ML (%d): %s", i, strings[i]);
+	}
+	list_delete(ima_strings_list); // only deletes the list elements not the element's data
+
 	for (list_t *l = measurement_list; l; l = l->next, ++i) {
 		ml_elem_t *ml_elem = l->data;	
 		char *hex_datahash = convert_bin_to_hex_new(ml_elem->datahash, ml_elem->hash_len);
@@ -115,10 +150,4 @@ ml_get_measurement_list_strings_new(void)
 	}
 
 	return strings;
-}
-
-int
-ml_get_measurement_list_len(void)
-{
-	return measurement_list_len;
 }

@@ -134,8 +134,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 		out.certificate = attestation_pub_key;
 
-		out.n_ml_entry = ml_get_measurement_list_len();
-		out.ml_entry = ml_get_measurement_list_strings_new();
+		out.ml_entry = ml_get_measurement_list_strings_new(&out.n_ml_entry);
 
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
