@@ -45,6 +45,25 @@ struct tpm2d_rcontrol {
 	int sock;		// listen ip socket fd
 };
 
+/**
+ * Returns the HashAlgLen (proto) for the given TPM_ALG_ID alg_id.
+ */
+static HashAlgLen
+tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
+{
+	switch (alg_id) {
+	case TPM_ALG_SHA1:
+		return HASH_ALG_LEN__SHA1;
+	case TPM_ALG_SHA256:
+		return HASH_ALG_LEN__SHA256;
+	case TPM_ALG_SHA384:
+		return HASH_ALG_LEN__SHA384;
+	default:
+		ERROR("Unsupported value for TPM_ALG_ID: %d", alg_id);
+		return -1;
+	}
+}
+
 static void
 tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t *rcontrol)
 {
@@ -69,9 +88,9 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		Pcr **out_pcrs = NULL;
 		int pcr_regs = 0;
 		int pcr_indices = 0;
-		tpm2d_pcr_string_t** pcr_string_array = NULL;
-		tpm2d_quote_string_t *quote_string = NULL;
-		char *attestation_pub_key = NULL;
+		tpm2d_pcr_t** pcr_array = NULL;
+		tpm2d_quote_t *quote = NULL;
+		uint8_t *attestation_cert = NULL;
 
 		Tpm2dToRemote out = TPM2D_TO_REMOTE__INIT;
 		out.code = TPM2D_TO_REMOTE__CODE__ATTESTATION_RES;
@@ -95,29 +114,31 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		}
 		pcr_indices = pcr_regs - 1;
 
-		pcr_string_array = mem_alloc0(sizeof(tpm2d_pcr_string_t*) * pcr_regs);
+		pcr_array = mem_alloc0(sizeof(tpm2d_pcr_t*) * pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			pcr_string_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM, true);
+			pcr_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
 
-			IF_NULL_GOTO_ERROR(pcr_string_array[i], err_att_req);
-			TRACE("PCR%d: %s", i, pcr_string_array[i]->pcr_str);
+			IF_NULL_GOTO_ERROR(pcr_array[i], err_att_req);
+			INFO("PCR%d: size %zu", i, pcr_array[i]->pcr_size);
 		}
 
-		quote_string = tpm2_quote_new(pcr_indices,
-				tpm2d_get_as_key_handle(), TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
-		IF_NULL_GOTO_ERROR(quote_string, err_att_req);
+		quote = tpm2_quote_new(pcr_indices, tpm2d_get_as_key_handle(),
+				TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata.data,
+				msg->qualifyingdata.len);
+		IF_NULL_GOTO_ERROR(quote, err_att_req);
 
-#if TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT
-		attestation_pub_key = ek_get_certificate_new(TPM2D_ASYM_ALGORITHM);
-#else
-		attestation_pub_key = tpm2_read_file_to_hex_string_new(TPM2D_ATTESTATION_PUB_FILE);
-#endif
-		IF_NULL_GOTO_ERROR(attestation_pub_key, err_att_req);
+		size_t att_cert_len;
+		attestation_cert = ek_get_certificate_new(TPM2D_ASYM_ALGORITHM, &att_cert_len);
+		IF_NULL_GOTO_ERROR(attestation_cert, err_att_req);
+		INFO("cert ek done: size=%zu", att_cert_len);
 
 		Pcr out_pcr = PCR__INIT;
 		out_pcrs = mem_new(Pcr *, pcr_regs);
 		for (int i=0; i < pcr_regs; ++i) {
-			out_pcr.value = pcr_string_array[i]->pcr_str;
+			out_pcr.has_value = true;
+			out_pcr.value.data = pcr_array[i]->pcr_value;
+			out_pcr.value.len = pcr_array[i]->pcr_size;
+			INFO("pcr: %zu", out_pcr.value.len);
 			out_pcr.has_number = true;
 			out_pcr.number = i;
 			out_pcrs[i] = mem_alloc(sizeof(Pcr));
@@ -126,13 +147,20 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 		out.has_atype = true;
 		out.atype = msg->atype;
-		out.halg = quote_string->halg_str;
-		out.quoted = quote_string->quoted_str;
-		out.signature = quote_string->signature_str;
+		out.halg = tpm2d_rcontrol_hash_algo_get_len_proto(quote->halg_id);
+		out.has_quoted = true;
+		out.quoted.data = quote->quoted_value;
+		out.quoted.len = quote->quoted_size;
+		out.has_signature = true;
+		out.signature.data = quote->signature_value;
+		out.signature.len = quote->signature_size;
+
 		out.n_pcr_values = pcr_regs;
 		out.pcr_values = out_pcrs;
 
-		out.certificate = attestation_pub_key;
+		out.has_certificate = true;
+		out.certificate.data = attestation_cert;
+		out.certificate.len = att_cert_len;
 
 		out.ml_entry = ml_get_measurement_list_strings_new(&out.n_ml_entry);
 
@@ -143,21 +171,21 @@ err_att_req:
 			mem_free(out.ml_entry[i]);
 		}
 
-		if (pcr_string_array)
+		if (pcr_array)
 			for (int i=0; i < pcr_regs; ++i) {
-				if (pcr_string_array[i])
-					tpm2_pcrread_free(pcr_string_array[i]);
+				if (pcr_array[i])
+					tpm2_pcrread_free(pcr_array[i]);
 				if (out_pcrs && out_pcrs[i])
 					mem_free(out_pcrs[i]);
 			}
 		if (out_pcrs)
 			mem_free(out_pcrs);
-		if (pcr_string_array)
-			mem_free(pcr_string_array);
-		if (quote_string)
-			tpm2_quote_free(quote_string);
-		if (attestation_pub_key)
-			mem_free(attestation_pub_key);
+		if (pcr_array)
+			mem_free(pcr_array);
+		if (quote)
+			tpm2_quote_free(quote);
+		if (attestation_cert)
+			mem_free(attestation_cert);
 	} break;
 	default:
 		WARN("RemoteToTpm2d command %d unknown or not implemented yet", msg->code);

@@ -3,7 +3,7 @@
 
 #include "tpm2d.h"
 
-char*
-ek_get_certificate_new(TPMI_ALG_PUBLIC);
+uint8_t *
+ek_get_certificate_new(TPMI_ALG_PUBLIC, size_t *cert_len);
 
 #endif /* _EK_H */

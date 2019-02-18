@@ -25,12 +25,6 @@ syntax = "proto2";
 
 import "attestation.proto";
 
-enum HashAlgLen {
-  SHA1   = 20;
-  SHA256 = 32;
-  SHA384 = 48;
-}
-
 message ControllerToTpm {
 	enum Code {
 		INTERNAL_ATTESTATION_REQ = 1;
