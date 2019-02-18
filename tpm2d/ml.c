@@ -38,7 +38,7 @@ typedef struct ml_elem {
 	TPM_ALG_ID algid;
 	int hash_len;
 	uint8_t *datahash;
-	tpm2d_pcr_string_t *template;
+	tpm2d_pcr_t *template;
 } ml_elem_t;
 
 static list_t *measurement_list = NULL;
@@ -77,8 +77,8 @@ ml_measurement_list_append(const char *filename, TPM_ALG_ID algid,
 	if (ret) {
 		ERROR("tpm extend failed");
 	}
-	// store the template as hexstring in the ML elem
-	new_ml_elem->template = tpm2_pcrread_new(CONTAINER_PCR_INDEX, TPM2D_HASH_ALGORITHM, true);
+	// store the template as in the ML elem
+	new_ml_elem->template = tpm2_pcrread_new(CONTAINER_PCR_INDEX, TPM2D_HASH_ALGORITHM);
 
 	measurement_list = list_append(measurement_list, new_ml_elem);
 	measurement_list_len++;
@@ -142,11 +142,14 @@ ml_get_measurement_list_strings_new(size_t *strings_len)
 		ml_elem_t *ml_elem = l->data;	
 		char *hex_datahash = convert_bin_to_hex_new(ml_elem->datahash, ml_elem->hash_len);
 		const char *halg_string = halg_id_to_ima_string(ml_elem->algid);
+		char *hex_template = convert_bin_to_hex_new(ml_elem->template->pcr_value,
+				ml_elem->template->pcr_size);
 		strings[i] = mem_printf("%d %s ima-ng %s:%s %s",
-				CONTAINER_PCR_INDEX, ml_elem->template->pcr_str,
+				CONTAINER_PCR_INDEX, hex_template,
 				halg_string, hex_datahash, ml_elem->filename);
 		INFO("ML (%d): %s", i, strings[i]);
 		mem_free(hex_datahash);
+		mem_free(hex_template);
 	}
 
 	return strings;
