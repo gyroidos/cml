@@ -21,7 +21,11 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#ifdef ANDROID
 #include "device/fraunhofer/common/cml/converter/guestos.pb-c.h"
+#else
+#include "guestos.pb-c.h"
+#endif
 
 #include "common/macro.h"
 #include "common/logf.h"
@@ -65,7 +69,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	out_file = mem_printf("%s.conf", out_image_path_versioned);
 
 	cfg.n_mounts = list_length(config->volumes_list) + 1;
-	INFO("cfg.n_mounts: %d", cfg.n_mounts);
+	INFO("cfg.n_mounts: %zu", cfg.n_mounts);
 	cfg.mounts = mem_new(GuestOSMount *, cfg.n_mounts);
 
 	GuestOSMount mount_root = GUEST_OSMOUNT__INIT;
