@@ -33,9 +33,9 @@
 #include <fcntl.h>
 #include <libtar.h>
 #include <sys/wait.h>
+#include <stdint.h>
 
-#include <mincrypt/sha.h>
-#include <mincrypt/sha256.h>
+#include <openssl/sha.h>
 
 #define MKSQUASHFS_PATH "mksquashfs"
 #define MKSQUASHFS_COMP "gzip"
@@ -119,7 +119,7 @@ util_tar_extract(const char *tar_filename, const char* index_file, const char* o
 		char *out_filename = mem_printf("%s/%s", out_dir, archive_filename);
 
 		char *mode = mem_alloc0(4*sizeof(char));
-		int_to_oct(th_get_mode(tar), mode, 4*sizeof(char));
+		int_to_oct(th_get_mode(tar), mode, (int)(4*sizeof(char)));
 		uid_t uid = th_get_uid(tar);
 		gid_t gid = th_get_gid(tar);
 
@@ -147,7 +147,6 @@ util_tar_extract(const char *tar_filename, const char* index_file, const char* o
 		}
 
 		mem_free(mode);
-		mem_free(archive_filename);
 		mem_free(out_filename);
 	}
 
@@ -173,7 +172,7 @@ util_hash_sha_image_file_new(const char *image_file)
 {
 	FILE *fp = NULL;
 	SHA_CTX ctx;
-	SHA_init(&ctx);
+	SHA1_Init(&ctx);
 
 	if (!(fp = fopen(image_file, "rb"))) {
 		ERROR_ERRNO("Error in file hasing, cannot open %s", image_file);
@@ -184,11 +183,12 @@ util_hash_sha_image_file_new(const char *image_file)
 	unsigned char buf[SIGN_HASH_BUFFER_SIZE];
 
 	while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
-		SHA_update(&ctx, buf, len);
+		SHA1_Update(&ctx, buf, len);
 	}
 	fclose(fp);
 
-	return convert_bin_to_hex_new(SHA_final(&ctx), SHA_DIGEST_SIZE);
+	SHA1_Final(buf, &ctx);
+	return convert_bin_to_hex_new(buf, SHA_DIGEST_LENGTH);
 }
 
 char *
@@ -196,7 +196,7 @@ util_hash_sha256_image_file_new(const char *image_file)
 {
 	FILE *fp = NULL;
 	SHA256_CTX ctx;
-	SHA256_init(&ctx);
+	SHA256_Init(&ctx);
 
 	if (!(fp = fopen(image_file, "rb"))) {
 		ERROR_ERRNO("Error in file hasing, cannot open %s", image_file);
@@ -207,11 +207,12 @@ util_hash_sha256_image_file_new(const char *image_file)
 	unsigned char buf[SIGN_HASH_BUFFER_SIZE];
 
 	while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
-		SHA256_update(&ctx, buf, len);
+		SHA256_Update(&ctx, buf, len);
 	}
 	fclose(fp);
 
-	return convert_bin_to_hex_new(SHA256_final(&ctx), SHA256_DIGEST_SIZE);
+	SHA256_Final(buf, &ctx);
+	return convert_bin_to_hex_new(buf, SHA256_DIGEST_LENGTH);
 }
 
 int
