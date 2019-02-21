@@ -47,12 +47,18 @@
 
 #define WORK_PATH "/tmp/trustx-converter"
 #define IMAGE_NAME_ROOT "root.img"
-#define MIN_INIT "/sbin/mini_init"
+#define MIN_INIT "/sbin/cservice"
+
+#define PKI_PATH "/pki_generator/"
+#define SSIG_KEY_FILE  PKI_PATH "dockerlocal-ssig.key"
+#define SSIG_CERT_FILE PKI_PATH "dockerlocal-ssig.cert"
 
 int
 write_guestos_config(docker_config_t *config, const char* root_image_file, const char *image_path, const char* image_name, const char *image_tag)
 {
 	char *out_file;
+	char *out_sig_file;
+	char *out_cert_file;
 	char *out_image_path_versioned;
 	char *image_path_unversioned;
 
@@ -155,6 +161,14 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 
 	protobuf_message_write_to_file(out_file, (ProtobufCMessage *)&cfg);
 
+	out_sig_file = mem_printf("%s.sig", out_image_path_versioned);
+	out_cert_file = mem_printf("%s.cert", out_image_path_versioned);
+	int ret = util_sign_guestos(out_sig_file, out_file, SSIG_KEY_FILE);
+	if (ret == 0) {
+		if(file_copy(SSIG_CERT_FILE, out_cert_file, file_size(SSIG_CERT_FILE), 512, 0) < 0)
+			WARN("Could not copy Certificate to %s", out_cert_file);
+	}
+
 	if(rename(image_path_unversioned, out_image_path_versioned) < 0)
 		ERROR_ERRNO("Can't rename dir %s", image_path_unversioned);
 
@@ -178,6 +192,8 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(image_path_unversioned);
 	mem_free(out_image_path_versioned);
 	mem_free(out_file);
+	mem_free(out_sig_file);
+	mem_free(out_cert_file);
 
 	return 0;
 }
@@ -212,11 +228,6 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 		}
 		mem_free(layer_file_name);
 	}
-
-	// will be used to bind mount the init wrapper by cmld
-	char *init_file_path = mem_printf("%s/%s", extracted_image_path, MIN_INIT);
-	file_printf(init_file_path, "dummy init file");
-	mem_free(init_file_path);
 
 	image_file = mem_printf("%s/%s", target_image_path, IMAGE_NAME_ROOT);
 	if (util_squash_image(extracted_image_path, extracted_pseudo_file, image_file) <0){
@@ -286,6 +297,7 @@ main(UNUSED int argc, char **argv)
 	}
 
 	char* token = docker_get_curl_token_new(image_name, token_file);
+	IF_NULL_GOTO_ERROR(token, err);
 
 	manifest_file = mem_printf("%s/%s", docker_image_path, "manifest.json");
 
@@ -350,11 +362,14 @@ main(UNUSED int argc, char **argv)
 	docker_manifest_free(manifest);
 	docker_config_free(config);
 
+	mem_free(token_file);
 	return 0;
 
 err:
 	INFO("Cleaning up token_file: %s", token_file);
 	if (file_exists(token_file))
 		remove(token_file);
+	mem_free(docker_image_path);
+	mem_free(token_file);
 	return -1;
 }

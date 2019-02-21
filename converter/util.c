@@ -37,6 +37,7 @@
 
 #include <openssl/sha.h>
 
+#define OPENSSLBIN_PATH "openssl"
 #define MKSQUASHFS_PATH "mksquashfs"
 #define MKSQUASHFS_COMP "gzip"
 #define MKSQUASHFS_BSIZE "131072"
@@ -59,6 +60,7 @@ util_fork_and_execvp(const char *path, const char * const *argv)
 		// see discussion at http://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html#tag_16_111_08
 		execvp(path, (char * const *)argv);
 		ERROR_ERRNO("Could not execv '%s'", path);
+		exit(-1);
 	} else {
 		// parent
 		int status;
@@ -220,4 +222,12 @@ util_squash_image(const char *dir, const char *pseudo_file, const char *image_fi
 {
 	const char * const argv[] = {MKSQUASHFS_PATH, dir, image_file, "-noappend", "-all-root", "-comp", MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, "-pf", pseudo_file, NULL};
 	return util_fork_and_execvp(MKSQUASHFS_PATH, argv);
+}
+
+int
+util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
+{
+	const char * const argv[] = { OPENSSLBIN_PATH, "dgst", "-sha512",
+		"-sign", key_file, "-out", sig_file, cfg_file, NULL };
+	return util_fork_and_execvp(argv[0], argv);
 }

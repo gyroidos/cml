@@ -305,7 +305,7 @@ docker_get_curl_token_new(char *image_name, char* token_file)
 
 	char *buf = file_read_new(token_file, BUF_SIZE);
 	if (!buf) {
-		ERROR("Could not token file");
+		ERROR("Could not read token file");
 		return NULL;
 	}
 
