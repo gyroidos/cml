@@ -48,4 +48,7 @@ util_tar_extract(const char *tar_filename, const char* index_file, const char* o
 int
 util_squash_image(const char *dir, const char *pseudo_file, const char *image_file);
 
+int
+util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file);
+
 #endif /* UTIL_H */
