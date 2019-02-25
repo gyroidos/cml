@@ -284,6 +284,8 @@ smartcard_crypto_verify_result_from_proto(TokenToDaemon__Code code)
 		return VERIFY_BAD_SIGNATURE;
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
 		return VERIFY_BAD_CERTIFICATE;
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
+		return VERIFY_LOCALLY_SIGNED;
 	default:
 		FATAL("Cannot convert %d to valid smartcard_verify_result_t value", code);
 	}
@@ -366,6 +368,7 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
+		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
 			task->verify_complete(smartcard_crypto_verify_result_from_proto(msg->code),
 					task->verify_data_file, task->verify_sig_file,
 					task->verify_cert_file, task->hash_algo, task->data);
@@ -565,6 +568,7 @@ smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, co
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
 		return smartcard_crypto_verify_result_from_proto(msg->code);
 	default:
 		ERROR("Invalid TokenToDaemon command %d when verifying file %s with signature %s and certificate %s",

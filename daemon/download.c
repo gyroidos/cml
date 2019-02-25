@@ -34,7 +34,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-#define WGET_PATH "/system/bin/wget"
+#define WGET_PATH "wget"
 
 struct download {
 	char *url;

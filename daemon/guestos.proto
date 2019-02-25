@@ -96,6 +96,7 @@ message GuestOSConfig {
 	optional bool feature_bg_booting = 27 [default = false];
 	optional bool feature_vpn = 28 [default = false];
 	optional bool feature_devtmpfs = 29 [default = false];
+	optional bool feature_install_guest = 40 [default = false];
 	// TODO: add further features as necessary
 
 	// TODO: Determine RAM limit policy...
@@ -108,6 +109,8 @@ message GuestOSConfig {
 	optional string upstream_version = 12;  // upstream version
 	optional bytes icon = 13;         // name of icon file
 	optional string build_date = 14;        // build date
+
+	optional string	update_base_url = 15; // provide url to file server which hosts the actual image data (overwrites device.conf)
 
 }
 

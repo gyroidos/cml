@@ -56,12 +56,16 @@ typedef enum {
 
 /**
  * Creates a new control_t object listening on the specified socket.
+ *
+ * @param socket listening socket
+ * @param privileged use privileged interface
  */
 control_t *
-control_new(int socket);
+control_new(int socket, bool privileged);
 
 /**
  * Creates a new control_t object listening on a UNIX socket bound to the specified file.
+ * Uses privileged control interface.
  *
  * @param path path of the socket file to bind the socket to
  */
@@ -71,6 +75,7 @@ control_local_new(const char *path);
 /**
  * Creates a new control_t object maintaining a remote connection over a internal
  * AF_INET client socket
+ * Uses privileged control interface.
  *
  * @param hostip The IP adress of the remote host as String, e.g., 127.0.0.1
  * @param service The MDM port name or port number

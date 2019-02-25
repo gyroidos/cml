@@ -278,3 +278,17 @@ guestos_config_get_feature_devtmpfs(const guestos_config_t *cfg)
 	ASSERT(cfg);
 	return cfg->feature_devtmpfs ? cfg->feature_devtmpfs : false;
 }
+
+bool
+guestos_config_get_feature_install_guest(const guestos_config_t *cfg)
+{
+	ASSERT(cfg);
+	return cfg->feature_install_guest ? cfg->feature_install_guest : false;
+}
+
+const char *
+guestos_config_get_update_base_url(const guestos_config_t *cfg)
+{
+	ASSERT(cfg);
+	return cfg->update_base_url;
+}

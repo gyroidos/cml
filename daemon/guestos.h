@@ -273,6 +273,9 @@ bool
 guestos_get_feature_devtmpfs(const guestos_t *os);
 
 bool
+guestos_get_feature_install_guest(const guestos_t *os);
+
+bool
 guestos_is_privileged(const guestos_t *os);
 
 #endif /* GUESTOS_H */
