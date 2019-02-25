@@ -490,7 +490,7 @@ iterate_images_trigger_check(iterate_images_t *task)
  */
 static bool
 iterate_images_start(guestos_t *os, iterate_images_callback_t iter_cb,
-		 iterate_images_on_complete_cb_t on_complete, void *complete_data)
+		iterate_images_on_complete_cb_t on_complete, void *complete_data)
 {
 	ASSERT(os);
 
@@ -592,8 +592,9 @@ iterate_images_trigger_download(iterate_images_t *task)
 	}
 	task->dl_attempts++;	// increase dl_attempt counter
 
-	const char *update_base_url = cmld_get_device_update_base_url();
-	ASSERT(update_base_url);
+	// check if guestos has update file server, use device.conf as fallback
+	const char *update_base_url = guestos_config_get_update_base_url(task->os->cfg) ?
+		 guestos_config_get_update_base_url(task->os->cfg) : cmld_get_device_update_base_url();
 	char *img_path = mem_printf("%s/%s.img", guestos_get_dir(task->os), img_name);
 	char *img_url = mem_printf("%s/operatingsystems/%s/%s-%" PRIu64 "/%s.img",
 			update_base_url, hardware_get_name(),
@@ -682,12 +683,14 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 {
 	ASSERT(os);
 	//ASSERT(cb);
-	if (!cmld_get_device_update_base_url()) {
+	const char *update_base_url = guestos_config_get_update_base_url(os->cfg) ?
+		 guestos_config_get_update_base_url(os->cfg) : cmld_get_device_update_base_url();
+	if (!update_base_url) {
 		WARN("Cannot download images for GuestOS %s since no device update base URL"
 				" was configured!", guestos_get_name(os));
 		return;
 	}
-	if (!cmld_is_wifi_active()) {
+	if ((!cmld_is_wifi_active()) && (!guestos_config_get_update_base_url(os->cfg))) {
 		INFO("Wifi is not active => not downloading images for guestos %s", guestos_get_name(os));
 		return;
 	}
@@ -1084,4 +1087,11 @@ guestos_get_feature_devtmpfs(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_devtmpfs(os->cfg);
+}
+
+bool
+guestos_get_feature_install_guest(const guestos_t *os)
+{
+	ASSERT(os);
+	return guestos_config_get_feature_install_guest(os->cfg);
 }

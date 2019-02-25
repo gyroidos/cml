@@ -196,7 +196,7 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED vo
 
 /**
  * Downloads, if necessary, the images for the latest (by version) available GuestOS with the given name.
- * @param name	name of the GuestOS
+ * @param name name of the GuestOS
  */
 static void
 guestos_mgr_download_latest(const char *name)
@@ -250,7 +250,14 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 {
 	INFO("Push GuestOS config (Phase 2)");
 
-	if (verify_result != VERIFY_GOOD) {
+	switch (verify_result) {
+	case VERIFY_GOOD:
+		INFO("Signature of GuestOS OK (GOOD)");
+		break;
+	case VERIFY_LOCALLY_SIGNED:
+		INFO("Signature of GuestOS OK (locally signed)");
+		break;
+	default:
 		ERROR("Signature verification failed (%d) for pushed GuestOS config %s, skipping.",
 				verify_result, cfg_file);
 		goto cleanup_tmpfiles;

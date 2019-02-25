@@ -214,6 +214,7 @@ message DaemonToController {
 		CONTAINER_START_PASSWD_WRONG = 4;
 		CONTAINER_START_LOCKED_TILL_REBOOT = 5;
 		CONTAINER_START_EEXIST = 6;
+		CMD_UNSUPPORTED = 7;
 	}
 
 	required Code code = 1;

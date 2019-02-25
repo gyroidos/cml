@@ -232,7 +232,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			// differentiation when we intend to check against other root CAs
 			if ((ret = ssl_verify_certificate(msg->verify_cert_file, SSIG_ROOT_CERT, true)) != 0) {
 				if (ret == -1) {
-					ERROR("Certificate not valid");
+					ERROR("Certificate not a valid ssig cert");
 					out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
 				} else
 					ERROR("Error during certificate validation");
@@ -242,14 +242,37 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 					if (ret == -1) {
 						ERROR("Signature invalid");
 						out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE;
-					}
-					else
+					} else
 						ERROR("Error during signature validation");
-				} else
+				} else {
 					out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD;
+				}
+			}
+			// Retry with Local CA
+			if (out.code == TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE) {
+				out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
+				if ((ret = ssl_verify_certificate(msg->verify_cert_file, LOCALCA_ROOT_CERT, true)) != 0) {
+					if (ret == -1) {
+						ERROR("Certificate not a valid local ssig cert");
+						out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
+					} else {
+						ERROR("Error during certificate validation");
+					}
+				} else {
+					if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file,
+							msg->verify_data_file, hash_algo)) != 0) {
+						if (ret == -1) {
+							ERROR("Signature invalid");
+							out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE;
+						} else {
+							ERROR("Error during signature validation");
+						}
+					} else {
+						out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED;
+					}
+				}
 			}
 		}
-
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:

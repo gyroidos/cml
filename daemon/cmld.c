@@ -491,6 +491,28 @@ cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void 
 }
 
 static void
+cmld_init_control_cb(container_t *container, container_callback_t *cb, void *data)
+{
+	int *control_sock_p = data;
+
+	container_state_t state = container_get_state(container);
+	/* Check if the container got over the initial starting phase */
+	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
+		/* Initialize unpriv control interface on the socket previously bound into container */
+		if(!control_new(*control_sock_p, false)) {
+			WARN("Could not create unpriv control socket for %s",
+				container_get_description(container));
+		} else {
+			INFO("Create unpriv control socket for %s",
+				container_get_description(container));
+		}
+		mem_free(control_sock_p);
+		container_unregister_observer(container, cb);
+	}
+	// TODO think about if this is unregistered correctly in corner cases...
+}
+
+static void
 cmld_container_register_observers(container_t *container)
 {
 	/* register callbacks which should be present while the container is running
@@ -516,6 +538,16 @@ cmld_container_register_observers(container_t *container)
 	} else {
 		if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
 			ERROR("Could not register airplane mode observer callback for %s",
+					container_get_description(container));
+		}
+	}
+	if (guestos_get_feature_install_guest(container_get_os(container))) {
+		INFO("GuestOS allows to install new Guests => mapping control socket");
+		int *control_sock_p = mem_new0(int, 1);
+		*control_sock_p = container_bind_socket_before_start(container, CMLD_CONTROL_SOCKET);
+
+		if (!container_register_observer(container, &cmld_init_control_cb, control_sock_p)) {
+			WARN("Could not register observer init control callback for %s",
 					container_get_description(container));
 		}
 	}
@@ -584,7 +616,7 @@ cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
 	/* Check if the container got over the initial starting phase */
 	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
 		/* Initialize control interface on the socket previously bound into a0 */
-		cmld_control_gui = control_new(*control_sock_p);
+		cmld_control_gui = control_new(*control_sock_p, true);
 		mem_free(control_sock_p);
 		container_unregister_observer(container, cb);
 	}

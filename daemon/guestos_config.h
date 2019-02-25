@@ -159,5 +159,18 @@ guestos_config_get_feature_bg_booting(const guestos_config_t *cfg);
 bool
 guestos_config_get_feature_devtmpfs(const guestos_config_t *cfg);
 
+/**
+ * Returns if the GuestOS is allowed to install new GuestOSes
+ * e.g., an OS which converts other container runtime images for the CML
+ */
+bool
+guestos_config_get_feature_install_guest(const guestos_config_t *cfg);
+
+/**
+ * Returns the URL to the file server for updating/installing new images
+ */
+const char *
+guestos_config_get_update_base_url(const guestos_config_t *cfg);
+
 #endif /* GUESTOS_CONFIG_H */
 

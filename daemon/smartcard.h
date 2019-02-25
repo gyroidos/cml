@@ -87,7 +87,8 @@ typedef enum smartcard_crypto_verify_result {
 	VERIFY_GOOD = 0,
 	VERIFY_ERROR,
 	VERIFY_BAD_SIGNATURE,
-	VERIFY_BAD_CERTIFICATE
+	VERIFY_BAD_CERTIFICATE,
+	VERIFY_LOCALLY_SIGNED
 } smartcard_crypto_verify_result_t;
 
 /**

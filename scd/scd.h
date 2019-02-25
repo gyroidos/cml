@@ -29,6 +29,7 @@
 // Do not edit! The provisioning script requires this path (also trustme-main.mk and its dummy provsg folder)
 #define SCD_TOKEN_DIR "/data/cml/tokens"
 #define SSIG_ROOT_CERT SCD_TOKEN_DIR "/ssig_rootca.cert"
+#define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
 #define GEN_ROOT_CERT SCD_TOKEN_DIR "/gen_rootca.cert"
 
 /**

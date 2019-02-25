@@ -70,6 +70,7 @@ struct control {
 	int port;		// remote port
 	bool connected; // FIXME: we should reconsider this...
 	event_timer_t *reconnect_timer;
+	bool privileged;
 };
 
 // TODO really?!
@@ -386,6 +387,94 @@ control_send_message(control_message_t message, int fd)
 }
 
 /**
+ * Handles list_guestos_configs cmd.
+ * Used in both priv and unpriv control handlers.
+ */
+static void
+control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDaemon *msg, int fd)
+{
+	// allocate memory for result
+	size_t n = guestos_mgr_get_guestos_count();
+	GuestOSConfig **results = mem_new(GuestOSConfig *, n);
+
+	// fill result with data from guestos
+	for (size_t i = 0; i < n; i++) {
+		guestos_t *os = guestos_mgr_get_guestos_by_index(i);
+		results[i] = guestos_get_raw_ptr(os);
+	}
+
+	// build and send response message to controller
+	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+	out.code = DAEMON_TO_CONTROLLER__CODE__GUESTOS_CONFIGS_LIST;
+	out.n_guestos_configs = n;
+	out.guestos_configs = results;
+	if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+		WARN("Could not send list of guestos configs to MDM");
+	}
+
+	// collect garbage
+	mem_free(results);
+}
+
+/**
+ * Handles push_guestos_configs cmd
+ * Used in both priv and unpriv control handlers.
+ */
+static void
+control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED int fd)
+{
+	if (!msg->has_guestos_config_file)
+		WARN("PUSH_GUESTOS_CONFIG without config file");
+	else if (!msg->has_guestos_config_signature)
+		WARN("PUSH_GUESTOS_CONFIG without config signature");
+	else if (!msg->has_guestos_config_certificate)
+		WARN("PUSH_GUESTOS_CONFIG without config certificate");
+	else {
+		guestos_mgr_push_config(msg->guestos_config_file.data, msg->guestos_config_file.len,
+			msg->guestos_config_signature.data, msg->guestos_config_signature.len,
+			msg->guestos_config_certificate.data, msg->guestos_config_certificate.len);
+	}
+}
+
+/**
+ * Handles a single decoded ControllerToDaemon message received on unriv socket
+ *
+ * @param msg	the ControllerToDaemon message to be handled
+ * @param fd	file descriptor of the unprivileged client connection
+ *		(for sending a response, if necessary)
+ */
+static void
+control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
+{
+	IF_NULL_RETURN(msg);
+	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+
+	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
+		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
+		TRACE("Handling unpriv ControllerToDaemon message:\n%s", msg_text ? msg_text : "NULL");
+		if (msg_text)
+			free(msg_text);
+	}
+
+	switch (msg->command) {
+	// Global commands:
+
+	case CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS: {
+		control_handle_cmd_list_guestos_configs(msg, fd);
+	} break;
+	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG: {
+		control_handle_cmd_push_guestos_configs(msg, fd);
+	} break;
+	default:
+		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
+		out.code = DAEMON_TO_CONTROLLER__CODE__RESPONSE;
+		out.code = DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED;
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+			WARN("Could not response to fd=%d", fd);
+	}
+}
+
+/**
  * Handles a single decoded ControllerToDaemon message.
  *
  * @param msg	the ControllerToDaemon message to be handled
@@ -419,27 +508,7 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 	// Global commands:
 
 	case CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS: {
-		// allocate memory for result
-		size_t n = guestos_mgr_get_guestos_count();
-		GuestOSConfig **results = mem_new(GuestOSConfig *, n);
-
-		// fill result with data from guestos
-		for (size_t i = 0; i < n; i++) {
-			guestos_t *os = guestos_mgr_get_guestos_by_index(i);
-			results[i] = guestos_get_raw_ptr(os);
-		}
-
-		// build and send response message to controller
-		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-		out.code = DAEMON_TO_CONTROLLER__CODE__GUESTOS_CONFIGS_LIST;
-		out.n_guestos_configs = n;
-		out.guestos_configs = results;
-		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
-			WARN("Could not send list of guestos configs to MDM");
-		}
-
-		// collect garbage
-		mem_free(results);
+		control_handle_cmd_list_guestos_configs(msg, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS: {
@@ -617,17 +686,7 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG: {
-		if (!msg->has_guestos_config_file)
-			WARN("PUSH_GUESTOS_CONFIG without config file");
-		else if (!msg->has_guestos_config_signature)
-			WARN("PUSH_GUESTOS_CONFIG without config signature");
-		else if (!msg->has_guestos_config_certificate)
-			WARN("PUSH_GUESTOS_CONFIG without config certificate");
-		else {
-			guestos_mgr_push_config(msg->guestos_config_file.data, msg->guestos_config_file.len,
-					msg->guestos_config_signature.data, msg->guestos_config_signature.len,
-					msg->guestos_config_certificate.data, msg->guestos_config_certificate.len);
-		}
+		control_handle_cmd_push_guestos_configs(msg, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__RELOAD_CONTAINERS: {
@@ -892,9 +951,14 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 	else if (events & EVENT_IO_READ) {
 		ControllerToDaemon *msg = (ControllerToDaemon *)protobuf_recv_message(fd, &controller_to_daemon__descriptor);
 		if (msg != NULL) {
-			control_handle_message(msg, fd);
+			if (control->privileged) {
+				control_handle_message(msg, fd);
+				TRACE("Handled control connection %d", fd);
+			} else { // unprivileged control interface (e.g. installer)
+				control_handle_message_unpriv(msg, fd);
+				TRACE("Handled unprivileged control connection %d", fd);
+			}
 			protobuf_free_message((ProtobufCMessage *)msg);
-			TRACE("Handled control connection %d", fd);
 			return;
 		}
 		if (!(events & EVENT_IO_EXCEPT)) {
@@ -948,9 +1012,14 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 		return;
 	}
 
-	control_handle_message(msg, fd);
+	if (control->privileged) {
+		control_handle_message(msg, fd);
+		TRACE("Handled control connection %d", fd);
+	} else { // unprivileged control interface (e.g. installer)
+		control_handle_message_unpriv(msg, fd);
+		TRACE("Handled unprivileged control connection %d", fd);
+	}
 	protobuf_free_message((ProtobufCMessage *)msg);
-	TRACE("Handled control connection %d", fd);
 }
 
 /**
@@ -1054,7 +1123,7 @@ control_remote_reconnect(control_t *control)
 }
 
 control_t *
-control_new(int sock)
+control_new(int sock, bool privileged)
 {
 	if (listen(sock, CONTROL_SOCK_LISTEN_BACKLOG) < 0) {
 		WARN_ERRNO("Could not listen on new control sock");
@@ -1065,6 +1134,7 @@ control_new(int sock)
 	control->sock = sock;
 	control->sock_client = -1;
 	control->type = AF_UNIX;
+	control->privileged = privileged;
 
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, control_cb_accept, control);
 	event_add_io(event);
@@ -1083,7 +1153,7 @@ control_local_new(const char *path)
 		WARN("Could not create and bind UNIX domain socket");
 		return NULL;
 	}
-	control = control_new(sock);
+	control = control_new(sock, true);
 
 	return control;
 }
@@ -1098,6 +1168,7 @@ control_remote_new(const char *hostip, const char *service)
 	control->connected = false;
 	control->sock = -1;
 	control->sock_client = -1;
+	control->privileged = true;
 
 	control->reconnect_timer = NULL;
 
