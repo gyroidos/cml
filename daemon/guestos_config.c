@@ -147,8 +147,6 @@ guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount
 {
 	ASSERT(mount);
 
-	IF_NULL_RETURN(mounts);
-
 	for (size_t i = 0; i < n_mounts; i++) {
 		GuestOSMount *m = mounts[i];
 		mount_entry_t *e = mount_add_entry(mount,
