@@ -318,8 +318,9 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 	INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
 		 cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD : GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
 
-	// 4. trigger image download if os is used by a container
-	if (guestos_mgr_is_guestos_used_by_containers(os_name)) {
+	// 4. trigger image download if os is used by a container or a fresh install
+	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os) {
+		INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_DOWNLOAD);
 		guestos_mgr_download_latest(os_name);
 	}
 	return;
