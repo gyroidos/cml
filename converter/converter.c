@@ -42,16 +42,44 @@
 #include <time.h>
 #include <inttypes.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define BUF_SIZE 10*4096
 
 #define WORK_PATH "/tmp/trustx-converter"
 #define IMAGE_NAME_ROOT "root.img"
 #define MIN_INIT "/sbin/cservice"
+#define FILE_SERVER_ETH "eth0"
 
 #define PKI_PATH "/pki_generator/"
 #define SSIG_KEY_FILE  PKI_PATH "dockerlocal-ssig.key"
 #define SSIG_CERT_FILE PKI_PATH "dockerlocal-ssig.cert"
+
+static char *
+get_ifname_ip_new(const char *ifname)
+{
+	struct ifreq ifr;
+	struct in_addr ip;
+	int sock;
+
+	char *ip_str = NULL;
+
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+	ifr.ifr_addr.sa_family = AF_INET;
+	strncpy(ifr.ifr_name, ifname, IFNAMSIZ-1);
+
+	IF_FALSE_GOTO_DEBUG_ERRNO((ioctl(sock, SIOCGIFADDR, &ifr) == 0), err);
+	ip = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
+
+	ip_str = strdup(inet_ntoa(ip));
+err:
+	close(sock);
+	return ip_str;
+}
 
 int
 write_guestos_config(docker_config_t *config, const char* root_image_file, const char *image_path, const char* image_name, const char *image_tag)
@@ -159,6 +187,10 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	cfg.has_feature_devtmpfs = true;
 	cfg.feature_devtmpfs = true;
 
+	char *local_ip = get_ifname_ip_new("eth0");
+	cfg.update_base_url = mem_printf("http://%s/", local_ip);
+	mem_free(local_ip);
+
 	protobuf_message_write_to_file(out_file, (ProtobufCMessage *)&cfg);
 
 	out_sig_file = mem_printf("%s.sig", out_image_path_versioned);
@@ -186,6 +218,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(cfg.name);
 	mem_free(cfg.upstream_version);
 	mem_free(cfg.mounts);
+	mem_free(cfg.update_base_url);
 	mem_free(description.en);
 	mem_free(description.de);
 	mem_free(init);
