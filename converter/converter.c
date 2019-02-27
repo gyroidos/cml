@@ -58,6 +58,10 @@
 #define SSIG_KEY_FILE  PKI_PATH "dockerlocal-ssig.key"
 #define SSIG_CERT_FILE PKI_PATH "dockerlocal-ssig.cert"
 
+#define SYSTEM_ARCH "x86" // TODO get this from running system
+#define WWW_ROOT "/www/pages"
+#define WWW_OS_IMAGES_DIR WWW_ROOT "/operatingsystems/" SYSTEM_ARCH
+
 static char *
 get_ifname_ip_new(const char *ifname)
 {
@@ -88,6 +92,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	char *out_sig_file;
 	char *out_cert_file;
 	char *out_image_path_versioned;
+	char *out_www_image_path_versioned;
 	char *image_path_unversioned;
 
 	GuestOSConfig cfg = GUEST_OSCONFIG__INIT;
@@ -201,7 +206,13 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 			WARN("Could not copy Certificate to %s", out_cert_file);
 	}
 
-	if(rename(image_path_unversioned, out_image_path_versioned) < 0)
+	if (dir_mkdir_p(WWW_OS_IMAGES_DIR, 0755))
+		ERROR_ERRNO("Can't create folder for hosting image files");
+
+	out_www_image_path_versioned = mem_printf("%s/%s_%s-%"PRId64, WWW_OS_IMAGES_DIR,
+				image_name, image_tag, cfg.version);
+
+	if(rename(image_path_unversioned, out_www_image_path_versioned) < 0)
 		ERROR_ERRNO("Can't rename dir %s", image_path_unversioned);
 
 	// free stuff
@@ -223,6 +234,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(description.de);
 	mem_free(init);
 	mem_free(image_path_unversioned);
+	mem_free(out_www_image_path_versioned);
 	mem_free(out_image_path_versioned);
 	mem_free(out_file);
 	mem_free(out_sig_file);
