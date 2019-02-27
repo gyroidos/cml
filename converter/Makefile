@@ -27,9 +27,13 @@ CC ?= gcc
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -pedantic -Wall -Wextra -Werror
 
 PROTO_SRC := \
+	common/logf.pb-c.c \
+	container.pb-c.c \
+	control.pb-c.c \
 	guestos.pb-c.c
 
 SRC_FILES := \
+	common/sock.c \
 	common/protobuf.c \
 	common/dir.c \
 	common/file.c \
@@ -38,6 +42,7 @@ SRC_FILES := \
 	gzopen.c \
 	util.c \
 	docker.c \
+	control.c \
 	converter.c
 
 LD_LIB_FLAGS := \
@@ -52,8 +57,10 @@ LD_LIB_FLAGS := \
 .PHONY: all
 all: converter
 
-protobuf: guestos.proto
+protobuf: container.proto control.proto guestos.proto common/logf.proto
 	protoc-c --c_out=. guestos.proto
+	protoc-c --c_out=. container.proto
+	protoc-c --c_out=. control.proto
 	$(MAKE) -C common protobuf
 
 ${PROTO_SRC}: protobuf

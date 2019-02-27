@@ -87,6 +87,14 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 void
 guestos_mgr_update_images(void);
 
+/**
+ * Writes the provided cacert to the location expected by scd
+ * to verify signatures. Once the certificate is registered no new
+ * certificate register attempt will be allowed.
+ */
+int
+guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen);
+
 
 /******************************************************************************/
 

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,39 +21,13 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef UTIL_H
-#define UTIL_H
-
-#include <unistd.h>
-
-#define b64_ntop __b64_ntop
-#define b64_pton __b64_pton
-
-#define UTIL_PKI_PATH "/pki_generator/"
-
-int b64_ntop(unsigned char const *src, size_t srclength,
-		             char *target, size_t targsize);
-int b64_pton(char const *src, unsigned char *target, size_t targsize);
+#ifndef CONTROL_H
+#define CONTROL_H
 
 int
-util_fork_and_execvp(const char *path, const char * const *argv);
-
-char *
-util_hash_sha_image_file_new(const char *image_file);
-
-char *
-util_hash_sha256_image_file_new(const char *image_file);
+control_push_guestos(char* cfgfile, char* certfile, char* sigfile);
 
 int
-util_tar_extract(const char *tar_filename, const char* index_file, const char* out_dir);
+control_register_localca(char *ca_cert_file);
 
-int
-util_squash_image(const char *dir, const char *pseudo_file, const char *image_file);
-
-int
-util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file);
-
-int
-util_gen_pki(void);
-
-#endif /* UTIL_H */
+#endif /* CONTROL_H */

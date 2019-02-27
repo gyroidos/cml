@@ -44,6 +44,9 @@
 
 #define SIGN_HASH_BUFFER_SIZE 4096
 
+#define PKIGENSCRIPT_PATH UTIL_PKI_PATH "ssig_pki_generator.sh"
+#define PKIGENCONF_PATH UTIL_PKI_PATH "ssig_pki_generator.conf"
+
 extern tartype_t gztype;
 
 int
@@ -229,5 +232,12 @@ util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_fi
 {
 	const char * const argv[] = { OPENSSLBIN_PATH, "dgst", "-sha512",
 		"-sign", key_file, "-out", sig_file, cfg_file, NULL };
+	return util_fork_and_execvp(argv[0], argv);
+}
+
+int
+util_gen_pki(void)
+{
+	const char * const argv[] = { "bash", PKIGENSCRIPT_PATH, PKIGENCONF_PATH, NULL };
 	return util_fork_and_execvp(argv[0], argv);
 }
