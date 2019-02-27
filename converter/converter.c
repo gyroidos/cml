@@ -37,6 +37,7 @@
 
 #include "docker.h"
 #include "util.h"
+#include "control.h"
 
 #include <unistd.h>
 #include <time.h>
@@ -54,9 +55,9 @@
 #define MIN_INIT "/sbin/cservice"
 #define FILE_SERVER_ETH "eth0"
 
-#define PKI_PATH "/pki_generator/"
-#define SSIG_KEY_FILE  PKI_PATH "dockerlocal-ssig.key"
-#define SSIG_CERT_FILE PKI_PATH "dockerlocal-ssig.cert"
+#define SSIG_KEY_FILE  UTIL_PKI_PATH "dockerlocal-ssig.key"
+#define SSIG_CERT_FILE UTIL_PKI_PATH "dockerlocal-ssig.cert"
+#define LOCALCA_CERT_FILE UTIL_PKI_PATH "ssig_rootca.cert"
 
 #define SYSTEM_ARCH "x86" // TODO get this from running system
 #define WWW_ROOT "/www/pages"
@@ -200,6 +201,13 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 
 	out_sig_file = mem_printf("%s.sig", out_image_path_versioned);
 	out_cert_file = mem_printf("%s.cert", out_image_path_versioned);
+	if (!file_exists(SSIG_KEY_FILE)) {
+		if(util_gen_pki() < 0)
+			WARN("Could not generate PKI and register PKI");
+		else if(file_exists(LOCALCA_CERT_FILE)) {
+			control_register_localca(LOCALCA_CERT_FILE);
+		}
+	}
 	int ret = util_sign_guestos(out_sig_file, out_file, SSIG_KEY_FILE);
 	if (ret == 0) {
 		if(file_copy(SSIG_CERT_FILE, out_cert_file, file_size(SSIG_CERT_FILE), 512, 0) < 0)
@@ -214,6 +222,8 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 
 	if(rename(image_path_unversioned, out_www_image_path_versioned) < 0)
 		ERROR_ERRNO("Can't rename dir %s", image_path_unversioned);
+	else
+		ret = control_push_guestos(out_file, out_cert_file, out_sig_file);
 
 	// free stuff
 	for (uint32_t j=0; j < cfg.n_mounts; ++j) {
@@ -240,7 +250,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(out_sig_file);
 	mem_free(out_cert_file);
 
-	return 0;
+	return ret;
 }
 
 char *

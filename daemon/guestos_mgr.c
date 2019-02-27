@@ -53,6 +53,9 @@
 #define GUESTOS_MGR_UPDATE_SUCCESS "Reboot to install"
 #define GUESTOS_MGR_UPDATE_FAILED "Download failed"
 
+#define SCD_TOKEN_DIR "/data/cml/tokens"
+#define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
+
 static list_t *guestos_list = NULL;
 
 static const char *guestos_basepath = NULL;
@@ -359,6 +362,26 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 	mem_free(tmp_sig_file);
 	mem_free(tmp_cert_file);
 	return res;
+}
+
+int
+guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
+{
+	int ret = -1;
+	IF_TRUE_RETVAL(file_exists(LOCALCA_ROOT_CERT), ret);
+
+	char *tmp_cacert_file = write_to_tmpfile_new(cacert, cacertlen);
+	IF_NULL_RETVAL(tmp_cacert_file, ret);
+
+	if ((ret = file_move(tmp_cacert_file, LOCALCA_ROOT_CERT, GUESTOS_MGR_FILE_MOVE_BLOCKSIZE)) < 0) {
+		ERROR_ERRNO("Failed to move localca root certificate %s to %s",
+				tmp_cacert_file, LOCALCA_ROOT_CERT);
+	} else {
+		INFO("Successfully installed localca root certificate %s to %s",
+				tmp_cacert_file, LOCALCA_ROOT_CERT);
+	}
+	mem_free(tmp_cacert_file);
+	return ret;
 }
 
 
