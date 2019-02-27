@@ -117,14 +117,17 @@ download_start(download_t *dl)
 	ASSERT(dl);
 	pid_t pid = fork();
 
+	char *const argv[] = {WGET_PATH, "-O", dl->file, dl->url, NULL};
+
 	switch (pid) {
 	case -1:
 		ERROR_ERRNO("Could not fork wget to download image %s", dl->file);
 		return -1;
-	case 0:
-		execl(WGET_PATH, "wget", "-O", dl->file, dl->url, (char*)0);
-		ERROR_ERRNO("Could not exec wget");
+	case 0: {
+		execvp(argv[0], argv);
+		ERROR_ERRNO("Could not exec %s", argv[0]);
 		_exit(-1);
+	}
 	default:
 		DEBUG("Started wget with PID %d", pid);
 		dl->wget_pid = pid;
