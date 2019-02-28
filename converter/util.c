@@ -73,7 +73,7 @@ util_fork_and_execvp(const char *path, const char * const *argv)
 			ERROR("Child '%s' terminated abnormally", path);
 		} else {
 			// child terminated normally return exit status
-			return WEXITSTATUS(status);
+			return -WEXITSTATUS(status);
 		}
 	}
 	return -1;
@@ -123,22 +123,21 @@ util_tar_extract(const char *tar_filename, const char* index_file, const char* o
 		char *archive_filename = th_get_pathname(tar);
 		char *out_filename = mem_printf("%s/%s", out_dir, archive_filename);
 
-		char *mode = mem_alloc0(4*sizeof(char));
-		int_to_oct(th_get_mode(tar), mode, (int)(4*sizeof(char)));
+		mode_t mode = th_get_mode(tar);
 		uid_t uid = th_get_uid(tar);
 		gid_t gid = th_get_gid(tar);
 
 		INFO("Writing file %s to %s", archive_filename, out_filename);
 		if (TH_ISCHR(tar)) {
 			// writing file attributes to index file (TODO use hashmap to handle duplicates)
-			file_printf_append(index_file, "%s c %s %d %d %d %d\n",
-				archive_filename, mode, uid, gid,
+			file_printf_append(index_file, "%s c %o %d %d %d %d\n",
+				archive_filename, mode&0777, uid, gid,
 				th_get_devmajor(tar),
 				th_get_devminor(tar));
 		} else if (TH_ISBLK(tar)) {
 			// writing file attributes to index file (TODO use hashmap to handle duplicates)
-			file_printf_append(index_file, "%s b %s %d %d %d %d\n",
-				archive_filename, mode, uid, gid,
+			file_printf_append(index_file, "%s b %o %d %d %d %d\n",
+				archive_filename, mode&0777, uid, gid,
 				th_get_devmajor(tar),
 				th_get_devminor(tar));
 		} else {
@@ -146,12 +145,11 @@ util_tar_extract(const char *tar_filename, const char* index_file, const char* o
 				INFO_ERRNO("Skipping file: %s", archive_filename);
 			} else {
 				// writing file attributes to index file (TODO use hashmap to handle duplicates)
-				file_printf_append(index_file, "%s m %s %d %d\n",
-					archive_filename, mode, uid, gid);
+				file_printf_append(index_file, "%s m %o %d %d\n",
+					archive_filename, mode&0777, uid, gid);
 			}
 		}
 
-		mem_free(mode);
 		mem_free(out_filename);
 	}
 
@@ -223,7 +221,7 @@ util_hash_sha256_image_file_new(const char *image_file)
 int
 util_squash_image(const char *dir, const char *pseudo_file, const char *image_file)
 {
-	const char * const argv[] = {MKSQUASHFS_PATH, dir, image_file, "-noappend", "-all-root", "-comp", MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, "-pf", pseudo_file, NULL};
+	const char * const argv[] = {MKSQUASHFS_PATH, dir, image_file, "-noappend", "-comp", MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, "-pf", pseudo_file, NULL};
 	return util_fork_and_execvp(MKSQUASHFS_PATH, argv);
 }
 
