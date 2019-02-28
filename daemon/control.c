@@ -1014,33 +1014,40 @@ static void
 control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *data)
 {
 	control_t *control = data;
+	/*
+	 * always check READ flag first, since also if the peer called close()
+	 * and there is pending data on the socet the READ and EXCEPT flags are set.
+	 * Thus, we have to read pending date before handling the EXCEPT event.
+	 */
+	if (events & EVENT_IO_READ) {
+		ControllerToDaemon *msg =
+			(ControllerToDaemon *)protobuf_recv_message(fd, &controller_to_daemon__descriptor);
+		// close connection if client EOF, or protocol parse error
+		IF_NULL_GOTO_TRACE(msg, connection_err);
 
-	if (events & EVENT_IO_EXCEPT) {
-		WARN("Exception on connected socket to control client; closing socket");
-		event_remove_io(io);
-		event_io_free(io);
-		if (close(fd) < 0)
-			WARN_ERRNO("Failed to close connected control socket");
-		control->sock_client = -1;
-		return;
+		if (control->privileged) {
+			control_handle_message(msg, fd);
+			TRACE("Handled control connection %d", fd);
+		} else { // unprivileged control interface (e.g. installer)
+			control_handle_message_unpriv(msg, fd);
+			TRACE("Handled unprivileged control connection %d", fd);
+		}
+		protobuf_free_message((ProtobufCMessage *)msg);
 	}
-
-	IF_FALSE_RETURN(events & EVENT_IO_READ);
-
-	ControllerToDaemon *msg = (ControllerToDaemon *)protobuf_recv_message(fd, &controller_to_daemon__descriptor);
-	if (!msg) {
-		WARN("Failed to receive and decode ControllerToDaemon protobuf message!");
-		return;
+	// also check EXCEPT flag
+	if(events & EVENT_IO_EXCEPT) {
+		INFO("Control client closed connection; disconnecting control socket.");
+		goto connection_err;
 	}
+	return;
 
-	if (control->privileged) {
-		control_handle_message(msg, fd);
-		TRACE("Handled control connection %d", fd);
-	} else { // unprivileged control interface (e.g. installer)
-		control_handle_message_unpriv(msg, fd);
-		TRACE("Handled unprivileged control connection %d", fd);
-	}
-	protobuf_free_message((ProtobufCMessage *)msg);
+connection_err:
+	event_remove_io(io);
+	event_io_free(io);
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected control socket");
+	control->sock_client = -1;
+	return;
 }
 
 /**

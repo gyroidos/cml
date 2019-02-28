@@ -99,16 +99,6 @@ static DaemonToController* recv_message(int sock)
 	return resp;
 }
 
-static void sock_disconnect(int sock)
-{
-	// give cmld some time to handle message before closing socket
-	fsync(sock);
-	usleep(200 * 1000);
-	shutdown(sock, SHUT_RDWR);
-	close(sock);
-}
-
-
 static const struct option global_options[] = {
 	{"socket",   required_argument, 0, 's'},
 	{"help",     no_argument, 0, 'h'},
@@ -383,7 +373,7 @@ send_message:
 			protobuf_free_message((ProtobufCMessage *) resp);
 		}
 	}
-	sock_disconnect(sock);
+	close(sock);
 
 	return 0;
 }

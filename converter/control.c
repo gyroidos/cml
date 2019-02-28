@@ -43,7 +43,6 @@ send_message(ControllerToDaemon *msg)
 {
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, CONTROL_SOCKET);
 	IF_TRUE_RETVAL(sock < 0, -1);
-	
 	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) msg);
 	if (msg_size < 0)
 		ERROR("error sending message");
