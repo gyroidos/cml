@@ -91,15 +91,13 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		goto error_read;
 	if (0 == bytes_read) {// EOF / remote end closed the connection
 		DEBUG("client on fd %d closed connection.", fd);
-		close(fd);
 		return NULL;
 	}
 	buflen = ntohl(buflen);
 	TRACE("read protobuf message length (%zd bytes read, %zu bytes expected, len=%d)",
 			bytes_read, sizeof(buflen), buflen);
 	if (((size_t)bytes_read != sizeof(buflen))) {
-		ERROR("Protocol violation closing link!");
-		close(fd);
+		ERROR("Protocol violation!");
 		return NULL;
 	}
 	IF_FALSE_RETVAL(buflen < PROTOBUF_MAX_MESSAGE_SIZE, NULL);
