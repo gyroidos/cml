@@ -193,6 +193,12 @@ char *
 mount_entry_get_mount_data(const mount_entry_t *mntent);
 
 /**
+ * Remounts rootfs read-only
+ */
+int
+mount_remount_root_ro (void);
+
+/**
  * Mounts kernel debugfs
  */
 int

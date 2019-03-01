@@ -278,6 +278,15 @@ mount_entry_match_sha256(const mount_entry_t *e, const char *hash)
 }
 
 int
+mount_remount_root_ro(void) {
+	DEBUG("Remounting rootfs readonly");
+	int ret = mount("none", "/", "none", MS_REMOUNT | MS_RDONLY, NULL);
+	if (ret < 0)
+		FATAL_ERRNO("Could not remount rootfs as readonly");
+	return ret;
+}
+
+int
 mount_debugfs(void)
 {
 	DEBUG("Mounting /sys/kernel/debugfs");

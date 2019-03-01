@@ -850,6 +850,9 @@ cmld_init(const char *path)
 	const char *c0os_name = device_config_get_c0os(device_config);
 	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
+	if (mount_remount_root_ro() < 0)
+		FATAL("Could not remount rootfs read-only");
+
 	if (mount_debugfs() < 0)
 		WARN("Could not mount debugfs (already mounted?)");
 	else
