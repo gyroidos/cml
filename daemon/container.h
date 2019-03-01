@@ -265,6 +265,18 @@ container_get_service_pid(const container_t *container);
 void
 container_oom_protect_service(const container_t *container);
 
+/*
+ * Add process with given PID to cgroups of given container
+ */
+int
+container_add_pid_to_cgroups(const container_t *container, pid_t pid);
+
+/*
+ * Set capapilites for calling process as for given container's init
+ */
+int
+container_set_cap_current_process(const container_t *container);
+
 /**
  * Gets the last exit_status of the container's init process.
  * Only valid if the container is stopped...
@@ -289,6 +301,13 @@ container_get_color(const container_t *container);
  */
 char *
 container_get_color_rgb_string(const container_t *container);
+
+/**
+ * Get socket fd used to communicate with process executed in container context
+ * by using the control run interface
+ */
+int
+container_get_console_sock_cmld(const container_t *container);
 
 /**
  * Remove a container persistently from disk, i.e. remove its configuration and
@@ -337,6 +356,15 @@ container_suspend(container_t *container);
  */
 int
 container_resume(container_t *container);
+
+/**
+ * Run a given command inside a container
+ */
+int
+container_run( container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv);
+
+int
+container_write_exec_input(container_t *container, char *exec_input);
 
 /**
  * Start the given container using the given key to decrypt its filesystem

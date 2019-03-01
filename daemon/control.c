@@ -300,6 +300,80 @@ control_container_status_free(ContainerStatus *c_status)
 	mem_free(c_status);
 }
 
+static ssize_t
+control_read_send(control_t * control, int fd)
+{
+	uint8_t buf[1024];
+	int count = -1;
+
+	if ((count = read(fd, buf, 1023)) > 0) {
+		buf[count] = 0;
+
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_OUTPUT;
+		out.has_exec_output = true;
+		out.exec_output.len = count;
+		out.exec_output.data = buf;
+
+		TRACE("[CONTROL] Read %d bytes: %s. Sending to control client...", count, buf);
+
+		if (protobuf_send_message(control->sock_client,
+				(ProtobufCMessage *) & out) < 0) {
+			WARN("Could not send exec output to MDM");
+		}
+	}
+
+	return count;
+}
+
+static void
+control_cb_read_console(int fd, unsigned events, event_io_t * io, void *data)
+{
+	control_t *control = data;
+
+	TRACE("Console callback called, events: read: %u, write: %u, except: %u",
+		(events & EVENT_IO_READ), (events & EVENT_IO_WRITE), (events & EVENT_IO_EXCEPT));
+
+	if ((events & EVENT_IO_EXCEPT)) {
+		//EVENT_IO_READ not set or read of length 0
+		TRACE("Detected termination of executed command. Stop listening.");
+
+		int i = 0, count = 0;
+
+		do {
+			TRACE("Trying to read remaining data from socket");
+			count = control_read_send(control, fd);
+			TRACE("Response from read was %d", count);
+		} while (i < 100 && count > 0);
+
+		event_remove_io(io);
+		event_io_free(io);
+		close(fd);
+
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+
+		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *) & out) < 0) {
+			WARN("Could not send exec output to MDM");
+		}
+
+		TRACE("Sent notification of command termination to client");
+
+	} else if ((events & EVENT_IO_READ)) {
+		TRACE("Got output from exec'ed command, trying to read from console socket");
+
+			int i = 0, count = 0;
+
+			// necessary to get all output from interactive commands
+			do {
+				TRACE("Trying to read all available data from socket");
+				count = control_read_send(control, fd);
+
+				TRACE("Response from read was %d", count);
+			} while (i < 100 && count > 0);
+	}
+}
+
 static container_t *
 control_get_container_by_uuid_string(const char *uuid_str)
 {
@@ -499,7 +573,7 @@ control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
  *		(for sending a response, if necessary)
  */
 static void
-control_handle_message(const ControllerToDaemon *msg, int fd)
+control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd)
 {
 	// TODO cases when and how to report the result back to the caller?
 	// => for now, only reply if there is actual data to be sent back to the caller
@@ -879,7 +953,41 @@ control_handle_message(const ControllerToDaemon *msg, int fd)
 		}
         } break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD:{
+			TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
 
+			if (container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
+				ERROR("Failed to exec. Wrong UUID or or already executing command in this container.");
+
+				DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+				out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+
+				if (protobuf_send_message(control->sock_client, (ProtobufCMessage *) & out) < 0) {
+					WARN("Could not send exec output to MDM");
+				}
+
+				TRACE("Sent notification of command termination to control client");
+				break;
+
+			} else {
+				DEBUG("Registering read callback for cmld console socket");
+				event_io_t *event = event_io_new(container_get_console_sock_cmld(container),
+										EVENT_IO_READ | EVENT_IO_EXCEPT, control_cb_read_console, control);
+				event_add_io(event);
+			}
+		}
+		break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT:{
+			TRACE("Got input for exec'ed process. Sending message");
+
+			if (container != NULL) {
+				container_write_exec_input(container, msg->exec_input);
+			} else {
+				ERROR("No container UUID given");
+			}
+		break;
+	}
 	default:
 		WARN("Unknown ControllerToDaemon command: %d received", msg->command);
 		/* DO NOTHING */
@@ -973,7 +1081,7 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 		ControllerToDaemon *msg = (ControllerToDaemon *)protobuf_recv_message(fd, &controller_to_daemon__descriptor);
 		if (msg != NULL) {
 			if (control->privileged) {
-				control_handle_message(msg, fd);
+				control_handle_message(control, msg, fd);
 				TRACE("Handled control connection %d", fd);
 			} else { // unprivileged control interface (e.g. installer)
 				control_handle_message_unpriv(msg, fd);
@@ -1026,7 +1134,7 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 		IF_NULL_GOTO_TRACE(msg, connection_err);
 
 		if (control->privileged) {
-			control_handle_message(msg, fd);
+			control_handle_message(control, msg, fd);
 			TRACE("Handled control connection %d", fd);
 		} else { // unprivileged control interface (e.g. installer)
 			control_handle_message_unpriv(msg, fd);

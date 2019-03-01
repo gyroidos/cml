@@ -106,3 +106,22 @@ mem_free(void *mem)
 {
 	free(mem);
 }
+
+void
+mem_free_array(void **array, size_t size)
+{
+	if (array != NULL) {
+		size_t i = 0;
+		while (i < size) {
+			if (array[i] != NULL) {
+				DEBUG("[MEM] Freeing element %lu", i);
+				mem_free(array[i]);
+			}
+
+			i++;
+		}
+
+		DEBUG("[MEM] Freeing array");
+		mem_free(array);
+	}
+}
