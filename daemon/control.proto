@@ -157,6 +157,12 @@ message ControllerToDaemon {
 		// List network interfaces assigned to a container
 		CONTAINER_LIST_IFACES = 112;
 
+		// Execute command inside container
+		CONTAINER_EXEC_CMD = 113;
+
+		//Send input to exec'ed porgram
+		CONTAINER_EXEC_INPUT = 114;
+
 	}
 	required Command command = 1;
 
@@ -170,6 +176,10 @@ message ControllerToDaemon {
 	optional ContainerStartParams container_start_params = 11;	// start parameters for CONTAINER_START
 	optional AssignInterfaceParams assign_iface_params = 12;	// parameter for CONTAINER_ASSIGNIFACE / CONTAINER_UNASSIGNIFACE
 	optional bytes container_config_file = 13;		// new container config for CREATE_CNTAINER
+	optional string exec_command = 14; // command to execute in container context
+	repeated string exec_args = 15; // arguments for command to be executed
+	optional bool exec_pty = 16 [ default = false ]; // assign pty to command
+	optional string exec_input = 17; // input to be sent to already executing command
 
 	// Daemon
 	optional bytes guestos_config_file = 20;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
@@ -206,6 +216,10 @@ message DaemonToController {
 
 		RESPONSE = 13;			// -> [response]
 
+		EXEC_END = 14;
+
+		EXEC_OUTPUT = 15;
+
 		// Requests to other endpoint:
 
 		// Log-on the device onto the backend (not applicable for cmdline tool).
@@ -241,5 +255,6 @@ message DaemonToController {
 	optional string logon_imei = 203;					// IMEI for LOGON_DEVICE
 	optional string logon_mac_address = 204;			// MAC address for LOGON_DEVICE
 	optional string logon_phone_number = 205;			// Phone number for LOGON_DEVICE
+	optional string exec_end_reason = 206;
+	optional bytes exec_output = 207;
 }
-

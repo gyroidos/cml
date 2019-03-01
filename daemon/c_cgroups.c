@@ -966,6 +966,40 @@ error:
 }
 
 int
+c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid)
+{
+	ASSERT(cgroups);
+
+	// temporarily add systemd to list
+	cgroups->active_cgroups = list_prepend(cgroups->active_cgroups, "systemd");
+
+	for (list_t* l = cgroups->active_cgroups; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_child_path = mem_printf("%s/%s/%s/child", CGROUPS_FOLDER, subsys,
+				uuid_string(container_get_uuid(cgroups->container)));
+		char *cgroup_tasks = mem_printf("%s/tasks", subsys_child_path);
+
+		/* assign the container to the cgroup */
+		if (file_printf(cgroup_tasks, "%d", pid) == -1) {
+			ERROR_ERRNO("Could not add container %s to its cgroup under %s",
+				container_get_description(cgroups->container), subsys_child_path);
+			mem_free(cgroup_tasks);
+			mem_free(subsys_child_path);
+			goto error;
+		}
+	}
+
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
+
+	return 0;
+error:
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
+	return -1;
+}
+
+int
 c_cgroups_start_child(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);

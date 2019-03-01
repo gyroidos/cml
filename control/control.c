@@ -27,16 +27,21 @@
 #include "control.pb-c.h"
 #endif
 
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
 #include "common/sock.h"
 #include "common/file.h"
+#include "common/mem.h"
 
 #include <getopt.h>
 #include <stdbool.h>
+#include <termios.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #define CONTROL_SOCKET SOCK_PATH(control)
 #define RUN_PATH "run"
@@ -327,17 +332,54 @@ int main(int argc, char *argv[])
                         msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE;
 		} else
 			ASSERT(false); // should never be reached
-	} else if (!strcasecmp(command, "run") ) {
-		if ( optind > argc-2 )
+	} else if (!strcasecmp(command, "run")) {
+		if (optind > argc-2)
 			print_usage(argv[0]);
+
 		has_response = true;
-		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_PID;
-		optind = argc-1;
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD;
+
+		int nopty = 0, argcount = 0;
+
+
+		msg.has_exec_pty = true;
+
+		if (! strcmp(argv[optind], "nopty")) {
+			TRACE("Got nopty option");
+			msg.exec_pty = 0;
+			nopty = 1;
+			optind++;
+		} else {
+			msg.exec_pty = 1;
+		}
+
+		if (optind > argc-2)
+			print_usage(argv[0]);
+
+		msg.exec_command = argv[optind];
+
+		if (optind < argc - 1) {
+			TRACE("[CLIENT] Allocating %d bytes for arguments", sizeof(char *) * argc);
+			msg.exec_args = mem_alloc(sizeof(char *) * argc);
+
+			while (optind < argc - 1) {
+				TRACE("[CLIENT] Parsing command arguments at index %d, optind: %d: %s",
+					argcount,optind, argv[optind]);
+				msg.exec_args[argcount] = mem_strdup(argv[optind]);
+
+				optind++;
+				argcount++;
+			}
+		}
+
+		TRACE("[CLIENT] Done parsing arguments, got %d argsuments", argcount);
+		msg.n_exec_args = argcount;
+		TRACE("after set n_exec_args");
 	} else
 		print_usage(argv[0]);
 
 	// need exactly one more argument (i.e. container string)
-	if (optind != argc-1)
+	if (optind != argc - 1)
 		print_usage(argv[0]);
 
 	msg.n_container_uuids = 1;
@@ -348,33 +390,118 @@ send_message:
 	sock = sock_connect(socket_file);
 	send_message(sock, &msg);
 
+	struct termios termios_before;
+	tcgetattr(STDIN_FILENO, &termios_before);
+
+	if (!strcasecmp(command, "run")) {
+		TRACE("[CLIENT] Processing response for run command");
+
+		if(msg.exec_pty) {
+			TRACE("[CLIENT] Setting termios for PTY");
+			struct termios termios_run = termios_before;
+			termios_run.c_cflag &= ~(ICRNL | IXON | IXOFF );
+			termios_run.c_oflag &= ~(OPOST);
+			termios_run.c_lflag &= ~(ISIG | ICANON | ECHO | ECHOCTL);
+			tcsetattr(STDIN_FILENO, TCSANOW, &termios_run);
+		}
+
+		//free exec arguments
+		TRACE("[CLIENT] Freeing %d args at %p", msg.n_exec_args, msg.exec_args);
+		mem_free_array((void *) msg.exec_args, msg.n_exec_args);
+		TRACE("[CLIENT] after free ");
+
+		int pid = fork();
+
+		if (pid == -1) {
+			ERROR("[CLIENT] Failed to fork(), exiting...\n");
+			goto exit;
+		} else if (pid == 0) {
+			TRACE("[CLIENT] User input reading child forked, PID: %i", getpid());
+
+			char buf[128];
+			unsigned int count;
+
+			while (1) {
+				TRACE("[CLIENT] Trying to read input for exec'ed process");
+
+				if ((count = read(STDIN_FILENO, buf, 127)) > 0) {
+
+					buf[count] = 0;
+
+					TRACE("[CLIENT] Got input for exec'ed process: %s", buf);
+
+					ControllerToDaemon inputmsg = CONTROLLER_TO_DAEMON__INIT;
+					inputmsg.container_uuids = mem_new(char*, 1);
+					inputmsg.container_uuids[0] = argv[optind];
+					inputmsg.n_container_uuids = 1;
+					inputmsg.command =
+					CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
+					inputmsg.exec_input = buf;
+
+					TRACE("[CLIENT] Sending input for exec'ed process in container %s", argv[optind]);
+
+					send_message(sock, &inputmsg);
+					mem_free(inputmsg.container_uuids);
+					TRACE("[CLIENT] Sent input to cmld");
+				}
+			}
+		} else {
+			TRACE("[CLIENT] Exec'ed process outputreceiving  child forked, PID: %i", getpid());
+
+			while (1) {
+				TRACE("[CLIENT] Waiting for command output message from cmld");
+				DaemonToController *resp = recv_message(sock);
+
+				TRACE("[CLIENT] Got message from exec'ed process\n");
+
+				unsigned int count = 0;
+				size_t written = 0, current = 0;
+
+				if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_OUTPUT) {
+					TRACE("[CLIENT] Message length; %d\n", resp->exec_output.len);
+					while (written < resp->exec_output.len) {
+						TRACE("[CLIENT] Writing exec output to stdout");
+						if(current = write(STDOUT_FILENO, resp->exec_output.data + written,
+									resp->exec_output.len - written)) {
+							written += current;
+						}
+
+						fflush(stdout);
+					}
+
+				} else if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_END) {
+					TRACE("[CLIENT] Got notification of command termination. Exiting...");
+
+					kill(pid, SIGTERM);
+					waitpid(pid, NULL, 0);
+					goto exit;
+				} else {
+					ERROR("Detected unexpected message from cmld. Exiting");
+					goto exit;
+				}
+			}
+		}
+		ERROR_ERRNO("[CLIENT] command \"run\" failed");
+	}
+
 	// recv response if applicable
-	if (has_response){
+	if (has_response) {
+		TRACE("[CLIENT] Awaiting response");
+
 		DaemonToController *resp = recv_message(sock);
 
-		// do command-specific response processing
-		if (!strcasecmp(command, "run") ){
-			pid_t pid = resp->container_pid;
-		        int run_argc = argc - 1;
-			char **run_argv = mem_new(char *, run_argc + 1);
-			run_argv[0] = mem_strdup(RUN_PATH);
-			run_argv[1] = mem_printf("%u", pid);
-			for ( int i = 2; i < run_argc; i++ ){
-				run_argv[i] = mem_strdup(argv[i]);
-			}
-			run_argv[run_argc] = NULL;
+		TRACE("[CLIENT] Got response. Processing");
 
-			// execute command
-			execvp(run_argv[0], run_argv);
-			ERROR_ERRNO("run failed");
-		} else {
-			// TODO for now just dump the response in text format
-			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
-			protobuf_free_message((ProtobufCMessage *) resp);
-		}
+		// do command-specific response processing
+		// TODO for now just dump the response in text format
+		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
+		protobuf_free_message((ProtobufCMessage *) resp);
 	}
+
+exit:
 	close(sock);
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
+	mem_free(msg.container_uuids);
 
 	return 0;
 }
-

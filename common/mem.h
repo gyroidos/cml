@@ -122,6 +122,14 @@ void
 mem_free(void *mem);
 
 /**
+ * Frees the allocated memory of each array element and the array itself.
+ * @param array Array to be freed.
+ * @param size Array size.
+ */
+void
+mem_free_array(void **array, size_t size);
+
+/**
  * Convenience wrapper macro for mem_alloc which calculates
  * the correct size to be allocated and casts accordingly.
  */

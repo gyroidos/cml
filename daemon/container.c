@@ -26,6 +26,7 @@
 
 #include "container.h"
 
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/uuid.h"
@@ -42,6 +43,7 @@
 #include "c_vol.h"
 #include "c_cap.h"
 #include "c_service.h"
+#include "c_run.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
@@ -147,6 +149,7 @@ struct container {
 
 	c_vol_t *vol;
 	c_service_t *service;
+	c_run_t *run;
 	// Wifi module?
 
 	char *imei;
@@ -356,6 +359,13 @@ container_new_internal(
 	if (!container->service) {
 		WARN("Could not initialize service subsystem for container %s (UUID: %s)", container->name,
 		     uuid_string(container->uuid));
+		goto error;
+	}
+
+	container->run = c_run_new(container);
+	if (!container->run) {
+		WARN("Could not initialize run subsystem for container %s (UUID: %s)", container->name,
+			uuid_string(container->uuid));
 		goto error;
 	}
 
@@ -582,6 +592,8 @@ container_free(container_t *container) {
 		c_net_free(container->net);
 	if (container->vol)
 		c_vol_free(container->vol);
+	if (container->run)
+		c_run_free(container->run);
 	if (container->service)
 		c_service_free(container->service);
 	if (container->imei)
@@ -704,6 +716,31 @@ container_oom_protect_service(const container_t *container)
     mem_free(path);
 }
 
+c_cgroups_t *
+container_get_cgroups(const container_t *container)
+{
+	ASSERT(container);
+	return container->cgroups;
+}
+
+int
+container_add_pid_to_cgroups(const container_t *container, pid_t pid)
+{
+	return c_cgroups_add_pid(container->cgroups, pid);
+}
+
+int
+container_set_cap_current_process(const container_t *container) {
+	return c_cap_set_current_process(container);
+}
+
+int
+container_get_console_sock_cmld(const container_t * container)
+{
+	ASSERT(container);
+	return c_run_get_console_sock_cmld(container->run);
+}
+
 int
 container_get_exit_status(const container_t *container)
 {
@@ -817,6 +854,7 @@ container_cleanup(container_t *container)
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
 	c_net_cleanup(container->net);
+	c_run_cleanup(container->run);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol);
 
@@ -880,6 +918,9 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			else
 				WARN_ERRNO("waitpid failed for container %s", container_get_description(container));
 			break;
+		} else if (pid == c_run_get_active_exec_pid(container->run)) {
+			DEBUG("Exec'ed process exited. Cleaning up;");
+			c_run_cleanup(container->run);
 		} else {
 			DEBUG("Reaped a child with PID %d for container %s", pid, container_get_description(container));
 		}
@@ -1214,6 +1255,20 @@ error:
 	container_kill(container);
 }
 
+int
+container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv)
+{
+	ASSERT(cmd);
+
+	TRACE("Forwarding request to c_run subsystem");
+	return c_run_exec_process(container->run, create_pty, cmd, argc, argv);
+}
+
+int
+container_write_exec_input(container_t *container, char *exec_input)
+{
+	return c_run_write_exec_input(container->run, exec_input);
+}
 
 int
 container_start(container_t *container)//, const char *key)
