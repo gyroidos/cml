@@ -227,7 +227,7 @@ guestos_mgr_update_images(void)
 static char *
 write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 {
-	char *file = mem_strdup("tmpXXXXXXXX");
+	char *file = mem_strdup("/tmp/tmpXXXXXXXX");
 	int fd = mkstemp(file);
 	if (fd != -1) {
 		int len = fd_write(fd, (char *) buf, buflen);
