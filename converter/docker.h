@@ -32,6 +32,8 @@ typedef struct docker_remote_file {
 	char *digest_algorithm;
 	char *digest;
 	char *suffix;
+	char *platform_arch;
+	char *platform_variant;
 } docker_remote_file_t;
 
 typedef struct docker_manifest {
@@ -64,6 +66,16 @@ typedef struct docker_config {
 	list_t *labels_list;
 } docker_config_t;
 
+typedef struct docker_manifest_list {
+	int schema_version;
+	char *media_type;
+	int manifests_size;
+	docker_remote_file_t **manifests;
+} docker_manifest_list_t;
+
+docker_manifest_list_t*
+docker_parse_manifest_list_new(const char *raw_file_buffer);
+
 docker_manifest_t*
 docker_parse_manifest_new(const char *raw_file_buffer);
 
@@ -71,10 +83,16 @@ docker_config_t*
 docker_parse_config_new(const char *raw_file_buffer);
 
 void
+docker_manifest_list_free(docker_manifest_list_t *ml);
+
+void
 docker_manifest_free(docker_manifest_t *manifest);
 
 void
 docker_config_free(docker_config_t* cfg);
+
+int
+docker_download_manifest_list(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag);
 
 int
 docker_download_manifest(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag);

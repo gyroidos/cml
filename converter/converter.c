@@ -318,16 +318,26 @@ void
 print_usage(char *progname)
 {
 	ERROR("Usage: %s login -u <username> -p <password> <hostname:port>", progname);
-	ERROR("Usage: %s pull <hostname:port> <imagename> [<imagetag>]", progname);
+	ERROR("Usage: %s pull <hostname:port> <arch> <imagename> [<imagetag>]", progname);
 }
 
 
 int
 main(UNUSED int argc, char **argv)
 {
-	char *buf, *manifest_file;
+	char *buf, *manifest_file, *manifest_list_file;
 	char *image_tag = NULL;
 	char *image_name = NULL;;
+	char *image_arch = NULL;
+
+	char *config_file_name = NULL;
+	docker_config_t *config = NULL;
+	char *trustx_image_path = NULL;
+	char *trustx_image_file = NULL;
+
+	docker_manifest_list_t *ml = NULL;
+	char *manifest_url_digest = NULL;
+	docker_manifest_t *manifest = NULL;
 
 	logf_register(&logf_file_write, stdout);
 
@@ -344,11 +354,12 @@ main(UNUSED int argc, char **argv)
 		return -1;
 	}
 	if (!strncmp(argv[1], "pull", strlen("pull"))) {
-		if (argc < 5)
+		if (argc < 6)
 			image_tag = "latest";
 		else
-			image_tag = argv[4];
-		image_name = argv[3];
+			image_tag = argv[5];
+		image_arch = argv[3];
+		image_name = argv[4];
 		docker_set_host_url(argv[2]);
 
 	} else if (!strncmp(argv[1], "login", strlen("login"))) {
@@ -371,9 +382,42 @@ main(UNUSED int argc, char **argv)
 	char* token = docker_get_curl_token_new(image_name, token_file);
 	IF_NULL_GOTO_ERROR(token, err);
 
+	manifest_list_file = mem_printf("%s/%s", docker_image_path, "manifests.json");
+	if (docker_download_manifest_list(token, manifest_list_file, image_name, image_tag) < 0) {
+		ERROR("Could not download manifest list");
+		goto err;
+	}
+
+	DEBUG("Trying to read manifest list %s", manifest_list_file);
+	buf = file_read_new(manifest_list_file, BUF_SIZE);
+	if (!buf) {
+		ERROR("Could not read manifest list file");
+		goto err;
+	}
+
+	ml = docker_parse_manifest_list_new(buf);
+
+	mem_free(buf);
+	buf = NULL;
+
+	for (int i=0; i < ml->manifests_size; ++i) {
+		if (!strcmp(ml->manifests[i]->platform_arch, image_arch)) {
+			manifest_url_digest = mem_printf("%s:%s",
+					ml->manifests[i]->digest_algorithm,
+					ml->manifests[i]->digest);
+			if (strcmp(image_arch, "arm")) // for arm run throuh to latest subarch
+				break;
+		}
+	}
+	if (!manifest_url_digest) {
+		ERROR("No manifets for requested architecture found!");
+		goto err;
+	}
+	INFO ("manifests with url digest %s", manifest_url_digest);
+
 	manifest_file = mem_printf("%s/%s", docker_image_path, "manifest.json");
 
-	if (0 < docker_download_manifest(token, manifest_file, image_name, image_tag)) {
+	if (docker_download_manifest(token, manifest_file, image_name, manifest_url_digest) < 0) {
 		ERROR("Could not download manifest");
 		goto err;
 	}
@@ -384,9 +428,8 @@ main(UNUSED int argc, char **argv)
 		ERROR("Could not read manifest file");
 		goto err;
 	}
-	mem_free(manifest_file);
 
-	docker_manifest_t *manifest = docker_parse_manifest_new(buf);
+	manifest = docker_parse_manifest_new(buf);
 
 	mem_free(buf);
 	buf = NULL;
@@ -397,14 +440,14 @@ main(UNUSED int argc, char **argv)
 	if (file_exists(token_file))
 		remove(token_file);
 
-	char *config_file_name = mem_printf("%s/%s%s", docker_image_path, manifest->config->digest, manifest->config->suffix);
+	config_file_name = mem_printf("%s/%s%s", docker_image_path, manifest->config->digest, manifest->config->suffix);
 	DEBUG("Trying to read config %s", config_file_name);
 	buf = file_read_new(config_file_name, BUF_SIZE);
 	if (!buf) {
 		ERROR("Could not read config file");
-		return -1;
+		goto err;
 	}
-	docker_config_t *config = docker_parse_config_new(buf);
+	config = docker_parse_config_new(buf);
 
 	// replace the slashes in docker image name to be compatible with trustme
 	// guestos names, e.g. library/debian -> library_debian
@@ -412,21 +455,23 @@ main(UNUSED int argc, char **argv)
 	while ((strp = strchr(strp, '/')) != NULL )
 		*strp++ = '_';
 
-	char *trustx_image_path = mem_printf("%s/%s", WORK_PATH, "trustx_image");
+	trustx_image_path = mem_printf("%s/%s", WORK_PATH, "trustx_image");
 	if (dir_mkdir_p(trustx_image_path, 0755) < 0) {
 		ERROR_ERRNO("Can't create out dir %s", trustx_image_path);
-		return -1;
+		goto err;
 	}
 
-	char *trustx_image_file = merge_layers_new(manifest, docker_image_path, trustx_image_path, image_name, image_tag);
+	trustx_image_file = merge_layers_new(manifest, docker_image_path, trustx_image_path, image_name, image_tag);
 	if (NULL == trustx_image_file) {
 		ERROR("Failed to merge layers resulting image file is NULL!");
-		return -1;
+		goto err;
 
 	}
 
 	write_guestos_config(config, trustx_image_file, trustx_image_path, image_name, image_tag);
 
+	mem_free(manifest_list_file);
+	mem_free(manifest_file);
 	mem_free(docker_image_path);
 	mem_free(trustx_image_path);
 	mem_free(trustx_image_file);
@@ -435,13 +480,33 @@ main(UNUSED int argc, char **argv)
 	docker_config_free(config);
 
 	mem_free(token_file);
+	mem_free(token);
 	return 0;
 
 err:
 	INFO("Cleaning up token_file: %s", token_file);
 	if (file_exists(token_file))
 		remove(token_file);
-	mem_free(docker_image_path);
 	mem_free(token_file);
+	if (token)
+		mem_free(token);
+
+	if (manifest_list_file)
+		mem_free(manifest_list_file);
+	if (manifest_url_digest)
+		mem_free(manifest_url_digest);
+	if (manifest_file)
+		mem_free(manifest_file);
+	if (docker_image_path)
+		mem_free(docker_image_path);
+	if (trustx_image_path)
+		mem_free(trustx_image_path);
+	if (trustx_image_file)
+		mem_free(trustx_image_file);
+
+	if (manifest)
+		docker_manifest_free(manifest);
+	if (config)
+		docker_config_free(config);
 	return -1;
 }

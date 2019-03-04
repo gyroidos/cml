@@ -39,6 +39,10 @@
 #define BUF_SIZE 10*4096
 #define CURL_PATH "curl"
 
+#define MEDIA_TYPE_MANIFEST_LIST_V2 "application/vnd.docker.distribution.manifest.list.v2+json"
+#define MEDIA_TYPE_MANIFEST_V2 "application/vnd.docker.distribution.manifest.v2+json"
+#define MEDIA_TYPE_MANIFEST_V1 "application/vnd.docker.distribution.manifest.v1+json"
+
 static char* host_url = NULL;
 
 static void
@@ -53,6 +57,10 @@ docker_remote_file_free(docker_remote_file_t* rf)
 	//	mem_free(rf->digest);
 	if (rf->suffix)
 		mem_free(rf->suffix);
+	if (rf->platform_arch)
+		mem_free(rf->platform_arch);
+	if (rf->platform_variant)
+		mem_free(rf->platform_variant);
 	mem_free(rf);
 }
 
@@ -75,9 +83,75 @@ parse_remote_file_new(cJSON *rf_obj, char* suffix)
 		rf->digest_algorithm = strtok(mem_strdup(jdigest->valuestring), ":");
 		rf->digest = strtok(NULL, ":");
 	}
-	INFO ("Parsed remote file: \n\t type: %s\n\t size: %d\n\t digest %s :: %s",
-			rf->media_type, rf->size, rf->digest_algorithm, rf->digest);
+	cJSON *jplatform = cJSON_GetObjectItem(rf_obj, "platform");
+	if (cJSON_IsObject(jplatform)) {
+		cJSON *jplatform_arch = cJSON_GetObjectItem(jplatform, "architecture");
+		if (cJSON_IsString(jplatform_arch))
+			rf->platform_arch = mem_strdup(jplatform_arch->valuestring);
+		cJSON *jplatform_variant = cJSON_GetObjectItem(jplatform, "variant");
+		if (cJSON_IsString(jplatform_variant))
+			rf->platform_variant = mem_strdup(jplatform_variant->valuestring);
+	}
+
+	INFO ("Parsed remote file: \n\t type: %s\n\t size: %d\n\t digest %s :: %s (arch %s:%s)",
+			rf->media_type, rf->size, rf->digest_algorithm, rf->digest,
+			rf->platform_arch, rf->platform_variant);
 	return rf;
+}
+
+
+docker_manifest_list_t*
+docker_parse_manifest_list_new(const char *raw_file_buffer)
+{
+	cJSON *jroot = NULL;
+	docker_manifest_list_t *ml = mem_alloc0(sizeof(docker_manifest_list_t));
+
+	jroot = cJSON_Parse(raw_file_buffer);
+
+	cJSON *jschema = cJSON_GetObjectItem(jroot, "schemaVersion");
+	if (cJSON_IsNumber(jschema))
+		ml->schema_version = jschema->valueint;
+	if (ml->schema_version != 2) {
+		ERROR("Unsuported schema verison = %d", ml->schema_version);
+		mem_free(ml);
+		ml = NULL;
+		goto out;
+	}
+
+	cJSON *jmanifests = cJSON_GetObjectItem(jroot, "manifests");
+	ml->manifests_size = cJSON_GetArraySize(jmanifests);
+	if (ml->manifests_size < 0) {
+		ERROR("No manifests in list");
+		mem_free(ml);
+		ml = NULL;
+		goto out;
+	}
+
+	cJSON *jmedia_type = cJSON_GetObjectItem(jroot, "mediaType");
+	if (cJSON_IsString(jmedia_type)) {
+		ml->media_type = mem_strdup(jmedia_type->valuestring);
+	}
+
+	ml->manifests = mem_alloc0(ml->manifests_size*sizeof(docker_remote_file_t*));
+	for (int i=0; i < ml->manifests_size; ++i) {
+		cJSON *item = cJSON_GetArrayItem(jmanifests, i);
+		ml->manifests[i] = parse_remote_file_new(item, ".json");
+	}
+out:
+	cJSON_Delete(jroot);
+	return ml;
+}
+
+void
+docker_manifest_list_free(docker_manifest_list_t *ml)
+{
+	if (ml->media_type)
+		mem_free(ml->media_type);
+	for (int i=0; i < ml->manifests_size; ++i) {
+		if (ml->manifests[i])
+			docker_remote_file_free(ml->manifests[i]);
+	}
+	mem_free(ml);
 }
 
 docker_manifest_t*
@@ -93,8 +167,9 @@ docker_parse_manifest_new(const char *raw_file_buffer)
 		manifest->schema_version = jschema->valueint;
 
 	cJSON *jmedia_type = cJSON_GetObjectItem(jroot, "mediaType");
-	if (cJSON_IsString(jmedia_type))
+	if (cJSON_IsString(jmedia_type)) {
 		manifest->media_type = mem_strdup(jmedia_type->valuestring);
+	}
 
 	cJSON *jconfig = cJSON_GetObjectItem(jroot, "config");
 	manifest->config = parse_remote_file_new(jconfig, ".json");
@@ -321,6 +396,33 @@ docker_get_curl_token_new(char *image_name, char* token_file)
 }
 
 int
+docker_download_manifest_list(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag)
+{
+	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
+	char *url = mem_printf("https://%s/v2/%s/manifests/%s", host_url, image_name, image_tag);
+
+	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
+	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
+	char *acceptlist = "Accept: " MEDIA_TYPE_MANIFEST_LIST_V2;
+
+	const char * const argv_basic[] = {CURL_PATH, "-fsSL", "-H", auth_basic,
+			"-H", acceptlist, url, "-o", out_file, NULL};
+	const char * const argv_bearer[] = {CURL_PATH, "-fsSL", "-H", auth_bearer,
+			"-H", acceptlist, url, "-o", out_file, NULL};
+
+	int ret = util_fork_and_execvp(CURL_PATH, argv_bearer);
+	if (ret != 0) {
+		INFO("Bearer auth failed (curl returned %d), trying Basic auth", ret);
+		ret = util_fork_and_execvp(CURL_PATH, argv_basic);
+	}
+
+	mem_free(url);
+	mem_free(auth_basic);
+	mem_free(auth_bearer);
+	return ret;
+}
+
+int
 docker_download_manifest(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
@@ -328,16 +430,19 @@ docker_download_manifest(const char *curl_token, const char* out_file, const cha
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
-	char *acceptv2 = "Accept: application/vnd.docker.distribution.manifest.v2+json";
-	char *acceptv1 = "Accept: application/vnd.docker.distribution.manifest.v1+json";
+	char *acceptv2 = "Accept: " MEDIA_TYPE_MANIFEST_V2;
+	char *acceptv1 = "Accept: " MEDIA_TYPE_MANIFEST_V1;
 
-	const char * const argv_basic[] = {CURL_PATH, "-fsSL", "-H", auth_basic, "-H", acceptv2, "-H", acceptv1, url, "-o", out_file, NULL};
-	const char * const argv_bearer[] = {CURL_PATH, "-fsSL", "-H", auth_bearer, "-H", acceptv2, "-H", acceptv1, url, "-o", out_file, NULL};
+	const char * const argv_basic[] = {CURL_PATH, "-fsSL", "-H", auth_basic,
+			"-H", acceptv2, "-H", acceptv1, url, "-o", out_file, NULL};
+	const char * const argv_bearer[] = {CURL_PATH, "-fsSL", "-H", auth_bearer,
+			"-H", acceptv2, "-H", acceptv1, url, "-o", out_file, NULL};
 
 	int ret = util_fork_and_execvp(CURL_PATH, argv_bearer);
-	INFO("Bearer auth failed (curl returned %d), trying Basic auth", ret);
-	if (ret != 0)
+	if (ret != 0) {
+		INFO("Bearer auth failed (curl returned %d), trying Basic auth", ret);
 		ret = util_fork_and_execvp(CURL_PATH, argv_basic);
+	}
 
 	mem_free(url);
 	mem_free(auth_basic);

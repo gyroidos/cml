@@ -127,7 +127,7 @@ util_tar_extract(const char *tar_filename, const char* index_file, const char* o
 		uid_t uid = th_get_uid(tar);
 		gid_t gid = th_get_gid(tar);
 
-		INFO("Writing file %s to %s", archive_filename, out_filename);
+		TRACE("Writing file %s to %s", archive_filename, out_filename);
 		if (TH_ISCHR(tar)) {
 			// writing file attributes to index file (TODO use hashmap to handle duplicates)
 			file_printf_append(index_file, "%s c %o %d %d %d %d\n",
