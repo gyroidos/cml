@@ -74,6 +74,7 @@ SRC_FILES := main.c \
 	common/cryptfs.c \
 	common/reboot.c \
 	power.c \
+	c_run.c \
 	hw_$(TRUSTME_HARDWARE).c
 
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
