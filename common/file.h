@@ -48,6 +48,8 @@ file_is_dir(const char *file);
 bool
 file_is_mountpoint(const char *file);
 
+bool
+file_is_socket(const char *file);
 
 /**
  * Copy a file.

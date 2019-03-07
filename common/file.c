@@ -85,6 +85,14 @@ file_is_mountpoint(const char *file)
 	return ret;
 }
 
+bool
+file_is_socket(const char *file)
+{
+	struct stat s;
+
+	return !lstat(file, &s) && S_ISSOCK(s.st_mode);
+}
+
 int
 file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek)
 {
