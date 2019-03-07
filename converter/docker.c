@@ -111,31 +111,58 @@ docker_parse_manifest_list_new(const char *raw_file_buffer)
 	cJSON *jschema = cJSON_GetObjectItem(jroot, "schemaVersion");
 	if (cJSON_IsNumber(jschema))
 		ml->schema_version = jschema->valueint;
-	if (ml->schema_version != 2) {
+	switch (ml->schema_version) {
+	case 1: {
+		// no manifetslist support (client answerd with v1 manifest)
+		// construct a default manifest list for the v2 manifest
+		cJSON *jarchitecture = cJSON_GetObjectItem(jroot, "architecture");
+		cJSON *jtag = cJSON_GetObjectItem(jroot, "tag");
+		if (cJSON_IsString(jarchitecture) && cJSON_IsString(jtag)) {
+			ml->schema_version = 2;
+			ml->manifests_size = 1;
+			ml->manifests = mem_alloc0(sizeof(docker_remote_file_t*));
+			ml->manifests[0] = mem_alloc0(sizeof(docker_remote_file_t));
+			ml->manifests[0]->media_type =
+					mem_strdup(MEDIA_TYPE_MANIFEST_V2);
+			ml->manifests[0]->size = 0;
+			ml->manifests[0]->digest_algorithm = NULL;
+			ml->manifests[0]->digest = mem_strdup(jtag->valuestring);
+			ml->manifests[0]->platform_arch =
+					mem_strdup(jarchitecture->valuestring);
+		} else {
+			ERROR("Unsuported schema verison = %d", ml->schema_version);
+			mem_free(ml);
+			ml = NULL;
+			goto out;
+		}
+		break;
+	}
+	case 2: {
+		cJSON *jmanifests = cJSON_GetObjectItem(jroot, "manifests");
+		ml->manifests_size = cJSON_GetArraySize(jmanifests);
+		if (ml->manifests_size < 0) {
+			ERROR("No manifests in list");
+			mem_free(ml);
+			ml = NULL;
+			goto out;
+		}
+
+		cJSON *jmedia_type = cJSON_GetObjectItem(jroot, "mediaType");
+		if (cJSON_IsString(jmedia_type)) {
+			ml->media_type = mem_strdup(jmedia_type->valuestring);
+		}
+
+		ml->manifests = mem_alloc0(ml->manifests_size*sizeof(docker_remote_file_t*));
+		for (int i=0; i < ml->manifests_size; ++i) {
+			cJSON *item = cJSON_GetArrayItem(jmanifests, i);
+			ml->manifests[i] = parse_remote_file_new(item, ".json");
+		}
+		break;
+	}
+	default:
 		ERROR("Unsuported schema verison = %d", ml->schema_version);
 		mem_free(ml);
 		ml = NULL;
-		goto out;
-	}
-
-	cJSON *jmanifests = cJSON_GetObjectItem(jroot, "manifests");
-	ml->manifests_size = cJSON_GetArraySize(jmanifests);
-	if (ml->manifests_size < 0) {
-		ERROR("No manifests in list");
-		mem_free(ml);
-		ml = NULL;
-		goto out;
-	}
-
-	cJSON *jmedia_type = cJSON_GetObjectItem(jroot, "mediaType");
-	if (cJSON_IsString(jmedia_type)) {
-		ml->media_type = mem_strdup(jmedia_type->valuestring);
-	}
-
-	ml->manifests = mem_alloc0(ml->manifests_size*sizeof(docker_remote_file_t*));
-	for (int i=0; i < ml->manifests_size; ++i) {
-		cJSON *item = cJSON_GetArrayItem(jmanifests, i);
-		ml->manifests[i] = parse_remote_file_new(item, ".json");
 	}
 out:
 	cJSON_Delete(jroot);
@@ -369,7 +396,9 @@ docker_generate_basic_auth(const char* user, const char* password, const char* t
 char *
 docker_get_curl_token_new(char *image_name, char* token_file)
 {
-	char *url = mem_printf("https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull", image_name);
+	char *url = mem_printf("https://auth.docker.io/token?service="
+			"registry.docker.io&scope=repository:%s%s:pull",
+			!strchr(image_name, '/') ? "library/" : "", image_name);
 
 	if (!file_exists(token_file)) {
 		const char * const argv[] = {CURL_PATH, "-fsSL", url, "-o", token_file, NULL};
@@ -399,7 +428,9 @@ int
 docker_download_manifest_list(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
-	char *url = mem_printf("https://%s/v2/%s/manifests/%s", host_url, image_name, image_tag);
+	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url,
+			!strchr(image_name, '/') ? "library/" : "",
+			image_name, image_tag);
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
@@ -426,7 +457,9 @@ int
 docker_download_manifest(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
-	char *url = mem_printf("https://%s/v2/%s/manifests/%s", host_url, image_name, image_tag);
+	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url,
+			!strchr(image_name, '/') ? "library/" : "",
+			image_name, image_tag);
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
@@ -469,8 +502,9 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t* 
 	}
 
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/blobs/%s:%s",
-	char *url = mem_printf("https://%s/v2/%s/blobs/%s:%s",
-		       host_url, image_name, rf->digest_algorithm, rf->digest);
+	char *url = mem_printf("https://%s/v2/%s%s/blobs/%s:%s", host_url,
+			!strchr(image_name, '/') ? "library/" : "", image_name,
+			rf->digest_algorithm, rf->digest);
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);

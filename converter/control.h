@@ -24,6 +24,9 @@
 #ifndef CONTROL_H
 #define CONTROL_H
 
+bool
+control_is_enabled(void);
+
 int
 control_push_guestos(char* cfgfile, char* certfile, char* sigfile);
 

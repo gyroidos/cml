@@ -39,6 +39,7 @@
 #include "util.h"
 #include "control.h"
 
+#include <getopt.h>
 #include <unistd.h>
 #include <time.h>
 #include <inttypes.h>
@@ -187,6 +188,12 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	cfg.has_feature_devtmpfs = true;
 	cfg.feature_devtmpfs = true;
 
+	// skip siging and pushing if no control interface is available
+	if (!control_is_enabled()) {
+		protobuf_message_write_to_file(out_file, (ProtobufCMessage *)&cfg);
+		goto free_stuff;
+	}
+
 	char *local_ip = get_ifname_ip_new("eth0");
 	cfg.update_base_url = mem_printf("http://%s/", local_ip);
 	mem_free(local_ip);
@@ -219,7 +226,12 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	else
 		ret = control_push_guestos(out_file, out_cert_file, out_sig_file);
 
-	// free stuff
+	mem_free(cfg.update_base_url);
+	mem_free(out_sig_file);
+	mem_free(out_cert_file);
+	mem_free(out_www_image_path_versioned);
+
+free_stuff:
 	for (uint32_t j=0; j < cfg.n_mounts; ++j) {
 		mem_free(cfg.mounts[j]->image_file);
 		mem_free(cfg.mounts[j]->mount_point);
@@ -233,16 +245,12 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(cfg.name);
 	mem_free(cfg.upstream_version);
 	mem_free(cfg.mounts);
-	mem_free(cfg.update_base_url);
 	mem_free(description.en);
 	mem_free(description.de);
 	mem_free(init);
 	mem_free(image_path_unversioned);
-	mem_free(out_www_image_path_versioned);
 	mem_free(out_image_path_versioned);
 	mem_free(out_file);
-	mem_free(out_sig_file);
-	mem_free(out_cert_file);
 
 	return ret;
 }
@@ -317,10 +325,28 @@ out:
 void
 print_usage(char *progname)
 {
-	ERROR("Usage: %s login -u <username> -p <password> <hostname:port>", progname);
-	ERROR("Usage: %s pull <hostname:port> <arch> <imagename> [<imagetag>]", progname);
+	ERROR("Usage: %s login -u <username> -p <password>"
+		       " -r <hostname:port>", progname);
+	ERROR("Usage: %s pull [-r <hostname:port>] [-a <arch>]"
+		       " <imagename> [-t <imagetag>]", progname);
+	exit(-1);
 }
 
+static const struct option pull_options[] = {
+	{"registry",	optional_argument, 0, 'r'},
+	{"arch",	optional_argument, 0, 'a'},
+	{"tag",		optional_argument, 0, 't'},
+	{"help",     	no_argument, 0, 'h'},
+	{0, 0, 0, 0}
+};
+
+static const struct option login_options[] = {
+	{"registry",	required_argument, 0, 'r'},
+	{"user",	required_argument, 0, 'u'},
+	{"password",	required_argument, 0, 'p'},
+	{"help",     	no_argument, 0, 'h'},
+	{0, 0, 0, 0}
+};
 
 int
 main(UNUSED int argc, char **argv)
@@ -348,46 +374,90 @@ main(UNUSED int argc, char **argv)
 
 	char *token_file = mem_printf("%s/curl_token", docker_image_path);
 
-	// DEBUG("argc=%d",argc);
-	if (argc < 4) {
+	// need at least one more argument (command string)
+	if (optind >= argc)
 		print_usage(argv[0]);
-		return -1;
-	}
-	if (!strncmp(argv[1], "pull", strlen("pull"))) {
-		if (argc < 6)
-			image_tag = "latest";
-		else
-			image_tag = argv[5];
-		image_arch = argv[3];
-		image_name = argv[4];
-		docker_set_host_url(argv[2]);
 
-	} else if (!strncmp(argv[1], "login", strlen("login"))) {
-		if (argc != 7) {
-			print_usage(argv[0]);
-			return -1;
+	const char *command = argv[optind++];
+	if (!strcasecmp(command, "pull")) {
+		optind--;
+		char **pull_argv = &argv[optind];
+		int pull_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		const char *url = "registry-1.docker.io";
+		image_arch = "amd64";
+		image_tag = "latest";
+		for (int c, option_index = 0; -1 != (c = getopt_long(pull_argc, pull_argv,
+						"t:r:a:", pull_options, &option_index)); ) {
+			switch (c) {
+			case 'r':
+				url = optarg ? optarg : "registry-1.docker.io";
+				break;
+			case 't':
+				image_tag = optarg ? optarg : "latest";
+				break;
+			case 'a':
+				image_arch = optarg ? optarg : "amd64";
+				break;
+			default:
+				print_usage(argv[0]);
+			}
 		}
-		if (strncmp(argv[2], "-u", 2) || strncmp(argv[4], "-p", 2)) {
+		optind += argc - pull_argc;	// adjust optind to be used with argv
+		// need at least one more argument (i.e. command string)
+		if (optind >= argc)
 			print_usage(argv[0]);
-			return -1;
+
+		docker_set_host_url(url);
+		image_name = argv[optind++];
+		INFO("imagename %s", image_name);
+	}
+	if (!strcasecmp(command, "login")) {
+		optind--;
+		char **login_argv = &argv[optind];
+		int login_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		const char *url = NULL;
+		const char *user = NULL;
+		const char *password = NULL;
+		for (int c, option_index = 0; -1 != (c = getopt_long(login_argc, login_argv,
+						":r:u:p", login_options, &option_index)); ) {
+			switch (c) {
+			case 'r':
+				url = optarg;
+				break;
+			case 'u':
+				user = optarg;
+				break;
+			case 'p':
+				password = optarg;
+				break;
+			default:
+				print_usage(argv[0]);
+			}
 		}
-		docker_set_host_url(argv[6]);
-		docker_generate_basic_auth(argv[3], argv[5], token_file);
+		if (!user || !password || !url) {
+			ERROR("no user/password given!");
+			print_usage(argv[0]);
+		}
+		docker_set_host_url(url);
+		docker_generate_basic_auth(user, password, token_file);
+		mem_free(token_file);
+		mem_free(docker_image_path);
 		return 0;
-	} else {
-		print_usage(argv[0]);
-		return -1;
 	}
 
 	char* token = docker_get_curl_token_new(image_name, token_file);
 	IF_NULL_GOTO_ERROR(token, err);
 
 	manifest_list_file = mem_printf("%s/%s", docker_image_path, "manifests.json");
+	if (file_exists(manifest_list_file))
+		unlink(manifest_list_file);
+
 	if (docker_download_manifest_list(token, manifest_list_file, image_name, image_tag) < 0) {
 		ERROR("Could not download manifest list");
 		goto err;
 	}
-
 	DEBUG("Trying to read manifest list %s", manifest_list_file);
 	buf = file_read_new(manifest_list_file, BUF_SIZE);
 	if (!buf) {
@@ -402,9 +472,13 @@ main(UNUSED int argc, char **argv)
 
 	for (int i=0; i < ml->manifests_size; ++i) {
 		if (!strcmp(ml->manifests[i]->platform_arch, image_arch)) {
-			manifest_url_digest = mem_printf("%s:%s",
+			if (ml->manifests[i]->digest_algorithm == NULL) {
+				manifest_url_digest = mem_strdup(image_tag);
+			} else {
+				manifest_url_digest = mem_printf("%s:%s",
 					ml->manifests[i]->digest_algorithm,
 					ml->manifests[i]->digest);
+			}
 			if (strcmp(image_arch, "arm")) // for arm run throuh to latest subarch
 				break;
 		}
@@ -416,6 +490,8 @@ main(UNUSED int argc, char **argv)
 	INFO ("manifests with url digest %s", manifest_url_digest);
 
 	manifest_file = mem_printf("%s/%s", docker_image_path, "manifest.json");
+	if (file_exists(manifest_file))
+		unlink(manifest_file);
 
 	if (docker_download_manifest(token, manifest_file, image_name, manifest_url_digest) < 0) {
 		ERROR("Could not download manifest");
@@ -434,7 +510,11 @@ main(UNUSED int argc, char **argv)
 	mem_free(buf);
 	buf = NULL;
 
-	docker_download_image(token, manifest, docker_image_path, image_name, image_tag);
+	if (docker_download_image(token, manifest, docker_image_path, image_name, image_tag) < 0) {
+		ERROR("Downloading image %s failed!", image_name);
+		goto err;
+	}
+
 
 	INFO("Cleaning up token_file: %s", token_file);
 	if (file_exists(token_file))

@@ -51,6 +51,12 @@ send_message(ControllerToDaemon *msg)
 	return (msg_size < 0) ? -1 : 0;
 }
 
+bool
+control_is_enabled(void)
+{
+	return file_is_socket(CONTROL_SOCKET);
+}
+
 int
 control_push_guestos(char* cfgfile, char* certfile, char* sigfile)
 {
