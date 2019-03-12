@@ -122,6 +122,9 @@ event_add_io(event_io_t *io);
 void
 event_remove_io(event_io_t *io);
 
+void
+event_reset();
+
 // TODO: doxygen for event_inotify*
 
 typedef struct event_inotify event_inotify_t;

@@ -279,11 +279,11 @@ event_remove_timer(event_timer_t *timer)
 /******************************************************************************/
 
 static int
-event_epoll_fd(void)
+event_epoll_fd(int reset)
 {
 	static int fd = -1;
 
-	if (fd < 0) {
+	if (fd < 0 || (fd >= 0 && reset == 1)) {
 		fd = epoll_create(1);
 
 		ASSERT(fd >= 0);
@@ -301,6 +301,45 @@ event_epoll_fd(void)
 	}
 
 	return fd;
+}
+
+static void
+event_reset_fd(void)
+{
+	if (close(event_epoll_fd(0) < 0)) {
+		ERROR_ERRNO("Failed to close old epoll fd");
+	}
+
+	event_epoll_fd(1);
+}
+
+static void
+event_reset_timers()
+{
+	TRACE("Resetting event timers");
+	//TODO stop timers
+	event_timer_list = NULL;
+}
+
+static void
+event_reset_signal_handlers()
+{
+	TRACE("Resetting event signal handler list");
+	event_signal_list = NULL;
+}
+
+static void
+event_reset_inotify()
+{
+	TRACE("Resetting event inotify list");
+	event_inotify_list = NULL;
+}
+
+void event_reset() {
+	event_reset_fd();
+	event_reset_timers();
+	event_reset_signal_handlers();
+	event_reset_inotify();
 }
 
 event_io_t *
@@ -341,7 +380,7 @@ event_add_io(event_io_t *io)
 	epoll_event.events |= (io->events & EVENT_IO_PRI) ? EPOLLPRI : 0;
 	epoll_event.data.ptr = io;
 
-	if (epoll_ctl(event_epoll_fd(), EPOLL_CTL_ADD, io->fd, &epoll_event) < 0)
+	if (epoll_ctl(event_epoll_fd(0), EPOLL_CTL_ADD, io->fd, &epoll_event) < 0)
 		WARN_ERRNO("epoll_ctl failed"); // TODO: handle error?
 	else
 		event_io_active++;
@@ -356,7 +395,7 @@ event_remove_io(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
 
-	if (epoll_ctl(event_epoll_fd(), EPOLL_CTL_DEL, io->fd, NULL) < 0)
+	if (epoll_ctl(event_epoll_fd(0), EPOLL_CTL_DEL, io->fd, NULL) < 0)
 		WARN_ERRNO("epoll_ctl failed"); // TODO: handle error?
 	else
 		event_io_active--;
@@ -373,7 +412,7 @@ event_epoll(int timeout)
 	int n, i;
 
 	TRACE("Calling epoll_wait with timeout=%ums", timeout);
-	n = epoll_wait(event_epoll_fd(), epoll_events, ELEMENTSOF(epoll_events),
+	n = epoll_wait(event_epoll_fd(0), epoll_events, ELEMENTSOF(epoll_events),
 			timeout);
 	if (n < 0) {
 		if (errno == EINTR) // caused by suspend (no real error)
@@ -401,6 +440,8 @@ event_epoll(int timeout)
 					io->data, io->fd, io->events);
 
 			(io->func)(io->fd, e, io, io->data);
+
+			TRACE("Finished io handling");
 		}
 	} // else timeout
 
@@ -661,6 +702,8 @@ event_signal_handler(void)
 {
 	bool *received;
 
+	TRACE("event_signal_handler() called");
+
 	/* We have two arrays to allow atomic switching from one array to the
 	 * other to guarantee that we do not miss signals entirely. It is still
 	 * possible that the handler is only called once for multiple signals
@@ -773,6 +816,8 @@ event_loop(void)
 		timeout = event_timeout();
 		if (!event_epoll(timeout))
 			event_timeout_handler();
+
+		TRACE("Handled event");
 	}
 
 	DEBUG("Leaving event loop");
