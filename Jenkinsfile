@@ -1,9 +1,8 @@
 pipeline {
-   agent none
+   agent any
    options { checkoutToSubdirectory('trustme/cml') }
    stages {
       stage('Repo') {
-         agent any
 	 steps {
              sh 'repo init -u https://github.com/trustm3/trustme_main.git -b master -m ids-x86-yocto.xml'
              sh 'mkdir -p .repo/local_manifests'
@@ -18,6 +17,7 @@ pipeline {
          agent { dockerfile {
             dir 'trustme/build/yocto/docker'
             args '--entrypoint=\'\''
+            reuseNode true
          } }
          steps {
             sh '''
@@ -46,6 +46,7 @@ pipeline {
          agent { dockerfile {
             dir 'trustme/build/yocto/docker'
             args '--entrypoint=\'\''
+            reuseNode true
          } }
          steps {
             sh '''
