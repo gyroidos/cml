@@ -918,13 +918,27 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			else
 				WARN_ERRNO("waitpid failed for container %s", container_get_description(container));
 			break;
-		} else if (pid == c_run_get_active_exec_pid(container->run)) {
-			DEBUG("Exec'ed process exited. Cleaning up;");
-			c_run_cleanup(container->run);
 		} else {
 			DEBUG("Reaped a child with PID %d for container %s", pid, container_get_description(container));
 		}
 	}
+
+	pid_t loop_pid = c_run_get_exec_loop_pid(container->run);
+
+	if (loop_pid != -1) {
+		// if event loop, injected into container using control run, exited reap it here
+		TRACE("Waiting for exec loop PID: %d", loop_pid);
+		if ((pid = waitpid(loop_pid, &status, WNOHANG)) > 0) {
+			INFO("Reaped exec loop process: %d", pid);
+			c_run_free(container->run);
+			container->run = c_run_new(container);
+			TRACE("container->run was reset.");
+		} else {
+			TRACE("Failed to reap exec loop");
+		}
+	}
+
+	DEBUG("No more childs to reap. Callback exiting...");
 }
 
 static int
@@ -1258,6 +1272,7 @@ error:
 int
 container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv)
 {
+	ASSERT(container);
 	ASSERT(cmd);
 
 	TRACE("Forwarding request to c_run subsystem");
@@ -1267,6 +1282,7 @@ container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, c
 int
 container_write_exec_input(container_t *container, char *exec_input)
 {
+	TRACE("Forwarding write request to c_run subsystem");
 	return c_run_write_exec_input(container->run, exec_input);
 }
 

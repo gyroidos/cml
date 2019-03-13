@@ -21,6 +21,9 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include "list.h"
 #include "macro.h"
 #include "mem.h"
@@ -59,6 +62,7 @@ list_contains(const list_t *list, const list_t *elem)
 	IF_NULL_RETVAL(elem, false);
 
 	for (const list_t *e = list; e; e = e->next) {
+		TRACE("Searching list element %p in list %p", (void *) elem, (void *) list);
 		if (e == elem)
 			return true;
 	}
@@ -100,10 +104,17 @@ list_remove(list_t *list, void *data)
 list_t *
 list_find(list_t *list, void *data)
 {
+	TRACE("Searching data %p in list %p", (void *) data, (void *) list);
+
 	for (list_t *e = list; e; e = e->next) {
-		if (e->data == data)
+		TRACE("Scanning element %p having data %p", (void *) e, (void *) e->data);
+		if (e->data == data) {
+			TRACE("Found data in element %p", (void *) e);
 			return e;
+		}
 	}
+
+	TRACE("Did not find data in list");
 	return NULL;
 }
 
@@ -191,4 +202,26 @@ list_replace(list_t *list, list_t *elem,void * data)
 	mem_free(elem);
 
 	return head;
+}
+
+void
+list_foreach(list_t *list, void (func)(void *)) {
+	ASSERT(list);
+	ASSERT(func);
+
+	list_t *current = list;
+	list_t *elem = NULL;
+
+	TRACE("Applying callback to list at %p", (void *) list);
+
+	do {
+		if (current) {
+			TRACE("Applying callback to element %p, data: %p", (void *) current, (void *) current->data);
+			elem = current;
+			current = current->next;
+			func(elem->data);
+		} else {
+			ERROR("NULL pointer during list traversal");
+		}
+	} while (current && current != list);
 }
