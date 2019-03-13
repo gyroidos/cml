@@ -120,40 +120,22 @@ err:
 	return NULL;
 }
 
-static char *
-halg_id_to_string_new(TPM_ALG_ID alg_id)
-{
-	switch (alg_id) {
-		case TPM_ALG_SHA1:
-			return mem_printf("TPM_ALG_SHA1");
-		case TPM_ALG_SHA256:
-			return mem_printf("TPM_ALG_SHA256");
-		case TPM_ALG_SHA384:
-			return mem_printf("TPM_ALG_SHA384");
-		default:
-			return "NONE";
-	}
-}
-
 #ifndef TPM2D_NVMCRYPT_ONLY
-static char *
-tpm2d_marshal_structure_new(void *structure, MarshalFunction_t marshal_function)
+static uint8_t *
+tpm2d_marshal_structure_new(void *structure, MarshalFunction_t marshal_function, size_t *size)
 {
 	uint8_t *bin_stream = NULL;
-	char *hex_stream = NULL;
-
-	uint16_t written_size = 0;
+	uint16_t written_size;
 
 	if (TPM_RC_SUCCESS != TSS_Structure_Marshal(&bin_stream, &written_size,
 						structure, marshal_function)) {
 		WARN("no data written to stream!");
-		goto err;
+		*size = 0;
+		return NULL;
 	}
-
-	hex_stream = convert_bin_to_hex_new(bin_stream, written_size*2 + 1);
-err:
-	mem_free(bin_stream);
-	return hex_stream;
+	*size = written_size;
+	INFO("marshal written size %d, *size %zu", written_size, *size);
+	return bin_stream;
 }
 #endif
 
@@ -345,7 +327,7 @@ tpm2_policyauthvalue(TPMI_SH_POLICY se_handle)
 
 TPM_RC
 tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask,
-				tpm2d_pcr_string_t *pcrs[], size_t pcrs_size)
+				tpm2d_pcr_t *pcrs[], size_t pcrs_size)
 {
 	TPM_RC rc;
 	PolicyPCR_In in;
@@ -376,7 +358,7 @@ tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask,
 			in.pcrDigest.b.size = 20;
 			SHA1_Init(&sha1);
 			for (size_t i=0; i < pcrs_size; ++i) {
-				SHA1_Update(&sha1, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				SHA1_Update(&sha1, pcrs[i]->pcr_value, pcrs[i]->pcr_size);
 				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
 			}
 			SHA1_Final(in.pcrDigest.b.buffer, &sha1);
@@ -386,7 +368,7 @@ tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask,
 			in.pcrDigest.b.size = 32;
 			SHA256_Init(&sha256);
 			for (size_t i=0; i < pcrs_size; ++i) {
-				SHA256_Update(&sha256, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				SHA256_Update(&sha256, pcrs[i]->pcr_value, pcrs[i]->pcr_size);
 				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
 			}
 			SHA256_Final(in.pcrDigest.b.buffer, &sha256);
@@ -396,7 +378,7 @@ tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask,
 			in.pcrDigest.b.size = 48;
 			SHA384_Init(&sha384);
 			for (size_t i=0; i < pcrs_size; ++i)
-				SHA384_Update(&sha384, pcrs[i]->pcr_str, pcrs[i]->pcr_size);
+				SHA384_Update(&sha384, pcrs[i]->pcr_value, pcrs[i]->pcr_size);
 			SHA384_Final(in.pcrDigest.b.buffer, &sha384);
 			break;
 		default:
@@ -792,13 +774,13 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 	in.parentHandle = parent_handle;
 
 	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructure(&in.inPrivate,
-			(UnmarshalFunction_t)TPM2B_PRIVATE_Unmarshal,
+			(UnmarshalFunction_t)TSS_TPM2B_PRIVATE_Unmarshalu,
 			file_name_priv_key)))
 		return rc;
 
-	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructure(&in.inPublic,
-			(UnmarshalFunction_t)TPM2B_PUBLIC_Unmarshal,
-			file_name_pub_key)))
+	if (TPM_RC_SUCCESS != (rc = TSS_File_ReadStructureFlag(&in.inPublic,
+			(UnmarshalFunctionFlag_t)TSS_TPM2B_PUBLIC_Unmarshalu,
+			false, file_name_pub_key)))
 		return rc;
 
 	rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
@@ -851,16 +833,16 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 	return rc;
 }
 
-tpm2d_quote_string_t *
+tpm2d_quote_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
-			const char *sig_key_pwd, const char *qualifying_data)
+			const char *sig_key_pwd, uint8_t *qualifying_data,
+			size_t qualifying_data_len)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	Quote_In in;
 	Quote_Out out;
 	TPMS_ATTEST tpms_attest;
-	uint8_t *qualifying_data_bin = NULL;
-	tpm2d_quote_string_t *quote_string = NULL;
+	tpm2d_quote_t *quote = NULL;
 
 	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
@@ -891,11 +873,8 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 	in.PCRselect.pcrSelections[0].hash = TPM2D_HASH_ALGORITHM;
 
 	if (qualifying_data != NULL) {
-		int length;
-		qualifying_data_bin = convert_hex_to_bin_new(qualifying_data, &length);
-		IF_NULL_RETVAL(qualifying_data_bin, NULL);
 		if (TPM_RC_SUCCESS != (rc = TSS_TPM2B_Create(&in.qualifyingData.b,
-				qualifying_data_bin, length, sizeof(TPMT_HA))))
+				qualifying_data, qualifying_data_len, sizeof(TPMT_HA))))
 			goto err;
 	} else
 		in.qualifyingData.t.size = 0;
@@ -912,64 +891,41 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
 
 	// check if input qualifying data matches output extra data
 	BYTE *buf_byte = out.quoted.t.attestationData;
-	int buf_size = out.quoted.t.size;
-	if (TPM_RC_SUCCESS != (rc = TPMS_ATTEST_Unmarshal(&tpms_attest, &buf_byte, &buf_size)))
+	uint32_t buf_size = out.quoted.t.size;
+	if (TPM_RC_SUCCESS != (rc = TSS_TPMS_ATTEST_Unmarshalu(&tpms_attest, &buf_byte, &buf_size)))
 		goto err;
 	if (!TSS_TPM2B_Compare(&in.qualifyingData.b, &tpms_attest.extraData.b))
 		goto err;
 
-	// finally fill the output structure with converted hex strings needed for protobuf
-	quote_string = mem_alloc0(sizeof(tpm2d_quote_string_t));
-	quote_string->halg_str = halg_id_to_string_new(in.PCRselect.pcrSelections[0].hash);
-	quote_string->quoted_str = convert_bin_to_hex_new(out.quoted.t.attestationData,
-							out.quoted.t.size);
-	quote_string->signature_str = tpm2d_marshal_structure_new(&out.signature,
-					(MarshalFunction_t)TSS_TPMT_SIGNATURE_Marshal);
+	// finally fill the output structure needed for protobuf
+	quote = mem_alloc0(sizeof(tpm2d_quote_t));
+	quote->halg_id = in.PCRselect.pcrSelections[0].hash;
+	quote->quoted_size = out.quoted.t.size;
+	quote->quoted_value = mem_new0(uint8_t, out.quoted.t.size);
+	memcpy(quote->quoted_value, out.quoted.t.attestationData, out.quoted.t.size);
+	size_t signature_size;
+	quote->signature_value = tpm2d_marshal_structure_new(&out.signature,
+				(MarshalFunction_t)TSS_TPMT_SIGNATURE_Marshal, &signature_size);
+	quote->signature_size = signature_size;
 
 	if (in.inScheme.scheme == TPM_ALG_RSASSA) {
 		TSS_PrintAll("RSA signature", out.signature.signature.rsassa.sig.t.buffer,
 					out.signature.signature.rsassa.sig.t.size);
 	}
-
-	if (qualifying_data_bin)
-		mem_free(qualifying_data_bin);
-	return quote_string;
+	return quote;
 err:
 	TSS_TPM_CMD_ERROR(rc, "CC_Quote");
-
-	if (qualifying_data_bin)
-		mem_free(qualifying_data_bin);
 	return NULL;
 }
 
 void
-tpm2_quote_free(tpm2d_quote_string_t* quote_string)
+tpm2_quote_free(tpm2d_quote_t* quote)
 {
-	if (quote_string->halg_str)
-		mem_free(quote_string->halg_str);
-	if (quote_string->quoted_str)
-		mem_free(quote_string->quoted_str);
-	if (quote_string->signature_str)
-		mem_free(quote_string->signature_str);
-	mem_free(quote_string);
-}
-
-char *
-tpm2_read_file_to_hex_string_new(const char *file_name)
-{
-	uint8_t *data_bin = NULL;
-	size_t len;
-
-	if (TPM_RC_SUCCESS != TSS_File_ReadBinaryFile(&data_bin, &len ,file_name))
-		goto err;
-
-	if (data_bin)
-		mem_free(data_bin);
-	return convert_bin_to_hex_new(data_bin, len);
-err:
-	if (data_bin)
-		mem_free(data_bin);
-	return NULL;
+	if (quote->quoted_value)
+		mem_free(quote->quoted_value);
+	if (quote->signature_value)
+		mem_free(quote->signature_value);
+	mem_free(quote);
 }
 
 TPM_RC
@@ -1183,13 +1139,13 @@ tpm2_getrandom_new(size_t rand_length)
 	return rand;
 }
 
-tpm2d_pcr_string_t *
-tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex)
+tpm2d_pcr_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	PCR_Read_In in;
 	PCR_Read_Out out;
-	tpm2d_pcr_string_t *pcr_string = NULL;
+	tpm2d_pcr_t *pcr = NULL;
 
 	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
@@ -1221,31 +1177,22 @@ tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex)
 
 	INFO("out.pcrValues.digests[0].t.size %d", out.pcrValues.digests[0].t.size);
 
-	// finally fill the output structure with converted hex strings needed for protobuf
-	pcr_string = mem_alloc0(sizeof(tpm2d_pcr_string_t));
-	pcr_string->is_hex = is_hex;
-	pcr_string->halg_str = halg_id_to_string_new(in.pcrSelectionIn.pcrSelections[0].hash);
-	if (is_hex) {
-		pcr_string->pcr_str = convert_bin_to_hex_new(out.pcrValues.digests[0].t.buffer,
+	// finally fill the output structure needed for protobuf
+	pcr = mem_alloc0(sizeof(tpm2d_pcr_t));
+	pcr->halg_id = in.pcrSelectionIn.pcrSelections[0].hash;
+	pcr->pcr_value = mem_alloc0(sizeof(uint8_t) * out.pcrValues.digests[0].t.size);
+	memcpy(pcr->pcr_value, out.pcrValues.digests[0].t.buffer, 
 						out.pcrValues.digests[0].t.size);
-		pcr_string->pcr_size = strlen(pcr_string->pcr_str+1);
-	} else {
-		pcr_string->pcr_str = mem_alloc0(sizeof(uint8_t) * out.pcrValues.digests[0].t.size);
-		memcpy(pcr_string->pcr_str, out.pcrValues.digests[0].t.buffer, 
-						out.pcrValues.digests[0].t.size);
-		pcr_string->pcr_size = out.pcrValues.digests[0].t.size;
-	}
-	return pcr_string;
+	pcr->pcr_size = out.pcrValues.digests[0].t.size;
+	return pcr;
 }
 
 void
-tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string)
+tpm2_pcrread_free(tpm2d_pcr_t *pcr)
 {
-	if (pcr_string->halg_str)
-		mem_free(pcr_string->halg_str);
-	if (pcr_string->pcr_str)
-		mem_free(pcr_string->pcr_str);
-	mem_free(pcr_string);
+	if (pcr->pcr_value)
+		mem_free(pcr->pcr_value);
+	mem_free(pcr);
 }
 
 

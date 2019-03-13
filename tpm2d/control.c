@@ -135,99 +135,12 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 	switch(msg->code) {
 #ifndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ: {
-		Pcr **out_pcrs = NULL;
-		int pcr_regs = 0;
-		int pcr_indices = 0;
-		tpm2d_pcr_string_t** pcr_string_array = NULL;
-		tpm2d_quote_string_t *quote_string = NULL;
-		char *attestation_pub_key = NULL;
-
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
-		out.code = TPM_TO_CONTROLLER__CODE__INTERNAL_ATTESTATION_RES;
-
-		switch (msg->atype) {
-			case IDS_ATTESTATION_TYPE__BASIC:
-				TRACE("atype BASIC");
-				pcr_regs = 12;
-				break;
-			case IDS_ATTESTATION_TYPE__ALL:
-				TRACE("atype ALL");
-				pcr_regs = 24;
-				break;
-			case IDS_ATTESTATION_TYPE__ADVANCED:
-				TRACE("atype ADVACE");
-				pcr_regs = (msg->has_pcrs) ? msg->pcrs : 0;
-				break;
-			default:
-				goto err_att_req;
-				break;
-		}
-		pcr_indices = pcr_regs - 1;
-
-		pcr_string_array = mem_alloc0(sizeof(tpm2d_pcr_string_t*) * pcr_regs);
-		for (int i=0; i < pcr_regs; ++i) {
-			pcr_string_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM, true);
-
-			IF_NULL_GOTO_ERROR(pcr_string_array[i], err_att_req);
-			TRACE("PCR%d: %s", i, pcr_string_array[i]->pcr_str);
-		}
-
-		quote_string = tpm2_quote_new(pcr_indices,
-				tpm2d_get_as_key_handle(), TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata);
-		IF_NULL_GOTO_ERROR(quote_string, err_att_req);
-
-#if TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT
-		attestation_pub_key = ek_get_certificate_new(TPM2D_ASYM_ALGORITHM);
-#else
-		attestation_pub_key = tpm2_read_file_to_hex_string_new(TPM2D_ATTESTATION_PUB_FILE);
-#endif
-		IF_NULL_GOTO_ERROR(attestation_pub_key, err_att_req);
-
-		Pcr out_pcr = PCR__INIT;
-		out_pcrs = mem_new(Pcr *, pcr_regs);
-		for (int i=0; i < pcr_regs; ++i) {
-			out_pcr.value = pcr_string_array[i]->pcr_str;
-			out_pcr.has_number = true;
-			out_pcr.number = i;
-			out_pcrs[i] = mem_alloc(sizeof(Pcr));
-			memcpy(out_pcrs[i], &out_pcr, sizeof(Pcr));
-		}
-
-		out.has_atype = true;
-		out.atype = msg->atype;
-		out.halg = quote_string->halg_str;
-		out.quoted = quote_string->quoted_str;
-		out.signature = quote_string->signature_str;
-		out.n_pcr_values = pcr_regs;
-		out.pcr_values = out_pcrs;
-
-		out.certificate_uri = attestation_pub_key;
-
-		out.n_ml_entry = ml_get_measurement_list_len();
-		out.ml_entry = ml_get_measurement_list_strings_new();
-
-		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
+		INFO("Received deprected ATTESTATION_REQ!");
+		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
+		out.has_response = true;
+		out.response = tpm2d_control_resp_to_proto(CMD_FAILED);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-err_att_req:
-		for (size_t i=0; i< out.n_ml_entry; ++i) {
-			mem_free(out.ml_entry[i]);
-		}
-
-		if (pcr_string_array)
-			for (int i=0; i < pcr_regs; ++i) {
-				if (pcr_string_array[i])
-					tpm2_pcrread_free(pcr_string_array[i]);
-				if (out_pcrs && out_pcrs[i])
-					mem_free(out_pcrs[i]);
-			}
-		if (out_pcrs)
-			mem_free(out_pcrs);
-		if (pcr_string_array)
-			mem_free(pcr_string_array);
-		if (quote_string)
-			tpm2_quote_free(quote_string);
-		if (attestation_pub_key)
-			mem_free(attestation_pub_key);
 	} break;
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {

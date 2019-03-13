@@ -1,6 +1,6 @@
 #
 # This file is part of trust|me
-# Copyright(c) 2013 - 2018 Fraunhofer AISEC
+# Copyright(c) 2013 - 2019 Fraunhofer AISEC
 # Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -22,35 +22,37 @@
 #
 
 
-LOCAL_CFLAGS := -pedantic -Wall -Wextra -Werror -std=gnu99 \
-	-I.. -I../include -Icommon -DDEBUG_BUILD
+CC ?= gcc
+
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -pedantic -Wall -Wextra -Werror
+
+PROTO_SRC := \
+	attestation.pb-c.c
 
 SRC_FILES := \
 	common/protobuf.c \
+	common/fd.c \
 	common/sock.c \
 	common/file.c \
-	common/fd.c \
-	attestation.pb-c.c \
-	tpm2d.pb-c.c \
-	common/logf.pb-c.c \
-	tpm2d_control.c
+	attestation.c \
+	main.c
 
 .PHONY: all
-all: tpm2_control
+all: rattestation
 
-protobuf: attestation.proto tpm2d.proto
+protobuf: attestation.proto
 	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
 	$(MAKE) -C common protobuf
 
-libcommon: 
+${PROTO_SRC}: protobuf
+
+libcommon:
 	$(MAKE) -C common libcommon
 
-${SRC_FILES}: protobuf
+rattestation: libcommon ${SRC_FILES} ${PROTO_SRC}
+	${CC} -static ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o $@
 
-tpm2_control: libcommon ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o tpm2_control
 
 .PHONY: clean
 clean:
-	rm -f tpm2_control *.o *.pb-c.*
+	rm -f attestation *.o *.pb-c.*

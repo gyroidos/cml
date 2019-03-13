@@ -59,11 +59,13 @@
 #define TPM2D_ATTESTATION_PUB_FILE	TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_pub.bin"
 #define TPM2D_PS_PUB_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/ps_pub.bin"
 
-typedef struct tpm2d_quote_string {
-	char *halg_str;
-	char *quoted_str;
-	char *signature_str;
-} tpm2d_quote_string_t;
+typedef struct tpm2d_quote {
+	TPM_ALG_ID halg_id;
+	size_t quoted_size;
+	uint8_t *quoted_value;
+	size_t signature_size;
+	uint8_t *signature_value;
+} tpm2d_quote_t;
 
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 
@@ -75,12 +77,11 @@ typedef enum tpm2d_key_type {
 	TPM2D_KEY_TYPE_SIGNING_EK
 } tpm2d_key_type_t;
 
-typedef struct tpm2d_pcr_string {
-	bool is_hex; // if true stirng is hexreprestation, otherwise binary of size pcr_size
+typedef struct tpm2d_pcr {
 	size_t pcr_size;
-	char *halg_str;
-	char *pcr_str;
-} tpm2d_pcr_string_t;
+	TPM_ALG_ID halg_id;
+	uint8_t *pcr_value;
+} tpm2d_pcr_t;
 
 /*****************************************************************************/
 void
@@ -196,15 +197,14 @@ tpm2d_get_as_key_handle(void);
 TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len);
 
-tpm2d_quote_string_t *
+
+tpm2d_quote_t *
 tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle,
-			const char *sig_key_pwd, const char *qualifying_data);
+			const char *sig_key_pwd, uint8_t *qualifying_data,
+			size_t qualifying_data_len);
 
 void
-tpm2_quote_free(tpm2d_quote_string_t *quote_string);
-
-char *
-tpm2_read_file_to_hex_string_new(const char *file_name);
+tpm2_quote_free(tpm2d_quote_t *quote);
 
 TPM_RC
 tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char* auth_pwd, TPMI_DH_OBJECT obj_handle,
@@ -223,11 +223,11 @@ TPM_RC
 tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd,
 			const char *new_pwd);
 
-tpm2d_pcr_string_t *
-tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, bool is_hex);
+tpm2d_pcr_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg);
 
 void
-tpm2_pcrread_free(tpm2d_pcr_string_t *pcr_string);
+tpm2_pcrread_free(tpm2d_pcr_t *pcr);
 
 uint8_t *
 tpm2_getrandom_new(size_t rand_length);
@@ -263,7 +263,7 @@ tpm2_policyauthvalue(TPMI_SH_POLICY se_handle);
 
 TPM_RC
 tpm2_policypcr(TPMI_SH_POLICY se_handle, uint32_t pcr_mask,
-				tpm2d_pcr_string_t *pcrs[], size_t pcrs_size);
+				tpm2d_pcr_t *pcrs[], size_t pcrs_size);
 
 TPM_RC
 tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest,

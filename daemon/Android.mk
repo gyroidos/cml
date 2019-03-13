@@ -94,6 +94,7 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	display.c \
 	smartcard.c \
 	tss.c \
+	attestation.proto \
 	tpm2d.proto \
 	cmld.c \
 	mount.c \
@@ -167,6 +168,7 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	ksm.c \
 	smartcard.c \
 	tss.c \
+	attestation.proto \
 	tpm2d.proto \
 	cmld.c \
 	main.c

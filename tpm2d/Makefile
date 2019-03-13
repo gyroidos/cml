@@ -35,8 +35,10 @@ SRC_FILES := \
 	common/sock.c \
 	common/protobuf.c \
 	common/cryptfs.c \
+	attestation.pb-c.c \
 	tpm2d.pb-c.c \
 	control.c \
+	rcontrol.c \
 	tpm2_commands.c \
 	nvmcrypt.c \
 	ml.c \
@@ -48,7 +50,8 @@ SRC_FILES := \
 all: tpm2d
 
 
-protobuf: tpm2d.proto
+protobuf: attestation.proto tpm2d.proto
+	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
 
 ${SRC_FILES}: protobuf

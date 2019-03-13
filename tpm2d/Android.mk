@@ -44,8 +44,10 @@ LOCAL_SRC_FILES := \
 	common/fd.c \
 	common/protobuf.c \
 	common/cryptfs.c \
+	attestation.proto \
 	tpm2d.proto \
 	control.c \
+	rcontrol.c \
 	tpm2_commands.c \
 	nvmcrypt.c \
 	ml.c \
