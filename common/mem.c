@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include "mem.h"
 #include "macro.h"
 

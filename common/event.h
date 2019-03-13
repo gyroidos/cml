@@ -122,6 +122,11 @@ event_add_io(event_io_t *io);
 void
 event_remove_io(event_io_t *io);
 
+/**
+ * Resets the event subsystem to its initial state
+ * As this sets all event lists to zero,
+ * the event_loop() call currently executing will exit
+ */
 void
 event_reset();
 

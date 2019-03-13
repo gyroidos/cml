@@ -304,7 +304,9 @@ static ssize_t
 control_read_send(control_t * control, int fd)
 {
 	uint8_t buf[1024];
-	int count = -1;
+	ssize_t count = -1;
+
+	TRACE("Trying to read data from console socket.");
 
 	if ((count = read(fd, buf, 1023)) > 0) {
 		buf[count] = 0;
@@ -315,7 +317,7 @@ control_read_send(control_t * control, int fd)
 		out.exec_output.len = count;
 		out.exec_output.data = buf;
 
-		TRACE("[CONTROL] Read %d bytes: %s. Sending to control client...", count, buf);
+		TRACE("[CONTROL] Read %ld bytes: %s. Sending to control client...", count, buf);
 
 		if (protobuf_send_message(control->sock_client,
 				(ProtobufCMessage *) & out) < 0) {
@@ -334,17 +336,22 @@ control_cb_read_console(int fd, unsigned events, event_io_t * io, void *data)
 	TRACE("Console callback called, events: read: %u, write: %u, except: %u",
 		(events & EVENT_IO_READ), (events & EVENT_IO_WRITE), (events & EVENT_IO_EXCEPT));
 
-	if ((events & EVENT_IO_EXCEPT)) {
-		//EVENT_IO_READ not set or read of length 0
-		TRACE("Detected termination of executed command. Stop listening.");
+	if ((events & EVENT_IO_READ)) {
+		TRACE("Got output from exec'ed command, trying to read from console socket");
 
 		int i = 0, count = 0;
 
+		// necessary to get all output from interactive commands
 		do {
-			TRACE("Trying to read remaining data from socket");
+			TRACE("Trying to read all available data from socket");
 			count = control_read_send(control, fd);
+
 			TRACE("Response from read was %d", count);
 		} while (i < 100 && count > 0);
+	}
+
+	if ((events & EVENT_IO_EXCEPT)) {
+		TRACE("Detected termination of executed command. Stop listening.");
 
 		event_remove_io(io);
 		event_io_free(io);
@@ -358,19 +365,6 @@ control_cb_read_console(int fd, unsigned events, event_io_t * io, void *data)
 		}
 
 		TRACE("Sent notification of command termination to client");
-
-	} else if ((events & EVENT_IO_READ)) {
-		TRACE("Got output from exec'ed command, trying to read from console socket");
-
-			int i = 0, count = 0;
-
-			// necessary to get all output from interactive commands
-			do {
-				TRACE("Trying to read all available data from socket");
-				count = control_read_send(control, fd);
-
-				TRACE("Response from read was %d", count);
-			} while (i < 100 && count > 0);
 	}
 }
 
@@ -1021,7 +1015,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD:{
 			TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
 
-			if (container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
+			if ((! container) || container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
 				ERROR("Failed to exec. Wrong UUID or or already executing command in this container.");
 
 				DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
@@ -1044,10 +1038,13 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT:{
-			TRACE("Got input for exec'ed process. Sending message");
+			TRACE("Got input for exec'ed process. Sending message on fd");
 
 			if (container != NULL) {
-				container_write_exec_input(container, msg->exec_input);
+				int ret = container_write_exec_input(container, msg->exec_input);
+				if (ret < 0) {
+					ERROR_ERRNO("Failed to write input to exec'ed process");
+				}
 			} else {
 				ERROR("No container UUID given");
 			}

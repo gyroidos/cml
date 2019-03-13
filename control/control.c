@@ -137,6 +137,9 @@ int main(int argc, char *argv[])
 	const char *socket_file = CONTROL_SOCKET;
 	int sock = 0;
 
+	struct termios termios_before;
+	tcgetattr(STDIN_FILENO, &termios_before);
+
 	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, "+s:h",
 					global_options, &option_index)); ) {
 		switch (c) {
@@ -433,9 +436,6 @@ int main(int argc, char *argv[])
 send_message:
 	sock = sock_connect(socket_file);
 	send_message(sock, &msg);
-
-	struct termios termios_before;
-	tcgetattr(STDIN_FILENO, &termios_before);
 
 	if (!strcasecmp(command, "run")) {
 		TRACE("[CLIENT] Processing response for run command");

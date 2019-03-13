@@ -265,6 +265,7 @@ event_remove_timer(event_timer_t *timer)
 {
 	IF_NULL_RETURN(timer);
 
+	TRACE("Removing timer event %p from list %p", (void *) timer, (void *) event_timer_list);
 	event_timer_list = list_remove(event_timer_list, timer);
 
 	TRACE("Removed timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)",
@@ -284,6 +285,10 @@ event_epoll_fd(int reset)
 	static int fd = -1;
 
 	if (fd < 0 || (fd >= 0 && reset == 1)) {
+		if (fd >= 0 && close(fd) < 0) {
+			ERROR_ERRNO("Failed to cleanly close old epoll fd");
+		}
+
 		fd = epoll_create(1);
 
 		ASSERT(fd >= 0);
@@ -306,40 +311,48 @@ event_epoll_fd(int reset)
 static void
 event_reset_fd(void)
 {
-	if (close(event_epoll_fd(0) < 0)) {
-		ERROR_ERRNO("Failed to close old epoll fd");
-	}
-
 	event_epoll_fd(1);
 }
 
+// compiling with -Wall, -Werror
+// must cast types appropriately in wrapper functions
 static void
-event_reset_timers()
+wrapped_remove_timer(void *elem)
 {
-	TRACE("Resetting event timers");
-	//TODO stop timers
-	event_timer_list = NULL;
+	event_remove_timer((event_timer_t *) elem);
+	event_timer_free(elem);
 }
 
 static void
-event_reset_signal_handlers()
+wrapped_remove_signal(void *elem)
 {
-	TRACE("Resetting event signal handler list");
-	event_signal_list = NULL;
+	event_remove_signal((event_signal_t *) elem);
+	event_signal_free(elem);
 }
 
 static void
-event_reset_inotify()
+wrapped_remove_inotify(void *elem)
 {
-	TRACE("Resetting event inotify list");
-	event_inotify_list = NULL;
+	event_remove_inotify((event_inotify_t *) elem);
+	event_inotify_free(elem);
 }
 
-void event_reset() {
+void
+event_reset() {
+	TRACE("Resetting event epoll fd");
 	event_reset_fd();
-	event_reset_timers();
-	event_reset_signal_handlers();
-	event_reset_inotify();
+
+	TRACE("Resetting event timers");
+	list_foreach(event_timer_list, wrapped_remove_timer);
+	event_timer_list = NULL;
+
+	TRACE("Resetting event signal handler list");
+	list_foreach(event_signal_list, wrapped_remove_signal);
+	event_signal_list = NULL;
+
+	TRACE("Resetting event inotify list");
+	list_foreach(event_inotify_list, wrapped_remove_inotify);
+	event_inotify_list = NULL;
 }
 
 event_io_t *
@@ -394,6 +407,7 @@ void
 event_remove_io(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
+	TRACE("Removing io event %p", (void *) io);
 
 	if (epoll_ctl(event_epoll_fd(0), EPOLL_CTL_DEL, io->fd, NULL) < 0)
 		WARN_ERRNO("epoll_ctl failed"); // TODO: handle error?
@@ -403,6 +417,7 @@ event_remove_io(event_io_t *io)
 	TRACE("Removed io event %p (func=%p, data=%p, fd=%d, events=0x%x)",
 			(void *) io, CAST_FUNCPTR_VOIDPTR io->func,
 			io->data, io->fd, io->events);
+	//TODO unlink?
 }
 
 static int
@@ -614,6 +629,7 @@ event_remove_inotify(event_inotify_t *inotify)
 {
 	IF_NULL_RETURN(inotify);
 
+	TRACE("Removing inotify event %p", (void *) inotify);
 	event_inotify_list = list_remove(event_inotify_list, inotify);
 
 	/* walk through list and check if there are other handlers on the same
@@ -690,6 +706,7 @@ event_remove_signal(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
+	TRACE("Removing signal event %p from list", (void *) sig);
 	event_signal_list = list_remove(event_signal_list, sig);
 
 	TRACE("Removed signal event %p (func=%p, data=%p, signal=%d (%s))",
