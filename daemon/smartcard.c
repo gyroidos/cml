@@ -119,7 +119,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
-			char *keyfile = mem_printf("%s/%s.key", startdata->smartcard->path, container_get_name(startdata->container));
+			char *keyfile = mem_printf("%s/%s.key", startdata->smartcard->path,
+				uuid_string(container_get_uuid(startdata->container)));
 			if (file_exists(keyfile)) {
 				DEBUG("Using key for container %s from existing key file %s",
 						container_get_name(startdata->container), keyfile);
@@ -183,7 +184,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				break;
 			}
 			ASSERT(msg->wrapped_key.len < TOKEN_MAX_WRAPPED_KEY_LEN);
-			char *keyfile = mem_printf("%s/%s.key", startdata->smartcard->path, container_get_name(startdata->container));
+			char *keyfile = mem_printf("%s/%s.key", startdata->smartcard->path,
+				uuid_string(container_get_uuid(startdata->container)));
 			// save wrapped key to file
 			int bytes_written = file_write(keyfile, (char *)msg->wrapped_key.data, msg->wrapped_key.len);
 			if (bytes_written != (int)msg->wrapped_key.len) {
