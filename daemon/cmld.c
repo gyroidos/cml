@@ -216,12 +216,20 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 	if (uuid) {
 		container_t *c = cmld_container_get_by_uuid(uuid);
 		if (c) {
-			DEBUG("Not loading %s for already created container %s.", name, container_get_name(c));
-			goto cleanup;
+			container_state_t state = container_get_state(c);
+			if (state != CONTAINER_STATE_STOPPED) {
+				DEBUG("Not loading %s for already created and not stopped container %s.",
+					name, container_get_name(c));
+				goto cleanup;
+			}
+			DEBUG("Removing outdated created container %s for config update",
+				container_get_name(c));
+			cmld_containers_list = list_remove(cmld_containers_list, c);
+			container_free(c);
 		}
 		c = container_new(path, uuid, NULL, 0);
 		if (c) {
-			DEBUG("Loaded existing container %s from %s", container_get_name(c), name);
+			DEBUG("Loaded config for container %s from %s", container_get_name(c), name);
 			cmld_containers_list = list_append(cmld_containers_list, c);
 			res = 1;
 			goto cleanup;
