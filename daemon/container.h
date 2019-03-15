@@ -711,4 +711,13 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
 list_t *
 container_get_vnet_runtime_cfg_new(container_t *container);
 
+/**
+ * This function updates the containers config on storage with the provided
+ * protobuf config in buf. A reload is triggerd if the container is stopped
+ * to update cmld's view. If the container is not in stopped state a manual
+ * reload is necessary.
+ */
+int
+container_update_config(container_t * container, uint8_t *buf, size_t buf_len);
+
 #endif /* CONTAINER_H */

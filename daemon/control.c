@@ -856,6 +856,71 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		break;
 
 	// Container-specific commands:
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG: {
+		char **cuuid_str = NULL;
+		ContainerConfig **ccfg = NULL;
+
+		// build default response message for controller
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_CONFIG;
+		out.n_container_configs = 0;
+		out.n_container_uuids = 0;
+
+		if (NULL == container) {
+			WARN("Container does not exist!");
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to UPDATE_CONFIG");
+			break;
+		}
+		if (!msg->has_container_config_file) {
+			WARN("UPDATE_CONFIG without config file does not work, doing nothing...");
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to UPDATE_CONFIG");
+			break;
+		}
+		int res = container_update_config(container,
+				msg->container_config_file.data,
+				msg->container_config_file.len);
+		if (res) {
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to UPDATE_CONFIG");
+			break;
+		}
+
+		ccfg = mem_new(ContainerConfig *, 1);
+		ccfg[0] = (ContainerConfig *) protobuf_message_new_from_textfile(
+						container_get_config_filename(container),
+						&container_config__descriptor);
+		cuuid_str = mem_new(char *, 1);
+		cuuid_str[0] = mem_strdup(uuid_string(container_get_uuid(container)));
+
+		if (!ccfg[0]) {
+			ERROR("Failed to get new config for %s", cuuid_str[0]);
+			mem_free(ccfg);
+			mem_free(cuuid_str[0]);
+			mem_free(cuuid_str);
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send empty Response to UPDATE_CONFIG");
+			break;
+		}
+		// reload configs if container is in state
+		container_state_t state = container_get_state(container);
+		if (state == CONTAINER_STATE_STOPPED)
+			cmld_reload_containers();
+
+		// build and send response message to controller
+		out.n_container_configs = 1;
+		out.container_configs = ccfg;
+		out.n_container_uuids = 1;
+		out.container_uuids = cuuid_str;
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			WARN("Could not send container config as Response to UPDATE_CONFIG");
+		}
+		mem_free(cuuid_str[0]);
+		mem_free(cuuid_str);
+		protobuf_free_message((ProtobufCMessage *) ccfg[0]);
+		mem_free(ccfg);
+	} break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		char *key = NULL;
 		if (NULL == container) {

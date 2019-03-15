@@ -61,6 +61,7 @@ static void print_usage(const char *cmd)
 	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
+	printf("   update_config <container-uuid> -c <container.conf>\n        Updates a container's config with the given config file.\n");
 	printf("   state <container-uuid>\n        Prints the state of the specified container.\n");
 	printf("   freeze <container-uuid>\n        Freeze the specified container.\n");
 	printf("   unfreeze <container-uuid>\n        Unfreeze the specified container.\n");
@@ -120,6 +121,11 @@ static const struct option start_options[] = {
 static const struct option assign_iface_options[] = {
 	{"iface",	required_argument, 0, 'i'},
 	{"persistent",	no_argument, 0, 'p'},
+	{0, 0, 0, 0}
+};
+
+static const struct option update_cfg_options[] = {
+	{"file",   required_argument, 0, 'f'},
 	{0, 0, 0, 0}
 };
 
@@ -298,6 +304,44 @@ int main(int argc, char *argv[])
 	} else if (!strcasecmp(command, "config")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 		has_response = true;
+	} else if (!strcasecmp(command, "update_config")) {
+		const char* cfgfile = NULL;
+		has_response = true;
+                optind--;
+                char **update_argv = &argv[optind];
+                int update_argc = argc - optind;
+                optind = 0; // reset optind to scan command-specific options
+                for (int c, option_index = 0; -1 != (c = getopt_long(update_argc, update_argv,
+                                                ":f", update_cfg_options, &option_index)); ) {
+                        switch (c) {
+                        case 'f':
+				cfgfile = optarg ? optarg : NULL;
+                                break;
+                        default:
+                                print_usage(argv[0]);
+                                ASSERT(false); // never reached
+                        }
+                }
+                optind += argc - update_argc;    // adjust optind to be used with argv
+
+		//const char* cfgfile = argv[optind++];
+		off_t cfglen = file_size(cfgfile);
+		if (cfglen < 0) {
+			ERROR("Error accessing container config file %s.", cfgfile);
+			exit(-2);
+		}
+
+		unsigned char *cfg = mem_alloc(cfglen);
+		if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
+			ERROR("Error reading %s. Aborting.", cfgfile);
+			exit(-2);
+		}
+		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG;
+		msg.has_container_config_file = true;
+		msg.container_config_file.len = cfglen;
+		msg.container_config_file.data = cfg;
 	} else if (!strcasecmp(command, "ifaces")) {
                 msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
                 has_response = true;
