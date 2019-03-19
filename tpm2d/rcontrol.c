@@ -212,21 +212,25 @@ tpm2d_rcontrol_cb_recv_message(int fd, unsigned events, event_io_t *io, void *da
 
 	if (events & EVENT_IO_READ) {
 		RemoteToTpm2d *msg = (RemoteToTpm2d *)protobuf_recv_message(fd, &remote_to_tpm2d__descriptor);
-		if (NULL == msg) {
-			WARN("Failed to receive and decode RemoteToTpm2d protobuf message on sock %d!", fd);
-		} else {
-			tpm2d_rcontrol_handle_message(msg, fd, rcontrol);
-			protobuf_free_message((ProtobufCMessage *)msg);
-			DEBUG("Handled remote control connection %d", fd);
-			return;
-		}
+		// close connection if client EOF, or protocol parse error
+		IF_NULL_GOTO_TRACE(msg, connection_err);
+
+		tpm2d_rcontrol_handle_message(msg, fd, rcontrol);
+		protobuf_free_message((ProtobufCMessage *)msg);
+		DEBUG("Handled remote control connection %d", fd);
 	}
 	if (events & EVENT_IO_EXCEPT) {
-		event_remove_io(io);
-		event_io_free(io);
-		close(fd);
-		return;
+		INFO("Remote client closed connection; disconnecting rcontrol socket.");
+		goto connection_err;
 	}
+	return;
+
+connection_err:
+	event_remove_io(io);
+	event_io_free(io);
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected rcontrol socket");
+	return;
 }
 /**
  * Event callback for accepting incoming connections on the listening socket.
