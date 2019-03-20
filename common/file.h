@@ -46,6 +46,9 @@ bool
 file_is_dir(const char *file);
 
 bool
+file_is_blk(const char *file);
+
+bool
 file_is_mountpoint(const char *file);
 
 bool
