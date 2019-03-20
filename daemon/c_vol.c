@@ -55,6 +55,7 @@
 #define MAKE_EXT4FS "mkfs.ext4"
 #endif
 #define BTRFSTUNE "btrfstune"
+#define MAKE_BTRFS "mkfs.btrfs"
 
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
@@ -69,6 +70,34 @@ struct c_vol {
 };
 
 /******************************************************************************/
+
+static int
+c_vol_fork_and_execvp(const char * const *argv)
+{
+	int status;
+	pid_t pid = fork();
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork for %s", argv[0]);
+		return -1;
+	case 0:
+		execvp(argv[0], (char * const *)argv);
+		ERROR_ERRNO("Could not execvp %s", argv[0]);
+		return -1;
+	default:
+		if (waitpid(pid, &status, 0) != pid) {
+			ERROR_ERRNO("Could not waitpid for '%s'", argv[0]);
+		} else if (!WIFEXITED(status)) {
+			ERROR("Child '%s' terminated abnormally", argv[0]);
+		} else {
+			TRACE("%s terminated normally", argv[0]);
+			return WEXITSTATUS(status) ? -1 : 0;
+		}
+	}
+	return -1;
+}
+
 
 /**
  * Allocate a new string with the full image path for one mount point.
@@ -179,25 +208,8 @@ c_vol_create_image_empty(c_vol_t *vol, const char *img, const mount_entry_t *mnt
 static int
 c_vol_btrfs_regen_uuid(const char *dev)
 {
-	pid_t pid = fork();
-
-	switch (pid) {
-	case -1:
-		ERROR_ERRNO("Could not fork to regen uuid for %s", dev);
-		return -1;
-	case 0:
-		execlp("/usr/bin/"BTRFSTUNE, BTRFSTUNE, "-f", "-u", dev, (char *) NULL);
-		ERROR_ERRNO("Could not execlp %s", BTRFSTUNE);
-		return -1;
-	default:
-		if (waitpid(pid, NULL, 0) != pid) {
-			ERROR_ERRNO("Could not waitpid for %s", BTRFSTUNE);
-			return -1;
-		}
-		return 0;
-	}
-
-	return 0;
+	const char * const argv_regen[] = { BTRFSTUNE, "-f", "-u", dev, NULL };
+	return c_vol_fork_and_execvp(argv_regen);
 }
 
 static int
@@ -289,32 +301,65 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 static int
 c_vol_format_image(const char *dev, const char *fs)
 {
-	pid_t pid;
-
-	if (strcmp("ext4", fs)) {
+	const char *mkfs_bin = NULL;
+	if (0 == strcmp("ext4", fs)) {
+		mkfs_bin = MAKE_EXT4FS;
+	} else if (0 == strcmp("btrfs", fs)) {
+		mkfs_bin = MAKE_BTRFS;
+	} else {
 		ERROR("Could not create filesystem of type %s on %s", fs, dev);
 		return -1;
 	}
+	const char * const argv_mkfs[] = {mkfs_bin, dev, NULL};
+	return c_vol_fork_and_execvp(argv_mkfs);
+}
 
-	pid = fork();
+static int
+c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
+{
+	IF_NULL_RETVAL(mount_data, -1);
 
-	switch (pid) {
-	case -1:
-		ERROR_ERRNO("Could not fork to create filesystem for %s", dev);
+	int ret = 0;
+	char *token = strdup(mount_data);
+	char *subvol = strtok(token, "=");
+	subvol = strtok(NULL, "=");
+	if (NULL == subvol) {
+		mem_free(token);
 		return -1;
-	case 0:
-		execlp("/sbin/"MAKE_EXT4FS, MAKE_EXT4FS, dev, (char *) NULL);
-		ERROR_ERRNO("Could not execlp %s", MAKE_EXT4FS);
-		return -1;
-	default:
-		if (waitpid(pid, NULL, 0) != pid) {
-			ERROR_ERRNO("Could not waitpid for %s", MAKE_EXT4FS);
-			return -1;
-		}
-		return 0;
 	}
 
-	return 0;
+	char *subvol_path = NULL;
+	char *tmp_mount = mem_strdup("/tmp/tmp.XXXXXX");
+	tmp_mount = mkdtemp(tmp_mount);
+	if (NULL == tmp_mount) {
+		ret = -1;
+		goto out;
+	}
+	if (-1 == (ret = mount(dev, tmp_mount, "btrfs", 0, 0))) {
+		ERROR_ERRNO("temporary mount of btrfs root volume %s failed", dev);
+		goto out;
+	}
+	subvol_path = mem_printf("%s/%s", tmp_mount, subvol);
+
+	const char * const argv_list[] = {"btrfs", "subvol", "list", subvol_path, NULL};
+	if (-1 == (ret = c_vol_fork_and_execvp(argv_list))) {
+		const char * const argv_create[] = {"btrfs", "subvol", "create", subvol_path, NULL};
+		if (-1 == (ret = c_vol_fork_and_execvp(argv_create))) {
+			ERROR_ERRNO("Could not create btrfs subvol %s", subvol);
+		} else {
+			INFO("Created new suvol %s on btrfs device %s", subvol, dev);
+		}
+	}
+	if (-1 == (ret = umount(tmp_mount))) {
+		ERROR_ERRNO("Could not umount temporary mount of btrfs root volume %s!", dev);
+	}
+out:
+	unlink(tmp_mount);
+	if (subvol_path)
+		mem_free(subvol_path);
+	mem_free(tmp_mount);
+	mem_free(token);
+	return ret;
 }
 
 /**
@@ -471,14 +516,20 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				mount_entry_get_img(mntent));
 
-		DEBUG("Setting up cryptfs volume %s for %s", label, dev);
+		crypt = cryptfs_get_device_path_new(label);
+		if (file_is_blk(crypt)) {
+			INFO("Using existing mapper device: %s", crypt);
+		} else {
+			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
 
-		crypt = cryptfs_setup_volume_new(label, dev, container_get_key(vol->container));
+			mem_free(crypt);
+			crypt = cryptfs_setup_volume_new(label, dev, container_get_key(vol->container));
 
-		if (!crypt) {
-			ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
-			mem_free(label);
-			goto error;
+			if (!crypt) {
+				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
+				mem_free(label);
+				goto error;
+			}
 		}
 
 		mem_free(label);
@@ -494,10 +545,13 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 
 	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW) {
 		// create mountpoints for lower and upper dev
-		overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs", uuid_string(container_get_uuid(vol->container)));
-		lower_dir = mem_printf("%s/%s/lower", overlayfs_mount_dir, mount_entry_get_img(mntent));
-		upper_dir = mem_printf("%s/%s/upper", overlayfs_mount_dir, mount_entry_get_img(mntent));
-		work_dir = mem_printf("%s/%s/work", overlayfs_mount_dir, mount_entry_get_img(mntent));
+		overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs/%s%s",
+						uuid_string(container_get_uuid(vol->container)),
+						mount_entry_get_img(mntent),
+						mount_entry_get_dir(mntent));
+		lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
+		upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
+		work_dir = mem_printf("%s/work", overlayfs_mount_dir);
 
 		if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir overlayfs dir %s", overlayfs_mount_dir);
@@ -566,12 +620,19 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			}
 			DEBUG("Successfully formatted new image %s using %s", img, dev);
 		}
+		if (!strcmp("btrfs", rw_fstype) &&
+			!strncmp("subvol", mount_entry_get_mount_data(mntent), 6)) {
+			c_vol_btrfs_create_subvol(dev, mount_entry_get_mount_data(mntent));
+		}
 
 		/*
 		 * mount rw image for overlayfs lower, upper and work dir
 		 * (at least upper and work need to be on the same fs)
 		 */
-		overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs", uuid_string(container_get_uuid(vol->container)));
+		overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs/%s%s",
+						uuid_string(container_get_uuid(vol->container)),
+						mount_entry_get_img(mntent),
+						mount_entry_get_dir(mntent));
 		if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir overlayfs mount dir: %s", overlayfs_mount_dir);
 			goto error;
@@ -583,8 +644,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		DEBUG("Successfully mounted %s using %s to %s", img, dev, overlayfs_mount_dir);
 
 		// create mountpoint for upper dev
-		upper_dir = mem_printf("%s/%s-upper", overlayfs_mount_dir, mount_entry_get_img(mntent));
-		work_dir = mem_printf("%s/%s-work", overlayfs_mount_dir, mount_entry_get_img(mntent));
+		upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
+		work_dir = mem_printf("%s/work", overlayfs_mount_dir);
 		if (dir_mkdir_p(upper_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
 			goto error;

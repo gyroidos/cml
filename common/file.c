@@ -71,6 +71,14 @@ file_is_dir(const char *file)
 }
 
 bool
+file_is_blk(const char *file)
+{
+	struct stat s;
+
+	return !lstat(file, &s) && S_ISBLK(s.st_mode);
+}
+
+bool
 file_is_mountpoint(const char *file)
 {
 	bool ret;

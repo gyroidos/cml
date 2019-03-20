@@ -55,4 +55,4 @@ rattestation: libcommon ${SRC_FILES} ${PROTO_SRC}
 
 .PHONY: clean
 clean:
-	rm -f attestation *.o *.pb-c.*
+	rm -f rattestation *.o *.pb-c.*
