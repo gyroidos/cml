@@ -61,7 +61,7 @@ service: ${SRC_FILES}
 	${CC} -static ${LOCAL_CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
 service-static: ${SRC_FILES}
-	${CC} -static ${LOCAL_CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
+	${CC} -static ${LOCAL_CFLAGS} ${CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
 
 .PHONY: clean
