@@ -39,8 +39,7 @@
 #include <signal.h>
 #include <getopt.h>
 
-#define TPM2D_SOCK_PATH TPM2D_BASE_DIR "/communication"
-#define TPM2D_CONTROL_SOCKET TPM2D_SOCK_PATH "/control.sock"
+#define TPM2D_CONTROL_SOCKET SOCK_PATH(tpm2d-control)
 #define TPM2D_RCONTROL_PORT 9505
 
 static bool use_simulator = false;
@@ -298,8 +297,10 @@ main(UNUSED int argc, char **argv) {
 
 	tpm2d_init();
 
-	if (mkdir(TPM2D_SOCK_PATH, 0700) < 0 && errno != EEXIST)
-                FATAL_ERRNO("Could not mkdir communictaions dir: %s", TPM2D_SOCK_PATH);
+	TRACE("Try to create directory for socket if not existing");
+	if (dir_mkdir_p(CMLD_SOCKET_DIR, 0755) < 0) {
+		FATAL("Could not create directory for tpm2d_control socket");
+	}
 
 	tpm2d_control_cmld = tpm2d_control_new(TPM2D_CONTROL_SOCKET);
 	if (!tpm2d_control_cmld) {

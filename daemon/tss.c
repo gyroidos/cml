@@ -37,8 +37,7 @@
 #include <protobuf-c-text/protobuf-c-text.h>
 #include <stdbool.h>
 
-#define TPM2D_SOCK_PATH "/data/cml/tpm2d/communication"
-#define TPM2D_SOCKET TPM2D_SOCK_PATH "/control.sock"
+#define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
 
 static int tss_sock = -1;
 
