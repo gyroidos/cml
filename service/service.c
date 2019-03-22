@@ -198,11 +198,7 @@ main(int argc, char **argv)
 	if (msg_size < 0)
 		WARN("Could not send boot complete msg!, error: %zd\n", msg_size);
 
-	fsync(sock);
-
-	// give cmld some time to handle message before closing socket
-	usleep(200 * 1000);
-	shutdown(sock, SHUT_WR);
+	// closing socket to cmld
 	close(sock);
 
 	if (do_init) {
