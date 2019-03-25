@@ -23,7 +23,7 @@
 
 #include "sock.h"
 
-#include "common/macro.h"
+#include "macro.h"
 
 #include <unistd.h>
 #include <string.h>
