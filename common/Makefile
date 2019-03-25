@@ -29,39 +29,42 @@ LOCAL_CFLAGS += -I../include -pedantic -Wall -Wextra -Werror -std=gnu99 -D _POSI
 .PHONY: all
 all: libcommon
 
-libcommon: event list logf mem str nl
-	ar rcs libcommon.a nl.o logf.o event.o list.o mem.o str.o
+.PHONY: protobuf
+protobuf: logf.pb-c.c
 
-event: event.c event.h
-	${CC} -c ${LOCAL_CFLAGS} event.c -o event.o
+OBJS_COMMON := \
+	event.o \
+	list.o \
+	logf.o \
+	mem.o \
+	str.o \
+	nl.o
 
-list: list.c list.h
-	${CC} -c ${LOCAL_CFLAGS} list.c -o list.o
+OBJS_COMMON_FULL := \
+	$(OBJS_COMMON) \
+	protobuf.o \
+	logf.pb-c.o \
+	file.o \
+	dir.o \
+	fd.o \
+	sock.o \
+	network.o \
+	proc.o \
+	loopdev.o
 
-logf: logf.c logf.h
-	${CC} -c ${LOCAL_CFLAGS} logf.c -o logf.o
+libcommon: $(OBJS_COMMON)
+	ar rcs libcommon.a $^
 
-mem: mem.c mem.h
-	${CC} -c ${LOCAL_CFLAGS} mem.c -o mem.o
+libcommon_full: $(OBJS_COMMON_FULL)
+	ar rcs libcommon_full.a $^
 
-str: str.c str.h
-	${CC} -c ${LOCAL_CFLAGS} str.c -o str.o
-
-nl: nl.c nl.h
-	${CC} -c ${LOCAL_CFLAGS} nl.c -o nl.o
-
-sock: sock.c sock.h
-	${CC} -c ${LOCAL_CFLAGS} sock.c -o sock.o
+.c.o:
+	${CC} -c ${LOCAL_CFLAGS} $< -o $@
 	
 
-uuid: uuid.c uuid.h
-	${CC} -c ${LOCAL_CFLAGS} uuid.c -o uuid.o
-
-
-protobuf: logf.proto
-	protoc-c --c_out=. logf.proto
-
+logf.pb-c.c: logf.proto
+	protoc-c --c_out=. $<
 
 .PHONY: clean
 clean:
-	rm -f *.o libcommon.a *.pb-c.*
+	rm -f *.o *.a *.pb-c.*
