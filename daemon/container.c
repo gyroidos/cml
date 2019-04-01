@@ -2146,3 +2146,13 @@ container_get_vnet_runtime_cfg_new(container_t *container)
 {
 	return c_net_get_interface_mapping_new(container->net);
 }
+
+int
+container_update_config(container_t * container, uint8_t *buf, size_t buf_len)
+{
+	int ret;
+	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len);
+	ret = container_config_write(conf);
+	container_config_free(conf);
+	return ret;
+}

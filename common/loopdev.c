@@ -28,10 +28,10 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-#include "common/loopdev.h"
+#include "loopdev.h"
 
-#include "common/macro.h"
-#include "common/mem.h"
+#include "macro.h"
+#include "mem.h"
 
 #ifndef LOOP_CTL_GET_FREE
 #define LOOP_CTL_GET_FREE 0x4C82

@@ -21,11 +21,11 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "common/dir.h"
+#include "dir.h"
 
-#include "common/macro.h"
-#include "common/logf.h"
-#include "common/mem.h"
+#include "macro.h"
+#include "logf.h"
+#include "mem.h"
 
 #include <dirent.h>
 #include <errno.h>

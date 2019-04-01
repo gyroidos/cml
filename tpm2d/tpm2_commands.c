@@ -1462,23 +1462,16 @@ tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const c
 
 	in.authHandle = nv_index_handle;
 	in.nvIndex = nv_index_handle;
-	in.offset = 0;
 
 	size_t data_size = tpm2_nv_get_data_size(nv_index_handle);
 	size_t buffer_max = tpm2_nv_get_max_buffer_size(tss_context);
-	if (data_size > buffer_max) {
-		INFO("Only one chunk of size=%zd is supported by this implementation!", buffer_max);
-		rc = TSS_RC_INSUFFICIENT_BUFFER;
-		goto err;
-	}
+
 	if (data_size > *out_length) {
 		ERROR("Output buffer (size=%zd) is to small for nv data of size %zd\n",
 						*out_length, data_size);
 		rc = TSS_RC_INSUFFICIENT_BUFFER;
 		goto err;
 	}
-
-	in.size = data_size;
 
 	// since we use this to read symetric keys, start an encrypted transport
 	if (se_handle == TPM_RH_NULL) {
@@ -1490,20 +1483,28 @@ tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const c
 		auth_se_handle = se_handle;
 	}
 
+	in.offset = *out_length = 0;
 	do {
-		rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
-			(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
-			auth_se_handle, NULL, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
-			TPM_RH_NULL, NULL, 0);
-	} while (TPM_RC_RETRY == rc);
+		in.size = (data_size > buffer_max) ? buffer_max : data_size;
+		INFO("Reading chunk of size=%d", in.size);
 
-	if (TPM_RC_SUCCESS != rc)
-		goto flush;
+		do {
+			rc = TSS_Execute(tss_context, (RESPONSE_PARAMETERS *)&out,
+				(COMMAND_PARAMETERS *)&in, NULL, TPM_CC_NV_Read,
+				auth_se_handle, NULL, TPMA_SESSION_ENCRYPT|TPMA_SESSION_CONTINUESESSION,
+				TPM_RH_NULL, NULL, 0);
+		} while (TPM_RC_RETRY == rc);
 
-	memcpy(out_buffer, out.data.b.buffer, out.data.b.size);
+		if (TPM_RC_SUCCESS != rc)
+			goto flush;
 
-	// set ouput length of caller
-	*out_length = out.data.b.size;
+		memcpy(out_buffer+in.offset, out.data.b.buffer, out.data.b.size);
+		data_size -= out.data.b.size;
+		in.offset += out.data.b.size;
+		// set ouput length of caller
+		*out_length += out.data.b.size;
+
+	} while (data_size > 0);
 
 	TSS_PrintAll("nv_read data: ", out_buffer, *out_length);
 

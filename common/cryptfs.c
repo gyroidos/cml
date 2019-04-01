@@ -88,8 +88,8 @@ get_blkdev_size(int fd)
 	return nr_sec;
 }
 
-static char *
-get_device_path_new(const char *label)
+char *
+cryptfs_get_device_path_new(const char *label)
 {
 	return mem_printf("%s%s", CRYPT_PATH_PREFIX, label);
 }
@@ -272,7 +272,7 @@ create_device_node(const char *name)
 	/* should not be necassery for android */
 	mkdir("/dev/block", 00777);
 
-	char *device = get_device_path_new(name);
+	char *device = cryptfs_get_device_path_new(name);
 	/* we might need to remove this device first */
 	unlink(device);
 	if (mknod(device, S_IFBLK | 00777, io->dev) != 0) {
@@ -321,7 +321,7 @@ cryptfs_delete_blk_dev(const char *name)
 	}
 
 	/* remove device node if necessary */
-	char *device = get_device_path_new(name);
+	char *device = cryptfs_get_device_path_new(name);
 	unlink(device);
 	mem_free(device);
 

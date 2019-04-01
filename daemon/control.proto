@@ -163,6 +163,9 @@ message ControllerToDaemon {
 		//Send input to exec'ed porgram
 		CONTAINER_EXEC_INPUT = 114;
 
+		// Starts a container. Also needs ontainer_config_file.
+		CONTAINER_UPDATE_CONFIG = 115;
+
 	}
 	required Command command = 1;
 

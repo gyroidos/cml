@@ -297,21 +297,25 @@ scd_control_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void
 {
 	if (events & EVENT_IO_READ) {
 		DaemonToToken *msg = (DaemonToToken *)protobuf_recv_message(fd, &daemon_to_token__descriptor);
-		if (NULL == msg) {
-			WARN("Failed to receive and decode DaemonToToken protobuf message on sock %d!", fd);
-		} else {
-			scd_control_handle_message(msg, fd);
-			protobuf_free_message((ProtobufCMessage *)msg);
-			DEBUG("Handled control connection %d", fd);
-			return;
-		}
+		// close connection if client EOF, or protocol parse error
+		IF_NULL_GOTO_TRACE(msg, connection_err);
+
+		scd_control_handle_message(msg, fd);
+		protobuf_free_message((ProtobufCMessage *)msg);
+		DEBUG("Handled control connection %d", fd);
 	}
-	if (events & EVENT_IO_EXCEPT) {
-		event_remove_io(io);
-		event_io_free(io);
-		close(fd);
-		return;
+	if(events & EVENT_IO_EXCEPT) {
+		INFO("Control client closed connection; disconnecting control socket.");
+		goto connection_err;
 	}
+	return;
+
+connection_err:
+	event_remove_io(io);
+	event_io_free(io);
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected control socket");
+	return;
 }
 /**
  * Event callback for accepting incoming connections on the listening socket.

@@ -24,12 +24,12 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "common/file.h"
+#include "file.h"
 
-#include "common/macro.h"
-#include "common/logf.h"
-#include "common/mem.h"
-#include "common/fd.h"
+#include "macro.h"
+#include "logf.h"
+#include "mem.h"
+#include "fd.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -68,6 +68,14 @@ file_is_dir(const char *file)
 	struct stat s;
 
 	return !lstat(file, &s) && S_ISDIR(s.st_mode);
+}
+
+bool
+file_is_blk(const char *file)
+{
+	struct stat s;
+
+	return !lstat(file, &s) && S_ISBLK(s.st_mode);
 }
 
 bool

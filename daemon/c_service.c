@@ -228,36 +228,32 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 
 	c_service_t *service = data;
 
+	if (events & EVENT_IO_READ) {
+		ServiceToCmldMessage *message =
+			(ServiceToCmldMessage *) protobuf_recv_message(fd, &service_to_cmld_message__descriptor);
+		// close connection if client EOF, or protocol parse error
+		IF_NULL_GOTO_TRACE(message, connection_err);
+
+		c_service_handle_received_message(service, message);
+		protobuf_c_message_free_unpacked((ProtobufCMessage *) message, NULL);
+	}
+
+	// also check EXCEPT flag
 	if (events & EVENT_IO_EXCEPT) {
-		WARN("Exception on connected socket to TrustmeService; closing socket and deregistering c_service_cb_receive_message");
-		event_remove_io(io);
-		event_io_free(io);
-		service->event_io_sock_connected = NULL;
-		if (close(fd) < 0)
-			WARN_ERRNO("Failed to close connected service socket");
-		service->sock_connected = -1;
-		return;
+		WARN("Exception on connected socket to TrustmeService; "
+			"closing socket and deregistering c_service_cb_receive_message");
+		goto connection_err;
 	}
+	return;
 
-	IF_FALSE_RETURN(events & EVENT_IO_READ);
-
-	ServiceToCmldMessage *message = (ServiceToCmldMessage *) protobuf_recv_message(fd, &service_to_cmld_message__descriptor);
-	if (!message) {
-		if (fd_is_closed(fd)) {
-			// EOF received in protobuf_recv_message
-			// disconnect local side of already disconnected client side
-			service->sock_connected = -1;
-			event_remove_io(io);
-			event_io_free(io);
-			service->event_io_sock_connected = NULL;
-			return;
-		}
-		WARN("Failed to receive and decode protobuf ServiceToCmldMessage");
-		return;
-	}
-
-	c_service_handle_received_message(service, message);
-	protobuf_c_message_free_unpacked((ProtobufCMessage *) message, NULL);
+connection_err:
+	event_remove_io(io);
+	event_io_free(io);
+	service->event_io_sock_connected = NULL;
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected service socket");
+	service->sock_connected = -1;
+	return;
 }
 
 /**
