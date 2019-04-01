@@ -197,8 +197,12 @@ enum container_start_sync_msg {
 static uint16_t
 container_get_next_adb_port(void)
 {
+#ifdef ANDROID
 	static uint16_t next_free_adb_port = ADB_FWD_PORT_BASE + 1;
 	return next_free_adb_port++;
+#else
+	return 0;
+#endif
 }
 
 /*
