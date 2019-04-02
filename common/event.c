@@ -265,6 +265,7 @@ event_remove_timer(event_timer_t *timer)
 {
 	IF_NULL_RETURN(timer);
 
+	TRACE("Removing timer event %p from list %p", (void *) timer, (void *) event_timer_list);
 	event_timer_list = list_remove(event_timer_list, timer);
 
 	TRACE("Removed timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)",
@@ -279,11 +280,15 @@ event_remove_timer(event_timer_t *timer)
 /******************************************************************************/
 
 static int
-event_epoll_fd(void)
+event_epoll_fd(int reset)
 {
 	static int fd = -1;
 
-	if (fd < 0) {
+	if (fd < 0 || (fd >= 0 && reset == 1)) {
+		if (fd >= 0 && close(fd) < 0) {
+			ERROR_ERRNO("Failed to cleanly close old epoll fd");
+		}
+
 		fd = epoll_create(1);
 
 		ASSERT(fd >= 0);
@@ -301,6 +306,53 @@ event_epoll_fd(void)
 	}
 
 	return fd;
+}
+
+static void
+event_reset_fd(void)
+{
+	event_epoll_fd(1);
+}
+
+// compiling with -Wall, -Werror
+// must cast types appropriately in wrapper functions
+static void
+wrapped_remove_timer(void *elem)
+{
+	event_remove_timer((event_timer_t *) elem);
+	event_timer_free(elem);
+}
+
+static void
+wrapped_remove_signal(void *elem)
+{
+	event_remove_signal((event_signal_t *) elem);
+	event_signal_free(elem);
+}
+
+static void
+wrapped_remove_inotify(void *elem)
+{
+	event_remove_inotify((event_inotify_t *) elem);
+	event_inotify_free(elem);
+}
+
+void
+event_reset() {
+	TRACE("Resetting event epoll fd");
+	event_reset_fd();
+
+	TRACE("Resetting event timers");
+	list_foreach(event_timer_list, wrapped_remove_timer);
+	event_timer_list = NULL;
+
+	TRACE("Resetting event signal handler list");
+	list_foreach(event_signal_list, wrapped_remove_signal);
+	event_signal_list = NULL;
+
+	TRACE("Resetting event inotify list");
+	list_foreach(event_inotify_list, wrapped_remove_inotify);
+	event_inotify_list = NULL;
 }
 
 event_io_t *
@@ -341,7 +393,7 @@ event_add_io(event_io_t *io)
 	epoll_event.events |= (io->events & EVENT_IO_PRI) ? EPOLLPRI : 0;
 	epoll_event.data.ptr = io;
 
-	if (epoll_ctl(event_epoll_fd(), EPOLL_CTL_ADD, io->fd, &epoll_event) < 0)
+	if (epoll_ctl(event_epoll_fd(0), EPOLL_CTL_ADD, io->fd, &epoll_event) < 0)
 		WARN_ERRNO("epoll_ctl failed"); // TODO: handle error?
 	else
 		event_io_active++;
@@ -355,8 +407,9 @@ void
 event_remove_io(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
+	TRACE("Removing io event %p", (void *) io);
 
-	if (epoll_ctl(event_epoll_fd(), EPOLL_CTL_DEL, io->fd, NULL) < 0)
+	if (epoll_ctl(event_epoll_fd(0), EPOLL_CTL_DEL, io->fd, NULL) < 0)
 		WARN_ERRNO("epoll_ctl failed"); // TODO: handle error?
 	else
 		event_io_active--;
@@ -364,6 +417,7 @@ event_remove_io(event_io_t *io)
 	TRACE("Removed io event %p (func=%p, data=%p, fd=%d, events=0x%x)",
 			(void *) io, CAST_FUNCPTR_VOIDPTR io->func,
 			io->data, io->fd, io->events);
+	//TODO unlink?
 }
 
 static int
@@ -373,7 +427,7 @@ event_epoll(int timeout)
 	int n, i;
 
 	TRACE("Calling epoll_wait with timeout=%ums", timeout);
-	n = epoll_wait(event_epoll_fd(), epoll_events, ELEMENTSOF(epoll_events),
+	n = epoll_wait(event_epoll_fd(0), epoll_events, ELEMENTSOF(epoll_events),
 			timeout);
 	if (n < 0) {
 		if (errno == EINTR) // caused by suspend (no real error)
@@ -401,6 +455,8 @@ event_epoll(int timeout)
 					io->data, io->fd, io->events);
 
 			(io->func)(io->fd, e, io, io->data);
+
+			TRACE("Finished io handling");
 		}
 	} // else timeout
 
@@ -573,6 +629,7 @@ event_remove_inotify(event_inotify_t *inotify)
 {
 	IF_NULL_RETURN(inotify);
 
+	TRACE("Removing inotify event %p", (void *) inotify);
 	event_inotify_list = list_remove(event_inotify_list, inotify);
 
 	/* walk through list and check if there are other handlers on the same
@@ -649,6 +706,7 @@ event_remove_signal(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
+	TRACE("Removing signal event %p from list", (void *) sig);
 	event_signal_list = list_remove(event_signal_list, sig);
 
 	TRACE("Removed signal event %p (func=%p, data=%p, signal=%d (%s))",
@@ -660,6 +718,8 @@ static void
 event_signal_handler(void)
 {
 	bool *received;
+
+	TRACE("event_signal_handler() called");
 
 	/* We have two arrays to allow atomic switching from one array to the
 	 * other to guarantee that we do not miss signals entirely. It is still
@@ -773,6 +833,8 @@ event_loop(void)
 		timeout = event_timeout();
 		if (!event_epoll(timeout))
 			event_timeout_handler();
+
+		TRACE("Handled event");
 	}
 
 	DEBUG("Leaving event loop");

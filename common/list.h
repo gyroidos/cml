@@ -200,4 +200,11 @@ list_tail(list_t *list);
 	        __attribute__((warn_unused_result))
 #endif
 ;
+
+
+/**
+ * Calls the given function on each list element
+ */
+void
+list_foreach(list_t *list, void (func)(void *));
 #endif /* LIST_H */
