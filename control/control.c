@@ -61,7 +61,7 @@ static void print_usage(const char *cmd)
 	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
-	printf("   update_config <container-uuid> -c <container.conf>\n        Updates a container's config with the given config file.\n");
+	printf("   update_config <container-uuid> --file=<container.conf>\n        Updates a container's config with the given config file.\n");
 	printf("   state <container-uuid>\n        Prints the state of the specified container.\n");
 	printf("   freeze <container-uuid>\n        Freeze the specified container.\n");
 	printf("   unfreeze <container-uuid>\n        Unfreeze the specified container.\n");
@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
                 int update_argc = argc - optind;
                 optind = 0; // reset optind to scan command-specific options
                 for (int c, option_index = 0; -1 != (c = getopt_long(update_argc, update_argv,
-                                                ":f", update_cfg_options, &option_index)); ) {
+                                                "f:", update_cfg_options, &option_index)); ) {
                         switch (c) {
                         case 'f':
 				cfgfile = optarg ? optarg : NULL;
