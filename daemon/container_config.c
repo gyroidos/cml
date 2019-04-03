@@ -35,6 +35,7 @@
 #include "common/protobuf.h"
 
 #include <stdint.h>
+#include <inttypes.h>
 
 #include "guestos.h"
 #include "guestos_mgr.h"
@@ -499,8 +500,31 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 
 	list_t *if_cfg_list = NULL;
 	for (size_t i=0; i < config->cfg->n_vnet_configs; ++i) {
+		uint8_t mac[6];
+		if (config->cfg->vnet_configs[i]->if_mac == NULL) {
+			INFO("Generating new mac for if %s",
+				config->cfg->vnet_configs[i]->if_name);
+			file_read("/dev/urandom", (char*)mac, 6);
+			mac[0] &= 0xfe; /* clear multicast bit */
+			mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
+			config->cfg->vnet_configs[i]->if_mac =
+				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
+						":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
+					mac[0], mac[1], mac[2],
+					mac[3], mac[4], mac[5]);
+		} else {
+			INFO("Using mac %s for if %s",
+				config->cfg->vnet_configs[i]->if_mac,
+				config->cfg->vnet_configs[i]->if_name);
+			sscanf(config->cfg->vnet_configs[i]->if_mac,
+				"%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
+						":%02" SCNx8 ":%02" SCNx8,
+				&mac[0], &mac[1], &mac[2],
+				&mac[3], &mac[4], &mac[5]);
+		}
+
 		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(
-			config->cfg->vnet_configs[i]->if_name, NULL,
+			config->cfg->vnet_configs[i]->if_name, NULL, mac,
 			config->cfg->vnet_configs[i]->configure
 		);
 		if_cfg_list = list_append(if_cfg_list, if_cfg);
@@ -510,8 +534,12 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 		list_t *nw_name_list = hardware_get_nw_name_list();
 		for (list_t* l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
+			uint8_t mac[6];
+			file_read("/dev/urandom", (char*)mac, 6);
+			mac[0] &= 0xfe; /* clear multicast bit */
+			mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 			container_vnet_cfg_t *if_cfg =
-				container_vnet_cfg_new(if_name, NULL, true);
+				container_vnet_cfg_new(if_name, NULL, mac, true);
 			if_cfg_list = list_append(if_cfg_list, if_cfg);
 		}
 		list_delete(nw_name_list);
