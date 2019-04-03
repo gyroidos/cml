@@ -526,7 +526,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
 
-	list_t *vnet_cfg_list = container_config_get_vnet_cfg_list_new(conf);
+	list_t *vnet_cfg_list =	(ns_net) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
@@ -2124,11 +2124,13 @@ container_set_setup_mode(container_t *container, bool setup)
 }
 
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, bool configure)
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[6], bool configure)
 {
 	IF_NULL_RETVAL(if_name, NULL);
 	container_vnet_cfg_t* vnet_cfg = mem_new(container_vnet_cfg_t, 1);
 	vnet_cfg->vnet_name = mem_strdup(if_name);
+	memcpy(vnet_cfg->vnet_mac, mac, 6);
 	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
 	vnet_cfg->configure = configure;
 	return vnet_cfg;

@@ -77,6 +77,7 @@ typedef enum {
 typedef struct container_vnet_cfg {
 	char *vnet_name;
 	char *rootns_name;
+	uint8_t vnet_mac[6];
 	bool configure;
 } container_vnet_cfg_t;
 
@@ -694,7 +695,8 @@ container_set_setup_mode(container_t *container, bool setup);
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory
  */
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, bool configure);
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[6], bool configure);
 
 /**
  * Free all memory used by a container_vnet_cfg_t data structure

@@ -49,6 +49,7 @@
 #include "common/network.h"
 
 #include <unistd.h>
+#include <inttypes.h>
 
 #include <protobuf-c-text/protobuf-c-text.h>
 
@@ -702,6 +703,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 					container_vnet_config__init(vnet_configs[i]);
 					vnet_configs[i]->if_name = mem_strdup(vnet_cfg->vnet_name);
 					vnet_configs[i]->if_rootns_name = mem_strdup(vnet_cfg->rootns_name);
+					vnet_configs[i]->if_mac =
+						mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
+								":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
+							vnet_cfg->vnet_mac[0], vnet_cfg->vnet_mac[1],
+							vnet_cfg->vnet_mac[2], vnet_cfg->vnet_mac[3],
+							vnet_cfg->vnet_mac[4], vnet_cfg->vnet_mac[5]);
 					vnet_configs[i]->configure = vnet_cfg->configure;
 					TRACE("setup runtime vnet_configs[%d] vnetc: %s, vnetr: %s (%s)", i,
 						vnet_configs[i]->if_name,

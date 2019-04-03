@@ -88,6 +88,7 @@ typedef struct {
 	struct in_addr ipv4_cont_addr; //!< ipv4 address of container
 	struct in_addr ipv4_bc_addr; //!< ipv4 bcaddr of container/cmld subnet
 	int cont_offset; //!< gives information about the adresses to be set
+	uint8_t veth_mac[6]; // generated or configured mac of nic in	container
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -421,7 +422,7 @@ c_net_remove_ifi(const char *ifi_name, const pid_t pid)
  * with a netlink message using the netlink socket
  */
 static int
-c_net_create_veth_pair(const char *veth1, const char *veth2)
+c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6])
 {
 	ASSERT(veth1 && veth2);
 
@@ -498,6 +499,11 @@ c_net_create_veth_pair(const char *veth1, const char *veth2)
 	/* Set veth1 name */
 	if (nl_msg_add_string(req, IFLA_IFNAME, veth1))
 		goto msg_err;
+
+	/* Set veth1 mac address */
+	if (nl_msg_add_buffer(req, IFLA_ADDRESS, (char *)veth1_mac, 6))
+		goto msg_err;
+
 
 	/* Send request message and wait for the response message */
 	if (nl_msg_send_kernel_verify(nl_sock, req))
@@ -601,12 +607,13 @@ c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr,
 }
 
 static c_net_interface_t *
-c_net_interface_new(const char *if_name, bool configure)
+c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 {
 	ASSERT(if_name);
 
 	c_net_interface_t *ni = mem_new0(c_net_interface_t, 1);
 	ni->nw_name = mem_printf("%s", if_name);
+	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
 
 	/* Get container offset based on currently started containers */
@@ -643,7 +650,9 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	for (list_t *l = vnet_cfg_list; l; l = l->next) {
 		container_vnet_cfg_t *cfg = l->data;
 
-		c_net_interface_t *ni = c_net_interface_new(cfg->vnet_name, cfg->configure);
+		c_net_interface_t *ni = c_net_interface_new(cfg->vnet_name,
+							    cfg->vnet_mac,
+							    cfg->configure);
 		ASSERT(ni);
 		net->interface_list = list_append(net->interface_list, ni);
 
@@ -657,7 +666,14 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	}
 
 	if (adb_port > 0) {
-		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME, true);
+		INFO("Generating debug veth %s", ADB_INTERFACE_NAME);
+		uint8_t mac[6];
+		file_read("/dev/urandom", (char*)mac, 6);
+		mac[0] &= 0xfe; /* clear multicast bit */
+		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
+
+		c_net_interface_t *ni_adb =
+			c_net_interface_new(ADB_INTERFACE_NAME, mac, true);
 		net->interface_list = list_append(net->interface_list, ni_adb);
 	}
 
@@ -782,7 +798,7 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	DEBUG("Create veth pair %s/%s", ni->veth_cont_name, ni->veth_cmld_name);
 
 	/* Create veth pair */
-	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name))
+	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name, ni->veth_mac))
 		goto err;
 
 	if (ni->configure) {
@@ -1007,6 +1023,7 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	memset(&ni->ipv4_cmld_addr, 0, sizeof(struct in_addr));
 	memset(&ni->ipv4_cont_addr, 0, sizeof(struct in_addr));
 	memset(&ni->ipv4_bc_addr, 0, sizeof(struct in_addr));
+	memset(&ni->veth_mac, 0, 6);
 }
 
 /**
@@ -1104,7 +1121,7 @@ c_net_get_interface_mapping_new(c_net_t *net)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 		container_vnet_cfg_t* vnet_cfg = container_vnet_cfg_new(
-			ni->nw_name, ni->veth_cmld_name, ni->configure);
+			ni->nw_name, ni->veth_cmld_name, ni->veth_mac, ni->configure);
 		mapping = list_append(mapping, vnet_cfg);
 	}
 	return mapping;
