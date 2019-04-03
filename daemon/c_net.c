@@ -65,10 +65,17 @@
 #define SYS_NET_PATH "/sys/class/net"
 
 /* ipv4 addresses for cmld and cont endpoints, where the subnet depends on the container */
+#ifdef USE_LOCALNET_ROUTING
 #define IPV4_CMLD_ADDRESS "127.1.%d.1"
 #define IPV4_CONT_ADDRESS "127.1.%d.2"
 #define IPV4_DHCP_RANGE_START "127.1.%d.50"
 #define IPV4_DHCP_RANGE_END "127.1.%d.61"
+#else
+#define IPV4_CMLD_ADDRESS "172.23.%d.1"
+#define IPV4_CONT_ADDRESS "172.23.%d.2"
+#define IPV4_DHCP_RANGE_START "172.23.%d.50"
+#define IPV4_DHCP_RANGE_END "172.23.%d.61"
+#endif
 
 // connection to adb in container
 #define ADB_INTERFACE_NAME "adb"

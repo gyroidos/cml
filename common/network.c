@@ -364,6 +364,7 @@ network_set_flag(const char *ifi_name, const uint32_t flag)
 		return -1;
 }
 
+#ifdef USE_LOCALNET_ROUTING
 /**
  * Enable or disable localnet routing for the given interface.
  */
@@ -380,6 +381,7 @@ network_route_localnet(const char *interface, bool enable)
 	mem_free(route_localnet_file);
 	return error;
 }
+#endif
 
 /**
  * Bring up the loopback interface and shrink its subnet.
@@ -392,11 +394,13 @@ network_setup_loopback()
 	// bring interface up (no additional route necessary)
 	if (network_set_flag(LOOPBACK_NAME, IFF_UP))
 		return -1;
+#ifdef USE_LOCALNET_ROUTING
 	(void)network_remove_ip_addr_from_interface(LOCALHOST_IP, LOOPBACK_OLD_PREFIX, LOOPBACK_NAME);
 	ret = network_set_ip_addr_of_interface(LOCALHOST_IP, LOOPBACK_PREFIX, LOOPBACK_NAME);
 
 	// enable localnet routing for all interfaces
 	ret |= network_route_localnet("all", true);
+#endif
 
 	return ret;
 }
