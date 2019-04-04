@@ -73,8 +73,9 @@
 #else
 #define IPV4_CMLD_ADDRESS "172.23.%d.1"
 #define IPV4_CONT_ADDRESS "172.23.%d.2"
-#define IPV4_DHCP_RANGE_START "172.23.%d.50"
-#define IPV4_DHCP_RANGE_END "172.23.%d.61"
+#define IPV4_DHCP_RANGE_START "172.23.%d.2"
+#define IPV4_DHCP_RANGE_END "172.23.%d.12"
+#define IPV4_DHCP_MASK "255.255.255.0"
 #endif
 
 // connection to adb in container
@@ -96,6 +97,7 @@ typedef struct {
 	struct in_addr ipv4_bc_addr; //!< ipv4 bcaddr of container/cmld subnet
 	int cont_offset; //!< gives information about the adresses to be set
 	uint8_t veth_mac[6]; // generated or configured mac of nic in	container
+	pid_t dhcpd_pid; // pid of corresponding dhcpd if running for this ni
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -623,14 +625,6 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
 
-	/* Get container offset based on currently started containers */
-	if ((ni->cont_offset = c_net_set_next_offset()) == -1) {
-		WARN_ERRNO("Maximum offset for Network interfaces reached!");
-		return NULL;
-	}
-
-	ni->veth_cmld_name = mem_printf("r_%d", ni->cont_offset);
-	ni->veth_cont_name = mem_printf("c_%d", ni->cont_offset);
 	return ni;
 }
 
@@ -729,12 +723,13 @@ c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 }
 
 
+#ifdef ANDROID
 static int
 c_net_write_dhcp_config(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
-	int bytes_written = 0;
+	int bytes_written = -1;
 
 	char *conf_dir = mem_printf("/data/misc/dhcp/dnsmasq.d");
 	char *conf_file = mem_printf("%s/%s.conf", conf_dir, ni->veth_cmld_name);
@@ -744,7 +739,7 @@ c_net_write_dhcp_config(c_net_interface_t *ni)
 	// create config dir if not created yet
 	if (dir_mkdir_p(conf_dir, 0755) < 0) {
 		DEBUG_ERRNO("Could not mkdir %s", conf_dir);
-		return -1;
+		goto out;
 	}
 
 	bytes_written = file_printf(conf_file, "interface=%s\n dhcp-range=%s,%s,1h", ni->veth_cmld_name,
@@ -756,21 +751,113 @@ c_net_write_dhcp_config(c_net_interface_t *ni)
 	// restart dnsmasq a0's init while restart it
 	proc_killall(-1, "dnsmasq", SIGTERM);
 
+out:
 	mem_free(conf_dir);
 	mem_free(conf_file);
 	mem_free(ipv4_start);
 	mem_free(ipv4_end);
 
-	if (bytes_written > 0)
-		return 0;
+	return (bytes_written > 0) ? 0 : -1;
+}
+#endif
 
-	return -1;
+void
+c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+{
+
+	c_net_interface_t *ni = data;
+	pid_t pid;
+	int status = 0;
+
+	DEBUG("dhcpd SIGCHLD handler called for PID %d", ni->dhcpd_pid);
+	if ((pid = waitpid(ni->dhcpd_pid, &status, WNOHANG)) > 0) {
+		TRACE("Reaped dhcpd process: %d", pid);
+		/* remove the sigchld callback for this container from the event loop */
+		event_remove_signal(sig);
+		event_signal_free(sig);
+		ni->dhcpd_pid = -1;
+	} else {
+		TRACE("Failed to reap dhcpd process");
+	}
+}
+
+static void
+c_net_udhcpd_stop(c_net_interface_t *ni)
+{
+	ASSERT(ni);
+	if (ni->dhcpd_pid)
+		kill(ni->dhcpd_pid, SIGTERM);
+}
+
+static int
+c_net_udhcpd_start(c_net_interface_t *ni)
+{
+	ASSERT(ni);
+
+	int bytes_written = -1;
+
+	char *run_dir = mem_printf("/run/udhcpd");
+	char *conf_file = mem_printf("%s/%s.conf", run_dir, ni->veth_cmld_name);
+	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
+	char *ipv4_end  = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
+	char *lease_file = mem_printf("%s/%s.leases", run_dir, ni->veth_cmld_name);
+	char *pid_file = mem_printf("%s/%s.pid", run_dir, ni->veth_cmld_name);
+
+	// create config dir if not created yet
+	if (dir_mkdir_p(run_dir, 0755) < 0) {
+		DEBUG_ERRNO("Could not mkdir %s", run_dir);
+		goto out;
+	}
+
+	// if running stop dhcpd for this ni
+	if (ni->dhcpd_pid > 0)
+		c_net_udhcpd_stop(ni);
+
+	bytes_written = file_printf(conf_file, "interface %s\n" "start %s\n" "end %s\n"
+					"option subnet %s\n" "lease_file %s\n" "pidfile %s",
+			ni->veth_cmld_name, ipv4_start, ipv4_end,
+			IPV4_DHCP_MASK, lease_file, pid_file);
+
+	IF_FALSE_GOTO(bytes_written > 0, out);
+
+	char *dhcpd_argv[] = { "udhcpd", "-f", conf_file, NULL };
+	ni->dhcpd_pid = fork();
+	if (ni->dhcpd_pid == -1) {
+		ERROR_ERRNO("Could not fork '%s' for %s", dhcpd_argv[0], ni->veth_cmld_name);
+		bytes_written = -1;
+	} else if (ni->dhcpd_pid == 0) {
+		INFO("Starting '%s' for %s", dhcpd_argv[0], ni->veth_cmld_name);
+		execvp(dhcpd_argv[0], dhcpd_argv);
+		exit(1);
+	} else {
+		event_signal_t *sig = event_signal_new(SIGCHLD, c_net_udhcpd_sigchld_cb, ni);
+		event_add_signal(sig);
+	}
+out:
+	mem_free(lease_file);
+	mem_free(pid_file);
+	mem_free(run_dir);
+	mem_free(conf_file);
+	mem_free(ipv4_start);
+	mem_free(ipv4_end);
+
+	return (bytes_written > 0) ? 0 : -1;
 }
 
 static int
 c_net_start_pre_clone_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
+
+	/* Get container offset based on currently started containers */
+	if ((ni->cont_offset = c_net_set_next_offset()) == -1) {
+		WARN_ERRNO("Maximum offset for Network interfaces reached!");
+		goto err;
+	}
+
+	ni->dhcpd_pid = -1;
+	ni->veth_cmld_name = mem_printf("r_%d", ni->cont_offset);
+	ni->veth_cont_name = mem_printf("c_%d", ni->cont_offset);
 
 	if (ni->configure) {
 		/* Get root ns ipv4 address */
@@ -822,20 +909,39 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 		ni->subnet = mem_printf("%s/%d", inet_ntoa(net), IPV4_PREFIX);
 		IF_NULL_GOTO_ERROR(ni->subnet, err);
 
+#ifdef ANDROID
 		/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
 		if (ni->cont_offset > 0) {
 			if (c_net_write_dhcp_config(ni))
 				goto err;
 		}
+#else
+		/* Start busybox' dhcpd server for veth */
+		if (c_net_udhcpd_start(ni))
+			goto err;
+#endif
 	}
 
 	return 0;
 
 	/* In case of an error, release the current offset */
-	err:
-		c_net_unset_offset(ni->cont_offset);
-		// FIXME also delete veth pair if it was created?!
-		return -1;
+err:
+	c_net_unset_offset(ni->cont_offset);
+	if (ni->veth_cmld_name) {
+		// delete veth pair if it was created!
+		if (c_net_is_veth_used(ni->veth_cmld_name)) {
+			if (network_delete_link(ni->veth_cmld_name))
+				TRACE("network interface %s could not be destroyed",
+							ni->veth_cmld_name);
+		}
+		mem_free(ni->veth_cmld_name);
+		ni->veth_cmld_name = NULL;
+	}
+	if (ni->veth_cont_name) {
+		mem_free(ni->veth_cont_name);
+		ni->veth_cont_name = NULL;
+	}
+	return -1;
 }
 
 /**
@@ -1010,13 +1116,18 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	ASSERT(ni);
 
 	DEBUG("shut network interface %s down", ni->veth_cont_name);
+	c_net_udhcpd_stop(ni);
 
 	/* shut the network interface down */
-	if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, false))
-		WARN("network interface could not be gracefully shut down");
+	// check if iface was allready destroyed by kernel
+	if (c_net_is_veth_used(ni->veth_cmld_name)) {
 
-	if (network_delete_link(ni->veth_cmld_name))
-		WARN("network interface %s could not be destroyed", ni->veth_cmld_name);
+		if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, false))
+			WARN("network interface could not be gracefully shut down");
+
+		if (network_delete_link(ni->veth_cmld_name))
+			WARN("network interface %s could not be destroyed", ni->veth_cmld_name);
+	}
 
 	TRACE("cleanup c_net_t structure");
 
@@ -1030,7 +1141,15 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	memset(&ni->ipv4_cmld_addr, 0, sizeof(struct in_addr));
 	memset(&ni->ipv4_cont_addr, 0, sizeof(struct in_addr));
 	memset(&ni->ipv4_bc_addr, 0, sizeof(struct in_addr));
-	memset(&ni->veth_mac, 0, 6);
+
+	if (ni->veth_cmld_name) {
+		mem_free(ni->veth_cmld_name);
+		ni->veth_cmld_name = NULL;
+	}
+	if (ni->veth_cont_name) {
+		mem_free(ni->veth_cont_name);
+		ni->veth_cont_name = NULL;
+	}
 }
 
 /**
