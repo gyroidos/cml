@@ -545,7 +545,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	}
 	list_delete(vnet_cfg_list);
 
-	//container_config_free(conf); // TODO: really think about this... This is bad!!
+	container_config_free(conf);
 	return c;
 }
 

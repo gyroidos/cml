@@ -702,7 +702,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 					vnet_configs[i] = mem_new0(ContainerVnetConfig, 1);
 					container_vnet_config__init(vnet_configs[i]);
 					vnet_configs[i]->if_name = mem_strdup(vnet_cfg->vnet_name);
-					vnet_configs[i]->if_rootns_name = mem_strdup(vnet_cfg->rootns_name);
+					if (vnet_cfg->rootns_name)
+						vnet_configs[i]->if_rootns_name = mem_strdup(vnet_cfg->rootns_name);
 					vnet_configs[i]->if_mac =
 						mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
 								":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
