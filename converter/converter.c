@@ -280,6 +280,8 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 	for (int i=0; i < manifest->layers_size; ++i) {
 		char* layer_file_name = mem_printf("%s/%s%s", in_path, manifest->layers[i]->digest, manifest->layers[i]->suffix);
 		layer_pseudo_file[i] =  mem_printf("%s-%d", extracted_pseudo_file, i);
+		if (file_exists(layer_pseudo_file[i]))
+			unlink(layer_pseudo_file[i]);
 		INFO("Extracting layer[%d]: %s", i, layer_file_name);
 		if (-1 == util_tar_extract(layer_file_name, layer_pseudo_file[i], extracted_image_path)) {
 			ERROR_ERRNO("Failed to extract %s", layer_file_name);
