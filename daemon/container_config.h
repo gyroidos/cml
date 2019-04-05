@@ -228,4 +228,16 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 list_t *
 container_config_get_vnet_cfg_list_new(const container_config_t *config);
 
+/**
+ * Returns the container specific array used to appened to evn buffer on start
+ */
+char **
+container_config_get_init_env(const container_config_t *cfg);
+
+/**
+ * Returns the size of init env array
+ */
+size_t
+container_config_get_init_env_len(const container_config_t *cfg);
+
 #endif /* C_CONFIG_H */

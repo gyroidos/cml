@@ -26,7 +26,7 @@
 
 #include "container.h"
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/uuid.h"
@@ -255,7 +255,9 @@ container_new_internal(
 	list_t *net_ifaces,
 	char **allowed_devices,
 	char **assigned_devices,
-	list_t *vnet_cfg_list
+	list_t *vnet_cfg_list,
+	char **init_env,
+	size_t init_env_len
 )
 {
 	container_t *container = mem_new0(container_t, 1);
@@ -375,7 +377,16 @@ container_new_internal(
 
 	// construct an argv buffer for execve
 	container->init_argv = guestos_get_init_argv_new(os);
-	container->init_env = guestos_get_init_env_new(os);
+
+	// construct an NULL terminated env buffer for execve
+	container->init_env =
+		mem_new0(char *, guestos_get_init_env_len(os) + init_env + 1);
+	size_t i = 0;
+	char **os_env = guestos_get_init_env(os);
+	for (; i < guestos_get_init_env_len(os); i++)
+		container->init_env[i] = mem_strdup(os_env[i]);
+	for (size_t j = 0; j < init_env_len; ++j)
+		container->init_env[i+j] = mem_strdup(init_env[j]);
 
 	container->feature_enabled_list = feature_enabled;
 	for (list_t* elem = container->feature_enabled_list; elem != NULL; elem = elem->next) {
@@ -530,9 +541,13 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
+
+	char **init_env = container_config_get_init_env(conf);
+	size_t init_env_len = container_config_get_init_env_len(conf);
+
 	container_t *c = container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
 			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled,
-			dns_server, net_ifaces, allowed_devices, assigned_devices, vnet_cfg_list);
+			dns_server, net_ifaces, allowed_devices, assigned_devices, vnet_cfg_list, init_env, init_env_len);
 	if (c)
 		container_config_write(conf);
 

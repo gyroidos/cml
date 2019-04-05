@@ -546,3 +546,19 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 	}
 	return if_cfg_list;
 }
+
+size_t
+container_config_get_init_env_len(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->n_init_env;
+}
+
+char **
+container_config_get_init_env(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->init_env;
+}

@@ -65,6 +65,8 @@ message ContainerConfig {
 	// type of container, e.g. KVM or CONTAINER
 	required ContainerType type = 7 [ default = CONTAINER ];
 
+	repeated string init_env = 8;	// environment variables
+
 	// Flags indicating the allows for containers:
 	optional bool allow_autostart = 17 [default = false];
 	// TODO: add further features as necessary
