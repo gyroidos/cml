@@ -167,7 +167,9 @@ container_new_internal(
 	list_t *net_ifaces,
 	char **allowed_devices,
 	char **assigned_devices,
-	list_t *vnet_cfg_list
+	list_t *vnet_cfg_list,
+	char **init_env,
+	size_t init_env_len
 );
 
 /**
