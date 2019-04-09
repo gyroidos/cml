@@ -23,6 +23,10 @@
 
 #define _LARGEFILE64_SOURCE
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "c_vol.h"
 
 #include "common/macro.h"
@@ -371,7 +375,7 @@ out:
 static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 {
-	char *img, *dev, *dir, *lower_dir, *upper_dir, *lower_dev, *lower_img, *work_dir;
+	char *img, *dev, *dir, *lower_dir, *upper_dir, *lower_dev, *work_dir;
 	char *overlayfs_mount_dir;
 	int fd = 0;
 	bool new_image = false;
@@ -381,7 +385,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
 
-	img = dev = dir = lower_dir = upper_dir = lower_dev = lower_img = work_dir = NULL;
+	img = dev = dir = lower_dir = upper_dir = lower_dev = work_dir = NULL;
 	overlayfs_mount_dir = NULL;
 
 	switch (mount_entry_get_type(mntent)) {
@@ -552,25 +556,30 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 
 		DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, lower_dir=%s, lower_img=%s, target dir=%s",
 				work_dir, upper_dir, lower_dir, img, dir);
-		// mount overlayfs to dir
-		// create mount option string
-		char *overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
+		// create mount option string (try to mask absolute paths)
+		char *overlayfs_options;
+		char *cwd = get_current_dir_name();
+		if (chdir(overlayfs_mount_dir)) {
+			overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
 				lower_dir, upper_dir, work_dir);
-		if (mount("overlay", dir, "overlay", 0, overlayfs_options) >= 0) {
-			mem_free(overlayfs_options);
-			goto final;
+		} else {
+			overlayfs_options =
+				mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
+			TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ",
+				cwd, overlayfs_mount_dir, overlayfs_options);
 		}
-		mem_free(overlayfs_options);
-
-		WARN_ERRNO("Could not mount overlay retrying with older overlayfs");
-		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s",
-				lower_dir, upper_dir);
+		// mount overlayfs to dir
+		INFO("mount_dir: %s", dir);
 		if (mount("overlay", dir, "overlay", 0, overlayfs_options) < 0) {
 			ERROR_ERRNO("Could not mount overlayfs");
 			mem_free(overlayfs_options);
+			chdir(cwd);
+			mem_free(cwd);
 			goto error;
 		}
 		mem_free(overlayfs_options);
+		chdir(cwd);
+		mem_free(cwd);
 		goto final;
 	}
 
@@ -618,22 +627,41 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			goto error;
 		}
 
-		// create mountpoint for lower dev
-		lower_dir = mem_strdup(dir);
+		// create mountpoint for lower dev (try to hide absolute paths)
+		lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
+		if (symlink(dir, lower_dir) < 0) {
+			ERROR_ERRNO("link lowerdir failed");
+			mem_free(lower_dir);
+			lower_dir = mem_strdup(dir);
+		}
 
-		DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, upper_img=%s,"
-				" lower_dir=%s, lower_img=%s, target dir=%s",
-				work_dir, upper_dir, img, lower_dir, lower_img, dir);
-		// create mount option string
-		char *overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
+		DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, persist_img=%s,"
+				" lower_dir=%s, target dir=%s",
+				work_dir, upper_dir, img, lower_dir, dir);
+		// create mount option string (try to mask absolute paths)
+		char *cwd = get_current_dir_name();
+		char *overlayfs_options;
+		if (chdir(overlayfs_mount_dir)) {
+			overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
 				lower_dir, upper_dir, work_dir);
+		} else {
+			overlayfs_options =
+				mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
+			TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ",
+				cwd, overlayfs_mount_dir, overlayfs_options);
+		}
+		INFO("mount_dir: %s", dir);
 		// mount overlayfs to dir
 		if (mount("overlay", dir, "overlay", 0, overlayfs_options) < 0) {
 			ERROR_ERRNO("Could not mount overlay");
 			mem_free(overlayfs_options);
+			chdir(cwd);
+			mem_free(cwd);
 			goto error;
 		}
 		mem_free(overlayfs_options);
+		chdir(cwd);
+		mem_free(cwd);
 		goto final;
 	}
 
@@ -735,12 +763,15 @@ final:
 		loopdev_free(lower_dev);
 	if (img)
 		mem_free(img);
-	if (lower_img)
-		mem_free(lower_img);
 	if (dir)
 		mem_free(dir);
-	if (lower_dir)
+	if (lower_dir) {
+		if (file_is_link(lower_dir)) {
+			if (unlink(lower_dir))
+				WARN_ERRNO("could not remove temporary link %s", lower_dir);
+		}
 		mem_free(lower_dir);
+	}
 	if (upper_dir)
 		mem_free(upper_dir);
 	if (work_dir)
@@ -758,12 +789,15 @@ error:
 		loopdev_free(lower_dev);
 	if (img)
 		mem_free(img);
-	if (lower_img)
-		mem_free(lower_img);
 	if (dir)
 		mem_free(dir);
-	if (lower_dir)
+	if (lower_dir) {
+		if (file_is_link(lower_dir)) {
+			if (unlink(lower_dir))
+				WARN_ERRNO("could not remove temporary link %s", lower_dir);
+		}
 		mem_free(lower_dir);
+	}
 	if (upper_dir)
 		mem_free(upper_dir);
 	if (work_dir)
