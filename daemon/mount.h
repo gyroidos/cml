@@ -48,15 +48,12 @@ enum mount_type {
 	MOUNT_TYPE_EMPTY = 4,   /**< image file is generated on container start if not available */
 	MOUNT_TYPE_COPY = 5,    // TODO: remove
 	MOUNT_TYPE_FLASH = 6,	///< image to be flashed to a partition
-	MOUNT_TYPE_SHARED_DATA = 7, /**< image file that contains data and can
-				      be mounted to multiple containers with
-				      different OSs */
-	MOUNT_TYPE_OVERLAY_RO = 8, /**< image file that contains features e.g. 
+	MOUNT_TYPE_OVERLAY_RO = 7, /**< image file that contains features e.g. 
 				      gps, camera ... as overly for system */
-	MOUNT_TYPE_SHARED_RW = 9,  /**< image file is shared by all containers of the operating
+	MOUNT_TYPE_SHARED_RW = 8,  /**< image file is shared by all containers of the operating
 				      system type and an individual writable tmpfs is mounted
 				      as overlay to each container */
-	MOUNT_TYPE_OVERLAY_RW = 10,  /**< image file is shared by all containers of the operating
+	MOUNT_TYPE_OVERLAY_RW = 9,  /**< image file is shared by all containers of the operating
 				      system type and an individual writable persitent fs is mounted
 				      as overlay to each container */
 };
