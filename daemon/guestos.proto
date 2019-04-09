@@ -47,10 +47,9 @@ message GuestOSMount {
 		EMPTY = 4;  // empty, created when a corresponding container is first instantiated
 		COPY = 5;   // deprecated
 		FLASH = 6;	// image to be flashed to a partition (e.g. boot.img; base system updates only for now)
-		SHARED_DATA = 7; // image shared between different containers and OSs
-		OVERLAY_RO = 8; // read only overlay images e.g. for system features
-		SHARED_RW = 9; // image shared by all containers of same OS type (writable tmpfs as overlay)
-		OVERLAY_RW = 10; // similar to EMPTY image, however overlayed on given mount_point (writable persitent fs as overlay)
+		OVERLAY_RO = 7; // read only overlay images e.g. for system features
+		SHARED_RW = 8; // image shared by all containers of same OS type (writable tmpfs as overlay)
+		OVERLAY_RW = 9; // similar to EMPTY image, however overlayed on given mount_point (writable persitent fs as overlay)
 	}
 	required Type mount_type = 4;   // type of the image file
 

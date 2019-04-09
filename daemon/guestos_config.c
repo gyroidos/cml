@@ -103,8 +103,6 @@ guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 		return MOUNT_TYPE_COPY;
 	case GUEST_OSMOUNT__TYPE__FLASH:
 		return MOUNT_TYPE_FLASH;
-	case GUEST_OSMOUNT__TYPE__SHARED_DATA:
-		return MOUNT_TYPE_SHARED_DATA;
 	case GUEST_OSMOUNT__TYPE__OVERLAY_RO:
 		return MOUNT_TYPE_OVERLAY_RO;
 	case GUEST_OSMOUNT__TYPE__SHARED_RW:
@@ -132,8 +130,6 @@ guestos_config_mount_type_to_protobuf(enum mount_type mt)
 		return GUEST_OSMOUNT__TYPE__COPY;
 	case MOUNT_TYPE_FLASH:
 		return GUEST_OSMOUNT__TYPE__FLASH;
-	case MOUNT_TYPE_SHARED_DATA:
-		return GUEST_OSMOUNT__TYPE__SHARED_DATA;
 	case MOUNT_TYPE_OVERLAY_RO:
 		return GUEST_OSMOUNT__TYPE__OVERLAY_RO;
 	default:
