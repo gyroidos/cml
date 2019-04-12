@@ -20,6 +20,7 @@
  * Contact Information:
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
+#include <sys/stat.h>
 
 #include "rcontrol.h"
 #ifdef ANDROID
@@ -29,14 +30,15 @@
 #endif
 
 #include "tpm2d.h"
+#include "tpm2d_shared.h"
 #include "ml.h"
 #include "ek.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
-#include "common/sock.h"
 #include "common/fd.h"
 #include "common/event.h"
+#include "common/file.h"
 #include "common/protobuf.h"
 
 #include "protobuf-c-text/protobuf-c-text.h"
@@ -83,6 +85,8 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 			free(msg_text);
 	}
 
+	tss2_init();
+
 	switch(msg->code) {
 	case REMOTE_TO_TPM2D__CODE__ATTESTATION_REQ: {
 		Pcr **out_pcrs = NULL;
@@ -91,6 +95,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		tpm2d_pcr_t** pcr_array = NULL;
 		tpm2d_quote_t *quote = NULL;
 		uint8_t *attestation_cert = NULL;
+		size_t att_cert_len = 0;
 
 		Tpm2dToRemote out = TPM2D_TO_REMOTE__INIT;
 		out.code = TPM2D_TO_REMOTE__CODE__ATTESTATION_RES;
@@ -123,14 +128,35 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		}
 
 		quote = tpm2_quote_new(pcr_indices, tpm2d_get_as_key_handle(),
-				TPM2D_ATTESTATION_KEY_PW, msg->qualifyingdata.data,
+				TPM2D_ATT_KEY_PW, msg->qualifyingdata.data,
 				msg->qualifyingdata.len);
 		IF_NULL_GOTO_ERROR(quote, err_att_req);
 
-		size_t att_cert_len;
-		attestation_cert = ek_get_certificate_new(TPM2D_ASYM_ALGORITHM, &att_cert_len);
+		// add device certificate to quote
+		FILE *fp;
+		struct stat stat_buf;
+		if (!(fp = fopen(TPM2D_ATT_CERT_FILE, "rb"))) {
+			ERROR("Error opening device cert file");
+			goto err_att_req;
+		}
+		if (fstat(fileno(fp), &stat_buf) == -1) {
+		        ERROR("Error accessing device cert file");
+			fclose(fp);
+			goto err_att_req;
+		}
+		att_cert_len = stat_buf.st_size;
+		attestation_cert = mem_new(uint8_t, att_cert_len);
+
+		if ((fread(attestation_cert, sizeof(uint8_t), att_cert_len, fp)) != att_cert_len) {
+		        ERROR("Error reading out device cert file");
+			fclose(fp);
+			goto err_att_req;
+		}
+		fclose(fp);
+
 		IF_NULL_GOTO_ERROR(attestation_cert, err_att_req);
-		INFO("cert ek done: size=%zu", att_cert_len);
+		//INFO("att cert:\n%s", (char*) attestation_cert);
+		INFO("att cert done: size=%zu", att_cert_len);
 
 		Pcr out_pcr = PCR__INIT;
 		out_pcrs = mem_new(Pcr *, pcr_regs);
@@ -147,6 +173,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 		out.has_atype = true;
 		out.atype = msg->atype;
+		out.has_halg = true;
 		out.halg = tpm2d_rcontrol_hash_algo_get_len_proto(quote->halg_id);
 		out.has_quoted = true;
 		out.quoted.data = quote->quoted_value;
@@ -191,6 +218,7 @@ err_att_req:
 		WARN("RemoteToTpm2d command %d unknown or not implemented yet", msg->code);
 		break;
 	}
+	tss2_destroy();
 }
 
 /**

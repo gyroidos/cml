@@ -23,7 +23,7 @@
 
 
 LOCAL_CFLAGS := -pedantic -Wall -Wextra -Werror -std=gnu99 \
-	-I.. -I../include -Icommon -DDEBUG_BUILD -O2
+	-I.. -I../include -I../tpm2d -Icommon -DDEBUG_BUILD -O2
 
 SRC_FILES := \
 	common/protobuf.c \

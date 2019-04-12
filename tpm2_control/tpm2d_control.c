@@ -27,6 +27,8 @@
 #include "tpm2d.pb-c.h"
 #endif
 
+#include "tpm2d_shared.h"
+
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
@@ -37,8 +39,6 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <sys/stat.h>
-
-#define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
 
 static void print_usage(const char *cmd)
 {

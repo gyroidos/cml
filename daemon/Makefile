@@ -23,7 +23,7 @@
 
 
 CC ?= gcc
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -pedantic -Wall -Wextra -Werror -O2
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -pedantic -Wall -Wextra -Werror -O2
 LOCAL_CFLAGS += -DDEBUG_BUILD
 LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
 

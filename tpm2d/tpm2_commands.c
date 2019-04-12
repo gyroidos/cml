@@ -36,6 +36,8 @@
 
 #include <ibmtss/tssprint.h>
 
+#include "tpm2d_write_openssl.h"
+
 #include <openssl/sha.h>
 
 static TSS_CONTEXT *tss_context = NULL;
@@ -582,7 +584,9 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, 
 
 	switch (key_type) {
 		case TPM2D_KEY_TYPE_STORAGE_U:
-			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_SIGN;
+			// TODO needed both signing (for tpm2d) and decryption (for openssl),
+			// found no suitable keytype, so I toggled the flag (question is whether to create a new keytype)
+			out_public_area->objectAttributes.val |= TPMA_OBJECT_SIGN;
 			out_public_area->objectAttributes.val |= TPMA_OBJECT_DECRYPT;
 			out_public_area->objectAttributes.val &= ~TPMA_OBJECT_RESTRICTED;
 			break;
@@ -700,7 +704,7 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 TPM_RC
 tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		uint32_t object_vals, const char *parent_pwd, const char *key_pwd,
-		const char *file_name_priv_key, const char *file_name_pub_key)
+		const char *file_name_priv_key, const char *file_name_pub_key, const char *file_name_tss_key)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	Create_In in;
@@ -755,6 +759,25 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		rc = TSS_File_WriteStructure(&out.outPublic,
 				(MarshalFunction_t)TSS_TPM2B_PUBLIC_Marshal,
 				file_name_pub_key);
+	}
+
+	if (file_name_tss_key) {
+		BYTE pubkey[sizeof(TPM2B_PUBLIC)], privkey[sizeof(TPM2B_PRIVATE)], *buffer;
+		TPM2B_PUBLIC *pub = &out.outPublic;
+		TPM2B_PRIVATE *priv = &out.outPrivate;
+		uint16_t pubkey_len, privkey_len;
+		int32_t size;
+
+		buffer = pubkey;
+		pubkey_len = 0;
+		size = sizeof(pubkey);
+		TSS_TPM2B_PUBLIC_Marshal(pub, &pubkey_len, &buffer, &size);
+		buffer = privkey;
+		privkey_len = 0;
+		size = sizeof(privkey);
+		TSS_TPM2B_PRIVATE_Marshal(priv, &privkey_len, &buffer, &size);
+		openssl_write_tpmfile(file_name_tss_key, pubkey, pubkey_len, privkey, privkey_len,
+				key_pwd == NULL, parent_handle, NULL, 0, NULL);
 	}
 
 	return rc;

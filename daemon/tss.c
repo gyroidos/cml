@@ -29,15 +29,14 @@
 #include "tpm2d.pb-c.h"
 #endif
 
+#include "tpm2d_shared.h"
+
 #include "common/macro.h"
-#include "common/sock.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
 
 #include <protobuf-c-text/protobuf-c-text.h>
 #include <stdbool.h>
-
-#define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
 
 static int tss_sock = -1;
 
