@@ -22,6 +22,7 @@
  */
 
 #include "scd.h"
+#include "tpm2d_shared.h"
 
 #include "control.h"
 #ifdef ANDROID
@@ -54,12 +55,17 @@
 // Do not edit! The provisioning script requires this path (also trustme-main.mk and its dummy provsg folder)
 #define DEVICE_CERT_FILE SCD_TOKEN_DIR "/device.cert"
 #define DEVICE_CSR_FILE SCD_TOKEN_DIR "/device.csr"
+// Only used on platforms without TPM, otherwise TPM-bound key is used
 #define DEVICE_KEY_FILE SCD_TOKEN_DIR "/device.key"
+
 // Do not edit! This path is also configured in cmld.c
 #define DEVICE_CONF "/data/cml/device.conf"
 
+#ifdef ANDROID
 #define PROP_SERIALNO "ro.boot.serialno"
 #define PROP_HARDWARE "ro.hardware"
+#endif
+
 #define TOKEN_DEFAULT_PASS "trustme"
 #define TOKEN_DEFAULT_NAME "testuser"
 #define TOKEN_DEFAULT_EXT ".p12"
@@ -112,20 +118,33 @@ token_file_exists() {
 static void
 provisioning_mode()
 {
-	INFO("Check for existence of device certificate");
+	INFO("Check for existence of device certificate and user token");
 
 	bool need_initialization = (!file_exists(DEVICE_CERT_FILE) || !token_file_exists());
+	bool use_tpm = false;
+	char *dev_key_file = DEVICE_KEY_FILE;
 
 	// device needs a device certificate
 	if (!file_exists(DEVICE_CONF)) {
-		INFO("Going back to bootloader mode, device config does not exist (Proper"
+		ERROR("Going back to bootloader mode, device config does not exist (Proper"
 		    "userdata image needs to be flashed first)");
 		reboot_reboot(REBOOT);
 	}
 
+	// if available, use tpm to create and store device key
+	if (file_exists("/dev/tpm0")) {
+		use_tpm = true;
+		// assumption: tpm2d is launched prior to scd, and creates a keypair on first boot
+		if (!file_exists(TPM2D_ATT_TSS_FILE))
+		{
+			ERROR("TPM keypair not found, missing %s", TPM2D_ATT_TSS_FILE);
+			reboot_reboot(REBOOT);
+		}
+		dev_key_file = TPM2D_ATT_TSS_FILE;
+	}
+
 	if (need_initialization) {
 		sleep(5);
-		ssl_init();
 	}
 
 	// if no certificate exists, create a csr
@@ -133,9 +152,13 @@ provisioning_mode()
 
 		INFO("Device certificate not available. Switch to device provisioning mode");
 
-		if (!file_exists(DEVICE_CSR_FILE) || !file_exists(DEVICE_KEY_FILE)) {
+		if (ssl_init(use_tpm) == -1) {
+			FATAL("Failed to initialize OpenSSL stack for device cert");
+		}
 
-			DEBUG("Create CSR (recreate if corresponding private key file misses)");
+		if (!file_exists(DEVICE_CSR_FILE) || (!use_tpm && !file_exists(DEVICE_KEY_FILE))) {
+
+			DEBUG("Create CSR (recreate if corresponding private key misses)");
 
 			if (file_exists(SCD_TOKEN_DIR) && file_is_dir(SCD_TOKEN_DIR)) {
 				DEBUG("CSR folder already exists");
@@ -167,7 +190,6 @@ provisioning_mode()
 			char *hw_name = mem_strdup("hw_unknown");
 #endif
 
-
 			// create device uuid and write to device.conf
 			uuid_t *dev_uuid = uuid_new(NULL);
 			const char *uid;
@@ -193,7 +215,7 @@ provisioning_mode()
 				FATAL("Could not write device config to \"%s\"!", DEVICE_CONF);
 			}
 
-			if (ssl_create_csr(DEVICE_CSR_FILE, DEVICE_KEY_FILE, NULL, common_name, uid) != 0) {
+			if (ssl_create_csr(DEVICE_CSR_FILE, dev_key_file, NULL, common_name, uid, use_tpm) != 0) {
 				FATAL("Unable to create CSR");
 			}
 
@@ -203,18 +225,20 @@ provisioning_mode()
 			mem_free(hw_name);
 			mem_free(common_name);
 			uuid_free(dev_uuid);
-			DEBUG("CSR with keyfile created and stored");
+			DEBUG("CSR with privkey created and stored");
 		} else {
-			DEBUG("CSR with keyfile already exists");
+			DEBUG("CSR with privkey already exists");
 		}
 
 		// self-sign device csr to bring the device up
 		// corresponding cert is overwritten during provisioning
 		DEBUG("Create self-signed certificate from CSR");
 
-		if (ssl_self_sign_csr(DEVICE_CSR_FILE, DEVICE_CERT_FILE, DEVICE_KEY_FILE) != 0) {
+		if (ssl_self_sign_csr(DEVICE_CSR_FILE, DEVICE_CERT_FILE, dev_key_file, use_tpm) != 0) {
 			FATAL("Unable to self sign existing device.csr");
 		}
+
+		ssl_free();
 	}
 	else {
 		INFO("Device certificate found");
@@ -230,6 +254,10 @@ provisioning_mode()
 	if (!token_file_exists()) {
 
 		DEBUG("Create initial soft token");
+		// TPM not used for soft token
+		if (ssl_init(false) == -1) {
+			FATAL("Failed to initialize OpenSSL stack for softtoken");
+		}
 
 		char *token_file = mem_printf("%s/%s%s", SCD_TOKEN_DIR,
 			TOKEN_DEFAULT_NAME, TOKEN_DEFAULT_EXT);
@@ -237,20 +265,19 @@ provisioning_mode()
 			FATAL("Unable to create initial user token");
 		}
 		mem_free(token_file);
+		ssl_free();
 	}
 
 	// we now have anything for a clean startup so just die and let us be restarted by init
 	if (need_initialization) {
-		ssl_free();
 		exit(0);
 	}
 
 	// remark: no certificate validation checks are carried out
-	if (!file_exists(DEVICE_KEY_FILE) || !file_exists(SSIG_ROOT_CERT)
+	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT)
 		|| !file_exists(GEN_ROOT_CERT) || !token_file_exists()) {
 		FATAL("Missing certificate chains, user token, or private key for device certificate");
 	}
-
 }
 
 static void
@@ -283,7 +310,10 @@ main(int argc, char **argv) {
 
 	INFO("Starting scd ...");
 
-	ssl_init();
+	// for now, the scd is using the tpm engine only for provisioning
+	if (ssl_init(false) == -1) {
+		FATAL("Failed to initialize OpenSSL stack for scd runtime");
+	}
 
 	DEBUG("Try to create directory for socket if not existing");
 	if (dir_mkdir_p(CMLD_SOCKET_DIR, 0755) < 0) {

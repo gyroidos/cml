@@ -21,7 +21,8 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
-LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -DDEBUG_BUILD -O2
+LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -DDEBUG_BUILD -O2
+LOCAL_CFLAGS += -DTPM_POSIX
 
 SRC_FILES := \
 	common/list.c \

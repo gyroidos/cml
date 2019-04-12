@@ -40,13 +40,16 @@ ssl_read_pkcs12_token(const char *token_file, const char *passphrase,
 
 /**
  * creates a certificate signing request and stores it in the file req_file.
- * The private key is stored in the file specified by privkey_file, encrypted
- * with the passphrase, which has to be a 0 terminated string.
+ * If tpmkey is false, the private key is stored in the file specified by the write-out parameter
+ * key_file and encrypted with the passphrase, which has to be a 0 terminated string.
+ * If tpmkey is true, key_file is a read-in parameter designating the TPM-encrypted key file
+ * that is going to be loaded into the TPM for creating the device key inside the tpm.
+ * Setting tpmkey requires to initialize the OpenSSL stack with tpm use, see ssl_init
  * The common name (CN) is included in the certificate request.
  * @return returns 0 on succes, -1 in case of a failure. */
 int
-ssl_create_csr(const char *req_file, const char *privkey_file,
-		const char *passphrase, const char *common_name, const char *uid);
+ssl_create_csr(const char *req_file, const char *key_file,
+		const char *passphrase, const char *common_name, const char *uid, bool tpmkey);
 
 /**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
@@ -103,18 +106,24 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 
 /**
  * create a self-signed certificate from a CSR
- * csr_file is an existing x509 CSR and cert_file is the desitionation file
- * the key file for signing is in key_file
+ * csr_file is an existing x509 CSR and cert_file is the desitination file
+ * the key file for signing is in key_file.
+ * If tpmkey is true, the key_file designates the file that is fed to the TPM for loading the TPM-key
+ * used to sign the CSR. Setting tpmkey true requires to initialize the OpenSSL stack with the
+ * OpenSSL TPM engine, see ssl_init
  * returns -1 on error, 0 on success
  */
 int
-ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file);
+ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file, bool tpmkey);
 
 /**
- * Initialize internal OpenSSL structurs, run this once at start of program
+ * Initializes internal OpenSSL structures
+ * use_tpm indicates whether the OpenSSL stack should be initialized using
+ * the openssl-tpm-engine or not
+ * returns -1 on error, 0 on success
  */
-void
-ssl_init(void);
+int
+ssl_init(bool use_tpm);
 
 /**
  * Frees internal OpenSSL structurs, run this once ati the end of program

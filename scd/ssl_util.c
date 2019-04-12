@@ -22,6 +22,7 @@
  */
 
 #include "ssl_util.h"
+#include "tpm2d_shared.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -93,16 +94,19 @@ ssl_add_ext_cert(X509 *cert, int nid, char *value);
 static EVP_PKEY *
 ssl_mkkeypair();
 
-/* creates a CSR of a public key */
+/* creates a CSR of a public key. If tpmkey is set true, openssl-tpm-engine
+ * is used to create the request with a TPM-bound key */
 static X509_REQ *
-ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid);
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey);
 
 /* adds an extension nid with name value to a stack of extensions*/
 static int
 add_ext_req(STACK_OF(X509_EXTENSION) *sk, int nid, char *value);
 
-void
-ssl_init(void)
+ENGINE *tpm_engine = NULL;
+
+int
+ssl_init(bool use_tpm)
 {
 	// initialize OpenSSL stuff
 	OpenSSL_add_all_digests(); // loads digest algorithm names
@@ -110,9 +114,40 @@ ssl_init(void)
 	ERR_load_crypto_strings(); // load error strings
 	OpenSSL_add_all_algorithms(); // load internal table of algorithms
 	ENGINE_load_builtin_engines(); // load all bundled ENGINEs into memory and make them visible
-	ENGINE_register_all_complete(); // register all of them for every algorithm they implement
+	if (use_tpm) {
+		tpm_engine = ENGINE_by_id("tpm2");
+		if (!tpm_engine) {
+			ERROR("Could not find TPM2 engine");
+			return -1;
+		}
+
+		if (!ENGINE_init(tpm_engine)) {
+			ERROR("Failed to initialize TPM2 engine");
+			goto error;
+		}
+		if (!ENGINE_set_default_RSA(tpm_engine) || !ENGINE_set_default_RAND(tpm_engine)) {
+			ERROR("Failed to set defaults for TPM2 engine");
+			goto error;
+		}
+		// TODO proper auth handling for hierarchies
+		// set the SRK passphrase to make storage key usable
+		if (TPM2D_PRIMARY_STORAGE_KEY_PW) {
+			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, TPM2D_PRIMARY_STORAGE_KEY_PW, NULL, 0)) {
+				ERROR("Failed to set SRK passphrase with  TPM2 engine");
+				goto error;
+			}
+		}
+	} else {
+		ENGINE_register_all_complete(); // register all of them for every algorithm they implement
+	}
 	//if (!RAND_status())
 	//	ERROR("PRNG has not been seeded with enough data");
+	return 0;
+error:
+	ENGINE_free(tpm_engine);
+	ENGINE_finish(tpm_engine);
+	tpm_engine = NULL;
+	return -1;
 }
 
 void
@@ -123,6 +158,11 @@ ssl_free(void)
 	EVP_cleanup(); // cleans loaded alogrithms, ciphers and digests
 	ENGINE_cleanup(); // cleanup previsouly loaded ENGINEs
 	CRYPTO_cleanup_all_ex_data(); // cleans some more generally used memory
+	if (tpm_engine) {
+		ENGINE_free(tpm_engine);
+		ENGINE_finish(tpm_engine);
+		tpm_engine = NULL;
+	}
 }
 
 int
@@ -182,11 +222,11 @@ end:
 }
 
 int
-ssl_create_csr(const char *req_file, const char *privkey_file,
-		const char *passphrase, const char *common_name, const char *uid)
+ssl_create_csr(const char *req_file, const char *key_file,
+		const char *passphrase, const char *common_name, const char *uid, bool tpmkey)
 {
 	ASSERT(req_file);
-	ASSERT(privkey_file);
+	ASSERT(key_file);
 	ASSERT(common_name);
 	ASSERT(uid);
 
@@ -196,12 +236,21 @@ ssl_create_csr(const char *req_file, const char *privkey_file,
 	const EVP_CIPHER *cipher = NULL;
 	int pass_len = 0;
 
-	if ((pkeyp = ssl_mkkeypair()) == NULL) {
-		ERROR("Error creating public key pair");
-		goto error;
+	if (!tpmkey) {
+		if ((pkeyp = ssl_mkkeypair()) == NULL) {
+			ERROR("Error creating public key pair");
+			goto error;
+		}
+	} else {
+		// TODO need to figure out a way to provide passphrases defined in tpm2d_shared
+		// setting TPM2D_ATT_KEY_PW as cb_data does not work, so right now the engine prompts for the passphrase
+		if ((pkeyp = ENGINE_load_private_key(tpm_engine, key_file, NULL, NULL)) == NULL) {
+			ERROR("Error loading key pair in TPM");
+			goto error;
+		}
 	}
 
-	if ((req = ssl_mkreq(pkeyp, common_name, uid)) == NULL) {
+	if ((req = ssl_mkreq(pkeyp, common_name, uid, tpmkey)) == NULL) {
 		ERROR("Error creating CSR");
 		goto error;
 	}
@@ -220,28 +269,30 @@ ssl_create_csr(const char *req_file, const char *privkey_file,
 	}
 	fclose(fp);
 
-	if (!(fp = fopen(privkey_file, "wb"))) {
-		ERROR("Error saving CSR private key");
-		goto error;
-	}
-
-	// consider pkey without password using default values
-	if (passphrase) {
-		DEBUG("Passphare for device private key imposed");
-		pass_len = strlen(passphrase);
-		if (!(cipher = EVP_get_cipherbyname(CIPHER_PW_CSR))) {
-			ERROR("Error setting up cipher for CSR private key encryption");
+	if (!tpmkey) {
+		if (!(fp = fopen(key_file, "wb"))) {
+			ERROR("Error saving CSR private key");
 			goto error;
 		}
-	}
 
-	if (!PEM_write_PrivateKey(fp, pkeyp, cipher, (unsigned char *) passphrase,
-	    pass_len, NULL, NULL)) {
-		ERROR("Error writing CSR private key");
+		// consider pkey without password using default values
+		if (passphrase) {
+			DEBUG("Passphare for device private key imposed");
+			pass_len = strlen(passphrase);
+			if (!(cipher = EVP_get_cipherbyname(CIPHER_PW_CSR))) {
+				ERROR("Error setting up cipher for CSR private key encryption");
+				goto error;
+			}
+		}
+
+		if (!PEM_write_PrivateKey(fp, pkeyp, cipher, (unsigned char *) passphrase,
+					pass_len, NULL, NULL)) {
+			ERROR("Error writing CSR private key");
+			fclose(fp);
+			goto error;
+		}
 		fclose(fp);
-		goto error;
 	}
-	fclose(fp);
 
 	EVP_PKEY_free(pkeyp);
 	X509_REQ_free(req);
@@ -253,7 +304,7 @@ error:
 }
 
 static X509_REQ*
-ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid)
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey)
 {
 	ASSERT(pkeyp);
 	ASSERT(common_name);
@@ -402,7 +453,7 @@ ssl_mkkeypair()
 	}
 
 	if ((ctx = BN_CTX_new()) == NULL) {
-		ERROR("Error setting up big number contexti");
+		ERROR("Error setting up big number context");
 		goto error;
 	}
 
@@ -1177,7 +1228,7 @@ ssl_add_ext_cert(X509 *cert, int nid, char *value)
 }
 
 int
-ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file) {
+ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file, bool tpmkey) {
 
 	ASSERT(csr_file);
 	ASSERT(cert_file);
@@ -1207,26 +1258,35 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 		goto error;
 	}
 
-	// read signing key
-	if ((key = BIO_new_file(key_file,"r")) == NULL) {
-		ERROR("Error reading csr signing priv key");
-		goto error;
-	}
+	if (!tpmkey) {
+		// read signing key
+		if ((key = BIO_new_file(key_file,"r")) == NULL) {
+			ERROR("Error reading csr signing priv key");
+			goto error;
+		}
 
-	if ((key_evp_priv = EVP_PKEY_new()) == NULL) {
-		ERROR("Error creating evp priv key");
-		goto error;
-	}
+		if ((key_evp_priv = EVP_PKEY_new()) == NULL) {
+			ERROR("Error creating evp priv key");
+			goto error;
+		}
 
-	if ((PEM_read_bio_RSAPrivateKey(key, &key_rsa, NULL, NULL)) == NULL) {
-		ERROR("error reading rsa priv key");
-		goto error;
-	}
+		if ((PEM_read_bio_RSAPrivateKey(key, &key_rsa, NULL, NULL)) == NULL) {
+			ERROR("error reading rsa priv key");
+			goto error;
+		}
 
-	if (EVP_PKEY_assign_RSA(key_evp_priv, key_rsa) == 0) {
-		ERROR("error assigning rsa priv key");
-		RSA_free(key_rsa);
-		goto error;
+		if (EVP_PKEY_assign_RSA(key_evp_priv, key_rsa) == 0) {
+			ERROR("error assigning rsa priv key");
+			RSA_free(key_rsa);
+			goto error;
+		}
+	} else {
+		DEBUG("Load key for signing into TPM");
+		// TODO same as above, need proper passphrase handling to avoid input prompt
+		if ((key_evp_priv = ENGINE_load_private_key(tpm_engine, key_file, NULL, NULL)) == NULL) {
+			ERROR("Error loading csr signing key pair into TPM");
+			goto error;
+		}
 	}
 
 	// create certificate structure
@@ -1297,7 +1357,7 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 		}
 	}
 
-	DEBUG("Self-singn device cert initialized");
+	DEBUG("Self-sign device cert initialized");
 
 	// sign cert
 	if (!X509_sign(cert_x509, key_evp_priv, EVP_sha256())) {
@@ -1321,14 +1381,14 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 	ret = 0;
 
 error:
-	BIO_free(csr);
-	BIO_free(cert);
-	BIO_free(key);
-	X509_free(cert_x509);
-	X509_REQ_free(csr_x509);
+	if (csr) BIO_free(csr);
+	if (cert) BIO_free(cert);
+	if (key) BIO_free(key);
+	if (key_evp_priv) EVP_PKEY_free(key_evp_priv);
+	if (cert_x509) X509_free(cert_x509);
+	if (csr_x509) X509_REQ_free(csr_x509);
 	// EVP_PKEY_free also frees rsa key if assigned
-	EVP_PKEY_free(key_evp_priv);
-	EVP_PKEY_free(key_evp_pub);
-	sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
+	if (key_evp_pub) EVP_PKEY_free(key_evp_pub);
+	if (ext_stack) sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
 	return ret;
 }

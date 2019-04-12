@@ -43,7 +43,8 @@ SRC_FILES := \
 	nvmcrypt.c \
 	ml.c \
 	ek.c \
-	tpm2d.c
+	tpm2d.c \
+	tpm2d_write_openssl.c
 
 
 .PHONY: all

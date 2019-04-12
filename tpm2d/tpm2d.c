@@ -22,6 +22,7 @@
  */
 
 #include "tpm2d.h"
+#include "tpm2d_shared.h"
 #include "nvmcrypt.h"
 
 #include "control.h"
@@ -51,12 +52,12 @@ static logf_handler_t *tpm2d_logfile_handler = NULL;
 static uint32_t tpm2d_salt_key_handle = 0;
 
 #ifndef TPM2D_NVMCRYPT_ONLY
-static uint32_t tpm2d_as_key_handle = 0;
-#if TPM2D_KEY_HIERARCHY != TPM_RH_ENDORSEMENT
-
-static uint32_t tpm2d_ps_key_handle = 0;
-static uint32_t persist_ps_handle = 0;
-#endif
+// transient (tr) attestation key (as) handle
+static uint32_t tpm2d_as_key_handle_tr = 0;
+// transient (tr) parent handle (pt) for attestation key (as)
+static uint32_t tpm2d_as_key_handle_pt_tr = 0;
+// persistent (ps) parent handle (pt) for attestation key (as)
+static uint32_t tpm2d_as_key_handle_pt_ps = 0;
 #endif
 
 static void
@@ -89,77 +90,88 @@ tpm2d_get_salt_key_handle(void)
 TPMI_DH_OBJECT
 tpm2d_get_as_key_handle(void)
 {
-	return tpm2d_as_key_handle;
+	return tpm2d_as_key_handle_tr;
 }
 
-#if TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT
-static void
-tpm2d_setup_keys(void)
-{
-	int ret = 0;
-	// create ek
-	if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM2D_KEY_HIERARCHY,
-			TPM2D_KEY_TYPE_SIGNING_EK, NULL, TPM2D_ATTESTATION_KEY_PW, NULL,
-			&tpm2d_as_key_handle))) {
-		FATAL("Failed to create primary endorsement key with error code: %08x", ret);
-	}
-	INFO("Created EK with handle %08x", tpm2d_as_key_handle);
-}
-#else
 static void
 tpm2d_setup_keys(void)
 {
 	int ret = 0;
 	char *token_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
+	bool handle_possibly_uninit = true;
+	char *tpm2d_as_key_pwd_pt = NULL;
 
+	//TODO resolve pwd/auth policy for other hierarchies
+	//fails for platform and endorsement hierarchy with auth problems
 	if (TPM2D_KEY_HIERARCHY == TPM_RH_OWNER) {
-		persist_ps_handle = TPM2D_OWNER_STORAGE_KEY_PERSIST_HANDLE;
+		tpm2d_as_key_handle_pt_ps = TPM2D_STORAGE_KEY_PERSIST_HANDLE;
+		tpm2d_as_key_pwd_pt = TPM2D_PRIMARY_STORAGE_KEY_PW;
+	} else if (TPM2D_KEY_HIERARCHY == TPM_RH_PLATFORM) {
+		tpm2d_as_key_handle_pt_ps = TPM2D_PLATFORM_KEY_PERSIST_HANDLE;
 	} else {
-		persist_ps_handle = TPM2D_PLATFORM_STORAGE_KEY_PERSIST_HANDLE;
+		tpm2d_as_key_handle_pt_ps = TPM2D_ENDORSEMENT_KEY_PERSIST_HANDLE;
 	}
-	if (!file_is_dir(token_dir)) {
-		if (mkdir(token_dir, 0700) < 0) {
-			FATAL_ERRNO("Could not mkdir tpm tokens dir: %s", token_dir);
-		}
-		// create primary key
-		if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM2D_KEY_HIERARCHY, TPM2D_KEY_TYPE_STORAGE_R,
-				NULL, TPM2D_PRIMARY_STORAGE_KEY_PW, TPM2D_PS_PUB_FILE, &tpm2d_ps_key_handle))) {
-			FATAL("Failed to create primary storage key with error code: %08x", ret);
-		}
-		INFO("Created PS key with handle %08x", tpm2d_ps_key_handle);
 
-		if (TPM_RC_SUCCESS != (ret = tpm2_evictcontrol(TPM2D_KEY_HIERARCHY, NULL,
-							tpm2d_ps_key_handle, persist_ps_handle))) {
-			FATAL("Failed to persist platform key with error code: %08x", ret);
+	if (!file_exists(TPM2D_ATT_PRIV_FILE)) {
+		if (!file_is_dir(token_dir)) {
+			if (mkdir(token_dir, 0700) < 0) {
+				FATAL_ERRNO("Could not mkdir tpm tokens dir: %s", token_dir);
+			}
 		}
-		INFO("Persisted PS key with handle %08x -> %08x", tpm2d_ps_key_handle, persist_ps_handle);
-		if (TPM_RC_SUCCESS != (ret = tpm2_flushcontext(tpm2d_ps_key_handle))) {
-			ERROR("flushing transient object handle of platform key storage key");
-		}
-
-	}
-	if (!file_exists(TPM2D_ATTESTATION_PRIV_FILE)) {
-		if (TPM_RC_SUCCESS != (ret = tpm2_create_asym(persist_ps_handle, TPM2D_KEY_TYPE_SIGNING_U,
+retry:
+		// create attestation key based on a persistent parent key
+		if (TPM_RC_SUCCESS != (ret = tpm2_create_asym(tpm2d_as_key_handle_pt_ps, TPM2D_KEY_TYPE_STORAGE_U,
 					(TPMA_OBJECT_FIXEDTPM | TPMA_OBJECT_FIXEDPARENT),
-					TPM2D_PRIMARY_STORAGE_KEY_PW, TPM2D_ATTESTATION_KEY_PW,
-					TPM2D_ATTESTATION_PRIV_FILE, TPM2D_ATTESTATION_PUB_FILE))) {
-			dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
-			FATAL("Failed to create attestation key with error code: %08x", ret);
-		}
-		INFO("Created signing key for attestation.");
-	}
+					tpm2d_as_key_pwd_pt, TPM2D_ATT_KEY_PW,
+					TPM2D_ATT_PRIV_FILE, TPM2D_ATT_PUB_FILE, TPM2D_ATT_TSS_FILE))) {
+			if (handle_possibly_uninit) {
+				INFO("Attestation parent possibly unitialized, trying to create and persist a primary key");
+				// create primary key
+				if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM2D_KEY_HIERARCHY, TPM2D_KEY_TYPE_STORAGE_R, NULL,
+						tpm2d_as_key_pwd_pt, TPM2D_ATT_PARENT_PUB_FILE, &tpm2d_as_key_handle_pt_tr))) {
+					dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
+					FATAL("Failed to create att primary key with error code: %08x", ret);
+				}
+				INFO("Created att primary key with handle %08x", tpm2d_as_key_handle_pt_tr);
 
-	// load attestation key
-	if (TPM_RC_SUCCESS != (ret = tpm2_load(persist_ps_handle,
-					TPM2D_PRIMARY_STORAGE_KEY_PW, TPM2D_ATTESTATION_PRIV_FILE,
-					TPM2D_ATTESTATION_PUB_FILE, &tpm2d_as_key_handle))) {
-		FATAL("Failed to load attestation key with error code: %08x", ret);
+				if (TPM_RC_SUCCESS != (ret = tpm2_evictcontrol(TPM2D_KEY_HIERARCHY, NULL,
+									tpm2d_as_key_handle_pt_tr, tpm2d_as_key_handle_pt_ps))) {
+					dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
+					FATAL("Failed to persist att primary key with error code: %08x", ret);
+				}
+				INFO("Persisted att primary key with handle %08x -> %08x", tpm2d_as_key_handle_pt_tr,
+						tpm2d_as_key_handle_pt_ps);
+				handle_possibly_uninit = false;
+
+				if (TPM_RC_SUCCESS != (ret = tpm2_flushcontext(tpm2d_as_key_handle_pt_tr))) {
+					ERROR("Failed to flush transient object handle of att primary key");
+				}
+				goto retry;
+			}
+			else {
+				dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
+				FATAL("Failed to create attestation key with error code: %08x", ret);
+			}
+		}
+		else {
+			INFO("Created signing key for attestation in %s, not loading need to wait for provsg ...", token_dir);
+		}
 	}
-	INFO("Loaded signing key for attestation.");
+	else {
+		INFO("Signing key for attestation found in %s, loading ...", token_dir);
+
+		// load attestation key
+		if (TPM_RC_SUCCESS != (ret = tpm2_load(tpm2d_as_key_handle_pt_ps,
+						tpm2d_as_key_pwd_pt, TPM2D_ATT_PRIV_FILE,
+						TPM2D_ATT_PUB_FILE, &tpm2d_as_key_handle_tr))) {
+			FATAL("Failed to load attestation key with error code: %08x", ret);
+		}
+		INFO("Loaded signing key for attestation with handle %08x from parent handle %08x.",
+			tpm2d_as_key_handle_tr, tpm2d_as_key_handle_pt_ps);
+	}
 	mem_free(token_dir);
 }
-#endif /* ndef TPM2D_NVMCRYPT_ONLY */
-#endif /* TPM2D_KEY_HIERARCHY == TPM_RH_ENDORSEMENT */
+#endif /* ifndef TPM2D_NVMCRYPT_ONLY */
 
 static void
 tpm2d_init(void)
@@ -222,8 +234,8 @@ tpm2d_exit(void)
 	if (tpm2d_salt_key_handle)
 		tpm2_flushcontext(tpm2d_salt_key_handle);
 #ifndef TPM2D_NVMCRYPT_ONLY
-	if (tpm2d_as_key_handle)
-		tpm2_flushcontext(tpm2d_as_key_handle);
+	if (tpm2d_as_key_handle_tr)
+		tpm2_flushcontext(tpm2d_as_key_handle_tr);
 #endif
 
 	tss2_destroy();

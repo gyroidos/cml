@@ -37,27 +37,15 @@
 //#define TPM2D_DIGEST_SIZE		20
 #define TPM2D_SYM_SESSION_ALGORITHM 	TPM_ALG_AES
 
-//#define TPM2D_KEY_HIERARCHY		TPM_RH_OWNER
-#define TPM2D_KEY_HIERARCHY		TPM_RH_ENDORSEMENT
-#define TPM2D_FDE_NV_HANDLE		0x01000000
+#define TPM2D_KEY_HIERARCHY		TPM_RH_OWNER //OWNER, ENDORSEMENT, PLATFORM
 
-#define TPM2D_BASE_DIR "/data/cml/tpm2d"
-#define TPM2D_SESSION_DIR "session"
+#define TPM2D_FDE_NV_HANDLE		0x01000000
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 
-#define TPM2D_TOKEN_DIR "tokens"
-
-#define TPM2D_PLATFORM_STORAGE_KEY_PERSIST_HANDLE	0x81800000
-#define TPM2D_OWNER_STORAGE_KEY_PERSIST_HANDLE		0x81000000
-
-// TODO proper auth handling (generate pws during provisioning)
-#define TPM2D_PRIMARY_STORAGE_KEY_PW	"primary"
-#define TPM2D_ATTESTATION_KEY_PW	"sig"
-
-#define TPM2D_ATTESTATION_PRIV_FILE	TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_priv.bin"
-#define TPM2D_ATTESTATION_PUB_FILE	TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_pub.bin"
-#define TPM2D_PS_PUB_FILE		TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/ps_pub.bin"
+#define TPM2D_PLATFORM_KEY_PERSIST_HANDLE		0x81800000
+#define TPM2D_STORAGE_KEY_PERSIST_HANDLE		0x81000000
+#define TPM2D_ENDORSEMENT_KEY_PERSIST_HANDLE		0x81010000
 
 typedef struct tpm2d_quote {
 	TPM_ALG_ID halg_id;
@@ -67,7 +55,7 @@ typedef struct tpm2d_quote {
 	uint8_t *signature_value;
 } tpm2d_quote_t;
 
-#endif // ndef TPM2D_NVMCRYPT_ONLY
+#endif // ifndef TPM2D_NVMCRYPT_ONLY
 
 typedef enum tpm2d_key_type {
 	TPM2D_KEY_TYPE_STORAGE_U = 1,
@@ -181,10 +169,16 @@ TPM_RC
 tpm2_flushcontext(TPMI_DH_CONTEXT handle);
 
 #ifndef TPM2D_NVMCRYPT_ONLY
+/**
+ * Creates an asymmetric key as part of the hierarchy designated by the parent handle
+ * If not null, this function ensure to persist the TPM-protected key blobs in
+ * file_name_priv/public_key for the private/public key, and as a blob loadable by
+ * the openssl tpm engine designated by file_name_tss_key
+ */
 TPM_RC
 tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		uint32_t object_vals, const char *parent_pwd, const char *key_pwd,
-		const char *file_name_priv_key, const char *file_name_pub_key);
+		const char *file_name_priv_key, const char *file_name_pub_key, const char *file_name_tss_key);
 
 TPM_RC
 tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
