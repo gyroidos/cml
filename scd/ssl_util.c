@@ -111,8 +111,8 @@ ssl_init(void)
 	OpenSSL_add_all_algorithms(); // load internal table of algorithms
 	ENGINE_load_builtin_engines(); // load all bundled ENGINEs into memory and make them visible
 	ENGINE_register_all_complete(); // register all of them for every algorithm they implement
-	if (!RAND_status())
-		ERROR("PRNG has not been seeded with enough data");
+	//if (!RAND_status())
+	//	ERROR("PRNG has not been seeded with enough data");
 }
 
 void
