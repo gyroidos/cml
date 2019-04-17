@@ -24,7 +24,7 @@
 
 CC ?= gcc
 
-LOCAL_CFLAGS += -I../include -pedantic -Wall -Wextra -Werror -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE
+LOCAL_CFLAGS += -I../include -pedantic -Wall -Wextra -Werror -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
 
 .PHONY: all
 all: libcommon

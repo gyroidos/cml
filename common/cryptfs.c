@@ -74,7 +74,7 @@ ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flag
 	io->flags = flags;
 
 	if (name)
-		strncpy(io->name, name, sizeof(io->name));
+		strncpy(io->name, name, sizeof(io->name)-1);
 }
 
 static unsigned long

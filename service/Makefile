@@ -24,7 +24,7 @@
 
 CC ?= gcc
 
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -O2
 # set for sending boot complete protobuf message only
 #LOCAL_CFLAGS += -DBOOT_COMPLETE_ONLY
 

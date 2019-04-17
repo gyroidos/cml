@@ -24,7 +24,7 @@
 
 CC ?= gcc
 
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -pedantic -Wall -Wextra -Werror
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -pedantic -Wall -Wextra -Werror -O2
 
 PROTO_SRC := \
 	attestation.pb-c.c

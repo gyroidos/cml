@@ -405,7 +405,8 @@ readloop(int from_fd, int to_fd)
 		if (0 < (count = read(from_fd, &buf, sizeof(buf)-1))) {
 			buf[count] = 0;
 			TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, from_fd, buf);
-			write(to_fd, buf, count+1);
+			if (write(to_fd, buf, count+1))
+				TRACE_ERRNO("[READLOOP] write");
 		} else {
 			TRACE("[READLOOP] Read returned %d, exiting...", count);
 			break;
