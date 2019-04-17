@@ -25,7 +25,7 @@ tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
 	-DTPM_POSIX
 
-LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon -Wextra -Werror $(tss_cflags)
+LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon -Wextra -Werror $(tss_cflags) -O2
 #LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
 
 SRC_FILES := \

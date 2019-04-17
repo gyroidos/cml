@@ -21,7 +21,7 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
-LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -DDEBUG_BUILD
+LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -DDEBUG_BUILD -O2
 
 SRC_FILES := \
 	common/list.c \

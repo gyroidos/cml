@@ -573,12 +573,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		if (mount("overlay", dir, "overlay", 0, overlayfs_options) < 0) {
 			ERROR_ERRNO("Could not mount overlayfs");
 			mem_free(overlayfs_options);
-			chdir(cwd);
+			if (chdir(cwd))
+				WARN("Could not change back to former cwd %s", cwd);
 			mem_free(cwd);
 			goto error;
 		}
 		mem_free(overlayfs_options);
-		chdir(cwd);
+		if (chdir(cwd))
+			WARN("Could not change back to former cwd %s", cwd);
 		mem_free(cwd);
 		goto final;
 	}
@@ -655,12 +657,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		if (mount("overlay", dir, "overlay", 0, overlayfs_options) < 0) {
 			ERROR_ERRNO("Could not mount overlay");
 			mem_free(overlayfs_options);
-			chdir(cwd);
+			if (chdir(cwd))
+				WARN("Could not change back to former cwd %s", cwd);
 			mem_free(cwd);
 			goto error;
 		}
 		mem_free(overlayfs_options);
-		chdir(cwd);
+		if (chdir(cwd))
+			WARN("Could not change back to former cwd %s", cwd);
 		mem_free(cwd);
 		goto final;
 	}
