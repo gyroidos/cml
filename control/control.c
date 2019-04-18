@@ -23,8 +23,10 @@
 
 #ifdef ANDROID
 #include "device/fraunhofer/common/cml/control/control.pb-c.h"
+#include "device/fraunhofer/common/cml/control/container.pb-c.h"
 #else
 #include "control.pb-c.h"
+#include "container.pb-c.h"
 #endif
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -34,6 +36,7 @@
 #include "common/sock.h"
 #include "common/file.h"
 #include "common/mem.h"
+#include "common/uuid.h"
 
 #include <getopt.h>
 #include <stdbool.h>
@@ -104,6 +107,33 @@ static DaemonToController* recv_message(int sock)
 	}
 	return resp;
 }
+
+static uuid_t *
+get_container_uuid_new(const char *identifier, int sock)
+{
+	uuid_t *uuid = uuid_new(identifier);
+	if (uuid)
+		return uuid;
+
+	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
+	msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+	send_message(sock, &msg);
+
+	DaemonToController *resp = recv_message(sock);
+	for (size_t i=0; i < resp->n_container_status; ++i) {
+		TRACE("name %s", resp->container_status[i]->name);
+		if (0 == strcmp(resp->container_status[i]->name, identifier)) {
+			uuid = uuid_new(resp->container_status[i]->uuid);
+			break;
+		}
+	}
+	if (!uuid)
+		FATAL("Container with provided name does not exist!");
+
+	protobuf_free_message((ProtobufCMessage *) resp);
+	return uuid;
+}
+
 
 static const struct option global_options[] = {
 	{"socket",   required_argument, 0, 's'},
@@ -429,12 +459,16 @@ int main(int argc, char *argv[])
 	if (optind != argc - 1)
 		print_usage(argv[0]);
 
+	sock = sock_connect(socket_file);
+	uuid_t *uuid = get_container_uuid_new(argv[optind], sock);
 	msg.n_container_uuids = 1;
 	msg.container_uuids = mem_new(char *, 1);
-	msg.container_uuids[0] = argv[optind];
+	msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
+	uuid_free(uuid);
 
 send_message:
-	sock = sock_connect(socket_file);
+	if (!sock)
+		sock = sock_connect(socket_file);
 	send_message(sock, &msg);
 
 	if (!strcasecmp(command, "run")) {
@@ -545,6 +579,8 @@ send_message:
 exit:
 	close(sock);
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
+	for (size_t i=0; i < msg.n_container_uuids; ++i)
+		mem_free(msg.container_uuids[i]);
 	mem_free(msg.container_uuids);
 
 	return 0;

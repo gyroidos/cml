@@ -32,6 +32,7 @@ SRC_FILES := \
 	common/sock.c \
 	common/file.c \
 	common/fd.c \
+	common/uuid.c \
 	guestos.pb-c.c \
 	control.pb-c.c \
 	container.pb-c.c \
