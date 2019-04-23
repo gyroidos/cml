@@ -31,6 +31,7 @@
 #define SSIG_ROOT_CERT SCD_TOKEN_DIR "/ssig_rootca.cert"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
 #define GEN_ROOT_CERT SCD_TOKEN_DIR "/gen_rootca.cert"
+#define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
 
 /**
  * Returns the directory in which the token files are stored.

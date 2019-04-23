@@ -38,6 +38,7 @@
 #include "common/fd.h"
 #include "common/event.h"
 #include "common/list.h"
+#include "common/dir.h"
 #include "common/file.h"
 #include "common/protobuf.h"
 
@@ -75,6 +76,93 @@ switch_proto_hash_algo(int hash_algo) {
 		break;
 	}
 	return ret;
+}
+
+struct verify_cert_ca_cb_data {
+	const char *cert_file;
+	bool verified;
+};
+
+static int
+scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
+{
+	int ret = 0;
+	struct verify_cert_ca_cb_data *cb_data = data;
+	char *ca_file = mem_printf("%s/%s", path, file);
+
+	if (ssl_verify_certificate(cb_data->cert_file, ca_file, true) != 0) {
+		ERROR("Error during certificate validation using ca: %s", ca_file);
+		cb_data->verified = false;
+		ret = 1;
+	} else {
+		INFO("Certificate validation succeeded using ca: %s", ca_file);
+		cb_data->verified = true;
+		// break dir_foreach
+		ret = -1;
+	}
+	mem_free(ca_file);
+	return ret;
+}
+
+static TokenToDaemon__Code
+scd_control_handle_verify(const DaemonToToken *msg)
+{
+	
+	int ret;
+	TokenToDaemon__Code out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
+	char *hash_algo = switch_proto_hash_algo(msg->hash_algo);
+	IF_NULL_RETVAL(hash_algo, out_code);
+
+	bool verified = false;
+	// At first, we explicitly assume that the file to be verified is a software update file,
+	// and we thus use the software signing root CA.
+	if ((ret = ssl_verify_certificate(msg->verify_cert_file, SSIG_ROOT_CERT, true)) == 0) {
+		verified = true;
+	} else {
+		// Try all CA files in trusted CA store
+		struct verify_cert_ca_cb_data cb_data = {
+			.cert_file = msg->verify_cert_file,
+			.verified = false };
+
+		dir_foreach(TRUSTED_CA_STORE, scd_control_verify_cert_ca_cb, &cb_data);
+		if (cb_data.verified) {
+			verified = true;
+			ret = 0;
+		} else if (ret == -1) {
+			ERROR("Certificate not a valid ssig cert");
+			out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
+		} else {
+			ERROR("Error during certificate validation");
+			out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
+		}
+	}
+	IF_TRUE_GOTO(verified, do_signature);
+
+	// Retry with Local CA
+	if ((ret = ssl_verify_certificate(msg->verify_cert_file, LOCALCA_ROOT_CERT, true)) == 0) {
+		goto do_signature;
+	} else if (ret == -1) {
+		ERROR("Certificate not a valid local ssig cert");
+		out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
+	} else {
+		ERROR("Error during certificate validation");
+		out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
+	}
+	return out_code;
+
+do_signature:
+	if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file,
+			    msg->verify_data_file, hash_algo)) == 0) {
+		out_code = (verified) ? TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD :
+			TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED;
+	} else if (ret == -1) {
+		ERROR("Signature invalid");
+		out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE;
+	} else {
+		ERROR("Error during signature validation");
+		out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
+	}
+	return out_code;
 }
 
 static void
@@ -218,61 +306,8 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE: {
 
-		int ret;
-		char *hash_algo;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
-		out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
-
-		hash_algo = switch_proto_hash_algo(msg->hash_algo);
-
-		if (hash_algo) {
-			// TODO: we explicitly assume that the file to be verified is a software update file,
-			// and we thus use the software signing root CA.
-			// In case, the usage of the protobuf message may vary, we have to introduce a
-			// differentiation when we intend to check against other root CAs
-			if ((ret = ssl_verify_certificate(msg->verify_cert_file, SSIG_ROOT_CERT, true)) != 0) {
-				if (ret == -1) {
-					ERROR("Certificate not a valid ssig cert");
-					out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
-				} else
-					ERROR("Error during certificate validation");
-			} else {
-				if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file,
-					    msg->verify_data_file, hash_algo)) != 0) {
-					if (ret == -1) {
-						ERROR("Signature invalid");
-						out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE;
-					} else
-						ERROR("Error during signature validation");
-				} else {
-					out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD;
-				}
-			}
-			// Retry with Local CA
-			if (out.code == TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE) {
-				out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
-				if ((ret = ssl_verify_certificate(msg->verify_cert_file, LOCALCA_ROOT_CERT, true)) != 0) {
-					if (ret == -1) {
-						ERROR("Certificate not a valid local ssig cert");
-						out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
-					} else {
-						ERROR("Error during certificate validation");
-					}
-				} else {
-					if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file,
-							msg->verify_data_file, hash_algo)) != 0) {
-						if (ret == -1) {
-							ERROR("Signature invalid");
-							out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE;
-						} else {
-							ERROR("Error during signature validation");
-						}
-					} else {
-						out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED;
-					}
-				}
-			}
-		}
+		out.code = scd_control_handle_verify(msg);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:
