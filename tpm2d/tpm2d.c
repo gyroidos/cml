@@ -212,6 +212,7 @@ tpm2d_init(void)
 
 	mem_free(session_dir);
 	INFO("Sucessfully initialized TPM2.0");
+	tss2_destroy();
 }
 
 void
