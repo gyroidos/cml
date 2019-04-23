@@ -23,6 +23,7 @@
 
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -DDEBUG_BUILD -O2
+LOCAL_CFLAGS += -pedantic -Wall -Wextra -Werror
 
 SRC_FILES := \
 	common/list.c \

@@ -403,7 +403,7 @@ int main(int argc, char *argv[])
                 }
                 optind += argc - start_argc;    // adjust optind to be used with argv
 
-		if ( !strcasecmp(command, "assign_iface") ){
+		if (!strcasecmp(command, "assign_iface")) {
 	                msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE;
 		} else if ( !strcasecmp(command, "unassign_iface") ){
                         msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE;
@@ -416,15 +416,13 @@ int main(int argc, char *argv[])
 		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD;
 
-		int nopty = 0, argcount = 0;
-
+		int argcount = 0;
 
 		msg.has_exec_pty = true;
 
-		if (! strcmp(argv[optind], "nopty")) {
+		if (!strcmp(argv[optind], "nopty")) {
 			TRACE("Got nopty option");
 			msg.exec_pty = 0;
-			nopty = 1;
 			optind++;
 		} else {
 			msg.exec_pty = 1;
@@ -436,7 +434,7 @@ int main(int argc, char *argv[])
 		msg.exec_command = argv[optind];
 
 		if (optind < argc - 1) {
-			TRACE("[CLIENT] Allocating %d bytes for arguments", sizeof(char *) * argc);
+			TRACE("[CLIENT] Allocating %zu bytes for arguments", sizeof(char *) * argc);
 			msg.exec_args = mem_alloc(sizeof(char *) * argc);
 
 			while (optind < argc - 1) {
@@ -484,7 +482,7 @@ send_message:
 		}
 
 		//free exec arguments
-		TRACE("[CLIENT] Freeing %d args at %p", msg.n_exec_args, msg.exec_args);
+		TRACE("[CLIENT] Freeing %zu args at %p", msg.n_exec_args, (void*) msg.exec_args);
 		mem_free_array((void *) msg.exec_args, msg.n_exec_args);
 		TRACE("[CLIENT] after free ");
 
@@ -532,24 +530,20 @@ send_message:
 
 				TRACE("[CLIENT] Got message from exec'ed process\n");
 
-				unsigned int count = 0;
 				size_t written = 0, current = 0;
-
 				if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_OUTPUT) {
-					TRACE("[CLIENT] Message length; %d\n", resp->exec_output.len);
+					TRACE("[CLIENT] Message length; %zu\n", resp->exec_output.len);
 					while (written < resp->exec_output.len) {
 						TRACE("[CLIENT] Writing exec output to stdout");
-						if(current = write(STDOUT_FILENO, resp->exec_output.data + written,
-									resp->exec_output.len - written)) {
+						if ((current = write(STDOUT_FILENO,
+								resp->exec_output.data + written,
+								resp->exec_output.len - written))) {
 							written += current;
 						}
-
 						fflush(stdout);
 					}
-
 				} else if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_END) {
 					TRACE("[CLIENT] Got notification of command termination. Exiting...");
-
 					kill(pid, SIGTERM);
 					waitpid(pid, NULL, 0);
 					goto exit;
