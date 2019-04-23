@@ -132,6 +132,8 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 			free(msg_text);
 	}
 
+	tss2_init();
+
 	switch(msg->code) {
 #ifndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ: {
@@ -216,6 +218,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		WARN("ControllerToTpm command %d unknown or not implemented yet", msg->code);
 		break;
 	}
+	tss2_destroy();
 }
 
 /**
