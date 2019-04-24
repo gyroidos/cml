@@ -38,8 +38,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define TPM2D_SOCK_PATH "/data/cml/tpm2d/communication"
-#define TPM2D_SOCKET TPM2D_SOCK_PATH "/control.sock"
+#define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
 
 static void print_usage(const char *cmd)
 {
