@@ -116,7 +116,7 @@ mem_free_array(void **array, size_t size)
 		size_t i = 0;
 		while (i < size) {
 			if (array[i] != NULL) {
-				DEBUG("[MEM] Freeing element %lu", i);
+				DEBUG("[MEM] Freeing element %zu", i);
 				mem_free(array[i]);
 			}
 

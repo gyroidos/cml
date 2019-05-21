@@ -318,7 +318,7 @@ control_read_send(control_t * control, int fd)
 		out.exec_output.len = count;
 		out.exec_output.data = buf;
 
-		TRACE("[CONTROL] Read %ld bytes: %s. Sending to control client...", count, buf);
+		TRACE("[CONTROL] Read %zd bytes: %s. Sending to control client...", count, buf);
 
 		if (protobuf_send_message(control->sock_client,
 				(ProtobufCMessage *) & out) < 0) {
