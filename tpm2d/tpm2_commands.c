@@ -59,7 +59,7 @@ tss2_init(void)
 	int ret;
 
 	if (tss_context) {
-		WARN("Context already exists");
+		INFO("Context already exists.");
 		return;
 	}
 

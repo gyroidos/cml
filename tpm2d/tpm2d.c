@@ -220,6 +220,8 @@ void
 tpm2d_exit(void)
 {
 	INFO("Cleaning up tss2 and exit");
+	// When called tss2 library context may not be
+	tss2_init();
 	if (tpm2d_salt_key_handle)
 		tpm2_flushcontext(tpm2d_salt_key_handle);
 #ifndef TPM2D_NVMCRYPT_ONLY
