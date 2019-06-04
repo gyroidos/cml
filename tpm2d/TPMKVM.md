@@ -134,6 +134,7 @@ cp libibmtss.so* /usr/local/lib
 ldconfig -a
 ```
 
+
 ### run the emulator for direct use (without qemu)
 ```
 swtpm socket --tpmstate dir=/tmp/swtpmqemu --tpm2 \
@@ -145,4 +146,35 @@ swtpm socket --tpmstate dir=/tmp/swtpmqemu --tpm2 \
 swtpm_ioctl -i --tcp localhost:2322
 swtpm_bios --tpm2 --tcp localhost:2321
 tpm2d -s
+```
+
+### provisioning for testing porpose
+scd is used to create a device.csr with the help of openssl-tpm2-engine.
+
+You can build this also on a debian host:
+
+```
+git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/jejb/openssl_tpm2_engine/
+cd openssl_tpm2_engine
+git checkout v2.3.0
+bash bootstrap.sh
+./configure --with-enginesdir=/usr/lib/x86_64-linux-gnu/engines-1.1
+make install
+```
+
+Set environment for openssl\_tpm2\_engine to use simulator
+```
+export TPM_INTERFACE_TYPE=socsim
+export TPM_SERVER_TYPE=raw
+```
+Run tpm2d and scd to create a key inside the TPM and the corresponding csr
+- tpm2d will create the corresponding keys in `/data/cml/tpm2d/tokens`
+- scd will create  a device.csr and a self-signed device.cert in `/data/cml/tokens/`
+- you can now sign the device.csr by an own pki and overwrite the self-signed cert `/data/cml/tokens/device.cert`
+
+```
+swtpm_ioctl -i --tcp localhost:2322
+swtpm_bios --tpm2 --tcp localhost:2321
+tpm2d -s
+scd
 ```

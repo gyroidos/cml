@@ -57,7 +57,7 @@ static uint32_t tpm2d_as_key_handle_tr = 0;
 // transient (tr) parent handle (pt) for attestation key (as)
 static uint32_t tpm2d_as_key_handle_pt_tr = 0;
 // persistent (ps) parent handle (pt) for attestation key (as)
-static uint32_t tpm2d_as_key_handle_pt_ps = 0;
+static uint32_t tpm2d_as_key_handle_pt_ps = TPM2D_STORAGE_KEY_PERSIST_HANDLE;
 #endif
 
 static void
@@ -99,18 +99,7 @@ tpm2d_setup_keys(void)
 	int ret = 0;
 	char *token_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
 	bool handle_possibly_uninit = true;
-	char *tpm2d_as_key_pwd_pt = NULL;
-
-	//TODO resolve pwd/auth policy for other hierarchies
-	//fails for platform and endorsement hierarchy with auth problems
-	if (TPM2D_KEY_HIERARCHY == TPM_RH_OWNER) {
-		tpm2d_as_key_handle_pt_ps = TPM2D_STORAGE_KEY_PERSIST_HANDLE;
-		tpm2d_as_key_pwd_pt = TPM2D_PRIMARY_STORAGE_KEY_PW;
-	} else if (TPM2D_KEY_HIERARCHY == TPM_RH_PLATFORM) {
-		tpm2d_as_key_handle_pt_ps = TPM2D_PLATFORM_KEY_PERSIST_HANDLE;
-	} else {
-		tpm2d_as_key_handle_pt_ps = TPM2D_ENDORSEMENT_KEY_PERSIST_HANDLE;
-	}
+	char *tpm2d_as_key_pwd_pt = TPM2D_PRIMARY_STORAGE_KEY_PW;
 
 	if (!file_exists(TPM2D_ATT_PRIV_FILE)) {
 		if (!file_is_dir(token_dir)) {
@@ -231,6 +220,8 @@ void
 tpm2d_exit(void)
 {
 	INFO("Cleaning up tss2 and exit");
+	// When called tss2 library context may not be
+	tss2_init();
 	if (tpm2d_salt_key_handle)
 		tpm2_flushcontext(tpm2d_salt_key_handle);
 #ifndef TPM2D_NVMCRYPT_ONLY

@@ -17,9 +17,9 @@
 
 #define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
 
-// TODO proper auth handling for all hierarchies and functions
-#define TPM2D_PRIMARY_STORAGE_KEY_PW	"primary"
-#define TPM2D_ATT_KEY_PW		"sig"
+// WARNING overwrite this with proper auth in production builds
+#define TPM2D_PRIMARY_STORAGE_KEY_PW	NULL
+#define TPM2D_ATT_KEY_PW		NULL
 
 #endif // ifndef TPM2D_NVMCRYPT_ONLY
 

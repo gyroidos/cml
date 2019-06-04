@@ -59,7 +59,7 @@ tss2_init(void)
 	int ret;
 
 	if (tss_context) {
-		WARN("Context already exists");
+		INFO("Context already exists.");
 		return;
 	}
 
@@ -776,8 +776,9 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type,
 		privkey_len = 0;
 		size = sizeof(privkey);
 		TSS_TPM2B_PRIVATE_Marshal(priv, &privkey_len, &buffer, &size);
-		openssl_write_tpmfile(file_name_tss_key, pubkey, pubkey_len, privkey, privkey_len,
-				key_pwd == NULL, parent_handle, NULL, 0, NULL);
+		tpm2d_openssl_write_tpmfile(file_name_tss_key, pubkey, pubkey_len,
+				privkey, privkey_len, key_pwd == NULL,
+				parent_handle, NULL);
 	}
 
 	return rc;
