@@ -42,7 +42,7 @@
 #include "common/file.h"
 #include "common/protobuf.h"
 
-#include "protobuf-c-text/protobuf-c-text.h"
+#include <google/protobuf-c/protobuf-c-text.h>
 
 // maximum no. of connections waiting to be accepted on the listening socket
 #define TPM2D_CONTROL_SOCK_LISTEN_BACKLOG 8
