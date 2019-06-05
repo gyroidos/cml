@@ -51,7 +51,7 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <protobuf-c-text/protobuf-c-text.h>
+#include <google/protobuf-c/protobuf-c-text.h>
 
 // maximum no. of connections waiting to be accepted on the listening socket
 #define CONTROL_SOCK_LISTEN_BACKLOG 8

@@ -41,7 +41,7 @@
 #include "common/file.h"
 #include "common/protobuf.h"
 
-#include "protobuf-c-text/protobuf-c-text.h"
+#include <google/protobuf-c/protobuf-c-text.h>
 
 struct tpm2d_rcontrol {
 	int sock;		// listen ip socket fd

@@ -41,7 +41,7 @@
 #include "common/mem.h"
 #include "common/protobuf.h"
 
-#include <protobuf-c-text/protobuf-c-text.h>
+#include <google/protobuf-c/protobuf-c-text.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>

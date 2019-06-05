@@ -35,7 +35,7 @@
 #include "common/mem.h"
 #include "common/protobuf.h"
 
-#include <protobuf-c-text/protobuf-c-text.h>
+#include <google/protobuf-c/protobuf-c-text.h>
 #include <stdbool.h>
 
 static int tss_sock = -1;

@@ -23,7 +23,7 @@
 
 #include "protobuf.h"
 #include <stdio.h>  // for protobuf-c-text.h
-#include <protobuf-c-text/protobuf-c-text.h>
+#include <google/protobuf-c/protobuf-c-text.h>
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "macro.h"
