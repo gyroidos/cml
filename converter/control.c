@@ -141,9 +141,9 @@ control_register_localca(char *ca_cert_file)
 	// build ControllerToDaemon message
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
 	msg.command = CONTROLLER_TO_DAEMON__COMMAND__REGISTER_LOCALCA;
-	msg.has_localca_rootcert = true;
-	msg.localca_rootcert.len = ca_cert_len;
-	msg.localca_rootcert.data = ca_cert;
+	msg.has_guestos_rootcert = true;
+	msg.guestos_rootcert.len = ca_cert_len;
+	msg.guestos_rootcert.data = ca_cert;
 
 	ret = send_message(&msg);
 out:

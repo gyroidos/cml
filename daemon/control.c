@@ -512,10 +512,10 @@ control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED in
 static void
 control_handle_cmd_register_localca(const ControllerToDaemon *msg, UNUSED int fd)
 {
-	if (!msg->has_localca_rootcert)
+	if (!msg->has_guestos_rootcert)
 		WARN("REGISTER_LOCALCA without root certificate");
 	else {
-		guestos_mgr_register_localca(msg->localca_rootcert.data, msg->localca_rootcert.len);
+		guestos_mgr_register_localca(msg->guestos_rootcert.data, msg->guestos_rootcert.len);
 	}
 }
 
@@ -780,6 +780,13 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG: {
 		control_handle_cmd_push_guestos_configs(msg, fd);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA: {
+		if (!msg->has_guestos_rootcert)
+			WARN("REGISTER_NEWCA without root certificate");
+		else
+			guestos_mgr_register_newca(msg->guestos_rootcert.data, msg->guestos_rootcert.len);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_LOCALCA: {
