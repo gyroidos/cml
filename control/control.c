@@ -72,6 +72,7 @@ static void print_usage(const char *cmd)
 	printf("   deny_audio <container-uuid>\n        Deny audio access to the specified container (cgroups).\n");
 	printf("   wipe <container-uuid>\n        Wipes the specified container.\n");
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n        (testing) Pushes the specified GuestOS config, signature, and certificate files.\n");
+	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
@@ -133,7 +134,6 @@ get_container_uuid_new(const char *identifier, int sock)
 	protobuf_free_message((ProtobufCMessage *) resp);
 	return uuid;
 }
-
 
 static const struct option global_options[] = {
 	{"socket",   required_argument, 0, 's'},
@@ -262,7 +262,30 @@ int main(int argc, char *argv[])
 		msg.guestos_config_certificate.data = cert;
 		goto send_message;
 	}
+	if (!strcasecmp(command, "ca_register")) {
+		// need exactly one more argument (container config file)
+		if (optind != argc-1)
+			print_usage(argv[0]);
 
+		const char *ca_cert_file = argv[optind++];
+		off_t ca_cert_len = file_size(ca_cert_file);
+		if (ca_cert_len < 0) {
+			ERROR("Error accessing certificate file %s.", ca_cert_file);
+			exit(-2);
+		}
+		uint8_t *ca_cert = mem_alloc(ca_cert_len);
+		if (file_read(ca_cert_file, (char*)ca_cert, ca_cert_len) < 0) {
+			ERROR("Error reading %s.", ca_cert_file);
+			exit(-2);
+		}
+		INFO("Registering new CA by cert %s (len %zu).", ca_cert_file, (size_t)ca_cert_len);
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA;
+		msg.has_guestos_rootcert = true;
+		msg.guestos_rootcert.len = ca_cert_len;
+		msg.guestos_rootcert.data = ca_cert;
+		goto send_message;
+	}
 	if (!strcasecmp(command, "create")) {
 		has_response = true;
 		// need exactly one more argument (container config file)

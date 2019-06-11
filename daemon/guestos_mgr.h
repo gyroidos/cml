@@ -95,6 +95,13 @@ guestos_mgr_update_images(void);
 int
 guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen);
 
+/**
+ * Writes the provided cacert to the trusted CA store where scd can use it
+ * to verify signatures of GuestOSes
+ */
+int
+guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen);
+
 
 /******************************************************************************/
 

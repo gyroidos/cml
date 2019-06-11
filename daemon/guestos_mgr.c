@@ -55,6 +55,7 @@
 
 #define SCD_TOKEN_DIR "/data/cml/tokens"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
+#define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
 
 static list_t *guestos_list = NULL;
 
@@ -383,6 +384,52 @@ guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
 	mem_free(tmp_cacert_file);
 	return ret;
 }
+
+int
+guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
+{
+	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
+	const char *end_cert_str   = "-----END CERTIFICATE-----";
+
+	int ret = -1;
+	if (!file_is_dir(TRUSTED_CA_STORE))
+		IF_TRUE_RETVAL(dir_mkdir_p(TRUSTED_CA_STORE, 0600), ret);
+
+	// Sanity check file is a certificate
+	size_t end_offset = cacertlen - strlen(end_cert_str) - 1;
+	if (strncmp((char *)cacert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
+			strncmp((char*)cacert+end_offset, end_cert_str, strlen(end_cert_str)) != 0) {
+		ERROR("Sanity check failed. provided data is not an encoded certificate");
+		return ret;
+	}
+
+	char *tmp_cacert_file = write_to_tmpfile_new(cacert, cacertlen);
+	IF_NULL_RETVAL(tmp_cacert_file, ret);
+
+	char *cacert_hash = smartcard_crypto_hash_file_block_new(tmp_cacert_file, SHA1);
+	char *cacert_file = mem_printf("%s/%s", TRUSTED_CA_STORE, cacert_hash);
+	if (file_exists(cacert_file)) {
+		INFO("Certificate with hash %s already installed!", cacert_hash);
+		if (unlink(tmp_cacert_file))
+			WARN_ERRNO("Failed to delete tmpfile %s failed!", tmp_cacert_file);
+		ret = 0;
+		goto out;
+	}
+
+	if ((ret = file_move(tmp_cacert_file, cacert_file, GUESTOS_MGR_FILE_MOVE_BLOCKSIZE)) < 0) {
+		ERROR_ERRNO("Failed to move new ca certificate %s to %s",
+				tmp_cacert_file, cacert_file);
+	} else {
+		INFO("Successfully installed new ca certificate %s to %s",
+				tmp_cacert_file, cacert_file);
+	}
+out:
+	mem_free(cacert_file);
+	mem_free(cacert_hash);
+	mem_free(tmp_cacert_file);
+	return ret;
+}
+
 
 
 /******************************************************************************/
