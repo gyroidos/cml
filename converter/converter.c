@@ -90,6 +90,7 @@ err:
 int
 write_guestos_config(docker_config_t *config, const char* root_image_file, const char *image_path, const char* image_name, const char *image_tag)
 {
+	int ret = -1;
 	char *out_file;
 	char *out_sig_file;
 	char *out_cert_file;
@@ -209,7 +210,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 			control_register_localca(LOCALCA_CERT_FILE);
 		}
 	}
-	int ret = util_sign_guestos(out_sig_file, out_file, SSIG_KEY_FILE);
+	ret = util_sign_guestos(out_sig_file, out_file, SSIG_KEY_FILE);
 	if (ret == 0) {
 		if(file_copy(SSIG_CERT_FILE, out_cert_file, file_size(SSIG_CERT_FILE), 512, 0) < 0)
 			WARN("Could not copy Certificate to %s", out_cert_file);
@@ -262,6 +263,7 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 	char* extracted_image_path = mem_printf("%s/%s_%s_extracted", out_path, image_name, image_tag);
 	char* extracted_pseudo_file = mem_printf("%s/%s_%s_extracted_index.txt", out_path, image_name, image_tag);
 	char *image_file = NULL;
+	char **layer_pseudo_file = NULL;
 
 	if (dir_mkdir_p(extracted_image_path, 0755) < 0) {
 		ERROR_ERRNO("Can't create dir %s", extracted_image_path);
@@ -275,7 +277,7 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 	if (file_exists(extracted_pseudo_file))
 		remove(extracted_pseudo_file);
 
-	char **layer_pseudo_file = mem_new0(char*, manifest->layers_size);
+	layer_pseudo_file = mem_new0(char*, manifest->layers_size);
 
 	for (int i=0; i < manifest->layers_size; ++i) {
 		char* layer_file_name = mem_printf("%s/%s%s", in_path, manifest->layers[i]->digest, manifest->layers[i]->suffix);
@@ -353,7 +355,9 @@ static const struct option login_options[] = {
 int
 main(UNUSED int argc, char **argv)
 {
-	char *buf, *manifest_file, *manifest_list_file;
+	char *buf;
+	char *manifest_file = NULL;
+	char *manifest_list_file = NULL;
 	char *image_tag = NULL;
 	char *image_name = NULL;;
 	char *image_arch = NULL;
