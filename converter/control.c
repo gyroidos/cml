@@ -61,6 +61,9 @@ int
 control_push_guestos(char* cfgfile, char* certfile, char* sigfile)
 {
 	int ret = -1;
+	uint8_t *cfg = NULL;
+	uint8_t *sig = NULL;
+	uint8_t *cert = NULL;
 	off_t cfglen = file_size(cfgfile);
 	if (cfglen < 0) {
 		ERROR("Error accessing config file %s.", cfgfile);
@@ -79,17 +82,17 @@ control_push_guestos(char* cfgfile, char* certfile, char* sigfile)
 		return ret;
 	}
 
-	uint8_t *cfg = mem_alloc(cfglen);
+	cfg = mem_alloc(cfglen);
 	if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
 		ERROR("Error reading %s.", cfgfile);
 		goto out;
 	}
-	uint8_t *sig = mem_alloc(siglen);
+	sig = mem_alloc(siglen);
 	if (file_read(sigfile, (char*)sig, siglen) < 0) {
 		ERROR("Error reading %s.", sigfile);
 		goto out;
 	}
-	uint8_t *cert = mem_alloc(certlen);
+	cert = mem_alloc(certlen);
 	if (file_read(certfile, (char*)cert, certlen) < 0) {
 		ERROR("Error reading %s.", certfile);
 		goto out;
