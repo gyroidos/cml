@@ -57,9 +57,15 @@ pipeline {
                rm cmld_git.bbappend
                cp cmld_git.bbappend.jenkins cmld_git.bbappend
 
-               wic create -e trustx-cml-initramfs --no-fstab-update trustmeimage
+               bitbake trustx-cml
             '''
          }
+      }
+   }
+
+   post {
+      always {
+         archiveArtifacts artifacts: 'out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img', fingerprint: true
       }
    }
 }
