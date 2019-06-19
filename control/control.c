@@ -165,6 +165,7 @@ int main(int argc, char *argv[])
 
 	bool has_response = false;
 	const char *socket_file = CONTROL_SOCKET;
+	uuid_t *uuid = NULL;
 	int sock = 0;
 
 	struct termios termios_before;
@@ -481,11 +482,10 @@ int main(int argc, char *argv[])
 		print_usage(argv[0]);
 
 	sock = sock_connect(socket_file);
-	uuid_t *uuid = get_container_uuid_new(argv[optind], sock);
+	uuid = get_container_uuid_new(argv[optind], sock);
 	msg.n_container_uuids = 1;
 	msg.container_uuids = mem_new(char *, 1);
 	msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
-	uuid_free(uuid);
 
 send_message:
 	if (!sock)
@@ -531,10 +531,10 @@ send_message:
 
 					ControllerToDaemon inputmsg = CONTROLLER_TO_DAEMON__INIT;
 					inputmsg.container_uuids = mem_new(char*, 1);
-					inputmsg.container_uuids[0] = argv[optind];
+					inputmsg.container_uuids[0] = (char *)uuid_string(uuid);
 					inputmsg.n_container_uuids = 1;
 					inputmsg.command =
-					CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
+						CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
 					inputmsg.exec_input = buf;
 
 					TRACE("[CLIENT] Sending input for exec'ed process in container %s", argv[optind]);
@@ -599,6 +599,8 @@ exit:
 	for (size_t i=0; i < msg.n_container_uuids; ++i)
 		mem_free(msg.container_uuids[i]);
 	mem_free(msg.container_uuids);
+	if (uuid)
+		mem_free(uuid);
 
 	return 0;
 }
