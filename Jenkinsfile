@@ -16,7 +16,7 @@ pipeline {
       stage('Build') {
          agent { dockerfile {
             dir 'trustme/build/yocto/docker'
-            args '--entrypoint=\'\''
+            args '--entrypoint=\'\' -v /yocto_mirror:/source_mirror'
             reuseNode true
          } }
          steps {
@@ -26,6 +26,10 @@ pipeline {
                export LANGUAGE=en_US.UTF-8
                echo branch name from Jenkins: ${BRANCH_NAME}
                . init_ws.sh out-yocto
+
+               echo "SOURCE_MIRROR_URL ?= \\\"file:///source_mirror/sources/\\\"" >> conf/local.conf
+               echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
+               echo "BB_GENERATE_MIRROR_TARBALLS = \\\"1\\\"" >> conf/local.conf
 
                cd ${WORKSPACE}/trustme/cml
                if [ ! -z $(git branch --list ${BRANCH_NAME}) ]; then
@@ -45,7 +49,7 @@ pipeline {
       stage('Deploy') {
          agent { dockerfile {
             dir 'trustme/build/yocto/docker'
-            args '--entrypoint=\'\''
+            args '--entrypoint=\'\' -v /tmp:/tmp'
             reuseNode true
          } }
          steps {
@@ -58,6 +62,29 @@ pipeline {
                cp cmld_git.bbappend.jenkins cmld_git.bbappend
 
                bitbake trustx-cml
+            '''
+         }
+      }
+      stage('Update_Mirror') {
+         agent { dockerfile {
+            dir 'trustme/build/yocto/docker'
+            args '--entrypoint=\'\' -v /yocto_mirror:/source_mirror'
+            reuseNode true
+         } }
+         steps {
+            sh '''
+               export LC_ALL=en_US.UTF-8
+               export LANG=en_US.UTF-8
+               export LANGUAGE=en_US.UTF-8
+
+               if [ ! -d /source_mirror/sources ]; then
+                  mkdir /source_mirror/sources
+               fi
+               for i in out-yocto/downloads/*; do
+                  if [ -f $i ]; then
+                     cp -v $i /source_mirror/sources/
+                  fi
+               done
             '''
          }
       }
