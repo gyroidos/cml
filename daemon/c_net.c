@@ -1120,7 +1120,7 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 
 	/* shut the network interface down */
 	// check if iface was allready destroyed by kernel
-	if (c_net_is_veth_used(ni->veth_cmld_name)) {
+	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
 
 		if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, false))
 			WARN("network interface could not be gracefully shut down");

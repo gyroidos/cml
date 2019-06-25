@@ -505,8 +505,6 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 			INFO("Generating new mac for if %s",
 				config->cfg->vnet_configs[i]->if_name);
 			file_read("/dev/urandom", (char*)mac, 6);
-			mac[0] &= 0xfe; /* clear multicast bit */
-			mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 			config->cfg->vnet_configs[i]->if_mac =
 				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
 						":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
@@ -522,6 +520,9 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 				&mac[0], &mac[1], &mac[2],
 				&mac[3], &mac[4], &mac[5]);
 		}
+		// sanitize mac veth otherwise kernel may reject the mac
+		mac[0] &= 0xfe; /* clear multicast bit */
+		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
 		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(
 			config->cfg->vnet_configs[i]->if_name, NULL, mac,
