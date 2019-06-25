@@ -836,11 +836,11 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	/* configure loopback interface of root network namespace */
 	network_setup_loopback();
 
-	/* Temporary hardcoded configuration for trustme-x86 on qemu*/
 	DEBUG("Trying to configure eth0");
 	//network_set_ip_addr_of_interface("10.0.2.15", 24, "eth0");
 	network_set_ip_addr_of_interface(host_addr, host_subnet, host_if);
 	network_setup_default_route(host_gateway, true);
+	network_enable_ip_forwarding();
 }
 
 int
