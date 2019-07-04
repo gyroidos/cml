@@ -15,26 +15,8 @@ pipeline {
                 echo "</manifest>" >> .repo/local_manifests/jenkins.xml
              '''
              sh 'repo sync -j8'
-         }
-      }
-      stage('Build') {
-         agent { dockerfile {
-            dir 'trustme/build/yocto/docker'
-            args '--entrypoint=\'\' -v /yocto_mirror:/source_mirror'
-            reuseNode true
-         } }
-         steps {
-            sh '''
-               export LC_ALL=en_US.UTF-8
-               export LANG=en_US.UTF-8
-               export LANGUAGE=en_US.UTF-8
+             sh '''
                echo branch name from Jenkins: ${BRANCH_NAME}
-               . init_ws.sh out-yocto
-
-               echo "SOURCE_MIRROR_URL ?= \\\"file:///source_mirror/sources/\\\"" >> conf/local.conf
-               echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
-               echo "BB_GENERATE_MIRROR_TARBALLS = \\\"1\\\"" >> conf/local.conf
-
                cd ${WORKSPACE}/trustme/cml
                if [ ! -z $(git branch --list ${BRANCH_NAME}) ]; then
                   git branch -D ${BRANCH_NAME}
@@ -45,23 +27,47 @@ pipeline {
                cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
                rm cmld_git.bbappend
                cp cmld_git.bbappend.jenkins cmld_git.bbappend
-
-               bitbake trustx-cml-initramfs multiconfig:container:trustx-core
-            '''
+             '''
          }
       }
-      stage('Static_Analysis') {
-         agent { dockerfile {
-            dir 'codesonar-docker'
-            args '--entrypoint=\'\' -v /etc/passwd:/etc/passwd:ro'
-            reuseNode true
-         } }
-         steps {
-            sh '''
-               export HOME=${WORKSPACE}
-               cd ${WORKSPACE}/trustme/cml
-               sh ${WORKSPACE}/codesonar-docker/docker-entrypoint.sh
-            '''
+      stage('Build') {
+         parallel {
+            stage('Bitbake') {
+               agent { dockerfile {
+                  dir 'trustme/build/yocto/docker'
+                  args '--entrypoint=\'\' -v /yocto_mirror:/source_mirror'
+                  reuseNode true
+               } }
+               steps {
+                  sh '''
+                     export LC_ALL=en_US.UTF-8
+                     export LANG=en_US.UTF-8
+                     export LANGUAGE=en_US.UTF-8
+                     echo branch name from Jenkins: ${BRANCH_NAME}
+                     . init_ws.sh out-yocto
+
+                     echo "SOURCE_MIRROR_URL ?= \\\"file:///source_mirror/sources/\\\"" >> conf/local.conf
+                     echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
+                     echo "BB_GENERATE_MIRROR_TARBALLS = \\\"1\\\"" >> conf/local.conf
+
+                     bitbake trustx-cml-initramfs multiconfig:container:trustx-core
+                  '''
+               }
+            }
+            stage('Static_Analysis') {
+               agent { dockerfile {
+                  dir 'codesonar-docker'
+                  args '--entrypoint=\'\' -v /etc/passwd:/etc/passwd:ro'
+                  reuseNode true
+               } }
+               steps {
+                  sh '''
+                     export HOME=${WORKSPACE}
+                     cd ${WORKSPACE}/trustme/cml
+                     sh ${WORKSPACE}/codesonar-docker/docker-entrypoint.sh
+                  '''
+               }
+            }
          }
       }
       stage('Deploy') {
