@@ -8,7 +8,11 @@ pipeline {
              sh 'mkdir -p .repo/local_manifests'
              sh '''
                 echo "<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>" > .repo/local_manifests/jenkins.xml
-                echo "<manifest><remove-project name=\\\"device_fraunhofer_common_cml\\\" /></manifest>" >> .repo/local_manifests/jenkins.xml
+                echo "<manifest>" >> .repo/local_manifests/jenkins.xml
+                echo "<remote name=\\\"git-int\\\" fetch=\\\"https://git-int.aisec.fraunhofer.de\\\" />" >> .repo/local_manifests/jenkins.xml
+                echo "<remove-project name=\\\"device_fraunhofer_common_cml\\\" />" >> .repo/local_manifests/jenkins.xml
+                echo "<project path=\\\"codesonar-docker\\\" name=\\\"braunsdo/codesonar-docker\\\" remote=\\\"git-int\\\" revision=\\\"trustme\\\" />" >> .repo/local_manifests/jenkins.xml
+                echo "</manifest>" >> .repo/local_manifests/jenkins.xml
              '''
              sh 'repo sync -j8'
          }
@@ -43,6 +47,20 @@ pipeline {
                cp cmld_git.bbappend.jenkins cmld_git.bbappend
 
                bitbake trustx-cml-initramfs multiconfig:container:trustx-core
+            '''
+         }
+      }
+      stage('Static_Analysis') {
+         agent { dockerfile {
+            dir 'codesonar-docker'
+            args '--entrypoint=\'\' -v /etc/passwd:/etc/passwd:ro'
+            reuseNode true
+         } }
+         steps {
+            sh '''
+               export HOME=${WORKSPACE}
+               cd ${WORKSPACE}/trustme/cml
+               sh ${WORKSPACE}/codesonar-docker/docker-entrypoint.sh
             '''
          }
       }
