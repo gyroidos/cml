@@ -81,7 +81,7 @@ pipeline {
                   mkdir /source_mirror/sources
                fi
                for i in out-yocto/downloads/*; do
-                  if [ -f $i ]; then
+                  if [ -f $i ] && [ ! -L $i ]; then
                      cp -v $i /source_mirror/sources/
                   fi
                done
