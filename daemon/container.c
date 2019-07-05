@@ -1294,6 +1294,17 @@ container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, c
 	ASSERT(container);
 	ASSERT(cmd);
 
+	switch (container_get_state(container)) {
+		case CONTAINER_STATE_BOOTING:
+		case CONTAINER_STATE_RUNNING:
+		case CONTAINER_STATE_SETUP:
+			break;
+		default:
+			WARN("Container %s is not running thus no command could be exec'ed",
+				container_get_description(container));
+			return -1;
+	}
+
 	TRACE("Forwarding request to c_run subsystem");
 	return c_run_exec_process(container->run, create_pty, cmd, argc, argv);
 }
