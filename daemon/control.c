@@ -1031,7 +1031,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
 
 			if ((! container) || container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
-				ERROR("Failed to exec. Wrong UUID or or already executing command in this container.");
+				ERROR("Failed to exec");
 
 				DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 				out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
