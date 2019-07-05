@@ -22,11 +22,6 @@ pipeline {
                   git branch -D ${BRANCH_NAME}
                fi
                git checkout -b ${BRANCH_NAME}
-               cd ${WORKSPACE}/out-yocto
-               echo "BRANCH = \\\"${BRANCH_NAME}\\\"" > cmld_git.bbappend.jenkins
-               cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
-               rm cmld_git.bbappend
-               cp cmld_git.bbappend.jenkins cmld_git.bbappend
              '''
          }
       }
@@ -43,8 +38,14 @@ pipeline {
                      export LC_ALL=en_US.UTF-8
                      export LANG=en_US.UTF-8
                      export LANGUAGE=en_US.UTF-8
-                     echo branch name from Jenkins: ${BRANCH_NAME}
                      . init_ws.sh out-yocto
+
+                     echo Using branch name ${BRANCH_NAME} in bbappend files
+                     cd ${WORKSPACE}/out-yocto
+                     echo "BRANCH = \\\"${BRANCH_NAME}\\\"" > cmld_git.bbappend.jenkins
+                     cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
+                     rm cmld_git.bbappend
+                     cp cmld_git.bbappend.jenkins cmld_git.bbappend
 
                      echo "SOURCE_MIRROR_URL ?= \\\"file:///source_mirror/sources/\\\"" >> conf/local.conf
                      echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
