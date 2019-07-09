@@ -57,6 +57,7 @@ static void print_usage(const char *cmd)
 	printf("\n");
 	printf("commands:\n");
 	printf("   list\n        Lists all containers.\n");
+	printf("   list_guestos\n        Lists all installed guestos configs.\n");
 	printf("   reload\n        Reloads containers from config files.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
 	printf("   create <container.conf>\n        Creates a container from the given config file.\n");
@@ -197,6 +198,11 @@ int main(int argc, char *argv[])
 	const char *command = argv[optind++];
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+		has_response = true;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "list_guestos")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS;
 		has_response = true;
 		goto send_message;
 	}
