@@ -304,21 +304,6 @@ error:
 static int
 do_exec (c_run_t *run)
 {
-	if (-1 == dup2(run->pty_slave_fd, STDIN_FILENO)) {
-		ERROR("Failed to redirect stdin to cmld socket. Exiting...");
-		goto error;
-	}
-
-	if (-1 == dup2(run->pty_slave_fd, STDOUT_FILENO)) {
-		ERROR ("Failed to redirect stdout to cmld socket. Exiting...");
-		goto error;
-	}
-
-	if (-1 == dup2(run->pty_slave_fd, STDERR_FILENO)) {
-		ERROR("Failed to redirect stderr to cmld. Exiting...");
-		goto error;
-	}
-
 	//Add NULL pointer to end of argv
 	char **exec_args = NULL;
 
@@ -343,6 +328,22 @@ do_exec (c_run_t *run)
 	container_set_cap_current_process(run->container);
 
 	TRACE("[EXEC]: Executing command %s in process with PID: %d, PGID: %d, PPID: %d", run->cmd, getpid(), getpgid(getpid()), getppid());
+
+	if (-1 == dup2(run->pty_slave_fd, STDIN_FILENO)) {
+		ERROR("Failed to redirect stdin to cmld socket. Exiting...");
+		goto error;
+	}
+
+	if (-1 == dup2(run->pty_slave_fd, STDOUT_FILENO)) {
+		ERROR ("Failed to redirect stdout to cmld socket. Exiting...");
+		goto error;
+	}
+
+	if (-1 == dup2(run->pty_slave_fd, STDERR_FILENO)) {
+		ERROR("Failed to redirect stderr to cmld. Exiting...");
+		goto error;
+	}
+
 	int ret = execve(run->cmd, exec_args, NULL);
 
 	mem_free_array((void *) exec_args, run->argc);
@@ -350,6 +351,7 @@ do_exec (c_run_t *run)
 
 error:
 	ERROR_ERRNO("An error occured while trying to execute command. Giving up...");
+	mem_free_array((void *) exec_args, run->argc);
 	exit(EXIT_FAILURE);
 }
 
