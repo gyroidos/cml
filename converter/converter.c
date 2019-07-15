@@ -48,6 +48,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #define BUF_SIZE 10*4096
 
@@ -61,8 +62,9 @@
 #define LOCALCA_CERT_FILE UTIL_PKI_PATH "ssig_rootca.cert"
 
 #define SYSTEM_ARCH "x86" // TODO get this from running system
-#define WWW_ROOT "/www/pages"
-#define WWW_OS_IMAGES_DIR WWW_ROOT "/operatingsystems/" SYSTEM_ARCH
+#define WWW_ROOT "/www/pages/operatingsystems"
+#define TMP_OS_IMAGES_PREFIX "/tmp/operatingsystems/"
+#define WWW_OS_IMAGES_DIR TMP_OS_IMAGES_PREFIX SYSTEM_ARCH
 
 static char *
 get_ifname_ip_new(const char *ifname)
@@ -216,8 +218,13 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 			WARN("Could not copy Certificate to %s", out_cert_file);
 	}
 
+
 	if (dir_mkdir_p(WWW_OS_IMAGES_DIR, 0755))
 		ERROR_ERRNO("Can't create folder for hosting image files");
+
+	if (symlink(TMP_OS_IMAGES_PREFIX, WWW_ROOT) < 0 && errno != EEXIST)
+		ERROR_ERRNO("Can't symlink %s foder to %s", TMP_OS_IMAGES_PREFIX, WWW_ROOT);
+
 
 	out_www_image_path_versioned = mem_printf("%s/%s_%s-%"PRId64, WWW_OS_IMAGES_DIR,
 				image_name, image_tag, cfg.version);
