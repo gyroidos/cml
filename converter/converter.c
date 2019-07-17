@@ -268,9 +268,7 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 {
 	char *target_image_path = mem_printf("%s/%s_%s", out_path, image_name, image_tag);
 	char* extracted_image_path = mem_printf("%s/%s_%s_extracted", out_path, image_name, image_tag);
-	char* extracted_pseudo_file = mem_printf("%s/%s_%s_extracted_index.txt", out_path, image_name, image_tag);
 	char *image_file = NULL;
-	char **layer_pseudo_file = NULL;
 
 	if (dir_mkdir_p(extracted_image_path, 0755) < 0) {
 		ERROR_ERRNO("Can't create dir %s", extracted_image_path);
@@ -281,55 +279,25 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 		goto out;
 	}
 
-	if (file_exists(extracted_pseudo_file))
-		remove(extracted_pseudo_file);
-
-	layer_pseudo_file = mem_new0(char*, manifest->layers_size);
-
 	for (int i=0; i < manifest->layers_size; ++i) {
 		char* layer_file_name = mem_printf("%s/%s%s", in_path, manifest->layers[i]->digest, manifest->layers[i]->suffix);
-		layer_pseudo_file[i] =  mem_printf("%s-%d", extracted_pseudo_file, i);
-		if (file_exists(layer_pseudo_file[i]))
-			unlink(layer_pseudo_file[i]);
 		INFO("Extracting layer[%d]: %s", i, layer_file_name);
-		if (-1 == util_tar_extract(layer_file_name, layer_pseudo_file[i], extracted_image_path)) {
+		if (-1 == util_tar_extract(layer_file_name, extracted_image_path)) {
 			ERROR_ERRNO("Failed to extract %s", layer_file_name);
 			mem_free(layer_file_name);
 			goto out;
 		}
 		mem_free(layer_file_name);
 	}
-	// concatenate pseudo file in reverse order (mksquahfs will ignore duplicate entries)
-	for (int i = manifest->layers_size-1; i >= 0; --i) {
-		ssize_t file_len = file_size(layer_pseudo_file[i]);
-		if (file_len < 0)
-			continue;
-		char *file_buf = mem_alloc0(file_len);
-		if (-1 == file_read(layer_pseudo_file[i], file_buf, file_len)) {
-			mem_free(file_buf);
-			continue;
-		}
-		if (-1 == file_write_append(extracted_pseudo_file, file_buf, file_len)) {
-			ERROR_ERRNO("Failed to write part %d to pseudo file!", i);
-			mem_free(file_buf);
-			goto out;
-		}
-		mem_free(file_buf);
-	}
-
 	image_file = mem_printf("%s/%s", target_image_path, IMAGE_NAME_ROOT);
-	if (util_squash_image(extracted_image_path, extracted_pseudo_file, image_file) <0){
+	if (util_squash_image(extracted_image_path, image_file) <0){
 		mem_free(image_file);
 		image_file = NULL;
 		goto out;
 	}
 out:
-	mem_free(extracted_pseudo_file);
 	mem_free(extracted_image_path);
 	mem_free(target_image_path);
-	for (int i=0; i < manifest->layers_size; ++i)
-		mem_free(layer_pseudo_file[i]);
-	mem_free(layer_pseudo_file);
 	return image_file;
 }
 
