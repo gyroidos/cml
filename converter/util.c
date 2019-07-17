@@ -31,13 +31,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
-#include <libtar.h>
 #include <sys/wait.h>
 #include <stdint.h>
 
 #include <openssl/sha.h>
 
 #define OPENSSLBIN_PATH "openssl"
+#define TAR_PATH	"tar"
 #define MKSQUASHFS_PATH "mksquashfs"
 #define MKSQUASHFS_COMP "gzip"
 #define MKSQUASHFS_BSIZE "131072"
@@ -46,8 +46,6 @@
 
 #define PKIGENSCRIPT_PATH UTIL_PKI_PATH "ssig_pki_generator.sh"
 #define PKIGENCONF_PATH UTIL_PKI_PATH "ssig_pki_generator.conf"
-
-extern tartype_t gztype;
 
 int
 util_fork_and_execvp(const char *path, const char * const *argv)
@@ -109,52 +107,10 @@ util_fork_and_execvp(const char *path, const char * const *argv)
 //}
 
 int
-util_tar_extract(const char *tar_filename, const char* index_file, const char* out_dir)
+util_tar_extract(const char *tar_filename, const char* out_dir)
 {
-	TAR *tar = NULL;
-
-	int ret = tar_open(&tar, tar_filename, &gztype, O_RDONLY, 0, TAR_GNU);
-	if (ret != 0) {
-		ERROR_ERRNO("Fail to open tarfile: %s\n", tar_filename);
-		return ret;
-	}
-	//ret = tar_extract_all(tar, tar_prefix);
-	while (th_read(tar) == 0) {
-		char *archive_filename = th_get_pathname(tar);
-		char *out_filename = mem_printf("%s/%s", out_dir, archive_filename);
-
-		mode_t mode = th_get_mode(tar);
-		uid_t uid = th_get_uid(tar);
-		gid_t gid = th_get_gid(tar);
-
-		TRACE("Writing file %s to %s", archive_filename, out_filename);
-		if (TH_ISCHR(tar)) {
-			// writing file attributes to index file (TODO use hashmap to handle duplicates)
-			file_printf_append(index_file, "%s c %o %d %d %d %d\n",
-				archive_filename, mode&0777, uid, gid,
-				th_get_devmajor(tar),
-				th_get_devminor(tar));
-		} else if (TH_ISBLK(tar)) {
-			// writing file attributes to index file (TODO use hashmap to handle duplicates)
-			file_printf_append(index_file, "%s b %o %d %d %d %d\n",
-				archive_filename, mode&0777, uid, gid,
-				th_get_devmajor(tar),
-				th_get_devminor(tar));
-		} else {
-			if (tar_extract_file(tar, out_filename) != 0) {
-				INFO_ERRNO("Skipping file: %s", archive_filename);
-			} else {
-				// writing file attributes to index file (TODO use hashmap to handle duplicates)
-				file_printf_append(index_file, "%s m %o %d %d\n",
-					archive_filename, mode&0777, uid, gid);
-			}
-		}
-
-		mem_free(out_filename);
-	}
-
-	ret |= tar_close(tar);
-	return ret;
+	const char * const argv[] = {TAR_PATH, "-xvf", tar_filename, "-C", out_dir, NULL};
+	return util_fork_and_execvp(argv[0], argv);
 }
 
 static char *
@@ -219,9 +175,9 @@ util_hash_sha256_image_file_new(const char *image_file)
 }
 
 int
-util_squash_image(const char *dir, const char *pseudo_file, const char *image_file)
+util_squash_image(const char *dir, const char *image_file)
 {
-	const char * const argv[] = {MKSQUASHFS_PATH, dir, image_file, "-noappend", "-comp", MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, "-pf", pseudo_file, NULL};
+	const char * const argv[] = {MKSQUASHFS_PATH, dir, image_file, "-noappend", "-comp", MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL};
 	return util_fork_and_execvp(MKSQUASHFS_PATH, argv);
 }
 

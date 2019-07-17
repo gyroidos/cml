@@ -45,10 +45,10 @@ char *
 util_hash_sha256_image_file_new(const char *image_file);
 
 int
-util_tar_extract(const char *tar_filename, const char* index_file, const char* out_dir);
+util_tar_extract(const char *tar_filename, const char* out_dir);
 
 int
-util_squash_image(const char *dir, const char *pseudo_file, const char *image_file);
+util_squash_image(const char *dir, const char *image_file);
 
 int
 util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file);
