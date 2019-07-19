@@ -940,7 +940,9 @@ cmld_init(const char *path)
 	}
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
-	if (guestos_mgr_init(guestos_path) < 0)
+	bool allow_locally_signed =
+		device_config_get_locally_signed_images(device_config);
+	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0)
 		FATAL("Could not load guest operating systems");
 	mem_free(guestos_path);
 	INFO("guestos initialized.");

@@ -51,4 +51,7 @@ message DeviceConfig {
 	optional string host_if = 10 [default = "wlan0"];
 	optional string host_gateway = 11 [default = ""];
 	optional string host_dns = 12 [default = ""];
+
+	// enable locally signed images
+	optional bool locally_signed_images = 13 [default = false];
 }

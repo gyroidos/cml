@@ -60,6 +60,7 @@
 static list_t *guestos_list = NULL;
 
 static const char *guestos_basepath = NULL;
+static bool guestos_mgr_allow_locally_signed = false;
 
 /******************************************************************************/
 
@@ -95,14 +96,31 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 
 	smartcard_crypto_verify_result_t verify_result = smartcard_crypto_verify_file_block(
 			cfg_file, sig_file, cert_file, GUESTOS_MGR_VERIFY_HASH_ALGO);
-	if (verify_result != VERIFY_GOOD) {
+
+	switch (verify_result) {
+	case VERIFY_GOOD:
+		INFO("Signature of GuestOS OK (GOOD)");
+		break;
+	case VERIFY_LOCALLY_SIGNED:
+		if (guestos_mgr_allow_locally_signed) {
+			INFO("Signature of GuestOS OK (locally signed)");
+			break;
+		}
+		// fallthrough
+	default:
 		ERROR("Signature verification failed (%d) while loading GuestOS config %s, skipping.",
 				verify_result, cfg_file);
-	} else if (guestos_mgr_add_from_file(cfg_file) < 0) {
-		WARN("Could not add guest operating system from file %s.", cfg_file);
-	} else
 		res = 1;
+		goto cleanup_files;
+	}
 
+	if (guestos_mgr_add_from_file(cfg_file) < 0) {
+		WARN("Could not add guest operating system from file %s.", cfg_file);
+	} else  {
+		res = 1;
+	}
+
+cleanup_files:
 	mem_free(cfg_file);
 	mem_free(sig_file);
 	mem_free(cert_file);
@@ -133,7 +151,7 @@ guestos_mgr_load_operatingsystems(void)
 /******************************************************************************/
 
 int
-guestos_mgr_init(const char *path)
+guestos_mgr_init(const char *path, bool allow_locally_signed)
 {
 	ASSERT(path);
 	ASSERT(!guestos_basepath);
@@ -142,6 +160,7 @@ guestos_mgr_init(const char *path)
 		return -1;
 
 	guestos_basepath = mem_strdup(path);
+	guestos_mgr_allow_locally_signed = allow_locally_signed;
 
 	return guestos_mgr_load_operatingsystems();
 }
@@ -259,8 +278,11 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 		INFO("Signature of GuestOS OK (GOOD)");
 		break;
 	case VERIFY_LOCALLY_SIGNED:
-		INFO("Signature of GuestOS OK (locally signed)");
-		break;
+		if (guestos_mgr_allow_locally_signed) {
+			INFO("Signature of GuestOS OK (locally signed)");
+			break;
+		}
+		// fallthrough
 	default:
 		ERROR("Signature verification failed (%d) for pushed GuestOS config %s, skipping.",
 				verify_result, cfg_file);
