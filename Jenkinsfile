@@ -38,6 +38,9 @@ pipeline {
                      export LC_ALL=en_US.UTF-8
                      export LANG=en_US.UTF-8
                      export LANGUAGE=en_US.UTF-8
+                     if [ -d out-yocto/conf ]; then
+                        rm -r out-yocto/conf
+                     fi
                      . init_ws.sh out-yocto
 
                      echo Using branch name ${BRANCH_NAME} in bbappend files
