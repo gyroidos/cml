@@ -42,9 +42,10 @@ typedef struct guestos guestos_mgr_t;
 /**
  * Initialize the operating system list by loading all information from storage.
  * @param path The directory where operating systems are stored.
+ * @param allow_locally_signed enable images which are signed by a locally generated CA
  */
 int
-guestos_mgr_init(const char *path);
+guestos_mgr_init(const char *path, bool allow_locally_signed);
 
 /**
  * Add an operating system WITHOUT checking its signature.

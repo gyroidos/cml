@@ -209,3 +209,11 @@ device_config_get_host_if(const device_config_t *config)
 	return config->cfg->host_if;
 }
 
+bool
+device_config_get_locally_signed_images(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->locally_signed_images;
+}

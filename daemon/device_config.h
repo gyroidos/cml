@@ -33,6 +33,8 @@
 
 #include <sys/types.h>
 #include <stdint.h>
+#include <stdbool.h>
+
 typedef struct device_config device_config_t;
 
 /**
@@ -95,5 +97,8 @@ device_config_get_host_subnet(const device_config_t *config);
 
 const char *
 device_config_get_host_if(const device_config_t *config);
+
+bool
+device_config_get_locally_signed_images(const device_config_t *config);
 #endif /* DEVICE_H */
 
