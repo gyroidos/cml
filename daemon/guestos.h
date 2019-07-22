@@ -48,7 +48,6 @@
  */
 typedef struct guestos guestos_t;
 
-
 /******************************************************************************/
 
 /**
@@ -280,6 +279,22 @@ guestos_get_feature_install_guest(const guestos_t *os);
 
 bool
 guestos_is_privileged(const guestos_t *os);
+
+/**
+ * Result of guestos config verification process.
+ */
+typedef enum guestos_verify_result {
+	GUESTOS_SIGNED,
+	GUESTOS_LOCALLY_SIGNED,
+	GUESTOS_UNSIGNED,
+} guestos_verify_result_t;
+
+void
+guestos_set_verify_result(guestos_t *os,
+		guestos_verify_result_t verify_result);
+
+guestos_verify_result_t
+guestos_get_verify_result(const guestos_t *os);
 
 #endif /* GUESTOS_H */
 

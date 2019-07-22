@@ -85,6 +85,7 @@ static int
 guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED void *data)
 {
 	int res = 0; // counter
+	guestos_verify_result_t guestos_verified = GUESTOS_UNSIGNED;
 
 	char *dir = mem_printf("%s/%s", path, name);
 	if (!file_is_dir(dir))
@@ -99,22 +100,25 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 
 	switch (verify_result) {
 	case VERIFY_GOOD:
+		guestos_verified = GUESTOS_SIGNED;
 		INFO("Signature of GuestOS OK (GOOD)");
 		break;
 	case VERIFY_LOCALLY_SIGNED:
+		guestos_verified = GUESTOS_LOCALLY_SIGNED;
 		if (guestos_mgr_allow_locally_signed) {
 			INFO("Signature of GuestOS OK (locally signed)");
 			break;
 		}
 		// fallthrough
 	default:
+		guestos_verified = GUESTOS_UNSIGNED;
 		ERROR("Signature verification failed (%d) while loading GuestOS config %s, skipping.",
 				verify_result, cfg_file);
 		res = 1;
 		goto cleanup_files;
 	}
 
-	if (guestos_mgr_add_from_file(cfg_file) < 0) {
+	if (guestos_mgr_add_from_file(cfg_file, guestos_verified) < 0) {
 		WARN("Could not add guest operating system from file %s.", cfg_file);
 	} else  {
 		res = 1;
@@ -166,7 +170,7 @@ guestos_mgr_init(const char *path, bool allow_locally_signed)
 }
 
 int
-guestos_mgr_add_from_file(const char *file)
+guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_result)
 {
 	ASSERT(file);
 
@@ -175,6 +179,7 @@ guestos_mgr_add_from_file(const char *file)
 		return -1;
 	}
 
+	guestos_set_verify_result(os, verify_result);
 	guestos_list = list_append(guestos_list, os);
 
 	return 0;

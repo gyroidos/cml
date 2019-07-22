@@ -46,6 +46,7 @@ struct guestos {
 	char *sig_file;     ///< config signature file name
 	char *cert_file;     ///< config certificate file name
 	guestos_config_t *cfg;  ///< pointer to GuestOS config struct
+	guestos_verify_result_t verify_result; ///< result of guestos signature verification
 
 	bool downloading;   ///< indicates download in progress
 };
@@ -1103,4 +1104,19 @@ guestos_get_feature_install_guest(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_install_guest(os->cfg);
+}
+
+void
+guestos_set_verify_result(guestos_t *os,
+			guestos_verify_result_t verify_result)
+{
+	ASSERT(os);
+	os->verify_result = verify_result;
+}
+
+guestos_verify_result_t
+guestos_get_verify_result(const guestos_t *os)
+{
+	ASSERT(os);
+	return os->verify_result;
 }
