@@ -73,6 +73,7 @@ static void print_usage(const char *cmd)
 	printf("   deny_audio <container-uuid>\n        Deny audio access to the specified container (cgroups).\n");
 	printf("   wipe <container-uuid>\n        Wipes the specified container.\n");
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n        (testing) Pushes the specified GuestOS config, signature, and certificate files.\n");
+	printf("   remove_guestos <guestos name>\n        Remove a GuestOS by the specified name. It will only remove the OS if no container is using it anymore.\n");
 	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
@@ -267,6 +268,18 @@ int main(int argc, char *argv[])
 		msg.has_guestos_config_certificate = true;
 		msg.guestos_config_certificate.len = certlen;
 		msg.guestos_config_certificate.data = cert;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "remove_guestos")) {
+		// need exactly one more argument (container config file)
+		if (optind != argc-1)
+			print_usage(argv[0]);
+
+		char *os_name = argv[optind++];
+		INFO("Removing Guestos: %s", os_name);
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REMOVE_GUESTOS;
+		msg.guestos_name = os_name;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "ca_register")) {

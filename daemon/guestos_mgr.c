@@ -152,6 +152,21 @@ guestos_mgr_load_operatingsystems(void)
 	return 0;
 }
 
+static bool
+guestos_mgr_is_guestos_used_by_containers(const char *os_name)
+{
+	ASSERT(os_name);
+	int n = cmld_containers_get_count();
+	for (int i=0; i<n; i++) {
+		container_t *c = cmld_container_get_by_index(i);
+		const char *container_os_name = guestos_get_name(container_get_os(c));
+		if (!strcmp(container_os_name, os_name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 /******************************************************************************/
 
 int
@@ -189,26 +204,21 @@ void
 guestos_mgr_delete(guestos_t *os)
 {
 	ASSERT(os);
-	ASSERT(0); // TODO
+	const char *os_name = guestos_get_name(os);
+	if (guestos_mgr_is_guestos_used_by_containers(os_name)) {
+		WARN("Containers which use guestos %s still exist! Not deleting anything.", os_name);
+		return;
+	}
+
+	INFO("Deleting GuestOS: %s", os_name);
+
+	guestos_purge(os);
+	guestos_list = list_remove(guestos_list, os);
 	guestos_free(os);
 }
 
 /******************************************************************************/
 
-static bool
-guestos_mgr_is_guestos_used_by_containers(const char *os_name)
-{
-	ASSERT(os_name);
-	int n = cmld_containers_get_count();
-	for (int i=0; i<n; i++) {
-		container_t *c = cmld_container_get_by_index(i);
-		const char *container_os_name = guestos_get_name(container_get_os(c));
-		if (!strcmp(container_os_name, os_name)) {
-			return true;
-		}
-	}
-	return false;
-}
 
 static void
 download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)

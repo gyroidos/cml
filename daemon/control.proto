@@ -113,6 +113,9 @@ message ControllerToDaemon {
 		// Registers a root certificate for signed GuestOSes.
 		REGISTER_NEWCA = 25;
 
+		// Removes a guestos including images, configs and signature files
+		REMOVE_GUESTOS = 26;
+
 		// TODO (optional) REMOVE_GUESTOS
 		// How to remove? Send same package_info as during install and delete list of files?
 		// TODO: Are there other files/settings/configs to be managed remotely (install/update/remove)?
@@ -192,6 +195,7 @@ message ControllerToDaemon {
 	optional bytes guestos_config_signature = 21;	// signature of the GuestOS config file
 	optional bytes guestos_config_certificate = 22;	// sw signing certificate to verify the signature on the config file
 	optional bytes guestos_rootcert = 23;	// rootca certificate for local or new CAs to verify GuestOSes
+	optional string guestos_name = 24;	// name of a GuestOS (e.g. used in remove command)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

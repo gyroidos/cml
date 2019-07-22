@@ -796,6 +796,16 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		control_handle_cmd_push_guestos_configs(msg, fd);
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__REMOVE_GUESTOS: {
+		if (!msg->guestos_name) {
+			WARN("REMOVE_GUESTOS without name");
+		} else {
+			guestos_t *os = guestos_mgr_get_latest_by_name(msg->guestos_name, false);
+			guestos_mgr_delete(os);
+		}
+	} break;
+
+
 	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA: {
 		if (!msg->has_guestos_rootcert)
 			WARN("REGISTER_NEWCA without root certificate");
