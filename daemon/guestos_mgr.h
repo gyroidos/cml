@@ -48,12 +48,15 @@ int
 guestos_mgr_init(const char *path, bool allow_locally_signed);
 
 /**
- * Add an operating system WITHOUT checking its signature.
+ * Add an operating system WITHOUT checking its signature. The verification
+ * should already made elsewhere and the result must be provided by parameter
+ * verify_result.
  * @param file The name of the guest OS config file.
+ * @param verify_result The result of the pre-required verification process.
  * @return 0 if the guest OS was successfully added, -1 on error.
  */
 int
-guestos_mgr_add_from_file(const char *file);
+guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_result);
 
 /**
  * Delete an operating system persistently from disk, i.e. remove its configuration and
