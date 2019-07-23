@@ -75,6 +75,8 @@ static void print_usage(const char *cmd)
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n        (testing) Pushes the specified GuestOS config, signature, and certificate files.\n");
 	printf("   remove_guestos <guestos name>\n        Remove a GuestOS by the specified name. It will only remove the OS if no container is using it anymore.\n");
 	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
+	printf("   pull_csr <device.csr>\n        Pulles the device csr and stores it in <device.csr>.\n");
+	printf("   push_cert <device.cert>\n        Pushes back the device certificate provided by <device.cert>.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
@@ -304,6 +306,39 @@ int main(int argc, char *argv[])
 		msg.has_guestos_rootcert = true;
 		msg.guestos_rootcert.len = ca_cert_len;
 		msg.guestos_rootcert.data = ca_cert;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "pull_csr")) {
+		// need exactly one more argument (certificate file)
+		if (optind != argc-1)
+			print_usage(argv[0]);
+
+		has_response = true;
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "push_cert")) {
+		// need exactly one more argument (certificate file)
+		if (optind != argc-1)
+			print_usage(argv[0]);
+
+		const char *dev_cert_file = argv[optind++];
+		off_t dev_cert_len = file_size(dev_cert_file);
+		if (dev_cert_len < 0) {
+			ERROR("Error accessing certificate file %s.", dev_cert_file);
+			exit(-2);
+		}
+		uint8_t *dev_cert = mem_alloc(dev_cert_len);
+		if (file_read(dev_cert_file, (char*)dev_cert, dev_cert_len) < 0) {
+			ERROR("Error reading %s.", dev_cert_file);
+			exit(-2);
+		}
+		INFO("Pushing new device certifcate from file %s (len %zu).",
+					dev_cert_file, (size_t)dev_cert_len);
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT;
+		msg.has_device_cert = true;
+		msg.device_cert.len = dev_cert_len;
+		msg.device_cert.data = dev_cert;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "create")) {
@@ -607,8 +642,18 @@ send_message:
 		TRACE("[CLIENT] Got response. Processing");
 
 		// do command-specific response processing
-		// TODO for now just dump the response in text format
-		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
+		switch (resp->code) {
+		case DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR: {
+			const char *dev_csr_file = argv[optind];
+			if (-1 == file_write(dev_csr_file, (char *)resp->device_csr.data,
+						resp->device_csr.len)) {
+				ERROR("writing device csr to %s", dev_csr_file);
+			}
+		} break; 
+		default: 
+			// TODO for now just dump the response in text format
+			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
+		}
 		protobuf_free_message((ProtobufCMessage *) resp);
 	}
 

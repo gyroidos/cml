@@ -26,12 +26,20 @@
 
 #include "softtoken.h"
 
+#define PROVISIONING_MODE_FILE "/tmp/_provisioning_"
+
 // Do not edit! The provisioning script requires this path (also trustme-main.mk and its dummy provsg folder)
 #define SCD_TOKEN_DIR "/data/cml/tokens"
 #define SSIG_ROOT_CERT SCD_TOKEN_DIR "/ssig_rootca.cert"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
 #define GEN_ROOT_CERT SCD_TOKEN_DIR "/gen_rootca.cert"
 #define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
+
+#define DEVICE_CERT_FILE SCD_TOKEN_DIR "/device.cert"
+#define DEVICE_CSR_FILE SCD_TOKEN_DIR "/device.csr"
+// Only used on platforms without TPM, otherwise TPM-bound key is used
+#define DEVICE_KEY_FILE SCD_TOKEN_DIR "/device.key"
+
 
 /**
  * Returns the directory in which the token files are stored.
@@ -45,6 +53,12 @@ scd_get_token_dir(void);
  */
 softtoken_t *
 scd_get_token(void);
+
+/**
+ * Checks provisioning mode
+ */
+bool
+scd_in_provisioning_mode(void);
 
 #endif // SCD_H
 

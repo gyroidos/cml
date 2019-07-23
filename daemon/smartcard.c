@@ -475,17 +475,17 @@ smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const ch
 
 
 static TokenToDaemon *
-smartcard_send_recv_crypto_block(const DaemonToToken *out)
+smartcard_send_recv_block(const DaemonToToken *out)
 {
 	ASSERT(out);
 
 	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
 	if (sock < 0) {
-		ERROR_ERRNO("Failed to connect to scd control socket %s for crypto", SCD_CONTROL_SOCKET);
+		ERROR_ERRNO("Failed to connect to scd control socket %s", SCD_CONTROL_SOCKET);
 		return NULL;
 	}
 
-	DEBUG("smartcard_send_crypto_block: connected to sock %d", sock);
+	DEBUG("smartcard_send_recv_block: connected to sock %d", sock);
 
 	/*
 	char *string = protobuf_c_text_to_string((ProtobufCMessage *) out, NULL);
@@ -496,12 +496,13 @@ smartcard_send_recv_crypto_block(const DaemonToToken *out)
 	*/
 
 	if (protobuf_send_message(sock, (ProtobufCMessage *) out) <= 0) {
-		ERROR("Failed to send crypto message to scd on sock %d", sock);
+		ERROR("Failed to send message to scd on sock %d", sock);
 		close(sock);
 		return NULL;
 	}
 
-	TokenToDaemon *msg = (TokenToDaemon *)protobuf_recv_message(sock, &token_to_daemon__descriptor);
+	TokenToDaemon *msg = NULL;
+	msg = (TokenToDaemon *)protobuf_recv_message(sock, &token_to_daemon__descriptor);
 	close(sock);
 	return msg;
 }
@@ -517,7 +518,7 @@ smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
 	out.hash_file = mem_strdup(file);
 
-	TokenToDaemon *msg = smartcard_send_recv_crypto_block(&out);
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
 	mem_free(out.hash_file);
 
 	if (!msg)
@@ -555,7 +556,7 @@ smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, co
 	out.has_hash_algo = true;
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
 
-	TokenToDaemon *msg = smartcard_send_recv_crypto_block(&out);
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
 	mem_free(out.verify_data_file);
 	mem_free(out.verify_sig_file);
 	mem_free(out.verify_cert_file);
@@ -580,3 +581,75 @@ smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, co
 }
 
 
+uint8_t *
+smartcard_pull_csr_new(size_t *csr_len)
+{
+	ASSERT(csr_len);
+	uint8_t *csr = NULL;
+	*csr_len = 0;
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__PULL_DEVICE_CSR;
+
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
+	IF_NULL_RETVAL(msg, NULL);
+
+	switch (msg->code) {
+	case TOKEN_TO_DAEMON__CODE__DEVICE_CSR:
+		if (msg->has_device_csr) {
+			csr = mem_new0(uint8_t, msg->device_csr.len);
+			memcpy(csr, msg->device_csr.data, msg->device_csr.len);
+			*csr_len = msg->device_csr.len;
+			return csr;
+		}
+		ERROR("Missing csr in response to PULL_DEVICE_CSR");
+		break;
+	case TOKEN_TO_DAEMON__CODE__DEVICE_CSR_ERROR:
+		ERROR("Error on reading csr in SCD");
+		break;
+	case TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR:
+		ERROR("Device not in provsioning mode!");
+		break;
+	default:
+		ERROR("Invalid TokenToDaemon command %d when pulling csr!", msg->code);
+	}
+	return NULL;
+}
+
+int
+smartcard_push_cert(uint8_t *cert, size_t cert_len)
+{
+	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
+	const char *end_cert_str   = "-----END CERTIFICATE-----";
+
+	// Sanity check file is a certificate
+	size_t end_offset = cert_len - strlen(end_cert_str) - 1;
+	if (strncmp((char *)cert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
+			strncmp((char*)cert+end_offset, end_cert_str, strlen(end_cert_str)) != 0) {
+		ERROR("Sanity check failed. provided data is not an encoded certificate");
+		return -1;
+	}
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__PUSH_DEVICE_CERT;
+	out.has_device_cert = true;
+	out.device_cert.data = cert;
+	out.device_cert.len = cert_len;
+
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
+	IF_NULL_RETVAL(msg, -1);
+
+	switch (msg->code) {
+	case TOKEN_TO_DAEMON__CODE__DEVICE_CERT_OK:
+		INFO("Stored device cert sucessfully!");
+		return 0;
+	case TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR:
+		ERROR("writing device cert in SCD");
+		break;
+	case TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR:
+		ERROR("Device not in provsioning mode!");
+		break;
+	default:
+		ERROR("Invalid TokenToDaemon command %d when pushing device cert!", msg->code);
+	}
+	return -1;
+}

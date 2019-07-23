@@ -128,6 +128,27 @@ smartcard_crypto_verify_result_t
 smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, const char *certfile,
 		smartcard_crypto_hashalgo_t hashalgo);
 
+/**
+ * Pulls the device CSR from the tokens directory,
+ * If a TPM is connected, the corresponding Private Key is stored inside the TPM,
+ * otherwise it resides in a softtoken called device.key
+ *
+ * @param csr_len a pointer in which the size of the csr will be returned
+ * @return the csr
+ */
+uint8_t *
+smartcard_pull_csr_new(size_t *csr_len);
+
+/**
+ * Pushes back the certificate (the sigend CSR). Which may
+ * be used during ssl client auth, to identify the device in a backend.
+ *
+ * @param cert a pointer to the buffer which holds the certificate
+ * @param cert_len the size of the cert
+ * @return 0 if certificate was sucessfully pushed and stored, -1 otherwise
+ */
+int
+smartcard_push_cert(uint8_t *cert, size_t cert_len);
 
 #endif /* SMARTCARD_H */
 
