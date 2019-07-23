@@ -279,6 +279,47 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		if (out.has_unwrapped_key)
 			mem_free(unwrapped_key);
 	} break;
+	case DAEMON_TO_TOKEN__CODE__PULL_DEVICE_CSR: {
+		uint8_t *csr = NULL;
+		int csr_len = 0;
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		if (!scd_in_provisioning_mode()) {
+			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR;
+		} else {
+			csr_len = file_size(DEVICE_CSR_FILE);
+			// we set maximum read length one byte grater than file_size
+			// since file_read sets '\0' char at the end of the buffer
+			csr = file_read_new(DEVICE_CSR_FILE, csr_len+1);
+			if (csr_len < 0 || csr == NULL) {
+				out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CSR_ERROR;
+			} else {
+				out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CSR;
+				out.has_device_csr = true;
+				out.device_csr.len = csr_len;
+				out.device_csr.data = csr;
+			}
+		}
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		INFO("csr: %p", csr);
+		if (csr)
+			mem_free(csr);
+	} break;
+	case DAEMON_TO_TOKEN__CODE__PUSH_DEVICE_CERT: {
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		if (!scd_in_provisioning_mode()) {
+			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR;
+		} else if (!msg->has_device_cert) {
+			ERROR("No device_cert in msg!");
+			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR;
+		} else if (-1 == file_write(DEVICE_CERT_FILE, msg->device_cert.data,
+					 		msg->device_cert.len)) {
+			ERROR("writing device cert to file :%s", DEVICE_CERT_FILE);
+			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR;
+		} else {
+			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_OK;
+		}
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE: {
 
 		unsigned int hash_len;

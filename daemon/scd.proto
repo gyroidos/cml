@@ -47,6 +47,9 @@ message DaemonToToken {
 
 		DERIVE_KEY = 20;	// Derives a key from [pbdfk_salt] and [pbkdf_pass].
 
+		PULL_DEVICE_CSR = 40;	// pulls the device csr
+		PUSH_DEVICE_CERT = 41; // pushes back the certifcate (signed csr)
+
 		// crypto commands unrelated to actual secure element (FIXME move elsewhere?!)
 		CRYPTO_HASH_FILE = 50;		// compute hash for file [hash_file]
 		CRYPTO_VERIFY_FILE = 60;	// verify certificate and signature on data given in [verify_*_file]
@@ -62,6 +65,8 @@ message DaemonToToken {
 
 	optional string pbkdf_pass = 20;	// for key derivation
 	optional bytes pbkdf_salt = 21;	// for key derivation
+
+	optional bytes device_cert = 41;	// for PUSH_CERT
 
 	optional HashAlgo hash_algo = 50;	// determines hash algorithm for hashing
 	optional string hash_file = 51;		// the full path to the file to hash
@@ -83,6 +88,12 @@ message TokenToDaemon {
 		UNWRAPPED_KEY = 27;	// -> [unwrapped key]
 		LOCKED_TILL_REBOOT = 28;
 
+		DEVICE_CSR = 40; 	// -> [device_csr]
+		DEVICE_CSR_ERROR = 41;  // -> [device_csr]
+		DEVICE_CERT_OK = 42; 	// -> [device_cert]
+		DEVICE_CERT_ERROR = 43; // -> [device_cert]
+		DEVICE_PROV_ERROR = 44; // -> [device_csr] | [device_cert] not in provisioning mode
+
 		CRYPTO_HASH_OK = 50;	// hash computed successfully and stored in hash_value
 		CRYPTO_HASH_ERROR = 51;	// some error occurred
 
@@ -100,6 +111,7 @@ message TokenToDaemon {
 
 	optional bytes derived_key = 20;	// derived key in response to DERIVE_KEY
 
+	optional bytes device_csr = 40;		// device csr in response to PULL_CSR
 	optional bytes hash_value = 50;		// hash_value in reponse to CRYPTO_HASH_FILE
 }
 

@@ -35,6 +35,7 @@
 #include "guestos.h"
 #include "cmld.h"
 #include "hardware.h"
+#include "smartcard.h"
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
@@ -823,6 +824,28 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE: {
 		cmld_wipe_device();
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {
+		uint8_t *csr = NULL;
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR;
+		csr = smartcard_pull_csr_new(&out.device_csr.len);
+		out.has_device_csr = true;
+		out.device_csr.data = csr;
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			WARN("Could not send device csr!");
+		}
+		if (csr)
+			mem_free(csr);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT: {
+		if (!msg->has_device_cert)
+			WARN("PUSH_DEVICE_CERT without certificate");
+		else {
+			smartcard_push_cert(msg->device_cert.data, msg->device_cert.len);
+		}
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {

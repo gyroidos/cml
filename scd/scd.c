@@ -52,12 +52,6 @@
 
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
 
-// Do not edit! The provisioning script requires this path (also trustme-main.mk and its dummy provsg folder)
-#define DEVICE_CERT_FILE SCD_TOKEN_DIR "/device.cert"
-#define DEVICE_CSR_FILE SCD_TOKEN_DIR "/device.csr"
-// Only used on platforms without TPM, otherwise TPM-bound key is used
-#define DEVICE_KEY_FILE SCD_TOKEN_DIR "/device.key"
-
 // Do not edit! This path is also configured in cmld.c
 #define DEVICE_CONF "/data/cml/device.conf"
 
@@ -115,6 +109,13 @@ token_file_exists() {
 	}
 }
 
+bool
+scd_in_provisioning_mode(void)
+{
+	return file_is_regular(PROVISIONING_MODE_FILE);
+}
+
+
 static void
 provisioning_mode()
 {
@@ -151,6 +152,7 @@ provisioning_mode()
 	if (!file_exists(DEVICE_CERT_FILE)) {
 
 		INFO("Device certificate not available. Switch to device provisioning mode");
+		file_printf(PROVISIONING_MODE_FILE, "provisioning mode");
 
 		if (ssl_init(use_tpm) == -1) {
 			FATAL("Failed to initialize OpenSSL stack for device cert");

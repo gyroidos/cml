@@ -124,6 +124,11 @@ message ControllerToDaemon {
 		// TODO: Only wipes containers, not e.g. GuestOSes and device.conf.
 		WIPE_DEVICE = 30;
 
+		// Pulls the device csr (provisioning)
+		PULL_DEVICE_CSR = 40;
+		// Pushes bach the device certificate (provisioning)
+		PUSH_DEVICE_CERT = 41;
+
 		///////////////////////////////////////////////////
 		// Commands that operate on a specific container //
 		///////////////////////////////////////////////////
@@ -196,6 +201,8 @@ message ControllerToDaemon {
 	optional bytes guestos_config_certificate = 22;	// sw signing certificate to verify the signature on the config file
 	optional bytes guestos_rootcert = 23;	// rootca certificate for local or new CAs to verify GuestOSes
 	optional string guestos_name = 24;	// name of a GuestOS (e.g. used in remove command)
+
+	optional bytes device_cert = 41;	// device cert for PUSH_DEVICE_CERT
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,6 +237,8 @@ message DaemonToController {
 
 		EXEC_OUTPUT = 15;
 
+		DEVICE_CSR = 40;		// -> [device_csr]
+
 		// Requests to other endpoint:
 
 		// Log-on the device onto the backend (not applicable for cmdline tool).
@@ -258,6 +267,7 @@ message DaemonToController {
 	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
 
 	optional Response response = 13;
+	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
 
 	optional string device_uuid = 200;					// Device UUID for LOGON_DEVICE and LOG_MESSAGE
 	optional string logon_hardware_name = 201;			// Hardware name (e.g. "i9505", "hammerhead", ...) for LOGON_DEVICE
