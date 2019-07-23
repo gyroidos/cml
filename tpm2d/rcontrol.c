@@ -97,6 +97,10 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		uint8_t *attestation_cert = NULL;
 		size_t att_cert_len = 0;
 
+		TPMI_DH_OBJECT att_key_handle = tpm2d_get_as_key_handle();
+		if (att_key_handle == TPM_RH_NULL)
+			goto err_att_req;
+
 		Tpm2dToRemote out = TPM2D_TO_REMOTE__INIT;
 		out.code = TPM2D_TO_REMOTE__CODE__ATTESTATION_RES;
 
@@ -127,7 +131,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 			INFO("PCR%d: size %zu", i, pcr_array[i]->pcr_size);
 		}
 
-		quote = tpm2_quote_new(pcr_indices, tpm2d_get_as_key_handle(),
+		quote = tpm2_quote_new(pcr_indices, att_key_handle,
 				TPM2D_ATT_KEY_PW, msg->qualifyingdata.data,
 				msg->qualifyingdata.len);
 		IF_NULL_GOTO_ERROR(quote, err_att_req);
@@ -194,6 +198,8 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 err_att_req:
+		tpm2d_flush_as_key_handle();
+
 		for (size_t i=0; i< out.n_ml_entry; ++i) {
 			mem_free(out.ml_entry[i]);
 		}

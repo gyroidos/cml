@@ -188,6 +188,10 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd,
 TPMI_DH_OBJECT
 tpm2d_get_as_key_handle(void);
 
+void
+tpm2d_flush_as_key_handle(void);
+
+
 TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len);
 
