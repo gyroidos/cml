@@ -124,6 +124,9 @@ message ControllerToDaemon {
 		// TODO: Only wipes containers, not e.g. GuestOSes and device.conf.
 		WIPE_DEVICE = 30;
 
+		// reboot the device
+		REBOOT_DEVICE = 31;
+
 		// Pulls the device csr (provisioning)
 		PULL_DEVICE_CSR = 40;
 		// Pushes bach the device certificate (provisioning)
