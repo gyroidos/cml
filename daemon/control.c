@@ -48,6 +48,7 @@
 #include "common/logf.h"
 #include "common/list.h"
 #include "common/network.h"
+#include "common/reboot.h"
 
 #include <unistd.h>
 #include <inttypes.h>
@@ -824,6 +825,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE: {
 		cmld_wipe_device();
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE: {
+		reboot_reboot(REBOOT);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {

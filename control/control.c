@@ -60,6 +60,7 @@ static void print_usage(const char *cmd)
 	printf("   list_guestos\n        Lists all installed guestos configs.\n");
 	printf("   reload\n        Reloads containers from config files.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
+	printf("   reboot\n        Reboots the whole device, shutting down any containers which are running.\n");
 	printf("   create <container.conf>\n        Creates a container from the given config file.\n");
 	printf("   remove <container-uuid>\n        Removes the specified container (completely).\n");
 	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
@@ -215,6 +216,10 @@ int main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "wipe_device")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "reboot")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_guestos_config")) {
