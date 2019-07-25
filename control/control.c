@@ -76,7 +76,7 @@ static void print_usage(const char *cmd)
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n        (testing) Pushes the specified GuestOS config, signature, and certificate files.\n");
 	printf("   remove_guestos <guestos name>\n        Remove a GuestOS by the specified name. It will only remove the OS if no container is using it anymore.\n");
 	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
-	printf("   pull_csr <device.csr>\n        Pulles the device csr and stores it in <device.csr>.\n");
+	printf("   pull_csr <device.csr>\n        Pulls the device csr and stores it in <device.csr>.\n");
 	printf("   push_cert <device.cert>\n        Pushes back the device certificate provided by <device.cert>.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
@@ -89,28 +89,23 @@ static void print_usage(const char *cmd)
 static int sock_connect(const char *socket_file)
 {
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, socket_file);
-	if (sock < 0) {
-		exit(-3);
-	}
+	if (sock < 0)
+		FATAL("Failed to create and connect to socket %s!", socket_file);
 	return sock;
 }
 
 static void send_message(int sock, ControllerToDaemon *msg)
 {
 	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) msg);
-	if (msg_size < 0) {
-		printf("error sending message\n");
-		exit(-4);
-	}
+	if (msg_size < 0)
+		FATAL("error sending protobuf message\n");
 }
 
 static DaemonToController* recv_message(int sock)
 {
 	DaemonToController *resp = (DaemonToController *) protobuf_recv_message(sock, &daemon_to_controller__descriptor);
-	if (!resp) {
-		printf("error receiving message\n");
-		exit(-5);
-	}
+	if (!resp)
+		FATAL("error receiving message\n");
 	return resp;
 }
 
@@ -187,10 +182,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!file_exists(socket_file)) {
-		WARN("Could not find socket file %s. Aborting.\n", socket_file);
-		exit(-2);
-	}
+	if (!file_exists(socket_file))
+		FATAL("Could not find socket file %s. Aborting.\n", socket_file);
 
 	// need at least one more argument (i.e. command string)
 	if (optind >= argc)
@@ -228,40 +221,29 @@ int main(int argc, char *argv[])
 
 		const char* cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
-		if (cfglen < 0) {
-			ERROR("Error accessing config file %s.", cfgfile);
-			exit(-2);
-		}
+		if (cfglen < 0)
+			FATAL("Error accessing config file %s.", cfgfile);
 
 		const char* sigfile = argv[optind++];
 		off_t siglen = file_size(sigfile);
-		if (siglen < 0) {
-			ERROR("Error accessing signature file %s.", sigfile);
-			exit(-2);
-		}
+		if (siglen < 0)
+			FATAL("Error accessing signature file %s.", sigfile);
 
 		const char* certfile = argv[optind++];
 		off_t certlen = file_size(certfile);
-		if (certlen < 0) {
-			ERROR("Error accessing certificate file %s.", certfile);
-			exit(-2);
-		}
+		if (certlen < 0)
+			FATAL("Error accessing certificate file %s.", certfile);
 
 		unsigned char *cfg = mem_alloc(cfglen);
-		if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
-			ERROR("Error reading %s. Aborting.", cfgfile);
-			exit(-2);
-		}
+		if (file_read(cfgfile, (char*)cfg, cfglen) < 0)
+			FATAL("Error reading %s. Aborting.", cfgfile);
 		unsigned char *sig = mem_alloc(siglen);
-		if (file_read(sigfile, (char*)sig, siglen) < 0) {
-			ERROR("Error reading %s. Aborting.", sigfile);
-			exit(-2);
-		}
+		if (file_read(sigfile, (char*)sig, siglen) < 0)
+			FATAL("Error reading %s. Aborting.", sigfile);
 		unsigned char *cert = mem_alloc(certlen);
-		if (file_read(certfile, (char*)cert, certlen) < 0) {
-			ERROR("Error reading %s. Aborting.", certfile);
-			exit(-2);
-		}
+		if (file_read(certfile, (char*)cert, certlen) < 0)
+			FATAL("Error reading %s. Aborting.", certfile);
+
 		INFO("Pushing cfg %s (len %zu), sig %s (len %zu), and cert %s (len %zu).",
 				cfgfile, (size_t)cfglen, sigfile, (size_t)siglen, certfile, (size_t)certlen);
 
@@ -296,15 +278,12 @@ int main(int argc, char *argv[])
 
 		const char *ca_cert_file = argv[optind++];
 		off_t ca_cert_len = file_size(ca_cert_file);
-		if (ca_cert_len < 0) {
-			ERROR("Error accessing certificate file %s.", ca_cert_file);
-			exit(-2);
-		}
+		if (ca_cert_len < 0)
+			FATAL("Error accessing certificate file %s.", ca_cert_file);
 		uint8_t *ca_cert = mem_alloc(ca_cert_len);
-		if (file_read(ca_cert_file, (char*)ca_cert, ca_cert_len) < 0) {
-			ERROR("Error reading %s.", ca_cert_file);
-			exit(-2);
-		}
+		if (file_read(ca_cert_file, (char*)ca_cert, ca_cert_len) < 0)
+			FATAL("Error reading %s.", ca_cert_file);
+
 		INFO("Registering new CA by cert %s (len %zu).", ca_cert_file, (size_t)ca_cert_len);
 
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA;
@@ -329,15 +308,12 @@ int main(int argc, char *argv[])
 
 		const char *dev_cert_file = argv[optind++];
 		off_t dev_cert_len = file_size(dev_cert_file);
-		if (dev_cert_len < 0) {
-			ERROR("Error accessing certificate file %s.", dev_cert_file);
-			exit(-2);
-		}
+		if (dev_cert_len < 0)
+			FATAL("Error accessing certificate file %s.", dev_cert_file);
 		uint8_t *dev_cert = mem_alloc(dev_cert_len);
-		if (file_read(dev_cert_file, (char*)dev_cert, dev_cert_len) < 0) {
-			ERROR("Error reading %s.", dev_cert_file);
-			exit(-2);
-		}
+		if (file_read(dev_cert_file, (char*)dev_cert, dev_cert_len) < 0)
+			FATAL("Error reading %s.", dev_cert_file);
+
 		INFO("Pushing new device certifcate from file %s (len %zu).",
 					dev_cert_file, (size_t)dev_cert_len);
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT;
@@ -354,16 +330,13 @@ int main(int argc, char *argv[])
 
 		const char* cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
-		if (cfglen < 0) {
-			ERROR("Error accessing container config file %s.", cfgfile);
-			exit(-2);
-		}
+		if (cfglen < 0)
+			FATAL("Error accessing container config file %s.", cfgfile);
 
 		unsigned char *cfg = mem_alloc(cfglen);
-		if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
-			ERROR("Error reading %s. Aborting.", cfgfile);
-			exit(-2);
-		}
+		if (file_read(cfgfile, (char*)cfg, cfglen) < 0)
+			FATAL("Error reading %s. Aborting.", cfgfile);
+
 		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
 
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER;
@@ -442,16 +415,13 @@ int main(int argc, char *argv[])
 
 		//const char* cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
-		if (cfglen < 0) {
-			ERROR("Error accessing container config file %s.", cfgfile);
-			exit(-2);
-		}
+		if (cfglen < 0)
+			FATAL("Error accessing container config file %s.", cfgfile);
 
 		unsigned char *cfg = mem_alloc(cfglen);
-		if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
-			ERROR("Error reading %s. Aborting.", cfgfile);
-			exit(-2);
-		}
+		if (file_read(cfgfile, (char*)cfg, cfglen) < 0)
+			FATAL("Error reading %s. Aborting.", cfgfile);
+
 		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
 
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG;
