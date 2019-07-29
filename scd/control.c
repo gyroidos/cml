@@ -279,6 +279,29 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		if (out.has_unwrapped_key)
 			mem_free(unwrapped_key);
 	} break;
+	case DAEMON_TO_TOKEN__CODE__CHANGE_PIN: {
+
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
+
+		softtoken_t *token = scd_get_token();
+		if (!token) {
+			ERROR("No token loaded, change pass failed");
+		} else if (!msg->token_pin) {
+			ERROR("Token passphrase not specified");
+		} else if (softtoken_is_locked_till_reboot(token)) {
+			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
+		} else {
+			int ret = softtoken_change_passphrase(token,
+						 msg->token_pin, msg->token_newpin);
+			if (ret == 0)
+				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
+			else
+				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
+		}
+
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
 	case DAEMON_TO_TOKEN__CODE__PULL_DEVICE_CSR: {
 		uint8_t *csr = NULL;
 		int csr_len = 0;
