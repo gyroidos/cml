@@ -39,6 +39,14 @@ softtoken_t *
 softtoken_new_from_p12(const char *filename);
 
 /**
+ * Changes the pasphrase/pin of the underlying low level structure
+ * of the softtoken token.
+ */
+int
+softtoken_change_passphrase(softtoken_t *token, const char *oldpass,
+					const char *newpass);
+
+/**
  * unlocks a softtoken with a password.
  * stores the token private key in the structure
  */

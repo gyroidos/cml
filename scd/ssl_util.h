@@ -105,6 +105,14 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 		const char *passphrase, const char *user_name);
 
 /**
+ * changes the passwphrase/pin of a pkcs 12 softtoken located in the file token_file,
+ * locked with the old password oldpass. If oldpass is correct token will be unlocked,
+ * newpass will be set as new password and the token is stored back in file token_file.
+ */
+int
+ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass,
+						const char *newpass);
+/**
  * create a self-signed certificate from a CSR
  * csr_file is an existing x509 CSR and cert_file is the desitination file
  * the key file for signing is in key_file.

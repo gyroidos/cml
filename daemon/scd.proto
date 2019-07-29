@@ -40,7 +40,7 @@ message DaemonToToken {
 		LOCK = 1;	// Locks the token
 		UNLOCK = 2;	// Unlocks the token (need [token_pin])
 
-		//CHANGE_PIN = 3;
+		CHANGE_PIN = 3;	// change the token passphrase (needs [token_pin] [token_pin_new])
 
 		WRAP_KEY = 10;	// Wraps a key ([unwrapped_key])
 		UNWRAP_KEY = 11;	// Unwraps a key ([wrapped_key])
@@ -58,13 +58,14 @@ message DaemonToToken {
 
 	required Code code = 1;
 
-	optional string token_pin = 2;	// for unlocking the token
+	optional string token_pin = 2;		// for unlocking and changeing of the token
+	optional string token_newpin = 3;	// for changeing pin of the token
 
 	optional bytes unwrapped_key = 10;	// for wrapping a key
 	optional bytes wrapped_key = 11;	// for (un)wrapping a key
 
 	optional string pbkdf_pass = 20;	// for key derivation
-	optional bytes pbkdf_salt = 21;	// for key derivation
+	optional bytes pbkdf_salt = 21;		// for key derivation
 
 	optional bytes device_cert = 41;	// for PUSH_CERT
 
@@ -87,6 +88,8 @@ message TokenToDaemon {
 		WRAPPED_KEY = 26;	// -> [wrapped_key] 
 		UNWRAPPED_KEY = 27;	// -> [unwrapped key]
 		LOCKED_TILL_REBOOT = 28;
+		CHANGE_PIN_FAILED = 29;		// pin change of the token failed
+		CHANGE_PIN_SUCCESSFUL = 30;	// pin change of the token was successful
 
 		DEVICE_CSR = 40; 	// -> [device_csr]
 		DEVICE_CSR_ERROR = 41;  // -> [device_csr]

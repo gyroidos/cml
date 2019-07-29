@@ -262,7 +262,7 @@ ssl_create_csr(const char *req_file, const char *key_file,
 		goto error;
 	}
 
-	if (PEM_write_X509_REQ(fp, req) < 0) {
+	if (PEM_write_X509_REQ(fp, req) != 1) {
 		ERROR("Error writing certificate request");
 		fclose(fp);
 		goto error;
@@ -1021,7 +1021,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 		ERROR("Error saving PKCS#12 softtoken");
 		goto error;
 	}
-	if (i2d_PKCS12_fp(fp, p12) < 0) {
+	if (i2d_PKCS12_fp(fp, p12) != 1) {
 		ERROR("Error writing PKCS#12 softtoken");
 		fclose(fp);
 		goto error;
@@ -1034,7 +1034,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 			goto error;
 		}
 
-		if (PEM_write_X509(fp, cert) < 0) {
+		if (PEM_write_X509(fp, cert) != 1) {
 			ERROR("Error saving certificate");
 			fclose(fp);
 			goto error;
@@ -1060,6 +1060,53 @@ error:
 	if (cert) X509_free(cert);
 	if (p12) PKCS12_free(p12);
 	mem_free(passphr);
+	return -1;
+}
+
+int
+ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass,
+						const char *newpass)
+{
+	ASSERT(token_file);
+
+	FILE *fp = NULL;
+	PKCS12 *p12 = NULL;
+
+	if (NULL == oldpass || NULL == newpass) {
+		errno = EINVAL;
+		goto error;
+	}
+
+	if (!(fp = fopen(token_file, "rb"))) {
+		ERROR("Error opening PKCS#12 file");
+		goto error;
+	}
+	p12 = d2i_PKCS12_fp(fp, NULL);
+	fclose(fp);
+
+	if (!p12) {
+		ERROR("Error loading PKCS#12 structure");
+		goto error;
+	}
+	if (PKCS12_newpass(p12, oldpass, newpass) != 1) {
+		ERROR("Changing password!");
+		goto error;
+	}
+	if (!(fp = fopen(token_file, "wb"))) {
+		ERROR("Error saving PKCS#12 softtoken");
+		goto error;
+	}
+	if (i2d_PKCS12_fp(fp, p12) != 1) {
+		ERROR("Error writing PKCS#12 softtoken");
+		fclose(fp);
+		goto error;
+	}
+
+	fclose(fp);
+	PKCS12_free(p12);
+	return 0;
+error:
+	if (p12) PKCS12_free(p12);
 	return -1;
 }
 
@@ -1275,7 +1322,7 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 			goto error;
 		}
 
-		if (EVP_PKEY_assign_RSA(key_evp_priv, key_rsa) == 0) {
+		if (EVP_PKEY_assign_RSA(key_evp_priv, key_rsa) != 1) {
 			ERROR("error assigning rsa priv key");
 			RSA_free(key_rsa);
 			goto error;

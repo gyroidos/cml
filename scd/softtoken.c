@@ -57,6 +57,14 @@ softtoken_new_from_p12(const char *filename)
 	return token;
 }
 
+int
+softtoken_change_passphrase(softtoken_t *token, const char *oldpass,
+					const char *newpass)
+{
+	ASSERT(token);
+	return ssl_newpass_pkcs12_token(token->token_file, oldpass, newpass);
+}
+
 
 /**
  * Free key and certificate data.
