@@ -198,6 +198,17 @@ cmld_get_device_host_dns(void);
 const char *
 cmld_get_c0os(void);
 
+/**
+ * Change the pin of the device token.
+ * The request is sent asynchronously through lower communication layer.
+ *
+ * @param passwd old passphrase/pin
+ * @param newpasswd new passphrase/pin which is to be set
+ * @return 0 on message delivered to lower levels, -1 message delivery failed
+ */
+int
+cmld_change_device_pin(const char *passwd, const char *newpasswd);
+
 
 #endif /* CMLD_H */
 

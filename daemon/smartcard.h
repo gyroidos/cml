@@ -38,6 +38,17 @@ int
 smartcard_container_start_handler(smartcard_t* smartcard, container_t *container,
 		const char *passwd);
 
+/**
+ * Change the passphrase/pin of the associated device token smartcard
+ *
+ * @param smartcard smartcard struct representing the device token
+ * @param passwd passphrase/pin of the token
+ * @param newpassed the new passphrase/pin for the token to which will be changed
+ * return -1 on message transmission failure, 0 if message was sent to SCD
+ */
+int
+smartcard_change_pin(smartcard_t* smartcard, const char *passwd, const char *newpasswd);
+
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...
 
