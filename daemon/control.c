@@ -455,12 +455,20 @@ control_send_message(control_message_t message, int fd)
 			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_PASSWD_WRONG;
 			break;
 
-		case CONTROL_RESPONSE_CONTAINER_START_LOCKED_TILL_REBOOT:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_LOCKED_TILL_REBOOT;
-			break;
-
 		case CONTROL_RESPONSE_CONTAINER_START_EEXIST:
 			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_EEXIST;
+			break;
+
+		case CONTROL_RESPONSE_DEVICE_LOCKED_TILL_REBOOT:
+			out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_LOCKED_TILL_REBOOT;
+			break;
+
+		case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_FAILED:
+			out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_FAILED;
+			break;
+
+		case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_SUCCESSFUL:
+			out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_SUCCESSFUL;
 			break;
 
 		default:
@@ -851,6 +859,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		else {
 			smartcard_push_cert(msg->device_cert.data, msg->device_cert.len);
 		}
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CHANGE_DEVICE_PIN: {
+		res = cmld_change_device_pin(msg->device_pin, msg->device_newpin);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {

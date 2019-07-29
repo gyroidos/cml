@@ -78,6 +78,7 @@ static void print_usage(const char *cmd)
 	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
 	printf("   pull_csr <device.csr>\n        Pulls the device csr and stores it in <device.csr>.\n");
 	printf("   push_cert <device.cert>\n        Pushes back the device certificate provided by <device.cert>.\n");
+	printf("   change_pin\n        Change device token's pin which is used for container key wrapping. Prompts for password entry.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
@@ -158,6 +159,34 @@ static const struct option update_cfg_options[] = {
 	{"file",   required_argument, 0, 'f'},
 	{0, 0, 0, 0}
 };
+
+static char *
+get_password_new(const char *prompt)
+{
+	struct termios termios_before;
+	struct termios termios_passwd;
+	char buf[128];
+
+	printf("%s", prompt);
+	fflush(stdout);
+
+	// disable echo of input
+	tcgetattr(STDIN_FILENO, &termios_before);
+	termios_passwd = termios_before;
+	termios_passwd.c_lflag &= ~(ECHO);
+	termios_passwd.c_lflag |= ECHONL;
+
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_passwd);
+
+	if (fgets(buf, 128, stdin) == NULL)
+		buf[0] = '\0';
+	else
+		buf[strlen(buf)-1] = '\0';
+
+	// restore terminal config
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
+	return mem_strdup(buf);
+}
 
 int main(int argc, char *argv[])
 {
@@ -320,6 +349,20 @@ int main(int argc, char *argv[])
 		msg.has_device_cert = true;
 		msg.device_cert.len = dev_cert_len;
 		msg.device_cert.data = dev_cert;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "change_pin")) {
+		char* newpin_verify = NULL;
+		has_response = true;
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CHANGE_DEVICE_PIN;
+		msg.device_pin = get_password_new("Current Password: ");
+		msg.device_newpin = get_password_new("New Password: ");
+		newpin_verify = get_password_new("Re-enter New Password: ");
+
+		if (strcmp(msg.device_newpin, newpin_verify) != 0)
+			FATAL("Passwords don't match!");
+
+		mem_free(newpin_verify);
 		goto send_message;
 	}
 	if (!strcasecmp(command, "create")) {

@@ -605,6 +605,12 @@ cmld_container_start_with_smartcard(container_t *container, const char *passwd)
 }
 
 int
+cmld_change_device_pin(const char *passwd, const char *newpasswd)
+{
+	return smartcard_change_pin(cmld_smartcard, passwd, newpasswd);
+}
+
+int
 cmld_get_control_gui_sock(void)
 {
 	return control_get_client_sock(cmld_control_gui);

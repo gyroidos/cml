@@ -115,7 +115,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
 			WARN("Unlocking the token failed (locked till reboot).");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCKED_TILL_REBOOT, cmld_get_control_gui_sock());
+			control_send_message(CONTROL_RESPONSE_DEVICE_LOCKED_TILL_REBOOT, cmld_get_control_gui_sock());
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
@@ -235,6 +235,59 @@ smartcard_container_start_handler(smartcard_t* smartcard, container_t *container
 	mem_free(out.token_pin);
 
 	return 0;
+}
+
+static void
+smartcard_cb_generic(int fd, unsigned events, event_io_t *io, UNUSED void *data)
+{
+	if (events & EVENT_IO_READ) {
+		// use protobuf for communication with scd
+		TokenToDaemon *msg = (TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+		switch (msg->code) {
+		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
+			WARN("Unlocking the token failed (locked till reboot).");
+			control_send_message(CONTROL_RESPONSE_DEVICE_LOCKED_TILL_REBOOT, cmld_get_control_gui_sock());
+		} break;
+		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL: {
+			control_send_message(CONTROL_RESPONSE_DEVICE_CHANGE_PIN_SUCCESSFUL, cmld_get_control_gui_sock());
+		} break;
+		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED: {
+			control_send_message(CONTROL_RESPONSE_DEVICE_CHANGE_PIN_FAILED, cmld_get_control_gui_sock());
+		} break;
+		default:
+			ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
+			break;
+		}
+		protobuf_free_message((ProtobufCMessage *) msg);
+
+		event_remove_io(io);
+		mem_free(io);
+	}
+}
+
+int
+smartcard_change_pin(smartcard_t* smartcard, const char *passwd, const char *newpasswd)
+{
+	ASSERT(smartcard);
+	int ret = -1;
+	int pw_size = strlen(passwd);
+	int newpw_size = strlen(newpasswd);
+	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
+	DEBUG("SCD: New Passwd form UI: %s, size: %d", newpasswd, newpw_size);
+
+	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, NULL);
+	event_add_io(event);
+	DEBUG("SCD: Registered generic container callback for scd");
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__CHANGE_PIN;
+	out.token_pin = mem_strdup(passwd);
+	out.token_newpin = mem_strdup(newpasswd);
+	ret = protobuf_send_message(smartcard->sock, (ProtobufCMessage *) &out);
+	mem_free(out.token_pin);
+	mem_free(out.token_newpin);
+
+	return (ret > 0)? 0: -1;
 }
 
 smartcard_t*
