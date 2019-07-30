@@ -665,12 +665,16 @@ send_message:
 		switch (resp->code) {
 		case DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR: {
 			const char *dev_csr_file = argv[optind];
-			if (-1 == file_write(dev_csr_file, (char *)resp->device_csr.data,
+			if (!resp->has_device_csr) {
+				ERROR("DEVICE_CSR_ERROR: Device not in Provisioning mode!");
+			} else if (-1 == file_write(dev_csr_file, (char *)resp->device_csr.data,
 						resp->device_csr.len)) {
 				ERROR("writing device csr to %s", dev_csr_file);
+			} else {
+				INFO("device csr written to %s", dev_csr_file);
 			}
-		} break; 
-		default: 
+		} break;
+		default:
 			// TODO for now just dump the response in text format
 			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
 		}
