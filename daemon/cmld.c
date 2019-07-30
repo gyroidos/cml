@@ -596,18 +596,25 @@ cmld_container_start(container_t *container, const char *key)
 }
 
 int
-cmld_container_start_with_smartcard(container_t *container, const char *passwd)
+cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd)
 {
 	ASSERT(container);
+	ASSERT(control);
 	ASSERT(passwd);
 
-	return smartcard_container_start_handler(cmld_smartcard, container, passwd);
+	return smartcard_container_start_handler(cmld_smartcard, control, container, passwd);
 }
 
 int
-cmld_change_device_pin(const char *passwd, const char *newpasswd)
+cmld_change_device_pin(control_t* control, const char *passwd, const char *newpasswd)
 {
-	return smartcard_change_pin(cmld_smartcard, passwd, newpasswd);
+	return smartcard_change_pin(cmld_smartcard, control, passwd, newpasswd);
+}
+
+void
+cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len)
+{
+	smartcard_push_cert(cmld_smartcard, control, cert, cert_len);
 }
 
 int

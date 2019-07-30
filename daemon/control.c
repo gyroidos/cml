@@ -842,10 +842,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {
 		uint8_t *csr = NULL;
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR;
 		csr = smartcard_pull_csr_new(&out.device_csr.len);
-		out.has_device_csr = true;
+		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR;
+		out.has_device_csr = csr ? true : false;
 		out.device_csr.data = csr;
+
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send device csr!");
 		}
@@ -854,15 +855,17 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT: {
-		if (!msg->has_device_cert)
-			WARN("PUSH_DEVICE_CERT without certificate");
-		else {
-			smartcard_push_cert(msg->device_cert.data, msg->device_cert.len);
+		uint8_t *cert = NULL;
+		ssize_t cert_len = 0;
+		if (msg->has_device_cert) {
+			cert = msg->device_cert.data;
+			cert_len = msg->device_cert.len;
 		}
+		cmld_push_device_cert(control, cert, cert_len);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CHANGE_DEVICE_PIN: {
-		res = cmld_change_device_pin(msg->device_pin, msg->device_newpin);
+		res = cmld_change_device_pin(control, msg->device_pin, msg->device_newpin);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
@@ -1010,7 +1013,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			}
 		}
 		// key is asserted to be the user entered passwd/pin
-		res = cmld_container_start_with_smartcard(container, key);
+		res = cmld_container_start_with_smartcard(control, container, key);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:

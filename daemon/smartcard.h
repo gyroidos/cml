@@ -25,6 +25,7 @@
 #define SMARTCARD_H
 
 #include "container.h"
+#include "control.h"
 
 typedef struct smartcard smartcard_t;
 
@@ -35,19 +36,21 @@ smartcard_t *
 smartcard_new(const char *path);
 
 int
-smartcard_container_start_handler(smartcard_t* smartcard, container_t *container,
-		const char *passwd);
+smartcard_container_start_handler(smartcard_t* smartcard, control_t *control,
+		container_t *container, const char *passwd);
 
 /**
  * Change the passphrase/pin of the associated device token smartcard
  *
  * @param smartcard smartcard struct representing the device token
+ * @param control control struct which should be used for responses
  * @param passwd passphrase/pin of the token
  * @param newpassed the new passphrase/pin for the token to which will be changed
  * return -1 on message transmission failure, 0 if message was sent to SCD
  */
 int
-smartcard_change_pin(smartcard_t* smartcard, const char *passwd, const char *newpasswd);
+smartcard_change_pin(smartcard_t* smartcard, control_t* control,
+				const char *passwd, const char *newpasswd);
 
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...
@@ -153,13 +156,15 @@ smartcard_pull_csr_new(size_t *csr_len);
 /**
  * Pushes back the certificate (the sigend CSR). Which may
  * be used during ssl client auth, to identify the device in a backend.
+ * responses are made to client socket of corresponding control struct.
  *
+ * @param smartcard smartcard struct representing the device token
+ * @param control control struct which should be used for responses
  * @param cert a pointer to the buffer which holds the certificate
  * @param cert_len the size of the cert
- * @return 0 if certificate was sucessfully pushed and stored, -1 otherwise
  */
-int
-smartcard_push_cert(uint8_t *cert, size_t cert_len);
+void
+smartcard_push_cert(smartcard_t* smartcard, control_t *control, uint8_t *cert, size_t cert_len);
 
 #endif /* SMARTCARD_H */
 
