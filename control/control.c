@@ -331,6 +331,7 @@ int main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_cert")) {
+		has_response = true;
 		// need exactly one more argument (certificate file)
 		if (optind != argc-1)
 			print_usage(argv[0]);
@@ -393,6 +394,7 @@ int main(int argc, char *argv[])
 	if (!strcasecmp(command, "remove")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER;
 	} else if (!strcasecmp(command, "start")) {
+		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
 		msg.container_start_params = &container_start_params;
 		// parse specific options for start command
