@@ -277,7 +277,7 @@ provisioning_mode()
 
 	// remark: no certificate validation checks are carried out
 	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT)
-		|| !file_exists(GEN_ROOT_CERT) || !token_file_exists()) {
+		|| !token_file_exists()) {
 		FATAL("Missing certificate chains, user token, or private key for device certificate");
 	}
 }
