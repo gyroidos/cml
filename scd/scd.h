@@ -32,7 +32,6 @@
 #define SCD_TOKEN_DIR "/data/cml/tokens"
 #define SSIG_ROOT_CERT SCD_TOKEN_DIR "/ssig_rootca.cert"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
-#define GEN_ROOT_CERT SCD_TOKEN_DIR "/gen_rootca.cert"
 #define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
 
 #define DEVICE_CERT_FILE SCD_TOKEN_DIR "/device.cert"
