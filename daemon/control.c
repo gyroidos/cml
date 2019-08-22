@@ -922,6 +922,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		mem_free(ccfg);
 	} break;
 
+	// Container-specific commands:
 	case CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER:
 		if (NULL == container) {
 			INFO("Container does not exist, nothing to destroy!");
@@ -930,7 +931,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		res = cmld_container_destroy(container);
 		break;
 
-	// Container-specific commands:
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG: {
 		char **cuuid_str = NULL;
 		ContainerConfig **ccfg = NULL;
@@ -1016,43 +1016,53 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
+		IF_NULL_RETURN(container);
 		res = cmld_container_stop(container);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE:
+		IF_NULL_RETURN(container);
 		res = cmld_container_freeze(container);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNFREEZE:
+		IF_NULL_RETURN(container);
 		res = cmld_container_unfreeze(container);
 		break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ALLOWAUDIO:
+		IF_NULL_RETURN(container);
 		res = cmld_container_allow_audio(container);
 		break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DENYAUDIO:
+		IF_NULL_RETURN(container);
 		res = cmld_container_deny_audio(container);
 		break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_WIPE:
+		IF_NULL_RETURN(container);
 		res = cmld_container_wipe(container);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_SNAPSHOT:
+		IF_NULL_RETURN(container);
 		res = cmld_container_snapshot(container);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE : {
+		IF_NULL_RETURN(container);
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
 		container_add_net_iface(container, net_iface, persistent);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE : {
+		IF_NULL_RETURN(container);
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
 		container_remove_net_iface(container, net_iface, persistent);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES: {
+		IF_NULL_RETURN(container);
 		pid_t pid = container_get_pid(container);
 		list_t *link_list = NULL;
 		network_list_link_ns(pid, &link_list);
@@ -1083,6 +1093,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
         } break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_PID: {
+		IF_NULL_RETURN(container);
 		pid_t pid = container_get_pid(container);
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_PID;
@@ -1094,6 +1105,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
         } break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD:{
+		IF_NULL_RETURN(container);
 			TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
 
 			if ((! container) || container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
@@ -1119,6 +1131,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT:{
+		IF_NULL_RETURN(container);
 			TRACE("Got input for exec'ed process. Sending message on fd");
 
 			if (container != NULL) {
