@@ -1023,6 +1023,10 @@ cmld_container_destroy(container_t *container)
 	int ret;
 	ASSERT(container);
 
+	// don't delete management container c0!
+	container_t *c0 = cmld_containers_get_a0();
+	IF_TRUE_RETVAL(c0 == container, -1);
+
 	ret = container_destroy(container);
 	cmld_containers_list = list_remove(cmld_containers_list, container);
 	container_free(container);
@@ -1120,4 +1124,17 @@ cmld_wipe_device() {
 const char *
 cmld_get_c0os(void){
 	return cmld_c0os_name;
+}
+
+void
+cmld_guestos_delete(const char *guestos_name)
+{
+	guestos_t *os = guestos_mgr_get_latest_by_name(guestos_name, false);
+	IF_NULL_RETURN(os);
+
+	// do not delete gustos of managment container c0
+	container_t *c0 = cmld_containers_get_a0();
+	IF_TRUE_RETURN(os == container_get_guestos(c0));
+
+	guestos_mgr_delete(os);
 }
