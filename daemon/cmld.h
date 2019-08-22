@@ -203,7 +203,7 @@ cmld_get_c0os(void);
  * Change the pin of the device token.
  * The request is sent asynchronously through lower communication layer.
  *
- * @parma link to control for responses
+ * @parma control link to control for responses
  * @param passwd old passphrase/pin
  * @param newpasswd new passphrase/pin which is to be set
  * @return 0 on message delivered to lower levels, -1 message delivery failed
@@ -215,12 +215,23 @@ cmld_change_device_pin(control_t *control, const char *passwd, const char *newpa
  * Change the device cert during provisioning.
  * The request is sent asynchronously through lower communication layer.
  *
- * @parma link to control for responses
+ * @parma control link to control for responses
  * @param cert buffer holding the device certificate
  * @param cert_len size of the certificate buffer
  */
 void
 cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
+
+
+/**
+ * Delete a GuestOS by given name
+ * Try to delete the latest GuestOS by the given name. This Function silently
+ * rejects attempts to delete the GuestOS of the management container c0.
+ *
+ * @param guestos_name name of the GuestOS which should be deleted
+ */
+void
+cmld_guestos_delete(const char *guestos_name);
 
 
 

@@ -810,8 +810,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		if (!msg->guestos_name) {
 			WARN("REMOVE_GUESTOS without name");
 		} else {
-			guestos_t *os = guestos_mgr_get_latest_by_name(msg->guestos_name, false);
-			guestos_mgr_delete(os);
+			cmld_guestos_delete(msg->guestos_name);
 		}
 	} break;
 
