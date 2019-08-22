@@ -135,7 +135,7 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 	/* alternate tty devices - seem to be necessary for android logwrapper */
 	//"c 5:0 rwm", // tty
 	//"c 5:1 rwm", // console
-	//"c 5:2 rwm", // ptmx
+	"c 5:2 rwm", // ptmx
 
 	//"c 7:* rwm", // Virtual console capture devices
 
@@ -162,7 +162,7 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 	//"c 108:* rwm",
 
 	/* Unix98 PTY Slaves (majors 136-143) */
-	//"c 136:* rwm", // seems to be necessary for android logwrapper
+	"c 136:* rwm", // seems to be necessary for android logwrapper
 
 	/* USB */
 	//"c 180:* rwm", // USB
