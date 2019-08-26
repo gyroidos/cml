@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <libgen.h>
 
 #include <selinux/selinux.h>
 
@@ -61,10 +62,15 @@
 #define BTRFSTUNE "btrfstune"
 #define MAKE_BTRFS "mkfs.btrfs"
 
+#if 0
 #define ICC_SHARED_MOUNT "data/trustme-com"
 #define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
 #define ICC_SHARED_DATA_TYPE "u:object_r:trustme-com:s0"
+#endif
+
 #define CSERVICE_TARGET "/sbin/cservice"
+#define SHARED_FILES_PATH "/data/cml/files_shared"
+#define SHARED_FILES_STORE_SIZE 100
 
 #define is_selinux_disabled() !file_exists("/sys/fs/selinux")
 #define is_selinux_enabled() file_exists("/sys/fs/selinux")
@@ -131,6 +137,9 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		// Note: this is the upper img for overlayfs
 		dir = container_get_images_dir(vol->container);
 		break;
+	case MOUNT_TYPE_BIND_FILE:
+	case MOUNT_TYPE_BIND_FILE_RW:
+		return mem_printf("%s/%s", SHARED_FILES_PATH, mount_entry_get_img(mntent));
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
 				mount_entry_get_type(mntent), mount_entry_get_img(mntent));
@@ -162,18 +171,45 @@ c_vol_check_image(c_vol_t *vol, const char *img)
 	return ret;
 }
 
+static char*
+c_vol_create_loopdev_new(int *fd, const char *img)
+{
+	char *dev = loopdev_new();
+	if (!dev) {
+		ERROR("Could not get free loop device for %s", img);
+		return NULL;
+	}
+
+	// wait until the devie appears...
+	// TODO: how was this timeout chosen?
+	// TODO: maybe better wait for the uevent?
+	if (loopdev_wait(dev, 10) < 0) {
+		ERROR("Device %s for image %s was not created", dev, img);
+		goto error;
+	}
+
+	// TODO: there might be another process trying to setup a device for dev
+	*fd = loopdev_setup_device(img, dev);
+	if (*fd < 0) {
+		ERROR("Could not setup loop device %s for %s", dev, img);
+		goto error;
+	}
+	return dev;
+error:
+	mem_free(dev);
+	return NULL;
+}
+
 static int
-c_vol_create_image_empty(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
+c_vol_create_image_empty(const char *img, uint64_t size)
 {
 	off64_t storage_size;
 	int fd;
 
-	ASSERT(vol);
 	ASSERT(img);
-	ASSERT(mntent);
 
 	// minimal storage size is 10 MB
-	storage_size = MAX(mount_entry_get_size(mntent), 10);
+	storage_size = MAX(size, 10);
 	storage_size *= 1024 * 1024;
 
 	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long) storage_size);
@@ -280,11 +316,11 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 	case MOUNT_TYPE_SHARED:
 	case MOUNT_TYPE_SHARED_RW:
 	case MOUNT_TYPE_OVERLAY_RW:
-		return c_vol_create_image_empty(vol, img, mntent);
+		return c_vol_create_image_empty(img, mount_entry_get_size(mntent));
 	case MOUNT_TYPE_FLASH:
 		return -1; // we cannot create such image files
 	case MOUNT_TYPE_EMPTY:
-		return c_vol_create_image_empty(vol, img, mntent);
+		return c_vol_create_image_empty(img, mount_entry_get_size(mntent));
 	case MOUNT_TYPE_COPY:
 		return c_vol_create_image_copy(vol, img, mntent);
 	case MOUNT_TYPE_DEVICE:
@@ -469,6 +505,61 @@ error:
 	return -1;
 }
 
+static int
+c_vol_mount_file_bind(const char* src, const char *dst, unsigned long flags)
+{
+	char *_src = mem_strdup(src);
+	char *_dst = mem_strdup(dst);
+	char *dir_src = dirname(_src);
+	char *dir_dst = dirname(_dst);
+
+	if (!(flags & MS_BIND)) {
+		errno = EINVAL;
+		ERROR_ERRNO("bind mount flag is not set!");
+		goto err;
+	}
+
+	if (dir_mkdir_p(dir_src, 0755) < 0) {
+		DEBUG_ERRNO("Could not mkdir %s", dir_src);
+		goto err;
+	}
+	if (dir_mkdir_p(dir_dst, 0755) < 0) {
+		DEBUG_ERRNO("Could not mkdir %s", dir_dst);
+		goto err;
+	}
+	if (file_touch(src) == -1) {
+		ERROR("Failed to touch source file \"%s\" for bind mount", src);
+		goto err;
+	}
+	if (file_touch(dst) == -1) {
+		ERROR("Failed to touch target file \"%s\"for bind mount", dst);
+		goto err;
+	}
+	if (mount(src, dst, "bind", flags, NULL) < 0) {
+		ERROR_ERRNO("Failed to bind mount %s to %s", src, dst);
+		goto err;
+	}
+	/*
+	 * ro bind mounts do not work directly, so we need to remount it manually
+	 * see, https://lwn.net/Articles/281157/
+	 */
+	if (flags & MS_RDONLY) { // ro bind mounts do not work directly
+		if (mount("none", dst, "bind", flags|MS_RDONLY|MS_REMOUNT, NULL) < 0) {
+			ERROR_ERRNO("Failed to remount bind"
+				" mount %s to %s read-only", src, dst);
+		}
+	}
+	DEBUG("Sucessfully bind mounted %s to %s", src, dst);
+
+	mem_free(_src);
+	mem_free(_dst);
+	return 0;
+err:
+	mem_free(_src);
+	mem_free(_dst);
+	return -1;
+}
+
 /**
  * Mount an image file. This function will take some time. So call it in a
  * thread or child process.
@@ -492,6 +583,17 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 
 	img = dev = dir = NULL;
 
+	if (mount_entry_get_dir(mntent)[0] == '/')
+		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
+	else
+		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
+
+
+	img = c_vol_image_path_new(vol, mntent);
+	if (!img)
+		goto error;
+
+
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
 	case MOUNT_TYPE_DEVICE:
@@ -513,6 +615,12 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	case MOUNT_TYPE_EMPTY:
 		encrypted = true;	    // create as encrypted image
 		break;
+	case MOUNT_TYPE_BIND_FILE:
+		mountflags |= MS_RDONLY;    // Fallthrough
+	case MOUNT_TYPE_BIND_FILE_RW:
+		mountflags |= MS_BIND;      // use bind mount
+		IF_TRUE_GOTO(-1 == c_vol_mount_file_bind(img, dir, mountflags), error);
+		goto final;
 	case MOUNT_TYPE_COPY:		    // deprecated
 		//WARN("Found deprecated MOUNT_TYPE_COPY");
 		break;
@@ -524,11 +632,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 				mount_entry_get_type(mntent), mount_entry_get_img(mntent));
 		goto error;
 	}
-
-	if (mount_entry_get_dir(mntent)[0] == '/')
-		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
-	else
-		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
 
 	// try to create mount point before mount, usually not necessary...
 	if (dir_mkdir_p(dir, 0755) < 0)
@@ -543,10 +646,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			goto error;
 		}
 	}
-
-	img = c_vol_image_path_new(vol, mntent);
-	if (!img)
-		goto error;
 
 	if (c_vol_check_image(vol, img) < 0) {
 		new_image = true;
@@ -564,26 +663,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		}
 	}
 
-	dev = loopdev_new();
-	if (!dev) {
-		ERROR("Could not get free loop device for %s", img);
-		goto error;
-	}
-
-	// wait until the devie appears...
-	// TODO: how was this timeout chosen?
-	// TODO: maybe better wait for the uevent?
-	if (loopdev_wait(dev, 10) < 0) {
-		ERROR("Device %s for image %s was not created", dev, img);
-		goto error;
-	}
-
-	// TODO: there might be another process trying to setup a device for dev
-	fd = loopdev_setup_device(img, dev);
-	if (fd < 0) {
-		ERROR("Could not setup loop device %s for %s", dev, img);
-		goto error;
-	}
+	dev = c_vol_create_loopdev_new(&fd, img);
+	IF_NULL_GOTO(dev, error);
 
 	if (encrypted) {
 		char *label, *crypt;
@@ -880,6 +961,68 @@ c_vol_free(c_vol_t *vol)
 }
 
 int
+c_vol_start_pre_clone(const c_vol_t *vol)
+{
+	ASSERT(vol);
+	char *bind_img_path = NULL;
+	char *bind_dev = NULL;
+	int loop_fd = 0;
+	bool contains_bind = false;
+
+	int n = mount_get_count(container_get_mount(vol->container));
+	for (int i = 0; i < n; i++) {
+		const mount_entry_t *mntent;
+		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		if (mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE_RW
+				|| mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE ) {
+			contains_bind = true;
+		}
+	}
+	// if no bind mount nothing to do
+	IF_FALSE_RETVAL(contains_bind, 0);
+
+	if (!file_is_dir(SHARED_FILES_PATH)) {
+		if (dir_mkdir_p(SHARED_FILES_PATH, 0755) < 0) {
+			DEBUG_ERRNO("Could not mkdir %s", SHARED_FILES_PATH);
+			return -1;
+		}
+	}
+	// if already mounted nothing to be done
+	IF_TRUE_RETVAL(file_is_mountpoint(SHARED_FILES_PATH), 0);
+
+	// setup persitent image as date store for shared objects
+	bind_img_path = mem_printf("%s/_store.img", SHARED_FILES_PATH);
+	if (!file_exists(bind_img_path)) {
+		if (c_vol_create_image_empty(bind_img_path, SHARED_FILES_STORE_SIZE) < 0) {
+			goto err;
+		}
+		if (c_vol_format_image(bind_img_path, "ext4") < 0) {
+			goto err;
+		}
+		INFO("Succesfully created image for %s", SHARED_FILES_PATH);
+	}
+	bind_dev = c_vol_create_loopdev_new(&loop_fd, bind_img_path);
+	IF_NULL_GOTO(bind_dev, err);
+	if (mount(bind_dev, SHARED_FILES_PATH, "ext4", MS_NOATIME|MS_NODEV|MS_NOEXEC, NULL) < 0) {
+		ERROR_ERRNO("Failed to mount %s to %s", bind_img_path, SHARED_FILES_PATH);
+		goto err;
+	}
+
+	close(loop_fd);
+	mem_free(bind_img_path);
+	mem_free(bind_dev);
+	return 0;
+err:
+	if (loop_fd)
+		close(loop_fd);
+	if (bind_img_path)
+		mem_free(bind_img_path);
+	if (bind_dev)
+		mem_free(bind_dev);
+	return -1;
+}
+
+int
 c_vol_start_child(c_vol_t *vol)
 {
 	char *root;
@@ -921,6 +1064,7 @@ c_vol_start_child(c_vol_t *vol)
 		WARN_ERRNO("Could not set %s executable", cservice_bin);
 	mem_free(cservice_bin);
 
+#if 0
 	/* Bind-mount shared mount for communication */
 	// TODO: properly secure this against intercontainer attacks
 	char *com_mnt = mem_printf("%s/%s/", root, ICC_SHARED_MOUNT);
@@ -952,6 +1096,7 @@ c_vol_start_child(c_vol_t *vol)
 		mem_free(com_mnt);
 	}
 	mem_free(com_mnt_data);
+#endif
 
 	// remount proc to reflect namespace change
 	if (umount("/proc") < 0 && errno != ENOENT) {

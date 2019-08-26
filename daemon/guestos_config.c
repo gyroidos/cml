@@ -109,6 +109,10 @@ guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 		return MOUNT_TYPE_SHARED_RW;
 	case GUEST_OSMOUNT__TYPE__OVERLAY_RW:
 		return MOUNT_TYPE_OVERLAY_RW;
+	case GUEST_OSMOUNT__TYPE__BIND_FILE:
+		return MOUNT_TYPE_BIND_FILE;
+	case GUEST_OSMOUNT__TYPE__BIND_FILE_RW:
+		return MOUNT_TYPE_BIND_FILE_RW;
 	default:
 		FATAL("Invalid protobuf mount type %d.", mt);
 	}

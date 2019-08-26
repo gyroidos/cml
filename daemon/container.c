@@ -1348,6 +1348,11 @@ container_start(container_t *container)//, const char *key)
 		goto error_pre_clone;
 	}
 
+	if (c_vol_start_pre_clone(container->vol) < 0) {
+		ret = CONTAINER_ERROR_VOL;
+		goto error_pre_clone;
+	}
+
 	// Wifi module?
 
 	/*********************************************************/
