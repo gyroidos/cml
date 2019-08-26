@@ -56,6 +56,8 @@ enum mount_type {
 	MOUNT_TYPE_OVERLAY_RW = 9,  /**< image file is shared by all containers of the operating
 				      system type and an individual writable persitent fs is mounted
 				      as overlay to each container */
+	MOUNT_TYPE_BIND_FILE = 10,     /**< file is bind mounted to container (RO) */
+	MOUNT_TYPE_BIND_FILE_RW = 11,  /**< file is bind mounted to container (RW) */
 };
 
 mount_t *

@@ -149,4 +149,11 @@ file_size(const char *file);
 char *
 file_get_extension(const char *file);
 
+/**
+ * creates an empty file
+ * @param file The file name
+ */
+int
+file_touch(const char *file);
+
 #endif /* FILE_H */

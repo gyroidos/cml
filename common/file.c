@@ -325,3 +325,17 @@ file_get_extension(const char *file)
 		return "";
 	return ext;
 }
+
+int
+file_touch(const char *file)
+{
+	IF_NULL_RETVAL(file, -1);
+
+	int fd = open(file, O_WRONLY | O_CREAT, 00666);
+	if (fd < 0) {
+		DEBUG_ERRNO("Could not touch output file %s", file);
+		return -1;
+	}
+	close(fd);
+	return 0;
+}
