@@ -1043,6 +1043,77 @@ c_vol_start_child(c_vol_t *vol)
 		devopts |= MS_RDONLY | MS_REMOUNT;
 		if (mount("/dev", dev_mnt, devfstype, devopts, mount_data) < 0)
 			WARN_ERRNO("Could not remount /dev (ro)");
+
+
+		//mount writable tmpfs over /dev
+		char *dir = mem_printf("%s%s", root, "/dev");
+
+		char *overlayfs_mount_dir = mem_printf("/tmp/%s-overlayfs/%s%s",
+						uuid_string(container_get_uuid(vol->container)),
+						"devtmpimg",
+						"/dev");
+		if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir overlayfs mount dir: %s", overlayfs_mount_dir);
+			goto error;
+		}
+
+		// create mountpoint for upper dev
+		char *upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
+		char *work_dir = mem_printf("%s/work", overlayfs_mount_dir);
+		if (dir_mkdir_p(upper_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
+			goto error;
+		}
+		if (dir_mkdir_p(work_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
+			goto error;
+		}
+
+		// create mountpoint for lower dev (try to hide absolute paths)
+		char *lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
+		if (symlink(dir, lower_dir) < 0) {
+			ERROR_ERRNO("link lowerdir failed");
+			mem_free(lower_dir);
+			lower_dir = mem_strdup(dir);
+		}
+
+		DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, persist_img=%s,"
+				" lower_dir=%s, target dir=%s",
+				work_dir, upper_dir, "<none>", lower_dir, dir);
+		// create mount option string (try to mask absolute paths)
+		char *cwd = get_current_dir_name();
+		char *overlayfs_options;
+		if (chdir(overlayfs_mount_dir)) {
+			overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
+				lower_dir, upper_dir, work_dir);
+		} else {
+			overlayfs_options =
+				mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
+			TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ",
+				cwd, overlayfs_mount_dir, overlayfs_options);
+		}
+		INFO("mount_dir: %s", dir);
+
+		// mount overlayfs to dir
+		if (mount("overlay", dir, "overlay", 0, overlayfs_options) < 0) {
+			ERROR_ERRNO("Could not mount overlay");
+			mem_free(overlayfs_options);
+			if (chdir(cwd))
+				WARN("Could not change back to former cwd %s", cwd);
+			mem_free(cwd);
+			goto error;
+		}
+		mem_free(overlayfs_options);
+		if (chdir(cwd))
+			WARN("Could not change back to former cwd %s", cwd);
+		mem_free(cwd);
+
+
+		mem_free(dir);
+		mem_free(overlayfs_mount_dir);
+		mem_free(upper_dir);
+		mem_free(work_dir);
+		mem_free(lower_dir);
 	} else {
 		if (mount(devfstype, dev_mnt, devfstype, devopts, mount_data) < 0)
 			WARN_ERRNO("Could not mount /dev");
