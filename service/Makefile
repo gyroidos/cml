@@ -24,7 +24,9 @@
 
 CC ?= gcc
 
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -O2
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -O2 -pedantic
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -DDEBUG_BUILD
 # set for sending boot complete protobuf message only
 #LOCAL_CFLAGS += -DBOOT_COMPLETE_ONLY
 
@@ -45,8 +47,6 @@ SRC_FILES := \
 	common/logf.pb-c.c \
 	service.c
 
-${SRC_FILES}: protobuf
-
 .PHONY: all
 all: service
 
@@ -57,11 +57,11 @@ protobuf: c_service.proto container.proto control.proto guestos.proto common/log
 	protoc-c --c_out=. guestos.proto
 	$(MAKE) -C common protobuf
 
-service: ${SRC_FILES}
-	${CC} -static ${LOCAL_CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
+service: protobuf $(SRC_FILES)
+	$(CC) $(LOCAL_CFLAGS) $(CLAGS) $(SRC_FILES) -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
-service-static: ${SRC_FILES}
-	${CC} -static ${LOCAL_CFLAGS} ${CFLAGS} ${SRC_FILES} -lprotobuf-c -lprotobuf-c-text -o cml-service-container
+service-static: protobuf $(SRC_FILES)
+	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
 
 .PHONY: clean

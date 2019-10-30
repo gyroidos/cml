@@ -25,7 +25,8 @@ tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
 	-DTPM_POSIX
 
-LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon -Wextra -Werror $(tss_cflags) -O2
+LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon $(tss_cflags) -O2
+LOCAL_CFLAGS += -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 #LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
 
 SRC_FILES := \
@@ -55,13 +56,11 @@ protobuf: attestation.proto tpm2d.proto
 	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
 
-${SRC_FILES}: protobuf
-
 libcommon:
 	$(MAKE) -C common libcommon
 
-tpm2d: libcommon ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -libmtss -lcrypto -Lcommon -lcommon -o tpm2d
+tpm2d: protobuf libcommon $(SRC_FILES)
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -libmtss -lcrypto -Lcommon -lcommon -o tpm2d
 
 
 .PHONY: clean

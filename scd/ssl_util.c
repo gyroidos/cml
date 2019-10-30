@@ -308,7 +308,7 @@ error:
 }
 
 static X509_REQ *
-ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey)
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool tpmkey)
 {
 	ASSERT(pkeyp);
 	ASSERT(common_name);
