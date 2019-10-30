@@ -21,8 +21,9 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
-LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -DDEBUG_BUILD -O2
-LOCAL_CFLAGS += -DTPM_POSIX
+LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
+LOCAL_CFLAGS += -DDEBUG_BUILD -DTPM_POSIX
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 
 SRC_FILES := \
 	common/list.c \

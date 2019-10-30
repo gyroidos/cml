@@ -303,7 +303,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			csr_len = file_size(DEVICE_CSR_FILE);
 			// we set maximum read length one byte grater than file_size
 			// since file_read sets '\0' char at the end of the buffer
-			csr = file_read_new(DEVICE_CSR_FILE, csr_len + 1);
+			csr = (uint8_t *)file_read_new(DEVICE_CSR_FILE, csr_len + 1);
 			if (csr_len < 0 || csr == NULL) {
 				out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CSR_ERROR;
 			} else {
@@ -325,7 +325,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		} else if (!msg->has_device_cert) {
 			ERROR("No device_cert in msg!");
 			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR;
-		} else if (-1 == file_write(DEVICE_CERT_FILE, msg->device_cert.data,
+		} else if (-1 == file_write(DEVICE_CERT_FILE, (char *)msg->device_cert.data,
 					    msg->device_cert.len)) {
 			ERROR("writing device cert to file :%s", DEVICE_CERT_FILE);
 			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR;

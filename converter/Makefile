@@ -24,8 +24,9 @@
 
 CC ?= gcc
 
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -pedantic -Wall -Wextra -Werror
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -DDEBUG_BUILD -pedantic 
 LOCAL_CFLAGS += -O2
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 
 PROTO_SRC := \
 	common/logf.pb-c.c \

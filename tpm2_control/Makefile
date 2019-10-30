@@ -22,8 +22,9 @@
 #
 
 
-LOCAL_CFLAGS := -pedantic -Wall -Wextra -Werror -std=gnu99 \
-	-I.. -I../include -I../tpm2d -Icommon -DDEBUG_BUILD -O2
+LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -DDEBUG_BUILD
 
 SRC_FILES := \
 	common/protobuf.c \

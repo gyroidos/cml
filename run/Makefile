@@ -24,7 +24,9 @@
 
 CC ?= gcc
 
-LOCAL_CFLAGS := -std=gnu99 -I.. -DDEBUG_BUILD
+LOCAL_CFLAGS := -std=gnu99 -I.. -pedantic -O2
+LOCAL_CFLAGS += -DDEBUG_BUILD
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 
 SRC_FILES := \
         common/list.c \
