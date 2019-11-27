@@ -23,6 +23,8 @@
 
 syntax = "proto2";
 
+option java_package = "de.fraunhofer.aisec.trustme";
+
 message DeviceConfig {
 	// unique uuid. may change due to user change.
 	// may be generated if no uuid is available.
