@@ -23,6 +23,8 @@
 
 syntax = "proto2";
 
+option java_package = "de.fraunhofer.aisec.trustme";
+
 // type of attestation in the IDS context
 enum IdsAttestationType {
   // kernel + core container (PCR 0 to 10)
