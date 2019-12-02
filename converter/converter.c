@@ -27,37 +27,37 @@
 #include "guestos.pb-c.h"
 #endif
 
-#include "common/macro.h"
-#include "common/logf.h"
-#include "common/file.h"
 #include "common/dir.h"
+#include "common/file.h"
 #include "common/list.h"
-#include "common/protobuf.h"
+#include "common/logf.h"
+#include "common/macro.h"
 #include "common/mem.h"
+#include "common/protobuf.h"
 
+#include "control.h"
 #include "docker.h"
 #include "util.h"
-#include "control.h"
 
-#include <getopt.h>
-#include <unistd.h>
-#include <time.h>
-#include <inttypes.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <getopt.h>
+#include <inttypes.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <time.h>
+#include <unistd.h>
 
-#define BUF_SIZE 10*4096
+#define BUF_SIZE 10 * 4096
 
 #define WORK_PATH "/tmp/trustx-converter"
 #define IMAGE_NAME_ROOT "root.img"
 #define MIN_INIT "/sbin/cservice"
 #define FILE_SERVER_ETH "eth0"
 
-#define SSIG_KEY_FILE  UTIL_PKI_PATH "dockerlocal-ssig.key"
+#define SSIG_KEY_FILE UTIL_PKI_PATH "dockerlocal-ssig.key"
 #define SSIG_CERT_FILE UTIL_PKI_PATH "dockerlocal-ssig.cert"
 #define LOCALCA_CERT_FILE UTIL_PKI_PATH "ssig_rootca.cert"
 
@@ -66,8 +66,7 @@
 #define TMP_OS_IMAGES_PREFIX "/tmp/operatingsystems/"
 #define WWW_OS_IMAGES_DIR TMP_OS_IMAGES_PREFIX SYSTEM_ARCH
 
-static char *
-get_ifname_ip_new(const char *ifname)
+static char *get_ifname_ip_new(const char *ifname)
 {
 	struct ifreq ifr;
 	struct in_addr ip;
@@ -78,7 +77,7 @@ get_ifname_ip_new(const char *ifname)
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 
 	ifr.ifr_addr.sa_family = AF_INET;
-	strncpy(ifr.ifr_name, ifname, IFNAMSIZ-1);
+	strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
 
 	IF_FALSE_GOTO_DEBUG_ERRNO((ioctl(sock, SIOCGIFADDR, &ifr) == 0), err);
 	ip = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
@@ -89,8 +88,8 @@ err:
 	return ip_str;
 }
 
-int
-write_guestos_config(docker_config_t *config, const char* root_image_file, const char *image_path, const char* image_name, const char *image_tag)
+int write_guestos_config(docker_config_t *config, const char *root_image_file, const char *image_path,
+			 const char *image_name, const char *image_tag)
 {
 	int ret = -1;
 	char *out_file;
@@ -109,7 +108,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	cfg.version = (int)time(NULL);
 
 	image_path_unversioned = mem_printf("%s/%s_%s", image_path, image_name, image_tag);
-	out_image_path_versioned = mem_printf("%s-%"PRId64, image_path_unversioned, cfg.version);
+	out_image_path_versioned = mem_printf("%s-%" PRId64, image_path_unversioned, cfg.version);
 	out_file = mem_printf("%s.conf", out_image_path_versioned);
 
 	cfg.n_mounts = list_length(config->volumes_list) + 1;
@@ -130,7 +129,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 
 	cfg.mounts[0] = &mount_root;
 
-	int i=1;
+	int i = 1;
 	// default sceleton for every volume
 	GuestOSMount mount_vol = GUEST_OSMOUNT__INIT;
 
@@ -150,20 +149,20 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	}
 
 	cfg.n_init_env = config->env_size;
-	cfg.init_env = mem_new(char*, config->env_size);
-	for (int i=0; i < config->env_size; ++i) {
+	cfg.init_env = mem_new(char *, config->env_size);
+	for (int i = 0; i < config->env_size; ++i) {
 		INFO("Env[%d]: %s", i, config->env[i]);
 		cfg.init_env[i] = config->env[i];
 	}
 
 	int index = 0;
 	int init_size = config->entrypoint_size + config->cmd_size;
-	char **init = mem_new(char*, init_size);
-	for (int i=0; i < config->entrypoint_size; ++i, ++index) {
+	char **init = mem_new(char *, init_size);
+	for (int i = 0; i < config->entrypoint_size; ++i, ++index) {
 		INFO("Config Entrypoint[%d]: %s", i, config->entrypoint[i]);
 		init[index] = config->entrypoint[i];
 	}
-	for (int i=0; i < config->cmd_size; ++i, ++index) {
+	for (int i = 0; i < config->cmd_size; ++i, ++index) {
 		INFO("Config Cmd[%d]: %s", i, config->cmd[i]);
 		init[index] = config->cmd[i];
 	}
@@ -173,7 +172,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	cfg.init_param = &init[0];
 
 	for (list_t *l = config->exposedports_list; l; l = l->next) {
-		docker_exposed_port_t* port = l->data;
+		docker_exposed_port_t *port = l->data;
 		INFO("Config Exposed Port: %d (%s)", port->port, port->protocol);
 	}
 	for (list_t *l = config->labels_list; l; l = l->next) {
@@ -206,18 +205,17 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	out_sig_file = mem_printf("%s.sig", out_image_path_versioned);
 	out_cert_file = mem_printf("%s.cert", out_image_path_versioned);
 	if (!file_exists(SSIG_KEY_FILE)) {
-		if(util_gen_pki() < 0)
+		if (util_gen_pki() < 0)
 			WARN("Could not generate PKI and register PKI");
-		else if(file_exists(LOCALCA_CERT_FILE)) {
+		else if (file_exists(LOCALCA_CERT_FILE)) {
 			control_register_localca(LOCALCA_CERT_FILE);
 		}
 	}
 	ret = util_sign_guestos(out_sig_file, out_file, SSIG_KEY_FILE);
 	if (ret == 0) {
-		if(file_copy(SSIG_CERT_FILE, out_cert_file, file_size(SSIG_CERT_FILE), 512, 0) < 0)
+		if (file_copy(SSIG_CERT_FILE, out_cert_file, file_size(SSIG_CERT_FILE), 512, 0) < 0)
 			WARN("Could not copy Certificate to %s", out_cert_file);
 	}
-
 
 	if (dir_mkdir_p(WWW_OS_IMAGES_DIR, 0755))
 		ERROR_ERRNO("Can't create folder for hosting image files");
@@ -225,11 +223,10 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	if (symlink(TMP_OS_IMAGES_PREFIX, WWW_ROOT) < 0 && errno != EEXIST)
 		ERROR_ERRNO("Can't symlink %s foder to %s", TMP_OS_IMAGES_PREFIX, WWW_ROOT);
 
+	out_www_image_path_versioned =
+		mem_printf("%s/%s_%s-%" PRId64, WWW_OS_IMAGES_DIR, image_name, image_tag, cfg.version);
 
-	out_www_image_path_versioned = mem_printf("%s/%s_%s-%"PRId64, WWW_OS_IMAGES_DIR,
-				image_name, image_tag, cfg.version);
-
-	if(rename(image_path_unversioned, out_www_image_path_versioned) < 0)
+	if (rename(image_path_unversioned, out_www_image_path_versioned) < 0)
 		ERROR_ERRNO("Can't rename dir %s", image_path_unversioned);
 	else
 		ret = control_push_guestos(out_file, out_cert_file, out_sig_file);
@@ -240,7 +237,7 @@ write_guestos_config(docker_config_t *config, const char* root_image_file, const
 	mem_free(out_www_image_path_versioned);
 
 free_stuff:
-	for (uint32_t j=0; j < cfg.n_mounts; ++j) {
+	for (uint32_t j = 0; j < cfg.n_mounts; ++j) {
 		mem_free(cfg.mounts[j]->image_file);
 		mem_free(cfg.mounts[j]->mount_point);
 		mem_free(cfg.mounts[j]->fs_type);
@@ -263,11 +260,10 @@ free_stuff:
 	return ret;
 }
 
-char *
-merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, char* image_name, char* image_tag)
+char *merge_layers_new(docker_manifest_t *manifest, char *in_path, char *out_path, char *image_name, char *image_tag)
 {
 	char *target_image_path = mem_printf("%s/%s_%s", out_path, image_name, image_tag);
-	char* extracted_image_path = mem_printf("%s/%s_%s_extracted", out_path, image_name, image_tag);
+	char *extracted_image_path = mem_printf("%s/%s_%s_extracted", out_path, image_name, image_tag);
 	char *image_file = NULL;
 
 	if (dir_mkdir_p(extracted_image_path, 0755) < 0) {
@@ -279,8 +275,9 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 		goto out;
 	}
 
-	for (int i=0; i < manifest->layers_size; ++i) {
-		char* layer_file_name = mem_printf("%s/%s%s", in_path, manifest->layers[i]->digest, manifest->layers[i]->suffix);
+	for (int i = 0; i < manifest->layers_size; ++i) {
+		char *layer_file_name =
+			mem_printf("%s/%s%s", in_path, manifest->layers[i]->digest, manifest->layers[i]->suffix);
 		INFO("Extracting layer[%d]: %s", i, layer_file_name);
 		if (-1 == util_tar_extract(layer_file_name, extracted_image_path)) {
 			ERROR_ERRNO("Failed to extract %s", layer_file_name);
@@ -290,7 +287,7 @@ merge_layers_new(docker_manifest_t *manifest, char* in_path, char* out_path, cha
 		mem_free(layer_file_name);
 	}
 	image_file = mem_printf("%s/%s", target_image_path, IMAGE_NAME_ROOT);
-	if (util_squash_image(extracted_image_path, image_file) <0){
+	if (util_squash_image(extracted_image_path, image_file) < 0) {
 		mem_free(image_file);
 		image_file = NULL;
 		goto out;
@@ -301,40 +298,37 @@ out:
 	return image_file;
 }
 
-void
-print_usage(char *progname)
+void print_usage(char *progname)
 {
 	ERROR("Usage: %s login -u <username> -p <password>"
-		       " -r <hostname:port>", progname);
+	      " -r <hostname:port>",
+	      progname);
 	ERROR("Usage: %s pull [-r <hostname:port>] [-a <arch>]"
-		       " <imagename> [-t <imagetag>]", progname);
+	      " <imagename> [-t <imagetag>]",
+	      progname);
 	exit(-1);
 }
 
-static const struct option pull_options[] = {
-	{"registry",	optional_argument, 0, 'r'},
-	{"arch",	optional_argument, 0, 'a'},
-	{"tag",		optional_argument, 0, 't'},
-	{"help",     	no_argument, 0, 'h'},
-	{0, 0, 0, 0}
-};
+static const struct option pull_options[] = { { "registry", optional_argument, 0, 'r' },
+					      { "arch", optional_argument, 0, 'a' },
+					      { "tag", optional_argument, 0, 't' },
+					      { "help", no_argument, 0, 'h' },
+					      { 0, 0, 0, 0 } };
 
-static const struct option login_options[] = {
-	{"registry",	required_argument, 0, 'r'},
-	{"user",	required_argument, 0, 'u'},
-	{"password",	required_argument, 0, 'p'},
-	{"help",     	no_argument, 0, 'h'},
-	{0, 0, 0, 0}
-};
+static const struct option login_options[] = { { "registry", required_argument, 0, 'r' },
+					       { "user", required_argument, 0, 'u' },
+					       { "password", required_argument, 0, 'p' },
+					       { "help", no_argument, 0, 'h' },
+					       { 0, 0, 0, 0 } };
 
-int
-main(UNUSED int argc, char **argv)
+int main(UNUSED int argc, char **argv)
 {
 	char *buf;
 	char *manifest_file = NULL;
 	char *manifest_list_file = NULL;
 	char *image_tag = NULL;
-	char *image_name = NULL;;
+	char *image_name = NULL;
+	;
 	char *image_arch = NULL;
 
 	char *config_file_name = NULL;
@@ -368,8 +362,8 @@ main(UNUSED int argc, char **argv)
 		const char *url = "registry-1.docker.io";
 		image_arch = "amd64";
 		image_tag = "latest";
-		for (int c, option_index = 0; -1 != (c = getopt_long(pull_argc, pull_argv,
-						"t:r:a:", pull_options, &option_index)); ) {
+		for (int c, option_index = 0;
+		     - 1 != (c = getopt_long(pull_argc, pull_argv, "t:r:a:", pull_options, &option_index));) {
 			switch (c) {
 			case 'r':
 				url = optarg ? optarg : "registry-1.docker.io";
@@ -384,7 +378,7 @@ main(UNUSED int argc, char **argv)
 				print_usage(argv[0]);
 			}
 		}
-		optind += argc - pull_argc;	// adjust optind to be used with argv
+		optind += argc - pull_argc; // adjust optind to be used with argv
 		// need at least one more argument (i.e. command string)
 		if (optind >= argc)
 			print_usage(argv[0]);
@@ -401,8 +395,8 @@ main(UNUSED int argc, char **argv)
 		const char *url = NULL;
 		const char *user = NULL;
 		const char *password = NULL;
-		for (int c, option_index = 0; -1 != (c = getopt_long(login_argc, login_argv,
-						":r:u:p", login_options, &option_index)); ) {
+		for (int c, option_index = 0;
+		     - 1 != (c = getopt_long(login_argc, login_argv, ":r:u:p", login_options, &option_index));) {
 			switch (c) {
 			case 'r':
 				url = optarg;
@@ -428,7 +422,7 @@ main(UNUSED int argc, char **argv)
 		return 0;
 	}
 
-	char* token = docker_get_curl_token_new(image_name, token_file);
+	char *token = docker_get_curl_token_new(image_name, token_file);
 	IF_NULL_GOTO_ERROR(token, err);
 
 	manifest_list_file = mem_printf("%s/%s", docker_image_path, "manifests.json");
@@ -451,14 +445,13 @@ main(UNUSED int argc, char **argv)
 	mem_free(buf);
 	buf = NULL;
 
-	for (int i=0; i < ml->manifests_size; ++i) {
+	for (int i = 0; i < ml->manifests_size; ++i) {
 		if (!strcmp(ml->manifests[i]->platform_arch, image_arch)) {
 			if (ml->manifests[i]->digest_algorithm == NULL) {
 				manifest_url_digest = mem_strdup(image_tag);
 			} else {
-				manifest_url_digest = mem_printf("%s:%s",
-					ml->manifests[i]->digest_algorithm,
-					ml->manifests[i]->digest);
+				manifest_url_digest = mem_printf("%s:%s", ml->manifests[i]->digest_algorithm,
+								 ml->manifests[i]->digest);
 			}
 			if (strcmp(image_arch, "arm")) // for arm run throuh to latest subarch
 				break;
@@ -468,7 +461,7 @@ main(UNUSED int argc, char **argv)
 		ERROR("No manifets for requested architecture found!");
 		goto err;
 	}
-	INFO ("manifests with url digest %s", manifest_url_digest);
+	INFO("manifests with url digest %s", manifest_url_digest);
 
 	manifest_file = mem_printf("%s/%s", docker_image_path, "manifest.json");
 	if (file_exists(manifest_file))
@@ -496,7 +489,6 @@ main(UNUSED int argc, char **argv)
 		goto err;
 	}
 
-
 	INFO("Cleaning up token_file: %s", token_file);
 	if (file_exists(token_file))
 		remove(token_file);
@@ -513,7 +505,7 @@ main(UNUSED int argc, char **argv)
 	// replace the slashes in docker image name to be compatible with trustme
 	// guestos names, e.g. library/debian -> library_debian
 	char *strp = image_name;
-	while ((strp = strchr(strp, '/')) != NULL )
+	while ((strp = strchr(strp, '/')) != NULL)
 		*strp++ = '_';
 
 	trustx_image_path = mem_printf("%s/%s", WORK_PATH, "trustx_image");
@@ -526,7 +518,6 @@ main(UNUSED int argc, char **argv)
 	if (NULL == trustx_image_file) {
 		ERROR("Failed to merge layers resulting image file is NULL!");
 		goto err;
-
 	}
 
 	write_guestos_config(config, trustx_image_file, trustx_image_path, image_name, image_tag);

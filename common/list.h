@@ -51,12 +51,11 @@ struct list {
  * @param data Payload of the new list element; may be NULL.
  * @return The head of the list.
  */
-list_t *
-list_append(list_t *list, void *data)
+list_t *list_append(list_t *list, void *data)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Joins two lists by appending list_append to list. If one of
@@ -66,8 +65,7 @@ list_append(list_t *list, void *data)
  * @param list The head of the list to be appended; may be NULL.
  * @return The head of new joind list.
  */
-list_t *
-list_join(list_t *list, list_t *list_append);
+list_t *list_join(list_t *list, list_t *list_append);
 
 /**
  * Returns true if and only if the list contains the element.
@@ -76,8 +74,7 @@ list_join(list_t *list, list_t *list_append);
  * @param elem The element to search for.
  * @return true if list contains element, false otherwise.
  */
-bool
-list_contains(const list_t *list, const list_t *elem);
+bool list_contains(const list_t *list, const list_t *elem);
 
 /**
  * Deletes the list "to the right".
@@ -86,8 +83,7 @@ list_contains(const list_t *list, const list_t *elem);
  * @return Head of the list (or NULL if the element was the only element
  *         of the list or the list was already NULL).
  */
-void
-list_delete(list_t *list);
+void list_delete(list_t *list);
 
 /**
  * Deletes an element from the list.
@@ -97,12 +93,11 @@ list_delete(list_t *list);
  * @return The head of the list (or NULL if the element was the only element
  *         of the list or the list was already NULL).
  */
-list_t *
-list_unlink(list_t *list, list_t *elem)
+list_t *list_unlink(list_t *list, list_t *elem)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Deletes the first element from the list that contains the supplied data
@@ -113,12 +108,11 @@ list_unlink(list_t *list, list_t *elem)
  * @return The head of the list (or NULL if the element was the only element
  *         of the list or the list was already NULL).
  */
-list_t *
-list_remove(list_t *list, void *data)
+list_t *list_remove(list_t *list, void *data)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Returns the first element from the list that contains the supplied data
@@ -128,8 +122,7 @@ list_remove(list_t *list, void *data)
  * @param data The payload data to search for.
  * @return The first element that matches data or NULL if no element matches.
  */
-list_t *
-list_find(list_t *list, void *data);
+list_t *list_find(list_t *list, void *data);
 
 /**
  * Returns the number of elements contained in the list.
@@ -137,8 +130,7 @@ list_find(list_t *list, void *data);
  * @param list The head of the list.
  * @return Number of elements contained in the list.
  */
-unsigned int
-list_length(const list_t *list);
+unsigned int list_length(const list_t *list);
 
 /**
  * Returns the n'th element of the list.
@@ -147,8 +139,7 @@ list_length(const list_t *list);
  * @param n The index of the element, starting with 0.
  * @return The element with index n.
  */
-list_t *
-list_nth(list_t *list, unsigned int n);
+list_t *list_nth(list_t *list, unsigned int n);
 
 /**
  * Returns the payload of the n'th element of the list.
@@ -158,8 +149,7 @@ list_nth(list_t *list, unsigned int n);
  * @return The payload of the element with index n or NULL if there is no n'th
  *         element, i.e., the list contains fewer elements or list is NULL.
  */
-void *
-list_nth_data(list_t *list, unsigned int n);
+void *list_nth_data(list_t *list, unsigned int n);
 
 /**
  * Allocates memory for a new list element and puts it at the start of the list
@@ -169,12 +159,11 @@ list_nth_data(list_t *list, unsigned int n);
  * @param data Payload of the new list element; may be NULL.
  * @return Head to the list.
  */
-list_t *
-list_prepend(list_t *list, void *data)
+list_t *list_prepend(list_t *list, void *data)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Returns the last element of the list.
@@ -182,8 +171,7 @@ list_prepend(list_t *list, void *data)
  * @param list The head of the list.
  * @return The last element of the list.
  */
-list_t *
-list_tail(list_t *list);
+list_t *list_tail(list_t *list);
 
 /**
  * replace an  element in the list.
@@ -194,17 +182,14 @@ list_tail(list_t *list);
  * @return The head of the list (or NULL if the element was the only element
  *         of the list or the list was already NULL).
  */
-	list_t *
-	list_replace(list_t *list, list_t *elem,void * data)
+list_t *list_replace(list_t *list, list_t *elem, void *data)
 #if defined(__GNUC__)
-	        __attribute__((warn_unused_result))
+	__attribute__((warn_unused_result))
 #endif
-;
-
+	;
 
 /**
  * Calls the given function on each list element
  */
-void
-list_foreach(list_t *list, void (func)(void *));
+void list_foreach(list_t *list, void(func)(void *));
 #endif /* LIST_H */

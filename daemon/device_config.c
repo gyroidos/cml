@@ -28,8 +28,8 @@
 #include "device.pb-c.h"
 #endif
 
-#include "common/macro.h"
 #include "common/file.h"
+#include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
 #include "common/uuid.h"
@@ -40,11 +40,9 @@ struct device_config {
 	DeviceConfig *cfg;
 };
 
-
 /******************************************************************************/
 
-device_config_t *
-device_config_new(const char *path)
+device_config_t *device_config_new(const char *path)
 {
 	char *file = NULL;
 	DeviceConfig *cfg = NULL;
@@ -55,8 +53,7 @@ device_config_new(const char *path)
 		file = mem_strdup(path);
 		DEBUG("Loading device config from \"%s\".", file);
 
-		cfg = (DeviceConfig *)
-			protobuf_message_new_from_textfile(file, &device_config__descriptor);
+		cfg = (DeviceConfig *)protobuf_message_new_from_textfile(file, &device_config__descriptor);
 		if (!cfg) {
 			WARN("Failed loading device config from file \"%s\". Reverting to default values.", file);
 			cfg = mem_new(DeviceConfig, 1);
@@ -75,11 +72,10 @@ device_config_new(const char *path)
 	return config;
 }
 
-void
-device_config_free(device_config_t *config)
+void device_config_free(device_config_t *config)
 {
 	ASSERT(config);
-	protobuf_free_message((ProtobufCMessage *) config->cfg);
+	protobuf_free_message((ProtobufCMessage *)config->cfg);
 	mem_free(config->file);
 	mem_free(config);
 }
@@ -101,8 +97,7 @@ device_config_write(const device_config_t *config)
 }
 #endif
 
-const char *
-device_config_get_uuid(const device_config_t *config)
+const char *device_config_get_uuid(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -110,8 +105,7 @@ device_config_get_uuid(const device_config_t *config)
 	return config->cfg->uuid;
 }
 
-const char *
-device_config_get_mdm_node(const device_config_t *config)
+const char *device_config_get_mdm_node(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -119,8 +113,7 @@ device_config_get_mdm_node(const device_config_t *config)
 	return config->cfg->mdm_node;
 }
 
-const char *
-device_config_get_mdm_service(const device_config_t *config)
+const char *device_config_get_mdm_service(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -128,8 +121,7 @@ device_config_get_mdm_service(const device_config_t *config)
 	return config->cfg->mdm_service;
 }
 
-const char *
-device_config_get_telephony_uuid(const device_config_t *config)
+const char *device_config_get_telephony_uuid(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -137,8 +129,7 @@ device_config_get_telephony_uuid(const device_config_t *config)
 	return config->cfg->telephony_uuid;
 }
 
-const char *
-device_config_get_update_base_url(const device_config_t *config)
+const char *device_config_get_update_base_url(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -146,8 +137,7 @@ device_config_get_update_base_url(const device_config_t *config)
 	return config->cfg->update_base_url;
 }
 
-int
-device_config_get_should_led_blink(const device_config_t *config)
+int device_config_get_should_led_blink(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -155,8 +145,7 @@ device_config_get_should_led_blink(const device_config_t *config)
 	return config->cfg->should_led_blink;
 }
 
-const char *
-device_config_get_c0os(const device_config_t *config)
+const char *device_config_get_c0os(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -164,8 +153,7 @@ device_config_get_c0os(const device_config_t *config)
 	return config->cfg->c0os;
 }
 
-const char *
-device_config_get_host_addr(const device_config_t *config)
+const char *device_config_get_host_addr(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -173,8 +161,7 @@ device_config_get_host_addr(const device_config_t *config)
 	return config->cfg->host_addr;
 }
 
-const char *
-device_config_get_host_dns(const device_config_t *config)
+const char *device_config_get_host_dns(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -182,8 +169,7 @@ device_config_get_host_dns(const device_config_t *config)
 	return config->cfg->host_dns;
 }
 
-const char *
-device_config_get_host_gateway(const device_config_t *config)
+const char *device_config_get_host_gateway(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -191,8 +177,7 @@ device_config_get_host_gateway(const device_config_t *config)
 	return config->cfg->host_gateway;
 }
 
-uint32_t
-device_config_get_host_subnet(const device_config_t *config)
+uint32_t device_config_get_host_subnet(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -200,8 +185,7 @@ device_config_get_host_subnet(const device_config_t *config)
 	return config->cfg->host_subnet;
 }
 
-const char *
-device_config_get_host_if(const device_config_t *config)
+const char *device_config_get_host_if(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -209,8 +193,7 @@ device_config_get_host_if(const device_config_t *config)
 	return config->cfg->host_if;
 }
 
-bool
-device_config_get_locally_signed_images(const device_config_t *config)
+bool device_config_get_locally_signed_images(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);

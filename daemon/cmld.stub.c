@@ -24,10 +24,10 @@
 #include "cmld.stub.h"
 #include "container.stub.h"
 
-#include "common/uuid.h"
 #include "common/list.h"
-#include "common/str.h"
 #include "common/macro.h"
+#include "common/str.h"
+#include "common/uuid.h"
 
 //#include <stdio.h>
 
@@ -40,18 +40,16 @@ static int g_feedback_fd;
 /****************************************/
 /*** Helper functions for unit test.  ***/
 /****************************************/
-void
-cmld_stub_init(int fd)
+void cmld_stub_init(int fd)
 {
 	g_feedback_fd = fd;
 }
 
-container_t *
-cmld_stub_container_create(const char *container_name)
+container_t *cmld_stub_container_create(const char *container_name)
 {
 	container_t *container = container_stub_new(container_name);
 	if (container) {
-		g_containers = list_append(g_containers, (void *) container);
+		g_containers = list_append(g_containers, (void *)container);
 		++g_nr_containers;
 	}
 	return container;
@@ -61,8 +59,7 @@ cmld_stub_container_create(const char *container_name)
 /**
  * Implementation for missing dprintf(int fd, ...).
  */
-static int
-dprintf(int fd, const char *format, ...)
+static int dprintf(int fd, const char *format, ...)
 {
 	va_list argptr;
 	va_start(argptr, format);
@@ -78,13 +75,12 @@ dprintf(int fd, const char *format, ...)
 /*** Stubbed CMLD API functions.  ***/
 /************************************/
 
-int
-cmld_container_destroy(container_t *container)
+int cmld_container_destroy(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	--g_nr_containers;
-	g_containers = list_remove(g_containers, (void *) container);
+	g_containers = list_remove(g_containers, (void *)container);
 	if (g_foreground == container) {
 		if (g_nr_containers > 0)
 			cmld_container_switch(cmld_container_get_by_index(0));
@@ -97,8 +93,7 @@ cmld_container_destroy(container_t *container)
 	return 0;
 }
 
-int
-cmld_container_switch(container_t *container)
+int cmld_container_switch(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
@@ -109,11 +104,10 @@ cmld_container_switch(container_t *container)
 	return -1;
 }
 
-int
-cmld_container_start(container_t *container, const char *key, bool no_switch)
+int cmld_container_start(container_t *container, const char *key, bool no_switch)
 {
-	dprintf(g_feedback_fd, "%s: %s, key=%s, no_switch=%s", __func__,
-	        container_get_name(container), key ? key : "NULL", no_switch ? "true" : "false");
+	dprintf(g_feedback_fd, "%s: %s, key=%s, no_switch=%s", __func__, container_get_name(container),
+		key ? key : "NULL", no_switch ? "true" : "false");
 
 	if (!no_switch)
 		cmld_container_switch(container);
@@ -121,63 +115,55 @@ cmld_container_start(container_t *container, const char *key, bool no_switch)
 	return 0;
 }
 
-int
-cmld_container_start_with_smartcard(container_t *container, const char *passwd, bool no_switch)
+int cmld_container_start_with_smartcard(container_t *container, const char *passwd, bool no_switch)
 {
 	return cmld_container_start(container, passwd, no_switch);
 }
 
-int
-cmld_container_stop(container_t *container)
+int cmld_container_stop(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	return 0;
 }
 
-int
-cmld_container_freeze(container_t *container)
+int cmld_container_freeze(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	return 0;
 }
 
-int
-cmld_container_unfreeze(container_t *container)
+int cmld_container_unfreeze(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	return 0;
 }
 
-int
-cmld_container_snapshot(container_t *container)
+int cmld_container_snapshot(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	return 0;
 }
 
-int
-cmld_container_wipe(container_t *container)
+int cmld_container_wipe(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	return 0;
 }
 
-void
-cmld_wipe_device()
+void cmld_wipe_device()
 {
-
 	return;
 }
 
-container_t *
-cmld_container_get_by_uuid(uuid_t *uuid)
+container_t *cmld_container_get_by_uuid(uuid_t *uuid)
 {
-	if (uuid) for (list_t *l = g_containers; l; l = l->next) {
+	if (uuid)
+		for (list_t *l = g_containers; l; l = l->next) {
 			container_t *container = (container_t *)l->data;
 			const uuid_t *c_uuid = container_get_uuid(container);
 			if (c_uuid && uuid_equals(uuid, c_uuid))
@@ -186,22 +172,20 @@ cmld_container_get_by_uuid(uuid_t *uuid)
 	return NULL;
 }
 
-container_t *
-cmld_containers_get_foreground(void)
+container_t *cmld_containers_get_foreground(void)
 {
 	return g_foreground;
 }
 
-int
-cmld_containers_get_count()
+int cmld_containers_get_count()
 {
 	return g_nr_containers;
 }
 
-container_t *
-cmld_container_get_by_index(int index)
+container_t *cmld_container_get_by_index(int index)
 {
-	if (index >= 0 && index < g_nr_containers) for (list_t *l = g_containers; l; l = l->next, index--) {
+	if (index >= 0 && index < g_nr_containers)
+		for (list_t *l = g_containers; l; l = l->next, index--) {
 			if (0 == index)
 				return (container_t *)l->data;
 		}
@@ -209,28 +193,24 @@ cmld_container_get_by_index(int index)
 	return NULL;
 }
 
-const char *
-cmld_get_device_uuid(void)
+const char *cmld_get_device_uuid(void)
 {
 	return "bd42af59-e003-4426-84ef-d3a9c1dce8fd";
 }
 
-container_t *
-cmld_containers_get_a0()
+container_t *cmld_containers_get_a0()
 {
 	return cmld_container_get_by_index(0);
 }
 
-int
-cmld_container_allow_audio(container_t *container)
+int cmld_container_allow_audio(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	return 0;
 }
 
-int
-cmld_container_deny_audio(container_t *container)
+int cmld_container_deny_audio(container_t *container)
 {
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 

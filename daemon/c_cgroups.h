@@ -36,51 +36,38 @@
 
 typedef struct c_cgroups c_cgroups_t;
 
-c_cgroups_t *
-c_cgroups_new(container_t *container);
+c_cgroups_t *c_cgroups_new(container_t *container);
 
-void
-c_cgroups_free(c_cgroups_t *cgroups);
+void c_cgroups_free(c_cgroups_t *cgroups);
 
 /*******************/
 /* Functions */
-int
-c_cgroups_freeze(c_cgroups_t *cgroups);
+int c_cgroups_freeze(c_cgroups_t *cgroups);
 
-int
-c_cgroups_unfreeze(c_cgroups_t *cgroups);
+int c_cgroups_unfreeze(c_cgroups_t *cgroups);
 
-int
-c_cgroups_devices_allow_audio(c_cgroups_t *cgroups);
+int c_cgroups_devices_allow_audio(c_cgroups_t *cgroups);
 
-int
-c_cgroups_devices_deny_audio(c_cgroups_t *cgroups);
+int c_cgroups_devices_deny_audio(c_cgroups_t *cgroups);
 
 /**
  * This function gets the ram_limit for the container from its associated container
  * object and configures the cgroups memory subsystem to this limit.
  */
-int
-c_cgroups_set_ram_limit(c_cgroups_t *cgroups);
+int c_cgroups_set_ram_limit(c_cgroups_t *cgroups);
 
 /*******************/
 /* Hooks */
-int
-c_cgroups_start_pre_clone(c_cgroups_t *cgroups);
+int c_cgroups_start_pre_clone(c_cgroups_t *cgroups);
 
-int
-c_cgroups_start_post_clone(c_cgroups_t *cgroups);
+int c_cgroups_start_post_clone(c_cgroups_t *cgroups);
 
-int
-c_cgroups_start_pre_exec(c_cgroups_t *cgroups);
+int c_cgroups_start_pre_exec(c_cgroups_t *cgroups);
 
-int
-c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid);
+int c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid);
 
-int
-c_cgroups_start_child(c_cgroups_t *cgroups);
+int c_cgroups_start_child(c_cgroups_t *cgroups);
 
-void
-c_cgroups_cleanup(c_cgroups_t *cgroups);
+void c_cgroups_cleanup(c_cgroups_t *cgroups);
 
 #endif /* C_CGROUPS_H */

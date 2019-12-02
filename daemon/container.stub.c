@@ -23,9 +23,9 @@
 
 #include "container.stub.h"
 
-#include "common/uuid.h"
-#include "common/mem.h"
 #include "common/macro.h"
+#include "common/mem.h"
+#include "common/uuid.h"
 
 /**
  * Unit-test stub for container.h.
@@ -40,8 +40,7 @@ struct container {
 	char *phone_number;
 };
 
-container_t *
-container_stub_new(char const *container_name)
+container_t *container_stub_new(char const *container_name)
 {
 	container_t *container = mem_new0(container_t, 1);
 	container->name = mem_strdup(container_name);
@@ -54,8 +53,7 @@ container_stub_new(char const *container_name)
  * Free a container data structure. Does not remove the persistent parts of the container,
  * i.e. the configuration and the images.
  */
-void
-container_free(container_t *container)
+void container_free(container_t *container)
 {
 	uuid_free(container->uuid);
 	mem_free((void *)container->name);
@@ -65,8 +63,7 @@ container_free(container_t *container)
 /**
  * Returns the name of the container.
  */
-const char *
-container_get_name(const container_t *container)
+const char *container_get_name(const container_t *container)
 {
 	ASSERT(container);
 	return container->name;
@@ -75,8 +72,7 @@ container_get_name(const container_t *container)
 /**
  * Returns the name of the container config.
  */
-const char *
-container_get_config_filename(const container_t *container)
+const char *container_get_config_filename(const container_t *container)
 {
 	ASSERT(container);
 	return container->config_filename;
@@ -85,40 +81,35 @@ container_get_config_filename(const container_t *container)
 /**
  * Returns the uuid of the container.
  */
-const uuid_t *
-container_get_uuid(const container_t *container)
+const uuid_t *container_get_uuid(const container_t *container)
 {
 	ASSERT(container);
 	return container->uuid;
 }
 
-container_state_t
-container_get_state(UNUSED const container_t *container)
+container_state_t container_get_state(UNUSED const container_t *container)
 {
 	return CONTAINER_STATE_STOPPED;
 }
 
-pid_t
-container_get_pid(UNUSED const container_t *container) {
+pid_t container_get_pid(UNUSED const container_t *container)
+{
 	return 0;
 }
 
-char*
-container_get_imei(container_t *container)
+char *container_get_imei(container_t *container)
 {
 	ASSERT(container);
 	return container->imei;
 }
 
-char*
-container_get_mac_address(container_t *container)
+char *container_get_mac_address(container_t *container)
 {
 	ASSERT(container);
 	return container->mac_address;
 }
 
-char*
-container_get_phone_number(container_t *container)
+char *container_get_phone_number(container_t *container)
 {
 	ASSERT(container);
 	return container->phone_number;

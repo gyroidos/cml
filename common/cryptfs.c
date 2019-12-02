@@ -22,21 +22,21 @@
  */
 
 #define _LARGEFILE64_SOURCE
+#include <errno.h>
+#include <fcntl.h>
+#include <libgen.h>
+#include <linux/dm-ioctl.h>
+#include <linux/kdev_t.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mount.h>
+#include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <sys/ioctl.h>
-#include <linux/dm-ioctl.h>
-#include <libgen.h>
-#include <stdlib.h>
-#include <sys/param.h>
-#include <string.h>
-#include <sys/mount.h>
-#include <errno.h>
-#include <linux/kdev_t.h>
 
 #include "common/cryptfs.h"
 
@@ -62,8 +62,7 @@
 
 /******************************************************************************/
 
-static void
-ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
+static void ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
 {
 	memset(io, 0, dataSize);
 	io->data_size = dataSize;
@@ -74,11 +73,10 @@ ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flag
 	io->flags = flags;
 
 	if (name)
-		strncpy(io->name, name, sizeof(io->name)-1);
+		strncpy(io->name, name, sizeof(io->name) - 1);
 }
 
-static unsigned long
-get_blkdev_size(int fd)
+static unsigned long get_blkdev_size(int fd)
 {
 	unsigned long nr_sec;
 
@@ -88,8 +86,7 @@ get_blkdev_size(int fd)
 	return nr_sec;
 }
 
-char *
-cryptfs_get_device_path_new(const char *label)
+char *cryptfs_get_device_path_new(const char *label)
 {
 	return mem_printf("%s%s", CRYPT_PATH_PREFIX, label);
 }
@@ -120,10 +117,8 @@ convert_key_to_hex_ascii(unsigned char *master_key, unsigned int keysize,
 }
 #endif
 
-static int
-load_crypto_mapping_table(const char *real_blk_name,
-	     const char *master_key_ascii, const char *name,
-	     int fs_size, int fd)
+static int load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name,
+				     int fs_size, int fd)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
@@ -148,15 +143,14 @@ load_crypto_mapping_table(const char *real_blk_name,
 	strcpy(tgt->target_type, "crypt");
 
 	crypt_params = buffer + sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec);
-	snprintf(crypt_params, DM_CRYPT_BUF_SIZE-sizeof(struct dm_ioctl)-sizeof(struct dm_target_spec),
-			"%s %s 0 %s 0 %s", CRYPTO_TYPE, master_key_ascii,
-			real_blk_name, extra_params);
+	snprintf(crypt_params, DM_CRYPT_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
+		 "%s %s 0 %s 0 %s", CRYPTO_TYPE, master_key_ascii, real_blk_name, extra_params);
 	crypt_params += strlen(crypt_params) + 1;
-	crypt_params = (char *)(((unsigned long)crypt_params + 7) & ~8);	/* Align to an 8 byte boundary */
+	crypt_params = (char *)(((unsigned long)crypt_params + 7) & ~8); /* Align to an 8 byte boundary */
 	tgt->next = crypt_params - buffer;
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		if (!ioctl(fd, (int) DM_TABLE_LOAD, io)) {
+		if (!ioctl(fd, (int)DM_TABLE_LOAD, io)) {
 			break;
 		}
 		usleep(500000);
@@ -170,9 +164,7 @@ load_crypto_mapping_table(const char *real_blk_name,
 	}
 }
 
-static int
-create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
-				 const char *name)
+static int create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
@@ -203,7 +195,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		if (!ioctl(fd, (int) DM_DEV_CREATE, io)) {
+		if (!ioctl(fd, (int)DM_DEV_CREATE, io)) {
 			break;
 		}
 		usleep(500000);
@@ -215,8 +207,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 		goto errout;
 	}
 
-	load_count = load_crypto_mapping_table(real_blk_name, master_key,
-			name, fs_size, fd);
+	load_count = load_crypto_mapping_table(real_blk_name, master_key, name, fs_size, fd);
 	if (load_count < 0) {
 		ERROR("Cannot load dm-crypt mapping table");
 		goto errout;
@@ -227,7 +218,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 	/* Resume this device to activate it */
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
-	if (ioctl(fd, (int) DM_DEV_SUSPEND, io)) {
+	if (ioctl(fd, (int)DM_DEV_SUSPEND, io)) {
 		ERROR_ERRNO("Cannot resume the dm-crypt device\n");
 		goto errout;
 	}
@@ -235,8 +226,8 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 	/* We made it here with no errors.  Woot! */
 	retval = 0;
 
-      errout:
-	close(fd);		/* If fd is <0 from a failed open call, it's safe to just ignore the close error */
+errout:
+	close(fd); /* If fd is <0 from a failed open call, it's safe to just ignore the close error */
 
 	return retval;
 }
@@ -244,8 +235,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key,
 /* TODO:
  * maybe we need to wait a bit before device is created 
  */
-static char *
-create_device_node(const char *name)
+static char *create_device_node(const char *name)
 {
 	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
 
@@ -256,10 +246,10 @@ create_device_node(const char *name)
 		return NULL;
 	}
 
-	struct dm_ioctl *io = (struct dm_ioctl *) buffer;
+	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
 
 	ioctl_init(io, DEVMAPPER_BUFFER_SIZE, name, 0);
-	if (ioctl(fd, (int) DM_DEV_STATUS, io)) {
+	if (ioctl(fd, (int)DM_DEV_STATUS, io)) {
 		if (errno != ENXIO) {
 			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
 		}
@@ -283,21 +273,18 @@ create_device_node(const char *name)
 	}
 	mem_free(buffer);
 	return device;
-
 }
 
-char *
-cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key)
+char *cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key)
 //			 char *crypto_sys_path, unsigned int max_path)
 {
-	if ( create_crypto_blk_dev(real_blkdev, key, label) < 0)
+	if (create_crypto_blk_dev(real_blkdev, key, label) < 0)
 		return NULL;
 
 	return create_device_node(label);
 }
 
-int
-cryptfs_delete_blk_dev(const char *name)
+int cryptfs_delete_blk_dev(const char *name)
 {
 	int fd;
 	char buffer[DM_CRYPT_BUF_SIZE];
@@ -313,7 +300,7 @@ cryptfs_delete_blk_dev(const char *name)
 	io = (struct dm_ioctl *)buffer;
 
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
-	if (ioctl(fd, (int) DM_DEV_REMOVE, io) < 0) {
+	if (ioctl(fd, (int)DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		if (errno != ENXIO)
 			ERROR_ERRNO("Cannot remove dm-crypt device");

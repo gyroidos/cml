@@ -30,14 +30,14 @@
 
 #include "hardware.h"
 
-#include "common/macro.h"
-#include "common/file.h"
-#include "common/mem.h"
 #include "common/event.h"
+#include "common/file.h"
+#include "common/macro.h"
+#include "common/mem.h"
 
 #include <cutils/properties.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define LED_R "/sys/class/leds/red/brightness"
@@ -49,7 +49,7 @@
 #define LED_B_ON_OFF_MS "/sys/class/leds/blue/on_off_ms"
 
 #define LED_ON_DEFAULT 10000 /* Max value from kernel driver; should not be below 500 */
-#define LED_OFF_DEFAULT 1	/* Min value from kernel driver */
+#define LED_OFF_DEFAULT 1 /* Min value from kernel driver */
 
 #define LED_ON_BLINK 500
 #define LED_OFF_BLINK 3000
@@ -106,7 +106,6 @@ static const char *hw_hammerhead_devices_whitelist_base[] = {
 
 	"c 252:* rwm", // rtc*
 
-
 	/*************/
 	/* Block     */
 	//"b 179:0 rwm", // mmcblk0
@@ -142,16 +141,13 @@ static const char *hw_hammerhead_devices_whitelist_priv[] = {
 /**
  * List of audio devices
  */
-static const char *hw_hammerhead_devices_whitelist_audio[] = {
-	"c 116:* rwm", // ALSA Audio
-	NULL
-};
+static const char *hw_hammerhead_devices_whitelist_audio[] = { "c 116:* rwm", // ALSA Audio
+							       NULL };
 
 static char *hw_hammerhead_serial_number = NULL;
 static char *hw_hammerhead_name = NULL;
 
-const char *
-hardware_get_name(void)
+const char *hardware_get_name(void)
 {
 	if (hw_hammerhead_name == NULL) {
 		hw_hammerhead_name = mem_alloc0(PROPERTY_VALUE_MAX);
@@ -166,22 +162,19 @@ hardware_get_name(void)
 	return hw_hammerhead_name;
 }
 
-const char *
-hardware_get_manufacturer(void)
+const char *hardware_get_manufacturer(void)
 {
 	// TODO check if this is the correct manufacturer string
 	return "Google & LG Electronics";
 }
 
-const char *
-hardware_get_model(void)
+const char *hardware_get_model(void)
 {
 	// TODO return the proper "hardware model"
 	return "hammerhead-model";
 }
 
-const char *
-hardware_get_serial_number(void)
+const char *hardware_get_serial_number(void)
 {
 	if (hw_hammerhead_serial_number == NULL) {
 		hw_hammerhead_serial_number = mem_alloc0(PROPERTY_VALUE_MAX);
@@ -196,20 +189,17 @@ hardware_get_serial_number(void)
 	return hw_hammerhead_serial_number;
 }
 
-const char *
-hardware_get_bootimg_path(void)
+const char *hardware_get_bootimg_path(void)
 {
 	return "/dev/block/platform/msm_sdcc.1/by-name/boot";
 }
 
-const char *
-hardware_get_block_by_name_path(void)
+const char *hardware_get_block_by_name_path(void)
 {
 	return "/dev/block/platform/msm_sdcc.1/by-name";
 }
 
-int
-hardware_set_led(uint32_t color, bool should_blink)
+int hardware_set_led(uint32_t color, bool should_blink)
 {
 	int led_time_on, led_time_off;
 
@@ -233,14 +223,13 @@ hardware_set_led(uint32_t color, bool should_blink)
 	file_printf(LED_B_ON_OFF_MS, "%d %d\n", led_time_on, led_time_off);
 	IF_FALSE_RETVAL(file_printf(LED_R, "%u\n", (color >> 24) & 0xff) >= 0, -1);
 	IF_FALSE_RETVAL(file_printf(LED_G, "%u\n", (color >> 16) & 0xff) >= 0, -1);
-	IF_FALSE_RETVAL(file_printf(LED_B, "%u\n", (color >>  8) & 0xff) >= 0, -1);
+	IF_FALSE_RETVAL(file_printf(LED_B, "%u\n", (color >> 8) & 0xff) >= 0, -1);
 	file_printf(LED_START, "%d\n", 1);
 
 	return 0;
 }
 
-bool
-hardware_is_led_on()
+bool hardware_is_led_on()
 {
 	char led_start = 0;
 
@@ -255,32 +244,27 @@ hardware_is_led_on()
 	return false;
 }
 
-const char *
-hardware_get_powerbutton_input_path(void)
+const char *hardware_get_powerbutton_input_path(void)
 {
 	return "/dev/input/event0";
 }
 
-const char **
-hardware_get_devices_whitelist_base()
+const char **hardware_get_devices_whitelist_base()
 {
 	return hw_hammerhead_devices_whitelist_base;
 }
 
-const char **
-hardware_get_devices_whitelist_priv()
+const char **hardware_get_devices_whitelist_priv()
 {
 	return hw_hammerhead_devices_whitelist_priv;
 }
 
-const char **
-hardware_get_devices_whitelist_audio()
+const char **hardware_get_devices_whitelist_audio()
 {
 	return hw_hammerhead_devices_whitelist_audio;
 }
 
-int
-hardware_backlight_on()
+int hardware_backlight_on()
 {
 	if (file_printf("/sys/class/leds/lcd-backlight/brightness", "%d", BOOT_BL_BRIGHTNESS) < 0) {
 		WARN_ERRNO("Could not write brightness file");
@@ -289,8 +273,7 @@ hardware_backlight_on()
 	return 0;
 }
 
-list_t *
-hardware_get_active_cgroups_subsystems(void)
+list_t *hardware_get_active_cgroups_subsystems(void)
 {
 	list_t *subsys_list = NULL;
 	subsys_list = list_append(subsys_list, "devices");
@@ -300,43 +283,38 @@ hardware_get_active_cgroups_subsystems(void)
 	return subsys_list;
 }
 
-list_t*
-hardware_get_nw_name_list(void) {
-
+list_t *hardware_get_nw_name_list(void)
+{
 	list_t *nw_name_list = NULL;
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
 
-list_t*
-hardware_get_nw_mv_name_list(void)
+list_t *hardware_get_nw_mv_name_list(void)
 {
 	/*
 	 * this list should start with the first mobile data iface
 	 * which is usually rmnet0
 	 */
 	list_t *nw_name_list = NULL;
-	for (int i=0; i<8; ++i)
+	for (int i = 0; i < 8; ++i)
 		nw_name_list = list_append(nw_name_list, mem_printf("rmnet%d", i));
-	for (int i=0; i<9; ++i)
+	for (int i = 0; i < 9; ++i)
 		nw_name_list = list_append(nw_name_list, mem_printf("rev_rmnet%d", i));
 	return nw_name_list;
 }
 
-const char *
-hardware_get_radio_ifname(void)
+const char *hardware_get_radio_ifname(void)
 {
 	return "rmnet0";
 }
 
-bool
-hardware_supports_systemv_ipc(void)
+bool hardware_supports_systemv_ipc(void)
 {
 	return true;
 }
 
-const char *
-hardware_get_routing_table_radio(void)
+const char *hardware_get_routing_table_radio(void)
 {
 	return "1022";
 }
@@ -347,8 +325,7 @@ hardware_get_routing_table_radio(void)
 
 static bool prev_display_power_state = true;
 
-bool
-hardware_display_power_state(void)
+bool hardware_display_power_state(void)
 {
 	char buf[65] = { 0 };
 	int fd;
@@ -371,14 +348,12 @@ hardware_display_power_state(void)
 	return prev_display_power_state;
 }
 
-const char *
-hardware_get_audio_device_dir(void)
+const char *hardware_get_audio_device_dir(void)
 {
 	return "/dev/snd";
 }
 
-bool
-hardware_is_audio_device(const char *file)
+bool hardware_is_audio_device(const char *file)
 {
 	// TODO: check for pcm* ?
 	if (!strcmp(file, "controlC0"))
@@ -388,33 +363,32 @@ hardware_is_audio_device(const char *file)
 	return true;
 }
 
-int
-hardware_get_random(unsigned char *buf, size_t len)
+int hardware_get_random(unsigned char *buf, size_t len)
 {
 	const char *rnd = "/dev/hw_random";
 	const char *sw = "/dev/random";
 	if (!file_exists(rnd)) {
 		if (!file_exists(sw)) {
-			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
+			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!",
+			      rnd, sw);
 			return -1;
 		}
-		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
+		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.",
+		     rnd, sw);
 		rnd = sw;
 	}
-	return file_read(rnd, (char*)buf, len);
+	return file_read(rnd, (char *)buf, len);
 }
 
-#define CMLD_PATH_WAKE_LOCK   "/sys/power/wake_lock"
+#define CMLD_PATH_WAKE_LOCK "/sys/power/wake_lock"
 #define CMLD_PATH_WAKE_UNLOCK "/sys/power/wake_unlock"
 
-void
-hardware_suspend_block(const char *name, size_t name_len)
+void hardware_suspend_block(const char *name, size_t name_len)
 {
 	file_write(CMLD_PATH_WAKE_LOCK, name, name_len);
 }
 
-void
-hardware_suspend_unblock(const char *name, size_t name_len)
+void hardware_suspend_unblock(const char *name, size_t name_len)
 {
 	file_write(CMLD_PATH_WAKE_UNLOCK, name, name_len);
 }

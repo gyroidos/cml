@@ -26,31 +26,31 @@
 
 #include "control.h"
 #ifdef ANDROID
-#include <cutils/properties.h>
 #include "device/fraunhofer/common/cml/scd/device.pb-c.h"
+#include <cutils/properties.h>
 #else
 #include "device.pb-c.h"
 #endif
 
+#include "common/dir.h"
+#include "common/event.h"
+#include "common/file.h"
+#include "common/logf.h"
 #include "common/macro.h"
 #include "common/mem.h"
-#include "common/event.h"
-#include "common/logf.h"
-#include "common/sock.h"
-#include "common/dir.h"
-#include "common/file.h"
-#include "common/uuid.h"
 #include "common/protobuf.h"
 #include "common/reboot.h"
+#include "common/sock.h"
+#include "common/uuid.h"
 #include "ssl_util.h"
 
+#include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <dirent.h>
 
-#define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
+#define SCD_CONTROL_SOCKET SOCK_PATH(scd - control)
 
 // Do not edit! This path is also configured in cmld.c
 #define DEVICE_CONF "/data/cml/device.conf"
@@ -71,9 +71,8 @@ static logf_handler_t *scd_logfile_handler = NULL;
 /**
  * returns 1 if a given file is a p12 token, otherwise 0
  */
-static int
-is_token(const char *path, const char *file, UNUSED void *data) {
-
+static int is_token(const char *path, const char *file, UNUSED void *data)
+{
 	char *location = mem_printf("%s/%s", path, file);
 	char *ext;
 
@@ -96,9 +95,8 @@ is_token(const char *path, const char *file, UNUSED void *data) {
 /**
  * returns >0 if one or more token files exist
  */
-static int
-token_file_exists() {
-
+static int token_file_exists()
+{
 	int ret = dir_foreach(SCD_TOKEN_DIR, &is_token, NULL);
 
 	if (ret < 0)
@@ -109,15 +107,12 @@ token_file_exists() {
 	}
 }
 
-bool
-scd_in_provisioning_mode(void)
+bool scd_in_provisioning_mode(void)
 {
 	return file_is_regular(PROVISIONING_MODE_FILE);
 }
 
-
-static void
-provisioning_mode()
+static void provisioning_mode()
 {
 	INFO("Check for existence of device certificate and user token");
 
@@ -128,7 +123,7 @@ provisioning_mode()
 	// device needs a device certificate
 	if (!file_exists(DEVICE_CONF)) {
 		ERROR("Going back to bootloader mode, device config does not exist (Proper"
-		    "userdata image needs to be flashed first)");
+		      "userdata image needs to be flashed first)");
 		reboot_reboot(REBOOT);
 	}
 
@@ -136,8 +131,7 @@ provisioning_mode()
 	if (file_exists("/dev/tpm0")) {
 		use_tpm = true;
 		// assumption: tpm2d is launched prior to scd, and creates a keypair on first boot
-		if (!file_exists(TPM2D_ATT_TSS_FILE))
-		{
+		if (!file_exists(TPM2D_ATT_TSS_FILE)) {
 			ERROR("TPM keypair not found, missing %s", TPM2D_ATT_TSS_FILE);
 			reboot_reboot(REBOOT);
 		}
@@ -150,7 +144,6 @@ provisioning_mode()
 
 	// if no certificate exists, create a csr
 	if (!file_exists(DEVICE_CERT_FILE)) {
-
 		INFO("Device certificate not available. Switch to device provisioning mode");
 		file_printf(PROVISIONING_MODE_FILE, "provisioning mode");
 
@@ -159,7 +152,6 @@ provisioning_mode()
 		}
 
 		if (!file_exists(DEVICE_CSR_FILE) || (!use_tpm && !file_exists(DEVICE_KEY_FILE))) {
-
 			DEBUG("Create CSR (recreate if corresponding private key misses)");
 
 			if (file_exists(SCD_TOKEN_DIR) && file_is_dir(SCD_TOKEN_DIR)) {
@@ -199,8 +191,8 @@ provisioning_mode()
 				FATAL("Could not create device uuid");
 			}
 
-			DeviceConfig *dev_cfg = (DeviceConfig *)
-			    protobuf_message_new_from_textfile(DEVICE_CONF, &device_config__descriptor);
+			DeviceConfig *dev_cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
+				DEVICE_CONF, &device_config__descriptor);
 
 			if (!dev_cfg) {
 				FATAL("Failed load device config from file \"%s\"!", DEVICE_CONF);
@@ -213,7 +205,7 @@ provisioning_mode()
 			dev_cfg->uuid = proto_uid;
 
 			// write the uuid to device config file
-			if (protobuf_message_write_to_file(DEVICE_CONF, (ProtobufCMessage *) dev_cfg) < 0) {
+			if (protobuf_message_write_to_file(DEVICE_CONF, (ProtobufCMessage *)dev_cfg) < 0) {
 				FATAL("Could not write device config to \"%s\"!", DEVICE_CONF);
 			}
 
@@ -222,7 +214,7 @@ provisioning_mode()
 			}
 
 			// this call also frees proto_uid
-			protobuf_free_message((ProtobufCMessage *) dev_cfg);
+			protobuf_free_message((ProtobufCMessage *)dev_cfg);
 			mem_free(hw_serial);
 			mem_free(hw_name);
 			mem_free(common_name);
@@ -241,8 +233,7 @@ provisioning_mode()
 		}
 
 		ssl_free();
-	}
-	else {
+	} else {
 		INFO("Device certificate found");
 		if (file_exists(DEVICE_CSR_FILE)) {
 			// this is the case when a non-provisioned trustme phone
@@ -254,15 +245,13 @@ provisioning_mode()
 	// self-create a user token to bring the device up
 	// is removed during provisioning
 	if (!token_file_exists()) {
-
 		DEBUG("Create initial soft token");
 		// TPM not used for soft token
 		if (ssl_init(false) == -1) {
 			FATAL("Failed to initialize OpenSSL stack for softtoken");
 		}
 
-		char *token_file = mem_printf("%s/%s%s", SCD_TOKEN_DIR,
-			TOKEN_DEFAULT_NAME, TOKEN_DEFAULT_EXT);
+		char *token_file = mem_printf("%s/%s%s", SCD_TOKEN_DIR, TOKEN_DEFAULT_NAME, TOKEN_DEFAULT_EXT);
 		if (ssl_create_pkcs12_token(token_file, NULL, TOKEN_DEFAULT_PASS, TOKEN_DEFAULT_NAME) != 0) {
 			FATAL("Unable to create initial user token");
 		}
@@ -276,14 +265,12 @@ provisioning_mode()
 	}
 
 	// remark: no certificate validation checks are carried out
-	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT)
-		|| !token_file_exists()) {
+	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT) || !token_file_exists()) {
 		FATAL("Missing certificate chains, user token, or private key for device certificate");
 	}
 }
 
-static void
-scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(scd_logfile_handler);
@@ -291,9 +278,8 @@ scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_WARN);
 }
 
-int
-main(int argc, char **argv) {
-
+int main(int argc, char **argv)
+{
 	ASSERT(argc >= 1);
 
 	if (file_exists("/dev/log/main"))
@@ -305,7 +291,8 @@ main(int argc, char **argv) {
 	scd_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-scd"));
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_WARN);
 
-	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, scd_logfile_rename_cb, NULL);
+	event_timer_t *logfile_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, scd_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
 	provisioning_mode();
@@ -342,15 +329,15 @@ main(int argc, char **argv) {
 	return 0;
 }
 
-static int
-scd_load_token_cb(const char *path, const char *name, UNUSED void *data)
+static int scd_load_token_cb(const char *path, const char *name, UNUSED void *data)
 {
 	if (scd_token) {
 		DEBUG("Token already loaded, stopping scan.");
 		return -1;
 	}
 	/* Only do the rest of the callback if the file name ends with .p12 */
-	if (strlen(name) >= strlen(TOKEN_DEFAULT_EXT) && !strcmp(name + strlen(name) - strlen(TOKEN_DEFAULT_EXT), TOKEN_DEFAULT_EXT)) {
+	if (strlen(name) >= strlen(TOKEN_DEFAULT_EXT) &&
+	    !strcmp(name + strlen(name) - strlen(TOKEN_DEFAULT_EXT), TOKEN_DEFAULT_EXT)) {
 		char *token_file = mem_printf("%s/%s", path, name);
 		scd_token = softtoken_new_from_p12(token_file);
 		mem_free(token_file);
@@ -359,8 +346,7 @@ scd_load_token_cb(const char *path, const char *name, UNUSED void *data)
 	return 0;
 }
 
-int
-scd_load_token()
+int scd_load_token()
 {
 	if (scd_token) {
 		softtoken_free(scd_token);
@@ -382,17 +368,14 @@ scd_load_token()
 	return 0;
 }
 
-softtoken_t *
-scd_get_token(void)
+softtoken_t *scd_get_token(void)
 {
 	if (!scd_token)
 		scd_load_token();
 	return scd_token;
 }
 
-const char *
-scd_get_token_dir(void)
+const char *scd_get_token_dir(void)
 {
 	return SCD_TOKEN_DIR;
 }
-

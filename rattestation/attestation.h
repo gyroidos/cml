@@ -9,6 +9,5 @@
  * the validation result is provided back to the caller by the
  * provided resp_verivied_cb function.
  */
-int
-attestation_do_request(const char *host, void (*resp_verified_cb)(bool));
+int attestation_do_request(const char *host, void (*resp_verified_cb)(bool));
 #endif /* IP_AGENT_ATTESTATION_H */

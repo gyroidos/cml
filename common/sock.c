@@ -25,25 +25,24 @@
 
 #include "macro.h"
 
-#include <unistd.h>
-#include <string.h>
-#include <sys/un.h>
-#include <netinet/in.h>
 #include <arpa/inet.h> // inet_addr
 #include <netdb.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <sys/un.h>
+#include <unistd.h>
 
-#define MAKE_SOCKADDR_UN(addr, path) \
-	struct sockaddr_un addr = { .sun_family = AF_UNIX }; \
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1); \
-	addr.sun_path[sizeof(addr.sun_path)-1] = '\0'
+#define MAKE_SOCKADDR_UN(addr, path)                                                                                   \
+	struct sockaddr_un addr = { .sun_family = AF_UNIX };                                                           \
+	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);                                                       \
+	addr.sun_path[sizeof(addr.sun_path) - 1] = '\0'
 
-#define MAKE_SOCKADDR_IN(addr, server_ip, server_port) \
-	struct sockaddr_in addr = { .sin_family = AF_INET }; \
-	addr.sin_addr.s_addr = inet_addr(server_ip); \
+#define MAKE_SOCKADDR_IN(addr, server_ip, server_port)                                                                 \
+	struct sockaddr_in addr = { .sin_family = AF_INET };                                                           \
+	addr.sin_addr.s_addr = inet_addr(server_ip);                                                                   \
 	addr.sin_port = htons(server_port)
 
-int
-sock_unix_bind(int sock, const char *path)
+int sock_unix_bind(int sock, const char *path)
 {
 	unlink(path);
 	MAKE_SOCKADDR_UN(addr, path);
@@ -53,19 +52,16 @@ sock_unix_bind(int sock, const char *path)
 	return res;
 }
 
-int
-sock_unix_connect(int sock, const char *path)
+int sock_unix_connect(int sock, const char *path)
 {
 	MAKE_SOCKADDR_UN(addr, path);
 	int res = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
 	if (-1 == res)
 		WARN_ERRNO("Failed to connect UNIX socket to %s.", path);
 	return res;
-
 }
 
-int
-sock_unix_create(int type)
+int sock_unix_create(int type)
 {
 	int sock = socket(AF_UNIX, type, 0);
 	if (-1 == sock)
@@ -73,8 +69,7 @@ sock_unix_create(int type)
 	return sock;
 }
 
-int
-sock_unix_create_and_bind(int type, const char *path)
+int sock_unix_create_and_bind(int type, const char *path)
 {
 	int sock = sock_unix_create(type);
 	if (-1 != sock) {
@@ -86,8 +81,7 @@ sock_unix_create_and_bind(int type, const char *path)
 	return sock;
 }
 
-int
-sock_unix_create_and_connect(int type, const char *path)
+int sock_unix_create_and_connect(int type, const char *path)
 {
 	int sock = sock_unix_create(type);
 	if (-1 != sock) {
@@ -99,8 +93,7 @@ sock_unix_create_and_connect(int type, const char *path)
 	return sock;
 }
 
-int
-sock_unix_listen(int sock)
+int sock_unix_listen(int sock)
 {
 	int res = listen(sock, 128);
 	if (-1 == res)
@@ -108,8 +101,7 @@ sock_unix_listen(int sock)
 	return res;
 }
 
-int
-sock_unix_accept(int sock)
+int sock_unix_accept(int sock)
 {
 	int res = accept(sock, NULL, NULL);
 	if (-1 == res)
@@ -117,8 +109,7 @@ sock_unix_accept(int sock)
 	return res;
 }
 
-int
-sock_inet_create(int type)
+int sock_inet_create(int type)
 {
 	int sock = socket(AF_INET, type, 0);
 	if (-1 == sock)
@@ -126,8 +117,7 @@ sock_inet_create(int type)
 	return sock;
 }
 
-int
-sock_inet_bind(int sock, const char *ip, int port)
+int sock_inet_bind(int sock, const char *ip, int port)
 {
 	MAKE_SOCKADDR_IN(addr, ip, port);
 	int res = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -136,8 +126,7 @@ sock_inet_bind(int sock, const char *ip, int port)
 	return res;
 }
 
-int
-sock_inet_create_and_bind(int type, const char *ip, int port)
+int sock_inet_create_and_bind(int type, const char *ip, int port)
 {
 	int sock = sock_inet_create(type);
 	if (-1 != sock) {
@@ -149,8 +138,7 @@ sock_inet_create_and_bind(int type, const char *ip, int port)
 	return sock;
 }
 
-int
-sock_inet_connect(int sock, const char *ip, int port)
+int sock_inet_connect(int sock, const char *ip, int port)
 {
 	MAKE_SOCKADDR_IN(addr, ip, port);
 	int res = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -164,11 +152,9 @@ sock_inet_connect(int sock, const char *ip, int port)
 	return 0;
 }
 
-static int
-sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
+static int sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 {
-
-	char addr_str[INET6_ADDRSTRLEN] = {0};
+	char addr_str[INET6_ADDRSTRLEN] = { 0 };
 	void *addr_ptr = NULL;
 
 	if (addrinfo->ai_family == AF_INET) {
@@ -179,9 +165,8 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 
 	if (addr_ptr) {
 		inet_ntop(addrinfo->ai_family, addr_ptr, addr_str, sizeof(addr_str));
-		INFO("Trying to connect to IPv%d address: %s (%s)",
-				addrinfo->ai_family == PF_INET6 ? 6 : 4,
-				addr_str, addrinfo->ai_canonname);
+		INFO("Trying to connect to IPv%d address: %s (%s)", addrinfo->ai_family == PF_INET6 ? 6 : 4, addr_str,
+		     addrinfo->ai_canonname);
 	} else {
 		INFO("Trying to connect to unknown protocol address on %s", addrinfo->ai_canonname);
 	}
@@ -202,8 +187,7 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 	return sock;
 }
 
-int
-sock_inet_create_and_connect(int type, const char *node, const char *service)
+int sock_inet_create_and_connect(int type, const char *node, const char *service)
 {
 	struct addrinfo hints, *res;
 	int sock = -1;
@@ -225,7 +209,7 @@ sock_inet_create_and_connect(int type, const char *node, const char *service)
 	struct addrinfo *cur = res;
 
 	/* iterate over the linked list until a connect succeeds */
-	while(cur) {
+	while (cur) {
 		sock = sock_inet_connect_addrinfo(cur);
 		if (sock != -1) {
 			break;

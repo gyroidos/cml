@@ -26,10 +26,8 @@
 
 #include "container.h"
 
-int
-c_cap_set_current_process(const container_t *container);
+int c_cap_set_current_process(const container_t *container);
 
-int
-c_cap_start_child(const container_t *container);
+int c_cap_start_child(const container_t *container);
 
 #endif /* C_CAP_H */

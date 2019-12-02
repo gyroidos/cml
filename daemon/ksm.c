@@ -23,9 +23,9 @@
 
 #include "ksm.h"
 
-#include "common/macro.h"
 #include "common/event.h"
 #include "common/file.h"
+#include "common/macro.h"
 
 #define KSM_PATH "/sys/kernel/mm/ksm/"
 
@@ -50,22 +50,19 @@ static void ksm_set(int sleep_millisecs, int pages_to_scan)
 
 static void ksm_set_aggressive()
 {
-	DEBUG("Setting KSM aggressive settings (sleep_millisecs=%d, pages_to_scan=%d",
-			KSM_AGGRESSIVE_SLEEP_MILLISECS,
-			KSM_AGGRESSIVE_PAGES_TO_SCAN);
+	DEBUG("Setting KSM aggressive settings (sleep_millisecs=%d, pages_to_scan=%d", KSM_AGGRESSIVE_SLEEP_MILLISECS,
+	      KSM_AGGRESSIVE_PAGES_TO_SCAN);
 	ksm_set(KSM_AGGRESSIVE_SLEEP_MILLISECS, KSM_AGGRESSIVE_PAGES_TO_SCAN);
 }
 
 static void ksm_set_relaxed()
 {
-	DEBUG("Setting KSM relaxed settings (sleep_millisecs=%d, pages_to_scan=%d",
-			KSM_RELAXED_SLEEP_MILLISECS,
-			KSM_RELAXED_PAGES_TO_SCAN);
+	DEBUG("Setting KSM relaxed settings (sleep_millisecs=%d, pages_to_scan=%d", KSM_RELAXED_SLEEP_MILLISECS,
+	      KSM_RELAXED_PAGES_TO_SCAN);
 	ksm_set(KSM_RELAXED_SLEEP_MILLISECS, KSM_RELAXED_PAGES_TO_SCAN);
 }
 
-static void
-ksm_set_aggressive_timeout_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void ksm_set_aggressive_timeout_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	ksm_set_relaxed();
 
@@ -74,8 +71,7 @@ ksm_set_aggressive_timeout_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	ksm_timer = NULL;
 }
 
-void
-ksm_set_aggressive_for(int millisecs)
+void ksm_set_aggressive_for(int millisecs)
 {
 	ksm_set_aggressive();
 
@@ -91,16 +87,13 @@ ksm_set_aggressive_for(int millisecs)
 	event_add_timer(ksm_timer);
 }
 
-int
-ksm_init()
+int ksm_init()
 {
-	if (file_printf(KSM_PATH "sleep_millisecs", "%d",
-				KSM_RELAXED_SLEEP_MILLISECS) < 0) {
+	if (file_printf(KSM_PATH "sleep_millisecs", "%d", KSM_RELAXED_SLEEP_MILLISECS) < 0) {
 		WARN("Could not configure KSM; no kernel support?");
 		return -1;
 	}
-	if (file_printf(KSM_PATH "pages_to_scan", "%d",
-				KSM_RELAXED_PAGES_TO_SCAN) < 0) {
+	if (file_printf(KSM_PATH "pages_to_scan", "%d", KSM_RELAXED_PAGES_TO_SCAN) < 0) {
 		WARN("Could not configure KSM; no kernel support?");
 		return -1;
 	}

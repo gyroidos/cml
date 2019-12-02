@@ -37,16 +37,14 @@
  * @return The path of the loop device or NULL in case of an error.
  */
 
-char *
-loopdev_new(void);
+char *loopdev_new(void);
 
 /**
  * Free the device path of a loop device.
  * @param dev The device string, e.g. /dev/loop0 as returned by loopdev_new().
  */
 
-void
-loopdev_free(char *dev);
+void loopdev_free(char *dev);
 
 /**
  * Wait until the loop device appears in the dev file system.
@@ -56,8 +54,7 @@ loopdev_free(char *dev);
  * @return 0 if the loop device appeared, else -1.
  */
 
-int
-loopdev_wait(const char *dev, unsigned timeout);
+int loopdev_wait(const char *dev, unsigned timeout);
 
 /**
  * Setup a loop device for an image file.
@@ -68,7 +65,6 @@ loopdev_wait(const char *dev, unsigned timeout);
  * error. The caller must close the file descriptor after calling mount.
  */
 
-int
-loopdev_setup_device(const char *img, const char *dev);
+int loopdev_setup_device(const char *img, const char *dev);
 
 #endif /* LOOPDEV_H */

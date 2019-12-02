@@ -42,8 +42,7 @@
  *
  * @param fd    File descriptor (UNIX socket) to report back invoked * functions.
  */
-void
-cmld_stub_init(int fd);
+void cmld_stub_init(int fd);
 
 /**
  * Creates a dummy container stub with the given name.
@@ -51,10 +50,8 @@ cmld_stub_init(int fd);
  * @param container_name Name of the dummy container.
  * @return Pointer to the dummy container object.
  */
-container_t *
-cmld_stub_container_create(const char *container_name);
+container_t *cmld_stub_container_create(const char *container_name);
 
-container_t *
-cmld_containers_get_a0();
+container_t *cmld_containers_get_a0();
 
 #endif // CMLD_STUB_H

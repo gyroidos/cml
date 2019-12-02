@@ -28,16 +28,16 @@
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
-#include "mem.h"
 #include "macro.h"
+#include "mem.h"
 
-#define DEBUG_THRESHOLD(size) \
-	do { if (size > (1024 * 1024)) \
-		DEBUG("Allocating a large memory area of %zu bytes", size); \
+#define DEBUG_THRESHOLD(size)                                                                                          \
+	do {                                                                                                           \
+		if (size > (1024 * 1024))                                                                              \
+			DEBUG("Allocating a large memory area of %zu bytes", size);                                    \
 	} while (0)
 
-void *
-mem_alloc(size_t size)
+void *mem_alloc(size_t size)
 {
 	DEBUG_THRESHOLD(size);
 	void *p = malloc(size);
@@ -45,8 +45,7 @@ mem_alloc(size_t size)
 	return p;
 }
 
-void *
-mem_alloc0(size_t size)
+void *mem_alloc0(size_t size)
 {
 	DEBUG_THRESHOLD(size);
 	void *p = calloc(1, size);
@@ -54,8 +53,7 @@ mem_alloc0(size_t size)
 	return p;
 }
 
-void *
-mem_realloc(void *mem, size_t size)
+void *mem_realloc(void *mem, size_t size)
 {
 	DEBUG_THRESHOLD(size);
 	void *p = realloc(mem, size);
@@ -63,8 +61,7 @@ mem_realloc(void *mem, size_t size)
 	return p;
 }
 
-char *
-mem_strdup(const char *str)
+char *mem_strdup(const char *str)
 {
 	ASSERT(str);
 	char *p = strdup(str);
@@ -72,8 +69,7 @@ mem_strdup(const char *str)
 	return p;
 }
 
-char *
-mem_strndup(const char *str, size_t len)
+char *mem_strndup(const char *str, size_t len)
 {
 	ASSERT(str);
 	DEBUG_THRESHOLD(len);
@@ -82,8 +78,7 @@ mem_strndup(const char *str, size_t len)
 	return p;
 }
 
-char *
-mem_vprintf(const char *fmt, va_list ap)
+char *mem_vprintf(const char *fmt, va_list ap)
 {
 	char *p;
 	ASSERT(fmt);
@@ -91,8 +86,7 @@ mem_vprintf(const char *fmt, va_list ap)
 	return p;
 }
 
-char *
-mem_printf(const char *fmt, ...)
+char *mem_printf(const char *fmt, ...)
 {
 	char *p;
 	va_list ap;
@@ -103,14 +97,12 @@ mem_printf(const char *fmt, ...)
 	return p;
 }
 
-void
-mem_free(void *mem)
+void mem_free(void *mem)
 {
 	free(mem);
 }
 
-void
-mem_free_array(void **array, size_t size)
+void mem_free_array(void **array, size_t size)
 {
 	if (array != NULL) {
 		size_t i = 0;

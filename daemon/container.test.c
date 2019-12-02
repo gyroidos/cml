@@ -26,8 +26,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 
-int
-main(UNUSED int argc, UNUSED char **argv)
+int main(UNUSED int argc, UNUSED char **argv)
 {
 	// Init logging
 	logf_register(&logf_android_write, logf_android_new(argv[0]));
@@ -46,11 +45,11 @@ main(UNUSED int argc, UNUSED char **argv)
 	int ret;
 	if ((ret = container_start(container))) {
 		switch (ret) {
-			case CONTAINER_ERROR:
-			case CONTAINER_ERROR_UEVENT:
-				/* etc. pp. */
-			default:
-				FATAL_ERRNO("Starting a0 failed");
+		case CONTAINER_ERROR:
+		case CONTAINER_ERROR_UEVENT:
+			/* etc. pp. */
+		default:
+			FATAL_ERRNO("Starting a0 failed");
 		}
 	}
 }

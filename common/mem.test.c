@@ -29,14 +29,13 @@
  *
  */
 
-#include <string.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "logf.h"
-#include "mem.h"
 #include "macro.h"
-
+#include "mem.h"
 
 /**
   * Sample test structure for the Unit Test
@@ -46,7 +45,6 @@ typedef struct test_strct {
 	char *y;
 	double z;
 } test_strct;
-
 
 /**
   * Helper function to test mem_vprintf
@@ -59,8 +57,7 @@ static char *test_vprintf(int n, ...);
 /**
   * All functions from mem.c are basically tested in this function.
   */
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	test_strct *tst1;
 	test_strct *tst2;

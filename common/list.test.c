@@ -28,25 +28,23 @@
 #include <stdio.h>
 
 #include "list.h"
-#include "macro.h"
 #include "logf.h"
+#include "macro.h"
 
 /** Just a helper function, which prints a list
   *
   * @param list the list to be printed
   */
-void
-list_print(list_t *list)
+void list_print(list_t *list)
 {
 	for (unsigned int i = 0; i < list_length(list); i++)
-		DEBUG("list[%d] = %d\n", i, *((int *) list_nth_data(list, i)));
+		DEBUG("list[%d] = %d\n", i, *((int *)list_nth_data(list, i)));
 }
 
 /** Unit Test main function for list implementation
   *
   */
-int
-main(void)
+int main(void)
 {
 	list_t *list, *elem;
 
@@ -119,7 +117,6 @@ main(void)
 	list_print(list);
 	list = list_prepend(list, &e);
 
-
 	int false_test = -1;
 
 	DEBUG("Verify that non-existing data does not adversely affect the list");
@@ -151,7 +148,7 @@ main(void)
 	ASSERT(list_length(list) == 4);
 	ASSERT(list_nth_data(list, 0) == &e);
 	ASSERT(list_nth_data(list, 1) == &a);
-	ASSERT((*((int *) list_tail(list)->data)) == c);
+	ASSERT((*((int *)list_tail(list)->data)) == c);
 
 	list_print(list);
 
@@ -177,7 +174,7 @@ main(void)
 	ASSERT(list_nth_data(list, 0) == &a);
 	ASSERT(list_find(list, &a) != NULL);
 	ASSERT(list_find(list, &b) == NULL);
-	ASSERT((*((int *) list_tail(list)->data)) == a);
+	ASSERT((*((int *)list_tail(list)->data)) == a);
 	ASSERT(list == list_tail(list));
 
 	list_print(list);

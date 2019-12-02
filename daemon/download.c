@@ -23,15 +23,15 @@
 
 #include "download.h"
 
-#include "common/macro.h"
-#include "common/mem.h"
 #include "common/event.h"
 #include "common/file.h"
+#include "common/macro.h"
+#include "common/mem.h"
 
-#include <sys/wait.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define WGET_PATH "wget"
@@ -44,8 +44,7 @@ struct download {
 	pid_t wget_pid;
 };
 
-download_t *
-download_new(const char *url, const char *file, download_callback_t on_complete, void *data)
+download_t *download_new(const char *url, const char *file, download_callback_t on_complete, void *data)
 {
 	download_t *dl = mem_new(download_t, 1);
 	dl->url = mem_strdup(url);
@@ -55,8 +54,7 @@ download_new(const char *url, const char *file, download_callback_t on_complete,
 	return dl;
 }
 
-void
-download_free(download_t *dl)
+void download_free(download_t *dl)
 {
 	IF_NULL_RETURN(dl);
 	mem_free(dl->url);
@@ -64,8 +62,7 @@ download_free(download_t *dl)
 	mem_free(dl);
 }
 
-static void
-download_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+static void download_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	download_t *dl = data;
 	ASSERT(dl);
@@ -111,13 +108,12 @@ download_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	}
 }
 
-int
-download_start(download_t *dl)
+int download_start(download_t *dl)
 {
 	ASSERT(dl);
 	pid_t pid = fork();
 
-	char *const argv[] = {WGET_PATH, "-O", dl->file, dl->url, NULL};
+	char *const argv[] = { WGET_PATH, "-O", dl->file, dl->url, NULL };
 
 	switch (pid) {
 	case -1:
@@ -137,17 +133,14 @@ download_start(download_t *dl)
 	}
 }
 
-const char *
-download_get_url(const download_t *dl)
+const char *download_get_url(const download_t *dl)
 {
 	ASSERT(dl);
 	return dl->url;
 }
 
-const char *
-download_get_file(const download_t *dl)
+const char *download_get_file(const download_t *dl)
 {
 	ASSERT(dl);
 	return dl->file;
 }
-

@@ -28,22 +28,22 @@
  * and cmld.c (the central component of the container mangement layer daemon).
  */
 
-#include "common/macro.h"
 #include "common/event.h"
 #include "common/file.h"
 #include "common/logf.h"
+#include "common/macro.h"
 
 #include "cmld.h"
 #include "hardware.h"
 #include "power.h"
 
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/resource.h>
-#include <sys/time.h>
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #define DEFAULT_BASE_PATH "/data/cml"
 
@@ -51,8 +51,7 @@ static logf_handler_t *cml_daemon_logfile_handler = NULL;
 
 /******************************************************************************/
 
-static void
-main_core_dump_enable(void)
+static void main_core_dump_enable(void)
 {
 	struct rlimit core_limit;
 
@@ -63,14 +62,12 @@ main_core_dump_enable(void)
 		ERROR_ERRNO("Could not set rlimits for core dump generation");
 }
 
-static void
-main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+static void main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	FATAL("Received SIGINT...");
 }
 
-static void
-main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	DEBUG("Logfile will be closed and a new file opened");
 	logf_unregister(cml_daemon_logfile_handler);
@@ -80,8 +77,7 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 
 /******************************************************************************/
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	const char *path;
 
@@ -112,7 +108,8 @@ main(int argc, char **argv)
 	event_add_signal(sig);
 
 	DEBUG("Initializing cmld...");
-	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, main_logfile_rename_cb, NULL);
+	event_timer_t *logfile_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, main_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
 	if (cmld_init(path) < 0)

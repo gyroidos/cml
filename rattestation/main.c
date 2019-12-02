@@ -21,15 +21,15 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "common/macro.h"
-#include "common/mem.h"
+#include "common/event.h"
 #include "common/file.h"
 #include "common/logf.h"
-#include "common/event.h"
+#include "common/macro.h"
+#include "common/mem.h"
 
-#include <unistd.h>
-#include <sys/types.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "attestation.h"
 
@@ -38,37 +38,33 @@
 static logf_handler_t *ipagent_logfile_handler = NULL;
 static logf_handler_t *ipagent_logfile_handler_stdout = NULL;
 
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
+char *convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	IF_TRUE_RETVAL(0 > length, NULL);
 
-	char *hex = mem_alloc0(sizeof(char)*length*2 + 1);
+	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
-	for (int i=0; i < length; ++i) {
+	for (int i = 0; i < length; ++i) {
 		// remember snprintf additionally writs a '0' byte
-		snprintf(hex+i*2, 3, "%.2x", bin[i]);
+		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
 	}
 
 	return hex;
 }
 
-static void
-main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+static void main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	INFO("Received SIGINT...");
 	exit(0);
 }
 
-static void
-main_return_result_and_exit(bool validated)
+static void main_return_result_and_exit(bool validated)
 {
 	TRACE("Exit handler called...");
 	exit(validated ? 0 : -1);
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	ipagent_logfile_handler = logf_register(&logf_file_write, logf_file_new(LOGFILE_PATH));
 	ipagent_logfile_handler_stdout = logf_register(&logf_file_write, stdout);
@@ -76,7 +72,7 @@ main(int argc, char **argv)
 	logf_handler_set_prio(ipagent_logfile_handler, LOGF_PRIO_TRACE);
 	logf_handler_set_prio(ipagent_logfile_handler_stdout, LOGF_PRIO_TRACE);
 
-	char *rhost = (argc < 2) ? "127.0.0.1": argv[1];
+	char *rhost = (argc < 2) ? "127.0.0.1" : argv[1];
 
 	event_init();
 

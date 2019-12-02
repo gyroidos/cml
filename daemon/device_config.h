@@ -31,9 +31,9 @@
 #ifndef DEVICE_H
 #define DEVICE_H
 
-#include <sys/types.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <sys/types.h>
 
 typedef struct device_config device_config_t;
 
@@ -43,17 +43,14 @@ typedef struct device_config device_config_t;
  *             device_config_t object should be created.
  * @return The new device_config_t object or NULL on an error.
  */
-device_config_t *
-device_config_new(const char *path);
+device_config_t *device_config_new(const char *path);
 
-void
-device_config_free(device_config_t *config);
+void device_config_free(device_config_t *config);
 
 //int
 //device_config_read_from_fd(device_config_t *config, int fd);
 
-int
-device_config_write(const device_config_t *config);
+int device_config_write(const device_config_t *config);
 
 //int
 //device_config_write_to_fd(const device_config_t *config, int fd);
@@ -62,43 +59,29 @@ device_config_write(const device_config_t *config);
 /* GETTER + SETTER       */
 /*************************/
 
-const char *
-device_config_get_uuid(const device_config_t *config);
+const char *device_config_get_uuid(const device_config_t *config);
 
-const char *
-device_config_get_mdm_node(const device_config_t *config);
+const char *device_config_get_mdm_node(const device_config_t *config);
 
-const char *
-device_config_get_mdm_service(const device_config_t *config);
+const char *device_config_get_mdm_service(const device_config_t *config);
 
-const char *
-device_config_get_telephony_uuid(const device_config_t *config);
+const char *device_config_get_telephony_uuid(const device_config_t *config);
 
-const char *
-device_config_get_update_base_url(const device_config_t *config);
+const char *device_config_get_update_base_url(const device_config_t *config);
 
-int
-device_config_get_should_led_blink(const device_config_t *config);
+int device_config_get_should_led_blink(const device_config_t *config);
 
-const char *
-device_config_get_c0os(const device_config_t *config);
+const char *device_config_get_c0os(const device_config_t *config);
 
-const char *
-device_config_get_host_addr(const device_config_t *config);
+const char *device_config_get_host_addr(const device_config_t *config);
 
-const char *
-device_config_get_host_dns(const device_config_t *config);
+const char *device_config_get_host_dns(const device_config_t *config);
 
-const char *
-device_config_get_host_gateway(const device_config_t *config);
+const char *device_config_get_host_gateway(const device_config_t *config);
 
-uint32_t
-device_config_get_host_subnet(const device_config_t *config);
+uint32_t device_config_get_host_subnet(const device_config_t *config);
 
-const char *
-device_config_get_host_if(const device_config_t *config);
+const char *device_config_get_host_if(const device_config_t *config);
 
-bool
-device_config_get_locally_signed_images(const device_config_t *config);
+bool device_config_get_locally_signed_images(const device_config_t *config);
 #endif /* DEVICE_H */
-

@@ -26,7 +26,6 @@
 
 typedef struct scd_control scd_control_t;
 
-scd_control_t *
-scd_control_new(const char *path);
+scd_control_t *scd_control_new(const char *path);
 
 #endif /* SCD_CONTROL_H */

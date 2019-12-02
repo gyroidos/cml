@@ -27,43 +27,43 @@
 #include "container.h"
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
-#include "common/macro.h"
-#include "common/mem.h"
-#include "common/uuid.h"
-#include "common/list.h"
-#include "common/sock.h"
+#include "common/dir.h"
 #include "common/event.h"
 #include "common/file.h"
-#include "common/dir.h"
+#include "common/list.h"
+#include "common/macro.h"
+#include "common/mem.h"
 #include "common/proc.h"
+#include "common/sock.h"
+#include "common/uuid.h"
 
-#include "cmld.h"
+#include "c_cap.h"
 #include "c_cgroups.h"
 #include "c_net.h"
-#include "c_vol.h"
-#include "c_cap.h"
-#include "c_service.h"
 #include "c_run.h"
+#include "c_service.h"
+#include "c_vol.h"
+#include "cmld.h"
 #include "container_config.h"
-#include "guestos_mgr.h"
 #include "guestos.h"
+#include "guestos_mgr.h"
 #include "hardware.h"
 
 #include <inttypes.h>
+#include <pty.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <signal.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
-#include <pty.h>
+#include <unistd.h>
 
-#include <selinux/selinux.h>
 #include <selinux/label.h>
+#include <selinux/selinux.h>
 
 #ifdef ANDROID
 #include <selinux/android.h>
@@ -72,22 +72,22 @@
 #define CLONE_STACK_SIZE 8192
 /* Define some missing clone flags in BIONIC */
 #ifndef CLONE_NEWNS
-#define CLONE_NEWNS             0x00020000
+#define CLONE_NEWNS 0x00020000
 #endif
 #ifndef CLONE_NEWUTS
-#define CLONE_NEWUTS            0x04000000
+#define CLONE_NEWUTS 0x04000000
 #endif
 #ifndef CLONE_NEWIPC
-#define CLONE_NEWIPC            0x08000000
+#define CLONE_NEWIPC 0x08000000
 #endif
 #ifndef CLONE_NEWUSER
-#define CLONE_NEWUSER           0x10000000
+#define CLONE_NEWUSER 0x10000000
 #endif
 #ifndef CLONE_NEWPID
-#define CLONE_NEWPID            0x20000000
+#define CLONE_NEWPID 0x20000000
 #endif
 #ifndef CLONE_NEWNET
-#define CLONE_NEWNET            0x40000000
+#define CLONE_NEWNET 0x40000000
 #endif
 
 /* Timeout for a container boot. If the container does not come up in that time frame
@@ -127,7 +127,7 @@ struct container {
 
 	list_t *csock_list; /* List of sockets bound inside the container */
 	const guestos_t *os; /* weak reference */
-	pid_t pid;		/* PID of the corresponding /init */
+	pid_t pid; /* PID of the corresponding /init */
 	int exit_status; /* if the container's init exited, here we store its exit status */
 
 	char **init_argv; /* command line parameters for init */
@@ -194,8 +194,7 @@ enum container_start_sync_msg {
 	CONTAINER_START_SYNC_MSG_ERROR,
 };
 
-static uint16_t
-container_get_next_adb_port(void)
+static uint16_t container_get_next_adb_port(void)
 {
 #ifdef ANDROID
 	static uint16_t next_free_adb_port = ADB_FWD_PORT_BASE + 1;
@@ -209,56 +208,34 @@ container_get_next_adb_port(void)
  * if we create the container for the first time, we store its creation time
  * in a file, otherwise this functions reads the creation time from that file
  */
-static time_t
-container_get_creation_time_from_file(container_t *container)
+static time_t container_get_creation_time_from_file(container_t *container)
 {
 	time_t ret = -1;
-	char *file_name_created =
-		mem_printf("%s.created", container_get_images_dir(container));
+	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
 	if (!file_exists(file_name_created)) {
 		ret = time(NULL);
 		if (file_write(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
 			WARN("Failed to store creation time of container %s",
-				uuid_string(container_get_uuid(container)));
+			     uuid_string(container_get_uuid(container)));
 		}
 	} else {
 		if (file_read(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
-			WARN("Failed to get creation time of container %s",
-				uuid_string(container_get_uuid(container)));
+			WARN("Failed to get creation time of container %s", uuid_string(container_get_uuid(container)));
 		}
 	}
-	INFO("container %s was created at %s",
-		uuid_string(container_get_uuid(container)), ctime(&ret));
+	INFO("container %s was created at %s", uuid_string(container_get_uuid(container)), ctime(&ret));
 
 	mem_free(file_name_created);
 	return ret;
 }
 
-container_t *
-container_new_internal(
-	const uuid_t *uuid,
-	const char *name,
-	container_type_t type,
-	bool ns_usr,
-	bool ns_net,
-	bool privileged,
-	const guestos_t *os,
-	const char *config_filename,
-	const char *images_dir,
-	mount_t *mnt,
-	unsigned int ram_limit,
-	uint32_t color,
-	uint16_t adb_port,
-	bool allow_autostart,
-	list_t *feature_enabled,
-	const char *dns_server,
-	list_t *net_ifaces,
-	char **allowed_devices,
-	char **assigned_devices,
-	list_t *vnet_cfg_list,
-	char **init_env,
-	size_t init_env_len
-)
+container_t *container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
+				    bool ns_net, bool privileged, const guestos_t *os, const char *config_filename,
+				    const char *images_dir, mount_t *mnt, unsigned int ram_limit, uint32_t color,
+				    uint16_t adb_port, bool allow_autostart, list_t *feature_enabled,
+				    const char *dns_server, list_t *net_ifaces, char **allowed_devices,
+				    char **assigned_devices, list_t *vnet_cfg_list, char **init_env,
+				    size_t init_env_len)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -325,25 +302,25 @@ container_new_internal(
 	}
 
 	// virtual network interfaces from container config
-	for (list_t* elem = vnet_cfg_list; elem != NULL; elem = elem->next) {
+	for (list_t *elem = vnet_cfg_list; elem != NULL; elem = elem->next) {
 		container_vnet_cfg_t *vnet_cfg = elem->data;
 		DEBUG("vnet: %s will be added to conatiner (%s)", vnet_cfg->vnet_name,
-				(vnet_cfg->configure) ? "configured":"unconfigured");
+		      (vnet_cfg->configure) ? "configured" : "unconfigured");
 	}
 
 	list_t *nw_mv_name_list = NULL;
 	if (privileged && ns_net) {
 		nw_mv_name_list = hardware_get_nw_mv_name_list();
-		for (list_t* elem = nw_mv_name_list; elem != NULL; elem = elem->next) {
-			DEBUG("List element in nw_names_list: %s", (char*)(elem->data));
+		for (list_t *elem = nw_mv_name_list; elem != NULL; elem = elem->next) {
+			DEBUG("List element in nw_names_list: %s", (char *)(elem->data));
 		}
 	}
 
 	// network interfaces from container config
-	for (list_t* elem = net_ifaces; elem != NULL; elem = elem->next) {
-                DEBUG("List element in net_ifaces: %s", (char*)(elem->data));
+	for (list_t *elem = net_ifaces; elem != NULL; elem = elem->next) {
+		DEBUG("List element in net_ifaces: %s", (char *)(elem->data));
 		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(elem->data));
-        }
+	}
 
 	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list, adb_port);
 	if (!container->net) {
@@ -371,7 +348,7 @@ container_new_internal(
 	container->run = c_run_new(container);
 	if (!container->run) {
 		WARN("Could not initialize run subsystem for container %s (UUID: %s)", container->name,
-			uuid_string(container->uuid));
+		     uuid_string(container->uuid));
 		goto error;
 	}
 
@@ -379,18 +356,17 @@ container_new_internal(
 	container->init_argv = guestos_get_init_argv_new(os);
 
 	// construct an NULL terminated env buffer for execve
-	container->init_env =
-		mem_new0(char *, guestos_get_init_env_len(os) + init_env + 1);
+	container->init_env = mem_new0(char *, guestos_get_init_env_len(os) + init_env + 1);
 	size_t i = 0;
 	char **os_env = guestos_get_init_env(os);
 	for (; i < guestos_get_init_env_len(os); i++)
 		container->init_env[i] = mem_strdup(os_env[i]);
 	for (size_t j = 0; j < init_env_len; ++j)
-		container->init_env[i+j] = mem_strdup(init_env[j]);
+		container->init_env[i + j] = mem_strdup(init_env[j]);
 
 	container->feature_enabled_list = feature_enabled;
-	for (list_t* elem = container->feature_enabled_list; elem != NULL; elem = elem->next) {
-		DEBUG("Feature %s enabeld for %s", (char*)(elem->data), container->name);
+	for (list_t *elem = container->feature_enabled_list; elem != NULL; elem = elem->next) {
+		DEBUG("Feature %s enabeld for %s", (char *)(elem->data), container->name);
 	}
 
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
@@ -428,9 +404,8 @@ error:
  *
  */
 /* TODO Error handling */
-container_t *
-container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
-		size_t config_len)
+container_t *container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
+			   size_t config_len)
 {
 	ASSERT(store_path);
 	ASSERT(existing_uuid || config);
@@ -449,8 +424,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	uint64_t new_guestos_version;
 	bool allow_autostart;
 	bool priv;
-	char** allowed_devices;
-	char** assigned_devices;
+	char **allowed_devices;
+	char **assigned_devices;
 
 	if (!existing_uuid) {
 		uuid = uuid_new(NULL);
@@ -506,15 +481,14 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	new_guestos_version = guestos_get_version(os);
 	if (current_guestos_version < new_guestos_version) {
 		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
-						current_guestos_version, new_guestos_version, name);
+		     current_guestos_version, new_guestos_version, name);
 		container_config_set_guestos_version(conf, new_guestos_version);
 		INFO("guestos_version is now: %" PRIu64 "", container_config_get_guestos_version(conf));
 	} else if (current_guestos_version == new_guestos_version) {
-		INFO("Keeping current guestos version %" PRIu64 " for container %s",
-											current_guestos_version, name);
+		INFO("Keeping current guestos version %" PRIu64 " for container %s", current_guestos_version, name);
 	} else {
-		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low",
-											new_guestos_version, name);
+		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low", new_guestos_version,
+		     name);
 		WARN("Current version is %" PRIu64 "; Aborting...", current_guestos_version);
 		uuid_free(uuid);
 		container_config_free(conf);
@@ -535,9 +509,10 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
 
-	const char* dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) : cmld_get_device_host_dns();
+	const char *dns_server = (container_config_get_dns_server(conf)) ? container_config_get_dns_server(conf) :
+									   cmld_get_device_host_dns();
 
-	list_t *vnet_cfg_list =	(ns_net) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
+	list_t *vnet_cfg_list = (ns_net) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
@@ -545,9 +520,10 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	char **init_env = container_config_get_init_env(conf);
 	size_t init_env_len = container_config_get_init_env_len(conf);
 
-	container_t *c = container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
-			images_dir, mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled,
-			dns_server, net_ifaces, allowed_devices, assigned_devices, vnet_cfg_list, init_env, init_env_len);
+	container_t *c = container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename, images_dir,
+						mnt, ram_limit, color, adb_port, allow_autostart, feature_enabled,
+						dns_server, net_ifaces, allowed_devices, assigned_devices,
+						vnet_cfg_list, init_env, init_env_len);
 	if (c)
 		container_config_write(conf);
 
@@ -564,8 +540,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	return c;
 }
 
-void
-container_free(container_t *container) {
+void container_free(container_t *container)
+{
 	ASSERT(container);
 
 	uuid_free(container->uuid);
@@ -628,43 +604,37 @@ container_free(container_t *container) {
 	mem_free(container);
 }
 
-const uuid_t *
-container_get_uuid(const container_t *container)
+const uuid_t *container_get_uuid(const container_t *container)
 {
 	ASSERT(container);
 	return container->uuid;
 }
 
-const mount_t *
-container_get_mount(const container_t *container)
+const mount_t *container_get_mount(const container_t *container)
 {
 	ASSERT(container);
 	return container->mnt;
 }
 
-const mount_t *
-container_get_mount_setup(const container_t *container)
+const mount_t *container_get_mount_setup(const container_t *container)
 {
 	ASSERT(container);
 	return container->mnt_setup;
 }
 
-const guestos_t *
-container_get_os(const container_t *container)
+const guestos_t *container_get_os(const container_t *container)
 {
 	ASSERT(container);
 	return container->os;
 }
 
-const char *
-container_get_name(const container_t *container)
+const char *container_get_name(const container_t *container)
 {
 	ASSERT(container);
 	return container->name;
 }
 
-const char *
-container_get_images_dir(const container_t *container)
+const char *container_get_images_dir(const container_t *container)
 {
 	ASSERT(container);
 	return container->images_dir;
@@ -674,22 +644,19 @@ container_get_images_dir(const container_t *container)
  * Old references retrieved with the getter should not become
  * invalid! */
 
-const char *
-container_get_description(const container_t *container)
+const char *container_get_description(const container_t *container)
 {
 	ASSERT(container);
 	return container->description;
 }
 
-pid_t
-container_get_pid(const container_t *container)
+pid_t container_get_pid(const container_t *container)
 {
 	ASSERT(container);
 	return container->pid;
 }
 
-pid_t
-container_get_service_pid(const container_t *container)
+pid_t container_get_service_pid(const container_t *container)
 {
 	/* Determine PID of container's init */
 	pid_t init = container_get_pid(container);
@@ -715,77 +682,67 @@ container_get_service_pid(const container_t *container)
 	return service;
 }
 
-void
-container_oom_protect_service(const container_t *container)
+void container_oom_protect_service(const container_t *container)
 {
-    ASSERT(container);
+	ASSERT(container);
 
-    pid_t service_pid = container_get_service_pid(container);
+	pid_t service_pid = container_get_service_pid(container);
 	if (service_pid < 0) {
 		WARN("Could not determine PID of container's service to protect against low memory killer. Ignoring...");
 		return;
 	}
 
-    DEBUG("Setting oom_adj of trustme service (PID %d) in container %s to -17",
-            service_pid, container_get_description(container));
-    char *path = mem_printf("/proc/%d/oom_adj", service_pid);
-    int ret = file_write(path, "-17", -1);
-    if (ret < 0)
-        ERROR_ERRNO("Failed to write to %s", path);
-    mem_free(path);
+	DEBUG("Setting oom_adj of trustme service (PID %d) in container %s to -17", service_pid,
+	      container_get_description(container));
+	char *path = mem_printf("/proc/%d/oom_adj", service_pid);
+	int ret = file_write(path, "-17", -1);
+	if (ret < 0)
+		ERROR_ERRNO("Failed to write to %s", path);
+	mem_free(path);
 }
 
-c_cgroups_t *
-container_get_cgroups(const container_t *container)
+c_cgroups_t *container_get_cgroups(const container_t *container)
 {
 	ASSERT(container);
 	return container->cgroups;
 }
 
-int
-container_add_pid_to_cgroups(const container_t *container, pid_t pid)
+int container_add_pid_to_cgroups(const container_t *container, pid_t pid)
 {
 	return c_cgroups_add_pid(container->cgroups, pid);
 }
 
-int
-container_set_cap_current_process(const container_t *container) {
+int container_set_cap_current_process(const container_t *container)
+{
 	return c_cap_set_current_process(container);
 }
 
-int
-container_get_console_sock_cmld(const container_t * container)
+int container_get_console_sock_cmld(const container_t *container)
 {
 	ASSERT(container);
 	return c_run_get_console_sock_cmld(container->run);
 }
 
-int
-container_get_exit_status(const container_t *container)
+int container_get_exit_status(const container_t *container)
 {
 	ASSERT(container);
 	return container->exit_status;
 }
 
-uint32_t
-container_get_color(const container_t *container)
+uint32_t container_get_color(const container_t *container)
 {
 	ASSERT(container);
 	return container->color;
 }
 
-char *
-container_get_color_rgb_string(const container_t *container)
+char *container_get_color_rgb_string(const container_t *container)
 {
 	ASSERT(container);
-	return mem_printf("#%02X%02X%02X",
-			(container->color >> 24) & 0xff,
-			(container->color >> 16) & 0xff,
-			(container->color >> 8) & 0xff);
+	return mem_printf("#%02X%02X%02X", (container->color >> 24) & 0xff, (container->color >> 16) & 0xff,
+			  (container->color >> 8) & 0xff);
 }
 
-int
-container_write_config(container_t *container)
+int container_write_config(container_t *container)
 {
 	ASSERT(container);
 
@@ -798,34 +755,31 @@ container_write_config(container_t *container)
 		//container_config_free(conf);
 		return 0;
 	} else {
-		WARN("Trying to write configless container to file... Try to set config" \
-			   "filename first if you want to make the container config persistent");
+		WARN("Trying to write configless container to file... Try to set config"
+		     "filename first if you want to make the container config persistent");
 		return -1;
 	}
 }
 
-const char *
-container_get_config_filename(const container_t *container)
+const char *container_get_config_filename(const container_t *container)
 {
 	ASSERT(container);
 	return container->config_filename;
 }
 
-bool
-container_is_privileged(const container_t *container)
+bool container_is_privileged(const container_t *container)
 {
 	ASSERT(container);
 	return container->privileged;
 }
 
-int
-container_destroy(container_t *container)
+int container_destroy(container_t *container)
 {
 	int ret;
 	ASSERT(container);
 
 	INFO("Destroying conatiner %s with uuid=%s", container_get_name(container),
-				uuid_string(container_get_uuid(container)));
+	     uuid_string(container_get_uuid(container)));
 
 	if (file_is_dir(container_get_images_dir(container))) {
 		/* call to wipe will stop and cleanup container.
@@ -837,8 +791,7 @@ container_destroy(container_t *container)
 		if (rmdir(container_get_images_dir(container)))
 			WARN("Could not delete leftover container dir");
 	}
-	char *file_name_created =
-		mem_printf("%s.created", container_get_images_dir(container));
+	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
 	if (file_exists(file_name_created))
 		ret = unlink(file_name_created);
 	mem_free(file_name_created);
@@ -848,14 +801,12 @@ container_destroy(container_t *container)
 	return ret;
 }
 
-int
-container_suspend(container_t *container)
+int container_suspend(container_t *container)
 {
 	return c_service_send_message(container->service, C_SERVICE_MESSAGE_SUSPEND);
 }
 
-int
-container_resume(container_t *container)
+int container_resume(container_t *container)
 {
 	return c_service_send_message(container->service, C_SERVICE_MESSAGE_RESUME);
 }
@@ -867,8 +818,7 @@ container_resume(container_t *container)
  * Return values are not gathered, as the cleanup should just work as the system allows.
  * This function also sets the container's state to stopped.
  */
-static void
-container_cleanup(container_t *container)
+static void container_cleanup(container_t *container)
 {
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
@@ -898,12 +848,12 @@ container_cleanup(container_t *container)
 	container->time_started = -1;
 }
 
-void
-container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+void container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	container_t *container = data;
 
-	DEBUG("SIGCHLD handler called for container %s with PID %d", container_get_description(container), container->pid);
+	DEBUG("SIGCHLD handler called for container %s with PID %d", container_get_description(container),
+	      container->pid);
 
 	/* In the start function the childs init process gets set a process group which has
 	 * the same pgid as its pid. We wait for all processes belonging to our container's
@@ -915,13 +865,11 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		if (pid == container_pid) {
 			if (WIFEXITED(status)) {
 				INFO("Container %s terminated (init process exited with status=%d)",
-					container_get_description(container),
-					WEXITSTATUS(status));
+				     container_get_description(container), WEXITSTATUS(status));
 				container->exit_status = WEXITSTATUS(status);
 			} else if (WIFSIGNALED(status)) {
-				INFO("Container %s killed by signal %d",
-					container_get_description(container),
-					WTERMSIG(status));
+				INFO("Container %s killed by signal %d", container_get_description(container),
+				     WTERMSIG(status));
 			} else {
 				continue;
 			}
@@ -933,7 +881,7 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		} else if (pid == -1) {
 			if (errno == ECHILD)
 				DEBUG("Process group of container %s terminated completely",
-					container_get_description(container));
+				      container_get_description(container));
 			else
 				WARN_ERRNO("waitpid failed for container %s", container_get_description(container));
 			break;
@@ -960,8 +908,7 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	DEBUG("No more childs to reap. Callback exiting...");
 }
 
-static int
-container_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED void *data)
+static int container_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED void *data)
 {
 	int fd = atoi(file);
 
@@ -973,8 +920,7 @@ container_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED voi
 	return 0;
 }
 
-static int
-container_close_all_fds()
+static int container_close_all_fds()
 {
 	if (dir_foreach("/proc/self/fd", &container_close_all_fds_cb, NULL) < 0) {
 		WARN("Could not open /proc/self/fd directory, /proc not mounted?");
@@ -984,8 +930,7 @@ container_close_all_fds()
 	return 0;
 }
 
-static int
-container_start_child(void *data)
+static int container_start_child(void *data)
 {
 	int ret = 0;
 
@@ -1025,12 +970,11 @@ container_start_child(void *data)
 		ret = CONTAINER_ERROR_CGROUPS;
 		goto error;
 	}
-	
+
 	if (c_net_start_child(container->net) < 0) {
 		ret = CONTAINER_ERROR_NET;
 		goto error;
 	}
-
 
 	/* Make sure to execute the c_vol hook first, since it brings the childs mounts into
 	 * place as it is expected by the other submodules */
@@ -1049,7 +993,7 @@ container_start_child(void *data)
 		goto error;
 	}
 
-	char* root = (container->type == CONTAINER_TYPE_KVM) ? kvm_root : "/";
+	char *root = (container->type == CONTAINER_TYPE_KVM) ? kvm_root : "/";
 	if (chdir(root) < 0) {
 		WARN_ERRNO("Could not chdir to \"%s\" in container %s", root, uuid_string(container->uuid));
 		goto error;
@@ -1091,9 +1035,8 @@ container_start_child(void *data)
 		INFO("Successfully created new cgroup namespace");
 #endif
 
-	DEBUG("Will start %s after closing filedescriptors of %s",
-			guestos_get_init(container->os),
-			container_get_description(container));
+	DEBUG("Will start %s after closing filedescriptors of %s", guestos_get_init(container->os),
+	      container_get_description(container));
 
 	DEBUG("init_argv:");
 	for (char **arg = container->init_argv; *arg; arg++) {
@@ -1127,14 +1070,13 @@ container_start_child(void *data)
 			goto error;
 		}
 		if (pid == 0) { // child
-			char * const argv[] = { "/usr/bin/lkvm", "run", "-d", kvm_root, NULL};
+			char *const argv[] = { "/usr/bin/lkvm", "run", "-d", kvm_root, NULL };
 			execv(argv[0], argv);
 			WARN("Could not run exec for kvm container %s", uuid_string(container->uuid));
 		} else { // parent
 			char buffer[128];
 			ssize_t read_bytes;
-			char *kvm_log =
-				mem_printf("%s.kvm.log", container_get_images_dir(container));
+			char *kvm_log = mem_printf("%s.kvm.log", container_get_images_dir(container));
 			read_bytes = read(fd_master, buffer, 128);
 			file_write(kvm_log, buffer, read_bytes);
 			while ((read_bytes = read(fd_master, buffer, 128))) {
@@ -1175,8 +1117,7 @@ error:
 	return ret; // exit the child process
 }
 
-static void
-container_start_timeout_cb(event_timer_t *timer, void *data)
+static void container_start_timeout_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 
@@ -1190,7 +1131,8 @@ container_start_timeout_cb(event_timer_t *timer, void *data)
 	 * as the container goes down. */
 	if (container_get_state(container) == CONTAINER_STATE_BOOTING) {
 		WARN("Reached container start timeout for container %s and the container is still booting."
-				" Killing it...", container_get_description(container));
+		     " Killing it...",
+		     container_get_description(container));
 		/* kill container. SIGCHLD cb handles the cleanup and state change */
 		container_kill(container);
 	}
@@ -1202,8 +1144,7 @@ container_start_timeout_cb(event_timer_t *timer, void *data)
 	return;
 }
 
-static void
-container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *data)
+static void container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
 	char msg;
 	container_t *container = data;
@@ -1243,8 +1184,8 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		container_set_state(container, CONTAINER_STATE_BOOTING);
 
 		/* register a timer to kill the container if it does not come up in time */
-		container->start_timer = event_timer_new(CONTAINER_START_TIMEOUT, 1,
-			&container_start_timeout_cb, container);
+		container->start_timer =
+			event_timer_new(CONTAINER_START_TIMEOUT, 1, &container_start_timeout_cb, container);
 		event_add_timer(container->start_timer);
 	}
 
@@ -1288,42 +1229,39 @@ error:
 	container_kill(container);
 }
 
-int
-container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv)
+int container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv)
 {
 	ASSERT(container);
 	ASSERT(cmd);
 
 	switch (container_get_state(container)) {
-		case CONTAINER_STATE_BOOTING:
-		case CONTAINER_STATE_RUNNING:
-		case CONTAINER_STATE_SETUP:
-			break;
-		default:
-			WARN("Container %s is not running thus no command could be exec'ed",
-				container_get_description(container));
-			return -1;
+	case CONTAINER_STATE_BOOTING:
+	case CONTAINER_STATE_RUNNING:
+	case CONTAINER_STATE_SETUP:
+		break;
+	default:
+		WARN("Container %s is not running thus no command could be exec'ed",
+		     container_get_description(container));
+		return -1;
 	}
 
 	TRACE("Forwarding request to c_run subsystem");
 	return c_run_exec_process(container->run, create_pty, cmd, argc, argv);
 }
 
-int
-container_write_exec_input(container_t *container, char *exec_input)
+int container_write_exec_input(container_t *container, char *exec_input)
 {
 	TRACE("Forwarding write request to c_run subsystem");
 	return c_run_write_exec_input(container->run, exec_input);
 }
 
-int
-container_start(container_t *container)//, const char *key)
+int container_start(container_t *container) //, const char *key)
 {
 	ASSERT(container);
 
 	if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
 		ERROR("Container %s is not stopped and can therefore not be started",
-				container_get_description(container));
+		      container_get_description(container));
 		return CONTAINER_ERROR;
 	}
 
@@ -1411,8 +1349,8 @@ container_start(container_t *container)//, const char *key)
 
 	/*********************************************************/
 	/* REGISTER SOCKET TO RECEIVE STATUS MESSAGES FROM CHILD */
-	event_io_t *sync_sock_parent_event = event_io_new(container->sync_sock_parent, EVENT_IO_READ,
-	                                     &container_start_post_clone_cb, container);
+	event_io_t *sync_sock_parent_event =
+		event_io_new(container->sync_sock_parent, EVENT_IO_READ, &container_start_post_clone_cb, container);
 	event_add_io(sync_sock_parent_event);
 
 	/* register SIGCHILD handler which sets the state and
@@ -1460,19 +1398,17 @@ error_pre_clone:
 	return ret;
 }
 
-void
-container_kill(container_t *container)
+void container_kill(container_t *container)
 {
 	ASSERT(container);
 
-	if(container_get_state(container) == CONTAINER_STATE_STOPPED) {
+	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
 		DEBUG("Trying to kill stopped container... doing nothing.");
 		return;
 	}
 
 	// TODO kill container (possibly register callback and wait non-blocking)
-	DEBUG("Killing container %s with pid: %d", container_get_description(container),
-		container_get_pid(container));
+	DEBUG("Killing container %s with pid: %d", container_get_description(container), container_get_pid(container));
 
 	if (kill(container_get_pid(container), SIGKILL)) {
 		ERROR_ERRNO("Failed to kill container %s", container_get_description(container));
@@ -1481,13 +1417,13 @@ container_kill(container_t *container)
 
 /* This callback determines the container's state and forces its shutdown,
  * when a container could not be stopped in time*/
-static void
-container_stop_timeout_cb(event_timer_t *timer, void *data)
+static void container_stop_timeout_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 
 	container_t *container = data;
-	DEBUG("Reached container stop timeout for container %s. Doing the kill now", container_get_description(container));
+	DEBUG("Reached container stop timeout for container %s. Doing the kill now",
+	      container_get_description(container));
 
 	// kill container. sichld cb handles the cleanup and state change
 	container_kill(container);
@@ -1498,16 +1434,15 @@ container_stop_timeout_cb(event_timer_t *timer, void *data)
 	return;
 }
 
-int
-container_stop(container_t *container)
+int container_stop(container_t *container)
 {
 	ASSERT(container);
 
 	int ret = 0;
 
 	/* register timer with callback doing the kill, if stop fails */
-	event_timer_t *container_stop_timer = event_timer_new(CONTAINER_STOP_TIMEOUT, 1,
-		&container_stop_timeout_cb, container);
+	event_timer_t *container_stop_timer =
+		event_timer_new(CONTAINER_STOP_TIMEOUT, 1, &container_stop_timeout_cb, container);
 	event_add_timer(container_stop_timer);
 	container->stop_timer = container_stop_timer;
 
@@ -1540,9 +1475,7 @@ error_stop:
 	return ret;
 }
 
-
-int
-container_bind_socket_before_start(container_t *container, const char *path)
+int container_bind_socket_before_start(container_t *container, const char *path)
 {
 	ASSERT(container);
 
@@ -1557,43 +1490,41 @@ container_bind_socket_before_start(container_t *container, const char *path)
 	return cs->sockfd;
 }
 
-int
-container_bind_socket_after_start(UNUSED container_t *container, UNUSED const char *path)
+int container_bind_socket_after_start(UNUSED container_t *container, UNUSED const char *path)
 {
-//	int sock = container_bind_socket_before_start(container, socket_type, path);
-//	// TODO find out what works and implement me
-//	// EITHER:
-//	char *bind_path = mem_printf("/proc/%s/root/%s", atoi(container->pid), path);
-//	sock_unix_bind(sock, path_into_ns);
-//
-//	// OR:
-//	// create a socketpair for synchronization
-//	int fd[2];
-//    pid_t pid;
-//    socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
-//    pid = fork();
-//	if (pid == -1) {
-//		WARN_ERRNO("Fork failed");
-//		return -1;
-//	}
-//    if (pid == 0) {
-//		// TODO synchronization
-//		/* executed in child */
-//        close(fd[0]);
-//		char *mnt_ns_path = mem_printf("/proc/%s/ns/mnt", atoi(container->pid));
-//		ns_fd = open(mnt_ns_path, O_RDONLY);
-//		setns(ns_fd, 0); // switch into mount namespace of container
-//		sock_unix_bind(sock, path);
-//		exit(0);
-//    } else {
-//		/* executed in parent */
-//        close(fd[1]);
-//    }
+	//	int sock = container_bind_socket_before_start(container, socket_type, path);
+	//	// TODO find out what works and implement me
+	//	// EITHER:
+	//	char *bind_path = mem_printf("/proc/%s/root/%s", atoi(container->pid), path);
+	//	sock_unix_bind(sock, path_into_ns);
+	//
+	//	// OR:
+	//	// create a socketpair for synchronization
+	//	int fd[2];
+	//    pid_t pid;
+	//    socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
+	//    pid = fork();
+	//	if (pid == -1) {
+	//		WARN_ERRNO("Fork failed");
+	//		return -1;
+	//	}
+	//    if (pid == 0) {
+	//		// TODO synchronization
+	//		/* executed in child */
+	//        close(fd[0]);
+	//		char *mnt_ns_path = mem_printf("/proc/%s/ns/mnt", atoi(container->pid));
+	//		ns_fd = open(mnt_ns_path, O_RDONLY);
+	//		setns(ns_fd, 0); // switch into mount namespace of container
+	//		sock_unix_bind(sock, path);
+	//		exit(0);
+	//    } else {
+	//		/* executed in parent */
+	//        close(fd[1]);
+	//    }
 	return 0;
 }
 
-int
-container_freeze(container_t *container)
+int container_freeze(container_t *container)
 {
 	ASSERT(container);
 
@@ -1610,46 +1541,41 @@ container_freeze(container_t *container)
 	return 0;
 }
 
-int
-container_unfreeze(container_t *container)
+int container_unfreeze(container_t *container)
 {
 	ASSERT(container);
 	// TODO state checking
 	return c_cgroups_unfreeze(container->cgroups);
 }
 
-int
-container_allow_audio(container_t *container)
+int container_allow_audio(container_t *container)
 {
 	ASSERT(container);
 	// TODO state checking
 	return c_cgroups_devices_allow_audio(container->cgroups);
 }
 
-int
-container_deny_audio(container_t *container)
+int container_deny_audio(container_t *container)
 {
 	ASSERT(container);
 	// TODO state checking
 	return c_cgroups_devices_deny_audio(container->cgroups);
 }
 
-int
-container_snapshot(container_t *container)
+int container_snapshot(container_t *container)
 {
 	ASSERT(container);
 	// TODO implement
 	return 0;
 }
 
-static int
-container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
+static int container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 {
 	container_t *container = data;
 	/* Only do the rest of the callback if the file name ends with .img */
 	int len = strlen(name);
 	if (len >= 4 && !strcmp(name + len - 4, ".img")) {
-		char *image_path= mem_printf("%s/%s", path, name);
+		char *image_path = mem_printf("%s/%s", path, name);
 		DEBUG("Deleting image of container %s: %s", container_get_description(container), image_path);
 		if (unlink(image_path) == -1) {
 			ERROR_ERRNO("Could not delete image %s", image_path);
@@ -1659,8 +1585,7 @@ container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 	return 0;
 }
 
-int
-container_wipe_finish(container_t *container)
+int container_wipe_finish(container_t *container)
 {
 	ASSERT(container);
 
@@ -1672,8 +1597,7 @@ container_wipe_finish(container_t *container)
 	return 0;
 }
 
-static void
-container_wipe_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+static void container_wipe_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
 	ASSERT(container);
 
@@ -1690,8 +1614,7 @@ container_wipe_cb(container_t *container, container_callback_t *cb, UNUSED void 
 	container_unregister_observer(container, cb);
 }
 
-int
-container_wipe(container_t *container)
+int container_wipe(container_t *container)
 {
 	ASSERT(container);
 
@@ -1712,8 +1635,7 @@ container_wipe(container_t *container)
 	}
 }
 
-static void
-container_notify_observers(container_t *container)
+static void container_notify_observers(container_t *container)
 {
 	for (list_t *l = container->observer_list; l; l = l->next) {
 		container_callback_t *ccb = l->data;
@@ -1736,8 +1658,7 @@ container_notify_observers(container_t *container)
 	}
 }
 
-void
-container_set_state(container_t *container, container_state_t state)
+void container_set_state(container_t *container, container_state_t state)
 {
 	ASSERT(container);
 
@@ -1746,12 +1667,12 @@ container_set_state(container_t *container, container_state_t state)
 
 	// maintaining SETUP state in following cases
 	if (container->state == CONTAINER_STATE_SETUP) {
-		switch(state) {
-			case CONTAINER_STATE_BOOTING:
-			case CONTAINER_STATE_RUNNING:
-				return;
-			default:
-				break;
+		switch (state) {
+		case CONTAINER_STATE_BOOTING:
+		case CONTAINER_STATE_RUNNING:
+			return;
+		default:
+			break;
 		}
 	}
 
@@ -1761,26 +1682,20 @@ container_set_state(container_t *container, container_state_t state)
 	container_notify_observers(container);
 }
 
-container_state_t
-container_get_state(const container_t *container)
+container_state_t container_get_state(const container_t *container)
 {
 	ASSERT(container);
 	return container->state;
 }
 
-container_type_t
-container_get_type(const container_t *container)
+container_type_t container_get_type(const container_t *container)
 {
 	ASSERT(container);
 	return container->type;
 }
 
-container_callback_t *
-container_register_observer(
-		container_t *container,
-		void (*cb)(container_t *, container_callback_t *, void *),
-		void *data
-		)
+container_callback_t *container_register_observer(container_t *container,
+						  void (*cb)(container_t *, container_callback_t *, void *), void *data)
 {
 	ASSERT(container);
 	ASSERT(cb);
@@ -1789,14 +1704,12 @@ container_register_observer(
 	ccb->cb = cb;
 	ccb->data = data;
 	container->observer_list = list_append(container->observer_list, ccb);
-	DEBUG("Container %s: callback %p registered (nr of observers: %d)",
-			container_get_description(container), CAST_FUNCPTR_VOIDPTR(cb),
-			list_length(container->observer_list));
+	DEBUG("Container %s: callback %p registered (nr of observers: %d)", container_get_description(container),
+	      CAST_FUNCPTR_VOIDPTR(cb), list_length(container->observer_list));
 	return ccb;
 }
 
-void
-container_unregister_observer(container_t *container, container_callback_t *cb)
+void container_unregister_observer(container_t *container, container_callback_t *cb)
 {
 	ASSERT(container);
 	ASSERT(cb);
@@ -1805,21 +1718,18 @@ container_unregister_observer(container_t *container, container_callback_t *cb)
 		container->observer_list = list_remove(container->observer_list, cb);
 		mem_free(cb);
 	}
-	DEBUG("Container %s: callback %p unregistered (nr of observers: %d)",
-			container_get_description(container), CAST_FUNCPTR_VOIDPTR(cb),
-			list_length(container->observer_list));
+	DEBUG("Container %s: callback %p unregistered (nr of observers: %d)", container_get_description(container),
+	      CAST_FUNCPTR_VOIDPTR(cb), list_length(container->observer_list));
 }
 
-const char *
-container_get_key(const container_t *container)
+const char *container_get_key(const container_t *container)
 {
 	ASSERT(container);
 
 	return container->key;
 }
 
-void
-container_set_key(container_t *container, const char *key)
+void container_set_key(container_t *container, const char *key)
 {
 	ASSERT(container);
 	ASSERT(key);
@@ -1835,16 +1745,14 @@ container_set_key(container_t *container, const char *key)
 	container_notify_observers(container);
 }
 
-unsigned int
-container_get_ram_limit(const container_t *container)
+unsigned int container_get_ram_limit(const container_t *container)
 {
 	ASSERT(container);
 
 	return container->ram_limit;
 }
 
-int
-container_set_ram_limit(container_t *container, unsigned int ram_limit)
+int container_set_ram_limit(container_t *container, unsigned int ram_limit)
 {
 	ASSERT(container);
 
@@ -1857,52 +1765,47 @@ container_set_ram_limit(container_t *container, unsigned int ram_limit)
 	return c_cgroups_set_ram_limit(container->cgroups);
 }
 
-void
-container_set_connectivity(container_t *container, container_connectivity_t connectivity)
+void container_set_connectivity(container_t *container, container_connectivity_t connectivity)
 {
 	ASSERT(container);
 
 	if (container->connectivity == connectivity)
 		return;
 
-	DEBUG("Setting container connectivity state to %d for container %s",
-			connectivity, container_get_description(container));
+	DEBUG("Setting container connectivity state to %d for container %s", connectivity,
+	      container_get_description(container));
 	container->connectivity = connectivity;
 
 	container_notify_observers(container);
 }
 
-container_connectivity_t
-container_get_connectivity(container_t *container)
+container_connectivity_t container_get_connectivity(container_t *container)
 {
 	ASSERT(container);
 	return container->connectivity;
 }
 
-void
-container_set_airplane_mode(container_t *container, bool airplane_mode)
+void container_set_airplane_mode(container_t *container, bool airplane_mode)
 {
 	ASSERT(container);
 
 	if (container->airplane_mode == airplane_mode)
 		return;
 
-	DEBUG("Setting container airplane mode state to %d for container %s",
-			airplane_mode, container_get_description(container));
+	DEBUG("Setting container airplane mode state to %d for container %s", airplane_mode,
+	      container_get_description(container));
 	container->airplane_mode = airplane_mode;
 
 	container_notify_observers(container);
 }
 
-bool
-container_get_airplane_mode(container_t *container)
+bool container_get_airplane_mode(container_t *container)
 {
 	ASSERT(container);
 	return container->airplane_mode;
 }
 
-void
-container_set_screen_on(container_t *container, bool screen_on)
+void container_set_screen_on(container_t *container, bool screen_on)
 {
 	ASSERT(container);
 
@@ -1920,21 +1823,18 @@ container_set_screen_on(container_t *container, bool screen_on)
 	container_notify_observers(container);
 }
 
-bool
-container_is_screen_on(container_t *container)
+bool container_is_screen_on(container_t *container)
 {
 	ASSERT(container);
 
 	return container->screen_on;
 }
 
-void
-container_set_imei(container_t *container, char *imei)
+void container_set_imei(container_t *container, char *imei)
 {
 	ASSERT(container);
 	if (imei) {
-		DEBUG("Setting container imei to %s for container %s",
-				imei, container_get_description(container));
+		DEBUG("Setting container imei to %s for container %s", imei, container_get_description(container));
 		if (container->imei)
 			mem_free(container->imei);
 		container->imei = mem_strdup(imei);
@@ -1942,20 +1842,18 @@ container_set_imei(container_t *container, char *imei)
 	}
 }
 
-char*
-container_get_imei(container_t *container)
+char *container_get_imei(container_t *container)
 {
 	ASSERT(container);
 	return container->imei;
 }
 
-void
-container_set_mac_address(container_t *container, char *mac_address)
+void container_set_mac_address(container_t *container, char *mac_address)
 {
 	ASSERT(container);
-	if(mac_address) {
-		DEBUG("Setting container MAC address to %s for container %s",
-				mac_address, container_get_description(container));
+	if (mac_address) {
+		DEBUG("Setting container MAC address to %s for container %s", mac_address,
+		      container_get_description(container));
 		if (container->mac_address)
 			mem_free(container->mac_address);
 		container->mac_address = mem_strdup(mac_address);
@@ -1963,20 +1861,18 @@ container_set_mac_address(container_t *container, char *mac_address)
 	}
 }
 
-char*
-container_get_mac_address(container_t *container)
+char *container_get_mac_address(container_t *container)
 {
 	ASSERT(container);
 	return container->mac_address;
 }
 
-void
-container_set_phone_number(container_t *container, char *phone_number)
+void container_set_phone_number(container_t *container, char *phone_number)
 {
 	ASSERT(container);
-	if(phone_number) {
-		DEBUG("Setting container phone number to %s for container %s",
-				phone_number, container_get_description(container));
+	if (phone_number) {
+		DEBUG("Setting container phone number to %s for container %s", phone_number,
+		      container_get_description(container));
 		if (container->phone_number)
 			mem_free(container->phone_number);
 		container->phone_number = mem_strdup(phone_number);
@@ -1984,29 +1880,25 @@ container_set_phone_number(container_t *container, char *phone_number)
 	}
 }
 
-char*
-container_get_phone_number(container_t *container)
+char *container_get_phone_number(container_t *container)
 {
 	ASSERT(container);
 	return container->phone_number;
 }
 
-bool
-container_get_allow_autostart(container_t *container)
+bool container_get_allow_autostart(container_t *container)
 {
 	ASSERT(container);
 	return container->allow_autostart;
 }
 
-const guestos_t*
-container_get_guestos(const container_t *container)
+const guestos_t *container_get_guestos(const container_t *container)
 {
 	ASSERT(container);
 	return container->os;
 }
 
-bool
-container_is_feature_enabled(const container_t *container, const char *feature)
+bool container_is_feature_enabled(const container_t *container, const char *feature)
 {
 	for (list_t *l = container->feature_enabled_list; l; l = l->next) {
 		char *feature_enabled = l->data;
@@ -2016,8 +1908,7 @@ container_is_feature_enabled(const container_t *container, const char *feature)
 	return false;
 }
 
-static void
-container_set_feature_enable(container_t* container, const char* feature)
+static void container_set_feature_enable(container_t *container, const char *feature)
 {
 	if (container_is_feature_enabled(container, feature))
 		return;
@@ -2026,72 +1917,61 @@ container_set_feature_enable(container_t* container, const char* feature)
 	container->feature_enabled_list = list_append(container->feature_enabled_list, mem_strdup(feature));
 }
 
-void
-container_enable_bluetooth(container_t* container)
+void container_enable_bluetooth(container_t *container)
 {
 	container_set_feature_enable(container, "bluetooth");
 }
 
-void
-container_enable_camera(container_t* container)
+void container_enable_camera(container_t *container)
 {
 	container_set_feature_enable(container, "camera");
 }
 
-void
-container_enable_gps(container_t* container)
+void container_enable_gps(container_t *container)
 {
 	container_set_feature_enable(container, "gps");
 }
 
-void
-container_enable_telephony(container_t* container)
+void container_enable_telephony(container_t *container)
 {
 	container_set_feature_enable(container, "telephony");
 }
 
-void
-container_enable_gapps(container_t* container)
+void container_enable_gapps(container_t *container)
 {
 	container_set_feature_enable(container, "gapps");
 }
 
-void
-container_enable_fhgapps(container_t* container)
+void container_enable_fhgapps(container_t *container)
 {
 	container_set_feature_enable(container, "fhgapps");
 }
 
-const char *
-container_get_dns_server(const container_t *container)
+const char *container_get_dns_server(const container_t *container)
 {
 	ASSERT(container);
 	return container->dns_server;
 }
 
-bool
-container_has_netns(const container_t *container)
+bool container_has_netns(const container_t *container)
 {
 	ASSERT(container);
 	return container->ns_net;
 }
 
-char *
-container_get_first_ip_new(container_t *container)
+char *container_get_first_ip_new(container_t *container)
 {
 	ASSERT(container);
 	return c_net_get_ip_new(container->net);
 }
 
-char *
-container_get_first_subnet_new(container_t *container)
+char *container_get_first_subnet_new(container_t *container)
 {
 	ASSERT(container);
 	return c_net_get_subnet_new(container->net);
 }
 
-time_t
-container_get_uptime(const container_t *container)
+time_t container_get_uptime(const container_t *container)
 {
 	if (container->time_started < 0)
 		return 0;
@@ -2100,52 +1980,52 @@ container_get_uptime(const container_t *container)
 	return (uptime < 0) ? 0 : uptime;
 }
 
-time_t
-container_get_creation_time(const container_t *container)
+time_t container_get_creation_time(const container_t *container)
 {
 	if (container->time_created < 0)
 		return 0;
 	return container->time_created;
 }
 
-int
-container_add_net_iface(container_t *container, const char *iface, bool persistent){
+int container_add_net_iface(container_t *container, const char *iface, bool persistent)
+{
 	ASSERT(container);
 	pid_t pid = container_get_pid(container);
 	int res = c_net_move_ifi(iface, pid);
-	if ( res || !persistent ) return res;
-	container_config_t *conf = container_config_new(container->config_filename, NULL,0);
+	if (res || !persistent)
+		return res;
+	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
 	container_config_append_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
 	return 0;
 }
 
-int
-container_remove_net_iface(container_t *container, const char *iface, bool persistent){
+int container_remove_net_iface(container_t *container, const char *iface, bool persistent)
+{
 	ASSERT(container);
 	pid_t pid = container_get_pid(container);
 	int res = c_net_remove_ifi(iface, pid);
-	if ( res || !persistent ) return res;
-	container_config_t *conf = container_config_new(container->config_filename, NULL,0);
+	if (res || !persistent)
+		return res;
+	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
 	return 0;
 }
 
-const char **
-container_get_dev_allow_list(const container_t *container){
-	return (const char**) container->device_allowed_list;
+const char **container_get_dev_allow_list(const container_t *container)
+{
+	return (const char **)container->device_allowed_list;
 }
 
-const char **
-container_get_dev_assign_list(const container_t *container){
-	return (const char**) container->device_assigned_list;
+const char **container_get_dev_assign_list(const container_t *container)
+{
+	return (const char **)container->device_assigned_list;
 }
 
-void
-container_set_setup_mode(container_t *container, bool setup)
+void container_set_setup_mode(container_t *container, bool setup)
 {
 	ASSERT(container);
 	if (container->setup_mode == setup)
@@ -2154,12 +2034,11 @@ container_set_setup_mode(container_t *container, bool setup)
 	container->setup_mode = setup;
 }
 
-container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name,
-		       const uint8_t mac[6], bool configure)
+container_vnet_cfg_t *container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
+					     bool configure)
 {
 	IF_NULL_RETVAL(if_name, NULL);
-	container_vnet_cfg_t* vnet_cfg = mem_new(container_vnet_cfg_t, 1);
+	container_vnet_cfg_t *vnet_cfg = mem_new(container_vnet_cfg_t, 1);
 	vnet_cfg->vnet_name = mem_strdup(if_name);
 	memcpy(vnet_cfg->vnet_mac, mac, 6);
 	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
@@ -2167,8 +2046,7 @@ container_vnet_cfg_new(const char *if_name, const char *rootns_name,
 	return vnet_cfg;
 }
 
-void
-container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
+void container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
 {
 	IF_NULL_RETURN(vnet_cfg);
 	if (vnet_cfg->vnet_name)
@@ -2178,14 +2056,12 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
 	mem_free(vnet_cfg);
 }
 
-list_t *
-container_get_vnet_runtime_cfg_new(container_t *container)
+list_t *container_get_vnet_runtime_cfg_new(container_t *container)
 {
 	return c_net_get_interface_mapping_new(container->net);
 }
 
-int
-container_update_config(container_t * container, uint8_t *buf, size_t buf_len)
+int container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
 {
 	int ret;
 	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len);

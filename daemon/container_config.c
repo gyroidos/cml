@@ -28,14 +28,14 @@
 #include "container.pb-c.h"
 #endif
 
-#include "common/macro.h"
-#include "common/mem.h"
 #include "common/file.h"
 #include "common/list.h"
+#include "common/macro.h"
+#include "common/mem.h"
 #include "common/protobuf.h"
 
-#include <stdint.h>
 #include <inttypes.h>
+#include <stdint.h>
 
 #include "guestos.h"
 #include "guestos_mgr.h"
@@ -47,26 +47,19 @@ struct container_config {
 	ContainerConfig *cfg;
 };
 
-#define C_CONFIG_MAX_RAM_LIMIT  (1<<30)     // TODO 1GB? (< 4GB due to uint32)
-#define C_CONFIG_MAX_STORAGE    (4LL<<30)   // TODO 4GB?
+#define C_CONFIG_MAX_RAM_LIMIT (1 << 30) // TODO 1GB? (< 4GB due to uint32)
+#define C_CONFIG_MAX_STORAGE (4LL << 30) // TODO 4GB?
 
 // used to validate config
 #define C_CONFIG_FEATURES_LEN 7
 static const char *container_config_features[C_CONFIG_FEATURES_LEN] = {
-	"generic",
-	"bluetooth",
-	"camera",
-	"gapps",
-	"gps",
-	"telephony",
-	"fhgapps",
+	"generic", "bluetooth", "camera", "gapps", "gps", "telephony", "fhgapps",
 };
 
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
-container_type_t
-container_config_proto_to_type(ContainerType type)
+container_type_t container_config_proto_to_type(ContainerType type)
 {
 	switch (type) {
 	case CONTAINER_TYPE__CONTAINER:
@@ -119,8 +112,7 @@ container_config_storage_size(container_config_t *config)
 #endif
 /******************************************************************************/
 
-container_config_t *
-container_config_new(const char *file, const uint8_t *buf, size_t len)
+container_config_t *container_config_new(const char *file, const uint8_t *buf, size_t len)
 {
 	ContainerConfig *ccfg = NULL;
 
@@ -128,15 +120,13 @@ container_config_new(const char *file, const uint8_t *buf, size_t len)
 
 	if (buf) {
 		DEBUG("Loading container config from buf storing to file \"%s\".", file);
-		ccfg = (ContainerConfig *)
-		       protobuf_message_new_from_buf(buf, len, &container_config__descriptor);
+		ccfg = (ContainerConfig *)protobuf_message_new_from_buf(buf, len, &container_config__descriptor);
 		if (!ccfg)
 			WARN("Failed loading container config from buf");
 	}
 	if (!ccfg) {
 		DEBUG("Loading container config from file \"%s\".", file);
-		ccfg = (ContainerConfig *)
-			protobuf_message_new_from_textfile(file, &container_config__descriptor);
+		ccfg = (ContainerConfig *)protobuf_message_new_from_textfile(file, &container_config__descriptor);
 		if (!ccfg) {
 			WARN("Failed loading container config from file \"%s\".", file);
 			return NULL;
@@ -149,23 +139,21 @@ container_config_new(const char *file, const uint8_t *buf, size_t len)
 	return config;
 }
 
-void
-container_config_free(container_config_t *config)
+void container_config_free(container_config_t *config)
 {
 	ASSERT(config);
-	protobuf_free_message((ProtobufCMessage *) config->cfg);
+	protobuf_free_message((ProtobufCMessage *)config->cfg);
 	mem_free(config->file);
 	mem_free(config);
 }
 
-int
-container_config_write(const container_config_t *config)
+int container_config_write(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	ASSERT(config->file);
 
-	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *) config->cfg) < 0) {
+	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *)config->cfg) < 0) {
 		WARN("Could not write container config to \"%s\"", config->file);
 		return -1;
 	}
@@ -173,16 +161,14 @@ container_config_write(const container_config_t *config)
 	return 0;
 }
 
-const char *
-container_config_get_name(const container_config_t *config)
+const char *container_config_get_name(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->name;
 }
 
-void
-container_config_set_name(container_config_t *config, UNUSED const char *name)
+void container_config_set_name(container_config_t *config, UNUSED const char *name)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -191,16 +177,14 @@ container_config_set_name(container_config_t *config, UNUSED const char *name)
 	config->cfg->name = mem_strdup(name);
 }
 
-const char *
-container_config_get_guestos(const container_config_t *config)
+const char *container_config_get_guestos(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->guest_os;
 }
 
-void
-container_config_set_guestos(container_config_t *config, const char *os)
+void container_config_set_guestos(container_config_t *config, const char *os)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -209,30 +193,26 @@ container_config_set_guestos(container_config_t *config, const char *os)
 	config->cfg->guest_os = mem_strdup(os);
 }
 
-unsigned int
-container_config_get_ram_limit(const container_config_t *config)
+unsigned int container_config_get_ram_limit(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->ram_limit;
 }
 
-void
-container_config_set_ram_limit(container_config_t *config, unsigned int ram_limit)
+void container_config_set_ram_limit(container_config_t *config, unsigned int ram_limit)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	// TODO sanity checks for max. number of potatoes, etc.
 	if (ram_limit > C_CONFIG_MAX_RAM_LIMIT) {
-		WARN("Cannot set ram_limit to %d, maximum is %d.",
-				ram_limit, C_CONFIG_MAX_RAM_LIMIT);
+		WARN("Cannot set ram_limit to %d, maximum is %d.", ram_limit, C_CONFIG_MAX_RAM_LIMIT);
 		return;
 	}
 	config->cfg->ram_limit = ram_limit;
 }
 
-void
-container_config_fill_mount(const container_config_t *config, mount_t *mnt)
+void container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -245,8 +225,7 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		ASSERT(name);
 		mount_entry_t *mntent = mount_get_entry_by_img(mnt, name);
 		if (!mntent) {
-			WARN("Unknown mount entry \"%s\" in config for container \"%s\", skipping!",
-					name, cfg->name);
+			WARN("Unknown mount entry \"%s\" in config for container \"%s\", skipping!", name, cfg->name);
 			continue;
 		}
 
@@ -255,12 +234,13 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		mount_entry_set_img(mntent, file);
 
 		if ((mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) ||
-				(mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)) {
+		    (mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)) {
 			uint64_t size = cfg->image_sizes[i]->image_size;
 			mount_entry_set_size(mntent, size);
 		} else {
 			ERROR("Forbidden: Cannot override image size for mount entry \"%s\" "
-					"in config for container \"%s\"!", name, cfg->name);
+			      "in config for container \"%s\"!",
+			      name, cfg->name);
 		}
 	}
 }
@@ -286,40 +266,35 @@ container_config_set_storage_size(container_config_t *config, uint64_t storage_s
 	config->cfg->storage_size = storage_size;
 }
 #endif
-uint32_t
-container_config_get_color(const container_config_t *config)
+uint32_t container_config_get_color(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->color;
 }
 
-void
-container_config_set_color(container_config_t *config, uint32_t color)
+void container_config_set_color(container_config_t *config, uint32_t color)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	config->cfg->color = color;
 }
 
-container_type_t
-container_config_get_type(const container_config_t *config)
+container_type_t container_config_get_type(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return container_config_proto_to_type(config->cfg->type);
 }
 
-uint64_t
-container_config_get_guestos_version(const container_config_t *config)
+uint64_t container_config_get_guestos_version(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->guestos_version;
 }
 
-void
-container_config_set_guestos_version(container_config_t *config, uint64_t guestos_version)
+void container_config_set_guestos_version(container_config_t *config, uint64_t guestos_version)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -327,24 +302,21 @@ container_config_set_guestos_version(container_config_t *config, uint64_t guesto
 	config->cfg->guestos_version = guestos_version;
 }
 
-bool
-container_config_get_allow_autostart(const container_config_t *config)
+bool container_config_get_allow_autostart(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->allow_autostart;
 }
 
-void
-container_config_set_allow_autostart(container_config_t *config, bool allow_autostart)
+void container_config_set_allow_autostart(container_config_t *config, bool allow_autostart)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	config->cfg->allow_autostart = allow_autostart;
 }
 
-static bool
-container_config_is_valid_feature(const char *feature)
+static bool container_config_is_valid_feature(const char *feature)
 {
 	for (size_t i = 0; i < C_CONFIG_FEATURES_LEN; i++) {
 		if (strcmp(container_config_features[i], feature) == 0)
@@ -353,8 +325,7 @@ container_config_is_valid_feature(const char *feature)
 	return false;
 }
 
-list_t *
-container_config_get_feature_list_new(const container_config_t *config)
+list_t *container_config_get_feature_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -369,8 +340,7 @@ container_config_get_feature_list_new(const container_config_t *config)
 	return feature_list;
 }
 
-list_t *
-container_config_get_net_ifaces_list_new(const container_config_t *config)
+list_t *container_config_get_net_ifaces_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -382,13 +352,12 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 	return net_ifaces_list;
 }
 
-char**
-container_config_get_dev_allow_list_new(const container_config_t *config)
+char **container_config_get_dev_allow_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 
-	char** dev_whitelist = mem_new0(char *, config->cfg->n_allow_dev + 1);
+	char **dev_whitelist = mem_new0(char *, config->cfg->n_allow_dev + 1);
 	for (size_t i = 0; i < config->cfg->n_allow_dev; i++) {
 		dev_whitelist[i] = mem_strdup(config->cfg->allow_dev[i]);
 	}
@@ -396,12 +365,11 @@ container_config_get_dev_allow_list_new(const container_config_t *config)
 	return dev_whitelist;
 }
 
-char**
-container_config_get_dev_assign_list_new(const container_config_t *config)
+char **container_config_get_dev_assign_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-	char** dev_assign_list = mem_new0(char *, config->cfg->n_assign_dev + 1);
+	char **dev_assign_list = mem_new0(char *, config->cfg->n_assign_dev + 1);
 	for (size_t i = 0; i < config->cfg->n_assign_dev; i++) {
 		dev_assign_list[i] = mem_strdup(config->cfg->assign_dev[i]);
 	}
@@ -426,24 +394,21 @@ container_config_set_autostart(container_config_t *config, UNUSED bool autostart
 }
 #endif
 
-const char *
-container_config_get_dns_server(const container_config_t *config)
+const char *container_config_get_dns_server(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->dns_server;
 }
 
-bool
-container_config_has_netns(const container_config_t *config)
+bool container_config_has_netns(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->netns;
 }
 
-void
-container_config_append_net_ifaces(const container_config_t *config, const char *iface)
+void container_config_append_net_ifaces(const container_config_t *config, const char *iface)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -451,7 +416,7 @@ container_config_append_net_ifaces(const container_config_t *config, const char 
 	int n = config->cfg->n_net_ifaces++;
 	char **old_net_ifaces = config->cfg->net_ifaces;
 
-	config->cfg->net_ifaces = mem_new0(char*, n+1);
+	config->cfg->net_ifaces = mem_new0(char *, n + 1);
 
 	for (int i = 0; i < n; i++) {
 		config->cfg->net_ifaces[i] = mem_strdup(old_net_ifaces[i]);
@@ -463,8 +428,7 @@ container_config_append_net_ifaces(const container_config_t *config, const char 
 	config->cfg->net_ifaces[n] = mem_strdup(iface);
 }
 
-void
-container_config_remove_net_ifaces(const container_config_t *config, const char *iface)
+void container_config_remove_net_ifaces(const container_config_t *config, const char *iface)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
@@ -480,7 +444,7 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 	if (nremove == 0)
 		return;
 
-	config->cfg->net_ifaces = mem_new0(char*, n - nremove);
+	config->cfg->net_ifaces = mem_new0(char *, n - nremove);
 	config->cfg->n_net_ifaces = n - nremove;
 
 	for (int i = 0, j = 0; i < n; i++) {
@@ -492,55 +456,45 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 	mem_free(old_net_ifaces);
 }
 
-list_t *
-container_config_get_vnet_cfg_list_new(const container_config_t *config)
+list_t *container_config_get_vnet_cfg_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 
 	list_t *if_cfg_list = NULL;
-	for (size_t i=0; i < config->cfg->n_vnet_configs; ++i) {
+	for (size_t i = 0; i < config->cfg->n_vnet_configs; ++i) {
 		uint8_t mac[6];
 		if (config->cfg->vnet_configs[i]->if_mac == NULL) {
-			INFO("Generating new mac for if %s",
-				config->cfg->vnet_configs[i]->if_name);
-			file_read("/dev/urandom", (char*)mac, 6);
+			INFO("Generating new mac for if %s", config->cfg->vnet_configs[i]->if_name);
+			file_read("/dev/urandom", (char *)mac, 6);
 			config->cfg->vnet_configs[i]->if_mac =
-				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
-						":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
-					mac[0], mac[1], mac[2],
-					mac[3], mac[4], mac[5]);
+				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
+					   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		} else {
-			INFO("Using mac %s for if %s",
-				config->cfg->vnet_configs[i]->if_mac,
-				config->cfg->vnet_configs[i]->if_name);
+			INFO("Using mac %s for if %s", config->cfg->vnet_configs[i]->if_mac,
+			     config->cfg->vnet_configs[i]->if_name);
 			sscanf(config->cfg->vnet_configs[i]->if_mac,
-				"%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
-						":%02" SCNx8 ":%02" SCNx8,
-				&mac[0], &mac[1], &mac[2],
-				&mac[3], &mac[4], &mac[5]);
+			       "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8, &mac[0],
+			       &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
 		}
 		// sanitize mac veth otherwise kernel may reject the mac
 		mac[0] &= 0xfe; /* clear multicast bit */
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
-		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(
-			config->cfg->vnet_configs[i]->if_name, NULL, mac,
-			config->cfg->vnet_configs[i]->configure
-		);
+		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(config->cfg->vnet_configs[i]->if_name, NULL, mac,
+								      config->cfg->vnet_configs[i]->configure);
 		if_cfg_list = list_append(if_cfg_list, if_cfg);
 	}
 
 	if (if_cfg_list == NULL) {
 		list_t *nw_name_list = hardware_get_nw_name_list();
-		for (list_t* l = nw_name_list; l != NULL; l = l->next) {
+		for (list_t *l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
 			uint8_t mac[6];
-			file_read("/dev/urandom", (char*)mac, 6);
+			file_read("/dev/urandom", (char *)mac, 6);
 			mac[0] &= 0xfe; /* clear multicast bit */
 			mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
-			container_vnet_cfg_t *if_cfg =
-				container_vnet_cfg_new(if_name, NULL, mac, true);
+			container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(if_name, NULL, mac, true);
 			if_cfg_list = list_append(if_cfg_list, if_cfg);
 		}
 		list_delete(nw_name_list);
@@ -548,16 +502,14 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 	return if_cfg_list;
 }
 
-size_t
-container_config_get_init_env_len(const container_config_t *config)
+size_t container_config_get_init_env_len(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->n_init_env;
 }
 
-char **
-container_config_get_init_env(const container_config_t *config)
+char **container_config_get_init_env(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);

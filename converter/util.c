@@ -23,21 +23,21 @@
 
 #include "util.h"
 
+#include "common/file.h"
 #include "common/macro.h"
 #include "common/mem.h"
-#include "common/file.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
-#include <sys/wait.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
 
 #include <openssl/sha.h>
 
 #define OPENSSLBIN_PATH "openssl"
-#define TAR_PATH	"tar"
+#define TAR_PATH "tar"
 #define MKSQUASHFS_PATH "mksquashfs"
 #define MKSQUASHFS_COMP "gzip"
 #define MKSQUASHFS_BSIZE "131072"
@@ -47,19 +47,18 @@
 #define PKIGENSCRIPT_PATH UTIL_PKI_PATH "ssig_pki_generator.sh"
 #define PKIGENCONF_PATH UTIL_PKI_PATH "ssig_pki_generator.conf"
 
-int
-util_fork_and_execvp(const char *path, const char * const *argv)
+int util_fork_and_execvp(const char *path, const char *const *argv)
 {
 	ASSERT(path);
 	//ASSERT(argv);	    // on some OSes, argv can be NULL...
 
 	pid_t pid = fork();
-	if (pid == -1) {    // error
+	if (pid == -1) { // error
 		ERROR_ERRNO("Could not fork '%s'", path);
-	} else if (pid == 0) {	    // child
+	} else if (pid == 0) { // child
 		// cast away const from char (!) for compatibility with legacy (not so clever) execv API
 		// see discussion at http://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html#tag_16_111_08
-		execvp(path, (char * const *)argv);
+		execvp(path, (char *const *)argv);
 		ERROR_ERRNO("Could not execv '%s'", path);
 		exit(-1);
 	} else {
@@ -106,28 +105,25 @@ util_fork_and_execvp(const char *path, const char * const *argv)
 //    }
 //}
 
-int
-util_tar_extract(const char *tar_filename, const char* out_dir)
+int util_tar_extract(const char *tar_filename, const char *out_dir)
 {
-	const char * const argv[] = {TAR_PATH, "-xvf", tar_filename, "-C", out_dir, NULL};
+	const char *const argv[] = { TAR_PATH, "-xvf", tar_filename, "-C", out_dir, NULL };
 	return util_fork_and_execvp(argv[0], argv);
 }
 
-static char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
+static char *convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
-	char *hex = mem_alloc0(sizeof(char)*length*2 + 1);
+	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
-	for (int i=0; i < length; ++i) {
+	for (int i = 0; i < length; ++i) {
 		// remember snprintf additionally writs a '0' byte
-		snprintf(hex+i*2, 3, "%.2x", bin[i]);
+		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
 	}
 
 	return hex;
 }
 
-char *
-util_hash_sha_image_file_new(const char *image_file)
+char *util_hash_sha_image_file_new(const char *image_file)
 {
 	FILE *fp = NULL;
 	SHA_CTX ctx;
@@ -150,8 +146,7 @@ util_hash_sha_image_file_new(const char *image_file)
 	return convert_bin_to_hex_new(buf, SHA_DIGEST_LENGTH);
 }
 
-char *
-util_hash_sha256_image_file_new(const char *image_file)
+char *util_hash_sha256_image_file_new(const char *image_file)
 {
 	FILE *fp = NULL;
 	SHA256_CTX ctx;
@@ -174,24 +169,22 @@ util_hash_sha256_image_file_new(const char *image_file)
 	return convert_bin_to_hex_new(buf, SHA256_DIGEST_LENGTH);
 }
 
-int
-util_squash_image(const char *dir, const char *image_file)
+int util_squash_image(const char *dir, const char *image_file)
 {
-	const char * const argv[] = {MKSQUASHFS_PATH, dir, image_file, "-noappend", "-comp", MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL};
+	const char *const argv[] = { MKSQUASHFS_PATH, dir,  image_file,       "-noappend", "-comp",
+				     MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL };
 	return util_fork_and_execvp(MKSQUASHFS_PATH, argv);
 }
 
-int
-util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
+int util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
 {
-	const char * const argv[] = { OPENSSLBIN_PATH, "dgst", "-sha512",
-		"-sign", key_file, "-out", sig_file, cfg_file, NULL };
+	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",   "-sha512", "-sign", key_file,
+				     "-out",	  sig_file, cfg_file,  NULL };
 	return util_fork_and_execvp(argv[0], argv);
 }
 
-int
-util_gen_pki(void)
+int util_gen_pki(void)
 {
-	const char * const argv[] = { "bash", PKIGENSCRIPT_PATH, PKIGENCONF_PATH, NULL };
+	const char *const argv[] = { "bash", PKIGENSCRIPT_PATH, PKIGENCONF_PATH, NULL };
 	return util_fork_and_execvp(argv[0], argv);
 }

@@ -44,16 +44,14 @@
  * @param path The path of the CMLD configuration file.
  * @return 0 on success, -1 on error
  */
-int
-cmld_init(const char *path);
+int cmld_init(const char *path);
 
 /**
  * Reloads all containers from storage path.
  *
  * @return 0 on success, -1 on error
  */
-int
-cmld_reload_containers(void);
+int cmld_reload_containers(void);
 
 /**
  * Create a container by cloning from another one.
@@ -61,8 +59,7 @@ cmld_reload_containers(void);
  * @param container The container object to clone from.
  * @return The newly cloned container.
  */
-container_t *
-cmld_container_create_clone(container_t *container);
+container_t *cmld_container_create_clone(container_t *container);
 
 /**
  * Create a container by providing a config buffer.
@@ -70,8 +67,7 @@ cmld_container_create_clone(container_t *container);
  * @param config The config for the new container in form of a buffer.
  * @return The container of the newly created container.
  */
-container_t *
-cmld_container_create_from_config(const uint8_t *config, size_t config_len);
+container_t *cmld_container_create_from_config(const uint8_t *config, size_t config_len);
 
 /**
  * Create a container from a config file.
@@ -82,11 +78,9 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len);
 //container_t *
 //cmld_container_create_from_file(char const *config_path);
 
-int
-cmld_container_destroy(container_t *container);
+int cmld_container_destroy(container_t *container);
 
-container_t *
-cmld_containers_get_a0();
+container_t *cmld_containers_get_a0();
 
 /**
  * Start a container if it is not already started
@@ -95,29 +89,21 @@ cmld_containers_get_a0();
  * @param key The key used to decrypt the containers images.
  * @return 0 if success, -1 otherwise.
  */
-int
-cmld_container_start(container_t *container, const char *key);
+int cmld_container_start(container_t *container, const char *key);
 
-int
-cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd);
+int cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd);
 
-int
-cmld_get_control_gui_sock(void);
+int cmld_get_control_gui_sock(void);
 
-int
-cmld_container_stop(container_t *container);
+int cmld_container_stop(container_t *container);
 
-int
-cmld_container_freeze(container_t *container);
+int cmld_container_freeze(container_t *container);
 
-int
-cmld_container_unfreeze(container_t *container);
+int cmld_container_unfreeze(container_t *container);
 
-int
-cmld_container_allow_audio(container_t *container);
+int cmld_container_allow_audio(container_t *container);
 
-int
-cmld_container_deny_audio(container_t *container);
+int cmld_container_deny_audio(container_t *container);
 
 //bool
 //cmld_container_exists(container_t *container);
@@ -125,20 +111,15 @@ cmld_container_deny_audio(container_t *container);
 //const char *
 //cmld_container_getstate(container_t *container);
 
-int
-cmld_container_snapshot(container_t *container);
+int cmld_container_snapshot(container_t *container);
 
-int
-cmld_container_wipe(container_t *container);
+int cmld_container_wipe(container_t *container);
 
-void
-cmld_wipe_device();
+void cmld_wipe_device();
 
-container_t *
-cmld_container_get_by_uuid(uuid_t *uuid);
+container_t *cmld_container_get_by_uuid(uuid_t *uuid);
 
-int
-cmld_containers_stop();
+int cmld_containers_stop();
 
 /* state as parameter? */
 //void
@@ -150,54 +131,45 @@ cmld_containers_stop();
 //void
 //cmld_containers_foreach_suspended();
 
-int
-cmld_containers_get_count();
+int cmld_containers_get_count();
 
-container_t *
-cmld_container_get_by_index(int index);
+container_t *cmld_container_get_by_index(int index);
 
 /**
  * Get the device UUID.
  */
-const char *
-cmld_get_device_uuid(void);
+const char *cmld_get_device_uuid(void);
 
 /**
  * Get the base URL for fetching updates (image files, etc.).
  */
-const char *
-cmld_get_device_update_base_url(void);
+const char *cmld_get_device_update_base_url(void);
 
 /**
  * Get the path where images that can be shared between containers are stored.
  */
-const char *
-cmld_get_shared_data_dir(void);
+const char *cmld_get_shared_data_dir(void);
 
 /**
  * Get the global wifi state of the device.
  */
-bool
-cmld_is_wifi_active(void);
+bool cmld_is_wifi_active(void);
 
 /**
  * Get the global internet state of the device. Returns true if the device
  * has either mobile or wifi connectivity.
  */
-bool
-cmld_is_internet_active(void);
+bool cmld_is_internet_active(void);
 
 /**
  * Get the dns server set for the host interface in device config
  */
-const char *
-cmld_get_device_host_dns(void);
+const char *cmld_get_device_host_dns(void);
 
 /**
  * Get the name of the (privileged) core container from the device config
  */
-const char *
-cmld_get_c0os(void);
+const char *cmld_get_c0os(void);
 
 /**
  * Change the pin of the device token.
@@ -208,8 +180,7 @@ cmld_get_c0os(void);
  * @param newpasswd new passphrase/pin which is to be set
  * @return 0 on message delivered to lower levels, -1 message delivery failed
  */
-int
-cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd);
+int cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd);
 
 /**
  * Change the device cert during provisioning.
@@ -219,9 +190,7 @@ cmld_change_device_pin(control_t *control, const char *passwd, const char *newpa
  * @param cert buffer holding the device certificate
  * @param cert_len size of the certificate buffer
  */
-void
-cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
-
+void cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
 
 /**
  * Delete a GuestOS by given name
@@ -230,10 +199,6 @@ cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
  *
  * @param guestos_name name of the GuestOS which should be deleted
  */
-void
-cmld_guestos_delete(const char *guestos_name);
-
-
+void cmld_guestos_delete(const char *guestos_name);
 
 #endif /* CMLD_H */
-

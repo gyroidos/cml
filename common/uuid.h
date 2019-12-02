@@ -67,7 +67,6 @@ void uuid_free(uuid_t *uuid);
  * @param uuid UUID for which the string representation is returned.
  * @return The string representation of uuid.
  */
-const char *
-uuid_string(const uuid_t *uuid);
+const char *uuid_string(const uuid_t *uuid);
 
 #endif /* UUID_H */

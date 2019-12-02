@@ -27,8 +27,8 @@
  * Since there is not much to be inspected with ASSERTs,
  * applicable functions are only triggered.
  */
-#include <stdio.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include "logf.h"
 #include "macro.h"
@@ -37,10 +37,9 @@
  * Triggers logging functions to be tested, which are
  * given due to logf.h and macro.h
  */
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
-/*
+	/*
 	logf_register(&logf_file_write, stdout);
 	logf_register(&logf_file_write, stderr);
 	logf_register(&logf_file_write, fopen("log.cmld", "a"));
@@ -99,4 +98,3 @@ main(int argc, char **argv)
 
 	return 0;
 }
-

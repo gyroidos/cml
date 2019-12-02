@@ -35,7 +35,6 @@
  * This function puts a repeating timer into the the timer queue in order to
  * repeatedly check the deepsleep state and debug wakelocks.
  */
-int
-power_init(void);
+int power_init(void);
 
 #endif /* POWER_H */

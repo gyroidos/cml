@@ -21,12 +21,12 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <linux/loop.h>
-#include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "loopdev.h"
 
@@ -45,8 +45,7 @@
 
 #define LOOP_CONTROL "/dev/loop-control"
 
-char *
-loopdev_new(void)
+char *loopdev_new(void)
 {
 	int fd, i;
 
@@ -70,14 +69,12 @@ loopdev_new(void)
 	return mem_printf("%s%d", LOOP_DEV_PREFIX, i);
 }
 
-void
-loopdev_free(char *dev)
+void loopdev_free(char *dev)
 {
 	mem_free(dev);
 }
 
-int
-loopdev_wait(const char *dev, unsigned timeout)
+int loopdev_wait(const char *dev, unsigned timeout)
 {
 	unsigned i;
 
@@ -99,8 +96,7 @@ loopdev_wait(const char *dev, unsigned timeout)
  * http://stackoverflow.com/questions/11295154/how-do-i-loop-mount-programmatically
  */
 
-int
-loopdev_setup_device(const char *img, const char *dev)
+int loopdev_setup_device(const char *img, const char *dev)
 {
 	struct loop_info64 info;
 	memset(&info, 0, sizeof(info));

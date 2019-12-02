@@ -55,8 +55,7 @@ typedef enum nvmcrypt_fde_state {
  * 	which holds secure boot state should be used to bind
  * 	the key index to.
  */
-void
-nvmcrypt_init(bool use_secure_boot_policy);
+void nvmcrypt_init(bool use_secure_boot_policy);
 
 /**
  * Setup an encrypted device mapping for a given block device
@@ -75,8 +74,7 @@ nvmcrypt_init(bool use_secure_boot_policy);
  *  @param fde_pw password which will authorize the access to the
  *  		real key stored inside an nvindex of the TPM.
  */
-nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
+nvmcrypt_fde_state_t nvmcrypt_dm_setup(const char *device_path, const char *fde_pw);
 
 /**
  * This function locks the nvm key inside the TPM for further reading
@@ -87,8 +85,7 @@ nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
  * @param fde_pw password which will authorize the access to the
  *  		real key stored inside an nvindex of the TPM.
  */
-nvmcrypt_fde_state_t
-nvmcrypt_dm_lock(const char *fde_pw);
+nvmcrypt_fde_state_t nvmcrypt_dm_lock(const char *fde_pw);
 
 /**
  * This function deletes the nvm key from the TPM
@@ -99,7 +96,6 @@ nvmcrypt_dm_lock(const char *fde_pw);
  * @param owner/platform password which will authorize the access to the
  *  		the corresponding internally used nvindex of the TPM.
  */
-nvmcrypt_fde_state_t
-nvmcrypt_dm_reset(const char *hierarchy_pw);
+nvmcrypt_fde_state_t nvmcrypt_dm_reset(const char *hierarchy_pw);
 
 #endif // NVMCRYPT_H

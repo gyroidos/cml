@@ -26,13 +26,13 @@
   * Unit Test file for event.c
   */
 
-#include <unistd.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/socket.h>
-#include <fcntl.h>
+#include <unistd.h>
 
-#include "logf.h"
 #include "event.h"
+#include "logf.h"
 #include "macro.h"
 
 /** Test callback for timer
@@ -40,12 +40,11 @@
   * The test callback is responsible to test the remove and free
   * timer functions
   */
-void
-timer_cb(event_timer_t *timer, void *data)
+void timer_cb(event_timer_t *timer, void *data)
 {
-	int *count = (int *) data;
+	int *count = (int *)data;
 
-	DEBUG("timer cb: timer=%p, count=%d", (void *) timer, *count);
+	DEBUG("timer cb: timer=%p, count=%d", (void *)timer, *count);
 	if (!(*count)--) {
 		event_remove_timer(timer);
 		event_timer_free(timer);
@@ -56,12 +55,11 @@ timer_cb(event_timer_t *timer, void *data)
   *
   * This test callback is just a dummy call
   */
-void
-timer_cb2(event_timer_t *timer, void *data)
+void timer_cb2(event_timer_t *timer, void *data)
 {
-	char *payload = (char *) data;
+	char *payload = (char *)data;
 
-	DEBUG("timer cb: timer=%p, payload=%s", (void *) timer, payload);
+	DEBUG("timer cb: timer=%p, payload=%s", (void *)timer, payload);
 }
 
 /** Test callback for signal events
@@ -69,13 +67,11 @@ timer_cb2(event_timer_t *timer, void *data)
   * The test callback is responsible to remove an io event when a signal
   * occurs
   */
-void
-signal_cb(int signum, event_signal_t *sig, void *data)
+void signal_cb(int signum, event_signal_t *sig, void *data)
 {
-
 	DEBUG("received signal");
-	event_remove_io((event_io_t*) data);
-	event_io_free((event_io_t*) data);
+	event_remove_io((event_io_t *)data);
+	event_io_free((event_io_t *)data);
 }
 
 /** Test callback for io events
@@ -83,8 +79,7 @@ signal_cb(int signum, event_signal_t *sig, void *data)
   * The test callback is responsible to raise a signal in order
   * to react to an input event
   */
-void
-io_cb(int fd, unsigned events, event_io_t *io, void *data)
+void io_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
 	DEBUG("received io");
 	raise(SIGCHLD);
@@ -95,19 +90,17 @@ io_cb(int fd, unsigned events, event_io_t *io, void *data)
 /** This timer callback removes signals
   *
   */
-void
-timer_cb3(event_timer_t *timer, void *data)
+void timer_cb3(event_timer_t *timer, void *data)
 {
 	DEBUG("event timer 3 called");
-	event_remove_signal((event_signal_t*) data);
-	event_signal_free((event_signal_t*) data);
+	event_remove_signal((event_signal_t *)data);
+	event_signal_free((event_signal_t *)data);
 }
 
 /** Dummy timer callback
   *
   */
-void
-timer_cb4(event_timer_t *timer, void *data)
+void timer_cb4(event_timer_t *timer, void *data)
 {
 	DEBUG("event timer 4 called");
 }
@@ -115,19 +108,17 @@ timer_cb4(event_timer_t *timer, void *data)
 /** Timer callback removing another timer
   *
   */
-void
-timer_cb5(event_timer_t *timer, void *data)
+void timer_cb5(event_timer_t *timer, void *data)
 {
 	DEBUG("event timer 5 called");
-	event_remove_timer((event_timer_t*) data);
-	event_timer_free((event_timer_t*) data);
+	event_remove_timer((event_timer_t *)data);
+	event_timer_free((event_timer_t *)data);
 }
 
 /** Main unit test function for event queue
   *
   */
-int
-main(void)
+int main(void)
 {
 	int c0 = 8, c1 = 4;
 	char *p1 = "t2", *p2 = "t3";

@@ -29,11 +29,14 @@ int utest___android_log_write(UNUSED int prio, UNUSED const char *tag, UNUSED co
 	return 0;
 }
 
-void utest_klog_init(void) {
+void utest_klog_init(void)
+{
 }
 
-void utest_klog_set_level(UNUSED int level) {
+void utest_klog_set_level(UNUSED int level)
+{
 }
 
-void utest_klog_write(UNUSED int level, UNUSED const char *fmt, ...) {
+void utest_klog_write(UNUSED int level, UNUSED const char *fmt, ...)
+{
 }

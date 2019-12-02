@@ -44,8 +44,7 @@ typedef struct guestos guestos_mgr_t;
  * @param path The directory where operating systems are stored.
  * @param allow_locally_signed enable images which are signed by a locally generated CA
  */
-int
-guestos_mgr_init(const char *path, bool allow_locally_signed);
+int guestos_mgr_init(const char *path, bool allow_locally_signed);
 
 /**
  * Add an operating system WITHOUT checking its signature. The verification
@@ -55,8 +54,7 @@ guestos_mgr_init(const char *path, bool allow_locally_signed);
  * @param verify_result The result of the pre-required verification process.
  * @return 0 if the guest OS was successfully added, -1 on error.
  */
-int
-guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_result);
+int guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_result);
 
 /**
  * Delete an operating system persistently from disk, i.e. remove its configuration and
@@ -64,11 +62,9 @@ guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_resul
  * separately by the module that called operatingsystem_new in the first place.
  * @param os The operating system to be deleted.
  */
-void
-guestos_mgr_delete(guestos_t *os);
+void guestos_mgr_delete(guestos_t *os);
 
 /******************************************************************************/
-
 
 /**
  * Installs the given new or updated GuestOS config.
@@ -80,32 +76,27 @@ guestos_mgr_delete(guestos_t *os);
  * @param certlen   length of the given software signing cert in the buffer
  * @return -1 on error, 0 if installation was started (does NOT imply successful completion!)
  */
-int
-guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen,
-		unsigned char *cert, size_t certlen);
+int guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen, unsigned char *cert,
+			    size_t certlen);
 
 /**
  * Downloads (if necessary) the images for the latest versions of the installed GuestOSes
  * that are in use by any of the installed containers.
  */
-void
-guestos_mgr_update_images(void);
+void guestos_mgr_update_images(void);
 
 /**
  * Writes the provided cacert to the location expected by scd
  * to verify signatures. Once the certificate is registered no new
  * certificate register attempt will be allowed.
  */
-int
-guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen);
+int guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen);
 
 /**
  * Writes the provided cacert to the trusted CA store where scd can use it
  * to verify signatures of GuestOSes
  */
-int
-guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen);
-
+int guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen);
 
 /******************************************************************************/
 
@@ -119,24 +110,20 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen);
  * @return  a pointer to the found GuestOS instance or NULL if no matching GuestOS was found
  *	    (Note: The returned pointer should NOT be free'd by the caller.)
  */
-guestos_t *
-guestos_mgr_get_latest_by_name(const char *name, bool complete);
+guestos_t *guestos_mgr_get_latest_by_name(const char *name, bool complete);
 
 /**
  * Returns the number of installed/loaded GuestOSes.
  */
-size_t
-guestos_mgr_get_guestos_count(void);
+size_t guestos_mgr_get_guestos_count(void);
 
 /**
  * Gets the i-th GuestOS in the list of installed GuestOSes.
  * @param i the index of the GuestOS to get
  * @return the i-th GuestOS
  */
-guestos_t *
-guestos_mgr_get_guestos_by_index(size_t i);
+guestos_t *guestos_mgr_get_guestos_by_index(size_t i);
 
 /******************************************************************************/
 
 #endif /* GUESTOS_MGR_H */
-

@@ -28,10 +28,8 @@
  * Configure KSM to be aggressive for some time before returning to normal
  * settings
  */
-void
-ksm_set_aggressive_for(int millisecs);
+void ksm_set_aggressive_for(int millisecs);
 
-int
-ksm_init();
+int ksm_init();
 
 #endif /* KSM_H */

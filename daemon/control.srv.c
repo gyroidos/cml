@@ -24,19 +24,19 @@
 #include "control.c"
 #include "device/fraunhofer/common/cml/daemon/control.pb-c.h"
 
+#include "cmld.h"
 #include "cmld.stub.h"
 #include "container.stub.h"
-#include "cmld.h"
 
-#include "common/macro.h"
 #include "common/event.h"
-#include "common/str.h"
+#include "common/macro.h"
 #include "common/protobuf.h"
 #include "common/sock.h"
+#include "common/str.h"
 
 #include <string.h>
-#include <unistd.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
 /**
  * Helper function to create a socket pair.

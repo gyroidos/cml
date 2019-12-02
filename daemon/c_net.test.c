@@ -27,9 +27,9 @@
  * Unit Test for c_net.c. Tests the offset and address retrievel functionality, which
  * must be given to ensure that containers obtain and free correct adresses and devices.
  */
+#include "c_net.c"
 #include "common/list.h"
 #include "container.stub.h"
-#include "c_net.c"
 
 int main(void)
 {
@@ -51,8 +51,6 @@ int main(void)
 	//ASSERT(c_net_start_child(net0) == 0); (should not be run on host)
 	c_net_cleanup(net0);
 
-
-
 	DEBUG("Create a second container with network namespace and check offset and ip");
 	container_t *cont1 = container_stub_new("a1");
 
@@ -72,18 +70,17 @@ int main(void)
 	ASSERT(c_net_get_next_ipv4_bcaddr(&ni1->ipv4_cont_addr, &ni1->ipv4_bc_addr) == 0);
 
 	// check ip information of cont1
-	char* cmld_ip_string = mem_printf(IPV4_CMLD_ADDRESS, IPV4_SUBNET_OFFS);
-	char* cont_ip_string = mem_printf(IPV4_CONT_ADDRESS, IPV4_SUBNET_OFFS);
+	char *cmld_ip_string = mem_printf(IPV4_CMLD_ADDRESS, IPV4_SUBNET_OFFS);
+	char *cont_ip_string = mem_printf(IPV4_CONT_ADDRESS, IPV4_SUBNET_OFFS);
 
 	// assumption that 127.1. is defined. If define changes in c_net.c, this must be adapted
-	char* bc_ip_string = mem_printf("127.1.%d.255", IPV4_SUBNET_OFFS);
+	char *bc_ip_string = mem_printf("127.1.%d.255", IPV4_SUBNET_OFFS);
 
-	char* real_cmld_ip_string = mem_strdup(inet_ntoa(ni1->ipv4_cmld_addr));
-	char* real_cont_ip_string = mem_strdup(inet_ntoa(ni1->ipv4_cont_addr));
-	char* real_bc_ip_string = mem_strdup(inet_ntoa(ni1->ipv4_bc_addr));
-	DEBUG("cmld ip: expected %s vs %s; cont ip: expected %s vs %s; bc ip: expected %s vs %s",
-			cmld_ip_string, real_cmld_ip_string, cont_ip_string, real_cont_ip_string,
-			bc_ip_string, real_bc_ip_string);
+	char *real_cmld_ip_string = mem_strdup(inet_ntoa(ni1->ipv4_cmld_addr));
+	char *real_cont_ip_string = mem_strdup(inet_ntoa(ni1->ipv4_cont_addr));
+	char *real_bc_ip_string = mem_strdup(inet_ntoa(ni1->ipv4_bc_addr));
+	DEBUG("cmld ip: expected %s vs %s; cont ip: expected %s vs %s; bc ip: expected %s vs %s", cmld_ip_string,
+	      real_cmld_ip_string, cont_ip_string, real_cont_ip_string, bc_ip_string, real_bc_ip_string);
 
 	ASSERT(!strncmp(cmld_ip_string, real_cmld_ip_string, strlen(cmld_ip_string)));
 	ASSERT(!strncmp(cont_ip_string, real_cont_ip_string, strlen(cont_ip_string)));
@@ -107,22 +104,20 @@ int main(void)
 	ASSERT(c_net_get_next_ipv4_cont_addr(ni3->cont_offset, &ni3->ipv4_cont_addr) == 0);
 	ASSERT(c_net_get_next_ipv4_bcaddr(&ni3->ipv4_cont_addr, &ni3->ipv4_bc_addr) == 0);
 
-	cmld_ip_string = mem_printf(IPV4_CMLD_ADDRESS, IPV4_SUBNET_OFFS+1);
-	cont_ip_string = mem_printf(IPV4_CONT_ADDRESS, IPV4_SUBNET_OFFS+1);
+	cmld_ip_string = mem_printf(IPV4_CMLD_ADDRESS, IPV4_SUBNET_OFFS + 1);
+	cont_ip_string = mem_printf(IPV4_CONT_ADDRESS, IPV4_SUBNET_OFFS + 1);
 	// assumption that 127.1. is defined. If define changes in c_net.c, this must be adapted
-	bc_ip_string = mem_printf("127.1.%d.255", IPV4_SUBNET_OFFS+1);
+	bc_ip_string = mem_printf("127.1.%d.255", IPV4_SUBNET_OFFS + 1);
 
 	real_cmld_ip_string = mem_strdup(inet_ntoa(ni3->ipv4_cmld_addr));
 	real_cont_ip_string = mem_strdup(inet_ntoa(ni3->ipv4_cont_addr));
 	real_bc_ip_string = mem_strdup(inet_ntoa(ni3->ipv4_bc_addr));
-	DEBUG("cmld ip: expected %s vs %s; cont ip: expected %s vs %s; bc ip: expected %s vs %s",
-		cmld_ip_string, real_cmld_ip_string, cont_ip_string, real_cont_ip_string,
-		bc_ip_string, real_bc_ip_string);
+	DEBUG("cmld ip: expected %s vs %s; cont ip: expected %s vs %s; bc ip: expected %s vs %s", cmld_ip_string,
+	      real_cmld_ip_string, cont_ip_string, real_cont_ip_string, bc_ip_string, real_bc_ip_string);
 
 	ASSERT(!strncmp(cmld_ip_string, real_cmld_ip_string, strlen(cmld_ip_string)));
 	ASSERT(!strncmp(cont_ip_string, real_cont_ip_string, strlen(cont_ip_string)));
 	ASSERT(!strncmp(bc_ip_string, real_bc_ip_string, strlen(bc_ip_string)));
-
 
 	DEBUG("Check offset functionality");
 

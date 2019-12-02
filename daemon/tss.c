@@ -43,8 +43,7 @@ static int tss_sock = -1;
 /**
  * Returns the HashAlgLen (proto) for the given tss_hash_algo_t algo.
  */
-static HashAlgLen
-tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
+static HashAlgLen tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 {
 	switch (algo) {
 	case TSS_SHA1:
@@ -59,15 +58,13 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 	}
 }
 
-int
-tss_init(void)
+int tss_init(void)
 {
 	tss_sock = sock_unix_create_and_connect(SOCK_STREAM, TPM2D_SOCKET);
 	return (tss_sock < 0) ? -1 : 0;
 }
 
-void
-tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo)
+void tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo)
 {
 	/*
 	 * check if tpm2d socket is connected otherwise silently return,
@@ -85,7 +82,7 @@ tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo
 	msg.has_ml_hashalg = true;
 	msg.ml_hashalg = tss_hash_algo_get_len_proto(hashalgo);
 
-	if (protobuf_send_message(tss_sock, (ProtobufCMessage *) &msg) < 0) {
+	if (protobuf_send_message(tss_sock, (ProtobufCMessage *)&msg) < 0) {
 		WARN("Failed to send measurement to tpm2d");
 	}
 
@@ -96,10 +93,10 @@ tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo
 	}
 
 	if (resp->code != TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE ||
-			resp->response != TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK) {
+	    resp->response != TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK) {
 		ERROR("tpmd failed to append measurement to ML");
 	} else {
-		INFO("Sucessfully appended measurement to ML: file %s" , filename);
+		INFO("Sucessfully appended measurement to ML: file %s", filename);
 	}
 
 	protobuf_free_message((ProtobufCMessage *)resp);

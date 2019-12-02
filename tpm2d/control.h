@@ -32,12 +32,11 @@
  * setting up device encryption
  */
 
-
 #ifndef TPM2D_CONTROL_H
 #define TPM2D_CONTROL_H
 
-#include <unistd.h>
 #include <stdint.h>
+#include <unistd.h>
 
 /**
  * Data structure containing the variables associated to a control socket.
@@ -47,17 +46,13 @@ typedef struct tpm2d_control tpm2d_control_t;
 /**
  * Enum defining generic responses to commands
  */
-typedef enum control_generic_response {
-	CMD_OK = 1,
-	CMD_FAILED
-} control_generic_response_t; 
+typedef enum control_generic_response { CMD_OK = 1, CMD_FAILED } control_generic_response_t;
 
 /**
  * Creates a new tpm2d_control_t object listening on a UNIX socket bound to the specified file.
  *
  * @param path path of the socket file to bind the socket to
  */
-tpm2d_control_t *
-tpm2d_control_new(const char *path);
+tpm2d_control_t *tpm2d_control_new(const char *path);
 
 #endif /* TPM2D_CONTROL_H */

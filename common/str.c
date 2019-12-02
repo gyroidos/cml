@@ -22,13 +22,13 @@
  */
 
 #define _GNU_SOURCE
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "str.h"
-#include "mem.h"
 #include "macro.h"
+#include "mem.h"
+#include "str.h"
 
 struct str {
 	char *buf;
@@ -36,8 +36,7 @@ struct str {
 	size_t allocated_len;
 };
 
-static void
-str_expand(str_t *str, size_t len)
+static void str_expand(str_t *str, size_t len)
 {
 	IF_NULL_RETURN(str);
 
@@ -48,8 +47,7 @@ str_expand(str_t *str, size_t len)
 	str->buf = mem_realloc(str->buf, str->allocated_len);
 }
 
-static void
-str_append_printf_internal(str_t *str, const char *fmt, va_list ap)
+static void str_append_printf_internal(str_t *str, const char *fmt, va_list ap)
 {
 	char *buf;
 
@@ -58,8 +56,7 @@ str_append_printf_internal(str_t *str, const char *fmt, va_list ap)
 	mem_free(buf);
 }
 
-str_t *
-str_new(const char *init)
+str_t *str_new(const char *init)
 {
 	str_t *str;
 
@@ -75,8 +72,7 @@ str_new(const char *init)
 	return str;
 }
 
-str_t *
-str_new_len(size_t len)
+str_t *str_new_len(size_t len)
 {
 	str_t *str;
 
@@ -92,8 +88,7 @@ str_new_len(size_t len)
 	return str;
 }
 
-str_t *
-str_new_printf(const char *fmt, ...)
+str_t *str_new_printf(const char *fmt, ...)
 {
 	str_t *str;
 	va_list ap;
@@ -106,8 +101,7 @@ str_new_printf(const char *fmt, ...)
 	return str;
 }
 
-void
-str_assign(str_t *str, const char *buf)
+void str_assign(str_t *str, const char *buf)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -117,8 +111,7 @@ str_assign(str_t *str, const char *buf)
 	str_insert_len(str, -1, buf, -1);
 }
 
-void
-str_assign_len(str_t *str, const char *buf, ssize_t len)
+void str_assign_len(str_t *str, const char *buf, ssize_t len)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -128,8 +121,7 @@ str_assign_len(str_t *str, const char *buf, ssize_t len)
 	str_insert_len(str, -1, buf, len);
 }
 
-void
-str_assign_printf(str_t *str, const char *fmt, ...)
+void str_assign_printf(str_t *str, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -141,8 +133,7 @@ str_assign_printf(str_t *str, const char *fmt, ...)
 	va_end(ap);
 }
 
-void
-str_append(str_t *str, const char *buf)
+void str_append(str_t *str, const char *buf)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -150,8 +141,7 @@ str_append(str_t *str, const char *buf)
 	str_insert_len(str, -1, buf, -1);
 }
 
-void
-str_append_len(str_t *str, const char *buf, ssize_t len)
+void str_append_len(str_t *str, const char *buf, ssize_t len)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -159,8 +149,7 @@ str_append_len(str_t *str, const char *buf, ssize_t len)
 	str_insert_len(str, -1, buf, len);
 }
 
-void
-str_append_printf(str_t *str, const char *fmt, ...)
+void str_append_printf(str_t *str, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -169,8 +158,7 @@ str_append_printf(str_t *str, const char *fmt, ...)
 	va_end(ap);
 }
 
-void
-str_insert(str_t *str, ssize_t pos, const char *buf)
+void str_insert(str_t *str, ssize_t pos, const char *buf)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -178,8 +166,7 @@ str_insert(str_t *str, ssize_t pos, const char *buf)
 	str_insert_len(str, pos, buf, -1);
 }
 
-void
-str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
+void str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -201,8 +188,7 @@ str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 		buf = str->buf + offset;
 
 		if (pos < str->len)
-			  memmove(str->buf + pos + len, str->buf + pos,
-					str->len - pos);
+			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
 
 		if (offset < pos) {
 			precount = MIN(len, pos - offset);
@@ -210,12 +196,10 @@ str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 		}
 
 		if (len > precount)
-			memcpy(str->buf + pos + precount,
-					buf + precount + len, len - precount);
+			memcpy(str->buf + pos + precount, buf + precount + len, len - precount);
 	} else {
 		if (pos < str->len)
-			memmove(str->buf + pos + len, str->buf + pos,
-					str->len - pos);
+			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
 
 		memcpy(str->buf + pos, buf, len);
 	}
@@ -224,8 +208,7 @@ str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 	str->buf[str->len] = 0;
 }
 
-void
-str_truncate(str_t *str, ssize_t len)
+void str_truncate(str_t *str, ssize_t len)
 {
 	IF_NULL_RETURN(str);
 
@@ -233,22 +216,19 @@ str_truncate(str_t *str, ssize_t len)
 	str->buf[str->len] = 0;
 }
 
-const char *
-str_buffer(str_t *str)
+const char *str_buffer(str_t *str)
 {
 	IF_NULL_RETVAL(str, NULL);
 	return str->buf;
 }
 
-size_t
-str_length(str_t *str)
+size_t str_length(str_t *str)
 {
 	IF_NULL_RETVAL(str, 0);
 	return str->len;
 }
 
-char *
-str_free(str_t *str, bool free_buf)
+char *str_free(str_t *str, bool free_buf)
 {
 	char *buf;
 

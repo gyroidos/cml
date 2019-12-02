@@ -23,28 +23,28 @@
 
 #include "display.h"
 
-#include "hardware.h"
-#include "common/macro.h"
-#include "common/list.h"
-#include "common/mem.h"
 #include "common/event.h"
+#include "common/list.h"
+#include "common/macro.h"
+#include "common/mem.h"
+#include "hardware.h"
 
 #define DISPLAY_TIMER_TIMEOUT 50
 
 struct display_sleep {
-	void (* func)(void *);
+	void (*func)(void *);
 	void *data;
 };
 
 struct display_wake {
-	void (* func)(void *);
+	void (*func)(void *);
 	void *data;
 };
 
 struct display_status {
 	display_sleep_t *sleep;
 	display_wake_t *wake;
-	void (* func)(bool, void *);
+	void (*func)(bool, void *);
 	void *data;
 };
 
@@ -55,8 +55,7 @@ static event_timer_t *timer_wake = NULL;
 
 /******************************************************************************/
 
-static void
-display_sleep_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void display_sleep_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	if (display_is_on()) {
 		DEBUG("display still on... waiting");
@@ -77,8 +76,7 @@ display_sleep_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	}
 }
 
-void
-display_unregister_sleep_oneshot_cb(display_sleep_t *sleep)
+void display_unregister_sleep_oneshot_cb(display_sleep_t *sleep)
 {
 	display_sleep_cb_list = list_remove(display_sleep_cb_list, sleep);
 	mem_free(sleep);
@@ -90,8 +88,7 @@ display_unregister_sleep_oneshot_cb(display_sleep_t *sleep)
 	}
 }
 
-display_sleep_t *
-display_register_sleep_oneshot_cb(void (*func)(void *), void *data)
+display_sleep_t *display_register_sleep_oneshot_cb(void (*func)(void *), void *data)
 {
 	ASSERT(func);
 
@@ -103,8 +100,8 @@ display_register_sleep_oneshot_cb(void (*func)(void *), void *data)
 	display_sleep_cb_list = list_append(display_sleep_cb_list, sleep);
 
 	if (!timer_sleep) {
-		timer_sleep = event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER,
-			&display_sleep_cb, NULL);
+		timer_sleep =
+			event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER, &display_sleep_cb, NULL);
 		event_add_timer(timer_sleep);
 	}
 
@@ -113,8 +110,7 @@ display_register_sleep_oneshot_cb(void (*func)(void *), void *data)
 
 /******************************************************************************/
 
-static void
-display_wake_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void display_wake_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	if (!display_is_on()) {
 		return;
@@ -134,8 +130,7 @@ display_wake_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	}
 }
 
-void
-display_unregister_wake_oneshot_cb(display_wake_t *wake)
+void display_unregister_wake_oneshot_cb(display_wake_t *wake)
 {
 	display_wake_cb_list = list_remove(display_wake_cb_list, wake);
 	mem_free(wake);
@@ -147,8 +142,7 @@ display_unregister_wake_oneshot_cb(display_wake_t *wake)
 	}
 }
 
-display_wake_t *
-display_register_wake_oneshot_cb(void (*func)(void *), void *data)
+display_wake_t *display_register_wake_oneshot_cb(void (*func)(void *), void *data)
 {
 	ASSERT(func);
 
@@ -160,8 +154,7 @@ display_register_wake_oneshot_cb(void (*func)(void *), void *data)
 	display_wake_cb_list = list_append(display_wake_cb_list, wake);
 
 	if (!timer_wake) {
-		timer_wake = event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER,
-			&display_wake_cb, NULL);
+		timer_wake = event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER, &display_wake_cb, NULL);
 		event_add_timer(timer_wake);
 	}
 
@@ -170,11 +163,9 @@ display_register_wake_oneshot_cb(void (*func)(void *), void *data)
 
 /******************************************************************************/
 
-static void
-display_status_sleep_cb(void *data);
+static void display_status_sleep_cb(void *data);
 
-static void
-display_status_wake_cb(void *data)
+static void display_status_wake_cb(void *data)
 {
 	display_status_t *status = data;
 
@@ -186,8 +177,7 @@ display_status_wake_cb(void *data)
 	(status->func)(true, status->data);
 }
 
-static void
-display_status_sleep_cb(void *data)
+static void display_status_sleep_cb(void *data)
 {
 	display_status_t *status = data;
 
@@ -199,8 +189,7 @@ display_status_sleep_cb(void *data)
 	(status->func)(false, status->data);
 }
 
-display_status_t *
-display_register_status_cb(void (*func)(bool, void *), void *data)
+display_status_t *display_register_status_cb(void (*func)(bool, void *), void *data)
 {
 	display_status_t *status;
 
@@ -215,8 +204,7 @@ display_register_status_cb(void (*func)(bool, void *), void *data)
 	return status;
 }
 
-void
-display_unregister_status_cb(display_status_t *status)
+void display_unregister_status_cb(display_status_t *status)
 {
 	ASSERT(status);
 
@@ -231,8 +219,7 @@ display_unregister_status_cb(display_status_t *status)
 
 /******************************************************************************/
 
-bool
-display_is_on(void)
+bool display_is_on(void)
 {
 	return hardware_display_power_state();
 }

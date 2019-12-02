@@ -21,24 +21,24 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "macro.h"
 #include "logf.h"
 #include "list.h"
+#include "macro.h"
 #include "mem.h"
 
 #ifdef ANDROID
-#include <cutils/klog.h>
 #include <android/log.h>
+#include <cutils/klog.h>
 #endif
 
-#include <time.h>
 #include <errno.h>
-#include <stdio.h>
 #include <stdarg.h>
-#include <syslog.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <syslog.h>
+#include <time.h>
 #include <unistd.h>
 
 // TODO: we should not include this in production builds...
@@ -46,8 +46,7 @@
 #define LOGF_FILE_STRIP "device/fraunhofer/common/cml/"
 #endif
 
-void
-logf_message(logf_prio_t prio, const char *fmt, ...)
+void logf_message(logf_prio_t prio, const char *fmt, ...)
 {
 	char buf[4096];
 	va_list ap;
@@ -63,8 +62,7 @@ logf_message(logf_prio_t prio, const char *fmt, ...)
 	logf_write(prio, buf);
 }
 
-void
-logf_message_errno(logf_prio_t prio, const char *fmt, ...)
+void logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 {
 	char buf[4096];
 	int errno_backup = errno;
@@ -78,8 +76,7 @@ logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 	if (n < 0)
 		return;
 
-	n += snprintf(buf + n, sizeof(buf) - n, " (%d: %s)",
-			errno_backup, strerror(errno_backup));
+	n += snprintf(buf + n, sizeof(buf) - n, " (%d: %s)", errno_backup, strerror(errno_backup));
 
 	if (n < 0)
 		return;
@@ -87,8 +84,7 @@ logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 	logf_write(prio, buf);
 }
 
-void
-logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
+void logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
 {
 	char buf[4096];
 	va_list ap;
@@ -112,8 +108,7 @@ logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt,
 	logf_write(prio, buf);
 }
 
-void
-logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
+void logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
 {
 	char buf[4096];
 	int errno_backup = errno;
@@ -135,8 +130,7 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 	if (n < 0)
 		return;
 
-	n += snprintf(buf + n, sizeof(buf) - n, " (%d: %s)",
-			errno_backup, strerror(errno_backup));
+	n += snprintf(buf + n, sizeof(buf) - n, " (%d: %s)", errno_backup, strerror(errno_backup));
 
 	if (n < 0)
 		return;
@@ -154,18 +148,17 @@ struct logf_handler {
 	logf_prio_t prio;
 };
 
-void
-logf_write(logf_prio_t prio, const char *msg)
+void logf_write(logf_prio_t prio, const char *msg)
 {
 	for (list_t *l = logf_handler_list; l; l = l->next) {
 		logf_handler_t *h = l->data;
 		if (h && h->func && prio >= h->prio) {
-			(h->func)(prio, msg, h->data);}
+			(h->func)(prio, msg, h->data);
+		}
 	}
 }
 
-logf_handler_t *
-logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void *data)
+logf_handler_t *logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void *data)
 {
 	logf_handler_t *handler = mem_new(logf_handler_t, 1);
 
@@ -178,14 +171,12 @@ logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void 
 	return handler;
 }
 
-void
-logf_unregister(logf_handler_t *handler)
+void logf_unregister(logf_handler_t *handler)
 {
 	logf_handler_list = list_remove(logf_handler_list, handler);
 }
 
-void
-logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
+void logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 {
 	ASSERT(handler);
 	handler->prio = prio;
@@ -193,8 +184,7 @@ logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 
 /******************************************************************************/
 
-char *
-logf_file_new_name(const char *name)
+char *logf_file_new_name(const char *name)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
@@ -212,13 +202,12 @@ logf_file_new_name(const char *name)
 		buf2[0] = '\0';
 
 	// rfc3339 format: <name>.2014-05-23T21:29:11.150495+02:00
-	n = mem_printf("%s.%s.%06u%s", name, buf1, (unsigned) tv.tv_usec, buf2);
+	n = mem_printf("%s.%s.%06u%s", name, buf1, (unsigned)tv.tv_usec, buf2);
 
 	return n;
 }
 
-void *
-logf_file_new(const char *name)
+void *logf_file_new(const char *name)
 {
 	FILE *f;
 	char *name_with_time_of_day = logf_file_new_name(name);
@@ -229,8 +218,7 @@ logf_file_new(const char *name)
 	return f;
 }
 
-static void
-logf_file_write_timestamp(FILE *stream)
+static void logf_file_write_timestamp(FILE *stream)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
@@ -250,11 +238,10 @@ logf_file_write_timestamp(FILE *stream)
 		return;
 
 	// rfc3339 format: 2014-05-23T21:29:11.150495+02:00
-	fprintf(stream, "%s.%06u%s ", buf1, (unsigned) tv.tv_usec, buf2);
+	fprintf(stream, "%s.%06u%s ", buf1, (unsigned)tv.tv_usec, buf2);
 }
 
-static const char *
-prio_str(logf_prio_t prio)
+static const char *prio_str(logf_prio_t prio)
 {
 	switch (prio) {
 	case LOGF_PRIO_FATAL:
@@ -274,8 +261,7 @@ prio_str(logf_prio_t prio)
 	}
 }
 
-void
-logf_file_write(logf_prio_t prio, const char *msg, void *data)
+void logf_file_write(logf_prio_t prio, const char *msg, void *data)
 {
 	if (!data)
 		return;
@@ -285,8 +271,7 @@ logf_file_write(logf_prio_t prio, const char *msg, void *data)
 	fflush(data);
 }
 
-void
-logf_test_write(logf_prio_t prio, const char *msg, void *data)
+void logf_test_write(logf_prio_t prio, const char *msg, void *data)
 {
 	if (!data)
 		return;
@@ -295,16 +280,14 @@ logf_test_write(logf_prio_t prio, const char *msg, void *data)
 	fflush(data);
 }
 
-void *
-logf_syslog_new(const char *name)
+void *logf_syslog_new(const char *name)
 {
 	openlog(name, LOG_PID, LOG_USER);
 
 	return mem_strdup(name);
 }
 
-void
-logf_syslog_write(logf_prio_t prio, const char *msg, void *data)
+void logf_syslog_write(logf_prio_t prio, const char *msg, void *data)
 {
 	int prio_syslog;
 
@@ -328,18 +311,16 @@ logf_syslog_write(logf_prio_t prio, const char *msg, void *data)
 		break;
 	}
 
-	syslog(prio_syslog, "%s %s %s\n", prio_str(prio), (char *) data, msg);
+	syslog(prio_syslog, "%s %s %s\n", prio_str(prio), (char *)data, msg);
 }
 
-void *
-logf_android_new(const char *name)
+void *logf_android_new(const char *name)
 {
 	return mem_strdup(name);
 }
 
 #ifdef ANDROID
-void
-logf_android_write(logf_prio_t prio, const char *msg, void *data)
+void logf_android_write(logf_prio_t prio, const char *msg, void *data)
 {
 	int prio_android;
 
@@ -371,12 +352,12 @@ logf_android_write(logf_prio_t prio, const char *msg, void *data)
 }
 #else
 void logf_android_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
-{ return; }
+{
+	return;
+}
 #endif
 
-
-void *
-logf_klog_new(const char *name)
+void *logf_klog_new(const char *name)
 {
 #ifdef ANDROID
 	klog_init();
@@ -386,8 +367,7 @@ logf_klog_new(const char *name)
 }
 
 #ifdef ANDROID
-void
-logf_klog_write(logf_prio_t prio, const char *msg, void *data)
+void logf_klog_write(logf_prio_t prio, const char *msg, void *data)
 {
 	int prio_klog;
 
@@ -411,11 +391,11 @@ logf_klog_write(logf_prio_t prio, const char *msg, void *data)
 		break;
 	}
 
-	klog_write(prio_klog, "<%u>%s[%u] %s %s\n", prio_klog, (char *) data, getpid(), prio_str(prio), msg);
+	klog_write(prio_klog, "<%u>%s[%u] %s %s\n", prio_klog, (char *)data, getpid(), prio_str(prio), msg);
 }
 #else
-void 
-logf_klog_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
-{ return; }
+void logf_klog_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
+{
+	return;
+}
 #endif
-

@@ -37,14 +37,14 @@
 #ifndef CONTAINER_H
 #define CONTAINER_H
 
-#include "common/uuid.h"
 #include "common/list.h"
+#include "common/uuid.h"
 
 #include "guestos.h"
 
-#include <sys/types.h>
-#include <stdint.h>
 #include <errno.h>
+#include <stdint.h>
+#include <sys/types.h>
 
 /**
  * Opaque container type.
@@ -80,7 +80,6 @@ typedef struct container_vnet_cfg {
 	uint8_t vnet_mac[6];
 	bool configure;
 } container_vnet_cfg_t;
-
 
 /**
  * Represents the current container state.
@@ -118,23 +117,19 @@ typedef enum {
 	CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI
 } container_connectivity_t;
 
-
-static inline bool
-container_connectivity_wifi(container_connectivity_t connectivity)
+static inline bool container_connectivity_wifi(container_connectivity_t connectivity)
 {
-	return (connectivity == CONTAINER_CONNECTIVITY_WIFI_ONLY
-			|| connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
+	return (connectivity == CONTAINER_CONNECTIVITY_WIFI_ONLY ||
+		connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
 }
 
-static inline bool
-container_connectivity_mobile(container_connectivity_t connectivity)
+static inline bool container_connectivity_mobile(container_connectivity_t connectivity)
 {
-	return (connectivity == CONTAINER_CONNECTIVITY_MOBILE_ONLY
-			|| connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
+	return (connectivity == CONTAINER_CONNECTIVITY_MOBILE_ONLY ||
+		connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
 }
 
-static inline bool
-container_connectivity_online(container_connectivity_t connectivity)
+static inline bool container_connectivity_online(container_connectivity_t connectivity)
 {
 	return (connectivity != CONTAINER_CONNECTIVITY_OFFLINE);
 }
@@ -146,31 +141,13 @@ container_connectivity_online(container_connectivity_t connectivity)
  * TODO: Document parameters.
  * @return The new container instance.
  */
-container_t *
-container_new_internal(
-	const uuid_t *uuid,
-	const char *name,
-	container_type_t type,
-	bool ns_usr,
-	bool ns_net,
-	bool privileged,
-	const guestos_t *os,
-	const char *config_filename,
-	const char *images_folder,
-	mount_t *mnt,
-	unsigned int ram_limit,
-	uint32_t color,
-	uint16_t adb_port,
-	bool allow_autostart,
-	list_t *feature_enabled,
-	const char *dns_server,
-	list_t *net_ifaces,
-	char **allowed_devices,
-	char **assigned_devices,
-	list_t *vnet_cfg_list,
-	char **init_env,
-	size_t init_env_len
-);
+container_t *container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
+				    bool ns_net, bool privileged, const guestos_t *os, const char *config_filename,
+				    const char *images_folder, mount_t *mnt, unsigned int ram_limit, uint32_t color,
+				    uint16_t adb_port, bool allow_autostart, list_t *feature_enabled,
+				    const char *dns_server, list_t *net_ifaces, char **allowed_devices,
+				    char **assigned_devices, list_t *vnet_cfg_list, char **init_env,
+				    size_t init_env_len);
 
 /**
  * Creates a new container container object. There are three different cases
@@ -190,8 +167,7 @@ container_new_internal(
  *
  * @return The new container object or NULL if something went wrong.
  */
-container_t *
-container_new(const char *store_path, const uuid_t *uuid, const uint8_t *config, size_t config_len);
+container_t *container_new(const char *store_path, const uuid_t *uuid, const uint8_t *config, size_t config_len);
 
 /*
 container_t *
@@ -202,90 +178,76 @@ container_new_clone(container_t *container);
  * Free a container data structure. Does not remove the persistent parts of the container,
  * i.e. the configuration and the images.
  */
-void
-container_free(container_t *container);
+void container_free(container_t *container);
 
 /**
  * Returns the name of the container.
  */
-const char*
-container_get_name(const container_t *container);
+const char *container_get_name(const container_t *container);
 
 /**
  * Returns the uuid of the container.
  */
-const uuid_t *
-container_get_uuid(const container_t *container);
+const uuid_t *container_get_uuid(const container_t *container);
 
 /**
  * Return the partition table of the container.
  */
-const mount_t *
-container_get_mount(const container_t *container);
+const mount_t *container_get_mount(const container_t *container);
 
 /**
  * Return the partition table of additional mounts for the
  * container's root in setup mode.
  */
-const mount_t *
-container_get_mount_setup(const container_t *container);
+const mount_t *container_get_mount_setup(const container_t *container);
 
 /**
  * Return the associated guest OS object for the container.
  */
-const guestos_t *
-container_get_os(const container_t *container);
+const guestos_t *container_get_os(const container_t *container);
 
 /**
  * Return the directory where the container stores its images.
  */
-const char *
-container_get_images_dir(const container_t *container);
+const char *container_get_images_dir(const container_t *container);
 
 /**
  * Returns a string describing the container.
  */
-const char *
-container_get_description(const container_t *container);
+const char *container_get_description(const container_t *container);
 
 /**
  * Gets the PID of the container's init process.
  */
-pid_t
-container_get_pid(const container_t *container);
+pid_t container_get_pid(const container_t *container);
 
 /**
  * Returns the PID of the container's trustme service process
  * or -1 if the PID could not be determined.
  */
-pid_t
-container_get_service_pid(const container_t *container);
+pid_t container_get_service_pid(const container_t *container);
 
 /*
  * Prevents Android's low memory killer (OOM killer) from
  * killing the trustme service running in this container.
  */
-void
-container_oom_protect_service(const container_t *container);
+void container_oom_protect_service(const container_t *container);
 
 /*
  * Add process with given PID to cgroups of given container
  */
-int
-container_add_pid_to_cgroups(const container_t *container, pid_t pid);
+int container_add_pid_to_cgroups(const container_t *container, pid_t pid);
 
 /*
  * Set capapilites for calling process as for given container's init
  */
-int
-container_set_cap_current_process(const container_t *container);
+int container_set_cap_current_process(const container_t *container);
 
 /**
  * Gets the last exit_status of the container's init process.
  * Only valid if the container is stopped...
  */
-int
-container_get_exit_status(const container_t *container);
+int container_get_exit_status(const container_t *container);
 
 /**
  * Gets the (user defined) container color.
@@ -293,8 +255,7 @@ container_get_exit_status(const container_t *container);
  * @param container The container object.
  * @return The container color.
  */
-uint32_t
-container_get_color(const container_t *container);
+uint32_t container_get_color(const container_t *container);
 
 /**
  * Gets the (user defined) container color as an RGB string.
@@ -302,15 +263,13 @@ container_get_color(const container_t *container);
  * @param container The container object.
  * @return The container color as an RGB string.
  */
-char *
-container_get_color_rgb_string(const container_t *container);
+char *container_get_color_rgb_string(const container_t *container);
 
 /**
  * Get socket fd used to communicate with process executed in container context
  * by using the control run interface
  */
-int
-container_get_console_sock_cmld(const container_t *container);
+int container_get_console_sock_cmld(const container_t *container);
 
 /**
  * Remove a container persistently from disk, i.e. remove its configuration and
@@ -320,54 +279,45 @@ container_get_console_sock_cmld(const container_t *container);
  * @param container The container to be destroyed.
  * @return 0 if ok, negative values indicate errors.
  */
-int
-container_destroy(container_t *container);
+int container_destroy(container_t *container);
 
 /**
  * Wipe a container. Removes the images but keeps the config in place.
  */
-int
-container_wipe(container_t *container);
+int container_wipe(container_t *container);
 
 /**
  * Write the current configuration of the container to its configuration file.
  */
-int
-container_write_config(container_t *container);
+int container_write_config(container_t *container);
 
 /**
  * Get the container config filename.
  */
-const char *
-container_get_config_filename(const container_t *container);
+const char *container_get_config_filename(const container_t *container);
 
 /**
  * Get the information if the container should be privileged. This affects how the container
  * is handled by the trustme-lsm and which capabilities are dropped.
  */
-bool
-container_is_privileged(const container_t *container);
+bool container_is_privileged(const container_t *container);
 
 /**
  * Suspends the container before moving it into background
  */
-int
-container_suspend(container_t *container);
+int container_suspend(container_t *container);
 
 /**
  * Resumes the container.
  */
-int
-container_resume(container_t *container);
+int container_resume(container_t *container);
 
 /**
  * Run a given command inside a container
  */
-int
-container_run( container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv);
+int container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv);
 
-int
-container_write_exec_input(container_t *container, char *exec_input);
+int container_write_exec_input(container_t *container, char *exec_input);
 
 /**
  * Start the given container using the given key to decrypt its filesystem
@@ -385,8 +335,7 @@ container_write_exec_input(container_t *container, char *exec_input);
  * that all initialization done in the container module were successful and
  * the boot is now up to the guest OS.
  */
-int
-container_start(container_t *container);//, const char *key);
+int container_start(container_t *container); //, const char *key);
 
 /**
  * Gracefully terminate the execution of a container. Gives the container the
@@ -394,14 +343,12 @@ container_start(container_t *container);//, const char *key);
  * container state to CONTAINER_STATE_SHUTTING_DOWN. Should be used in combination
  * with registering a callback on container state changes.
  */
-int
-container_stop(container_t *container);
+int container_stop(container_t *container);
 
 /**
  * Forcefully terminate the execution of a container.
  */
-void
-container_kill(container_t *container);
+void container_kill(container_t *container);
 
 /**
  * Register a unix socket which is bound into the container at the given path during
@@ -439,8 +386,7 @@ container_kill(container_t *container);
  * container during container start and which will be available to listen/accept
  * after that start. On error, -1 is returned.
  */
-int
-container_bind_socket_before_start(container_t *container, const char *path);
+int container_bind_socket_before_start(container_t *container, const char *path);
 
 /**
  * Bind a unix socket into the **already started** container at the given path. The
@@ -453,36 +399,30 @@ container_bind_socket_before_start(container_t *container, const char *path);
  * @return The newly created and bound into the container socket which is immediately
  * ready to call listen+accept on.
  */
-int
-container_bind_socket_after_start(container_t *container, const char *path);
+int container_bind_socket_after_start(container_t *container, const char *path);
 
 /**
  * Freeze a container.
  *
  * @return 0 if ok, negative values indicate errors.
  */
-int
-container_freeze(container_t *container);
+int container_freeze(container_t *container);
 
 /**
  * Unfreeze a container.
  *
  * @return 0 if ok, negative values indicate errors.
  */
-int
-container_unfreeze(container_t *container);
+int container_unfreeze(container_t *container);
 
-int
-container_allow_audio(container_t *container);
+int container_allow_audio(container_t *container);
 
-int
-container_deny_audio(container_t *container);
+int container_deny_audio(container_t *container);
 
 /**
  * TODO Document 'snapshot' function.
  */
-int
-container_snapshot(container_t *container);
+int container_snapshot(container_t *container);
 
 /**
  * Update the state of the container and notify observers.
@@ -490,55 +430,45 @@ container_snapshot(container_t *container);
  * @param container The container object.
  * @param state The updated state to set.
  */
-void
-container_set_state(container_t *container, container_state_t state);
+void container_set_state(container_t *container, container_state_t state);
 
 /**
  * Returns the current state of the container.
  */
-container_state_t
-container_get_state(const container_t *container);
+container_state_t container_get_state(const container_t *container);
 
 /**
  * Returns the the type of the container.
  */
-container_type_t
-container_get_type(const container_t *container);
+container_type_t container_get_type(const container_t *container);
 
 /**
  * Register a callback function which is always called when the container's
  * state changes.
  */
-container_callback_t *
-container_register_observer(
-		container_t *container,
-		void (*cb)(container_t *, container_callback_t *, void *),
-		void *data);
+container_callback_t *container_register_observer(container_t *container,
+						  void (*cb)(container_t *, container_callback_t *, void *),
+						  void *data);
 
 /**
  * Unregister observer callback.
  */
-void
-container_unregister_observer(container_t *container, container_callback_t *cb);
+void container_unregister_observer(container_t *container, container_callback_t *cb);
 
 /**
  * Gets the container's key previously set by container_set_key or NULL if no key
  * has been set.
  */
-const char *
-container_get_key(const container_t *container);
+const char *container_get_key(const container_t *container);
 
 /**
  * Sets the key for encrypted storage of the contaier.
  */
-void
-container_set_key(container_t *container, const char *key);
+void container_set_key(container_t *container, const char *key);
 
-unsigned int
-container_get_ram_limit(const container_t *container);
+unsigned int container_get_ram_limit(const container_t *container);
 
-int
-container_set_ram_limit(container_t *container, unsigned int ram_limit);
+int container_set_ram_limit(container_t *container, unsigned int ram_limit);
 
 /***************************
  * Submodule Interfaces    *
@@ -551,56 +481,40 @@ container_set_ram_limit(container_t *container, unsigned int ram_limit);
 //int
 //container_inject_input_event(container_t *container /*, input event */);
 
-void
-container_set_connectivity(container_t *container, container_connectivity_t connectivity);
+void container_set_connectivity(container_t *container, container_connectivity_t connectivity);
 
-container_connectivity_t
-container_get_connectivity(container_t *container);
+container_connectivity_t container_get_connectivity(container_t *container);
 
-void
-container_set_airplane_mode(container_t *container, bool airplane_mode);
+void container_set_airplane_mode(container_t *container, bool airplane_mode);
 
-bool
-container_get_airplane_mode(container_t *container);
+bool container_get_airplane_mode(container_t *container);
 
-void
-container_set_screen_on(container_t *container, bool screen_on);
+void container_set_screen_on(container_t *container, bool screen_on);
 
-bool
-container_is_screen_on(container_t *container);
+bool container_is_screen_on(container_t *container);
 
-void
-container_set_wifi_user_enabled(container_t *container, bool enabled);
+void container_set_wifi_user_enabled(container_t *container, bool enabled);
 
-bool
-container_get_wifi_user_enabled(container_t *container);
+bool container_get_wifi_user_enabled(container_t *container);
 
-void
-container_set_imei(container_t *container, char *imei);
+void container_set_imei(container_t *container, char *imei);
 
-char*
-container_get_imei(container_t *container);
+char *container_get_imei(container_t *container);
 
-void
-container_set_mac_address(container_t *container, char *mac_address);
+void container_set_mac_address(container_t *container, char *mac_address);
 
-char*
-container_get_mac_address(container_t *container);
+char *container_get_mac_address(container_t *container);
 
-void
-container_set_phone_number(container_t *container, char *phone_number);
+void container_set_phone_number(container_t *container, char *phone_number);
 
-char*
-container_get_phone_number(container_t *container);
+char *container_get_phone_number(container_t *container);
 
-bool
-container_get_allow_autostart(container_t *container);
+bool container_get_allow_autostart(container_t *container);
 
 /*
  * Retrive the corresponding GuestOS which is running in this container
  */
-const guestos_t*
-container_get_guestos(const container_t *container);
+const guestos_t *container_get_guestos(const container_t *container);
 
 /*
  * Checks wether a feature is enabled or not for this container.
@@ -617,94 +531,73 @@ container_get_guestos(const container_t *container);
  *       "fhgapps"
  *    }
  */
-bool
-container_is_feature_enabled(const container_t *container, const char *feature);
+bool container_is_feature_enabled(const container_t *container, const char *feature);
 
-void
-container_enable_bluetooth(container_t *conatiner);
+void container_enable_bluetooth(container_t *conatiner);
 
-void
-container_enable_camera(container_t *conatiner);
+void container_enable_camera(container_t *conatiner);
 
-void
-container_enable_gps(container_t *conatiner);
+void container_enable_gps(container_t *conatiner);
 
-void
-container_enable_gapps(container_t *conatiner);
+void container_enable_gapps(container_t *conatiner);
 
-void
-container_enable_fhgapps(container_t *conatiner);
+void container_enable_fhgapps(container_t *conatiner);
 
-void
-container_enable_telephony(container_t *conatiner);
+void container_enable_telephony(container_t *conatiner);
 
-void
-container_set_radio_ip(container_t *container, char *ip);
+void container_set_radio_ip(container_t *container, char *ip);
 
-void
-container_set_radio_dns(container_t *container, char *dns);
+void container_set_radio_dns(container_t *container, char *dns);
 
-void
-container_set_radio_gateway(container_t *container, char *gateway);
+void container_set_radio_gateway(container_t *container, char *gateway);
 
 /**
  * Returns the ip address currently set for container.
  */
-const char*
-container_get_dns_server(const container_t *container);
+const char *container_get_dns_server(const container_t *container);
 
-bool
-container_has_netns(const container_t *container);
+bool container_has_netns(const container_t *container);
 
 /**
  * Returns the ip of the first interface set inside the container
  */
-char *
-container_get_first_ip_new(container_t *container);
+char *container_get_first_ip_new(container_t *container);
 
 /**
  * Returns the subnet of the first interface set inside the container
  */
-char *
-container_get_first_subnet_new(container_t *container);
+char *container_get_first_subnet_new(container_t *container);
 
 /**
  * Adds a network interface to the container. If persistent is true, the config file will be modified accordingly
  */
-int
-container_add_net_iface(container_t *container, const char *iface, bool persistent);
+int container_add_net_iface(container_t *container, const char *iface, bool persistent);
 
 /**
  * Removes a network interface from the container. If persistent is true, the config file will be modified accordingly
  */
-int
-container_remove_net_iface(container_t *container, const char *iface, bool persistent);
+int container_remove_net_iface(container_t *container, const char *iface, bool persistent);
 
 const char **container_get_dev_allow_list(const container_t *container);
 
 const char **container_get_dev_assign_list(const container_t *container);
 
-time_t
-container_get_uptime(const container_t *container);
+time_t container_get_uptime(const container_t *container);
 
-time_t
-container_get_creation_time(const container_t *container);
+time_t container_get_creation_time(const container_t *container);
 
-void
-container_set_setup_mode(container_t *container, bool setup);
+void container_set_setup_mode(container_t *container, bool setup);
 
 /**
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory
  */
-container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name,
-		       const uint8_t mac[6], bool configure);
+container_vnet_cfg_t *container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
+					     bool configure);
 
 /**
  * Free all memory used by a container_vnet_cfg_t data structure
  */
-void
-container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
+void container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
 
 /**
  * This function provides the container's runtime config
@@ -712,8 +605,7 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
  * The elements contain the veth name inside the container and
  * the runtime generated interface name of the rootns endpoint.
  */
-list_t *
-container_get_vnet_runtime_cfg_new(container_t *container);
+list_t *container_get_vnet_runtime_cfg_new(container_t *container);
 
 /**
  * This function updates the containers config on storage with the provided
@@ -721,7 +613,6 @@ container_get_vnet_runtime_cfg_new(container_t *container);
  * to update cmld's view. If the container is not in stopped state a manual
  * reload is necessary.
  */
-int
-container_update_config(container_t * container, uint8_t *buf, size_t buf_len);
+int container_update_config(container_t *container, uint8_t *buf, size_t buf_len);
 
 #endif /* CONTAINER_H */

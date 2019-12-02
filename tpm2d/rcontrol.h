@@ -32,12 +32,11 @@
  * performing remote attestation
  */
 
-
 #ifndef TPM2D_RCONTROL_H
 #define TPM2D_RCONTROL_H
 
-#include <unistd.h>
 #include <stdint.h>
+#include <unistd.h>
 
 /**
  * Data structure containing the variables associated to a rcontrol socket.
@@ -50,7 +49,6 @@ typedef struct tpm2d_rcontrol tpm2d_rcontrol_t;
  *
  * @param path path of the socket file to bind the socket to
  */
-tpm2d_rcontrol_t *
-tpm2d_rcontrol_new(const char *ip, int port);
+tpm2d_rcontrol_t *tpm2d_rcontrol_new(const char *ip, int port);
 
 #endif /* TPM2D_RCONTROL_H */

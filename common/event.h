@@ -51,37 +51,33 @@ typedef struct event_timer event_timer_t;
  * @param data Payload data that will be passed to the callback function.
  * @return The newly created timer.
  */
-event_timer_t *
-event_timer_new(int timeout, int repeat, void (*func)(event_timer_t *timer, void *data), void *data);
+event_timer_t *event_timer_new(int timeout, int repeat, void (*func)(event_timer_t *timer, void *data), void *data);
 
 /**
  * Frees the allocated memory of the timer.
  *
  * @param timer The timer to be freed.
  */
-void
-event_timer_free(event_timer_t *timer);
+void event_timer_free(event_timer_t *timer);
 
 /**
  * Adds the timer to the event loop.
  *
  * @param timer The timer to be added to the event loop.
  */
-void
-event_add_timer(event_timer_t *timer);
+void event_add_timer(event_timer_t *timer);
 
 /**
  * Removes the timer from the event loop.
  *
  * @param timer The timer to be removed from the event loop.
  */
-void
-event_remove_timer(event_timer_t *timer);
+void event_remove_timer(event_timer_t *timer);
 
-#define EVENT_IO_READ   (1 << 0)
-#define EVENT_IO_WRITE  (1 << 1)
+#define EVENT_IO_READ (1 << 0)
+#define EVENT_IO_WRITE (1 << 1)
 #define EVENT_IO_EXCEPT (1 << 2)
-#define EVENT_IO_PRI    (1 << 3)
+#define EVENT_IO_PRI (1 << 3)
 
 typedef struct event_io event_io_t;
 
@@ -95,56 +91,50 @@ typedef struct event_io event_io_t;
  * @param data Payload data to be passed to the callback function.
  * @return The newly created I/O event.
  */
-event_io_t *
-event_io_new(int fd, unsigned events, void (*func)(int fd, unsigned events, event_io_t *io, void *data), void *data);
+event_io_t *event_io_new(int fd, unsigned events, void (*func)(int fd, unsigned events, event_io_t *io, void *data),
+			 void *data);
 
 /**
  * Frees the allocated memory of the I/O event.
  *
  * @param io The I/O event to be freed.
  */
-void
-event_io_free(event_io_t *io);
+void event_io_free(event_io_t *io);
 
 /**
  * Adds the I/O event to the event loop.
  *
  * @param io The I/O event to be added to the event loop.
  */
-void
-event_add_io(event_io_t *io);
+void event_add_io(event_io_t *io);
 
 /**
  * Removes the I/O event from the event loop.
  *
  * @param io The I/O event to be removed from the event loop.
  */
-void
-event_remove_io(event_io_t *io);
+void event_remove_io(event_io_t *io);
 
 /**
  * Resets the event subsystem to its initial state
  * As this sets all event lists to zero,
  * the event_loop() call currently executing will exit
  */
-void
-event_reset();
+void event_reset();
 
 // TODO: doxygen for event_inotify*
 
 typedef struct event_inotify event_inotify_t;
 
-event_inotify_t *
-event_inotify_new(const char *path, uint32_t mask, void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data);
+event_inotify_t *event_inotify_new(const char *path, uint32_t mask,
+				   void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data),
+				   void *data);
 
-void
-event_inotify_free(event_inotify_t *inotify);
+void event_inotify_free(event_inotify_t *inotify);
 
-int
-event_add_inotify(event_inotify_t *inotify);
+int event_add_inotify(event_inotify_t *inotify);
 
-void
-event_remove_inotify(event_inotify_t *inotify);
+void event_remove_inotify(event_inotify_t *inotify);
 
 typedef struct event_signal event_signal_t;
 
@@ -156,47 +146,41 @@ typedef struct event_signal event_signal_t;
  * @param data Payload data to be passed to the callback function.
  * @return The newly created signal event.
  */
-event_signal_t *
-event_signal_new(int signum, void (*func)(int signum, event_signal_t *sig, void *data), void *data);
+event_signal_t *event_signal_new(int signum, void (*func)(int signum, event_signal_t *sig, void *data), void *data);
 
 /**
  * Frees the allocated memory of the signal event.
  *
  * @param sig The signal event to be freed.
  */
-void
-event_signal_free(event_signal_t *sig);
+void event_signal_free(event_signal_t *sig);
 
 /**
  * Adds the signal event to the event loop.
  *
  * @param sig The signal event to be added to the event loop.
  */
-void
-event_add_signal(event_signal_t *sig);
+void event_add_signal(event_signal_t *sig);
 
 /**
  * Removes the signal event from the event loop.
  *
  * @param sig The signal event to be removed from the event loop.
  */
-void
-event_remove_signal(event_signal_t *sig);
+void event_remove_signal(event_signal_t *sig);
 
 /**
  * Initializes the event loop. Should be called before event_add_signal() is used;
  * otherwise, signals that occur before event_loop() is started might be lost and
  * not get delivered to their registered signal handlers.
  */
-void
-event_init(void);
+void event_init(void);
 
 /**
  * Invokes the event loop that handles all registered timer, I/O, and signal
  * events. The function returns if there are no more registered timer, I/O, and
  * signal events.
  */
-void
-event_loop(void);
+void event_loop(void);
 
 #endif /* EVENT_H */

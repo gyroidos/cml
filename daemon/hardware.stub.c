@@ -23,27 +23,22 @@
 
 #include "hardware.h"
 
-const char *
-hardware_get_name(void)
+const char *hardware_get_name(void)
 {
 	return "test-hardware";
 }
 
-const char *
-hardware_get_manufacturer(void)
+const char *hardware_get_manufacturer(void)
 {
 	return "trustme AG";
 }
 
-const char *
-hardware_get_model(void)
+const char *hardware_get_model(void)
 {
 	return "test-model";
 }
 
-const char *
-hardware_get_serial_number(void)
+const char *hardware_get_serial_number(void)
 {
 	return "1234567890";
 }
-

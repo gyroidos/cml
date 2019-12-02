@@ -21,15 +21,13 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "list.h"
 #include "macro.h"
 #include "mem.h"
 
-list_t *
-list_append(list_t *list, void *data)
+list_t *list_append(list_t *list, void *data)
 {
 	list_t *e = mem_new(list_t, 1);
 	e->data = data;
@@ -44,8 +42,7 @@ list_append(list_t *list, void *data)
 	return tail ? list : e; // return head of list
 }
 
-list_t *
-list_join(list_t *list, list_t *list_append)
+list_t *list_join(list_t *list, list_t *list_append)
 {
 	IF_NULL_RETVAL(list, list_append);
 	IF_NULL_RETVAL(list_append, list);
@@ -56,28 +53,25 @@ list_join(list_t *list, list_t *list_append)
 	return list;
 }
 
-bool
-list_contains(const list_t *list, const list_t *elem)
+bool list_contains(const list_t *list, const list_t *elem)
 {
 	IF_NULL_RETVAL(elem, false);
 
 	for (const list_t *e = list; e; e = e->next) {
-		TRACE("Searching list element %p in list %p", (void *) elem, (void *) list);
+		TRACE("Searching list element %p in list %p", (void *)elem, (void *)list);
 		if (e == elem)
 			return true;
 	}
 	return false;
 }
 
-void
-list_delete(list_t *list)
+void list_delete(list_t *list)
 {
 	while (list)
 		list = list_unlink(list, list);
 }
 
-list_t *
-list_unlink(list_t *list, list_t *elem)
+list_t *list_unlink(list_t *list, list_t *elem)
 {
 	IF_NULL_RETVAL(elem, list);
 	IF_FALSE_RETVAL(list_contains(list, elem), list); // this also handles the case that list is NULL
@@ -95,21 +89,19 @@ list_unlink(list_t *list, list_t *elem)
 	return head;
 }
 
-list_t *
-list_remove(list_t *list, void *data)
+list_t *list_remove(list_t *list, void *data)
 {
 	return list_unlink(list, list_find(list, data));
 }
 
-list_t *
-list_find(list_t *list, void *data)
+list_t *list_find(list_t *list, void *data)
 {
-	TRACE("Searching data %p in list %p", (void *) data, (void *) list);
+	TRACE("Searching data %p in list %p", (void *)data, (void *)list);
 
 	for (list_t *e = list; e; e = e->next) {
-		TRACE("Scanning element %p having data %p", (void *) e, (void *) e->data);
+		TRACE("Scanning element %p having data %p", (void *)e, (void *)e->data);
 		if (e->data == data) {
-			TRACE("Found data in element %p", (void *) e);
+			TRACE("Found data in element %p", (void *)e);
 			return e;
 		}
 	}
@@ -118,8 +110,7 @@ list_find(list_t *list, void *data)
 	return NULL;
 }
 
-unsigned int
-list_length(const list_t *list)
+unsigned int list_length(const list_t *list)
 {
 	unsigned int len = 0;
 
@@ -129,8 +120,7 @@ list_length(const list_t *list)
 	return len;
 }
 
-list_t *
-list_nth(list_t *list, unsigned int n)
+list_t *list_nth(list_t *list, unsigned int n)
 {
 	IF_NULL_RETVAL(list, NULL);
 
@@ -145,15 +135,13 @@ list_nth(list_t *list, unsigned int n)
 	return elem;
 }
 
-void *
-list_nth_data(list_t *list, unsigned int n)
+void *list_nth_data(list_t *list, unsigned int n)
 {
 	list_t *e = list_nth(list, n);
 	return e ? e->data : NULL;
 }
 
-list_t *
-list_prepend(list_t *list, void *data)
+list_t *list_prepend(list_t *list, void *data)
 {
 	list_t *e = mem_new(list_t, 1);
 	e->data = data;
@@ -167,8 +155,7 @@ list_prepend(list_t *list, void *data)
 	return e; // return head of list
 }
 
-list_t *
-list_tail(list_t *list)
+list_t *list_tail(list_t *list)
 {
 	for (list_t *e = list; e; e = e->next) {
 		if (e->next == NULL)
@@ -177,9 +164,7 @@ list_tail(list_t *list)
 	return NULL;
 }
 
-
-list_t *
-list_replace(list_t *list, list_t *elem,void * data)
+list_t *list_replace(list_t *list, list_t *elem, void *data)
 {
 	IF_NULL_RETVAL(elem, list);
 	IF_FALSE_RETVAL(list_contains(list, elem), list); // this also handles the case that list is NULL
@@ -204,19 +189,19 @@ list_replace(list_t *list, list_t *elem,void * data)
 	return head;
 }
 
-void
-list_foreach(list_t *list, void (func)(void *)) {
+void list_foreach(list_t *list, void(func)(void *))
+{
 	ASSERT(list);
 	ASSERT(func);
 
 	list_t *current = list;
 	list_t *elem = NULL;
 
-	TRACE("Applying callback to list at %p", (void *) list);
+	TRACE("Applying callback to list at %p", (void *)list);
 
 	do {
 		if (current) {
-			TRACE("Applying callback to element %p, data: %p", (void *) current, (void *) current->data);
+			TRACE("Applying callback to element %p, data: %p", (void *)current, (void *)current->data);
 			elem = current;
 			current = current->next;
 			func(elem->data);

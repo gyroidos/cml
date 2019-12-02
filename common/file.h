@@ -33,26 +33,19 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-bool
-file_exists(const char *file);
+bool file_exists(const char *file);
 
-bool
-file_is_regular(const char *file);
+bool file_is_regular(const char *file);
 
-bool
-file_is_link(const char *file);
+bool file_is_link(const char *file);
 
-bool
-file_is_dir(const char *file);
+bool file_is_dir(const char *file);
 
-bool
-file_is_blk(const char *file);
+bool file_is_blk(const char *file);
 
-bool
-file_is_mountpoint(const char *file);
+bool file_is_mountpoint(const char *file);
 
-bool
-file_is_socket(const char *file);
+bool file_is_socket(const char *file);
 
 /**
  * Copy a file.
@@ -63,8 +56,7 @@ file_is_socket(const char *file);
  * @param seek Skip seek blocks at start of output.
  * @return -1 on error else 0.
  */
-int
-file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek);
+int file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek);
 
 /**
  * Move a file.
@@ -73,8 +65,7 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
  * @param bs Fallback blocksize for copying and unlinking the file (across file system boundaries).
  * @return -1 on error else 0.
  */
-int
-file_move(const char *src, const char *dst, size_t bs);
+int file_move(const char *src, const char *dst, size_t bs);
 
 /**
  * Write a string to a file.
@@ -83,8 +74,7 @@ file_move(const char *src, const char *dst, size_t bs);
  * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
  * @return -1 on error else 0.
  */
-int
-file_write(const char *file, const char *buf, ssize_t len);
+int file_write(const char *file, const char *buf, ssize_t len);
 
 /**
  * Append  a string to the end of a file.
@@ -93,8 +83,7 @@ file_write(const char *file, const char *buf, ssize_t len);
  * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
  * @return -1 on error else 0.
  */
-int
-file_write_append(const char *file, const char *buf, ssize_t len);
+int file_write_append(const char *file, const char *buf, ssize_t len);
 
 /**
  * Write a string to a file using printf.
@@ -102,8 +91,7 @@ file_write_append(const char *file, const char *buf, ssize_t len);
  * @param fmt The format string.
  * @return -1 on error else 0.
  */
-int
-file_printf(const char *file, const char *fmt, ...);
+int file_printf(const char *file, const char *fmt, ...);
 
 /**
  * Append a string to the end of a file using printf.
@@ -111,8 +99,7 @@ file_printf(const char *file, const char *fmt, ...);
  * @param fmt The format string.
  * @return -1 on error else 0.
  */
-int
-file_printf_append(const char *file, const char *fmt, ...);
+int file_printf_append(const char *file, const char *fmt, ...);
 
 /**
  * Read a string from a file.
@@ -121,8 +108,7 @@ file_printf_append(const char *file, const char *fmt, ...);
  * @param len The length of buffer.
  * @return -1 on error else 0.
  */
-int
-file_read(const char *file, char *buf, size_t len);
+int file_read(const char *file, char *buf, size_t len);
 
 /**
  * Read a string from a file and allocate memory for it.
@@ -130,30 +116,26 @@ file_read(const char *file, char *buf, size_t len);
  * @param maxlen The maximum length to read.
  * @return A newly allocated buffer with the string read from file and NULL in case of an error.
  */
-char *
-file_read_new(const char *file, size_t maxlen);
+char *file_read_new(const char *file, size_t maxlen);
 
 /**
  * Return the size of the given file or -1 on error.
  * @param file The file name.
  * @return The size of the given file or -1 on error.
  */
-off_t
-file_size(const char *file);
+off_t file_size(const char *file);
 
 /**
  * Return file extension of a given file including '.'.
  * Note: fails if path contains a '.' and file has no ending
  * @ param file The file name
  */
-char *
-file_get_extension(const char *file);
+char *file_get_extension(const char *file);
 
 /**
  * creates an empty file
  * @param file The file name
  */
-int
-file_touch(const char *file);
+int file_touch(const char *file);
 
 #endif /* FILE_H */

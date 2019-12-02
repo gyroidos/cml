@@ -26,60 +26,54 @@
 
 #include "file.h"
 
-#include "macro.h"
-#include "logf.h"
-#include "mem.h"
 #include "fd.h"
+#include "logf.h"
+#include "macro.h"
+#include "mem.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <alloca.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 /******************************************************************************/
 
-bool
-file_exists(const char *file)
+bool file_exists(const char *file)
 {
 	struct stat s;
 
 	return !stat(file, &s);
 }
 
-bool
-file_is_regular(const char *file)
+bool file_is_regular(const char *file)
 {
 	struct stat s;
 
 	return !lstat(file, &s) && S_ISREG(s.st_mode);
 }
 
-bool
-file_is_link(const char *file)
+bool file_is_link(const char *file)
 {
 	struct stat s;
 
 	return !lstat(file, &s) && S_ISLNK(s.st_mode);
 }
 
-bool
-file_is_dir(const char *file)
+bool file_is_dir(const char *file)
 {
 	struct stat s;
 
 	return !lstat(file, &s) && S_ISDIR(s.st_mode);
 }
 
-bool
-file_is_blk(const char *file)
+bool file_is_blk(const char *file)
 {
 	struct stat s;
 
 	return !lstat(file, &s) && S_ISBLK(s.st_mode);
 }
 
-bool
-file_is_mountpoint(const char *file)
+bool file_is_mountpoint(const char *file)
 {
 	bool ret;
 	struct stat s, s_parent;
@@ -93,16 +87,14 @@ file_is_mountpoint(const char *file)
 	return ret;
 }
 
-bool
-file_is_socket(const char *file)
+bool file_is_socket(const char *file)
 {
 	struct stat s;
 
 	return !lstat(file, &s) && S_ISSOCK(s.st_mode);
 }
 
-int
-file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek)
+int file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek)
 {
 	int in_fd, out_fd, ret = 0;
 	ssize_t i;
@@ -159,9 +151,7 @@ out:
 	return ret;
 }
 
-
-int
-file_move(const char *src, const char *dst, size_t bs)
+int file_move(const char *src, const char *dst, size_t bs)
 {
 	if (rename(src, dst) == 0)
 		return 0;
@@ -176,8 +166,7 @@ file_move(const char *src, const char *dst, size_t bs)
 	return unlink(src);
 }
 
-static int
-file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
+static int file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 {
 	int fd;
 
@@ -204,14 +193,12 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 	return bytes_written;
 }
 
-int
-file_write(const char *file, const char *buf, ssize_t len)
+int file_write(const char *file, const char *buf, ssize_t len)
 {
 	return file_write_internal(file, buf, len, O_WRONLY | O_CREAT | O_TRUNC);
 }
 
-int
-file_write_append(const char *file, const char *buf, ssize_t len)
+int file_write_append(const char *file, const char *buf, ssize_t len)
 {
 	int oflags = O_WRONLY;
 	oflags |= file_exists(file) ? O_APPEND : (O_CREAT | O_TRUNC);
@@ -219,8 +206,7 @@ file_write_append(const char *file, const char *buf, ssize_t len)
 	return file_write_internal(file, buf, len, oflags);
 }
 
-int
-file_printf(const char *file, const char *fmt, ...)
+int file_printf(const char *file, const char *fmt, ...)
 {
 	va_list ap;
 	char *buf;
@@ -237,8 +223,7 @@ file_printf(const char *file, const char *fmt, ...)
 	return ret;
 }
 
-int
-file_printf_append(const char *file, const char *fmt, ...)
+int file_printf_append(const char *file, const char *fmt, ...)
 {
 	va_list ap;
 	char *buf;
@@ -255,9 +240,7 @@ file_printf_append(const char *file, const char *fmt, ...)
 	return ret;
 }
 
-
-int
-file_read(const char *file, char *buf, size_t len)
+int file_read(const char *file, char *buf, size_t len)
 {
 	int fd;
 
@@ -282,8 +265,7 @@ file_read(const char *file, char *buf, size_t len)
 	return bytes_read;
 }
 
-char *
-file_read_new(const char *file, size_t maxlen)
+char *file_read_new(const char *file, size_t maxlen)
 {
 	char *maxbuf, *buf;
 
@@ -306,8 +288,7 @@ file_read_new(const char *file, size_t maxlen)
 	return buf;
 }
 
-off_t
-file_size(const char *file)
+off_t file_size(const char *file)
 {
 	struct stat s;
 	if (stat(file, &s) < 0)
@@ -315,8 +296,7 @@ file_size(const char *file)
 	return s.st_size;
 }
 
-char *
-file_get_extension(const char *file)
+char *file_get_extension(const char *file)
 {
 	ASSERT(file);
 
@@ -326,8 +306,7 @@ file_get_extension(const char *file)
 	return ext;
 }
 
-int
-file_touch(const char *file)
+int file_touch(const char *file)
 {
 	IF_NULL_RETVAL(file, -1);
 

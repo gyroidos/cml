@@ -23,15 +23,15 @@
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
-#include "macro.h"
 #include "proc.h"
-#include "mem.h"
-#include "file.h"
 #include "dir.h"
+#include "file.h"
+#include "macro.h"
+#include "mem.h"
 
-#include <unistd.h>
-#include <stdlib.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 struct proc_killall {
 	pid_t ppid;
@@ -60,8 +60,7 @@ struct proc_status {
 	gid_t fgid;
 };
 
-proc_status_t *
-proc_status_new(pid_t pid)
+proc_status_t *proc_status_new(pid_t pid)
 {
 	proc_status_t *status;
 	char *file, *buf, *tmp;
@@ -102,19 +101,15 @@ proc_status_new(pid_t pid)
 
 	tmp = strstr(buf, "\nUid:");
 	IF_NULL_GOTO(tmp, error);
-	n = sscanf(tmp, "\nUid:\t%u\t%u\t%u\t%u\n", &status->ruid,
-			&status->euid, &status->suid, &status->fuid);
+	n = sscanf(tmp, "\nUid:\t%u\t%u\t%u\t%u\n", &status->ruid, &status->euid, &status->suid, &status->fuid);
 	IF_FALSE_GOTO(n == 4, error);
-	TRACE("Parsed uid for %d: %u %u %u %u", pid, status->ruid,
-			status->euid, status->suid, status->fuid);
+	TRACE("Parsed uid for %d: %u %u %u %u", pid, status->ruid, status->euid, status->suid, status->fuid);
 
 	tmp = strstr(buf, "\nGid:");
 	IF_NULL_GOTO(tmp, error);
-	n = sscanf(tmp, "\nGid:\t%u\t%u\t%u\t%u\n", &status->rgid,
-			&status->egid, &status->sgid, &status->fgid);
+	n = sscanf(tmp, "\nGid:\t%u\t%u\t%u\t%u\n", &status->rgid, &status->egid, &status->sgid, &status->fgid);
 	IF_FALSE_GOTO(n == 4, error);
-	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid,
-			status->egid, status->sgid, status->fgid);
+	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid, status->egid, status->sgid, status->fgid);
 
 	mem_free(buf);
 	return status;
@@ -124,28 +119,24 @@ error:
 	return NULL;
 }
 
-void
-proc_status_free(proc_status_t *status)
+void proc_status_free(proc_status_t *status)
 {
 	mem_free(status);
 }
 
-const char *
-proc_status_get_name(const proc_status_t *status)
+const char *proc_status_get_name(const proc_status_t *status)
 {
 	ASSERT(status);
 	return status->name;
 }
 
-pid_t
-proc_status_get_ppid(const proc_status_t *status)
+pid_t proc_status_get_ppid(const proc_status_t *status)
 {
 	ASSERT(status);
 	return status->ppid;
 }
 
-static int
-proc_killall_cb(UNUSED const char *path, const char *file, void *data)
+static int proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 {
 	struct proc_killall *pk = data;
 
@@ -169,8 +160,7 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 	return 0;
 }
 
-int
-proc_killall(pid_t ppid, const char *name, int sig)
+int proc_killall(pid_t ppid, const char *name, int sig)
 {
 	struct proc_killall data = { ppid, name, sig };
 
@@ -183,8 +173,7 @@ proc_killall(pid_t ppid, const char *name, int sig)
 	return 0;
 }
 
-static int
-proc_find_cb(UNUSED const char *path, const char *file, void *data)
+static int proc_find_cb(UNUSED const char *path, const char *file, void *data)
 {
 	struct proc_find *pf = data;
 
@@ -209,8 +198,7 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 	return 0;
 }
 
-pid_t
-proc_find(pid_t ppid, const char *name)
+pid_t proc_find(pid_t ppid, const char *name)
 {
 	struct proc_find data = { ppid, name, 0 };
 

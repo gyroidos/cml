@@ -50,35 +50,29 @@ typedef void (*download_callback_t)(download_t *dl, bool success, void *data);
  * @param data custom parameter passed to the on_complete callback
  * @return the download_t instance or NULL on error
  */
-download_t *
-download_new(const char *url, const char *file, download_callback_t on_complete, void *data);
+download_t *download_new(const char *url, const char *file, download_callback_t on_complete, void *data);
 
 /**
  * Frees the given download instance.
  * @param dl the download instance to free
  */
-void
-download_free(download_t *dl);
+void download_free(download_t *dl);
 
 /**
  * Starts the download for the given download instance.
  * @param dl the download instance to start
  * @return 0 if the download has been started sucessfully, -1 otherwise
  */
-int
-download_start(download_t *dl);
+int download_start(download_t *dl);
 
 /**
  * Returns the URL of the given download instance.
  */
-const char *
-download_get_url(const download_t *dl);
+const char *download_get_url(const download_t *dl);
 
 /**
  * Returns the file of the given download instance.
  */
-const char *
-download_get_file(const download_t *dl);
+const char *download_get_file(const download_t *dl);
 
-#endif	// DOWNLOAD_H
-
+#endif // DOWNLOAD_H

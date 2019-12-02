@@ -21,22 +21,21 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "common/macro.h"
 #include "common/logf.h"
+#include "common/macro.h"
 
-#include "ssl_util.h"
 #include "softtoken.h"
+#include "ssl_util.h"
 
 static softtoken_t *token_old = NULL;
 static softtoken_t *token_new = NULL;
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	ASSERT(argc >= 3);
 	char *token_path_old = argv[1];
 	char *token_path_new = argv[2];
-	
+
 	logf_register(&logf_file_write, stdout);
 
 	token_old = softtoken_new_from_p12(token_path_old);

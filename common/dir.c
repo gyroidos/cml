@@ -23,8 +23,8 @@
 
 #include "dir.h"
 
-#include "macro.h"
 #include "logf.h"
+#include "macro.h"
 #include "mem.h"
 
 #include <dirent.h>
@@ -32,8 +32,7 @@
 #include <string.h>
 #include <unistd.h>
 
-int
-dir_foreach(const char *path, int (*func)(const char *path, const char *file, void *data), void *data)
+int dir_foreach(const char *path, int (*func)(const char *path, const char *file, void *data), void *data)
 {
 	struct dirent *dp;
 	DIR *dirp;
@@ -71,8 +70,7 @@ dir_foreach(const char *path, int (*func)(const char *path, const char *file, vo
 	return n;
 }
 
-int
-dir_mkdir_p(const char *path, mode_t mode)
+int dir_mkdir_p(const char *path, mode_t mode)
 {
 	ASSERT(path);
 	char *c, *p = mem_printf("%s", path);
@@ -95,7 +93,7 @@ dir_mkdir_p(const char *path, mode_t mode)
 			goto out;
 		}
 		*c = '/';
-		c = strchr(c+1, '/');
+		c = strchr(c + 1, '/');
 	}
 	if (mkdir(p, mode) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir %s", p);
@@ -106,8 +104,7 @@ out:
 	return ret;
 }
 
-static int
-dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *data)
+static int dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *data)
 {
 	struct stat stat_buffer;
 	int ret = 0;
@@ -118,8 +115,7 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 			ERROR_ERRNO("Could not delete file %s", file_to_remove);
 			ret--;
 		}
-	}
-	else {
+	} else {
 		DEBUG("Path %s is dir", file_to_remove);
 		if (dir_foreach(file_to_remove, &dir_unlink_folder_contents_cb, NULL) < 0) {
 			ERROR_ERRNO("Could not delete all dir contents in %s", file_to_remove);
@@ -135,8 +131,7 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 	return ret;
 }
 
-int
-dir_delete_folder(const char* path, const char* dir_name)
+int dir_delete_folder(const char *path, const char *dir_name)
 {
 	int ret = 0;
 	char *dir_to_remove = mem_printf("%s/%s", path, dir_name);

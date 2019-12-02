@@ -3,28 +3,27 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
-#include "common/mem.h"
 #include "common/macro.h"
+#include "common/mem.h"
 
-#define EK_CERT_RSA_INDEX	0x01c00002
-#define EK_CERT_EC_INDEX	0x01c0000a
+#define EK_CERT_RSA_INDEX 0x01c00002
+#define EK_CERT_EC_INDEX 0x01c0000a
 
-uint8_t *
-ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
+uint8_t *ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
 {
 	IF_NULL_RETVAL(cert_len, NULL);
 
 	TPMI_RH_NV_INDEX cert_index;
 	switch (alg) {
-		case TPM_ALG_RSA:
-			cert_index = EK_CERT_RSA_INDEX;
-			break;
-		case TPM_ALG_ECC:
-			cert_index = EK_CERT_EC_INDEX;
-			break;
-		default:
-			ERROR("Algorithm not supported by implementation!");
-			return NULL;
+	case TPM_ALG_RSA:
+		cert_index = EK_CERT_RSA_INDEX;
+		break;
+	case TPM_ALG_ECC:
+		cert_index = EK_CERT_EC_INDEX;
+		break;
+	default:
+		ERROR("Algorithm not supported by implementation!");
+		return NULL;
 	}
 
 	if ((*cert_len = tpm2_nv_get_data_size(cert_index)) == 0) {

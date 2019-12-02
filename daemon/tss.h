@@ -29,16 +29,10 @@
 /*
  * type of supported hashes
  */
-typedef enum {
-	TSS_SHA1 = 0,
-	TSS_SHA256,
-	TSS_SHA384
-} tss_hash_algo_t;
+typedef enum { TSS_SHA1 = 0, TSS_SHA256, TSS_SHA384 } tss_hash_algo_t;
 
-int
-tss_init(void);
+int tss_init(void);
 
-void
-tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo);
+void tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo);
 
 #endif /* TSS_H */

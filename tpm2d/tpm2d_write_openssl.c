@@ -5,26 +5,25 @@
  *   SPDX-License-Identifier: LGPL-2.1-only
  */
 
-
-#include <stdio.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
-#include <errno.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <ctype.h>
 
 #include <arpa/inet.h>
 
-#include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 
-#include <openssl/rsa.h>
-#include <openssl/pem.h>
-#include <openssl/evp.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/rand.h>
+#include <openssl/rsa.h>
 
 //#define TSSINCLUDE(x) < TSS_INCLUDE/x >
 //#include TSSINCLUDE(tss.h)
@@ -33,23 +32,21 @@
 //#include TSSINCLUDE(Unmarshal_fp.h)
 //#include TSSINCLUDE(tsscrypto.h)
 //#include TSSINCLUDE(tsscryptoh.h)
-#include <ibmtss/tss.h>
-#include <ibmtss/tssutils.h>
-#include <ibmtss/tssmarshal.h>
 #include <ibmtss/Unmarshal_fp.h>
+#include <ibmtss/tss.h>
 #include <ibmtss/tsscrypto.h>
 #include <ibmtss/tsscryptoh.h>
+#include <ibmtss/tssmarshal.h>
+#include <ibmtss/tssutils.h>
 
 #include "tpm2-asn.h"
 //#include "tpm2-common.h"
 
 #include "tpm2d_write_openssl.h"
 
-static int
-openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len,
-		      BYTE *privkey, int privkey_len, int empty_auth,
-		      TPM_HANDLE parent, STACK_OF(TSSOPTPOLICY) *sk,
-		      int version, TPM2B_ENCRYPTED_SECRET *secret)
+static int openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey, int privkey_len,
+				 int empty_auth, TPM_HANDLE parent, STACK_OF(TSSOPTPOLICY) * sk, int version,
+				 TPM2B_ENCRYPTED_SECRET *secret)
 {
 	union {
 		TSSLOADABLE tssl;
@@ -60,7 +57,7 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len,
 	/* clear structure so as not to have to set optional parameters */
 	memset(&k, 0, sizeof(k));
 	if ((outb = BIO_new_file(file, "w")) == NULL) {
-                fprintf(stderr, "Error opening file for write: %s\n", file);
+		fprintf(stderr, "Error opening file for write: %s\n", file);
 		return 1;
 	}
 	if (version == 0) {
@@ -80,8 +77,7 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len,
 		if (secret) {
 			k.tpk.type = OBJ_txt2obj(OID_importableKey, 1);
 			k.tpk.secret = ASN1_OCTET_STRING_new();
-			ASN1_STRING_set(k.tpk.secret, secret->t.secret,
-					secret->t.size);
+			ASN1_STRING_set(k.tpk.secret, secret->t.secret, secret->t.size);
 		} else {
 			k.tpk.type = OBJ_txt2obj(OID_loadableKey, 1);
 		}
@@ -102,11 +98,9 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len,
 	return 0;
 }
 
-int
-tpm2d_openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len,
-		      BYTE *privkey, int privkey_len, int empty_auth,
-		      TPM_HANDLE parent, TPM2B_ENCRYPTED_SECRET *secret)
+int tpm2d_openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey, int privkey_len,
+				int empty_auth, TPM_HANDLE parent, TPM2B_ENCRYPTED_SECRET *secret)
 {
-	return openssl_write_tpmfile(file, pubkey, pubkey_len, privkey, privkey_len,
-				empty_auth, parent, NULL, 0, secret);
+	return openssl_write_tpmfile(file, pubkey, pubkey_len, privkey, privkey_len, empty_auth, parent, NULL, 0,
+				     secret);
 }

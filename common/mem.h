@@ -32,8 +32,8 @@
 #ifndef MEM_H
 #define MEM_H
 
-#include <stddef.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <string.h>
 
 /**
@@ -43,8 +43,7 @@
  * @param size The number of bytes to allocate.
  * @return Pointer to the allocated memory.
  */
-void *
-mem_alloc(size_t size);
+void *mem_alloc(size_t size);
 
 /**
  * Allocates memory. The memory is set to zero.
@@ -53,8 +52,7 @@ mem_alloc(size_t size);
  * @param size The number of bytes to allocate.
  * @return Poiner to the allocated memory.
  */
-void *
-mem_alloc0(size_t size);
+void *mem_alloc0(size_t size);
 
 /**
  * Changes the size of the memory block pointed to by mem to size bytes.
@@ -64,8 +62,7 @@ mem_alloc0(size_t size);
  * @param size The new size of the memory block.
  * @return Pointer to the newly allocated memory.
  */
-void *
-mem_realloc(void *mem, size_t size);
+void *mem_realloc(void *mem, size_t size);
 
 /**
  * Duplicates a string. Allocates sufficient memory.
@@ -74,8 +71,7 @@ mem_realloc(void *mem, size_t size);
  * @param str The string to duplicate.
  * @return Pointer to the new string.
  */
-char *
-mem_strdup(const char *str);
+char *mem_strdup(const char *str);
 
 /**
  * Duplicates a string, but copies at most len bytes. Allocates sufficient memory.
@@ -85,8 +81,7 @@ mem_strdup(const char *str);
  * @param len The maximum length of the new string.
  * @return Pointer to the new string.
  */
-char *
-mem_strndup(const char *str, size_t len);
+char *mem_strndup(const char *str, size_t len);
 
 /**
  * Prints to a string allocated by this function.
@@ -96,8 +91,7 @@ mem_strndup(const char *str, size_t len);
  * @param ap va_list
  * @return Pointer to the allocated formatted string.
  */
-char *
-mem_vprintf(const char *fmt, va_list ap);
+char *mem_vprintf(const char *fmt, va_list ap);
 
 /**
  * Prints to a string allocated by this function.
@@ -106,51 +100,45 @@ mem_vprintf(const char *fmt, va_list ap);
  * @param fmt The format string.
  * @return Pointer to the allocated formatted string.
  */
-char *
-mem_printf(const char *fmt, ...)
+char *mem_printf(const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 1, 2)))
 #endif
-;
+	;
 
 /**
  * Frees the allocated memory.
  * This is a wrapper for free(3) (which is provided for consistency).
  * @param mem Memory to be freed.
  */
-void
-mem_free(void *mem);
+void mem_free(void *mem);
 
 /**
  * Frees the allocated memory of each array element and the array itself.
  * @param array Array to be freed.
  * @param size Array size.
  */
-void
-mem_free_array(void **array, size_t size);
+void mem_free_array(void **array, size_t size);
 
 /**
  * Convenience wrapper macro for mem_alloc which calculates
  * the correct size to be allocated and casts accordingly.
  */
-#define mem_new(struct_type, n_structs) \
-	((struct_type *) mem_alloc(((size_t) sizeof(struct_type)) \
-					* ((size_t) (n_structs))))
+#define mem_new(struct_type, n_structs)                                                                                \
+	((struct_type *)mem_alloc(((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
 
 /**
  * Convenience wrapper macro for mem_alloc0 which calculates
  * the correct size to be allocated and casts accordingly.
  */
-#define mem_new0(struct_type, n_structs) \
-	((struct_type *) mem_alloc0(((size_t) sizeof(struct_type)) \
-					* ((size_t) (n_structs))))
+#define mem_new0(struct_type, n_structs)                                                                               \
+	((struct_type *)mem_alloc0(((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
 
 /**
  * Convenience wrapper macro for mem_realloc which calculates
  * the correct size to be allocated and casts accordingly.
  */
-#define mem_renew(struct_type, mem, n_structs) \
-	((struct_type *) mem_realloc((mem), ((size_t) sizeof(struct_type)) \
-					* ((size_t) (n_structs))))
+#define mem_renew(struct_type, mem, n_structs)                                                                         \
+	((struct_type *)mem_realloc((mem), ((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
 
 #endif /* MEM_H */

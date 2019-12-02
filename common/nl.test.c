@@ -29,11 +29,10 @@
 #if PLATFORM_VERSION_MAJOR >= 5
 #include <sys/types.h>
 /* User visible structure for SCM_CREDENTIALS message */
-struct ucred
-{
-  pid_t pid;                    /* PID of sending process.  */
-  uid_t uid;                    /* UID of sending process.  */
-  gid_t gid;                    /* GID of sending process.  */
+struct ucred {
+	pid_t pid; /* PID of sending process.  */
+	uid_t uid; /* UID of sending process.  */
+	gid_t gid; /* GID of sending process.  */
 };
 #endif
 
@@ -45,11 +44,11 @@ struct ucred
  */
 static void print_sock(nl_sock_t *sock)
 {
-	if (!sock) return;
+	if (!sock)
+		return;
 
-	DEBUG("nl_sock{fd:%d, local: nl_family: %u, nl_pad:%u, nl_pid: %d, nl_groups: %u}",
-		sock->fd, sock->local.nl_family, sock->local.nl_pad,
-		sock->local.nl_pid, sock->local.nl_groups);
+	DEBUG("nl_sock{fd:%d, local: nl_family: %u, nl_pad:%u, nl_pid: %d, nl_groups: %u}", sock->fd,
+	      sock->local.nl_family, sock->local.nl_pad, sock->local.nl_pid, sock->local.nl_groups);
 }
 
 /**
@@ -57,10 +56,11 @@ static void print_sock(nl_sock_t *sock)
  */
 static void print_addr(struct sockaddr_nl *addr)
 {
-	if (!addr) return;
+	if (!addr)
+		return;
 
-	DEBUG("sockaddr_nl{nl_family: %u, nl_pad:%u, nl_pid: %d, nl_groups: %u}",
-		addr->nl_family, addr->nl_pad, addr->nl_pid, addr->nl_groups);
+	DEBUG("sockaddr_nl{nl_family: %u, nl_pad:%u, nl_pid: %d, nl_groups: %u}", addr->nl_family, addr->nl_pad,
+	      addr->nl_pid, addr->nl_groups);
 }
 
 /**
@@ -68,11 +68,13 @@ static void print_addr(struct sockaddr_nl *addr)
  */
 static void print_msg(nl_msg_t *msg)
 {
-	if (!msg) return;
+	if (!msg)
+		return;
 
 	DEBUG("nl_msg{size:%u,nlmsghdr:nlmsg_len: %u, nlmsg_type: %u,nlmsg_flags: %u, nlmsg_seq: %u, "
-		"nlmsg_pid: %d", msg->size, msg->nlmsghdr.nlmsg_len, msg->nlmsghdr.nlmsg_type,
-		msg->nlmsghdr.nlmsg_flags, msg->nlmsghdr.nlmsg_seq, msg->nlmsghdr.nlmsg_pid);
+	      "nlmsg_pid: %d",
+	      msg->size, msg->nlmsghdr.nlmsg_len, msg->nlmsghdr.nlmsg_type, msg->nlmsghdr.nlmsg_flags,
+	      msg->nlmsghdr.nlmsg_seq, msg->nlmsghdr.nlmsg_pid);
 }
 
 /**
@@ -80,11 +82,11 @@ static void print_msg(nl_msg_t *msg)
  */
 static void print_msghdr(struct nlmsghdr *msg)
 {
-	if (!msg) return;
+	if (!msg)
+		return;
 
-	DEBUG("nlmsghdr{nlmsg_len: %u, nlmsg_type: %u, nlmsg_flags: %u,nlmsg_seq: %u, nlmsg_pid: %d}",
-		msg->nlmsg_len, msg->nlmsg_type, msg->nlmsg_flags,
-		msg->nlmsg_seq, msg->nlmsg_pid);
+	DEBUG("nlmsghdr{nlmsg_len: %u, nlmsg_type: %u, nlmsg_flags: %u,nlmsg_seq: %u, nlmsg_pid: %d}", msg->nlmsg_len,
+	      msg->nlmsg_type, msg->nlmsg_flags, msg->nlmsg_seq, msg->nlmsg_pid);
 }
 
 /**
@@ -108,11 +110,10 @@ int main(void)
 	/* main point: different pids of the fd's */
 	ASSERT(sock1->fd != sock2->fd);
 	ASSERT(sock1->local.nl_family == AF_NETLINK);
-	ASSERT(sock1->local.nl_pid == (unsigned int) getpid());
+	ASSERT(sock1->local.nl_pid == (unsigned int)getpid());
 	ASSERT(sock1->local.nl_pid != sock2->local.nl_pid);
 	print_sock(sock1);
 	print_sock(sock2);
-
 
 	/* Allocate a request message */
 	nl_msg_t *msg1 = nl_msg_new(NL_MSG_DEFAULT_SIZE);
@@ -123,21 +124,18 @@ int main(void)
 	DEBUG("Request message allocated, preparing now...");
 	/* Prepare request message */
 	{
-		char* veth1 = "veth0";
-		char* veth2 = "veth1";
+		char *veth1 = "veth0";
+		char *veth2 = "veth1";
 
-		struct ifinfomsg link_req = {
-			.ifi_family = AF_INET
-		};
+		struct ifinfomsg link_req = { .ifi_family = AF_INET };
 
 		struct rtattr *attr1, *attr2, *attr3;
 
 		/* Fill netlink message header */
 		ASSERT(nl_msg_set_type(msg1, RTM_NEWLINK) == 0);
-	
+
 		/* Set appropriate flags for request, creating new object, exclusive access and acknowledgment response */
-		ASSERT(nl_msg_set_flags(msg1,NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL |
-				NLM_F_ACK) == 0);
+		ASSERT(nl_msg_set_flags(msg1, NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK) == 0);
 
 		/* Fill link request header of request message */
 		ASSERT(nl_msg_set_link_req(msg1, &link_req) == 0);
@@ -152,7 +150,6 @@ int main(void)
 		/* Set link type */
 		ASSERT(nl_msg_add_string(msg1, IFLA_INFO_KIND, "veth") == 0);
 
-
 		/* Add nested attributes for INFO and PEER */
 		attr2 = nl_msg_start_nested_attr(msg1, IFLA_INFO_DATA);
 		ASSERT(attr2);
@@ -166,10 +163,8 @@ int main(void)
 		   of the netlink message */
 		ASSERT(nl_msg_expand_len(msg1, sizeof(struct ifinfomsg)) == 0);
 
-
 		/* Set veth2 name */
 		ASSERT(nl_msg_add_string(msg1, IFLA_IFNAME, veth2) == 0);
-
 
 		/* Close nested attributes */
 		ASSERT(nl_msg_end_nested_attr(msg1, attr3) == 0);
@@ -189,7 +184,7 @@ int main(void)
 	DEBUG("Message should have nlmsg_pid and nlmsg_seq set after transmission");
 	print_msg(msg1);
 	/* seq. number set to socket fd to associate socket to message */
-	ASSERT(msg1->nlmsghdr.nlmsg_seq == (unsigned int) sock2->fd);
+	ASSERT(msg1->nlmsghdr.nlmsg_seq == (unsigned int)sock2->fd);
 
 	DEBUG("Sent and received, errno is: %d", errno);
 	ASSERT(errno == 1);
