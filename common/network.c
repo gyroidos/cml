@@ -66,7 +66,8 @@
 
 #define MAX_CAP_NUM (CAP_TO_INDEX(CAP_LAST_CAP) + 1)
 
-static int network_fork_and_execvp(const char *path, const char *const *argv)
+static int
+network_fork_and_execvp(const char *path, const char *const *argv)
 {
 	ASSERT(path);
 	//ASSERT(argv);	    // on some OSes, argv can be NULL...
@@ -99,7 +100,8 @@ static int network_fork_and_execvp(const char *path, const char *const *argv)
 	return -1;
 }
 
-static int network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *action)
+static int
+network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *action)
 {
 	char *net = mem_printf("%s/%i", addr, subnet);
 	const char *const argv[] = { IP_PATH, "addr", action, net, "dev", interface, NULL };
@@ -108,7 +110,8 @@ static int network_call_ip(const char *addr, uint32_t subnet, const char *interf
 	return ret;
 }
 
-int network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface)
+int
+network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface)
 {
 	char *src_pid_str = mem_printf("%d", src_pid);
 	char *dest_pid_str = mem_printf("%d", dest_pid);
@@ -123,7 +126,8 @@ int network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface)
 	return ret;
 }
 
-int network_list_link_ns(pid_t pid, list_t **link_list)
+int
+network_list_link_ns(pid_t pid, list_t **link_list)
 {
 	char *command = mem_printf("%s -t %d -n %s link", NSENTER_PATH, pid, IP_PATH);
 	FILE *fp;
@@ -149,19 +153,22 @@ int network_list_link_ns(pid_t pid, list_t **link_list)
 	return 0;
 }
 
-int network_set_ip_addr_of_interface(const char *addr, uint32_t subnet, const char *interface)
+int
+network_set_ip_addr_of_interface(const char *addr, uint32_t subnet, const char *interface)
 {
 	DEBUG("About to configure network interface %s with ip %s and subnet %i", interface, addr, subnet);
 	return network_call_ip(addr, subnet, interface, "add");
 }
 
-int network_remove_ip_addr_from_interface(const char *addr, uint32_t subnet, const char *interface)
+int
+network_remove_ip_addr_from_interface(const char *addr, uint32_t subnet, const char *interface)
 {
 	DEBUG("About to remove ip %s and subnet %i from network interface %s", addr, subnet, interface);
 	return network_call_ip(addr, subnet, interface, "del");
 }
 
-int network_setup_default_route(const char *gateway, bool add)
+int
+network_setup_default_route(const char *gateway, bool add)
 {
 	ASSERT(gateway);
 	DEBUG("%s default route via %s", add ? "Adding" : "Deleting", gateway);
@@ -170,7 +177,8 @@ int network_setup_default_route(const char *gateway, bool add)
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
-int network_setup_default_route_table(const char *table_id, const char *gateway, bool add)
+int
+network_setup_default_route_table(const char *table_id, const char *gateway, bool add)
 {
 	ASSERT(gateway);
 	DEBUG("%s default route via %s", add ? "Adding" : "Deleting", gateway);
@@ -180,7 +188,8 @@ int network_setup_default_route_table(const char *table_id, const char *gateway,
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
-int network_setup_route_table(const char *table_id, const char *net_dst, const char *dev, bool add)
+int
+network_setup_route_table(const char *table_id, const char *net_dst, const char *dev, bool add)
 {
 	ASSERT(net_dst);
 	ASSERT(dev);
@@ -191,7 +200,8 @@ int network_setup_route_table(const char *table_id, const char *net_dst, const c
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
-int network_setup_route(const char *net_dst, const char *dev, bool add)
+int
+network_setup_route(const char *net_dst, const char *dev, bool add)
 {
 	ASSERT(net_dst);
 	ASSERT(dev);
@@ -202,7 +212,8 @@ int network_setup_route(const char *net_dst, const char *dev, bool add)
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
-int network_iptables(const char *table, const char *chain, const char *net_src, const char *jmp_target, bool add)
+int
+network_iptables(const char *table, const char *chain, const char *net_src, const char *jmp_target, bool add)
 {
 	ASSERT(table);
 	ASSERT(chain);
@@ -214,7 +225,8 @@ int network_iptables(const char *table, const char *chain, const char *net_src, 
 	return network_fork_and_execvp(IPTABLES_PATH, argv);
 }
 
-int network_setup_port_forwarding(const char *srcip, uint16_t srcport, const char *dstip, uint16_t dstport, bool enable)
+int
+network_setup_port_forwarding(const char *srcip, uint16_t srcport, const char *dstip, uint16_t dstport, bool enable)
 {
 	ASSERT(srcip);
 	ASSERT(dstip);
@@ -247,7 +259,8 @@ int network_setup_port_forwarding(const char *srcip, uint16_t srcport, const cha
 	return error;
 }
 
-int network_setup_masquerading(const char *subnet, bool enable)
+int
+network_setup_masquerading(const char *subnet, bool enable)
 {
 	ASSERT(subnet);
 
@@ -271,7 +284,8 @@ int network_setup_masquerading(const char *subnet, bool enable)
 	return 0;
 }
 
-int network_delete_link(const char *dev)
+int
+network_delete_link(const char *dev)
 {
 	ASSERT(dev);
 	DEBUG("Destroying network interface %s", dev);
@@ -280,7 +294,8 @@ int network_delete_link(const char *dev)
 	return network_fork_and_execvp(IP_PATH, argv);
 }
 
-void network_enable_ip_forwarding(void)
+void
+network_enable_ip_forwarding(void)
 {
 	// enable IP forwarding
 	if (file_write(IP_FORWARD_FILE, "1", 1) <= 0) {
@@ -295,7 +310,8 @@ void network_enable_ip_forwarding(void)
  * using either the flag IFF_UP or IFF_DOWN
  * with a netlink message using the netlink socket.
  */
-int network_set_flag(const char *ifi_name, const uint32_t flag)
+int
+network_set_flag(const char *ifi_name, const uint32_t flag)
 {
 	ASSERT(ifi_name && (flag == IFF_UP || flag == IFF_DOWN));
 
@@ -362,7 +378,8 @@ msg_err:
 /**
  * Enable or disable localnet routing for the given interface.
  */
-static int network_route_localnet(const char *interface, bool enable)
+static int
+network_route_localnet(const char *interface, bool enable)
 {
 	char *route_localnet_file = mem_printf(IP_ROUTE_LOCALNET_PATH, interface);
 	int error = 0;
@@ -378,7 +395,8 @@ static int network_route_localnet(const char *interface, bool enable)
 /**
  * Bring up the loopback interface and shrink its subnet.
  */
-int network_setup_loopback()
+int
+network_setup_loopback()
 {
 	int ret = 0;
 
@@ -396,7 +414,8 @@ int network_setup_loopback()
 	return ret;
 }
 
-int network_routing_rules_set_all_main(bool flush)
+int
+network_routing_rules_set_all_main(bool flush)
 {
 	if (flush) {
 		DEBUG("Flushing all ip routing rules!");

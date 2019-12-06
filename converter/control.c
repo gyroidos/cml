@@ -38,7 +38,8 @@
 
 #define CONTROL_SOCKET SOCK_PATH(control)
 
-static int send_message(ControllerToDaemon *msg)
+static int
+send_message(ControllerToDaemon *msg)
 {
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, CONTROL_SOCKET);
 	IF_TRUE_RETVAL(sock < 0, -1);
@@ -50,12 +51,14 @@ static int send_message(ControllerToDaemon *msg)
 	return (msg_size < 0) ? -1 : 0;
 }
 
-bool control_is_enabled(void)
+bool
+control_is_enabled(void)
 {
 	return file_is_socket(CONTROL_SOCKET);
 }
 
-int control_push_guestos(char *cfgfile, char *certfile, char *sigfile)
+int
+control_push_guestos(char *cfgfile, char *certfile, char *sigfile)
 {
 	int ret = -1;
 	uint8_t *cfg = NULL;
@@ -122,7 +125,8 @@ out:
 	return ret;
 }
 
-int control_register_localca(char *ca_cert_file)
+int
+control_register_localca(char *ca_cert_file)
 {
 	int ret = -1;
 	off_t ca_cert_len = file_size(ca_cert_file);

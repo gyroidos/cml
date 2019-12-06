@@ -47,12 +47,18 @@ struct EventTagMap {
 };
 
 /* fwd */
-static int processFile(EventTagMap *map);
-static int countMapLines(const EventTagMap *map);
-static int parseMapLines(EventTagMap *map);
-static int scanTagLine(char **pData, EventTag *tag, int lineNum);
-static int sortTags(EventTagMap *map);
-static void dumpTags(const EventTagMap *map);
+static int
+processFile(EventTagMap *map);
+static int
+countMapLines(const EventTagMap *map);
+static int
+parseMapLines(EventTagMap *map);
+static int
+scanTagLine(char **pData, EventTag *tag, int lineNum);
+static int
+sortTags(EventTagMap *map);
+static void
+dumpTags(const EventTagMap *map);
 
 /*
  * Open the map file and allocate a structure to manage it.
@@ -60,7 +66,8 @@ static void dumpTags(const EventTagMap *map);
  * We create a private mapping because we want to terminate the log tag
  * strings with '\0'.
  */
-EventTagMap *android_openEventTagMap(const char *fileName)
+EventTagMap *
+android_openEventTagMap(const char *fileName)
 {
 	EventTagMap *newTagMap;
 	off_t end;
@@ -105,7 +112,8 @@ fail:
 /*
  * Close the map.
  */
-void android_closeEventTagMap(EventTagMap *map)
+void
+android_closeEventTagMap(EventTagMap *map)
 {
 	if (map == NULL)
 		return;
@@ -119,7 +127,8 @@ void android_closeEventTagMap(EventTagMap *map)
  *
  * The entries are sorted by tag number, so we can do a binary search.
  */
-const char *android_lookupEventTag(const EventTagMap *map, int tag)
+const char *
+android_lookupEventTag(const EventTagMap *map, int tag)
 {
 	int hi, lo, mid;
 
@@ -149,7 +158,8 @@ const char *android_lookupEventTag(const EventTagMap *map, int tag)
 /*
  * Determine whether "c" is a whitespace char.
  */
-static inline int isCharWhitespace(char c)
+static inline int
+isCharWhitespace(char c)
 {
 	return (c == ' ' || c == '\n' || c == '\r' || c == '\t');
 }
@@ -157,7 +167,8 @@ static inline int isCharWhitespace(char c)
 /*
  * Determine whether "c" is a valid tag char.
  */
-static inline int isCharValidTag(char c)
+static inline int
+isCharValidTag(char c)
 {
 	return ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c == '_'));
 }
@@ -165,7 +176,8 @@ static inline int isCharValidTag(char c)
 /*
  * Determine whether "c" is a valid decimal digit.
  */
-static inline int isCharDigit(char c)
+static inline int
+isCharDigit(char c)
 {
 	return (c >= '0' && c <= '9');
 }
@@ -173,7 +185,8 @@ static inline int isCharDigit(char c)
 /*
  * Crunch through the file, parsing the contents and creating a tag index.
  */
-static int processFile(EventTagMap *map)
+static int
+processFile(EventTagMap *map)
 {
 	EventTag *tagArray = NULL;
 
@@ -212,7 +225,8 @@ static int processFile(EventTagMap *map)
  *
  * Returns the number of potential tag entries found.
  */
-static int countMapLines(const EventTagMap *map)
+static int
+countMapLines(const EventTagMap *map)
 {
 	int numTags, unknown;
 	const char *cp;
@@ -249,7 +263,8 @@ static int countMapLines(const EventTagMap *map)
 /*
  * Parse the tags out of the file.
  */
-static int parseMapLines(EventTagMap *map)
+static int
+parseMapLines(EventTagMap *map)
 {
 	int tagNum, lineStart, lineNum;
 	char *cp;
@@ -317,7 +332,8 @@ static int parseMapLines(EventTagMap *map)
  *
  * Returns 0 on success, nonzero on failure.
  */
-static int scanTagLine(char **pData, EventTag *tag, int lineNum)
+static int
+scanTagLine(char **pData, EventTag *tag, int lineNum)
 {
 	char *cp = *pData;
 	char *startp;
@@ -375,7 +391,8 @@ static int scanTagLine(char **pData, EventTag *tag, int lineNum)
 /*
  * Compare two EventTags.
  */
-static int compareEventTags(const void *v1, const void *v2)
+static int
+compareEventTags(const void *v1, const void *v2)
 {
 	const EventTag *tag1 = (const EventTag *)v1;
 	const EventTag *tag2 = (const EventTag *)v2;
@@ -389,7 +406,8 @@ static int compareEventTags(const void *v1, const void *v2)
  *
  * Returns 0 on success.
  */
-static int sortTags(EventTagMap *map)
+static int
+sortTags(EventTagMap *map)
 {
 	int i;
 
@@ -410,7 +428,8 @@ static int sortTags(EventTagMap *map)
 /*
  * Dump the tag array for debugging.
  */
-static void dumpTags(const EventTagMap *map)
+static void
+dumpTags(const EventTagMap *map)
 {
 	int i;
 

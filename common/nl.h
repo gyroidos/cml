@@ -53,7 +53,8 @@ typedef struct nl_msg nl_msg_t;
  * Depending on the protocol, the socket options are implicitly set.
  * @return Pointer to nl_sock; NULL in case of failure
  */
-nl_sock_t *nl_sock_uevent_new();
+nl_sock_t *
+nl_sock_uevent_new();
 
 /**
  * Allocates, opens and returns a nl_sock object of family NETLINK_ROUTE with various netlink options.
@@ -62,7 +63,8 @@ nl_sock_t *nl_sock_uevent_new();
  * the max recv-buf file.
  * @return Pointer to nl_sock; NULL in case of failure
  */
-nl_sock_t *nl_sock_routing_new();
+nl_sock_t *
+nl_sock_routing_new();
 
 /**
  * Allocates, opens and returns a nl_sock object of family NETLINK_XFRM with various netlink options.
@@ -71,31 +73,36 @@ nl_sock_t *nl_sock_routing_new();
  * the max recv-buf file.
  * @return Pointer to nl_sock; NULL in case of failure
  */
-nl_sock_t *nl_sock_xfrm_new();
+nl_sock_t *
+nl_sock_xfrm_new();
 
 /**
  * Allocates, opens and returns a nl_sock object of a different netlink family than the other
  * sock_*_new functions without specific netlink options.
  * @return Pointer to nl_sock; NULL in case of failure
  */
-nl_sock_t *nl_sock_default_new(int protocol);
+nl_sock_t *
+nl_sock_default_new(int protocol);
 
 /**
  * Getter for fd of a nl_sock struct.
  * @return Filedescriptor associated to the netlink socket
  */
-int nl_sock_get_fd(const nl_sock_t *sock);
+int
+nl_sock_get_fd(const nl_sock_t *sock);
 
 /**
  * Close an open netlink socket
  */
-void nl_sock_free(nl_sock_t *sock);
+void
+nl_sock_free(nl_sock_t *sock);
 
 /**
  * Send a netlink message over a socket to the kernel
  * @return In case of failure, return -1/errno, in case of success, return number of bytes sent
  */
-int nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
+int
+nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
 
 /**
  * Receive a netlink message from the kernel.
@@ -105,7 +112,8 @@ int nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
  * The buffer is filled with the message content
  * @return In case of failure, return -1, in case of success, return num of bytes received
  */
-int nl_msg_receive_kernel(const nl_sock_t *sock, char *buf, size_t len, bool receive_uevent);
+int
+nl_msg_receive_kernel(const nl_sock_t *sock, char *buf, size_t len, bool receive_uevent);
 
 /**
  * Transmit a message with ACKNOWLEDGEMENT flag
@@ -114,7 +122,8 @@ int nl_msg_receive_kernel(const nl_sock_t *sock, char *buf, size_t len, bool rec
  * In case the netlink request failed, the errnor is set to the ACK error.
  * @return In case of failure, return -1, in case of success, return 0
  */
-int nl_msg_send_kernel_verify(const nl_sock_t *sock, const nl_msg_t *req);
+int
+nl_msg_send_kernel_verify(const nl_sock_t *sock, const nl_msg_t *req);
 
 /**
  * Allocates a raw netlink message, which can be completed
@@ -123,46 +132,53 @@ int nl_msg_send_kernel_verify(const nl_sock_t *sock, const nl_msg_t *req);
  * @return In case of failure, return NULL,
  *	    in case of success, return the allocated message.
  */
-nl_msg_t *nl_msg_new();
+nl_msg_t *
+nl_msg_new();
 
 /**
  * Free a netlink message
  */
-void nl_msg_free(nl_msg_t *msg);
+void
+nl_msg_free(nl_msg_t *msg);
 
 /**
  * Sets the request to according to the given payload struct.
  * The message length is adapted accordingly.
  * @return failure: -1, success: 0
  */
-int nl_msg_set_link_req(nl_msg_t *msg, const struct ifinfomsg *ifmsg);
+int
+nl_msg_set_link_req(nl_msg_t *msg, const struct ifinfomsg *ifmsg);
 
 /**
  * Sets the request to according to the given payload struct.
  * The message length is adapted accordingly.
  * @return failure: -1, success: 0
  */
-int nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg);
+int
+nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg);
 
 /**
  * Sets the request to according to the given payload struct.
  * The message length is adapted accordingly.
  * @return failure: -1, success: 0
  */
-int nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg);
+int
+nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg);
 
 /**
  * Sets the nl message type attribute
  * @return failure: -1, success: 0
  */
-int nl_msg_set_type(nl_msg_t *msg, uint16_t type);
+int
+nl_msg_set_type(nl_msg_t *msg, uint16_t type);
 
 /**
  * Sets the nl message flags. Using the send_and_check_ack function
  * for transmission, the NLM_F_ACK flag should be set here
  * @return failure: -1, success: 0
  */
-int nl_msg_set_flags(nl_msg_t *msg, uint16_t flags);
+int
+nl_msg_set_flags(nl_msg_t *msg, uint16_t flags);
 
 /**
  * Adds the attribute header that identifies the
@@ -170,40 +186,46 @@ int nl_msg_set_flags(nl_msg_t *msg, uint16_t flags);
  * @param type Type of the nested attribute
  * @return failure: NULL, success: pointer to the rtattr struct
  */
-struct rtattr *nl_msg_start_nested_attr(nl_msg_t *msg, int type);
+struct rtattr *
+nl_msg_start_nested_attr(nl_msg_t *msg, int type);
 
 /**
  * Adjusts the attribute header's length. Should be applied after
  * adding attributes to the nest.
  * @return failure: -1, success: 0
  */
-int nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr);
+int
+nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr);
 
 /**
  * Expands the length of the netlink message by a len bytes
  * @return failure: -1, success: 0
  */
-int nl_msg_expand_len(nl_msg_t *msg, size_t len);
+int
+nl_msg_expand_len(nl_msg_t *msg, size_t len);
 
 /**
  * This function adds a buffer attribute of a certain type
  * to the netlink message
  * @return failure: -1, success: 0
  */
-int nl_msg_add_buffer(nl_msg_t *msg, int type, const char *buffer, size_t len);
+int
+nl_msg_add_buffer(nl_msg_t *msg, int type, const char *buffer, size_t len);
 
 /**
  * This function adds a string attribute of a certain type
  * to the netlink message
  * @return failure: -1, success: 0
  */
-int nl_msg_add_string(nl_msg_t *msg, int type, const char *str);
+int
+nl_msg_add_string(nl_msg_t *msg, int type, const char *str);
 
 /**
  * This function adds a uint32_t attribute of a certain type
  * to the netlink message
  * @return failure: -1, success: 0
  */
-int nl_msg_add_u32(nl_msg_t *msg, int type, uint32_t val);
+int
+nl_msg_add_u32(nl_msg_t *msg, int type, uint32_t val);
 
 #endif /* NL_H_ */

@@ -39,6 +39,7 @@ enum command { REBOOT, POWER_OFF };
  * @return  0 on success, -1 on failure. In case the system was successfully
  * restarted or stopped, the call does not return.
  */
-int reboot_reboot(int cmd);
+int
+reboot_reboot(int cmd);
 
 #endif // REBOOT_H

@@ -80,9 +80,11 @@ struct control {
 static list_t *control_list = NULL;
 UNUSED static logf_handler_t *control_logf_handler = NULL;
 
-static int control_remote_reconnect(control_t *control);
+static int
+control_remote_reconnect(control_t *control);
 
-UNUSED static void control_logf(logf_prio_t prio, const char *msg, UNUSED void *data)
+UNUSED static void
+control_logf(logf_prio_t prio, const char *msg, UNUSED void *data)
 {
 	static bool log_bomb_prevention = false;
 	if (log_bomb_prevention) {
@@ -126,7 +128,8 @@ UNUSED static void control_logf(logf_prio_t prio, const char *msg, UNUSED void *
 	log_bomb_prevention = false;
 }
 
-static void UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool send_last_line_info)
+static void UNUSED
+control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool send_last_line_info)
 {
 	int fp_low = -1;
 	bool skipped_lines = false;
@@ -217,7 +220,8 @@ static void UNUSED control_send_log_file(int fd, char *log_file_name, bool read_
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
-ContainerState control_container_state_to_proto(container_state_t state)
+ContainerState
+control_container_state_to_proto(container_state_t state)
 {
 	switch (state) {
 	case CONTAINER_STATE_STOPPED:
@@ -246,7 +250,8 @@ ContainerState control_container_state_to_proto(container_state_t state)
 
  * The usual identity map between two corresponding C and protobuf enums.
  */
-ContainerType control_container_type_to_proto(container_type_t type)
+ContainerType
+control_container_type_to_proto(container_type_t type)
 {
 	switch (type) {
 	case CONTAINER_TYPE_CONTAINER:
@@ -265,7 +270,8 @@ ContainerType control_container_type_to_proto(container_type_t type)
  * @return  a new ContainerStatus object with information about the given container;
  *          has to be free'd with control_container_status_free()
  */
-static ContainerStatus *control_container_status_new(const container_t *container)
+static ContainerStatus *
+control_container_status_new(const container_t *container)
 {
 	ContainerStatus *c_status = mem_new(ContainerStatus, 1);
 	container_status__init(c_status);
@@ -297,7 +303,8 @@ static ContainerStatus *control_container_status_new(const container_t *containe
  *
  * @param c_status the previously allocated ContainerStatus object
  */
-static void control_container_status_free(ContainerStatus *c_status)
+static void
+control_container_status_free(ContainerStatus *c_status)
 {
 	IF_NULL_RETURN(c_status);
 	mem_free(c_status->name);
@@ -306,7 +313,8 @@ static void control_container_status_free(ContainerStatus *c_status)
 	mem_free(c_status);
 }
 
-static ssize_t control_read_send(control_t *control, int fd)
+static ssize_t
+control_read_send(control_t *control, int fd)
 {
 	uint8_t buf[1024];
 	ssize_t count = -1;
@@ -332,7 +340,8 @@ static ssize_t control_read_send(control_t *control, int fd)
 	return count;
 }
 
-static void control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
+static void
+control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 {
 	control_t *control = data;
 
@@ -371,7 +380,8 @@ static void control_cb_read_console(int fd, unsigned events, event_io_t *io, voi
 	}
 }
 
-static container_t *control_get_container_by_uuid_string(const char *uuid_str)
+static container_t *
+control_get_container_by_uuid_string(const char *uuid_str)
 {
 	uuid_t *uuid = uuid_new(uuid_str);
 	if (!uuid) {
@@ -391,7 +401,8 @@ static container_t *control_get_container_by_uuid_string(const char *uuid_str)
  * Returns a list of containers for all given UUIDs, or a list with all
  * available containers if the given UUID list is empty.
  */
-static list_t *control_build_container_list_from_uuids(size_t n_uuids, char **uuids)
+static list_t *
+control_build_container_list_from_uuids(size_t n_uuids, char **uuids)
 {
 	list_t *containers = NULL;
 	if (n_uuids > 0) { // uuid list given in incoming message
@@ -410,12 +421,14 @@ static list_t *control_build_container_list_from_uuids(size_t n_uuids, char **uu
 	return containers;
 }
 
-int control_get_client_sock(control_t *control)
+int
+control_get_client_sock(control_t *control)
 {
 	return control->sock_client;
 }
 
-int control_send_message(control_message_t message, int fd)
+int
+control_send_message(control_message_t message, int fd)
 {
 	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 	out.code = DAEMON_TO_CONTROLLER__CODE__RESPONSE;
@@ -465,7 +478,8 @@ int control_send_message(control_message_t message, int fd)
  * Handles list_guestos_configs cmd.
  * Used in both priv and unpriv control handlers.
  */
-static void control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDaemon *msg, int fd)
+static void
+control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDaemon *msg, int fd)
 {
 	// allocate memory for result
 	size_t n = guestos_mgr_get_guestos_count();
@@ -494,7 +508,8 @@ static void control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDae
  * Handles push_guestos_configs cmd
  * Used in both priv and unpriv control handlers.
  */
-static void control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED int fd)
+static void
+control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED int fd)
 {
 	if (!msg->has_guestos_config_file)
 		WARN("PUSH_GUESTOS_CONFIG without config file");
@@ -513,7 +528,8 @@ static void control_handle_cmd_push_guestos_configs(const ControllerToDaemon *ms
  * Handles register local cmd
  * Used in both priv and unpriv control handlers.
  */
-static void control_handle_cmd_register_localca(const ControllerToDaemon *msg, UNUSED int fd)
+static void
+control_handle_cmd_register_localca(const ControllerToDaemon *msg, UNUSED int fd)
 {
 	if (!msg->has_guestos_rootcert)
 		WARN("REGISTER_LOCALCA without root certificate");
@@ -529,7 +545,8 @@ static void control_handle_cmd_register_localca(const ControllerToDaemon *msg, U
  * @param fd	file descriptor of the unprivileged client connection
  *		(for sending a response, if necessary)
  */
-static void control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
+static void
+control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
 {
 	IF_NULL_RETURN(msg);
 	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
@@ -569,7 +586,8 @@ static void control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
  * @param fd	file descriptor of the client connection
  *		(for sending a response, if necessary)
  */
-static void control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd)
+static void
+control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd)
 {
 	// TODO cases when and how to report the result back to the caller?
 	// => for now, only reply if there is actual data to be sent back to the caller
@@ -1128,7 +1146,8 @@ static void control_handle_message(control_t *control, const ControllerToDaemon 
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this control_t struct
  */
-static void control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
+static void
+control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 {
 	bool connection_error = false;
 	control_t *control = data;
@@ -1239,7 +1258,8 @@ static void control_cb_recv_message(int fd, unsigned events, event_io_t *io, voi
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this control_t struct
  */
-static void control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *data)
+static void
+control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *data)
 {
 	control_t *control = data;
 	/*
@@ -1287,7 +1307,8 @@ connection_err:
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this control_t struct
   */
-static void control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
+static void
+control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 {
 	control_t *control = (control_t *)data;
 	ASSERT(control);
@@ -1323,7 +1344,8 @@ static void control_cb_accept(int fd, unsigned events, event_io_t *io, void *dat
 /**
  * Timer callback to retry connection to remote socket till success
  */
-static void control_remote_reconnect_cb(UNUSED event_timer_t *timer, void *data)
+static void
+control_remote_reconnect_cb(UNUSED event_timer_t *timer, void *data)
 {
 	control_t *control = data;
 
@@ -1356,7 +1378,8 @@ static void control_remote_reconnect_cb(UNUSED event_timer_t *timer, void *data)
 /**
  * helper function to register timer for reconnect handler
  */
-static int control_remote_reconnect(control_t *control)
+static int
+control_remote_reconnect(control_t *control)
 {
 	ASSERT(control->type == AF_INET);
 	ASSERT(control->hostip);
@@ -1375,7 +1398,8 @@ static int control_remote_reconnect(control_t *control)
 	return 0;
 }
 
-control_t *control_new(int sock, bool privileged)
+control_t *
+control_new(int sock, bool privileged)
 {
 	if (listen(sock, CONTROL_SOCK_LISTEN_BACKLOG) < 0) {
 		WARN_ERRNO("Could not listen on new control sock");
@@ -1394,7 +1418,8 @@ control_t *control_new(int sock, bool privileged)
 	return control;
 }
 
-control_t *control_local_new(const char *path)
+control_t *
+control_local_new(const char *path)
 {
 	control_t *control;
 	// TODO support giraffe bind?!? (needs to be done before registering event!)
@@ -1409,7 +1434,8 @@ control_t *control_local_new(const char *path)
 	return control;
 }
 
-control_t *control_remote_new(const char *hostip, const char *service)
+control_t *
+control_remote_new(const char *hostip, const char *service)
 {
 	control_t *control = mem_new0(control_t, 1);
 	control->type = AF_INET;
@@ -1427,7 +1453,8 @@ control_t *control_remote_new(const char *hostip, const char *service)
 	return control;
 }
 
-int control_remote_connect(control_t *control)
+int
+control_remote_connect(control_t *control)
 {
 	/* handle connection to remote host asynchronously */
 	if (!control->connected && !control->reconnect_timer)
@@ -1438,12 +1465,14 @@ int control_remote_connect(control_t *control)
 	}
 }
 
-bool control_remote_connecting(control_t *control)
+bool
+control_remote_connecting(control_t *control)
 {
 	return (control->connected || control->reconnect_timer);
 }
 
-void control_remote_disconnect(control_t *control)
+void
+control_remote_disconnect(control_t *control)
 {
 	if (control->reconnect_timer) {
 		event_remove_timer(control->reconnect_timer);
@@ -1462,7 +1491,8 @@ void control_remote_disconnect(control_t *control)
 	control->connected = false;
 }
 
-void control_free(control_t *control)
+void
+control_free(control_t *control)
 {
 	ASSERT(control);
 	if (control->sock_client >= 0) {

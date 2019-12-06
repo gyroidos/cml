@@ -65,7 +65,8 @@ typedef enum {
  * @param socket listening socket
  * @param privileged use privileged interface
  */
-control_t *control_new(int socket, bool privileged);
+control_t *
+control_new(int socket, bool privileged);
 
 /**
  * Creates a new control_t object listening on a UNIX socket bound to the specified file.
@@ -73,7 +74,8 @@ control_t *control_new(int socket, bool privileged);
  *
  * @param path path of the socket file to bind the socket to
  */
-control_t *control_local_new(const char *path);
+control_t *
+control_local_new(const char *path);
 
 /**
  * Creates a new control_t object maintaining a remote connection over a internal
@@ -84,37 +86,44 @@ control_t *control_local_new(const char *path);
  * @param service The MDM port name or port number
  */
 // TODO: allow a hostname instead of an ip address
-control_t *control_remote_new(const char *hostip, const char *service);
+control_t *
+control_remote_new(const char *hostip, const char *service);
 
 /**
  * Connects a remote control object to the host:ip provided during object creation.
  * Automatically retries the connection if it does not succeed until the corresponding
  * control_remote_disconnect() is called.
  */
-int control_remote_connect(control_t *control);
+int
+control_remote_connect(control_t *control);
 
 /**
  * Returns true if the given remote control object is already connected or trying
  * to connect. False otherwise.
  */
-bool control_remote_connecting(control_t *control);
+bool
+control_remote_connecting(control_t *control);
 
 /**
  * Disconnects a remote control object from its peer. Afterwards the state of the
  * control object is the same as immediately after the constructor.
  */
-void control_remote_disconnect(control_t *control);
+void
+control_remote_disconnect(control_t *control);
 
 /**
  * Frees the control_t object, closing the associated socket if necessary.
  */
-void control_free(control_t *control);
+void
+control_free(control_t *control);
 
-int control_get_client_sock(control_t *control);
+int
+control_get_client_sock(control_t *control);
 
 /**
  * Sends a protobuf message to the specified fd.
  */
-int control_send_message(control_message_t message, int fd);
+int
+control_send_message(control_message_t message, int fd);
 
 #endif /* CONTROL_H */

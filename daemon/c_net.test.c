@@ -31,7 +31,8 @@
 #include "common/list.h"
 #include "container.stub.h"
 
-int main(void)
+int
+main(void)
 {
 	logf_register(&logf_test_write, stdout);
 	DEBUG("Unit Test: c_net.test.c");

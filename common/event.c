@@ -119,7 +119,8 @@ static bool event_initialized = false;
 
 /******************************************************************************/
 
-static int event_timeout(void)
+static int
+event_timeout(void)
 {
 	struct timespec next, now, diff;
 	event_timer_t *timer;
@@ -159,7 +160,8 @@ static int event_timeout(void)
 	return (diff.tv_sec * 1000) + ((diff.tv_nsec + 999999L) / 1000000L);
 }
 
-static void event_timeout_handler(void)
+static void
+event_timeout_handler(void)
 {
 	struct timespec now;
 
@@ -203,7 +205,8 @@ static void event_timeout_handler(void)
 	}
 }
 
-event_timer_t *event_timer_new(int timeout, int repeat, void (*func)(event_timer_t *timer, void *data), void *data)
+event_timer_t *
+event_timer_new(int timeout, int repeat, void (*func)(event_timer_t *timer, void *data), void *data)
 {
 	event_timer_t *timer;
 
@@ -222,14 +225,16 @@ event_timer_t *event_timer_new(int timeout, int repeat, void (*func)(event_timer
 	return timer;
 }
 
-void event_timer_free(event_timer_t *timer)
+void
+event_timer_free(event_timer_t *timer)
 {
 	IF_NULL_RETURN(timer);
 
 	mem_free(timer);
 }
 
-void event_add_timer(event_timer_t *timer)
+void
+event_add_timer(event_timer_t *timer)
 {
 	struct timespec now;
 
@@ -246,7 +251,8 @@ void event_add_timer(event_timer_t *timer)
 	      (unsigned)timer->diff.tv_nsec, timer->repeat);
 }
 
-void event_remove_timer(event_timer_t *timer)
+void
+event_remove_timer(event_timer_t *timer)
 {
 	IF_NULL_RETURN(timer);
 
@@ -260,7 +266,8 @@ void event_remove_timer(event_timer_t *timer)
 
 /******************************************************************************/
 
-static int event_epoll_fd(int reset)
+static int
+event_epoll_fd(int reset)
 {
 	static int fd = -1;
 
@@ -288,32 +295,37 @@ static int event_epoll_fd(int reset)
 	return fd;
 }
 
-static void event_reset_fd(void)
+static void
+event_reset_fd(void)
 {
 	event_epoll_fd(1);
 }
 
 // compiling with -Wall, -Werror
 // must cast types appropriately in wrapper functions
-static void wrapped_remove_timer(void *elem)
+static void
+wrapped_remove_timer(void *elem)
 {
 	event_remove_timer((event_timer_t *)elem);
 	event_timer_free(elem);
 }
 
-static void wrapped_remove_signal(void *elem)
+static void
+wrapped_remove_signal(void *elem)
 {
 	event_remove_signal((event_signal_t *)elem);
 	event_signal_free(elem);
 }
 
-static void wrapped_remove_inotify(void *elem)
+static void
+wrapped_remove_inotify(void *elem)
 {
 	event_remove_inotify((event_inotify_t *)elem);
 	event_inotify_free(elem);
 }
 
-void event_reset()
+void
+event_reset()
 {
 	TRACE("Resetting event epoll fd");
 	event_reset_fd();
@@ -331,8 +343,8 @@ void event_reset()
 	event_inotify_list = NULL;
 }
 
-event_io_t *event_io_new(int fd, unsigned events, void (*func)(int fd, unsigned events, event_io_t *io, void *data),
-			 void *data)
+event_io_t *
+event_io_new(int fd, unsigned events, void (*func)(int fd, unsigned events, event_io_t *io, void *data), void *data)
 {
 	event_io_t *io;
 
@@ -348,14 +360,16 @@ event_io_t *event_io_new(int fd, unsigned events, void (*func)(int fd, unsigned 
 	return io;
 }
 
-void event_io_free(event_io_t *io)
+void
+event_io_free(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
 
 	mem_free(io);
 }
 
-void event_add_io(event_io_t *io)
+void
+event_add_io(event_io_t *io)
 {
 	struct epoll_event epoll_event;
 
@@ -376,7 +390,8 @@ void event_add_io(event_io_t *io)
 	      io->data, io->fd, io->events);
 }
 
-void event_remove_io(event_io_t *io)
+void
+event_remove_io(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
 	TRACE("Removing io event %p", (void *)io);
@@ -391,7 +406,8 @@ void event_remove_io(event_io_t *io)
 	//TODO unlink?
 }
 
-static int event_epoll(int timeout)
+static int
+event_epoll(int timeout)
 {
 	struct epoll_event epoll_events[128];
 	int n, i;
@@ -433,7 +449,8 @@ static int event_epoll(int timeout)
 
 /******************************************************************************/
 
-static void event_inotify_handler(int wd, const char *path, uint32_t mask)
+static void
+event_inotify_handler(int wd, const char *path, uint32_t mask)
 {
 	for (list_t *l = event_inotify_list; l; l = l->next) {
 		event_inotify_t *inotify = l->data;
@@ -478,7 +495,8 @@ static void event_inotify_handler(int wd, const char *path, uint32_t mask)
 	}
 }
 
-static void event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *data)
+static void
+event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *data)
 {
 	char buf[(8 * (sizeof(struct inotify_event) + NAME_MAX + 1))] __attribute__((aligned(8)));
 	char *p;
@@ -514,7 +532,8 @@ static void event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNU
 	}
 }
 
-static int event_inotify_fd(void)
+static int
+event_inotify_fd(void)
 {
 	static int fd = -1;
 
@@ -531,9 +550,9 @@ static int event_inotify_fd(void)
 	return fd;
 }
 
-event_inotify_t *event_inotify_new(const char *path, uint32_t mask,
-				   void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data),
-				   void *data)
+event_inotify_t *
+event_inotify_new(const char *path, uint32_t mask,
+		  void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data)
 {
 	event_inotify_t *inotify;
 
@@ -551,7 +570,8 @@ event_inotify_t *event_inotify_new(const char *path, uint32_t mask,
 	return inotify;
 }
 
-void event_inotify_free(event_inotify_t *inotify)
+void
+event_inotify_free(event_inotify_t *inotify)
 {
 	IF_NULL_RETURN(inotify);
 
@@ -561,7 +581,8 @@ void event_inotify_free(event_inotify_t *inotify)
 	mem_free(inotify);
 }
 
-int event_add_inotify(event_inotify_t *inotify)
+int
+event_add_inotify(event_inotify_t *inotify)
 {
 	IF_NULL_RETVAL(inotify, -1);
 
@@ -579,7 +600,8 @@ int event_add_inotify(event_inotify_t *inotify)
 	return 0;
 }
 
-void event_remove_inotify(event_inotify_t *inotify)
+void
+event_remove_inotify(event_inotify_t *inotify)
 {
 	IF_NULL_RETURN(inotify);
 
@@ -618,7 +640,8 @@ void event_remove_inotify(event_inotify_t *inotify)
 
 /******************************************************************************/
 
-event_signal_t *event_signal_new(int signum, void (*func)(int signum, event_signal_t *sig, void *data), void *data)
+event_signal_t *
+event_signal_new(int signum, void (*func)(int signum, event_signal_t *sig, void *data), void *data)
 {
 	event_signal_t *sig;
 
@@ -635,14 +658,16 @@ event_signal_t *event_signal_new(int signum, void (*func)(int signum, event_sign
 	return sig;
 }
 
-void event_signal_free(event_signal_t *sig)
+void
+event_signal_free(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
 	mem_free(sig);
 }
 
-void event_add_signal(event_signal_t *sig)
+void
+event_add_signal(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
@@ -652,7 +677,8 @@ void event_add_signal(event_signal_t *sig)
 	      sig->data, sig->signum, strsignal(sig->signum));
 }
 
-void event_remove_signal(event_signal_t *sig)
+void
+event_remove_signal(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
@@ -663,7 +689,8 @@ void event_remove_signal(event_signal_t *sig)
 	      sig->data, sig->signum, strsignal(sig->signum));
 }
 
-static void event_signal_handler(void)
+static void
+event_signal_handler(void)
 {
 	bool *received;
 
@@ -721,20 +748,23 @@ static void event_signal_handler(void)
 
 /******************************************************************************/
 
-static void event_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+static void
+event_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 {
 	if (sigaction(signum, act, oldact) < 0)
 		WARN_ERRNO("sigaction failed for signal %s (%d)", strsignal(signum), signum);
 }
 
-static void event_sa_handler(int signum)
+static void
+event_sa_handler(int signum)
 {
 	TRACE("Received signal %d (%s)", signum, strsignal(signum));
 	if (signum < NSIG)
 		event_signal_received[signum] = true;
 }
 
-void event_init(void)
+void
+event_init(void)
 {
 	if (event_initialized)
 		return;
@@ -758,7 +788,8 @@ void event_init(void)
 	event_initialized = true;
 }
 
-void event_loop(void)
+void
+event_loop(void)
 {
 	if (!event_initialized) {
 		WARN("Called event_loop() without prior initialization through event_init(). Signals might have been lost!.");

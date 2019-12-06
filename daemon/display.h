@@ -30,28 +30,35 @@ typedef struct display_wake display_wake_t;
 typedef struct display_sleep display_sleep_t;
 typedef struct display_status display_status_t;
 
-int display_init(void);
+int
+display_init(void);
 
-bool display_is_on(void);
+bool
+display_is_on(void);
 
-display_wake_t *display_register_wake_oneshot_cb(void (*func)(void *), void *data);
+display_wake_t *
+display_register_wake_oneshot_cb(void (*func)(void *), void *data);
 
-void display_unregister_wake_oneshot_cb(display_wake_t *display_wake);
+void
+display_unregister_wake_oneshot_cb(display_wake_t *display_wake);
 
 /**
  * Register a one shot callback to be called when the display goes to sleep or
  * immediately if it is already sleeping.
  */
 
-display_sleep_t *display_register_sleep_oneshot_cb(void (*func)(void *), void *data);
+display_sleep_t *
+display_register_sleep_oneshot_cb(void (*func)(void *), void *data);
 
-void display_unregister_sleep_oneshot_cb(display_sleep_t *display_sleep);
+void
+display_unregister_sleep_oneshot_cb(display_sleep_t *display_sleep);
 
 /*
 display_status_t *
 display_register_status_cb(void (* func)(bool, void *), void *data);
 */
 
-void display_unregister_status_cb(display_status_t *display_status);
+void
+display_unregister_status_cb(display_status_t *display_status);
 
 #endif /* DISPLAY_H */

@@ -65,7 +65,8 @@
  *              (bitwise OR with SOCK_NONBLOCK saves extra call to fcntl)
  * @return  the new UNIX socket file descriptor, or -1 on error
  */
-int sock_unix_create(int type);
+int
+sock_unix_create(int type);
 
 /**
  * Binds the given UNIX socket to the specified path.
@@ -74,7 +75,8 @@ int sock_unix_create(int type);
  * @param path  path of the socket file to bind the socket to
  * @return  0 on success, -1 on error
  */
-int sock_unix_bind(int sock, const char *path);
+int
+sock_unix_bind(int sock, const char *path);
 
 /**
  * Connects the given UNIX socket to the specified path.
@@ -83,7 +85,8 @@ int sock_unix_bind(int sock, const char *path);
  * @param path  path of the socket file to bind the socket to
  * @return      0 on success, -1 on error
  */
-int sock_unix_connect(int sock, const char *path);
+int
+sock_unix_connect(int sock, const char *path);
 
 /**
  * Creates a new UNIX socket and binds it to the specified path.
@@ -93,7 +96,8 @@ int sock_unix_connect(int sock, const char *path);
  * @param path  path of the socket file to bind the socket to
  * @return  the new and bound UNIX socket file descriptor, or -1 on error
  */
-int sock_unix_create_and_bind(int type, const char *path);
+int
+sock_unix_create_and_bind(int type, const char *path);
 
 /**
  * Creates a new UNIX socket and connects it to the specified socket file.
@@ -103,7 +107,8 @@ int sock_unix_create_and_bind(int type, const char *path);
  * @param path  path of the socket file to connect to
  * @return      the new and connected UNIX socket file descriptor, or -1 on error
  */
-int sock_unix_create_and_connect(int type, const char *path);
+int
+sock_unix_create_and_connect(int type, const char *path);
 
 /**
  * Listens for connections on the given UNIX socket by marking it as a
@@ -112,7 +117,8 @@ int sock_unix_create_and_connect(int type, const char *path);
  * @param sock the UNIX socket file descriptor to mark as a passive socket
  * @return 0 on success, -1 on error
  */
-int sock_unix_listen(int sock);
+int
+sock_unix_listen(int sock);
 
 /**
  * Accepts a connection on the given UNIX socket.
@@ -120,7 +126,8 @@ int sock_unix_listen(int sock);
  * @param sock the UNIX socket file descriptor to accept a connection on
  * @return non-negative descriptor for the accepted socket, or -1 on error
  */
-int sock_unix_accept(int sock);
+int
+sock_unix_accept(int sock);
 
 /**
  * Creates a new AF_INET socket of the given type.
@@ -128,7 +135,8 @@ int sock_unix_accept(int sock);
  * @param type  type of the socket (e.g. SOCK_STREAM, SOCK_SEQPACKET, ...);
  * @return  the new AF_INET socket file descriptor, or -1 on error
  */
-int sock_inet_create(int type);
+int
+sock_inet_create(int type);
 
 /**
  * Connects a given AF_INET socket fd to an remote server.
@@ -144,7 +152,8 @@ int sock_inet_create(int type);
  *         1 on EINPROGRESS,
  *        -1 on error
  */
-int sock_inet_connect(int sock, const char *ip, int port);
+int
+sock_inet_connect(int sock, const char *ip, int port);
 
 /**
  * Binds the given INET socket to the specified ip/port.
@@ -155,7 +164,8 @@ int sock_inet_connect(int sock, const char *ip, int port);
  * @param port  port to bind the socket to
  * @return  0 on success, -1 on error
  */
-int sock_inet_bind(int sock, const char *ip, int port);
+int
+sock_inet_bind(int sock, const char *ip, int port);
 
 /**
  * Creates a new INET socket of the given type and binds it to the specified host/port.
@@ -167,7 +177,8 @@ int sock_inet_bind(int sock, const char *ip, int port);
  * @param port	port number
  * @return      the new and connected inet socket file descriptor, or -1 on error
  */
-int sock_inet_create_and_bind(int type, const char *ip, int port);
+int
+sock_inet_create_and_bind(int type, const char *ip, int port);
 
 /**
  * Creates a new INET socket of the given type and connects it to the specified host/port.
@@ -182,6 +193,7 @@ int sock_inet_create_and_bind(int type, const char *ip, int port);
  * @param service port number or port name
  * @return      the new and connected inet socket file descriptor, or -1 on error
  */
-int sock_inet_create_and_connect(int type, const char *node, const char *service);
+int
+sock_inet_create_and_connect(int type, const char *node, const char *service);
 
 #endif // SOCK_H

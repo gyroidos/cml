@@ -65,7 +65,8 @@ struct nl_msg {
  * NLMSG_ALIGN rounds the length of a netlink message up to align it properly.
  * @param A pointer to a netlink message header
  */
-static inline void *nl_msg_top(const struct nlmsghdr *hdr)
+static inline void *
+nl_msg_top(const struct nlmsghdr *hdr)
 {
 	return (void *)(((char *)hdr) + NLMSG_ALIGN(hdr->nlmsg_len));
 }
@@ -74,7 +75,8 @@ static inline void *nl_msg_top(const struct nlmsghdr *hdr)
  * NLMSG_LENGTH(len) adds the length given by len to
  * the size of structure nlmsghdr.
  */
-static int nl_msg_set_len(nl_msg_t *msg, const size_t len)
+static int
+nl_msg_set_len(nl_msg_t *msg, const size_t len)
 {
 	ASSERT(msg);
 
@@ -87,7 +89,8 @@ static int nl_msg_set_len(nl_msg_t *msg, const size_t len)
  * Adds an attribute with optional payload data to a nl message
  * @return failure: -1, success: 0
  */
-static int nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t size)
+static int
+nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t size)
 {
 	ASSERT((msg && !(size > 0 && !data)));
 
@@ -124,7 +127,8 @@ static int nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, cons
  * @param nl_sock The socket to be configured
  * @return failure: -1, success: 0
  */
-static int nl_sock_conf_route_sock(nl_sock_t *sock)
+static int
+nl_sock_conf_route_sock(nl_sock_t *sock)
 {
 	ASSERT(sock);
 
@@ -146,7 +150,8 @@ static int nl_sock_conf_route_sock(nl_sock_t *sock)
 	return 0;
 }
 
-static inline uint32_t nl_mgrp(uint32_t group)
+static inline uint32_t
+nl_mgrp(uint32_t group)
 {
 	if (group > 31) {
 		FATAL("Group exeeds uint32, Use setsockopt for this group %d\n", group);
@@ -159,7 +164,8 @@ static inline uint32_t nl_mgrp(uint32_t group)
  * @param nl_sock The socket to be configured
  * @return failure: -1, success: 0
  */
-static int nl_sock_conf_xfrm_sock(nl_sock_t *sock)
+static int
+nl_sock_conf_xfrm_sock(nl_sock_t *sock)
 {
 	ASSERT(sock);
 
@@ -176,7 +182,8 @@ static int nl_sock_conf_xfrm_sock(nl_sock_t *sock)
  * @param nl_sock The socket to be configured
  * @return failure: -1, success: 0
  */
-static int nl_sock_conf_uevent_sock(nl_sock_t *sock)
+static int
+nl_sock_conf_uevent_sock(nl_sock_t *sock)
 {
 	ASSERT(sock);
 
@@ -204,7 +211,8 @@ static int nl_sock_conf_uevent_sock(nl_sock_t *sock)
  * Should be called only by nl_sock_*_new functions.
  * @param protocol Netlink Protocol Family
  */
-static nl_sock_t *nl_sock_new(int protocol)
+static nl_sock_t *
+nl_sock_new(int protocol)
 {
 	socklen_t socklen;
 	nl_sock_t *ret = NULL;
@@ -256,25 +264,29 @@ err:
 	return NULL;
 }
 
-nl_sock_t *nl_sock_uevent_new()
+nl_sock_t *
+nl_sock_uevent_new()
 {
 	TRACE("Creating uevent nl socket");
 	return nl_sock_new(NETLINK_KOBJECT_UEVENT);
 }
 
-nl_sock_t *nl_sock_routing_new()
+nl_sock_t *
+nl_sock_routing_new()
 {
 	TRACE("Creating routing nl socket");
 	return nl_sock_new(NETLINK_ROUTE);
 }
 
-nl_sock_t *nl_sock_xfrm_new()
+nl_sock_t *
+nl_sock_xfrm_new()
 {
 	TRACE("Creating xfrm nl socket");
 	return nl_sock_new(NETLINK_XFRM);
 }
 
-nl_sock_t *nl_sock_default_new(int protocol)
+nl_sock_t *
+nl_sock_default_new(int protocol)
 {
 	if (protocol == NETLINK_KOBJECT_UEVENT || protocol == NETLINK_ROUTE)
 		WARN("The default sock constructor should not be used with uevent or routing "
@@ -284,21 +296,24 @@ nl_sock_t *nl_sock_default_new(int protocol)
 	return nl_sock_new(protocol);
 }
 
-int nl_sock_get_fd(const nl_sock_t *sock)
+int
+nl_sock_get_fd(const nl_sock_t *sock)
 {
 	ASSERT(sock);
 
 	return sock->fd;
 }
 
-void nl_sock_free(nl_sock_t *nl)
+void
+nl_sock_free(nl_sock_t *nl)
 {
 	IF_NULL_RETURN(nl);
 	close(nl->fd);
 	mem_free(nl);
 }
 
-struct rtattr *nl_msg_start_nested_attr(nl_msg_t *msg, int type)
+struct rtattr *
+nl_msg_start_nested_attr(nl_msg_t *msg, int type)
 {
 	ASSERT(msg);
 
@@ -316,7 +331,8 @@ struct rtattr *nl_msg_start_nested_attr(nl_msg_t *msg, int type)
 	return nested;
 }
 
-int nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr)
+int
+nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr)
 {
 	ASSERT(msg && attr);
 
@@ -325,28 +341,32 @@ int nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr)
 	return 0;
 }
 
-int nl_msg_add_buffer(nl_msg_t *msg, int type, const char *buffer, size_t len)
+int
+nl_msg_add_buffer(nl_msg_t *msg, int type, const char *buffer, size_t len)
 {
 	ASSERT(msg && buffer);
 
 	return nl_msg_add_attr(msg, type, buffer, len);
 }
 
-int nl_msg_add_string(nl_msg_t *msg, const int type, const char *str)
+int
+nl_msg_add_string(nl_msg_t *msg, const int type, const char *str)
 {
 	ASSERT(msg && str);
 
 	return nl_msg_add_attr(msg, type, str, strlen(str) + 1);
 }
 
-int nl_msg_add_u32(nl_msg_t *msg, int type, uint32_t val)
+int
+nl_msg_add_u32(nl_msg_t *msg, int type, uint32_t val)
 {
 	ASSERT(msg);
 
 	return nl_msg_add_attr(msg, type, (const void *)&val, sizeof(uint32_t));
 }
 
-int nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
+int
+nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 {
 	ASSERT(nl && msg);
 
@@ -387,7 +407,8 @@ int nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 	return sendmsg(nl->fd, &m, 0);
 }
 
-static int nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
+static int
+nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 {
 	struct cmsghdr *cmsg = CMSG_FIRSTHDR(uevent_msg);
 
@@ -410,7 +431,8 @@ static int nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl
 	return 0;
 }
 
-int nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent)
+int
+nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent)
 {
 	int received;
 	struct sockaddr_nl nladdr;
@@ -476,7 +498,8 @@ error:
 /**
  * This function may possibly block!
  */
-static int nl_eval_ack(const nl_sock_t *nl)
+static int
+nl_eval_ack(const nl_sock_t *nl)
 {
 	ASSERT(nl);
 
@@ -557,7 +580,8 @@ static int nl_eval_ack(const nl_sock_t *nl)
 /**
   * This function may possibly block
   */
-int nl_msg_send_kernel_verify(const nl_sock_t *nl_sock, const nl_msg_t *req)
+int
+nl_msg_send_kernel_verify(const nl_sock_t *nl_sock, const nl_msg_t *req)
 {
 	ASSERT((nl_sock && req));
 
@@ -576,7 +600,8 @@ int nl_msg_send_kernel_verify(const nl_sock_t *nl_sock, const nl_msg_t *req)
 	return nl_eval_ack(nl_sock);
 }
 
-nl_msg_t *nl_msg_new()
+nl_msg_t *
+nl_msg_new()
 {
 	nl_msg_t *ret = NULL;
 	size_t size = NL_MSG_DEFAULT_SIZE;
@@ -604,13 +629,15 @@ nl_msg_t *nl_msg_new()
 	return ret;
 }
 
-void nl_msg_free(nl_msg_t *msg)
+void
+nl_msg_free(nl_msg_t *msg)
 {
 	IF_NULL_RETURN(msg);
 	mem_free(msg);
 }
 
-int nl_msg_expand_len(nl_msg_t *msg, const size_t len)
+int
+nl_msg_expand_len(nl_msg_t *msg, const size_t len)
 {
 	ASSERT(msg);
 
@@ -619,7 +646,8 @@ int nl_msg_expand_len(nl_msg_t *msg, const size_t len)
 	return 0;
 }
 
-int nl_msg_set_type(nl_msg_t *msg, const uint16_t type)
+int
+nl_msg_set_type(nl_msg_t *msg, const uint16_t type)
 {
 	ASSERT(msg);
 
@@ -628,7 +656,8 @@ int nl_msg_set_type(nl_msg_t *msg, const uint16_t type)
 	return 0;
 }
 
-int nl_msg_set_flags(nl_msg_t *msg, const uint16_t flags)
+int
+nl_msg_set_flags(nl_msg_t *msg, const uint16_t flags)
 {
 	ASSERT(msg);
 
@@ -637,7 +666,8 @@ int nl_msg_set_flags(nl_msg_t *msg, const uint16_t flags)
 	return 0;
 }
 
-int nl_msg_set_link_req(nl_msg_t *msg, const struct ifinfomsg *ifmsg)
+int
+nl_msg_set_link_req(nl_msg_t *msg, const struct ifinfomsg *ifmsg)
 {
 	ASSERT(msg);
 
@@ -647,7 +677,8 @@ int nl_msg_set_link_req(nl_msg_t *msg, const struct ifinfomsg *ifmsg)
 	return nl_msg_set_len(msg, size);
 }
 
-int nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg)
+int
+nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg)
 {
 	ASSERT(msg);
 
@@ -657,7 +688,8 @@ int nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg)
 	return nl_msg_set_len(msg, size);
 }
 
-int nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg)
+int
+nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg)
 {
 	ASSERT(msg);
 

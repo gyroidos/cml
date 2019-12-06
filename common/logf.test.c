@@ -37,7 +37,8 @@
  * Triggers logging functions to be tested, which are
  * given due to logf.h and macro.h
  */
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	/*
 	logf_register(&logf_file_write, stdout);

@@ -50,7 +50,8 @@ struct AndroidLogFormat_t {
 	AndroidLogColoredOutput colored_output;
 };
 
-static FilterInfo *filterinfo_new(const char *tag, android_LogPriority pri)
+static FilterInfo *
+filterinfo_new(const char *tag, android_LogPriority pri)
 {
 	FilterInfo *p_ret;
 
@@ -61,7 +62,8 @@ static FilterInfo *filterinfo_new(const char *tag, android_LogPriority pri)
 	return p_ret;
 }
 
-static void filterinfo_free(FilterInfo *p_info)
+static void
+filterinfo_free(FilterInfo *p_info)
 {
 	if (p_info == NULL) {
 		return;
@@ -75,7 +77,8 @@ static void filterinfo_free(FilterInfo *p_info)
  * Note: also accepts 0-9 priorities
  * returns ANDROID_LOG_UNKNOWN if the character is unrecognized
  */
-static android_LogPriority filterCharToPri(char c)
+static android_LogPriority
+filterCharToPri(char c)
 {
 	android_LogPriority pri;
 
@@ -110,7 +113,8 @@ static android_LogPriority filterCharToPri(char c)
 	return pri;
 }
 
-static char filterPriToChar(android_LogPriority pri)
+static char
+filterPriToChar(android_LogPriority pri)
 {
 	switch (pri) {
 	case ANDROID_LOG_VERBOSE:
@@ -135,7 +139,8 @@ static char filterPriToChar(android_LogPriority pri)
 	}
 }
 
-static int colorFromPri(android_LogPriority pri)
+static int
+colorFromPri(android_LogPriority pri)
 {
 	switch (pri) {
 	case ANDROID_LOG_VERBOSE:
@@ -160,7 +165,8 @@ static int colorFromPri(android_LogPriority pri)
 	}
 }
 
-static android_LogPriority filterPriForTag(AndroidLogFormat *p_format, const char *tag)
+static android_LogPriority
+filterPriForTag(AndroidLogFormat *p_format, const char *tag)
 {
 	FilterInfo *p_curFilter;
 
@@ -178,7 +184,8 @@ static android_LogPriority filterPriForTag(AndroidLogFormat *p_format, const cha
 }
 
 /** for debugging */
-static void dumpFilters(AndroidLogFormat *p_format)
+static void
+dumpFilters(AndroidLogFormat *p_format)
 {
 	FilterInfo *p_fi;
 
@@ -197,12 +204,14 @@ static void dumpFilters(AndroidLogFormat *p_format)
  * returns 1 if this log line should be printed based on its priority
  * and tag, and 0 if it should not
  */
-int android_log_shouldPrintLine(AndroidLogFormat *p_format, const char *tag, android_LogPriority pri)
+int
+android_log_shouldPrintLine(AndroidLogFormat *p_format, const char *tag, android_LogPriority pri)
 {
 	return pri >= filterPriForTag(p_format, tag);
 }
 
-AndroidLogFormat *android_log_format_new()
+AndroidLogFormat *
+android_log_format_new()
 {
 	AndroidLogFormat *p_ret;
 
@@ -215,7 +224,8 @@ AndroidLogFormat *android_log_format_new()
 	return p_ret;
 }
 
-void android_log_format_free(AndroidLogFormat *p_format)
+void
+android_log_format_free(AndroidLogFormat *p_format)
 {
 	FilterInfo *p_info, *p_info_old;
 
@@ -231,12 +241,14 @@ void android_log_format_free(AndroidLogFormat *p_format)
 	free(p_format);
 }
 
-void android_log_setPrintFormat(AndroidLogFormat *p_format, AndroidLogPrintFormat format)
+void
+android_log_setPrintFormat(AndroidLogFormat *p_format, AndroidLogPrintFormat format)
 {
 	p_format->format = format;
 }
 
-void android_log_setColoredOutput(AndroidLogFormat *p_format)
+void
+android_log_setColoredOutput(AndroidLogFormat *p_format)
 {
 	p_format->colored_output = OUTPUT_COLOR_ON;
 }
@@ -244,7 +256,8 @@ void android_log_setColoredOutput(AndroidLogFormat *p_format)
 /**
  * Returns FORMAT_OFF on invalid string
  */
-AndroidLogPrintFormat android_log_formatFromString(const char *formatString)
+AndroidLogPrintFormat
+android_log_formatFromString(const char *formatString)
 {
 	static AndroidLogPrintFormat format;
 
@@ -279,7 +292,8 @@ AndroidLogPrintFormat android_log_formatFromString(const char *formatString)
  * Assumes single threaded execution
  */
 
-int android_log_addFilterRule(AndroidLogFormat *p_format, const char *filterExpression)
+int
+android_log_addFilterRule(AndroidLogFormat *p_format, const char *filterExpression)
 {
 	size_t i = 0;
 	size_t tagNameLength;
@@ -350,7 +364,8 @@ error:
  *
  */
 
-int android_log_addFilterString(AndroidLogFormat *p_format, const char *filterString)
+int
+android_log_addFilterString(AndroidLogFormat *p_format, const char *filterString)
 {
 	char *filterStringCopy = strdup(filterString);
 	char *p_cur = filterStringCopy;
@@ -376,7 +391,8 @@ error:
 	return -1;
 }
 
-static inline char *strip_end(char *str)
+static inline char *
+strip_end(char *str)
 {
 	char *end = str + strlen(str) - 1;
 
@@ -392,7 +408,8 @@ static inline char *strip_end(char *str)
  * Returns 0 on success and -1 on invalid wire format (entry will be
  * in unspecified state)
  */
-static int __android_log_processLogBuffer(struct logger_entry_ns *buf, char *buf_msg, AndroidLogEntry *entry)
+static int
+__android_log_processLogBuffer(struct logger_entry_ns *buf, char *buf_msg, AndroidLogEntry *entry)
 {
 	entry->tv_sec = buf->sec;
 	entry->tv_nsec = buf->nsec;
@@ -454,7 +471,8 @@ static int __android_log_processLogBuffer(struct logger_entry_ns *buf, char *buf
 	return 0;
 }
 
-int android_log_processLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry)
+int
+android_log_processLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry)
 {
 	struct logger_entry_ns ns_buf;
 
@@ -468,7 +486,8 @@ int android_log_processLogBuffer(struct logger_entry *buf, AndroidLogEntry *entr
 	return __android_log_processLogBuffer(&ns_buf, buf->msg, entry);
 }
 
-int android_log_processLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry)
+int
+android_log_processLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry)
 {
 	return __android_log_processLogBuffer(buf, buf->msg, entry);
 }
@@ -476,7 +495,8 @@ int android_log_processLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry
 /*
  * Extract a 4-byte value from a byte stream.
  */
-static inline uint32_t get4LE(const uint8_t *src)
+static inline uint32_t
+get4LE(const uint8_t *src)
 {
 	return src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
 }
@@ -484,7 +504,8 @@ static inline uint32_t get4LE(const uint8_t *src)
 /*
  * Extract an 8-byte value from a byte stream.
  */
-static inline uint64_t get8LE(const uint8_t *src)
+static inline uint64_t
+get8LE(const uint8_t *src)
 {
 	uint32_t low, high;
 
@@ -504,8 +525,9 @@ static inline uint64_t get8LE(const uint8_t *src)
  *
  * Returns 0 on success, 1 on buffer full, -1 on failure.
  */
-static int android_log_printBinaryEvent(const unsigned char **pEventData, size_t *pEventDataLen, char **pOutBuf,
-					size_t *pOutBufLen)
+static int
+android_log_printBinaryEvent(const unsigned char **pEventData, size_t *pEventDataLen, char **pOutBuf,
+			     size_t *pOutBufLen)
 {
 	const unsigned char *eventData = *pEventData;
 	size_t eventDataLen = *pEventDataLen;
@@ -661,9 +683,9 @@ no_room:
  * it however we choose, which means we can't really use a fixed-size buffer
  * here.
  */
-static int __android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, const char *buf_msg,
-						   AndroidLogEntry *entry, const EventTagMap *map, char *messageBuf,
-						   int messageBufLen)
+static int
+__android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, const char *buf_msg, AndroidLogEntry *entry,
+					const EventTagMap *map, char *messageBuf, int messageBufLen)
 {
 	size_t inCount;
 	unsigned int tagIndex;
@@ -756,8 +778,9 @@ static int __android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, 
 	return 0;
 }
 
-int android_log_processBinaryLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry, const EventTagMap *map,
-				       char *messageBuf, int messageBufLen)
+int
+android_log_processBinaryLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry, const EventTagMap *map,
+				   char *messageBuf, int messageBufLen)
 {
 	struct logger_entry_ns ns_buf;
 
@@ -771,8 +794,9 @@ int android_log_processBinaryLogBuffer(struct logger_entry *buf, AndroidLogEntry
 	return __android_log_processBinaryLogBuffer_ns(&ns_buf, buf->msg, entry, map, messageBuf, messageBufLen);
 }
 
-int android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry, const EventTagMap *map,
-					  char *messageBuf, int messageBufLen)
+int
+android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry, const EventTagMap *map,
+				      char *messageBuf, int messageBufLen)
 {
 	return __android_log_processBinaryLogBuffer_ns(buf, buf->msg, entry, map, messageBuf, messageBufLen);
 }
@@ -785,8 +809,9 @@ int android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, AndroidLo
  * Returns NULL on malloc error
  */
 
-char *android_log_formatLogLine(AndroidLogFormat *p_format, char *defaultBuffer, size_t defaultBufferSize,
-				const AndroidLogEntry *entry, size_t *p_outLength)
+char *
+android_log_formatLogLine(AndroidLogFormat *p_format, char *defaultBuffer, size_t defaultBufferSize,
+			  const AndroidLogEntry *entry, size_t *p_outLength)
 {
 #if defined(HAVE_LOCALTIME_R)
 	struct tm tmBuf;
@@ -1011,7 +1036,8 @@ char *android_log_formatLogLine(AndroidLogFormat *p_format, char *defaultBuffer,
  * Returns count bytes written
  */
 
-int android_log_printLogLine(AndroidLogFormat *p_format, int fd, const AndroidLogEntry *entry)
+int
+android_log_printLogLine(AndroidLogFormat *p_format, int fd, const AndroidLogEntry *entry)
 {
 	int ret;
 	char defaultBuffer[512];
@@ -1046,7 +1072,8 @@ done:
 	return ret;
 }
 
-void logprint_run_tests()
+void
+logprint_run_tests()
 {
 #if 0
 

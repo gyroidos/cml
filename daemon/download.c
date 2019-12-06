@@ -44,7 +44,8 @@ struct download {
 	pid_t wget_pid;
 };
 
-download_t *download_new(const char *url, const char *file, download_callback_t on_complete, void *data)
+download_t *
+download_new(const char *url, const char *file, download_callback_t on_complete, void *data)
 {
 	download_t *dl = mem_new(download_t, 1);
 	dl->url = mem_strdup(url);
@@ -54,7 +55,8 @@ download_t *download_new(const char *url, const char *file, download_callback_t 
 	return dl;
 }
 
-void download_free(download_t *dl)
+void
+download_free(download_t *dl)
 {
 	IF_NULL_RETURN(dl);
 	mem_free(dl->url);
@@ -62,7 +64,8 @@ void download_free(download_t *dl)
 	mem_free(dl);
 }
 
-static void download_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+static void
+download_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	download_t *dl = data;
 	ASSERT(dl);
@@ -108,7 +111,8 @@ static void download_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *da
 	}
 }
 
-int download_start(download_t *dl)
+int
+download_start(download_t *dl)
 {
 	ASSERT(dl);
 	pid_t pid = fork();
@@ -133,13 +137,15 @@ int download_start(download_t *dl)
 	}
 }
 
-const char *download_get_url(const download_t *dl)
+const char *
+download_get_url(const download_t *dl)
 {
 	ASSERT(dl);
 	return dl->url;
 }
 
-const char *download_get_file(const download_t *dl)
+const char *
+download_get_file(const download_t *dl)
 {
 	ASSERT(dl);
 	return dl->file;

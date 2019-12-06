@@ -32,15 +32,20 @@
 
 #include "guestos.h"
 
-void guestos_mgr_update_images(void);
+void
+guestos_mgr_update_images(void);
 
-int guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen, unsigned char *cert,
-			    size_t certlen);
+int
+guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen, unsigned char *cert,
+			size_t certlen);
 
-size_t guestos_mgr_get_guestos_count(void);
+size_t
+guestos_mgr_get_guestos_count(void);
 
-guestos_t *guestos_mgr_get_guestos_by_index(size_t index);
+guestos_t *
+guestos_mgr_get_guestos_by_index(size_t index);
 
-void *guestos_get_raw_ptr(const guestos_t *os);
+void *
+guestos_get_raw_ptr(const guestos_t *os);
 
 #endif // GUESTOS_STUB_H

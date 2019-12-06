@@ -29,7 +29,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-int fd_write(int fd, const char *buf, size_t len)
+int
+fd_write(int fd, const char *buf, size_t len)
 {
 	size_t remain = len;
 
@@ -57,7 +58,8 @@ int fd_write(int fd, const char *buf, size_t len)
 	return len - remain;
 }
 
-int fd_read(int fd, char *buf, size_t len)
+int
+fd_read(int fd, char *buf, size_t len)
 {
 	size_t remain = len;
 
@@ -85,7 +87,8 @@ int fd_read(int fd, char *buf, size_t len)
 	return len - remain;
 }
 
-int fd_make_non_blocking(int fd)
+int
+fd_make_non_blocking(int fd)
 {
 	int flags = fcntl(fd, F_GETFL, 0);
 	if (-1 == flags) {
@@ -102,7 +105,8 @@ int fd_make_non_blocking(int fd)
 	return res;
 }
 
-int fd_is_closed(int fd)
+int
+fd_is_closed(int fd)
 {
 	errno = 0;
 	return fcntl(fd, F_GETFD) == -1 && errno == EBADF;

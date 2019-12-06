@@ -47,7 +47,8 @@
 #define PKIGENSCRIPT_PATH UTIL_PKI_PATH "ssig_pki_generator.sh"
 #define PKIGENCONF_PATH UTIL_PKI_PATH "ssig_pki_generator.conf"
 
-int util_fork_and_execvp(const char *path, const char *const *argv)
+int
+util_fork_and_execvp(const char *path, const char *const *argv)
 {
 	ASSERT(path);
 	//ASSERT(argv);	    // on some OSes, argv can be NULL...
@@ -105,13 +106,15 @@ int util_fork_and_execvp(const char *path, const char *const *argv)
 //    }
 //}
 
-int util_tar_extract(const char *tar_filename, const char *out_dir)
+int
+util_tar_extract(const char *tar_filename, const char *out_dir)
 {
 	const char *const argv[] = { TAR_PATH, "-xvf", tar_filename, "-C", out_dir, NULL };
 	return util_fork_and_execvp(argv[0], argv);
 }
 
-static char *convert_bin_to_hex_new(const uint8_t *bin, int length)
+static char *
+convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
@@ -123,7 +126,8 @@ static char *convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-char *util_hash_sha_image_file_new(const char *image_file)
+char *
+util_hash_sha_image_file_new(const char *image_file)
 {
 	FILE *fp = NULL;
 	SHA_CTX ctx;
@@ -146,7 +150,8 @@ char *util_hash_sha_image_file_new(const char *image_file)
 	return convert_bin_to_hex_new(buf, SHA_DIGEST_LENGTH);
 }
 
-char *util_hash_sha256_image_file_new(const char *image_file)
+char *
+util_hash_sha256_image_file_new(const char *image_file)
 {
 	FILE *fp = NULL;
 	SHA256_CTX ctx;
@@ -169,21 +174,24 @@ char *util_hash_sha256_image_file_new(const char *image_file)
 	return convert_bin_to_hex_new(buf, SHA256_DIGEST_LENGTH);
 }
 
-int util_squash_image(const char *dir, const char *image_file)
+int
+util_squash_image(const char *dir, const char *image_file)
 {
 	const char *const argv[] = { MKSQUASHFS_PATH, dir,  image_file,       "-noappend", "-comp",
 				     MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL };
 	return util_fork_and_execvp(MKSQUASHFS_PATH, argv);
 }
 
-int util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
+int
+util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
 {
 	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",   "-sha512", "-sign", key_file,
 				     "-out",	  sig_file, cfg_file,  NULL };
 	return util_fork_and_execvp(argv[0], argv);
 }
 
-int util_gen_pki(void)
+int
+util_gen_pki(void)
 {
 	const char *const argv[] = { "bash", PKIGENSCRIPT_PATH, PKIGENCONF_PATH, NULL };
 	return util_fork_and_execvp(argv[0], argv);

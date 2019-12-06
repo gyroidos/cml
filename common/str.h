@@ -43,7 +43,8 @@ typedef struct str str_t;
  * @param init The initial content of the string.
  * @return Pointer to the newly created string.
  */
-str_t *str_new(const char *init);
+str_t *
+str_new(const char *init);
 
 /**
  * Creates a new string of specified length.
@@ -52,7 +53,8 @@ str_t *str_new(const char *init);
  * @param len The length of the new string.
  * @return Pointer to the newly created string.
  */
-str_t *str_new_len(size_t len);
+str_t *
+str_new_len(size_t len);
 
 /**
  * Creates a new string with formatted content.
@@ -60,7 +62,8 @@ str_t *str_new_len(size_t len);
  * @param fmt The initial content of the string as a printf(3)-like format string.
  * @return Pointer to the newly created string.
  */
-str_t *str_new_printf(const char *fmt, ...)
+str_t *
+str_new_printf(const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 1, 2)))
 #endif
@@ -72,7 +75,8 @@ str_t *str_new_printf(const char *fmt, ...)
  * @param str The string which gets assigned the buffer content.
  * @param buf The buffer containing the content to assign to the string.
  */
-void str_assign(str_t *str, const char *buf);
+void
+str_assign(str_t *str, const char *buf);
 
 /**
  * Assigns the content of the supplied buffer to a string with known length.
@@ -83,7 +87,8 @@ void str_assign(str_t *str, const char *buf);
  * @param buf The buffer containing the content to assign to the string.
  * @param len The length of the string.
  */
-void str_assign_len(str_t *str, const char *buf, ssize_t len);
+void
+str_assign_len(str_t *str, const char *buf, ssize_t len);
 
 /**
  * Assigns the content of the supplied format string to a string.
@@ -91,7 +96,8 @@ void str_assign_len(str_t *str, const char *buf, ssize_t len);
  * @param str The string which gets assigned the formatted string.
  * @param fmt The to be assigned content of the string as a printf(3)-like format string.
  */
-void str_assign_printf(str_t *str, const char *fmt, ...)
+void
+str_assign_printf(str_t *str, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
@@ -103,7 +109,8 @@ void str_assign_printf(str_t *str, const char *fmt, ...)
  * @param str The string where the supplied buffer gets appended to.
  * @param buf The buffer to append to the string.
  */
-void str_append(str_t *str, const char *buf);
+void
+str_append(str_t *str, const char *buf);
 
 /**
  * Appends the content of the supplied buffer to a string with known length.
@@ -114,7 +121,8 @@ void str_append(str_t *str, const char *buf);
  * @param buf The buffer to append to the string.
  * @param len The length of the string.
  */
-void str_append_len(str_t *str, const char *buf, ssize_t len);
+void
+str_append_len(str_t *str, const char *buf, ssize_t len);
 
 /**
  * Appends the content of the supplied format string to a string.
@@ -122,7 +130,8 @@ void str_append_len(str_t *str, const char *buf, ssize_t len);
  * @param str The string where the formatted string gets appended to.
  * @param fmt The to be appended content of the string as a printf(3)-like format string.
  */
-void str_append_printf(str_t *str, const char *fmt, ...)
+void
+str_append_printf(str_t *str, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
@@ -139,7 +148,8 @@ void str_append_printf(str_t *str, const char *fmt, ...)
  *            A value greater than strlen(str) will result in the function just returning without altering the string at all.
  * @param buf The buffer to insert into the string.
  */
-void str_insert(str_t *str, ssize_t pos, const char *buf);
+void
+str_insert(str_t *str, ssize_t pos, const char *buf);
 
 /**
  * Inserts the contents of the supplied buffer to a string at the specified position.
@@ -155,7 +165,8 @@ void str_insert(str_t *str, ssize_t pos, const char *buf);
  * @param buf The buffer to insert into the string.
  * @param len The length of the string.
  */
-void str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len);
+void
+str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len);
 
 /**
  * Shortens a string to the specified length.
@@ -165,7 +176,8 @@ void str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len);
  * @param str The string to be shortened.
  * @param len The new length of the string.
  */
-void str_truncate(str_t *str, ssize_t len);
+void
+str_truncate(str_t *str, ssize_t len);
 
 /**
  * Returns a pointer to the internal string buffer.
@@ -173,7 +185,8 @@ void str_truncate(str_t *str, ssize_t len);
  * @param str The string for which the internal buffer is requested.
  * @return A pointer to the (constant) internal string buffer.
  */
-const char *str_buffer(str_t *str);
+const char *
+str_buffer(str_t *str);
 
 /**
  * Returns the string length.
@@ -181,7 +194,8 @@ const char *str_buffer(str_t *str);
  * @param str The string for which the string length is requested.
  * @return The length of the string.
  */
-size_t str_length(str_t *str);
+size_t
+str_length(str_t *str);
 
 /**
  * Frees the allocated string memory.
@@ -190,6 +204,7 @@ size_t str_length(str_t *str);
  * @param free_buf True: the internal string buffer should also be freed. False: the internal string buffer is not freed and a pointer to it is returned by the function.
  * @return If free_buf is false, a pointer to the internal string buffer is returned. Otherwise, NULL is returned.
  */
-char *str_free(str_t *str, bool free_buf);
+char *
+str_free(str_t *str, bool free_buf);
 
 #endif /* STR_H */

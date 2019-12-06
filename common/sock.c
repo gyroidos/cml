@@ -42,7 +42,8 @@
 	addr.sin_addr.s_addr = inet_addr(server_ip);                                                                   \
 	addr.sin_port = htons(server_port)
 
-int sock_unix_bind(int sock, const char *path)
+int
+sock_unix_bind(int sock, const char *path)
 {
 	unlink(path);
 	MAKE_SOCKADDR_UN(addr, path);
@@ -52,7 +53,8 @@ int sock_unix_bind(int sock, const char *path)
 	return res;
 }
 
-int sock_unix_connect(int sock, const char *path)
+int
+sock_unix_connect(int sock, const char *path)
 {
 	MAKE_SOCKADDR_UN(addr, path);
 	int res = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -61,7 +63,8 @@ int sock_unix_connect(int sock, const char *path)
 	return res;
 }
 
-int sock_unix_create(int type)
+int
+sock_unix_create(int type)
 {
 	int sock = socket(AF_UNIX, type, 0);
 	if (-1 == sock)
@@ -69,7 +72,8 @@ int sock_unix_create(int type)
 	return sock;
 }
 
-int sock_unix_create_and_bind(int type, const char *path)
+int
+sock_unix_create_and_bind(int type, const char *path)
 {
 	int sock = sock_unix_create(type);
 	if (-1 != sock) {
@@ -81,7 +85,8 @@ int sock_unix_create_and_bind(int type, const char *path)
 	return sock;
 }
 
-int sock_unix_create_and_connect(int type, const char *path)
+int
+sock_unix_create_and_connect(int type, const char *path)
 {
 	int sock = sock_unix_create(type);
 	if (-1 != sock) {
@@ -93,7 +98,8 @@ int sock_unix_create_and_connect(int type, const char *path)
 	return sock;
 }
 
-int sock_unix_listen(int sock)
+int
+sock_unix_listen(int sock)
 {
 	int res = listen(sock, 128);
 	if (-1 == res)
@@ -101,7 +107,8 @@ int sock_unix_listen(int sock)
 	return res;
 }
 
-int sock_unix_accept(int sock)
+int
+sock_unix_accept(int sock)
 {
 	int res = accept(sock, NULL, NULL);
 	if (-1 == res)
@@ -109,7 +116,8 @@ int sock_unix_accept(int sock)
 	return res;
 }
 
-int sock_inet_create(int type)
+int
+sock_inet_create(int type)
 {
 	int sock = socket(AF_INET, type, 0);
 	if (-1 == sock)
@@ -117,7 +125,8 @@ int sock_inet_create(int type)
 	return sock;
 }
 
-int sock_inet_bind(int sock, const char *ip, int port)
+int
+sock_inet_bind(int sock, const char *ip, int port)
 {
 	MAKE_SOCKADDR_IN(addr, ip, port);
 	int res = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -126,7 +135,8 @@ int sock_inet_bind(int sock, const char *ip, int port)
 	return res;
 }
 
-int sock_inet_create_and_bind(int type, const char *ip, int port)
+int
+sock_inet_create_and_bind(int type, const char *ip, int port)
 {
 	int sock = sock_inet_create(type);
 	if (-1 != sock) {
@@ -138,7 +148,8 @@ int sock_inet_create_and_bind(int type, const char *ip, int port)
 	return sock;
 }
 
-int sock_inet_connect(int sock, const char *ip, int port)
+int
+sock_inet_connect(int sock, const char *ip, int port)
 {
 	MAKE_SOCKADDR_IN(addr, ip, port);
 	int res = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -152,7 +163,8 @@ int sock_inet_connect(int sock, const char *ip, int port)
 	return 0;
 }
 
-static int sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
+static int
+sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 {
 	char addr_str[INET6_ADDRSTRLEN] = { 0 };
 	void *addr_ptr = NULL;
@@ -187,7 +199,8 @@ static int sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 	return sock;
 }
 
-int sock_inet_create_and_connect(int type, const char *node, const char *service)
+int
+sock_inet_create_and_connect(int type, const char *node, const char *service)
 {
 	struct addrinfo hints, *res;
 	int sock = -1;

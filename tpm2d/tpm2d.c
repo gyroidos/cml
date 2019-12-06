@@ -62,7 +62,8 @@ static uint32_t tpm2d_as_key_handle_pt_ps = TPM2D_STORAGE_KEY_PERSIST_HANDLE;
 static char *tpm2d_as_key_pwd_pt = TPM2D_PRIMARY_STORAGE_KEY_PW;
 #endif
 
-static void tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void
+tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(tpm2d_logfile_handler);
@@ -70,7 +71,8 @@ static void tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *da
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);
 }
 
-static void tpm2d_setup_salt_key(void)
+static void
+tpm2d_setup_salt_key(void)
 {
 	// create primary key in NULL hierarchy wwhcih is used for session encryption
 	int ret;
@@ -106,7 +108,8 @@ tpm2d_get_as_key_handle(void)
 	return tpm2d_as_key_handle_tr;
 }
 
-void tpm2d_flush_as_key_handle(void)
+void
+tpm2d_flush_as_key_handle(void)
 {
 	if (tpm2d_as_key_handle_tr != TPM_RH_NULL) {
 		tpm2_flushcontext(tpm2d_as_key_handle_tr);
@@ -114,7 +117,8 @@ void tpm2d_flush_as_key_handle(void)
 	}
 }
 
-static void tpm2d_setup_keys(void)
+static void
+tpm2d_setup_keys(void)
 {
 	int ret = 0;
 	char *token_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
@@ -174,7 +178,8 @@ retry:
 }
 #endif /* ifndef TPM2D_NVMCRYPT_ONLY */
 
-static void tpm2d_init(void)
+static void
+tpm2d_init(void)
 {
 	int ret = 0;
 	char *session_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_SESSION_DIR);
@@ -227,7 +232,8 @@ static void tpm2d_init(void)
 	tss2_destroy();
 }
 
-void tpm2d_exit(void)
+void
+tpm2d_exit(void)
 {
 	INFO("Cleaning up tss2 and exit");
 	// When called tss2 library context may not be
@@ -243,19 +249,22 @@ void tpm2d_exit(void)
 	exit(0);
 }
 
-static void main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+static void
+main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	INFO("Received SIGINT...");
 	tpm2d_exit();
 }
 
-static void main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+static void
+main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	INFO("Received SIGTERM...");
 	tpm2d_exit();
 }
 
-static void print_usage(const char *cmd)
+static void
+print_usage(const char *cmd)
 {
 	printf("\n");
 	printf("Usage: %s [-s] \n", cmd);
@@ -269,7 +278,8 @@ static const struct option global_options[] = { { "sim", no_argument, 0, 's' },
 						{ "help", no_argument, 0, 'h' },
 						{ 0, 0, 0, 0 } };
 
-int main(UNUSED int argc, char **argv)
+int
+main(UNUSED int argc, char **argv)
 {
 	if (file_exists("/dev/log/main"))
 		logf_register(&logf_android_write, logf_android_new(argv[0]));

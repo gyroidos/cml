@@ -42,7 +42,8 @@ struct c_run {
 	char **argv;
 };
 
-c_run_t *c_run_new(container_t *container)
+c_run_t *
+c_run_new(container_t *container)
 {
 	c_run_t *run = mem_new0(c_run_t, 1);
 	run->container = container;
@@ -62,13 +63,15 @@ c_run_t *c_run_new(container_t *container)
 	return run;
 }
 
-void c_run_free(c_run_t *run)
+void
+c_run_free(c_run_t *run)
 {
 	ASSERT(run);
 	mem_free(run);
 }
 
-void c_run_cleanup(c_run_t *run)
+void
+c_run_cleanup(c_run_t *run)
 {
 	if (run->exec_loop_pid > 0) {
 		kill(run->exec_loop_pid, SIGTERM);
@@ -78,7 +81,8 @@ void c_run_cleanup(c_run_t *run)
 }
 
 // to be called from exec event loop
-static void c_run_internal_cleanup(c_run_t *run)
+static void
+c_run_internal_cleanup(c_run_t *run)
 {
 	ASSERT(run);
 
@@ -132,7 +136,8 @@ static void c_run_internal_cleanup(c_run_t *run)
 	run->exec_loop_pid = -1;
 }
 
-static int do_clone(int (*func)(void *), unsigned long flags, void *data)
+static int
+do_clone(int (*func)(void *), unsigned long flags, void *data)
 {
 	void *exec_stack = NULL;
 	/* Allocate node stack */
@@ -146,19 +151,22 @@ static int do_clone(int (*func)(void *), unsigned long flags, void *data)
 	return clone(func, exec_stack_high, flags, data);
 }
 
-int c_run_get_console_sock_cmld(const c_run_t *run)
+int
+c_run_get_console_sock_cmld(const c_run_t *run)
 {
 	ASSERT(run);
 	return run->console_sock_cmld;
 }
 
-int c_run_get_exec_loop_pid(const c_run_t *run)
+int
+c_run_get_exec_loop_pid(const c_run_t *run)
 {
 	ASSERT(run);
 	return run->exec_loop_pid;
 }
 
-int c_run_write_exec_input(c_run_t *run, char *exec_input)
+int
+c_run_write_exec_input(c_run_t *run, char *exec_input)
 {
 	if (run->exec_loop_pid != -1) {
 		TRACE("Write message \"%s\" to fd: %d", exec_input, run->console_sock_cmld);
@@ -169,7 +177,8 @@ int c_run_write_exec_input(c_run_t *run, char *exec_input)
 	}
 }
 
-void c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+void
+c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	c_run_t *run = data;
 
@@ -217,7 +226,8 @@ void c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	TRACE("No more childs to reap. Exiting handler.");
 }
 
-int setns(int fd, int nstype)
+int
+setns(int fd, int nstype)
 {
 	return syscall(__NR_setns, fd, nstype);
 }
@@ -225,7 +235,8 @@ int setns(int fd, int nstype)
 #define MAX_NS 10
 int fd[MAX_NS] = { 0 };
 
-static int setns_cb(const char *path, const char *file, void *data)
+static int
+setns_cb(const char *path, const char *file, void *data)
 {
 	int *i = data;
 
@@ -254,7 +265,8 @@ error:
 	exit(EXIT_FAILURE);
 }
 
-static int c_run_set_namespaces(pid_t pid)
+static int
+c_run_set_namespaces(pid_t pid)
 {
 	char *pid_string = mem_printf("%d", pid);
 
@@ -289,7 +301,8 @@ error:
 	exit(EXIT_FAILURE);
 }
 
-static int do_exec(c_run_t *run)
+static int
+do_exec(c_run_t *run)
 {
 	//Add NULL pointer to end of argv
 	char **exec_args = NULL;
@@ -342,7 +355,8 @@ error:
 	exit(EXIT_FAILURE);
 }
 
-static int do_pty_exec(void *data)
+static int
+do_pty_exec(void *data)
 {
 	ASSERT(data);
 	c_run_t *run = (c_run_t *)data;
@@ -381,7 +395,8 @@ error:
 	exit(EXIT_FAILURE);
 }
 
-static void readloop(int from_fd, int to_fd)
+static void
+readloop(int from_fd, int to_fd)
 {
 	TRACE("[EXEC] Starting read loop in process %d; from fd %d, to fd %d, PPID: %d", getpid(), from_fd, to_fd,
 	      getppid());
@@ -404,7 +419,8 @@ static void readloop(int from_fd, int to_fd)
 	exit(EXIT_SUCCESS);
 }
 
-int do_read_pty(void *data)
+int
+do_read_pty(void *data)
 {
 	ASSERT(data);
 	c_run_t *run = (c_run_t *)data;
@@ -425,7 +441,8 @@ int do_read_pty(void *data)
 	return 0;
 }
 
-int do_write_pty(void *data)
+int
+do_write_pty(void *data)
 {
 	ASSERT(data);
 	c_run_t *run = (c_run_t *)data;
@@ -436,7 +453,8 @@ int do_write_pty(void *data)
 	return 0;
 }
 
-static int c_run_prepare_exec(c_run_t *run)
+static int
+c_run_prepare_exec(c_run_t *run)
 {
 	//create new PTY
 	if (run->create_pty) {
@@ -518,7 +536,8 @@ error:
 	return -1;
 }
 
-int c_run_prepare_loop(void *data)
+int
+c_run_prepare_loop(void *data)
 {
 	ASSERT(data);
 
@@ -560,7 +579,8 @@ error:
 	return -1;
 }
 
-int c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv)
+int
+c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv)
 {
 	TRACE("Trying to excute command \"%s\" inside container", cmd);
 	ASSERT(cmd);

@@ -61,18 +61,23 @@ typedef struct AndroidLogEntry_t {
 	const char *message;
 } AndroidLogEntry;
 
-AndroidLogFormat *android_log_format_new();
+AndroidLogFormat *
+android_log_format_new();
 
-void android_log_format_free(AndroidLogFormat *p_format);
+void
+android_log_format_free(AndroidLogFormat *p_format);
 
-void android_log_setPrintFormat(AndroidLogFormat *p_format, AndroidLogPrintFormat format);
+void
+android_log_setPrintFormat(AndroidLogFormat *p_format, AndroidLogPrintFormat format);
 
-void android_log_setColoredOutput(AndroidLogFormat *p_format);
+void
+android_log_setColoredOutput(AndroidLogFormat *p_format);
 
 /**
  * Returns FORMAT_OFF on invalid string
  */
-AndroidLogPrintFormat android_log_formatFromString(const char *s);
+AndroidLogPrintFormat
+android_log_formatFromString(const char *s);
 
 /** 
  * filterExpression: a single filter expression
@@ -84,7 +89,8 @@ AndroidLogPrintFormat android_log_formatFromString(const char *s);
  *
  */
 
-int android_log_addFilterRule(AndroidLogFormat *p_format, const char *filterExpression);
+int
+android_log_addFilterRule(AndroidLogFormat *p_format, const char *filterExpression);
 
 /** 
  * filterString: a whitespace-separated set of filter expressions 
@@ -96,13 +102,15 @@ int android_log_addFilterRule(AndroidLogFormat *p_format, const char *filterExpr
  *
  */
 
-int android_log_addFilterString(AndroidLogFormat *p_format, const char *filterString);
+int
+android_log_addFilterString(AndroidLogFormat *p_format, const char *filterString);
 
 /** 
  * returns 1 if this log line should be printed based on its priority
  * and tag, and 0 if it should not
  */
-int android_log_shouldPrintLine(AndroidLogFormat *p_format, const char *tag, android_LogPriority pri);
+int
+android_log_shouldPrintLine(AndroidLogFormat *p_format, const char *tag, android_LogPriority pri);
 
 /**
  * Splits a wire-format buffer into an AndroidLogEntry
@@ -111,8 +119,10 @@ int android_log_shouldPrintLine(AndroidLogFormat *p_format, const char *tag, and
  * Returns 0 on success and -1 on invalid wire format (entry will be
  * in unspecified state)
  */
-int android_log_processLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry);
-int android_log_processLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry);
+int
+android_log_processLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry);
+int
+android_log_processLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry);
 
 /**
  * Like android_log_processLogBuffer, but for binary logs.
@@ -120,10 +130,12 @@ int android_log_processLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry
  * If "map" is non-NULL, it will be used to convert the log tag number
  * into a string.
  */
-int android_log_processBinaryLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry, const EventTagMap *map,
-				       char *messageBuf, int messageBufLen);
-int android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry, const EventTagMap *map,
-					  char *messageBuf, int messageBufLen);
+int
+android_log_processBinaryLogBuffer(struct logger_entry *buf, AndroidLogEntry *entry, const EventTagMap *map,
+				   char *messageBuf, int messageBufLen);
+int
+android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, AndroidLogEntry *entry, const EventTagMap *map,
+				      char *messageBuf, int messageBufLen);
 
 /**
  * Formats a log message into a buffer
@@ -133,8 +145,9 @@ int android_log_processBinaryLogBuffer_ns(struct logger_entry_ns *buf, AndroidLo
  * Returns NULL on malloc error
  */
 
-char *android_log_formatLogLine(AndroidLogFormat *p_format, char *defaultBuffer, size_t defaultBufferSize,
-				const AndroidLogEntry *p_line, size_t *p_outLength);
+char *
+android_log_formatLogLine(AndroidLogFormat *p_format, char *defaultBuffer, size_t defaultBufferSize,
+			  const AndroidLogEntry *p_line, size_t *p_outLength);
 
 /**
  * Either print or do not print log line, based on filter
@@ -142,7 +155,8 @@ char *android_log_formatLogLine(AndroidLogFormat *p_format, char *defaultBuffer,
  * Assumes single threaded execution
  *
  */
-int android_log_printLogLine(AndroidLogFormat *p_format, int fd, const AndroidLogEntry *entry);
+int
+android_log_printLogLine(AndroidLogFormat *p_format, int fd, const AndroidLogEntry *entry);
 
 #ifdef __cplusplus
 }

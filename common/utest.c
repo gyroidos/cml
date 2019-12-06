@@ -24,19 +24,23 @@
 #include "utest.h"
 #include "macro.h"
 
-int utest___android_log_write(UNUSED int prio, UNUSED const char *tag, UNUSED const char *text)
+int
+utest___android_log_write(UNUSED int prio, UNUSED const char *tag, UNUSED const char *text)
 {
 	return 0;
 }
 
-void utest_klog_init(void)
+void
+utest_klog_init(void)
 {
 }
 
-void utest_klog_set_level(UNUSED int level)
+void
+utest_klog_set_level(UNUSED int level)
 {
 }
 
-void utest_klog_write(UNUSED int level, UNUSED const char *fmt, ...)
+void
+utest_klog_write(UNUSED int level, UNUSED const char *fmt, ...)
 {
 }

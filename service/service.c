@@ -49,7 +49,8 @@
 static logf_handler_t *service_logfile_handler = NULL;
 
 #ifndef BOOT_COMPLETE_ONLY
-static int service_set_hostname(int fd)
+static int
+service_set_hostname(int fd)
 {
 	int rc = 0;
 	char *name = NULL;
@@ -92,7 +93,8 @@ static int service_set_hostname(int fd)
 	return rc;
 }
 
-static int service_set_dnsserver(int fd)
+static int
+service_set_dnsserver(int fd)
 {
 	int rc;
 	char *dns_addr = NULL;
@@ -125,7 +127,8 @@ static int service_set_dnsserver(int fd)
 }
 #endif /* ndef BOOT_COMPLETE_ONLY */
 
-static int service_fork_execvp(char *prog, char **argv)
+static int
+service_fork_execvp(char *prog, char **argv)
 {
 	pid_t child_pid = fork();
 	if (child_pid < 0) {
@@ -148,7 +151,8 @@ static int service_fork_execvp(char *prog, char **argv)
 	return 0;
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	bool do_init = true;
 

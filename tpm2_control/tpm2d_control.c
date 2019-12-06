@@ -40,7 +40,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static void print_usage(const char *cmd)
+static void
+print_usage(const char *cmd)
 {
 	printf("\n");
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
@@ -57,7 +58,8 @@ static void print_usage(const char *cmd)
 	exit(-1);
 }
 
-static void send_message(const char *socket_file, ControllerToTpm *msg, bool has_response)
+static void
+send_message(const char *socket_file, ControllerToTpm *msg, bool has_response)
 {
 	// send message
 	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)msg);
@@ -89,7 +91,8 @@ static const struct option global_options[] = { { "socket", required_argument, 0
 						{ "help", no_argument, 0, 'h' },
 						{ 0, 0, 0, 0 } };
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	logf_register(&logf_test_write, stderr);
 

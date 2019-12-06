@@ -24,32 +24,37 @@
 #include "guestos.stub.h"
 #include "common/macro.h"
 
-void guestos_mgr_update_images(void)
+void
+guestos_mgr_update_images(void)
 {
 	// TODO
 	return;
 }
 
-int guestos_mgr_push_config(UNUSED unsigned char *cfg, UNUSED size_t cfglen, UNUSED unsigned char *sig,
-			    UNUSED size_t siglen, UNUSED unsigned char *cert, UNUSED size_t certlen)
+int
+guestos_mgr_push_config(UNUSED unsigned char *cfg, UNUSED size_t cfglen, UNUSED unsigned char *sig,
+			UNUSED size_t siglen, UNUSED unsigned char *cert, UNUSED size_t certlen)
 {
 	// TODO
 	return 0;
 }
 
-size_t guestos_mgr_get_guestos_count(void)
+size_t
+guestos_mgr_get_guestos_count(void)
 {
 	// TODO
 	return 0;
 }
 
-guestos_t *guestos_mgr_get_guestos_by_index(UNUSED size_t index)
+guestos_t *
+guestos_mgr_get_guestos_by_index(UNUSED size_t index)
 {
 	// TODO
 	return NULL;
 }
 
-void *guestos_get_raw_ptr(const guestos_t *os)
+void *
+guestos_get_raw_ptr(const guestos_t *os)
 {
 	// TODO
 	ASSERT(os);

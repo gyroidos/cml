@@ -50,7 +50,8 @@ static int kernel_log_pid = 0;
 static int copied_kernel_log_fd = -1;
 static int kernel_log_file_fd = -1;
 
-UNUSED static void panic_start_cml_logcat(void)
+UNUSED static void
+panic_start_cml_logcat(void)
 {
 	DEBUG("Starting to read logcat");
 	char *logfile_name = mem_printf("%s%s", LOGFILE_DIR, "logcat");
@@ -64,7 +65,8 @@ UNUSED static void panic_start_cml_logcat(void)
 	ERROR_ERRNO("Could not exec cml-logcat");
 }
 
-static void panic_read_kernel_log(void)
+static void
+panic_read_kernel_log(void)
 {
 	if (copied_kernel_log_fd > 0) {
 		close(copied_kernel_log_fd);
@@ -109,7 +111,8 @@ static void panic_read_kernel_log(void)
 	close(kernel_log_file_fd);
 }
 
-static int panic_restart_child(int pid, void (*func)(void))
+static int
+panic_restart_child(int pid, void (*func)(void))
 {
 	if (pid != 0) {
 		int ret_val = kill(pid, SIGTERM);
@@ -153,7 +156,8 @@ static int panic_restart_child(int pid, void (*func)(void))
 	return new_pid;
 }
 
-static void panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void
+panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	if (kernel_log_pid > 0) {
 		DEBUG("Logfiles must be closed and new files opened");
@@ -174,7 +178,8 @@ static void panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *da
 	DEBUG("Started kernel log copy with PID %d", kernel_log_pid);
 }
 
-static void panic_delete_old_logs_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void
+panic_delete_old_logs_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	DIR *directory = NULL;
 	struct dirent *entry = NULL;
@@ -211,7 +216,8 @@ static void panic_delete_old_logs_cb(UNUSED event_timer_t *timer, UNUSED void *d
 	}
 }
 
-char *panic_find_last_kmsg(void)
+char *
+panic_find_last_kmsg(void)
 {
 	DIR *directory = NULL;
 	struct dirent *entry = NULL;
@@ -247,7 +253,8 @@ char *panic_find_last_kmsg(void)
 	return filename_of_latest_kmsg;
 }
 
-void panic_search_for_kernel_panic_in_last_kmsg()
+void
+panic_search_for_kernel_panic_in_last_kmsg()
 {
 	FILE *f;
 	char *buf;
@@ -288,7 +295,8 @@ void panic_search_for_kernel_panic_in_last_kmsg()
 	}
 }
 
-int main(UNUSED int argc, char **argv)
+int
+main(UNUSED int argc, char **argv)
 {
 	struct stat stat_buf;
 

@@ -30,7 +30,8 @@
 #include <unistd.h>
 #endif
 
-int reboot_reboot(int cmd)
+int
+reboot_reboot(int cmd)
 {
 	int res = -1;
 	switch (cmd) {

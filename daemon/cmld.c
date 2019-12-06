@@ -97,7 +97,8 @@ static char *cmld_shared_data_dir = NULL;
 
 /******************************************************************************/
 
-container_t *cmld_containers_get_a0()
+container_t *
+cmld_containers_get_a0()
 {
 	//return a0;
 	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
@@ -106,7 +107,8 @@ container_t *cmld_containers_get_a0()
 	return container;
 }
 
-container_t *cmld_container_get_c_root_netns()
+container_t *
+cmld_container_get_c_root_netns()
 {
 	container_t *found = NULL;
 	container_t *found_a0 = NULL;
@@ -126,7 +128,8 @@ container_t *cmld_container_get_c_root_netns()
 	return ((found) ? found : found_a0);
 }
 
-container_t *cmld_container_get_by_uuid(uuid_t *uuid)
+container_t *
+cmld_container_get_by_uuid(uuid_t *uuid)
 {
 	ASSERT(uuid);
 
@@ -137,47 +140,56 @@ container_t *cmld_container_get_by_uuid(uuid_t *uuid)
 	return NULL;
 }
 
-int cmld_containers_get_count(void)
+int
+cmld_containers_get_count(void)
 {
 	return list_length(cmld_containers_list);
 }
 
-container_t *cmld_container_get_by_index(int index)
+container_t *
+cmld_container_get_by_index(int index)
 {
 	return list_nth_data(cmld_containers_list, index);
 }
 
-const char *cmld_get_device_uuid(void)
+const char *
+cmld_get_device_uuid(void)
 {
 	return cmld_device_uuid;
 }
 
-const char *cmld_get_device_update_base_url(void)
+const char *
+cmld_get_device_update_base_url(void)
 {
 	return cmld_device_update_base_url;
 }
 
-const char *cmld_get_device_host_dns(void)
+const char *
+cmld_get_device_host_dns(void)
 {
 	return cmld_device_host_dns;
 }
 
-const char *cmld_get_shared_data_dir(void)
+const char *
+cmld_get_shared_data_dir(void)
 {
 	return cmld_shared_data_dir;
 }
 
-bool cmld_is_wifi_active(void)
+bool
+cmld_is_wifi_active(void)
 {
 	return container_connectivity_wifi(cmld_connectivity);
 }
 
-bool cmld_is_internet_active(void)
+bool
+cmld_is_internet_active(void)
 {
 	return container_connectivity_online(cmld_connectivity);
 }
 
-static int cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
+static int
+cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 {
 	uuid_t *uuid = NULL;
 
@@ -232,7 +244,8 @@ cleanup:
 	return res;
 }
 
-static int cmld_load_containers(const char *path)
+static int
+cmld_load_containers(const char *path)
 {
 	if (dir_foreach(path, &cmld_load_containers_cb, NULL) < 0) {
 		WARN("Could not open %s to load containers", path);
@@ -246,7 +259,8 @@ static int cmld_load_containers(const char *path)
 	return 0;
 }
 
-int cmld_reload_containers(void)
+int
+cmld_reload_containers(void)
 {
 	int ret = -1;
 	char *path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
@@ -260,7 +274,8 @@ int cmld_reload_containers(void)
  * Checks if a filename in the /data/logs directory contains
  * "1970" and renames the found files with a new timestamp
  */
-void cmld_rename_logfiles()
+void
+cmld_rename_logfiles()
 {
 	DIR *directory = NULL;
 	struct dirent *entry = NULL;
@@ -301,7 +316,8 @@ void cmld_rename_logfiles()
  * This function is called every time the state of the wifi connection changes from
  * offline to online and vice versa.
  */
-static void cmld_wifi_change_cb(bool active)
+static void
+cmld_wifi_change_cb(bool active)
 {
 	/* TODO insert stuff that depends on wifi */
 	if (active) {
@@ -318,7 +334,8 @@ static void cmld_wifi_change_cb(bool active)
  * This function is called every time the state of the mobile connection changes from
  * offline to online and vice versa.
  */
-static void cmld_mobile_change_cb(bool active)
+static void
+cmld_mobile_change_cb(bool active)
 {
 	/* TODO insert stuff that depends on mobile */
 	if (active) {
@@ -341,7 +358,8 @@ static void cmld_mobile_change_cb(bool active)
  * This function is called every time the state of the global connection changes from
  * offline to online and vice versa.
  */
-static void cmld_online_change_cb(bool active)
+static void
+cmld_online_change_cb(bool active)
 {
 	/* connect the MDM dynamically */
 	if (active) {
@@ -359,7 +377,8 @@ static void cmld_online_change_cb(bool active)
 	}
 }
 
-static void cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+static void
+cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
 	ASSERT(container);
 	ASSERT(cb);
@@ -378,7 +397,8 @@ static void cmld_container_boot_complete_cb(container_t *container, container_ca
 	}
 }
 
-static void cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
+static void
+cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
 {
 	container_connectivity_t conn = container_get_connectivity(c_root_netns);
 
@@ -437,7 +457,8 @@ static void cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED contai
 //	container_set_connectivity(aX, cmld_connectivity);
 //}
 
-static void cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
+static void
+cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
 {
 	bool mode = container_get_airplane_mode(c_root_netns);
 
@@ -459,7 +480,8 @@ static void cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED conta
 	}
 }
 
-static void cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void *data)
+static void
+cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void *data)
 {
 	if (container_get_state(aX) == CONTAINER_STATE_STOPPED) {
 		DEBUG("Container %s stopped, unregistering airplane_mode aX callback", container_get_description(aX));
@@ -474,7 +496,8 @@ static void cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, 
 	container_set_airplane_mode(aX, cmld_airplane_mode);
 }
 
-static void cmld_init_control_cb(container_t *container, container_callback_t *cb, void *data)
+static void
+cmld_init_control_cb(container_t *container, container_callback_t *cb, void *data)
 {
 	int *control_sock_p = data;
 
@@ -493,7 +516,8 @@ static void cmld_init_control_cb(container_t *container, container_callback_t *c
 	// TODO think about if this is unregistered correctly in corner cases...
 }
 
-static void cmld_container_register_observers(container_t *container)
+static void
+cmld_container_register_observers(container_t *container)
 {
 	/* register callbacks which should be present while the container is running
 	 * ATTENTION: All these callbacks MUST deregister themselves as soon as the container is stopped */
@@ -533,7 +557,8 @@ static void cmld_container_register_observers(container_t *container)
 	}
 }
 
-int cmld_container_start(container_t *container, const char *key)
+int
+cmld_container_start(container_t *container, const char *key)
 {
 	if (!container) {
 		WARN("Container does not exists!");
@@ -567,7 +592,8 @@ int cmld_container_start(container_t *container, const char *key)
 	return 0;
 }
 
-int cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd)
+int
+cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd)
 {
 	ASSERT(container);
 	ASSERT(control);
@@ -576,17 +602,20 @@ int cmld_container_start_with_smartcard(control_t *control, container_t *contain
 	return smartcard_container_start_handler(cmld_smartcard, control, container, passwd);
 }
 
-int cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd)
+int
+cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd)
 {
 	return smartcard_change_pin(cmld_smartcard, control, passwd, newpasswd);
 }
 
-void cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len)
+void
+cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len)
 {
 	smartcard_push_cert(cmld_smartcard, control, cert, cert_len);
 }
 
-int cmld_get_control_gui_sock(void)
+int
+cmld_get_control_gui_sock(void)
 {
 	return control_get_client_sock(cmld_control_gui);
 }
@@ -597,7 +626,8 @@ int cmld_get_control_gui_sock(void)
 #define A0_KEY                                                                                                         \
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
-static void cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
+static void
+cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
 {
 	int *control_sock_p = data;
 
@@ -612,7 +642,8 @@ static void cmld_init_a0_cb(container_t *container, container_callback_t *cb, vo
 	// TODO think about if this is unregistered correctly in corner cases...
 }
 
-static void cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+static void
+cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
 	container_state_t state = container_get_state(container);
 	if (state == CONTAINER_STATE_RUNNING) {
@@ -635,7 +666,8 @@ static void cmld_a0_boot_complete_cb(container_t *container, container_callback_
  * This observer callback is attached to each container in order to check for other running containers.
  * It ensures that as soon as the last container went down, the device is shut down.
  */
-static void cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+static void
+cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
 	container_state_t state = container_get_state(container);
 
@@ -670,7 +702,8 @@ static void cmld_shutdown_container_cb(container_t *container, container_callbac
  * This callback for a0 is used when a0 gets the shutdown command in order to
  * trigger the graceful shutdown of the other running containers
  */
-static void cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
+static void
+cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
 {
 	container_state_t a0_state = container_get_state(a0);
 	bool shutdown_now = true;
@@ -718,7 +751,8 @@ static void cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSE
 	}
 }
 
-static int cmld_init_a0(const char *path, const char *c0os)
+static int
+cmld_init_a0(const char *path, const char *c0os)
 {
 	/* Get the a0 guestos */
 	guestos_t *a0_os = guestos_mgr_get_latest_by_name(c0os, true);
@@ -769,7 +803,8 @@ out:
 	return 0;
 }
 
-static int cmld_start_a0(container_t *new_a0)
+static int
+cmld_start_a0(container_t *new_a0)
 {
 	INFO("Starting management container %s...", container_get_description(new_a0));
 
@@ -798,8 +833,8 @@ static int cmld_start_a0(container_t *new_a0)
 	return 0;
 }
 
-static void cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if,
-			      const char *host_gateway)
+static void
+cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if, const char *host_gateway)
 {
 	/*
 	 * Increase the max socket send buffer size which is used for all types of
@@ -820,7 +855,8 @@ static void cmld_tune_network(const char *host_addr, uint32_t host_subnet, const
 	network_enable_ip_forwarding();
 }
 
-int cmld_init(const char *path)
+int
+cmld_init(const char *path)
 {
 	INFO("Storage path is %s", path);
 	cmld_path = path;
@@ -946,14 +982,16 @@ int cmld_init(const char *path)
 	return 0;
 }
 
-container_t *cmld_container_create_clone(container_t *container)
+container_t *
+cmld_container_create_clone(container_t *container)
 {
 	ASSERT(container);
 	ASSERT(0); // TODO
 	return NULL;
 }
 
-container_t *cmld_container_create_from_config(const uint8_t *config, size_t config_len)
+container_t *
+cmld_container_create_from_config(const uint8_t *config, size_t config_len)
 {
 	ASSERT(config);
 	ASSERT(config_len);
@@ -971,7 +1009,8 @@ container_t *cmld_container_create_from_config(const uint8_t *config, size_t con
 	return c;
 }
 
-int cmld_container_destroy(container_t *container)
+int
+cmld_container_destroy(container_t *container)
 {
 	int ret;
 	ASSERT(container);
@@ -987,7 +1026,8 @@ int cmld_container_destroy(container_t *container)
 	return ret;
 }
 
-int cmld_container_stop(container_t *container)
+int
+cmld_container_stop(container_t *container)
 {
 	ASSERT(container);
 
@@ -1014,49 +1054,56 @@ int cmld_container_stop(container_t *container)
 	return container_stop(container);
 }
 
-int cmld_container_freeze(container_t *container)
+int
+cmld_container_freeze(container_t *container)
 {
 	ASSERT(container);
 
 	return container_freeze(container);
 }
 
-int cmld_container_unfreeze(container_t *container)
+int
+cmld_container_unfreeze(container_t *container)
 {
 	ASSERT(container);
 
 	return container_unfreeze(container);
 }
 
-int cmld_container_allow_audio(container_t *container)
+int
+cmld_container_allow_audio(container_t *container)
 {
 	ASSERT(container);
 
 	return container_allow_audio(container);
 }
 
-int cmld_container_deny_audio(container_t *container)
+int
+cmld_container_deny_audio(container_t *container)
 {
 	ASSERT(container);
 
 	return container_deny_audio(container);
 }
 
-int cmld_container_snapshot(container_t *container)
+int
+cmld_container_snapshot(container_t *container)
 {
 	ASSERT(container);
 	ASSERT(0);
 	return 0;
 }
 
-int cmld_container_wipe(container_t *container)
+int
+cmld_container_wipe(container_t *container)
 {
 	ASSERT(container);
 
 	return container_wipe(container);
 }
 
-void cmld_wipe_device()
+void
+cmld_wipe_device()
 {
 	dir_delete_folder(cmld_path, CMLD_PATH_GUESTOS_DIR);
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINERS_DIR);
@@ -1066,12 +1113,14 @@ void cmld_wipe_device()
 	reboot_reboot(POWER_OFF);
 }
 
-const char *cmld_get_c0os(void)
+const char *
+cmld_get_c0os(void)
 {
 	return cmld_c0os_name;
 }
 
-void cmld_guestos_delete(const char *guestos_name)
+void
+cmld_guestos_delete(const char *guestos_name)
 {
 	guestos_t *os = guestos_mgr_get_latest_by_name(guestos_name, false);
 	IF_NULL_RETURN(os);

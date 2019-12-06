@@ -73,32 +73,43 @@ typedef struct docker_manifest_list {
 	docker_remote_file_t **manifests;
 } docker_manifest_list_t;
 
-docker_manifest_list_t *docker_parse_manifest_list_new(const char *raw_file_buffer);
+docker_manifest_list_t *
+docker_parse_manifest_list_new(const char *raw_file_buffer);
 
-docker_manifest_t *docker_parse_manifest_new(const char *raw_file_buffer);
+docker_manifest_t *
+docker_parse_manifest_new(const char *raw_file_buffer);
 
-docker_config_t *docker_parse_config_new(const char *raw_file_buffer);
+docker_config_t *
+docker_parse_config_new(const char *raw_file_buffer);
 
-void docker_manifest_list_free(docker_manifest_list_t *ml);
+void
+docker_manifest_list_free(docker_manifest_list_t *ml);
 
-void docker_manifest_free(docker_manifest_t *manifest);
+void
+docker_manifest_free(docker_manifest_t *manifest);
 
-void docker_config_free(docker_config_t *cfg);
+void
+docker_config_free(docker_config_t *cfg);
 
-int docker_download_manifest_list(const char *curl_token, const char *out_file, const char *image_name,
-				  const char *image_tag);
+int
+docker_download_manifest_list(const char *curl_token, const char *out_file, const char *image_name,
+			      const char *image_tag);
 
-int docker_download_manifest(const char *curl_token, const char *out_file, const char *image_name,
-			     const char *image_tag);
+int
+docker_download_manifest(const char *curl_token, const char *out_file, const char *image_name, const char *image_tag);
 
-int docker_download_image(char *curl_token, const docker_manifest_t *manifest, const char *out_path,
-			  const char *image_name, const char *image_tag);
+int
+docker_download_image(char *curl_token, const docker_manifest_t *manifest, const char *out_path, const char *image_name,
+		      const char *image_tag);
 
 /* functions for accessing docker registry */
-void docker_set_host_url(const char *url);
+void
+docker_set_host_url(const char *url);
 
-int docker_generate_basic_auth(const char *user, const char *password, const char *token_file);
+int
+docker_generate_basic_auth(const char *user, const char *password, const char *token_file);
 
-char *docker_get_curl_token_new(char *image_name, char *token_file);
+char *
+docker_get_curl_token_new(char *image_name, char *token_file);
 
 #endif /* DOCKER_H */

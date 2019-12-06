@@ -52,12 +52,14 @@ typedef struct test_strct {
   * @param n number of variable arguments
   * @return char-pointer to the vprintf output
   */
-static char *test_vprintf(int n, ...);
+static char *
+test_vprintf(int n, ...);
 
 /**
   * All functions from mem.c are basically tested in this function.
   */
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	test_strct *tst1;
 	test_strct *tst2;
@@ -122,7 +124,8 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-static char *test_vprintf(int n, ...)
+static char *
+test_vprintf(int n, ...)
 {
 	va_list vl;
 	va_start(vl, n);

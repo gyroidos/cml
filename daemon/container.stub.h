@@ -38,30 +38,43 @@
  * @param container_name The name of the dummy container stub.
  * @return Pointer to the new dummy container stub object.
  */
-container_t *container_stub_new(char const *container_name);
+container_t *
+container_stub_new(char const *container_name);
 
-void container_free(container_t *container);
+void
+container_free(container_t *container);
 
-const char *container_get_name(const container_t *container);
+const char *
+container_get_name(const container_t *container);
 
-const char *container_get_config_filename(const container_t *container);
+const char *
+container_get_config_filename(const container_t *container);
 
-const uuid_t *container_get_uuid(const container_t *container);
+const uuid_t *
+container_get_uuid(const container_t *container);
 
-container_state_t container_get_state(const container_t *container);
+container_state_t
+container_get_state(const container_t *container);
 
-pid_t container_get_pid(const container_t *container);
+pid_t
+container_get_pid(const container_t *container);
 
-char *container_get_imei(container_t *container);
+char *
+container_get_imei(container_t *container);
 
-char *container_get_mac_address(container_t *container);
+char *
+container_get_mac_address(container_t *container);
 
-char *container_get_phone_number(container_t *container);
+char *
+container_get_phone_number(container_t *container);
 
-void container_set_radio_ip(container_t *container, char *ip);
+void
+container_set_radio_ip(container_t *container, char *ip);
 
-void container_set_radio_dns(container_t *container, char *dns);
+void
+container_set_radio_dns(container_t *container, char *dns);
 
-void container_set_radio_gateway(container_t *container, char *gateway);
+void
+container_set_radio_gateway(container_t *container, char *gateway);
 
 #endif // CONTAINER_STUB_H

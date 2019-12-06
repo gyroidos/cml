@@ -66,7 +66,8 @@
 #define TMP_OS_IMAGES_PREFIX "/tmp/operatingsystems/"
 #define WWW_OS_IMAGES_DIR TMP_OS_IMAGES_PREFIX SYSTEM_ARCH
 
-static char *get_ifname_ip_new(const char *ifname)
+static char *
+get_ifname_ip_new(const char *ifname)
 {
 	struct ifreq ifr;
 	struct in_addr ip;
@@ -88,8 +89,9 @@ err:
 	return ip_str;
 }
 
-int write_guestos_config(docker_config_t *config, const char *root_image_file, const char *image_path,
-			 const char *image_name, const char *image_tag)
+int
+write_guestos_config(docker_config_t *config, const char *root_image_file, const char *image_path,
+		     const char *image_name, const char *image_tag)
 {
 	int ret = -1;
 	char *out_file;
@@ -260,7 +262,8 @@ free_stuff:
 	return ret;
 }
 
-char *merge_layers_new(docker_manifest_t *manifest, char *in_path, char *out_path, char *image_name, char *image_tag)
+char *
+merge_layers_new(docker_manifest_t *manifest, char *in_path, char *out_path, char *image_name, char *image_tag)
 {
 	char *target_image_path = mem_printf("%s/%s_%s", out_path, image_name, image_tag);
 	char *extracted_image_path = mem_printf("%s/%s_%s_extracted", out_path, image_name, image_tag);
@@ -298,7 +301,8 @@ out:
 	return image_file;
 }
 
-void print_usage(char *progname)
+void
+print_usage(char *progname)
 {
 	ERROR("Usage: %s login -u <username> -p <password>"
 	      " -r <hostname:port>",
@@ -321,7 +325,8 @@ static const struct option login_options[] = { { "registry", required_argument, 
 					       { "help", no_argument, 0, 'h' },
 					       { 0, 0, 0, 0 } };
 
-int main(UNUSED int argc, char **argv)
+int
+main(UNUSED int argc, char **argv)
 {
 	char *buf;
 	char *manifest_file = NULL;

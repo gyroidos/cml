@@ -81,7 +81,8 @@ struct c_vol {
 
 /******************************************************************************/
 
-static int c_vol_fork_and_execvp(const char *const *argv)
+static int
+c_vol_fork_and_execvp(const char *const *argv)
 {
 	int status;
 	pid_t pid = fork();
@@ -112,7 +113,8 @@ static int c_vol_fork_and_execvp(const char *const *argv)
  * TODO store img_path in mount_entry_t instances themselves?
  * @return A newly allocated string with the image path.
  */
-static char *c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
+static char *
+c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 {
 	const char *dir;
 
@@ -150,7 +152,8 @@ static char *c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
  * Check wether a container image is ready to be mounted.
  * @return On error -1 is returned, otherwise 0.
  */
-static int c_vol_check_image(c_vol_t *vol, const char *img)
+static int
+c_vol_check_image(c_vol_t *vol, const char *img)
 {
 	int ret;
 
@@ -167,7 +170,8 @@ static int c_vol_check_image(c_vol_t *vol, const char *img)
 	return ret;
 }
 
-static char *c_vol_create_loopdev_new(int *fd, const char *img)
+static char *
+c_vol_create_loopdev_new(int *fd, const char *img)
 {
 	char *dev = loopdev_new();
 	if (!dev) {
@@ -195,7 +199,8 @@ error:
 	return NULL;
 }
 
-static int c_vol_create_image_empty(const char *img, uint64_t size)
+static int
+c_vol_create_image_empty(const char *img, uint64_t size)
 {
 	off64_t storage_size;
 	int fd;
@@ -237,13 +242,15 @@ static int c_vol_create_image_empty(const char *img, uint64_t size)
 	return 0;
 }
 
-static int c_vol_btrfs_regen_uuid(const char *dev)
+static int
+c_vol_btrfs_regen_uuid(const char *dev)
 {
 	const char *const argv_regen[] = { BTRFSTUNE, "-f", "-u", dev, NULL };
 	return c_vol_fork_and_execvp(argv_regen);
 }
 
-static int c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
+static int
+c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
 	const char *dir;
 	char *src;
@@ -271,7 +278,8 @@ static int c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_en
 	return ret;
 }
 
-static int c_vol_create_image_device(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
+static int
+c_vol_create_image_device(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
 	const char *dir;
 	char *dev;
@@ -298,7 +306,8 @@ static int c_vol_create_image_device(c_vol_t *vol, const char *img, const mount_
 	return ret;
 }
 
-static int c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
+static int
+c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
 	INFO("Creating image %s", img);
 
@@ -325,7 +334,8 @@ static int c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t
 	return 0;
 }
 
-static int c_vol_format_image(const char *dev, const char *fs)
+static int
+c_vol_format_image(const char *dev, const char *fs)
 {
 	const char *mkfs_bin = NULL;
 	if (0 == strcmp("ext4", fs)) {
@@ -340,7 +350,8 @@ static int c_vol_format_image(const char *dev, const char *fs)
 	return c_vol_fork_and_execvp(argv_mkfs);
 }
 
-static int c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
+static int
+c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 {
 	IF_NULL_RETVAL(mount_data, -1);
 
@@ -387,8 +398,9 @@ out:
 	return ret;
 }
 
-static int c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char *lowerfs_type,
-			       int mount_flags, char *mount_data, const char *upper_dev, const char *lower_dev)
+static int
+c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char *lowerfs_type, int mount_flags,
+		    char *mount_data, const char *upper_dev, const char *lower_dev)
 {
 	char *lower_dir, *upper_dir, *work_dir, *overlayfs_mount_dir;
 
@@ -487,7 +499,8 @@ error:
 	return -1;
 }
 
-static int c_vol_mount_file_bind(const char *src, const char *dst, unsigned long flags)
+static int
+c_vol_mount_file_bind(const char *src, const char *dst, unsigned long flags)
 {
 	char *_src = mem_strdup(src);
 	char *_dst = mem_strdup(dst);
@@ -550,7 +563,8 @@ err:
  * @param mntent The information for this mount.
  * @return -1 on error else 0.
  */
-static int c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
+static int
+c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
 	char *img, *dev, *dir;
 	int fd = 0;
@@ -812,7 +826,8 @@ error:
 	return -1;
 }
 
-static int c_vol_cleanup_dm(c_vol_t *vol)
+static int
+c_vol_cleanup_dm(c_vol_t *vol)
 {
 	size_t i, n;
 
@@ -841,7 +856,8 @@ static int c_vol_cleanup_dm(c_vol_t *vol)
  * @param vol The vol struct for the container.
  * @param root Directory where the root file system should be mounted.
  */
-static int c_vol_mount_images(c_vol_t *vol, const char *root)
+static int
+c_vol_mount_images(c_vol_t *vol, const char *root)
 {
 	size_t i, n;
 
@@ -894,7 +910,8 @@ err:
 	return -1;
 }
 
-static void c_vol_fixup_logdev()
+static void
+c_vol_fixup_logdev()
 {
 	char *log_buffers[4] = { "events", "main", "radio", "system" };
 	for (int i = 0; i < 4; ++i) {
@@ -913,7 +930,8 @@ static void c_vol_fixup_logdev()
 
 /******************************************************************************/
 
-c_vol_t *c_vol_new(const container_t *container)
+c_vol_t *
+c_vol_new(const container_t *container)
 {
 	ASSERT(container);
 
@@ -923,14 +941,16 @@ c_vol_t *c_vol_new(const container_t *container)
 	return vol;
 }
 
-void c_vol_free(c_vol_t *vol)
+void
+c_vol_free(c_vol_t *vol)
 {
 	ASSERT(vol);
 
 	mem_free(vol);
 }
 
-int c_vol_start_pre_clone(const c_vol_t *vol)
+int
+c_vol_start_pre_clone(const c_vol_t *vol)
 {
 	ASSERT(vol);
 	char *bind_img_path = NULL;
@@ -991,7 +1011,8 @@ err:
 	return -1;
 }
 
-int c_vol_start_child(c_vol_t *vol)
+int
+c_vol_start_child(c_vol_t *vol)
 {
 	char *root;
 
@@ -1199,7 +1220,8 @@ error:
 	return -1;
 }
 
-void c_vol_cleanup(c_vol_t *vol)
+void
+c_vol_cleanup(c_vol_t *vol)
 {
 	ASSERT(vol);
 

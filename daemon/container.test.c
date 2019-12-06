@@ -26,7 +26,8 @@
 #include "common/macro.h"
 #include "common/mem.h"
 
-int main(UNUSED int argc, UNUSED char **argv)
+int
+main(UNUSED int argc, UNUSED char **argv)
 {
 	// Init logging
 	logf_register(&logf_android_write, logf_android_new(argv[0]));

@@ -58,17 +58,20 @@ struct guestos {
 
 /******************************************************************************/
 
-char *guestos_get_cfg_file_new(const char *dir)
+char *
+guestos_get_cfg_file_new(const char *dir)
 {
 	return mem_printf("%s.conf", dir);
 }
 
-char *guestos_get_sig_file_new(const char *dir)
+char *
+guestos_get_sig_file_new(const char *dir)
 {
 	return mem_printf("%s.sig", dir);
 }
 
-char *guestos_get_cert_file_new(const char *dir)
+char *
+guestos_get_cert_file_new(const char *dir)
 {
 	return mem_printf("%s.cert", dir);
 }
@@ -82,7 +85,8 @@ char *guestos_get_cert_file_new(const char *dir)
  *		Should be NULL to derive the filename automatically from the GuestOS name and version.
  * @param basepath  the base directory where GuestOSes and their configs are stored
  */
-static guestos_t *guestos_new_internal(guestos_config_t *cfg, const char *basepath)
+static guestos_t *
+guestos_new_internal(guestos_config_t *cfg, const char *basepath)
 {
 	ASSERT(cfg);
 	//ASSERT(file);
@@ -106,7 +110,8 @@ static guestos_t *guestos_new_internal(guestos_config_t *cfg, const char *basepa
 	return os;
 }
 
-guestos_t *guestos_new_from_file(const char *file, const char *basepath)
+guestos_t *
+guestos_new_from_file(const char *file, const char *basepath)
 {
 	ASSERT(file);
 	ASSERT(basepath);
@@ -120,7 +125,8 @@ guestos_t *guestos_new_from_file(const char *file, const char *basepath)
 	return guestos_new_internal(cfg, basepath);
 }
 
-guestos_t *guestos_new_from_buffer(unsigned char *buf, size_t buflen, const char *basepath)
+guestos_t *
+guestos_new_from_buffer(unsigned char *buf, size_t buflen, const char *basepath)
 {
 	ASSERT(buf);
 	ASSERT(basepath);
@@ -139,7 +145,8 @@ guestos_t *guestos_new_from_buffer(unsigned char *buf, size_t buflen, const char
  * parts of the operating system, i.e. the configuration and the images.
  * @param os The operating system to be freed.
  */
-void guestos_free(guestos_t *os)
+void
+guestos_free(guestos_t *os)
 {
 	IF_NULL_RETURN(os);
 	mem_free(os->cert_file);
@@ -155,7 +162,8 @@ void guestos_free(guestos_t *os)
 /**
  * Returns true iff the GuestOS instance is privileged (i.e. if it is a0).
  */
-bool guestos_is_privileged(const guestos_t *os)
+bool
+guestos_is_privileged(const guestos_t *os)
 {
 	bool ispriv = false;
 	ispriv |= !strcmp(guestos_get_name(os), cmld_get_c0os());
@@ -175,8 +183,8 @@ typedef struct check_mount_image {
 	void *data;
 } check_mount_image_t;
 
-static check_mount_image_t *check_mount_image_new(guestos_t *os, mount_entry_t *e, char *img_path,
-						  check_mount_image_complete_cb cb, void *data)
+static check_mount_image_t *
+check_mount_image_new(guestos_t *os, mount_entry_t *e, char *img_path, check_mount_image_complete_cb cb, void *data)
 {
 	check_mount_image_t *task = mem_new(check_mount_image_t, 1);
 	task->os = os;
@@ -187,15 +195,17 @@ static check_mount_image_t *check_mount_image_new(guestos_t *os, mount_entry_t *
 	return task;
 }
 
-static void check_mount_image_free(check_mount_image_t *task)
+static void
+check_mount_image_free(check_mount_image_t *task)
 {
 	IF_NULL_RETURN_WARN(task);
 	mem_free(task->img_path);
 	mem_free(task);
 }
 
-static void check_mount_image_cb_sha256(const char *hash_string, UNUSED const char *hash_file,
-					UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
+static void
+check_mount_image_cb_sha256(const char *hash_string, UNUSED const char *hash_file,
+			    UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
 {
 	check_mount_image_t *task = data;
 	ASSERT(task);
@@ -206,8 +216,9 @@ static void check_mount_image_cb_sha256(const char *hash_string, UNUSED const ch
 	check_mount_image_free(task);
 }
 
-static void check_mount_image_cb_sha1(const char *hash_string, UNUSED const char *hash_file,
-				      UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
+static void
+check_mount_image_cb_sha1(const char *hash_string, UNUSED const char *hash_file,
+			  UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
 {
 	check_mount_image_t *task = data;
 	ASSERT(task);
@@ -223,7 +234,8 @@ static void check_mount_image_cb_sha1(const char *hash_string, UNUSED const char
 	check_mount_image_free(task);
 }
 
-static uint8_t *convert_hex_to_bin_new(const char *hex_str, int *out_length)
+static uint8_t *
+convert_hex_to_bin_new(const char *hex_str, int *out_length)
 {
 	int len = strlen(hex_str);
 	int i = 0, j = 0;
@@ -248,8 +260,8 @@ err:
 	return NULL;
 }
 
-guestos_check_mount_image_result_t guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e,
-								   bool thorough)
+guestos_check_mount_image_result_t
+guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, bool thorough)
 {
 	ASSERT(os);
 	ASSERT(e);
@@ -299,7 +311,8 @@ cleanup:
 	return res;
 }
 
-bool guestos_images_are_complete(const guestos_t *os, bool thorough)
+bool
+guestos_images_are_complete(const guestos_t *os, bool thorough)
 {
 	ASSERT(os);
 	INFO("Checking images of GuestOS %s v%" PRIu64 " (%s)", guestos_get_name(os), guestos_get_version(os),
@@ -335,7 +348,8 @@ bool guestos_images_are_complete(const guestos_t *os, bool thorough)
  * @param cb callback to deliver the result back to the caller
  * @param data data parameter passed to the callback
  */
-static void guestos_check_mount_image(guestos_t *os, mount_entry_t *e, check_mount_image_complete_cb cb, void *data)
+static void
+guestos_check_mount_image(guestos_t *os, mount_entry_t *e, check_mount_image_complete_cb cb, void *data)
 {
 	ASSERT(os);
 	ASSERT(e);
@@ -386,8 +400,9 @@ struct iterate_images {
 	bool dl_started;
 };
 
-static iterate_images_t *iterate_images_new(guestos_t *os, mount_t *mnt, size_t n, iterate_images_callback_t iter_cb,
-					    iterate_images_on_complete_cb_t complete_cb, void *complete_data)
+static iterate_images_t *
+iterate_images_new(guestos_t *os, mount_t *mnt, size_t n, iterate_images_callback_t iter_cb,
+		   iterate_images_on_complete_cb_t complete_cb, void *complete_data)
 {
 	iterate_images_t *task = mem_new(iterate_images_t, 1);
 	task->os = os;
@@ -403,15 +418,17 @@ static iterate_images_t *iterate_images_new(guestos_t *os, mount_t *mnt, size_t 
 	return task;
 }
 
-static void iterate_images_free(iterate_images_t *task)
+static void
+iterate_images_free(iterate_images_t *task)
 {
 	IF_NULL_RETURN(task);
 	mount_free(task->mnt);
 	mem_free(task);
 }
 
-static void iterate_images_cb_check_image(guestos_check_mount_image_result_t res,
-					  UNUSED guestos_t *os /*already in task*/, mount_entry_t *e, void *data)
+static void
+iterate_images_cb_check_image(guestos_check_mount_image_result_t res, UNUSED guestos_t *os /*already in task*/,
+			      mount_entry_t *e, void *data)
 {
 	iterate_images_t *task = data;
 	ASSERT(task);
@@ -425,7 +442,8 @@ static void iterate_images_cb_check_image(guestos_check_mount_image_result_t res
  *
  * @return true if next image was found and check for it was triggered, false otherwise.
  */
-static bool iterate_images_trigger_check(iterate_images_t *task)
+static bool
+iterate_images_trigger_check(iterate_images_t *task)
 {
 	// look for next SHARED or FLASH type image
 	while (task->i < task->n) {
@@ -457,8 +475,9 @@ static bool iterate_images_trigger_check(iterate_images_t *task)
  * @return  true if iteration was started (iter_cb should be called at least once),
  *	    false otherwise (e.g. when there are no images to iterate over)
  */
-static bool iterate_images_start(guestos_t *os, iterate_images_callback_t iter_cb,
-				 iterate_images_on_complete_cb_t on_complete, void *complete_data)
+static bool
+iterate_images_start(guestos_t *os, iterate_images_callback_t iter_cb, iterate_images_on_complete_cb_t on_complete,
+		     void *complete_data)
 {
 	ASSERT(os);
 
@@ -484,7 +503,8 @@ static bool iterate_images_start(guestos_t *os, iterate_images_callback_t iter_c
 
 // CHECK IMAGES
 
-static void iterate_images_cb_check(iterate_images_t *task, guestos_check_mount_image_result_t res, mount_entry_t *e)
+static void
+iterate_images_cb_check(iterate_images_t *task, guestos_check_mount_image_result_t res, mount_entry_t *e)
 {
 	ASSERT(task);
 
@@ -510,7 +530,8 @@ static void iterate_images_cb_check(iterate_images_t *task, guestos_check_mount_
 	iterate_images_free(task);
 }
 
-void guestos_images_check(guestos_t *os, guestos_images_check_complete_cb_t cb, void *data)
+void
+guestos_images_check(guestos_t *os, guestos_images_check_complete_cb_t cb, void *data)
 {
 	ASSERT(os);
 	ASSERT(cb);
@@ -533,9 +554,11 @@ typedef enum download_images_result {
 	DOWNLOAD_IMAGES_INPROGRESS
 } download_images_result_t;
 */
-static void iterate_images_cb_download_complete(download_t *dl, bool success, void *data);
+static void
+iterate_images_cb_download_complete(download_t *dl, bool success, void *data);
 
-static bool iterate_images_trigger_download(iterate_images_t *task)
+static bool
+iterate_images_trigger_download(iterate_images_t *task)
 {
 	ASSERT(task);
 
@@ -570,7 +593,8 @@ static bool iterate_images_trigger_download(iterate_images_t *task)
 	return true;
 }
 
-static void iterate_images_cb_download_complete(download_t *dl, bool success, void *data)
+static void
+iterate_images_cb_download_complete(download_t *dl, bool success, void *data)
 {
 	iterate_images_t *task = data;
 	ASSERT(task);
@@ -594,8 +618,8 @@ static void iterate_images_cb_download_complete(download_t *dl, bool success, vo
 	download_free(dl);
 }
 
-static void iterate_images_cb_download_check(iterate_images_t *task, guestos_check_mount_image_result_t res,
-					     mount_entry_t *e)
+static void
+iterate_images_cb_download_check(iterate_images_t *task, guestos_check_mount_image_result_t res, mount_entry_t *e)
 {
 	ASSERT(task);
 
@@ -630,7 +654,8 @@ static void iterate_images_cb_download_check(iterate_images_t *task, guestos_che
 	iterate_images_free(task);
 }
 
-void guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb, void *data)
+void
+guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb, void *data)
 {
 	ASSERT(os);
 	//ASSERT(cb);
@@ -681,7 +706,8 @@ typedef enum {
  * @param part_path full path to the partition
  * @return whether the contents MATCH or MISMATCH, or ERROR if something goes wrong
  */
-static verify_partition_result_t verify_partition(const char *img_path, const char *part_path)
+static verify_partition_result_t
+verify_partition(const char *img_path, const char *part_path)
 {
 	ASSERT(img_path);
 	ASSERT(part_path);
@@ -741,7 +767,8 @@ cleanup_files:
  * @param e the mount entry to flash (type must be FLASH)
  * @return -1 on error, 0 if there was nothing to flash, 1 if the image was successfully flashed
  */
-static int verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
+static int
+verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 {
 	ASSERT(os);
 	ASSERT(e);
@@ -801,7 +828,8 @@ static int verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
  * @param os the GuestOS whose images to flash
  * @return -1 on error, number of flashed images otherwise
  */
-static int images_flash_no_check(guestos_t *os)
+static int
+images_flash_no_check(guestos_t *os)
 {
 	INFO("Flashing images for GuestOS %s ...", guestos_get_name(os));
 	mount_t *mnt = mount_new(); // need to get "mounts" to get image URLs... feels wrong
@@ -836,7 +864,8 @@ cleanup:
 	return flashed;
 }
 
-int guestos_images_flash(guestos_t *os)
+int
+guestos_images_flash(guestos_t *os)
 {
 	ASSERT(os);
 	INFO("Flashing images of GuestOS %s %" PRIu64, guestos_get_name(os), guestos_get_version(os));
@@ -855,7 +884,8 @@ int guestos_images_flash(guestos_t *os)
 	return images_flash_no_check(os);
 }
 
-void guestos_purge(guestos_t *os)
+void
+guestos_purge(guestos_t *os)
 {
 	ASSERT(os);
 	DEBUG("Purging GuestOS %s v%" PRIu64, guestos_get_name(os), guestos_get_version(os));
@@ -896,31 +926,36 @@ void guestos_purge(guestos_t *os)
 	}
 }
 
-const char *guestos_get_cfg_file(const guestos_t *os)
+const char *
+guestos_get_cfg_file(const guestos_t *os)
 {
 	ASSERT(os);
 	return os->cfg_file;
 }
 
-const char *guestos_get_sig_file(const guestos_t *os)
+const char *
+guestos_get_sig_file(const guestos_t *os)
 {
 	ASSERT(os);
 	return os->sig_file;
 }
 
-const char *guestos_get_cert_file(const guestos_t *os)
+const char *
+guestos_get_cert_file(const guestos_t *os)
 {
 	ASSERT(os);
 	return os->cert_file;
 }
 
-const char *guestos_get_dir(const guestos_t *os)
+const char *
+guestos_get_dir(const guestos_t *os)
 {
 	ASSERT(os);
 	return os->dir;
 }
 
-void *guestos_get_raw_ptr(const guestos_t *os)
+void *
+guestos_get_raw_ptr(const guestos_t *os)
 {
 	ASSERT(os);
 	return os->cfg;
@@ -928,103 +963,120 @@ void *guestos_get_raw_ptr(const guestos_t *os)
 
 /******************************************************************************/
 
-void guestos_fill_mount(const guestos_t *os, mount_t *mount)
+void
+guestos_fill_mount(const guestos_t *os, mount_t *mount)
 {
 	ASSERT(os);
 	guestos_config_fill_mount(os->cfg, mount);
 }
 
-void guestos_fill_mount_setup(const guestos_t *os, mount_t *mount)
+void
+guestos_fill_mount_setup(const guestos_t *os, mount_t *mount)
 {
 	ASSERT(os);
 	guestos_config_fill_mount_setup(os->cfg, mount);
 }
 
-const char *guestos_get_name(const guestos_t *os)
+const char *
+guestos_get_name(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_name(os->cfg);
 }
 
-const char *guestos_get_hardware(const guestos_t *os)
+const char *
+guestos_get_hardware(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_hardware(os->cfg);
 }
 
-uint64_t guestos_get_version(const guestos_t *os)
+uint64_t
+guestos_get_version(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_version(os->cfg);
 }
 
-const char *guestos_get_init(const guestos_t *os)
+const char *
+guestos_get_init(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_init(os->cfg);
 }
 
-char **guestos_get_init_argv_new(const guestos_t *os)
+char **
+guestos_get_init_argv_new(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_init_argv_new(os->cfg);
 }
 
-char **guestos_get_init_env(const guestos_t *os)
+char **
+guestos_get_init_env(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_init_env(os->cfg);
 }
 
-size_t guestos_get_init_env_len(const guestos_t *os)
+size_t
+guestos_get_init_env_len(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_init_env_len(os->cfg);
 }
 
-uint32_t guestos_get_min_ram_limit(const guestos_t *os)
+uint32_t
+guestos_get_min_ram_limit(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_min_ram_limit(os->cfg);
 }
 
-uint32_t guestos_get_def_ram_limit(const guestos_t *os)
+uint32_t
+guestos_get_def_ram_limit(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_def_ram_limit(os->cfg);
 }
 
-bool guestos_get_feature_vpn(const guestos_t *os)
+bool
+guestos_get_feature_vpn(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_vpn(os->cfg);
 }
 
-bool guestos_get_feature_bg_booting(const guestos_t *os)
+bool
+guestos_get_feature_bg_booting(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_bg_booting(os->cfg);
 }
 
-bool guestos_get_feature_devtmpfs(const guestos_t *os)
+bool
+guestos_get_feature_devtmpfs(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_devtmpfs(os->cfg);
 }
 
-bool guestos_get_feature_install_guest(const guestos_t *os)
+bool
+guestos_get_feature_install_guest(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_install_guest(os->cfg);
 }
 
-void guestos_set_verify_result(guestos_t *os, guestos_verify_result_t verify_result)
+void
+guestos_set_verify_result(guestos_t *os, guestos_verify_result_t verify_result)
 {
 	ASSERT(os);
 	os->verify_result = verify_result;
 }
 
-guestos_verify_result_t guestos_get_verify_result(const guestos_t *os)
+guestos_verify_result_t
+guestos_get_verify_result(const guestos_t *os)
 {
 	ASSERT(os);
 	return os->verify_result;

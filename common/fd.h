@@ -41,7 +41,8 @@
  * @param buf pointer to the buffer
  * @param len length of the buffer
  */
-int fd_write(const int fd, const char *buf, size_t len);
+int
+fd_write(const int fd, const char *buf, size_t len);
 
 /*
  * Reads the specified amount of bytes from the given file descriptor to the given buffer,
@@ -51,7 +52,8 @@ int fd_write(const int fd, const char *buf, size_t len);
  * @param buf pointer to the buffer
  * @param number of bytes to read (must fit into given buffer!)
  */
-int fd_read(int fd, char *buf, size_t len);
+int
+fd_read(int fd, char *buf, size_t len);
 
 /**
  * Makes the given file descriptor non-blocking by setting the O_NONBLOCK flag.
@@ -59,7 +61,8 @@ int fd_read(int fd, char *buf, size_t len);
  * @param fd the file descriptor
  * @return 0 on success, -1 on error
  */
-int fd_make_non_blocking(int fd);
+int
+fd_make_non_blocking(int fd);
 
 /**
  * Checks if the given fd is closed
@@ -67,6 +70,7 @@ int fd_make_non_blocking(int fd);
  * @param fd the file discriptor
  * @return 1 if fd is closed, 0 if fd is open and ready to use
  */
-int fd_is_closed(int fd);
+int
+fd_is_closed(int fd);
 
 #endif // FD_H

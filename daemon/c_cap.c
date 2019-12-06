@@ -38,7 +38,8 @@
 		}                                                                                                      \
 	} while (0)
 
-int c_cap_set_current_process(const container_t *container)
+int
+c_cap_set_current_process(const container_t *container)
 {
 	///* 1 */ C_CAP_DROP(CAP_DAC_OVERRIDE); /* does NOT work properly */
 	///* 2 */ C_CAP_DROP(CAP_DAC_READ_SEARCH);
@@ -84,7 +85,8 @@ int c_cap_set_current_process(const container_t *container)
 	return 0;
 }
 
-int c_cap_start_child(const container_t *container)
+int
+c_cap_start_child(const container_t *container)
 {
 	return c_cap_set_current_process(container);
 }

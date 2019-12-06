@@ -120,7 +120,8 @@ static bool *address_offsets = NULL;
  * sets the offset at the specified position to false.
  * indicates that a container releases its addresses.
  */
-static void c_net_unset_offset(int offset)
+static void
+c_net_unset_offset(int offset)
 {
 	ASSERT(offset >= 0 && offset < MAX_NUM_DEVICES);
 	TRACE("Offset %d released by a container", offset);
@@ -132,7 +133,8 @@ static void c_net_unset_offset(int offset)
  * determines first free slot and occupies it. Also responsible for allocating the offsets array.
  * @return failure, return -1, else return first free offset
  */
-static int c_net_set_next_offset(void)
+static int
+c_net_set_next_offset(void)
 {
 	if (!address_offsets) {
 		address_offsets = mem_new0(bool, MAX_NUM_DEVICES);
@@ -157,7 +159,8 @@ static int c_net_set_next_offset(void)
  * This function determines and sets the next available ipv4 address, depending on the container offset.
  * The ipv4 address relates to the ipv4 in the root namespace.
  */
-static int c_net_get_next_ipv4_cmld_addr(int offset, struct in_addr *ipv4_addr)
+static int
+c_net_get_next_ipv4_cmld_addr(int offset, struct in_addr *ipv4_addr)
 {
 	ASSERT(ipv4_addr);
 
@@ -182,7 +185,8 @@ static int c_net_get_next_ipv4_cmld_addr(int offset, struct in_addr *ipv4_addr)
 /**
  * This function determines and sets the mac address, depending on its corresponding ipv4 address
  */
-static int c_net_get_next_ipv4_bcaddr(const struct in_addr *ipv4_addr, struct in_addr *ipv4_bcaddr)
+static int
+c_net_get_next_ipv4_bcaddr(const struct in_addr *ipv4_addr, struct in_addr *ipv4_bcaddr)
 {
 	ASSERT(ipv4_addr && ipv4_bcaddr);
 
@@ -202,7 +206,8 @@ static int c_net_get_next_ipv4_bcaddr(const struct in_addr *ipv4_addr, struct in
  * This function determines and sets the next available ipv4 address, depending on the container offset.
  * The ipv4 address relates to the ipv4 in the container's namespace.
  */
-static int c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
+static int
+c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
 {
 	ASSERT(ipv4_addr);
 
@@ -229,7 +234,8 @@ static int c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
  * In case it is free, 0 is returned, if it's blocked 1
  * In case of failure, the function returns -1
  */
-static int c_net_is_veth_used(const char *if_name)
+static int
+c_net_is_veth_used(const char *if_name)
 {
 	ASSERT(if_name);
 
@@ -267,7 +273,8 @@ static int c_net_is_veth_used(const char *if_name)
  * This function renames a (container namespace) veth name from old_ifi_name to new_ifi_name
  * with a netlink message using the netlink socket.
  */
-static int c_net_rename_ifi(const char *old_ifi_name, const char *new_ifi_name)
+static int
+c_net_rename_ifi(const char *old_ifi_name, const char *new_ifi_name)
 {
 	ASSERT(old_ifi_name && new_ifi_name);
 
@@ -334,7 +341,8 @@ msg_err:
  * specified by the pid (from root namespace to container namespace).
  * It transmits a netlink message using the netlink socket
  */
-int c_net_move_ifi(const char *ifi_name, const pid_t pid)
+int
+c_net_move_ifi(const char *ifi_name, const pid_t pid)
 {
 	ASSERT(ifi_name);
 
@@ -403,7 +411,8 @@ msg_err:
  * This function removes the network interface from the corresponding namespace,
  * specified by the pid
  */
-int c_net_remove_ifi(const char *ifi_name, const pid_t pid)
+int
+c_net_remove_ifi(const char *ifi_name, const pid_t pid)
 {
 	ASSERT(ifi_name);
 	int ret = network_move_link_ns(pid, 1, ifi_name);
@@ -414,7 +423,8 @@ int c_net_remove_ifi(const char *ifi_name, const pid_t pid)
  * This function creates a veth pair veth1/veth2 (in the root namespace)
  * with a netlink message using the netlink socket
  */
-static int c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6])
+static int
+c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6])
 {
 	ASSERT(veth1 && veth2);
 
@@ -515,7 +525,8 @@ msg_err:
  * with a netlink message using the netlink socket.
  * We use this in the root namespace and in the container's namespace.
  */
-static int c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr, const struct in_addr *ipv4_bcaddr)
+static int
+c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr, const struct in_addr *ipv4_bcaddr)
 {
 	ASSERT(ifi_name);
 
@@ -591,7 +602,8 @@ msg_err:
 	return -1;
 }
 
-static c_net_interface_t *c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
+static c_net_interface_t *
+c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 {
 	ASSERT(if_name);
 
@@ -607,8 +619,8 @@ static c_net_interface_t *c_net_interface_new(const char *if_name, uint8_t if_ma
  * This function allocates a new c_net_t instance, associated to a specific container object.
  * @return the c_net_t network structure which holds networking information for a container.
  */
-c_net_t *c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list,
-		   uint16_t adb_port)
+c_net_t *
+c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list, uint16_t adb_port)
 {
 	ASSERT(container);
 
@@ -655,7 +667,8 @@ c_net_t *c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, l
 	return net;
 }
 
-static int c_net_setup_port_forwarding(c_net_interface_t *ni, uint16_t srcport, uint16_t dstport, bool enable)
+static int
+c_net_setup_port_forwarding(c_net_interface_t *ni, uint16_t srcport, uint16_t dstport, bool enable)
 {
 	ASSERT(ni);
 
@@ -672,7 +685,8 @@ static int c_net_setup_port_forwarding(c_net_interface_t *ni, uint16_t srcport, 
 	return ret;
 }
 
-static int c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
+static int
+c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 {
 	if (network_set_flag(if_name, up ? IFF_UP : IFF_DOWN))
 		return -1;
@@ -693,7 +707,8 @@ static int c_net_bring_up_link_and_route(const char *if_name, const char *subnet
 }
 
 #ifdef ANDROID
-static int c_net_write_dhcp_config(c_net_interface_t *ni)
+static int
+c_net_write_dhcp_config(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -729,7 +744,8 @@ out:
 }
 #endif
 
-void c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+void
+c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	c_net_interface_t *ni = data;
 	pid_t pid;
@@ -747,14 +763,16 @@ void c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	}
 }
 
-static void c_net_udhcpd_stop(c_net_interface_t *ni)
+static void
+c_net_udhcpd_stop(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 	if (ni->dhcpd_pid)
 		kill(ni->dhcpd_pid, SIGTERM);
 }
 
-static int c_net_udhcpd_start(c_net_interface_t *ni)
+static int
+c_net_udhcpd_start(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -812,7 +830,8 @@ out:
 	return (bytes_written > 0) ? 0 : -1;
 }
 
-static int c_net_start_pre_clone_interface(c_net_interface_t *ni)
+static int
+c_net_start_pre_clone_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -917,7 +936,8 @@ err:
   * by setting its ipv4 and bringing up the interface.
   * @return: 0 on success, -1 in case of failure.
   */
-int c_net_start_pre_clone(c_net_t *net)
+int
+c_net_start_pre_clone(c_net_t *net)
 {
 	ASSERT(net);
 
@@ -945,7 +965,8 @@ int c_net_start_pre_clone(c_net_t *net)
 	return 0;
 }
 
-static int c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
+static int
+c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -981,7 +1002,8 @@ static int c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 /**
  * This function is responisble for moving the container interface to its corresponding namespace.
  */
-int c_net_start_post_clone(c_net_t *net)
+int
+c_net_start_post_clone(c_net_t *net)
 {
 	ASSERT(net);
 
@@ -1010,7 +1032,8 @@ int c_net_start_post_clone(c_net_t *net)
 	return 0;
 }
 
-static int c_net_start_child_interface(c_net_interface_t *ni)
+static int
+c_net_start_child_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -1045,7 +1068,8 @@ static int c_net_start_child_interface(c_net_interface_t *ni)
  * In the container namespace, rename the interface to net->nw_name,
  * set the ipv4 container address and bring the interfaces up.
  */
-int c_net_start_child(c_net_t *net)
+int
+c_net_start_child(c_net_t *net)
 {
 	ASSERT(net);
 
@@ -1072,7 +1096,8 @@ int c_net_start_child(c_net_t *net)
 	return 0;
 }
 
-static void c_net_cleanup_interface(c_net_interface_t *ni)
+static void
+c_net_cleanup_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -1115,7 +1140,8 @@ static void c_net_cleanup_interface(c_net_interface_t *ni)
 /**
  * Cleans up the c_net_t struct and shuts down the network interface.
  */
-void c_net_cleanup(c_net_t *net)
+void
+c_net_cleanup(c_net_t *net)
 {
 	ASSERT(net);
 
@@ -1146,7 +1172,8 @@ void c_net_cleanup(c_net_t *net)
 /**
  * Frees the c_net_interface_t structure
  */
-static void c_net_free_interface(c_net_interface_t *ni)
+static void
+c_net_free_interface(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -1161,7 +1188,8 @@ static void c_net_free_interface(c_net_interface_t *ni)
 /**
  * Frees the c_net_t structure
  */
-void c_net_free(c_net_t *net)
+void
+c_net_free(c_net_t *net)
 {
 	ASSERT(net);
 
@@ -1177,7 +1205,8 @@ void c_net_free(c_net_t *net)
 	mem_free(net);
 }
 
-char *c_net_get_ip_new(c_net_t *net)
+char *
+c_net_get_ip_new(c_net_t *net)
 {
 	if (!net->ns_net)
 		return NULL;
@@ -1186,7 +1215,8 @@ char *c_net_get_ip_new(c_net_t *net)
 	return mem_strdup(inet_ntoa(ni0->ipv4_cont_addr));
 }
 
-char *c_net_get_subnet_new(c_net_t *net)
+char *
+c_net_get_subnet_new(c_net_t *net)
 {
 	if (!net->ns_net)
 		return NULL;
@@ -1195,7 +1225,8 @@ char *c_net_get_subnet_new(c_net_t *net)
 	return mem_strdup(ni0->subnet);
 }
 
-list_t *c_net_get_interface_mapping_new(c_net_t *net)
+list_t *
+c_net_get_interface_mapping_new(c_net_t *net)
 {
 	list_t *mapping = NULL;
 	for (list_t *l = net->interface_list; l; l = l->next) {

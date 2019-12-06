@@ -63,7 +63,8 @@ typedef struct smartcard_startdata {
 	control_t *control;
 } smartcard_startdata_t;
 
-static char *bytes_to_string_new(unsigned char *data, size_t len)
+static char *
+bytes_to_string_new(unsigned char *data, size_t len)
 {
 	IF_NULL_RETVAL(data, NULL);
 	char *str = mem_alloc(2 * len + 1);
@@ -72,7 +73,8 @@ static char *bytes_to_string_new(unsigned char *data, size_t len)
 	return str;
 }
 
-static void smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned char *key, int keylen)
+static void
+smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned char *key, int keylen)
 {
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
 	char *ascii_key = bytes_to_string_new(key, keylen);
@@ -82,7 +84,8 @@ static void smartcard_start_container_internal(smartcard_startdata_t *startdata,
 	mem_free(ascii_key);
 }
 
-static void smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data)
+static void
+smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
 	int resp_fd = control_get_client_sock(startdata->control);
@@ -208,8 +211,9 @@ static void smartcard_cb_start_container(int fd, unsigned events, event_io_t *io
 	}
 }
 
-int smartcard_container_start_handler(smartcard_t *smartcard, control_t *control, container_t *container,
-				      const char *passwd)
+int
+smartcard_container_start_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+				  const char *passwd)
 {
 	ASSERT(smartcard);
 	ASSERT(control);
@@ -239,7 +243,8 @@ int smartcard_container_start_handler(smartcard_t *smartcard, control_t *control
 	return 0;
 }
 
-static void smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
+static void
+smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 {
 	control_t *control = data;
 	int resp_fd = control_get_client_sock(control);
@@ -278,7 +283,8 @@ static void smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *
 	}
 }
 
-int smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd, const char *newpasswd)
+int
+smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd, const char *newpasswd)
 {
 	ASSERT(smartcard);
 	ASSERT(control);
@@ -304,7 +310,8 @@ int smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char 
 	return (ret > 0) ? 0 : -1;
 }
 
-smartcard_t *smartcard_new(const char *path)
+smartcard_t *
+smartcard_new(const char *path)
 {
 	ASSERT(path);
 	smartcard_t *smartcard = mem_alloc(sizeof(smartcard_t));
@@ -313,7 +320,8 @@ smartcard_t *smartcard_new(const char *path)
 	return smartcard;
 }
 
-void smartcard_free(smartcard_t *smartcard)
+void
+smartcard_free(smartcard_t *smartcard)
 {
 	IF_NULL_RETURN(smartcard);
 	// TODO properly cleanup
@@ -323,7 +331,8 @@ void smartcard_free(smartcard_t *smartcard)
 
 /// *** CRYPTO *** ///
 
-static HashAlgo smartcard_hashalgo_to_proto(smartcard_crypto_hashalgo_t hashalgo)
+static HashAlgo
+smartcard_hashalgo_to_proto(smartcard_crypto_hashalgo_t hashalgo)
 {
 	switch (hashalgo) {
 	case SHA1:
@@ -337,7 +346,8 @@ static HashAlgo smartcard_hashalgo_to_proto(smartcard_crypto_hashalgo_t hashalgo
 	}
 }
 
-static smartcard_crypto_verify_result_t smartcard_crypto_verify_result_from_proto(TokenToDaemon__Code code)
+static smartcard_crypto_verify_result_t
+smartcard_crypto_verify_result_from_proto(TokenToDaemon__Code code)
 {
 	switch (code) {
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
@@ -366,9 +376,9 @@ typedef struct crypto_callback_task {
 	char *verify_cert_file;
 } crypto_callback_task_t;
 
-static crypto_callback_task_t *crypto_callback_hash_task_new(smartcard_crypto_hash_callback_t cb, void *data,
-							     const char *hash_file,
-							     smartcard_crypto_hashalgo_t hash_algo)
+static crypto_callback_task_t *
+crypto_callback_hash_task_new(smartcard_crypto_hash_callback_t cb, void *data, const char *hash_file,
+			      smartcard_crypto_hashalgo_t hash_algo)
 {
 	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
 	task->hash_complete = cb;
@@ -378,10 +388,9 @@ static crypto_callback_task_t *crypto_callback_hash_task_new(smartcard_crypto_ha
 	return task;
 }
 
-static crypto_callback_task_t *crypto_callback_verify_task_new(smartcard_crypto_verify_callback_t cb, void *data,
-							       const char *data_file, const char *sig_file,
-							       const char *cert_file,
-							       smartcard_crypto_hashalgo_t hash_algo)
+static crypto_callback_task_t *
+crypto_callback_verify_task_new(smartcard_crypto_verify_callback_t cb, void *data, const char *data_file,
+				const char *sig_file, const char *cert_file, smartcard_crypto_hashalgo_t hash_algo)
 {
 	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
 	task->verify_complete = cb;
@@ -393,7 +402,8 @@ static crypto_callback_task_t *crypto_callback_verify_task_new(smartcard_crypto_
 	return task;
 }
 
-static void crypto_callback_task_free(crypto_callback_task_t *task)
+static void
+crypto_callback_task_free(crypto_callback_task_t *task)
 {
 	IF_NULL_RETURN(task);
 	mem_free(task->hash_file);
@@ -402,7 +412,8 @@ static void crypto_callback_task_free(crypto_callback_task_t *task)
 	mem_free(task->verify_cert_file);
 }
 
-static void smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
+static void
+smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 {
 	crypto_callback_task_t *task = data;
 	ASSERT(task);
@@ -454,7 +465,8 @@ static void smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *d
 	close(fd);
 }
 
-static int smartcard_send_crypto(const DaemonToToken *out, crypto_callback_task_t *task)
+static int
+smartcard_send_crypto(const DaemonToToken *out, crypto_callback_task_t *task)
 {
 	ASSERT(out);
 	ASSERT(task);
@@ -485,8 +497,9 @@ static int smartcard_send_crypto(const DaemonToToken *out, crypto_callback_task_
 	return 0;
 }
 
-int smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo,
-			       smartcard_crypto_hash_callback_t cb, void *data)
+int
+smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_hash_callback_t cb,
+			   void *data)
 {
 	ASSERT(file);
 	ASSERT(cb);
@@ -505,9 +518,9 @@ int smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t has
 	return 0;
 }
 
-int smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const char *certfile,
-				 smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_verify_callback_t cb,
-				 void *data)
+int
+smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const char *certfile,
+			     smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_verify_callback_t cb, void *data)
 {
 	ASSERT(datafile);
 	ASSERT(sigfile);
@@ -530,7 +543,8 @@ int smartcard_crypto_verify_file(const char *datafile, const char *sigfile, cons
 	return 0;
 }
 
-static TokenToDaemon *smartcard_send_recv_block(const DaemonToToken *out)
+static TokenToDaemon *
+smartcard_send_recv_block(const DaemonToToken *out)
 {
 	ASSERT(out);
 
@@ -562,7 +576,8 @@ static TokenToDaemon *smartcard_send_recv_block(const DaemonToToken *out)
 	return msg;
 }
 
-char *smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo)
+char *
+smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo)
 {
 	ASSERT(file);
 	char *ret = NULL;
@@ -597,9 +612,9 @@ char *smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_ha
 	return ret;
 }
 
-smartcard_crypto_verify_result_t smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile,
-								    const char *certfile,
-								    smartcard_crypto_hashalgo_t hashalgo)
+smartcard_crypto_verify_result_t
+smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, const char *certfile,
+				   smartcard_crypto_hashalgo_t hashalgo)
 {
 	ASSERT(datafile);
 	ASSERT(sigfile);
@@ -640,7 +655,8 @@ smartcard_crypto_verify_result_t smartcard_crypto_verify_file_block(const char *
 	return ret;
 }
 
-uint8_t *smartcard_pull_csr_new(size_t *csr_len)
+uint8_t *
+smartcard_pull_csr_new(size_t *csr_len)
 {
 	ASSERT(csr_len);
 	uint8_t *csr = NULL;
@@ -675,7 +691,8 @@ uint8_t *smartcard_pull_csr_new(size_t *csr_len)
 	return csr;
 }
 
-void smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len)
+void
+smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len)
 {
 	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
 	const char *end_cert_str = "-----END CERTIFICATE-----";

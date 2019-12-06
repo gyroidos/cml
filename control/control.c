@@ -50,7 +50,8 @@
 #define DEFAULT_KEY                                                                                                    \
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
-static void print_usage(const char *cmd)
+static void
+print_usage(const char *cmd)
 {
 	printf("\n");
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
@@ -87,7 +88,8 @@ static void print_usage(const char *cmd)
 	exit(-1);
 }
 
-static int sock_connect(const char *socket_file)
+static int
+sock_connect(const char *socket_file)
 {
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, socket_file);
 	if (sock < 0)
@@ -95,14 +97,16 @@ static int sock_connect(const char *socket_file)
 	return sock;
 }
 
-static void send_message(int sock, ControllerToDaemon *msg)
+static void
+send_message(int sock, ControllerToDaemon *msg)
 {
 	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)msg);
 	if (msg_size < 0)
 		FATAL("error sending protobuf message\n");
 }
 
-static DaemonToController *recv_message(int sock)
+static DaemonToController *
+recv_message(int sock)
 {
 	DaemonToController *resp = (DaemonToController *)protobuf_recv_message(sock, &daemon_to_controller__descriptor);
 	if (!resp)
@@ -110,7 +114,8 @@ static DaemonToController *recv_message(int sock)
 	return resp;
 }
 
-static uuid_t *get_container_uuid_new(const char *identifier, int sock)
+static uuid_t *
+get_container_uuid_new(const char *identifier, int sock)
 {
 	uuid_t *uuid = uuid_new(identifier);
 	if (uuid)
@@ -150,7 +155,8 @@ static const struct option assign_iface_options[] = { { "iface", required_argume
 
 static const struct option update_cfg_options[] = { { "file", required_argument, 0, 'f' }, { 0, 0, 0, 0 } };
 
-static char *get_password_new(const char *prompt)
+static char *
+get_password_new(const char *prompt)
 {
 	struct termios termios_before;
 	struct termios termios_passwd;
@@ -177,7 +183,8 @@ static char *get_password_new(const char *prompt)
 	return mem_strdup(buf);
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	logf_register(&logf_test_write, stderr);
 

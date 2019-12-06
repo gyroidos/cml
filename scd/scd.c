@@ -71,7 +71,8 @@ static logf_handler_t *scd_logfile_handler = NULL;
 /**
  * returns 1 if a given file is a p12 token, otherwise 0
  */
-static int is_token(const char *path, const char *file, UNUSED void *data)
+static int
+is_token(const char *path, const char *file, UNUSED void *data)
 {
 	char *location = mem_printf("%s/%s", path, file);
 	char *ext;
@@ -95,7 +96,8 @@ static int is_token(const char *path, const char *file, UNUSED void *data)
 /**
  * returns >0 if one or more token files exist
  */
-static int token_file_exists()
+static int
+token_file_exists()
 {
 	int ret = dir_foreach(SCD_TOKEN_DIR, &is_token, NULL);
 
@@ -107,12 +109,14 @@ static int token_file_exists()
 	}
 }
 
-bool scd_in_provisioning_mode(void)
+bool
+scd_in_provisioning_mode(void)
 {
 	return file_is_regular(PROVISIONING_MODE_FILE);
 }
 
-static void provisioning_mode()
+static void
+provisioning_mode()
 {
 	INFO("Check for existence of device certificate and user token");
 
@@ -270,7 +274,8 @@ static void provisioning_mode()
 	}
 }
 
-static void scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void
+scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(scd_logfile_handler);
@@ -278,7 +283,8 @@ static void scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_WARN);
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	ASSERT(argc >= 1);
 
@@ -329,7 +335,8 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-static int scd_load_token_cb(const char *path, const char *name, UNUSED void *data)
+static int
+scd_load_token_cb(const char *path, const char *name, UNUSED void *data)
 {
 	if (scd_token) {
 		DEBUG("Token already loaded, stopping scan.");
@@ -346,7 +353,8 @@ static int scd_load_token_cb(const char *path, const char *name, UNUSED void *da
 	return 0;
 }
 
-int scd_load_token()
+int
+scd_load_token()
 {
 	if (scd_token) {
 		softtoken_free(scd_token);
@@ -368,14 +376,16 @@ int scd_load_token()
 	return 0;
 }
 
-softtoken_t *scd_get_token(void)
+softtoken_t *
+scd_get_token(void)
 {
 	if (!scd_token)
 		scd_load_token();
 	return scd_token;
 }
 
-const char *scd_get_token_dir(void)
+const char *
+scd_get_token_dir(void)
 {
 	return SCD_TOKEN_DIR;
 }

@@ -9,7 +9,8 @@
 #define EK_CERT_RSA_INDEX 0x01c00002
 #define EK_CERT_EC_INDEX 0x01c0000a
 
-uint8_t *ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
+uint8_t *
+ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
 {
 	IF_NULL_RETVAL(cert_len, NULL);
 

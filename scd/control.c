@@ -57,7 +57,8 @@ struct scd_control {
 UNUSED static list_t *control_list = NULL;
 
 /* keep in sync with offered algorithms by protobuf */
-static char *switch_proto_hash_algo(int hash_algo)
+static char *
+switch_proto_hash_algo(int hash_algo)
 {
 	char *ret = NULL;
 	switch (hash_algo) {
@@ -82,7 +83,8 @@ struct verify_cert_ca_cb_data {
 	bool verified;
 };
 
-static int scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
+static int
+scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 {
 	int ret = 0;
 	struct verify_cert_ca_cb_data *cb_data = data;
@@ -102,7 +104,8 @@ static int scd_control_verify_cert_ca_cb(const char *path, const char *file, voi
 	return ret;
 }
 
-static TokenToDaemon__Code scd_control_handle_verify(const DaemonToToken *msg)
+static TokenToDaemon__Code
+scd_control_handle_verify(const DaemonToToken *msg)
 {
 	int ret;
 	TokenToDaemon__Code out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
@@ -159,7 +162,8 @@ do_signature:
 	return out_code;
 }
 
-static void scd_control_handle_message(const DaemonToToken *msg, int fd)
+static void
+scd_control_handle_message(const DaemonToToken *msg, int fd)
 {
 	if (NULL == msg) {
 		WARN("msg=NULL, returning");
@@ -372,7 +376,8 @@ static void scd_control_handle_message(const DaemonToToken *msg, int fd)
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this scd_control_t struct
  */
-static void scd_control_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *data)
+static void
+scd_control_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *data)
 {
 	if (events & EVENT_IO_READ) {
 		DaemonToToken *msg = (DaemonToToken *)protobuf_recv_message(fd, &daemon_to_token__descriptor);
@@ -405,7 +410,8 @@ connection_err:
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this scd_control_t struct
   */
-static void scd_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
+static void
+scd_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 {
 	scd_control_t *control = data;
 	ASSERT(control);
@@ -433,7 +439,8 @@ static void scd_control_cb_accept(int fd, unsigned events, event_io_t *io, void 
 	event_add_io(event);
 }
 
-scd_control_t *scd_control_new(const char *path)
+scd_control_t *
+scd_control_new(const char *path)
 {
 	int sock = sock_unix_create_and_bind(SOCK_SEQPACKET | SOCK_NONBLOCK, path);
 	if (sock < 0) {

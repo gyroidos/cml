@@ -81,7 +81,8 @@ struct c_cgroups {
 				  wildcard '*' is mapped to -1 */
 };
 
-c_cgroups_t *c_cgroups_new(container_t *container)
+c_cgroups_t *
+c_cgroups_new(container_t *container)
 {
 	c_cgroups_t *cgroups = mem_new0(c_cgroups_t, 1);
 	cgroups->container = container;
@@ -95,7 +96,8 @@ c_cgroups_t *c_cgroups_new(container_t *container)
 	return cgroups;
 }
 
-void c_cgroups_free(c_cgroups_t *cgroups)
+void
+c_cgroups_free(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 	mem_free(cgroups->cgroup_path);
@@ -177,7 +179,8 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 };
 
 /* extracts major and minor device numbers from a rule as an int array {major, minor} */
-static int *c_cgroups_dev_from_rule(const char *rule)
+static int *
+c_cgroups_dev_from_rule(const char *rule)
 {
 	int *ret = mem_new0(int, 2);
 	char *rule_cp = mem_strdup(rule);
@@ -201,14 +204,16 @@ static int *c_cgroups_dev_from_rule(const char *rule)
 	return ret;
 }
 
-static void c_cgroups_list_add(list_t **list, const int *dev)
+static void
+c_cgroups_list_add(list_t **list, const int *dev)
 {
 	int *dev_copy = mem_new0(int, 2);
 	memcpy(dev_copy, dev, sizeof(int) * 2);
 	*list = list_append(*list, dev_copy);
 }
 
-static void c_cgroups_list_remove(list_t **list, const int *dev)
+static void
+c_cgroups_list_remove(list_t **list, const int *dev)
 {
 	for (list_t *elem = *list; elem != NULL; elem = elem->next) {
 		int *dev_elem = (int *)elem->data;
@@ -220,7 +225,8 @@ static void c_cgroups_list_remove(list_t **list, const int *dev)
 	}
 }
 
-static int c_cgroups_list_contains_match(const list_t *list, const int *dev)
+static int
+c_cgroups_list_contains_match(const list_t *list, const int *dev)
 {
 	for (const list_t *elem = list; elem != NULL; elem = elem->next) {
 		const int *dev_elem = (const int *)elem->data;
@@ -234,19 +240,22 @@ static int c_cgroups_list_contains_match(const list_t *list, const int *dev)
 	return 0;
 }
 
-static void c_cgroups_add_allowed(c_cgroups_t *cgroups, const int *dev)
+static void
+c_cgroups_add_allowed(c_cgroups_t *cgroups, const int *dev)
 {
 	c_cgroups_list_add(&global_allowed_devs_list, dev);
 	c_cgroups_list_add(&cgroups->allowed_devs, dev);
 }
 
-static void c_cgroups_add_assigned(c_cgroups_t *cgroups, const int *dev)
+static void
+c_cgroups_add_assigned(c_cgroups_t *cgroups, const int *dev)
 {
 	c_cgroups_list_add(&global_assigned_devs_list, dev);
 	c_cgroups_list_add(&cgroups->assigned_devs, dev);
 }
 
-static int c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
+static int
+c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 {
 	// first allow in host-side list, which cannot manipulated by container (if namspaced)
 	char *path = mem_printf("%s/devices/%s/devices.allow", CGROUPS_FOLDER,
@@ -273,7 +282,8 @@ static int c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 	return 0;
 }
 
-int c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
+int
+c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
 {
 	ASSERT(cgroups);
 	ASSERT(rule);
@@ -289,7 +299,8 @@ int c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
 	return c_cgroups_allow_rule(cgroups, rule);
 }
 
-int c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
+int
+c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
 {
 	ASSERT(cgroups);
 	ASSERT(rule);
@@ -313,7 +324,8 @@ int c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
 	return 0;
 }
 
-int c_cgroups_devices_deny(c_cgroups_t *cgroups, const char *rule)
+int
+c_cgroups_devices_deny(c_cgroups_t *cgroups, const char *rule)
 {
 	ASSERT(cgroups);
 	ASSERT(rule);
@@ -334,7 +346,8 @@ error:
 	return -1;
 }
 
-int c_cgroups_devices_allow_list(c_cgroups_t *cgroups, const char **list)
+int
+c_cgroups_devices_allow_list(c_cgroups_t *cgroups, const char **list)
 {
 	ASSERT(cgroups);
 
@@ -351,7 +364,8 @@ int c_cgroups_devices_allow_list(c_cgroups_t *cgroups, const char **list)
 	return 0;
 }
 
-int c_cgroups_devices_deny_list(c_cgroups_t *cgroups, const char **list)
+int
+c_cgroups_devices_deny_list(c_cgroups_t *cgroups, const char **list)
 {
 	ASSERT(cgroups);
 
@@ -368,7 +382,8 @@ int c_cgroups_devices_deny_list(c_cgroups_t *cgroups, const char **list)
 	return 0;
 }
 
-static int c_cgroups_devices_assign_list(c_cgroups_t *cgroups, const char **list)
+static int
+c_cgroups_devices_assign_list(c_cgroups_t *cgroups, const char **list)
 {
 	if (!list)
 		return 0;
@@ -381,21 +396,24 @@ static int c_cgroups_devices_assign_list(c_cgroups_t *cgroups, const char **list
 	return 0;
 }
 
-int c_cgroups_devices_allow_all(c_cgroups_t *cgroups)
+int
+c_cgroups_devices_allow_all(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
 	return c_cgroups_devices_allow(cgroups, "a");
 }
 
-int c_cgroups_devices_deny_all(c_cgroups_t *cgroups)
+int
+c_cgroups_devices_deny_all(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
 	return c_cgroups_devices_deny(cgroups, "a");
 }
 
-int c_cgroups_devices_allow_audio(c_cgroups_t *cgroups)
+int
+c_cgroups_devices_allow_audio(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -408,7 +426,8 @@ int c_cgroups_devices_allow_audio(c_cgroups_t *cgroups)
 	return 0;
 }
 
-int c_cgroups_devices_deny_audio(c_cgroups_t *cgroups)
+int
+c_cgroups_devices_deny_audio(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -422,7 +441,8 @@ int c_cgroups_devices_deny_audio(c_cgroups_t *cgroups)
 	return 0;
 }
 
-static int c_cgroups_devices_init(c_cgroups_t *cgroups)
+static int
+c_cgroups_devices_init(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -500,7 +520,8 @@ static int c_cgroups_devices_init(c_cgroups_t *cgroups)
 	return 0;
 }
 
-static void c_cgroups_cleanup_freeze_timer(c_cgroups_t *cgroups)
+static void
+c_cgroups_cleanup_freeze_timer(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -513,7 +534,8 @@ static void c_cgroups_cleanup_freeze_timer(c_cgroups_t *cgroups)
 	cgroups->freezer_retries = 0;
 }
 
-int c_cgroups_freeze(c_cgroups_t *cgroups)
+int
+c_cgroups_freeze(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -530,7 +552,8 @@ int c_cgroups_freeze(c_cgroups_t *cgroups)
 	return 0;
 }
 
-int c_cgroups_unfreeze(c_cgroups_t *cgroups)
+int
+c_cgroups_unfreeze(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -547,9 +570,11 @@ int c_cgroups_unfreeze(c_cgroups_t *cgroups)
 	return 0;
 }
 
-static void c_cgroups_freezer_state_cb(const char *path, uint32_t mask, event_inotify_t *inotify, void *data);
+static void
+c_cgroups_freezer_state_cb(const char *path, uint32_t mask, event_inotify_t *inotify, void *data);
 
-static void c_cgroups_freeze_timeout_cb(UNUSED event_timer_t *timer, void *data)
+static void
+c_cgroups_freeze_timeout_cb(UNUSED event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 
@@ -578,8 +603,8 @@ static void c_cgroups_freeze_timeout_cb(UNUSED event_timer_t *timer, void *data)
 	c_cgroups_cleanup_freeze_timer(cgroups);
 }
 
-static void c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask, UNUSED event_inotify_t *inotify,
-				       void *data)
+static void
+c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask, UNUSED event_inotify_t *inotify, void *data)
 {
 	c_cgroups_t *cgroups = data;
 
@@ -619,7 +644,8 @@ static void c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t 
 	mem_free(state);
 }
 
-int c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
+int
+c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -647,8 +673,8 @@ int c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 #define _BSD_SOURCE /* See feature_test_macros(7) */
 #endif
 
-static void c_cgroups_devices_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event_inotify_t *inotify,
-					       void *data)
+static void
+c_cgroups_devices_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event_inotify_t *inotify, void *data)
 {
 	c_cgroups_t *cgroups = data;
 
@@ -706,7 +732,8 @@ static void c_cgroups_devices_watch_dev_dir_cb(const char *path, uint32_t mask, 
 	//}
 }
 
-static int c_cgroups_devices_dev_dir_foreach_cb(const char *path, const char *name, void *data)
+static int
+c_cgroups_devices_dev_dir_foreach_cb(const char *path, const char *name, void *data)
 {
 	char *full_path = mem_printf("%s/%s", path, name);
 
@@ -728,7 +755,8 @@ out:
 	return 0;
 }
 
-UNUSED static void c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
+UNUSED static void
+c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -745,7 +773,8 @@ UNUSED static void c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 	mem_free(dev_path);
 }
 
-static int c_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path)
+static int
+c_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path)
 {
 	int ret;
 	if (mkdir(mount_path, 0755) && errno != EEXIST) {
@@ -781,7 +810,8 @@ static int c_cgroups_create_and_mount_subsys(const char *subsys, const char *mou
 /*******************/
 /* Hooks */
 
-int c_cgroups_start_pre_clone(c_cgroups_t *cgroups)
+int
+c_cgroups_start_pre_clone(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -838,7 +868,8 @@ error:
 	return -1;
 }
 
-int c_cgroups_start_post_clone(c_cgroups_t *cgroups)
+int
+c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -885,7 +916,8 @@ error:
 	return -1;
 }
 
-int c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
+int
+c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -938,7 +970,8 @@ error:
 	return -1;
 }
 
-int c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid)
+int
+c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid)
 {
 	ASSERT(cgroups);
 
@@ -971,7 +1004,8 @@ error:
 	return -1;
 }
 
-int c_cgroups_start_child(c_cgroups_t *cgroups)
+int
+c_cgroups_start_child(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
@@ -993,7 +1027,8 @@ int c_cgroups_start_child(c_cgroups_t *cgroups)
 
 	return 0;
 }
-static int c_cgroups_cleanup_subsys_remove_cb(const char *path, const char *name, UNUSED void *data)
+static int
+c_cgroups_cleanup_subsys_remove_cb(const char *path, const char *name, UNUSED void *data)
 {
 	int ret = 0;
 	char *file_to_remove = mem_printf("%s/%s", path, name);
@@ -1013,7 +1048,8 @@ static int c_cgroups_cleanup_subsys_remove_cb(const char *path, const char *name
 	return ret;
 }
 
-void c_cgroups_cleanup(c_cgroups_t *cgroups)
+void
+c_cgroups_cleanup(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 

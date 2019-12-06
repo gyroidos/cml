@@ -35,53 +35,62 @@ typedef struct softtoken softtoken_t;
 /**
  * instantiates a new softtoken structure
  */
-softtoken_t *softtoken_new_from_p12(const char *filename);
+softtoken_t *
+softtoken_new_from_p12(const char *filename);
 
 /**
  * Changes the pasphrase/pin of the underlying low level structure
  * of the softtoken token.
  */
-int softtoken_change_passphrase(softtoken_t *token, const char *oldpass, const char *newpass);
+int
+softtoken_change_passphrase(softtoken_t *token, const char *oldpass, const char *newpass);
 
 /**
  * unlocks a softtoken with a password.
  * stores the token private key in the structure
  */
-int softtoken_unlock(softtoken_t *token, char *passphrase);
+int
+softtoken_unlock(softtoken_t *token, char *passphrase);
 
 /**
  * locks a softtoken by freeing the private key
  * reference in the softtoken
  */
-int softtoken_lock(softtoken_t *token);
+int
+softtoken_lock(softtoken_t *token);
 
 /**
  * checks whether the softtoken is locked or not
  */
-bool softtoken_is_locked(softtoken_t *token);
+bool
+softtoken_is_locked(softtoken_t *token);
 
 /**
  * checks whether the softtoken is locked or not till next reboot
  */
-bool softtoken_is_locked_till_reboot(softtoken_t *token);
+bool
+softtoken_is_locked_till_reboot(softtoken_t *token);
 
 /**
  * frees a softtoken structure
  */
-void softtoken_free(softtoken_t *token);
+void
+softtoken_free(softtoken_t *token);
 
 /**
  * wraps a symmetric container key plain_key of length plain_key_len with a
  * user public key pubkey into a wrapped key wrapped_key of legnth wrapped_key_len
  */
-int softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
-		       unsigned char **wrapped_key, int *wrapped_key_len);
+int
+softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
+		   unsigned char **wrapped_key, int *wrapped_key_len);
 
 /**
  * unwraps a symmetric container key wrapped_key of length wrapped_key_len with a
  * user's private key into the plain key plain_key of legnth plain_key_len
  */
-int softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
-			 unsigned char **plain_key, int *plain_key_len);
+int
+softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
+		     unsigned char **plain_key, int *plain_key_len);
 
 #endif /* SOFTTOKEN_H */

@@ -38,7 +38,8 @@
 
 // TODO update naming scheme
 
-ssize_t protobuf_send_message(int fd, const ProtobufCMessage *message)
+ssize_t
+protobuf_send_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
@@ -78,7 +79,8 @@ error_write:
 	return -1;
 }
 
-ProtobufCMessage *protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
+ProtobufCMessage *
+protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(descriptor);
 
@@ -130,7 +132,8 @@ error_read:
 	return NULL;
 }
 
-void protobuf_free_message(ProtobufCMessage *message)
+void
+protobuf_free_message(ProtobufCMessage *message)
 {
 	if (!message) {
 		WARN("Trying to free NULL protobuf message!");
@@ -139,7 +142,8 @@ void protobuf_free_message(ProtobufCMessage *message)
 	protobuf_c_message_free_unpacked(message, NULL);
 }
 
-ssize_t protobuf_dump_message(int fd, const ProtobufCMessage *message)
+ssize_t
+protobuf_dump_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
@@ -155,7 +159,8 @@ ssize_t protobuf_dump_message(int fd, const ProtobufCMessage *message)
 	return bytes_written;
 }
 
-ProtobufCMessage *protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageDescriptor *descriptor)
+ProtobufCMessage *
+protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(filename);
 	ASSERT(descriptor);
@@ -188,7 +193,8 @@ ProtobufCMessage *protobuf_message_new_from_textfile(const char *filename, const
 	return msg;
 }
 
-ProtobufCMessage *protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor)
+ProtobufCMessage *
+protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(string);
 	ASSERT(descriptor);
@@ -212,8 +218,8 @@ ProtobufCMessage *protobuf_message_new_from_string(char *string, const ProtobufC
 	return msg;
 }
 
-ProtobufCMessage *protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
-						const ProtobufCMessageDescriptor *descriptor)
+ProtobufCMessage *
+protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(buf);
 	ASSERT(descriptor);
@@ -230,7 +236,8 @@ ProtobufCMessage *protobuf_message_new_from_buf(const uint8_t *buf, size_t bufle
 	return msg;
 }
 
-ssize_t protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message)
+ssize_t
+protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message)
 {
 	ASSERT(filename);
 	ASSERT(message);

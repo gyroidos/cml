@@ -50,7 +50,8 @@ struct tpm2d_rcontrol {
 /**
  * Returns the HashAlgLen (proto) for the given TPM_ALG_ID alg_id.
  */
-static HashAlgLen tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
+static HashAlgLen
+tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
 {
 	switch (alg_id) {
 	case TPM_ALG_SHA1:
@@ -65,7 +66,8 @@ static HashAlgLen tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
 	}
 }
 
-static void tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t *rcontrol)
+static void
+tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t *rcontrol)
 {
 	ASSERT(rcontrol);
 
@@ -235,7 +237,8 @@ static void tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this tpm2d_rcontrol_t struct
  */
-static void tpm2d_rcontrol_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
+static void
+tpm2d_rcontrol_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 {
 	tpm2d_rcontrol_t *rcontrol = data;
 	ASSERT(rcontrol);
@@ -271,7 +274,8 @@ connection_err:
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this tpm2d_rcontrol_t struct
   */
-static void tpm2d_rcontrol_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
+static void
+tpm2d_rcontrol_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 {
 	tpm2d_rcontrol_t *rcontrol = data;
 	ASSERT(rcontrol);
@@ -299,7 +303,8 @@ static void tpm2d_rcontrol_cb_accept(int fd, unsigned events, event_io_t *io, vo
 	event_add_io(event);
 }
 
-tpm2d_rcontrol_t *tpm2d_rcontrol_new(const char *ip, int port)
+tpm2d_rcontrol_t *
+tpm2d_rcontrol_new(const char *ip, int port)
 {
 	int sock = sock_inet_create_and_bind(SOCK_STREAM, ip, port);
 	IF_TRUE_RETVAL(sock < 0, NULL);

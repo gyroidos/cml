@@ -53,7 +53,8 @@ static TSS_CONTEXT *tss_context = NULL;
 
 /************************************************************************************/
 
-void tss2_init(void)
+void
+tss2_init(void)
 {
 	int ret;
 
@@ -68,7 +69,8 @@ void tss2_init(void)
 	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 }
 
-void tss2_destroy(void)
+void
+tss2_destroy(void)
 {
 	int ret;
 	IF_NULL_RETURN_ERROR(tss_context);
@@ -79,7 +81,8 @@ void tss2_destroy(void)
 	tss_context = NULL;
 }
 
-char *convert_bin_to_hex_new(const uint8_t *bin, int length)
+char *
+convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
@@ -91,7 +94,8 @@ char *convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-uint8_t *convert_hex_to_bin_new(const char *hex_str, int *out_length)
+uint8_t *
+convert_hex_to_bin_new(const char *hex_str, int *out_length)
 {
 	int len = strlen(hex_str);
 	int i = 0, j = 0;
@@ -117,7 +121,8 @@ err:
 }
 
 #ifndef TPM2D_NVMCRYPT_ONLY
-static uint8_t *tpm2d_marshal_structure_new(void *structure, MarshalFunction_t marshal_function, size_t *size)
+static uint8_t *
+tpm2d_marshal_structure_new(void *structure, MarshalFunction_t marshal_function, size_t *size)
 {
 	uint8_t *bin_stream = NULL;
 	uint16_t written_size;
@@ -448,7 +453,8 @@ tpm2_flushcontext(TPMI_DH_CONTEXT handle)
 	return rc;
 }
 
-static TPM_RC tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
+static TPM_RC
+tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 {
 	ASSERT(out_public_area);
 
@@ -485,7 +491,8 @@ static TPM_RC tpm2_fill_rsa_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type
 	return TPM_RC_SUCCESS;
 }
 
-static TPM_RC tpm2_fill_ecc_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
+static TPM_RC
+tpm2_fill_ecc_details(TPMT_PUBLIC *out_public_area, tpm2d_key_type_t key_type)
 {
 	ASSERT(out_public_area);
 
@@ -533,7 +540,8 @@ static uint8_t ek_iwg_policy[] = { 0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xB3, 0xF
 				   0x8D, 0x46, 0xA5, 0xD7, 0x24, 0xFD, 0x52, 0xD7, 0x6E, 0x06, 0x52,
 				   0x0B, 0x64, 0xF2, 0xA1, 0xDA, 0x1B, 0x33, 0x14, 0x69, 0xAA };
 
-static TPM_RC tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, tpm2d_key_type_t key_type)
+static TPM_RC
+tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs, tpm2d_key_type_t key_type)
 {
 	ASSERT(out_public_area);
 
@@ -807,8 +815,9 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 	return rc;
 }
 
-tpm2d_quote_t *tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const char *sig_key_pwd,
-			      uint8_t *qualifying_data, size_t qualifying_data_len)
+tpm2d_quote_t *
+tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const char *sig_key_pwd,
+	       uint8_t *qualifying_data, size_t qualifying_data_len)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	Quote_In in;
@@ -888,7 +897,8 @@ err:
 	return NULL;
 }
 
-void tpm2_quote_free(tpm2d_quote_t *quote)
+void
+tpm2_quote_free(tpm2d_quote_t *quote)
 {
 	if (quote->quoted_value)
 		mem_free(quote->quoted_value);
@@ -1055,7 +1065,8 @@ err:
 	return rc;
 }
 
-uint8_t *tpm2_getrandom_new(size_t rand_length)
+uint8_t *
+tpm2_getrandom_new(size_t rand_length)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	TPMI_SH_AUTH_SESSION se_handle;
@@ -1099,7 +1110,8 @@ uint8_t *tpm2_getrandom_new(size_t rand_length)
 	return rand;
 }
 
-tpm2d_pcr_t *tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
+tpm2d_pcr_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	PCR_Read_In in;
@@ -1144,14 +1156,16 @@ tpm2d_pcr_t *tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 	return pcr;
 }
 
-void tpm2_pcrread_free(tpm2d_pcr_t *pcr)
+void
+tpm2_pcrread_free(tpm2d_pcr_t *pcr)
 {
 	if (pcr->pcr_value)
 		mem_free(pcr->pcr_value);
 	mem_free(pcr);
 }
 
-size_t tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle)
+size_t
+tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle)
 {
 	NV_ReadPublic_In in;
 	NV_ReadPublic_Out out;
@@ -1181,7 +1195,8 @@ size_t tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle)
 	return data_size;
 }
 
-static size_t tpm2_nv_get_max_buffer_size(TSS_CONTEXT *tss_context)
+static size_t
+tpm2_nv_get_max_buffer_size(TSS_CONTEXT *tss_context)
 {
 	GetCapability_In in;
 	GetCapability_Out out;

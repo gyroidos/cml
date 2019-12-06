@@ -46,7 +46,8 @@
 #define LOGF_FILE_STRIP "device/fraunhofer/common/cml/"
 #endif
 
-void logf_message(logf_prio_t prio, const char *fmt, ...)
+void
+logf_message(logf_prio_t prio, const char *fmt, ...)
 {
 	char buf[4096];
 	va_list ap;
@@ -62,7 +63,8 @@ void logf_message(logf_prio_t prio, const char *fmt, ...)
 	logf_write(prio, buf);
 }
 
-void logf_message_errno(logf_prio_t prio, const char *fmt, ...)
+void
+logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 {
 	char buf[4096];
 	int errno_backup = errno;
@@ -84,7 +86,8 @@ void logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 	logf_write(prio, buf);
 }
 
-void logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
+void
+logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
 {
 	char buf[4096];
 	va_list ap;
@@ -108,7 +111,8 @@ void logf_message_file(logf_prio_t prio, const char *file, int line, const char 
 	logf_write(prio, buf);
 }
 
-void logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
+void
+logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
 {
 	char buf[4096];
 	int errno_backup = errno;
@@ -148,7 +152,8 @@ struct logf_handler {
 	logf_prio_t prio;
 };
 
-void logf_write(logf_prio_t prio, const char *msg)
+void
+logf_write(logf_prio_t prio, const char *msg)
 {
 	for (list_t *l = logf_handler_list; l; l = l->next) {
 		logf_handler_t *h = l->data;
@@ -158,7 +163,8 @@ void logf_write(logf_prio_t prio, const char *msg)
 	}
 }
 
-logf_handler_t *logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void *data)
+logf_handler_t *
+logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void *data)
 {
 	logf_handler_t *handler = mem_new(logf_handler_t, 1);
 
@@ -171,12 +177,14 @@ logf_handler_t *logf_register(void (*func)(logf_prio_t prio, const char *msg, vo
 	return handler;
 }
 
-void logf_unregister(logf_handler_t *handler)
+void
+logf_unregister(logf_handler_t *handler)
 {
 	logf_handler_list = list_remove(logf_handler_list, handler);
 }
 
-void logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
+void
+logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 {
 	ASSERT(handler);
 	handler->prio = prio;
@@ -184,7 +192,8 @@ void logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 
 /******************************************************************************/
 
-char *logf_file_new_name(const char *name)
+char *
+logf_file_new_name(const char *name)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
@@ -207,7 +216,8 @@ char *logf_file_new_name(const char *name)
 	return n;
 }
 
-void *logf_file_new(const char *name)
+void *
+logf_file_new(const char *name)
 {
 	FILE *f;
 	char *name_with_time_of_day = logf_file_new_name(name);
@@ -218,7 +228,8 @@ void *logf_file_new(const char *name)
 	return f;
 }
 
-static void logf_file_write_timestamp(FILE *stream)
+static void
+logf_file_write_timestamp(FILE *stream)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
@@ -241,7 +252,8 @@ static void logf_file_write_timestamp(FILE *stream)
 	fprintf(stream, "%s.%06u%s ", buf1, (unsigned)tv.tv_usec, buf2);
 }
 
-static const char *prio_str(logf_prio_t prio)
+static const char *
+prio_str(logf_prio_t prio)
 {
 	switch (prio) {
 	case LOGF_PRIO_FATAL:
@@ -261,7 +273,8 @@ static const char *prio_str(logf_prio_t prio)
 	}
 }
 
-void logf_file_write(logf_prio_t prio, const char *msg, void *data)
+void
+logf_file_write(logf_prio_t prio, const char *msg, void *data)
 {
 	if (!data)
 		return;
@@ -271,7 +284,8 @@ void logf_file_write(logf_prio_t prio, const char *msg, void *data)
 	fflush(data);
 }
 
-void logf_test_write(logf_prio_t prio, const char *msg, void *data)
+void
+logf_test_write(logf_prio_t prio, const char *msg, void *data)
 {
 	if (!data)
 		return;
@@ -280,14 +294,16 @@ void logf_test_write(logf_prio_t prio, const char *msg, void *data)
 	fflush(data);
 }
 
-void *logf_syslog_new(const char *name)
+void *
+logf_syslog_new(const char *name)
 {
 	openlog(name, LOG_PID, LOG_USER);
 
 	return mem_strdup(name);
 }
 
-void logf_syslog_write(logf_prio_t prio, const char *msg, void *data)
+void
+logf_syslog_write(logf_prio_t prio, const char *msg, void *data)
 {
 	int prio_syslog;
 
@@ -314,13 +330,15 @@ void logf_syslog_write(logf_prio_t prio, const char *msg, void *data)
 	syslog(prio_syslog, "%s %s %s\n", prio_str(prio), (char *)data, msg);
 }
 
-void *logf_android_new(const char *name)
+void *
+logf_android_new(const char *name)
 {
 	return mem_strdup(name);
 }
 
 #ifdef ANDROID
-void logf_android_write(logf_prio_t prio, const char *msg, void *data)
+void
+logf_android_write(logf_prio_t prio, const char *msg, void *data)
 {
 	int prio_android;
 
@@ -351,13 +369,15 @@ void logf_android_write(logf_prio_t prio, const char *msg, void *data)
 	__android_log_write(prio_android, data, msg);
 }
 #else
-void logf_android_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
+void
+logf_android_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
 {
 	return;
 }
 #endif
 
-void *logf_klog_new(const char *name)
+void *
+logf_klog_new(const char *name)
 {
 #ifdef ANDROID
 	klog_init();
@@ -367,7 +387,8 @@ void *logf_klog_new(const char *name)
 }
 
 #ifdef ANDROID
-void logf_klog_write(logf_prio_t prio, const char *msg, void *data)
+void
+logf_klog_write(logf_prio_t prio, const char *msg, void *data)
 {
 	int prio_klog;
 
@@ -394,7 +415,8 @@ void logf_klog_write(logf_prio_t prio, const char *msg, void *data)
 	klog_write(prio_klog, "<%u>%s[%u] %s %s\n", prio_klog, (char *)data, getpid(), prio_str(prio), msg);
 }
 #else
-void logf_klog_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
+void
+logf_klog_write(UNUSED logf_prio_t prio, UNUSED const char *msg, UNUSED void *data)
 {
 	return;
 }

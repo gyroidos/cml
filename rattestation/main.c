@@ -38,7 +38,8 @@
 static logf_handler_t *ipagent_logfile_handler = NULL;
 static logf_handler_t *ipagent_logfile_handler_stdout = NULL;
 
-char *convert_bin_to_hex_new(const uint8_t *bin, int length)
+char *
+convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	IF_TRUE_RETVAL(0 > length, NULL);
 
@@ -52,19 +53,22 @@ char *convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-static void main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+static void
+main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	INFO("Received SIGINT...");
 	exit(0);
 }
 
-static void main_return_result_and_exit(bool validated)
+static void
+main_return_result_and_exit(bool validated)
 {
 	TRACE("Exit handler called...");
 	exit(validated ? 0 : -1);
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	ipagent_logfile_handler = logf_register(&logf_file_write, logf_file_new(LOGFILE_PATH));
 	ipagent_logfile_handler_stdout = logf_register(&logf_file_write, stdout);

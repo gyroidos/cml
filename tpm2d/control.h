@@ -53,6 +53,7 @@ typedef enum control_generic_response { CMD_OK = 1, CMD_FAILED } control_generic
  *
  * @param path path of the socket file to bind the socket to
  */
-tpm2d_control_t *tpm2d_control_new(const char *path);
+tpm2d_control_t *
+tpm2d_control_new(const char *path);
 
 #endif /* TPM2D_CONTROL_H */

@@ -24,10 +24,13 @@
 #ifndef CONTROL_H
 #define CONTROL_H
 
-bool control_is_enabled(void);
+bool
+control_is_enabled(void);
 
-int control_push_guestos(char *cfgfile, char *certfile, char *sigfile);
+int
+control_push_guestos(char *cfgfile, char *certfile, char *sigfile);
 
-int control_register_localca(char *ca_cert_file);
+int
+control_register_localca(char *ca_cert_file);
 
 #endif /* CONTROL_H */

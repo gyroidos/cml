@@ -55,7 +55,8 @@ struct c_service {
 	container_callback_t *airplane_mode_observer;
 };
 
-static int c_service_send_container_cfg_name_proto(c_service_t *service)
+static int
+c_service_send_container_cfg_name_proto(c_service_t *service)
 {
 	ASSERT(service);
 	int ret = -1;
@@ -75,7 +76,8 @@ static int c_service_send_container_cfg_name_proto(c_service_t *service)
 	return ret;
 }
 
-static int c_service_send_container_cfg_dns_proto(c_service_t *service)
+static int
+c_service_send_container_cfg_dns_proto(c_service_t *service)
 {
 	ASSERT(service);
 	int ret = -1;
@@ -99,7 +101,8 @@ static int c_service_send_container_cfg_dns_proto(c_service_t *service)
  * Processes the received protobuf message and calls the relevant callback
  * functions on the associated container.
  */
-static void c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessage *message)
+static void
+c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessage *message)
 {
 	//int wallpaper_len;
 
@@ -210,7 +213,8 @@ static void c_service_handle_received_message(c_service_t *service, const Servic
  * Invoked whenever the TrustmeService writes (a protobuf ServiceToCmldMessage)
  * to the _connected_ socket.
  */
-static void c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data)
+static void
+c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data)
 {
 	TRACE("Callback c_service_cb_receive_message has been invoked");
 
@@ -247,7 +251,8 @@ connection_err:
 /**
  * Invoked when the TrustmeService (initially) connects to the predefined UNIX socket.
  */
-static void c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
+static void
+c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 {
 	TRACE("Callback c_service_cb_accept has been invoked");
 
@@ -283,7 +288,8 @@ error:
 	return;
 }
 
-static int c_service_send_connectivity_proto(c_service_t *service, container_connectivity_t connectivity)
+static int
+c_service_send_connectivity_proto(c_service_t *service, container_connectivity_t connectivity)
 {
 	ASSERT(service);
 
@@ -300,7 +306,8 @@ static int c_service_send_connectivity_proto(c_service_t *service, container_con
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
-static void c_service_connectivity_observer_cb(container_t *container, UNUSED container_callback_t *cb, void *data)
+static void
+c_service_connectivity_observer_cb(container_t *container, UNUSED container_callback_t *cb, void *data)
 {
 	c_service_t *service = data;
 
@@ -316,7 +323,8 @@ static void c_service_connectivity_observer_cb(container_t *container, UNUSED co
 	}
 }
 
-static int c_service_send_airplane_mode_proto(c_service_t *service, bool airplane_mode)
+static int
+c_service_send_airplane_mode_proto(c_service_t *service, bool airplane_mode)
 {
 	ASSERT(service);
 
@@ -333,7 +341,8 @@ static int c_service_send_airplane_mode_proto(c_service_t *service, bool airplan
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
-static void c_service_airplane_mode_observer_cb(container_t *container, UNUSED container_callback_t *cb, void *data)
+static void
+c_service_airplane_mode_observer_cb(container_t *container, UNUSED container_callback_t *cb, void *data)
 {
 	c_service_t *service = data;
 
@@ -349,7 +358,8 @@ static void c_service_airplane_mode_observer_cb(container_t *container, UNUSED c
 	}
 }
 
-c_service_t *c_service_new(container_t *container)
+c_service_t *
+c_service_new(container_t *container)
 {
 	ASSERT(container);
 
@@ -369,7 +379,8 @@ c_service_t *c_service_new(container_t *container)
 	return service;
 }
 
-void c_service_cleanup(c_service_t *service)
+void
+c_service_cleanup(c_service_t *service)
 {
 	ASSERT(service);
 
@@ -405,7 +416,8 @@ void c_service_cleanup(c_service_t *service)
 	}
 }
 
-int c_service_stop(c_service_t *service)
+int
+c_service_stop(c_service_t *service)
 {
 	ASSERT(service);
 
@@ -414,7 +426,8 @@ int c_service_stop(c_service_t *service)
 	return c_service_send_message(service, C_SERVICE_MESSAGE_SHUTDOWN);
 }
 
-void c_service_free(c_service_t *service)
+void
+c_service_free(c_service_t *service)
 {
 	ASSERT(service);
 
@@ -422,7 +435,8 @@ void c_service_free(c_service_t *service)
 	mem_free(service);
 }
 
-int c_service_start_pre_clone(c_service_t *service)
+int
+c_service_start_pre_clone(c_service_t *service)
 {
 	ASSERT(service);
 
@@ -431,14 +445,16 @@ int c_service_start_pre_clone(c_service_t *service)
 	return service->sock;
 }
 
-int c_service_start_child(c_service_t *service)
+int
+c_service_start_child(c_service_t *service)
 {
 	ASSERT(service);
 
 	return sock_unix_bind(service->sock, C_SERVICE_SOCKET);
 }
 
-int c_service_start_pre_exec(c_service_t *service)
+int
+c_service_start_pre_exec(c_service_t *service)
 {
 	ASSERT(service);
 
@@ -471,7 +487,8 @@ int c_service_start_pre_exec(c_service_t *service)
 /**
  * Helper function that generates and sends a protobuf message to the Trustme Service.
  */
-static int c_service_send_message_proto(c_service_t *service, unsigned int code)
+static int
+c_service_send_message_proto(c_service_t *service, unsigned int code)
 {
 	ASSERT(service);
 
@@ -481,7 +498,8 @@ static int c_service_send_message_proto(c_service_t *service, unsigned int code)
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
-int c_service_send_message(c_service_t *service, c_service_message_t message)
+int
+c_service_send_message(c_service_t *service, c_service_message_t message)
 {
 	DEBUG("Sending message");
 	ASSERT(service);

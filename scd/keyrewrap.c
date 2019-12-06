@@ -30,7 +30,8 @@
 static softtoken_t *token_old = NULL;
 static softtoken_t *token_new = NULL;
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	ASSERT(argc >= 3);
 	char *token_path_old = argv[1];

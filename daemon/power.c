@@ -36,7 +36,8 @@
  * This function reads out the wakelocks set. The locks appear in the proc folder in the wakelocks file.
  * If the wakelock is recognized as active, it is printed.
  */
-static void power_debug_wakelocks(void)
+static void
+power_debug_wakelocks(void)
 {
 	char line[4096];
 	FILE *f;
@@ -76,7 +77,8 @@ static void power_debug_wakelocks(void)
  * In case that the device was not in deepsleep during the last 60 seconds, it debugs the wakelocks,
  * which prevent the deepsleep.
  */
-static void power_cb_check_sleep(UNUSED event_timer_t *timer, UNUSED void *data)
+static void
+power_cb_check_sleep(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	static struct timeval last_sleep = { 0, 0 };
 	static struct timeval last_awake = { 0, 0 };
@@ -117,7 +119,8 @@ static void power_cb_check_sleep(UNUSED event_timer_t *timer, UNUSED void *data)
 
 /******************************************************************************/
 
-int power_init(void)
+int
+power_init(void)
 {
 	event_timer_t *timer;
 

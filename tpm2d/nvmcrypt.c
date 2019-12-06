@@ -39,8 +39,9 @@ static nvmcrypt_fde_state_t fde_state = FDE_RESET;
 static bool secure_boot = false;
 static uint8_t *nvmcrypt_nvindex_policy = NULL;
 
-static TPM_RC nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session_handle,
-					    TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
+static TPM_RC
+nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session_handle, TPMI_DH_OBJECT bind_handle,
+			      const char *bind_pwd)
 {
 	TPM_RC ret;
 	tpm2d_pcr_t **pcrs = NULL;
@@ -73,7 +74,8 @@ cleanup:
 	return ret;
 }
 
-static TPM_RC nvmcrypt_create_policy(void)
+static TPM_RC
+nvmcrypt_create_policy(void)
 {
 	TPM_RC ret;
 	TPMI_SH_AUTH_SESSION se_trial;
@@ -94,7 +96,8 @@ static TPM_RC nvmcrypt_create_policy(void)
 	return tpm2_flushcontext(se_trial);
 }
 
-static uint8_t *nvmcrypt_load_key_new(const char *fde_key_pw)
+static uint8_t *
+nvmcrypt_load_key_new(const char *fde_key_pw)
 {
 	TPMI_SH_AUTH_SESSION se_handle;
 	int ret = 0;
@@ -203,7 +206,8 @@ err:
 	return NULL;
 }
 
-nvmcrypt_fde_state_t nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
+nvmcrypt_fde_state_t
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 {
 	IF_TRUE_RETVAL(device_path == NULL || !file_exists(device_path), FDE_NO_DEVICE);
 	char *dev_name = basename(device_path);
@@ -229,21 +233,24 @@ nvmcrypt_fde_state_t nvmcrypt_dm_setup(const char *device_path, const char *fde_
 	return fde_state;
 }
 
-nvmcrypt_fde_state_t nvmcrypt_dm_lock(const char *fde_pw)
+nvmcrypt_fde_state_t
+nvmcrypt_dm_lock(const char *fde_pw)
 {
 	if (TPM_RC_SUCCESS == tpm2_nv_readlock(TPM2D_FDE_NV_HANDLE, fde_pw))
 		fde_state = FDE_KEY_ACCESS_LOCKED;
 	return fde_state;
 }
 
-nvmcrypt_fde_state_t nvmcrypt_dm_reset(const char *hierarchy_pw)
+nvmcrypt_fde_state_t
+nvmcrypt_dm_reset(const char *hierarchy_pw)
 {
 	if (TPM_RC_SUCCESS == tpm2_nv_undefinespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE, hierarchy_pw))
 		fde_state = FDE_RESET;
 	return fde_state;
 }
 
-void nvmcrypt_init(bool use_secure_boot_policy)
+void
+nvmcrypt_init(bool use_secure_boot_policy)
 {
 	secure_boot = use_secure_boot_policy;
 

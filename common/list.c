@@ -27,7 +27,8 @@
 #include "macro.h"
 #include "mem.h"
 
-list_t *list_append(list_t *list, void *data)
+list_t *
+list_append(list_t *list, void *data)
 {
 	list_t *e = mem_new(list_t, 1);
 	e->data = data;
@@ -42,7 +43,8 @@ list_t *list_append(list_t *list, void *data)
 	return tail ? list : e; // return head of list
 }
 
-list_t *list_join(list_t *list, list_t *list_append)
+list_t *
+list_join(list_t *list, list_t *list_append)
 {
 	IF_NULL_RETVAL(list, list_append);
 	IF_NULL_RETVAL(list_append, list);
@@ -53,7 +55,8 @@ list_t *list_join(list_t *list, list_t *list_append)
 	return list;
 }
 
-bool list_contains(const list_t *list, const list_t *elem)
+bool
+list_contains(const list_t *list, const list_t *elem)
 {
 	IF_NULL_RETVAL(elem, false);
 
@@ -65,13 +68,15 @@ bool list_contains(const list_t *list, const list_t *elem)
 	return false;
 }
 
-void list_delete(list_t *list)
+void
+list_delete(list_t *list)
 {
 	while (list)
 		list = list_unlink(list, list);
 }
 
-list_t *list_unlink(list_t *list, list_t *elem)
+list_t *
+list_unlink(list_t *list, list_t *elem)
 {
 	IF_NULL_RETVAL(elem, list);
 	IF_FALSE_RETVAL(list_contains(list, elem), list); // this also handles the case that list is NULL
@@ -89,12 +94,14 @@ list_t *list_unlink(list_t *list, list_t *elem)
 	return head;
 }
 
-list_t *list_remove(list_t *list, void *data)
+list_t *
+list_remove(list_t *list, void *data)
 {
 	return list_unlink(list, list_find(list, data));
 }
 
-list_t *list_find(list_t *list, void *data)
+list_t *
+list_find(list_t *list, void *data)
 {
 	TRACE("Searching data %p in list %p", (void *)data, (void *)list);
 
@@ -110,7 +117,8 @@ list_t *list_find(list_t *list, void *data)
 	return NULL;
 }
 
-unsigned int list_length(const list_t *list)
+unsigned int
+list_length(const list_t *list)
 {
 	unsigned int len = 0;
 
@@ -120,7 +128,8 @@ unsigned int list_length(const list_t *list)
 	return len;
 }
 
-list_t *list_nth(list_t *list, unsigned int n)
+list_t *
+list_nth(list_t *list, unsigned int n)
 {
 	IF_NULL_RETVAL(list, NULL);
 
@@ -135,13 +144,15 @@ list_t *list_nth(list_t *list, unsigned int n)
 	return elem;
 }
 
-void *list_nth_data(list_t *list, unsigned int n)
+void *
+list_nth_data(list_t *list, unsigned int n)
 {
 	list_t *e = list_nth(list, n);
 	return e ? e->data : NULL;
 }
 
-list_t *list_prepend(list_t *list, void *data)
+list_t *
+list_prepend(list_t *list, void *data)
 {
 	list_t *e = mem_new(list_t, 1);
 	e->data = data;
@@ -155,7 +166,8 @@ list_t *list_prepend(list_t *list, void *data)
 	return e; // return head of list
 }
 
-list_t *list_tail(list_t *list)
+list_t *
+list_tail(list_t *list)
 {
 	for (list_t *e = list; e; e = e->next) {
 		if (e->next == NULL)
@@ -164,7 +176,8 @@ list_t *list_tail(list_t *list)
 	return NULL;
 }
 
-list_t *list_replace(list_t *list, list_t *elem, void *data)
+list_t *
+list_replace(list_t *list, list_t *elem, void *data)
 {
 	IF_NULL_RETVAL(elem, list);
 	IF_FALSE_RETVAL(list_contains(list, elem), list); // this also handles the case that list is NULL
@@ -189,7 +202,8 @@ list_t *list_replace(list_t *list, list_t *elem, void *data)
 	return head;
 }
 
-void list_foreach(list_t *list, void(func)(void *))
+void
+list_foreach(list_t *list, void(func)(void *))
 {
 	ASSERT(list);
 	ASSERT(func);

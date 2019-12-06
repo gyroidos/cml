@@ -43,16 +43,19 @@
  * Returns the directory in which the token files are stored.
  * Currently, only softtokens in the form of .p12 files are supported.
  */
-const char *scd_get_token_dir(void);
+const char *
+scd_get_token_dir(void);
 
 /**
  * Returns the token to use for crypto operations.
  */
-softtoken_t *scd_get_token(void);
+softtoken_t *
+scd_get_token(void);
 
 /**
  * Checks provisioning mode
  */
-bool scd_in_provisioning_mode(void);
+bool
+scd_in_provisioning_mode(void);
 
 #endif // SCD_H

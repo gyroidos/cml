@@ -72,7 +72,8 @@ typedef struct logf_handler logf_handler_t;
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
  */
-void logf_message(logf_prio_t prio, const char *fmt, ...)
+void
+logf_message(logf_prio_t prio, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
@@ -81,7 +82,8 @@ void logf_message(logf_prio_t prio, const char *fmt, ...)
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
  */
-void logf_message_errno(logf_prio_t prio, const char *fmt, ...)
+void
+logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
@@ -90,7 +92,8 @@ void logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
  */
-void logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
+void
+logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 4, 5)))
 #endif
@@ -99,7 +102,8 @@ void logf_message_file(logf_prio_t prio, const char *file, int line, const char 
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
  */
-void logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
+void
+logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 4, 5)))
 #endif
@@ -170,24 +174,28 @@ void logf_message_file_errno(logf_prio_t prio, const char *file, int line, const
  * @param prio Priority of the log message.
  * @param msg The log message.
  */
-void logf_write(logf_prio_t prio, const char *msg);
+void
+logf_write(logf_prio_t prio, const char *msg);
 
 /**
  * Registers a log writer.
  *
  */
-logf_handler_t *logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void *data);
+logf_handler_t *
+logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void *data);
 
 /**
  * Unregisters a log writer.
  *
  */
-void logf_unregister(logf_handler_t *handler);
+void
+logf_unregister(logf_handler_t *handler);
 
 /**
  * Set the lowest priority for messages logged to this handler
  */
-void logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio);
+void
+logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio);
 
 /**
  * Generates a logfile name by appending a unique timestamp to the filename.
@@ -196,7 +204,8 @@ void logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio);
  * @param name Name of the log file.
  * @return The new name with timestamp.
  */
-char *logf_file_new_name(const char *name);
+char *
+logf_file_new_name(const char *name);
 
 /**
  * Opens the log file for logf_file_write.
@@ -206,7 +215,8 @@ char *logf_file_new_name(const char *name);
  * @param name Name of the log file.
  * @return A pointer to the log file.
  */
-void *logf_file_new(const char *name);
+void *
+logf_file_new(const char *name);
 
 /**
  * Logs to stdout/stderr or to a file.
@@ -216,7 +226,8 @@ void *logf_file_new(const char *name);
  * @param msg The log message.
  * @param data stdout/stderr or a file.
  */
-void logf_file_write(logf_prio_t prio, const char *msg, void *data);
+void
+logf_file_write(logf_prio_t prio, const char *msg, void *data);
 
 /**
  *  Similar to logf_file_write but omits the (varying) timestamp and may thus
@@ -226,7 +237,8 @@ void logf_file_write(logf_prio_t prio, const char *msg, void *data);
  * @param msg The log message.
  * @param data stdout/stderr or a file.
  */
-void logf_test_write(logf_prio_t prio, const char *msg, void *data);
+void
+logf_test_write(logf_prio_t prio, const char *msg, void *data);
 
 /**
  * Opens syslog for logf_syslog_write and sets the log tag.
@@ -234,7 +246,8 @@ void logf_test_write(logf_prio_t prio, const char *msg, void *data);
  * @param name The string to be prepended to every log message.
  * @return A pointer to the tag name.
  */
-void *logf_syslog_new(const char *name);
+void *
+logf_syslog_new(const char *name);
 
 /**
  * Logs to syslog.
@@ -243,7 +256,8 @@ void *logf_syslog_new(const char *name);
  * @param msg The log message.
  * @param data The log name.
  */
-void logf_syslog_write(logf_prio_t prio, const char *msg, void *data);
+void
+logf_syslog_write(logf_prio_t prio, const char *msg, void *data);
 
 /**
  * Sets log tag for logf_android_write.
@@ -251,7 +265,8 @@ void logf_syslog_write(logf_prio_t prio, const char *msg, void *data);
  * @param name The tag name.
  * @return A pointer to the tag name.
  */
-void *logf_android_new(const char *name);
+void *
+logf_android_new(const char *name);
 
 /**
  * Logs to Android's logging system (logcat).
@@ -260,7 +275,8 @@ void *logf_android_new(const char *name);
  * @param msg The log message.
  * @param data The log name.
  */
-void logf_android_write(logf_prio_t prio, const char *msg, void *data);
+void
+logf_android_write(logf_prio_t prio, const char *msg, void *data);
 
 /**
  * Sets log tag for logf_klog_write.
@@ -268,7 +284,8 @@ void logf_android_write(logf_prio_t prio, const char *msg, void *data);
  * @param name The tag name.
  * @return A pointer to the tag name.
  */
-void *logf_klog_new(const char *name);
+void *
+logf_klog_new(const char *name);
 
 /**
  * Logs to kernel log.
@@ -277,6 +294,7 @@ void *logf_klog_new(const char *name);
  * @param msg The log message.
  * @param data The log name.
  */
-void logf_klog_write(logf_prio_t prio, const char *msg, void *data);
+void
+logf_klog_write(logf_prio_t prio, const char *msg, void *data);
 
 #endif /* LOGF_H */

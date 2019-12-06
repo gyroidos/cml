@@ -15,7 +15,8 @@
 static gzFile *gzfiles = NULL;
 static int gzfiles_tail = -1;
 
-static int gzopen_frontend(char *pathname, int oflags, int mode)
+static int
+gzopen_frontend(char *pathname, int oflags, int mode)
 {
 	char *gzoflags;
 	int fd;
@@ -60,7 +61,8 @@ static int gzopen_frontend(char *pathname, int oflags, int mode)
 	return fd;
 }
 
-static int gzclose_frontend(int fd)
+static int
+gzclose_frontend(int fd)
 {
 	int ret = gzclose(gzfiles[fd]);
 	gzfiles[fd] = NULL;
@@ -79,12 +81,14 @@ static int gzclose_frontend(int fd)
 	return ret;
 }
 
-static ssize_t gzread_frontend(int fd, void *buf, size_t count)
+static ssize_t
+gzread_frontend(int fd, void *buf, size_t count)
 {
 	return gzread(gzfiles[fd], buf, count);
 }
 
-static ssize_t gzwrite_frontend(int fd, const void *buf, size_t count)
+static ssize_t
+gzwrite_frontend(int fd, const void *buf, size_t count)
 {
 	return gzwrite(gzfiles[fd], (void *)buf, count);
 }

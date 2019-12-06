@@ -56,7 +56,8 @@ UNUSED static list_t *control_list = NULL;
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
-static TpmToController__GenericResponse tpm2d_control_resp_to_proto(control_generic_response_t resp)
+static TpmToController__GenericResponse
+tpm2d_control_resp_to_proto(control_generic_response_t resp)
 {
 	switch (resp) {
 	case CMD_OK:
@@ -71,7 +72,8 @@ static TpmToController__GenericResponse tpm2d_control_resp_to_proto(control_gene
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
-static TpmToController__FdeResponse tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
+static TpmToController__FdeResponse
+tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 {
 	switch (state) {
 	case FDE_OK:
@@ -93,7 +95,8 @@ static TpmToController__FdeResponse tpm2d_control_fdestate_to_proto(nvmcrypt_fde
 	}
 }
 
-static TPM_ALG_ID tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
+static TPM_ALG_ID
+tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 {
 	INFO("Get algid for hash_len: %d", hash_alg_len);
 
@@ -110,7 +113,8 @@ static TPM_ALG_ID tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 	}
 }
 
-static void tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
+static void
+tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
 	ASSERT(control);
 
@@ -227,7 +231,8 @@ static void tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this tpm2d_control_t struct
  */
-static void tpm2d_control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
+static void
+tpm2d_control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 {
 	tpm2d_control_t *control = data;
 	ASSERT(control);
@@ -263,7 +268,8 @@ connection_err:
  * @param io	    pointer to associated event_io_t struct
  * @param data	    pointer to this tpm2d_control_t struct
   */
-static void tpm2d_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
+static void
+tpm2d_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 {
 	tpm2d_control_t *control = data;
 	ASSERT(control);
@@ -291,7 +297,8 @@ static void tpm2d_control_cb_accept(int fd, unsigned events, event_io_t *io, voi
 	event_add_io(event);
 }
 
-tpm2d_control_t *tpm2d_control_new(const char *path)
+tpm2d_control_t *
+tpm2d_control_new(const char *path)
 {
 	int sock = sock_unix_create_and_bind(SOCK_STREAM | SOCK_NONBLOCK, path);
 	if (sock < 0) {

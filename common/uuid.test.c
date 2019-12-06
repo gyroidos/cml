@@ -27,7 +27,8 @@
 
 #include "common/macro.h"
 
-int main()
+int
+main()
 {
 	logf_register(&logf_file_write, stdout);
 

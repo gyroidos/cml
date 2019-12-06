@@ -35,7 +35,8 @@
 static pid_t child_pid = -1;
 static char use_setsid = 1;
 
-static void forward_signal(int signum)
+static void
+forward_signal(int signum)
 {
 	kill(use_setsid ? -child_pid : child_pid, signum);
 	DEBUG("Forwarded signal %d to children.\n", signum);
@@ -74,7 +75,8 @@ static void forward_signal(int signum)
  * clean up before suspending. In non-setsid mode, we proxy the original signal
  * instead of SIGSTOP for this reason.
 */
-static void dumb_init_handle_signal(int signum)
+static void
+dumb_init_handle_signal(int signum)
 {
 	DEBUG("Received signal %d.\n", signum);
 	if (signum == SIGCHLD) {
@@ -116,12 +118,14 @@ static void dumb_init_handle_signal(int signum)
 	}
 }
 
-void dumb_init_set_child_pid(pid_t pid)
+void
+dumb_init_set_child_pid(pid_t pid)
 {
 	child_pid = pid;
 }
 
-void dumb_init_signal_handler()
+void
+dumb_init_signal_handler()
 {
 	int signum;
 	sigset_t all_signals;

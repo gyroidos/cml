@@ -44,9 +44,9 @@
 
 #include "tpm2d_write_openssl.h"
 
-static int openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey, int privkey_len,
-				 int empty_auth, TPM_HANDLE parent, STACK_OF(TSSOPTPOLICY) * sk, int version,
-				 TPM2B_ENCRYPTED_SECRET *secret)
+static int
+openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey, int privkey_len, int empty_auth,
+		      TPM_HANDLE parent, STACK_OF(TSSOPTPOLICY) * sk, int version, TPM2B_ENCRYPTED_SECRET *secret)
 {
 	union {
 		TSSLOADABLE tssl;
@@ -98,8 +98,9 @@ static int openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len,
 	return 0;
 }
 
-int tpm2d_openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey, int privkey_len,
-				int empty_auth, TPM_HANDLE parent, TPM2B_ENCRYPTED_SECRET *secret)
+int
+tpm2d_openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey, int privkey_len,
+			    int empty_auth, TPM_HANDLE parent, TPM2B_ENCRYPTED_SECRET *secret)
 {
 	return openssl_write_tpmfile(file, pubkey, pubkey_len, privkey, privkey_len, empty_auth, parent, NULL, 0,
 				     secret);

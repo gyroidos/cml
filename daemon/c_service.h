@@ -65,12 +65,14 @@ c_service_new(container_t *container /*, configuration for communication with Tr
  * @param service The service object of the associated container to be freed.
  * @return 0 on success, -1 on error.
  */
-void c_service_cleanup(c_service_t *service);
+void
+c_service_cleanup(c_service_t *service);
 
 /**
  * Stop hook, which calls the android shutdown routine
  */
-int c_service_stop(c_service_t *service);
+int
+c_service_stop(c_service_t *service);
 
 /**
  * Frees the service object. Calls the cleanup function first.
@@ -78,7 +80,8 @@ int c_service_stop(c_service_t *service);
  * @param service The service object of the associated container to be freed.
  * @return 0 on success, -1 on error.
  */
-void c_service_free(c_service_t *service);
+void
+c_service_free(c_service_t *service);
 
 /**
  * Pre-clone hook.
@@ -86,7 +89,8 @@ void c_service_free(c_service_t *service);
  * @param service The service object of the associated container.
  * @return 0 on success, -1 on error.
  */
-int c_service_start_pre_clone(c_service_t *service);
+int
+c_service_start_pre_clone(c_service_t *service);
 
 /**
  * Child hook.
@@ -94,7 +98,8 @@ int c_service_start_pre_clone(c_service_t *service);
  * @param service The service object of the associated container.
  * @return 0 on success, -1 on error.
  */
-int c_service_start_child(c_service_t *service);
+int
+c_service_start_child(c_service_t *service);
 
 /**
  * pre-exec hook.
@@ -102,7 +107,8 @@ int c_service_start_child(c_service_t *service);
  * @param service The service object of the associated container.
  * @return 0 on success, -1 on error.
  */
-int c_service_start_pre_exec(c_service_t *service);
+int
+c_service_start_pre_exec(c_service_t *service);
 
 /**
  * Sends a message to the Trustme Service. If the message induces a response
@@ -118,6 +124,7 @@ int c_service_start_pre_exec(c_service_t *service);
  *         has been successfully received by the Trustme Service.
  *         On error, -1 is returned.
  */
-int c_service_send_message(c_service_t *service, c_service_message_t message);
+int
+c_service_send_message(c_service_t *service, c_service_message_t message);
 
 #endif /* C_SERVICE_H */

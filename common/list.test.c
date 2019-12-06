@@ -35,7 +35,8 @@
   *
   * @param list the list to be printed
   */
-void list_print(list_t *list)
+void
+list_print(list_t *list)
 {
 	for (unsigned int i = 0; i < list_length(list); i++)
 		DEBUG("list[%d] = %d\n", i, *((int *)list_nth_data(list, i)));
@@ -44,7 +45,8 @@ void list_print(list_t *list)
 /** Unit Test main function for list implementation
   *
   */
-int main(void)
+int
+main(void)
 {
 	list_t *list, *elem;
 

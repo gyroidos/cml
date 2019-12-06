@@ -41,14 +41,19 @@ typedef struct c_vol c_vol_t;
  * @param dir The path of the folder in which the
  * container-specific images (e.g. data and cache) are or should be stored.
  */
-c_vol_t *c_vol_new(const container_t *container);
+c_vol_t *
+c_vol_new(const container_t *container);
 
-void c_vol_free(c_vol_t *vol);
+void
+c_vol_free(c_vol_t *vol);
 
 /* Start hooks */
-int c_vol_start_pre_clone(const c_vol_t *vol);
-int c_vol_start_child(c_vol_t *vol);
+int
+c_vol_start_pre_clone(const c_vol_t *vol);
+int
+c_vol_start_child(c_vol_t *vol);
 
-void c_vol_cleanup(c_vol_t *vol);
+void
+c_vol_cleanup(c_vol_t *vol);
 
 #endif /* C_VOL_H */

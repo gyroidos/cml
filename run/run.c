@@ -34,12 +34,14 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-int setns(int fd, int nstype)
+int
+setns(int fd, int nstype)
 {
 	return syscall(__NR_setns, fd, nstype);
 }
 
-static void usage(char *pname)
+static void
+usage(char *pname)
 {
 	ERROR("Usage: %s container-pid cmd [arg...]\n", pname);
 	exit(-1);
@@ -48,7 +50,8 @@ static void usage(char *pname)
 #define MAX_NS 10
 int fd[MAX_NS] = { 0 };
 
-static int setns_cb(const char *path, const char *file, void *data)
+static int
+setns_cb(const char *path, const char *file, void *data)
 {
 	int *i = data;
 
@@ -76,7 +79,8 @@ error:
 	abort();
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	logf_register(&logf_test_write, stderr);
 

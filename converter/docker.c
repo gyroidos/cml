@@ -45,7 +45,8 @@
 
 static char *host_url = NULL;
 
-static void docker_remote_file_free(docker_remote_file_t *rf)
+static void
+docker_remote_file_free(docker_remote_file_t *rf)
 {
 	if (rf->media_type)
 		mem_free(rf->media_type);
@@ -63,7 +64,8 @@ static void docker_remote_file_free(docker_remote_file_t *rf)
 	mem_free(rf);
 }
 
-static docker_remote_file_t *parse_remote_file_new(cJSON *rf_obj, char *suffix)
+static docker_remote_file_t *
+parse_remote_file_new(cJSON *rf_obj, char *suffix)
 {
 	docker_remote_file_t *rf = mem_new0(docker_remote_file_t, 1);
 	rf->suffix = mem_strdup(suffix);
@@ -96,7 +98,8 @@ static docker_remote_file_t *parse_remote_file_new(cJSON *rf_obj, char *suffix)
 	return rf;
 }
 
-docker_manifest_list_t *docker_parse_manifest_list_new(const char *raw_file_buffer)
+docker_manifest_list_t *
+docker_parse_manifest_list_new(const char *raw_file_buffer)
 {
 	cJSON *jroot = NULL;
 	docker_manifest_list_t *ml = mem_alloc0(sizeof(docker_manifest_list_t));
@@ -162,7 +165,8 @@ out:
 	return ml;
 }
 
-void docker_manifest_list_free(docker_manifest_list_t *ml)
+void
+docker_manifest_list_free(docker_manifest_list_t *ml)
 {
 	if (ml->media_type)
 		mem_free(ml->media_type);
@@ -173,7 +177,8 @@ void docker_manifest_list_free(docker_manifest_list_t *ml)
 	mem_free(ml);
 }
 
-docker_manifest_t *docker_parse_manifest_new(const char *raw_file_buffer)
+docker_manifest_t *
+docker_parse_manifest_new(const char *raw_file_buffer)
 {
 	cJSON *jroot = NULL;
 	docker_manifest_t *manifest = mem_alloc0(sizeof(docker_manifest_t));
@@ -204,7 +209,8 @@ docker_manifest_t *docker_parse_manifest_new(const char *raw_file_buffer)
 	return manifest;
 }
 
-void docker_manifest_free(docker_manifest_t *manifest)
+void
+docker_manifest_free(docker_manifest_t *manifest)
 {
 	if (manifest->media_type)
 		mem_free(manifest->media_type);
@@ -219,7 +225,8 @@ void docker_manifest_free(docker_manifest_t *manifest)
 	mem_free(manifest);
 }
 
-docker_config_t *docker_parse_config_new(const char *raw_file_buffer)
+docker_config_t *
+docker_parse_config_new(const char *raw_file_buffer)
 {
 	cJSON *jroot = NULL;
 	docker_config_t *config = mem_alloc0(sizeof(docker_config_t));
@@ -307,7 +314,8 @@ docker_config_t *docker_parse_config_new(const char *raw_file_buffer)
 	return config;
 }
 
-void docker_config_free(docker_config_t *cfg)
+void
+docker_config_free(docker_config_t *cfg)
 {
 	if (cfg->hostname)
 		mem_free(cfg->hostname);
@@ -347,12 +355,14 @@ void docker_config_free(docker_config_t *cfg)
 	mem_free(cfg);
 }
 
-void docker_set_host_url(const char *url)
+void
+docker_set_host_url(const char *url)
 {
 	host_url = mem_strdup(url);
 }
 
-int docker_generate_basic_auth(const char *user, const char *password, const char *token_file)
+int
+docker_generate_basic_auth(const char *user, const char *password, const char *token_file)
 {
 	int ret = 0;
 
@@ -382,7 +392,8 @@ int docker_generate_basic_auth(const char *user, const char *password, const cha
 	return ret;
 }
 
-char *docker_get_curl_token_new(char *image_name, char *token_file)
+char *
+docker_get_curl_token_new(char *image_name, char *token_file)
 {
 	char *url = mem_printf("https://auth.docker.io/token?service="
 			       "registry.docker.io&scope=repository:%s%s:pull",
@@ -412,8 +423,9 @@ char *docker_get_curl_token_new(char *image_name, char *token_file)
 	return token;
 }
 
-int docker_download_manifest_list(const char *curl_token, const char *out_file, const char *image_name,
-				  const char *image_tag)
+int
+docker_download_manifest_list(const char *curl_token, const char *out_file, const char *image_name,
+			      const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
 	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url, !strchr(image_name, '/') ? "library/" : "",
@@ -440,8 +452,8 @@ int docker_download_manifest_list(const char *curl_token, const char *out_file, 
 	return ret;
 }
 
-int docker_download_manifest(const char *curl_token, const char *out_file, const char *image_name,
-			     const char *image_tag)
+int
+docker_download_manifest(const char *curl_token, const char *out_file, const char *image_name, const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
 	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url, !strchr(image_name, '/') ? "library/" : "",
@@ -469,8 +481,9 @@ int docker_download_manifest(const char *curl_token, const char *out_file, const
 	return ret;
 }
 
-static int download_docker_remote_file(const char *curl_token, const docker_remote_file_t *rf, const char *out_path,
-				       const char *image_name)
+static int
+download_docker_remote_file(const char *curl_token, const docker_remote_file_t *rf, const char *out_path,
+			    const char *image_name)
 {
 	int ret = 0;
 	char *image_hash = NULL;
@@ -525,8 +538,9 @@ static int download_docker_remote_file(const char *curl_token, const docker_remo
 	return ret;
 }
 
-int docker_download_image(char *curl_token, const docker_manifest_t *manifest, const char *out_path,
-			  const char *image_name, const char *image_tag)
+int
+docker_download_image(char *curl_token, const docker_manifest_t *manifest, const char *out_path, const char *image_name,
+		      const char *image_tag)
 {
 	int ret = download_docker_remote_file(curl_token, manifest->config, out_path, image_name);
 	if (ret < 0) {

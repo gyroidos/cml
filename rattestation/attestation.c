@@ -44,7 +44,8 @@ struct attestation_resp_cb_data {
 	uint8_t *nonce;
 };
 
-static char *convert_bin_to_hex_new(const uint8_t *bin, int length)
+static char *
+convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
@@ -56,7 +57,8 @@ static char *convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-static bool attestation_verify_resp(Tpm2dToRemote *resp, uint8_t *nonce, size_t nonce_len)
+static bool
+attestation_verify_resp(Tpm2dToRemote *resp, uint8_t *nonce, size_t nonce_len)
 {
 	DEBUG("Got Response from TPM2D");
 	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
@@ -68,7 +70,8 @@ static bool attestation_verify_resp(Tpm2dToRemote *resp, uint8_t *nonce, size_t 
 	return true;
 }
 
-static void attestation_response_recv_cb(int fd, unsigned events, event_io_t *io, void *data)
+static void
+attestation_response_recv_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
 	bool verified = false;
 	struct attestation_resp_cb_data *resp_cb_data = data;
@@ -101,7 +104,8 @@ cleanup:
 	mem_free(resp_cb_data);
 }
 
-int attestation_do_request(const char *host, void (*resp_verified_cb)(bool))
+int
+attestation_do_request(const char *host, void (*resp_verified_cb)(bool))
 {
 	uint8_t nonce[] = { 0xde, 0xad, 0xbe, 0xef }; //FIXME generate a real nonce here
 	size_t nonce_len = 4;

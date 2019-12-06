@@ -43,7 +43,8 @@
  * Reads a feedback string from the given file descriptor and compares it
  * with the expected result.
  */
-bool check_feedback_str(int fd, const char *expected_format, ...)
+bool
+check_feedback_str(int fd, const char *expected_format, ...)
 {
 	char expected_buf[4096];
 	va_list argptr;
@@ -69,7 +70,8 @@ bool check_feedback_str(int fd, const char *expected_format, ...)
  * @param sock_path path of the socket file to bind the socket to
  * @return the pid of the child process
  */
-static pid_t fork_child(const char *sock_path)
+static pid_t
+fork_child(const char *sock_path)
 {
 	static int sync_pipe[2];
 	int res = pipe(sync_pipe);
@@ -114,7 +116,8 @@ static pid_t fork_child(const char *sock_path)
  * Injects the given ControllerToDaemon message to the handle_control_message()
  * function in the control module (static test of control module logic).
  */
-void inject_message_static(ControllerToDaemon *msg, void *data)
+void
+inject_message_static(ControllerToDaemon *msg, void *data)
 {
 	int csock_write_fd = (int)data;
 	control_handle_message(msg, csock_write_fd);
@@ -125,7 +128,8 @@ void inject_message_static(ControllerToDaemon *msg, void *data)
  * connected to the control module (integration test of control module including
  * event loop).
  */
-void inject_message_sock(ControllerToDaemon *msg, void *data)
+void
+inject_message_sock(ControllerToDaemon *msg, void *data)
 {
 	int csock_fd = (int)data;
 	protobuf_send_message(csock_fd, (ProtobufCMessage *)msg);
@@ -145,8 +149,9 @@ void inject_message_sock(ControllerToDaemon *msg, void *data)
  * @param cmld_fd   file descriptor through which results are returned from the cmld stub
  * @param expected_results  array with expected result strings (NULL-terminated)
  */
-bool test_handle_message(ControllerToDaemon *msg, void (*inject)(ControllerToDaemon *msg, void *data), void *data,
-			 int cmld_fd, const char **expected_results)
+bool
+test_handle_message(ControllerToDaemon *msg, void (*inject)(ControllerToDaemon *msg, void *data), void *data,
+		    int cmld_fd, const char **expected_results)
 {
 	int bytes_available = 0;
 	// make sure there is no unhandled feedback (from previous test case)
@@ -172,7 +177,8 @@ bool test_handle_message(ControllerToDaemon *msg, void (*inject)(ControllerToDae
 /**
  * Helper function to create a socket pair.
  */
-void make_socketpair(int fds[2])
+void
+make_socketpair(int fds[2])
 {
 	if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) == -1) {
 		perror("socketpair");
@@ -190,7 +196,8 @@ void make_socketpair(int fds[2])
  * @param data      data for the inject function
  * @param csock_read_fdr     file descriptor responses from the control module can be read
  */
-void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *data), void *data, int csock_read_fd)
+void
+run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *data), void *data, int csock_read_fd)
 {
 	container_t *a0 = cmld_container_get_by_index(0);
 	container_t *a1 = cmld_container_get_by_index(1);
@@ -332,7 +339,8 @@ void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *da
 	protobuf_free_message((ProtobufCMessage *)cout);
 }
 
-int main()
+int
+main()
 {
 	logf_register(&logf_test_write, stdout);
 

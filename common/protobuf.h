@@ -46,7 +46,8 @@
  * @param message   the protobuf message struct to serialize and write
  * @return          the length of the serialized message (without length prefix)
  */
-ssize_t protobuf_send_message(int fd, const ProtobufCMessage *message);
+ssize_t
+protobuf_send_message(int fd, const ProtobufCMessage *message);
 
 /**
  * Reads a serialized protobuf message from the given file descriptor
@@ -60,14 +61,16 @@ ssize_t protobuf_send_message(int fd, const ProtobufCMessage *message);
  * @return          a pointer to a new protobuf message struct;
  *                  must be released with protobuf_free_message()
  */
-ProtobufCMessage *protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor);
+ProtobufCMessage *
+protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor);
 
 /**
  * Frees an unpacked protobuf message struct (e.g. created by protobuf_recv_message()).
  *
  * @param message message to free
  */
-void protobuf_free_message(ProtobufCMessage *message);
+void
+protobuf_free_message(ProtobufCMessage *message);
 
 /**
  * Writes (dumps) the given protobuf message struct to the given file descriptor
@@ -77,7 +80,8 @@ void protobuf_free_message(ProtobufCMessage *message);
  * @param message   the protobuf message struct to be dumped
  * @return  the length of the dumped message string
  */
-ssize_t protobuf_dump_message(int fd, const ProtobufCMessage *message);
+ssize_t
+protobuf_dump_message(int fd, const ProtobufCMessage *message);
 
 /**
  * Parses a protobuf message as defined by the given descriptor
@@ -88,8 +92,8 @@ ssize_t protobuf_dump_message(int fd, const ProtobufCMessage *message);
  * @return  a pointer to the parsed protobuf message struct;
  *          must be released with protobuf_free_message()
  */
-ProtobufCMessage *protobuf_message_new_from_textfile(const char *filename,
-						     const ProtobufCMessageDescriptor *descriptor);
+ProtobufCMessage *
+protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageDescriptor *descriptor);
 
 /**
  * Parses a protobuf message as defined by the given descriptor
@@ -100,10 +104,11 @@ ProtobufCMessage *protobuf_message_new_from_textfile(const char *filename,
  * @return  a pointer to the parsed protobuf message struct;
  *          must be released with protobuf_free_message()
  */
-ProtobufCMessage *protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor);
+ProtobufCMessage *
+protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor);
 
-ProtobufCMessage *protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
-						const ProtobufCMessageDescriptor *descriptor);
+ProtobufCMessage *
+protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor);
 
 /**
  * Writes a textual representation of the given protobuf message to the given file.
@@ -112,6 +117,7 @@ ProtobufCMessage *protobuf_message_new_from_buf(const uint8_t *buf, size_t bufle
  * @param message   the protobuf message to be serialized
  * @return          the length of the serialized message
  */
-ssize_t protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message);
+ssize_t
+protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message);
 
 #endif // PROTOBUF_H

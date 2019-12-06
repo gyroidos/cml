@@ -82,25 +82,31 @@
 
 /* creates a certificate containing the public key pkeyp with
  * serial number and validity in days (for user.p12) */
-static X509 *ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name);
+static X509 *
+ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name);
 
 /* adds extension nid with name value to a certificate cert */
-static int ssl_add_ext_cert(X509 *cert, int nid, char *value);
+static int
+ssl_add_ext_cert(X509 *cert, int nid, char *value);
 /*** self provisioning flags and functions */
 
 /* creates a public key pair */
-static EVP_PKEY *ssl_mkkeypair();
+static EVP_PKEY *
+ssl_mkkeypair();
 
 /* creates a CSR of a public key. If tpmkey is set true, openssl-tpm-engine
  * is used to create the request with a TPM-bound key */
-static X509_REQ *ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey);
+static X509_REQ *
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey);
 
 /* adds an extension nid with name value to a stack of extensions*/
-static int add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
+static int
+add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 
 ENGINE *tpm_engine = NULL;
 
-int ssl_init(bool use_tpm)
+int
+ssl_init(bool use_tpm)
 {
 	// initialize OpenSSL stuff
 	OpenSSL_add_all_digests(); // loads digest algorithm names
@@ -144,7 +150,8 @@ error:
 	return -1;
 }
 
-void ssl_free(void)
+void
+ssl_free(void)
 {
 	// free OpenSSL stuff
 	ERR_free_strings(); // free error strings
@@ -158,8 +165,9 @@ void ssl_free(void)
 	}
 }
 
-int ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY **pkey, X509 **cert,
-			  STACK_OF(X509) * *ca)
+int
+ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY **pkey, X509 **cert,
+		      STACK_OF(X509) * *ca)
 {
 	ASSERT(token_file);
 	ASSERT(passphrase);
@@ -214,8 +222,9 @@ end:
 	return ret;
 }
 
-int ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase, const char *common_name,
-		   const char *uid, bool tpmkey)
+int
+ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase, const char *common_name,
+	       const char *uid, bool tpmkey)
 {
 	ASSERT(req_file);
 	ASSERT(key_file);
@@ -296,7 +305,8 @@ error:
 	return -1;
 }
 
-static X509_REQ *ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey)
+static X509_REQ *
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey)
 {
 	ASSERT(pkeyp);
 	ASSERT(common_name);
@@ -424,7 +434,8 @@ error:
 	return NULL;
 }
 
-static EVP_PKEY *ssl_mkkeypair()
+static EVP_PKEY *
+ssl_mkkeypair()
 {
 	EVP_PKEY *pk = NULL;
 	RSA *rsa = NULL;
@@ -485,7 +496,8 @@ error:
 	return NULL;
 }
 
-static int add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value)
+static int
+add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value)
 {
 	ASSERT(sk);
 	X509_EXTENSION *ex;
@@ -498,8 +510,9 @@ static int add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value)
 	return 0;
 }
 
-int ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_len, unsigned char **wrapped_key,
-		 int *wrapped_key_len)
+int
+ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_len, unsigned char **wrapped_key,
+	     int *wrapped_key_len)
 {
 	ASSERT(pkey);
 	ASSERT(plain_key);
@@ -576,8 +589,9 @@ cleanup:
 	return res;
 }
 
-int ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_key_len, unsigned char **plain_key,
-		   int *plain_key_len)
+int
+ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_key_len, unsigned char **plain_key,
+	       int *plain_key_len)
 {
 	ASSERT(pkey);
 	ASSERT(wrapped_key);
@@ -646,7 +660,8 @@ cleanup:
 	return res;
 }
 
-int cb_verify_ignore_time(int ok, X509_STORE_CTX *ctx)
+int
+cb_verify_ignore_time(int ok, X509_STORE_CTX *ctx)
 {
 	/* Tolerate certificate expiration and not yet valid case */
 	if (X509_STORE_CTX_get_error(ctx) == X509_V_ERR_CERT_HAS_EXPIRED ||
@@ -658,7 +673,8 @@ int cb_verify_ignore_time(int ok, X509_STORE_CTX *ctx)
 	return ok;
 }
 
-int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_file, bool ignore_time)
+int
+ssl_verify_certificate(const char *test_cert_file, const char *root_cert_file, bool ignore_time)
 {
 	X509 *test_cert = NULL;
 	X509_STORE *store = NULL;
@@ -767,8 +783,8 @@ end:
 	return ret;
 }
 
-int ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file,
-			 const char *hash_algo)
+int
+ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file, const char *hash_algo)
 {
 	ASSERT(cert_file);
 	ASSERT(signature_file);
@@ -909,7 +925,8 @@ error:
 	return ret;
 }
 
-unsigned char *ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash_algo)
+unsigned char *
+ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash_algo)
 {
 	ASSERT(file_to_hash);
 	ASSERT(hash_algo);
@@ -976,8 +993,8 @@ error:
 	return ret;
 }
 
-int ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const char *passphrase,
-			    const char *user_name)
+int
+ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const char *passphrase, const char *user_name)
 {
 	ASSERT(token_file && passphrase);
 
@@ -1063,7 +1080,8 @@ error:
 	return -1;
 }
 
-int ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char *newpass)
+int
+ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char *newpass)
 {
 	ASSERT(token_file);
 
@@ -1109,7 +1127,8 @@ error:
 	return -1;
 }
 
-static X509 *ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name)
+static X509 *
+ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name)
 {
 	ASSERT(pkeyp);
 
@@ -1233,7 +1252,8 @@ error:
 	return NULL;
 }
 
-static int ssl_add_ext_cert(X509 *cert, int nid, char *value)
+static int
+ssl_add_ext_cert(X509 *cert, int nid, char *value)
 {
 	ASSERT(cert && value);
 
@@ -1264,7 +1284,8 @@ static int ssl_add_ext_cert(X509 *cert, int nid, char *value)
 	return 0;
 }
 
-int ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file, bool tpmkey)
+int
+ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file, bool tpmkey)
 {
 	ASSERT(csr_file);
 	ASSERT(cert_file);

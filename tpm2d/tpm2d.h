@@ -72,14 +72,17 @@ typedef struct tpm2d_pcr {
 } tpm2d_pcr_t;
 
 /*****************************************************************************/
-void tpm2d_exit(void);
+void
+tpm2d_exit(void);
 
 TPMI_DH_OBJECT
 tpm2d_get_salt_key_handle(void);
 
-void tss2_init(void);
+void
+tss2_init(void);
 
-void tss2_destroy(void);
+void
+tss2_destroy(void);
 
 /**
  * Helper function to convert a binary buffer to an hex string
@@ -91,7 +94,8 @@ void tss2_destroy(void);
  * @param bin binary buffer
  * @param length of the binary buffer
  */
-char *convert_bin_to_hex_new(const uint8_t *bin, int length);
+char *
+convert_bin_to_hex_new(const uint8_t *bin, int length);
 
 /**
  * Helper function to convert a hex string into binary
@@ -102,7 +106,8 @@ char *convert_bin_to_hex_new(const uint8_t *bin, int length);
  * @param hex_str buffer containing the hex string representation
  * @param out_length in this pointer the size of result is returned
  */
-uint8_t *convert_hex_to_bin_new(const char *hex_str, int *out_length);
+uint8_t *
+convert_hex_to_bin_new(const char *hex_str, int *out_length);
 
 /**
  * Function to powerup the simulator
@@ -181,15 +186,18 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd, const char *file
 TPMI_DH_OBJECT
 tpm2d_get_as_key_handle(void);
 
-void tpm2d_flush_as_key_handle(void);
+void
+tpm2d_flush_as_key_handle(void);
 
 TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len);
 
-tpm2d_quote_t *tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const char *sig_key_pwd,
-			      uint8_t *qualifying_data, size_t qualifying_data_len);
+tpm2d_quote_t *
+tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const char *sig_key_pwd,
+	       uint8_t *qualifying_data, size_t qualifying_data_len);
 
-void tpm2_quote_free(tpm2d_quote_t *quote);
+void
+tpm2_quote_free(tpm2d_quote_t *quote);
 
 TPM_RC
 tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char *auth_pwd, TPMI_DH_OBJECT obj_handle, TPMI_DH_PERSISTENT persist_handle);
@@ -206,13 +214,17 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 TPM_RC
 tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd, const char *new_pwd);
 
-tpm2d_pcr_t *tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg);
+tpm2d_pcr_t *
+tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg);
 
-void tpm2_pcrread_free(tpm2d_pcr_t *pcr);
+void
+tpm2_pcrread_free(tpm2d_pcr_t *pcr);
 
-uint8_t *tpm2_getrandom_new(size_t rand_length);
+uint8_t *
+tpm2_getrandom_new(size_t rand_length);
 
-size_t tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle);
+size_t
+tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle);
 
 TPM_RC
 tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle, size_t nv_size,

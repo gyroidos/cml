@@ -32,10 +32,12 @@ typedef struct smartcard smartcard_t;
 /**
  * @param path The directory where smartcard-related data is stored.
  */
-smartcard_t *smartcard_new(const char *path);
+smartcard_t *
+smartcard_new(const char *path);
 
-int smartcard_container_start_handler(smartcard_t *smartcard, control_t *control, container_t *container,
-				      const char *passwd);
+int
+smartcard_container_start_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+				  const char *passwd);
 
 /**
  * Change the passphrase/pin of the associated device token smartcard
@@ -46,7 +48,8 @@ int smartcard_container_start_handler(smartcard_t *smartcard, control_t *control
  * @param newpassed the new passphrase/pin for the token to which will be changed
  * return -1 on message transmission failure, 0 if message was sent to SCD
  */
-int smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd, const char *newpasswd);
+int
+smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd, const char *newpasswd);
 
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...
@@ -71,8 +74,9 @@ typedef void (*smartcard_crypto_hash_callback_t)(const char *hash_string, const 
  * @param data custom data parameter to pass to the callback
  * @return 0 if the hash request was sent and the callback is expected to be called, -1 otherwise
  */
-int smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo,
-			       smartcard_crypto_hash_callback_t cb, void *data);
+int
+smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_hash_callback_t cb,
+			   void *data);
 
 /**
  * Requests the scd to hash the given file, wait for the result and directly return it.
@@ -81,7 +85,8 @@ int smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t has
  * @param hashalgo the hash algorithm to use
  * @return pointer to a newly allocated string with the hash value, or NULL on error
  */
-char *smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo);
+char *
+smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo);
 
 /**
  * Result of a signature verification.
@@ -113,9 +118,9 @@ typedef void (*smartcard_crypto_verify_callback_t)(smartcard_crypto_verify_resul
  * @param data custom data parameter to pass to the callback
  * @return 0 if the verification request was sent and the callback is expected to be called, -1 otherwise
  */
-int smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const char *certfile,
-				 smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_verify_callback_t cb,
-				 void *data);
+int
+smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const char *certfile,
+			     smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_verify_callback_t cb, void *data);
 
 /**
  * Requests the scd to verify the signature on the given datafile using the given certificate,
@@ -127,9 +132,9 @@ int smartcard_crypto_verify_file(const char *datafile, const char *sigfile, cons
  * @param hash_algo the hash algorithm to use
  * @return the result of the verification
  */
-smartcard_crypto_verify_result_t smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile,
-								    const char *certfile,
-								    smartcard_crypto_hashalgo_t hashalgo);
+smartcard_crypto_verify_result_t
+smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, const char *certfile,
+				   smartcard_crypto_hashalgo_t hashalgo);
 
 /**
  * Pulls the device CSR from the tokens directory,
@@ -139,7 +144,8 @@ smartcard_crypto_verify_result_t smartcard_crypto_verify_file_block(const char *
  * @param csr_len a pointer in which the size of the csr will be returned
  * @return the csr
  */
-uint8_t *smartcard_pull_csr_new(size_t *csr_len);
+uint8_t *
+smartcard_pull_csr_new(size_t *csr_len);
 
 /**
  * Pushes back the certificate (the sigend CSR). Which may
@@ -151,6 +157,7 @@ uint8_t *smartcard_pull_csr_new(size_t *csr_len);
  * @param cert a pointer to the buffer which holds the certificate
  * @param cert_len the size of the cert
  */
-void smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len);
+void
+smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len);
 
 #endif /* SMARTCARD_H */

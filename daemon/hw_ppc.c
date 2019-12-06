@@ -57,66 +57,78 @@ static const char *hw_ppc_devices_whitelist_audio[] = {
 static char *hw_ppc_serial_number = "00000000";
 static char *hw_ppc_name = "ppc";
 
-const char *hardware_get_name(void)
+const char *
+hardware_get_name(void)
 {
 	return hw_ppc_name;
 }
 
-const char *hardware_get_manufacturer(void)
+const char *
+hardware_get_manufacturer(void)
 {
 	// TODO check if this is the correct manufacturer string
 	return "N/A";
 }
 
-const char *hardware_get_model(void)
+const char *
+hardware_get_model(void)
 {
 	// TODO return the proper "hardware model"
 	return "PowerPC";
 }
 
-const char *hardware_get_serial_number(void)
+const char *
+hardware_get_serial_number(void)
 {
 	return hw_ppc_serial_number;
 }
 
-const char *hardware_get_bootimg_path(void)
+const char *
+hardware_get_bootimg_path(void)
 {
 	//return "/dev/block/platform/msm_sdcc.1/by-name/boot";
 	return NULL;
 }
 
-const char *hardware_get_block_by_name_path(void)
+const char *
+hardware_get_block_by_name_path(void)
 {
 	//return "/dev/block/platform/msm_sdcc.1/by-name";
 	return NULL;
 }
 
-int hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
+int
+hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
 {
 	return 0;
 }
 
-bool hardware_is_led_on(void)
+bool
+hardware_is_led_on(void)
 {
 	return false;
 }
 
-const char *hardware_get_powerbutton_input_path(void)
+const char *
+hardware_get_powerbutton_input_path(void)
 {
 	return NULL;
 }
 
-const char **hardware_get_devices_whitelist_base()
+const char **
+hardware_get_devices_whitelist_base()
 {
 	return hw_ppc_devices_whitelist_base;
 }
 
-const char **hardware_get_devices_whitelist_priv()
+const char **
+hardware_get_devices_whitelist_priv()
 {
 	return hw_ppc_devices_whitelist_priv;
 }
 
-int hardware_get_random(unsigned char *buf, size_t len)
+int
+hardware_get_random(unsigned char *buf, size_t len)
 {
 	const char *rnd = "/dev/hwrng";
 	const char *sw = "/dev/random";
@@ -136,30 +148,36 @@ int hardware_get_random(unsigned char *buf, size_t len)
 	}
 }
 
-void hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len)
+void
+hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len)
 {
 }
 
-void hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
+void
+hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
 {
 }
 
-bool hardware_display_power_state(void)
+bool
+hardware_display_power_state(void)
 {
 	return false;
 }
 
-const char **hardware_get_devices_whitelist_audio()
+const char **
+hardware_get_devices_whitelist_audio()
 {
 	return hw_ppc_devices_whitelist_audio;
 }
 
-int hardware_backlight_on()
+int
+hardware_backlight_on()
 {
 	return 0;
 }
 
-list_t *hardware_get_active_cgroups_subsystems(void)
+list_t *
+hardware_get_active_cgroups_subsystems(void)
 {
 	list_t *subsys_list = NULL;
 	subsys_list = list_append(subsys_list, "devices");
@@ -169,29 +187,34 @@ list_t *hardware_get_active_cgroups_subsystems(void)
 	return subsys_list;
 }
 
-list_t *hardware_get_nw_name_list(void)
+list_t *
+hardware_get_nw_name_list(void)
 {
 	list_t *nw_name_list = NULL;
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
 
-const char *hardware_get_routing_table_radio(void)
+const char *
+hardware_get_routing_table_radio(void)
 {
 	return "";
 }
 
-const char *hardware_get_radio_ifname(void)
+const char *
+hardware_get_radio_ifname(void)
 {
 	return NULL;
 }
 
-bool hardware_supports_systemv_ipc(void)
+bool
+hardware_supports_systemv_ipc(void)
 {
 	return false;
 }
 
-list_t *hardware_get_nw_mv_name_list(void)
+list_t *
+hardware_get_nw_mv_name_list(void)
 {
 	/*
          * this list should start with the first mobile data iface

@@ -44,7 +44,8 @@ typedef struct ml_elem {
 static list_t *measurement_list = NULL;
 static size_t measurement_list_len = 0;
 
-int ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash, size_t datahash_len)
+int
+ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash, size_t datahash_len)
 {
 	// input checks
 	IF_NULL_RETVAL(filename, -1);
@@ -85,7 +86,8 @@ int ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uin
 	return 0;
 }
 
-static const char *halg_id_to_ima_string(TPM_ALG_ID alg_id)
+static const char *
+halg_id_to_ima_string(TPM_ALG_ID alg_id)
 {
 	switch (alg_id) {
 	case TPM_ALG_SHA1:
@@ -99,7 +101,8 @@ static const char *halg_id_to_ima_string(TPM_ALG_ID alg_id)
 	}
 }
 
-static list_t *ml_get_ima_ml_string_list_new(void)
+static list_t *
+ml_get_ima_ml_string_list_new(void)
 {
 	FILE *fp;
 	char *line = NULL; // will be malloced by getline
@@ -120,7 +123,8 @@ static list_t *ml_get_ima_ml_string_list_new(void)
 	return ima_list;
 }
 
-char **ml_get_measurement_list_strings_new(size_t *strings_len)
+char **
+ml_get_measurement_list_strings_new(size_t *strings_len)
 {
 	list_t *ima_strings_list = ml_get_ima_ml_string_list_new();
 	*strings_len = measurement_list_len + list_length(ima_strings_list);

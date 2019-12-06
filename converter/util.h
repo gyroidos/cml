@@ -31,21 +31,30 @@
 
 #define UTIL_PKI_PATH "/pki_generator/"
 
-int b64_ntop(unsigned char const *src, size_t srclength, char *target, size_t targsize);
-int b64_pton(char const *src, unsigned char *target, size_t targsize);
+int
+b64_ntop(unsigned char const *src, size_t srclength, char *target, size_t targsize);
+int
+b64_pton(char const *src, unsigned char *target, size_t targsize);
 
-int util_fork_and_execvp(const char *path, const char *const *argv);
+int
+util_fork_and_execvp(const char *path, const char *const *argv);
 
-char *util_hash_sha_image_file_new(const char *image_file);
+char *
+util_hash_sha_image_file_new(const char *image_file);
 
-char *util_hash_sha256_image_file_new(const char *image_file);
+char *
+util_hash_sha256_image_file_new(const char *image_file);
 
-int util_tar_extract(const char *tar_filename, const char *out_dir);
+int
+util_tar_extract(const char *tar_filename, const char *out_dir);
 
-int util_squash_image(const char *dir, const char *image_file);
+int
+util_squash_image(const char *dir, const char *image_file);
 
-int util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file);
+int
+util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file);
 
-int util_gen_pki(void);
+int
+util_gen_pki(void);
 
 #endif /* UTIL_H */

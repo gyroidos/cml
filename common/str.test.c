@@ -37,7 +37,8 @@
 /** Unit Test str main function
   *
   */
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	str_t *str;
 	char *buf;

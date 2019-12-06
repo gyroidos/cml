@@ -49,6 +49,7 @@ typedef struct tpm2d_rcontrol tpm2d_rcontrol_t;
  *
  * @param path path of the socket file to bind the socket to
  */
-tpm2d_rcontrol_t *tpm2d_rcontrol_new(const char *ip, int port);
+tpm2d_rcontrol_t *
+tpm2d_rcontrol_new(const char *ip, int port);
 
 #endif /* TPM2D_RCONTROL_H */

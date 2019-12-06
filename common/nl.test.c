@@ -42,7 +42,8 @@ struct ucred {
 /**
  * Print a nl_sock object. Could be used in nl.c for debugging
  */
-static void print_sock(nl_sock_t *sock)
+static void
+print_sock(nl_sock_t *sock)
 {
 	if (!sock)
 		return;
@@ -54,7 +55,8 @@ static void print_sock(nl_sock_t *sock)
 /**
  * Print a sockaddr_nl object. Could be used in nl.c for debugging
  */
-static void print_addr(struct sockaddr_nl *addr)
+static void
+print_addr(struct sockaddr_nl *addr)
 {
 	if (!addr)
 		return;
@@ -66,7 +68,8 @@ static void print_addr(struct sockaddr_nl *addr)
 /**
  * Print a nl_msg object. Could be used in nl.c for debugging
  */
-static void print_msg(nl_msg_t *msg)
+static void
+print_msg(nl_msg_t *msg)
 {
 	if (!msg)
 		return;
@@ -80,7 +83,8 @@ static void print_msg(nl_msg_t *msg)
 /**
  * Print a nlmsghdr object. Could be used in nl.c for debugging
  */
-static void print_msghdr(struct nlmsghdr *msg)
+static void
+print_msghdr(struct nlmsghdr *msg)
 {
 	if (!msg)
 		return;
@@ -94,7 +98,8 @@ static void print_msghdr(struct nlmsghdr *msg)
  * we don't have necessary permissions for this request.
  * Anyway, this checks the basic send, receive, allocate functionality.
  */
-int main(void)
+int
+main(void)
 {
 	logf_register(&logf_test_write, stdout);
 	DEBUG("Unit Test: nl.test.c");

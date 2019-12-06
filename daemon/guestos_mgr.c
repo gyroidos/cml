@@ -64,7 +64,8 @@ static bool guestos_mgr_allow_locally_signed = false;
 
 /******************************************************************************/
 
-static void guestos_mgr_purge_obsolete(void)
+static void
+guestos_mgr_purge_obsolete(void)
 {
 	INFO("Looking for obsolete GuestOSes to purge...");
 	for (list_t *l = guestos_list; l;) {
@@ -80,7 +81,8 @@ static void guestos_mgr_purge_obsolete(void)
 	}
 }
 
-static int guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED void *data)
+static int
+guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED void *data)
 {
 	int res = 0; // counter
 	guestos_verify_result_t guestos_verified = GUESTOS_UNSIGNED;
@@ -131,7 +133,8 @@ cleanup:
 	return res;
 }
 
-static int guestos_mgr_load_operatingsystems(void)
+static int
+guestos_mgr_load_operatingsystems(void)
 {
 	if (dir_foreach(guestos_basepath, &guestos_mgr_load_operatingsystems_cb, NULL) < 0) {
 		WARN("Could not open %s to load operating system", guestos_basepath);
@@ -149,7 +152,8 @@ static int guestos_mgr_load_operatingsystems(void)
 	return 0;
 }
 
-static bool guestos_mgr_is_guestos_used_by_containers(const char *os_name)
+static bool
+guestos_mgr_is_guestos_used_by_containers(const char *os_name)
 {
 	ASSERT(os_name);
 	int n = cmld_containers_get_count();
@@ -165,7 +169,8 @@ static bool guestos_mgr_is_guestos_used_by_containers(const char *os_name)
 
 /******************************************************************************/
 
-int guestos_mgr_init(const char *path, bool allow_locally_signed)
+int
+guestos_mgr_init(const char *path, bool allow_locally_signed)
 {
 	ASSERT(path);
 	ASSERT(!guestos_basepath);
@@ -179,7 +184,8 @@ int guestos_mgr_init(const char *path, bool allow_locally_signed)
 	return guestos_mgr_load_operatingsystems();
 }
 
-int guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_result)
+int
+guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_result)
 {
 	ASSERT(file);
 
@@ -194,7 +200,8 @@ int guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_r
 	return 0;
 }
 
-void guestos_mgr_delete(guestos_t *os)
+void
+guestos_mgr_delete(guestos_t *os)
 {
 	ASSERT(os);
 	const char *os_name = guestos_get_name(os);
@@ -212,7 +219,8 @@ void guestos_mgr_delete(guestos_t *os)
 
 /******************************************************************************/
 
-static void download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)
+static void
+download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)
 {
 	IF_NULL_RETURN_ERROR(os);
 
@@ -226,7 +234,8 @@ static void download_complete_cb(bool complete, unsigned int count, guestos_t *o
  * Downloads, if necessary, the images for the latest (by version) available GuestOS with the given name.
  * @param name name of the GuestOS
  */
-static void guestos_mgr_download_latest(const char *name)
+static void
+guestos_mgr_download_latest(const char *name)
 {
 	IF_NULL_RETURN(name);
 
@@ -236,7 +245,8 @@ static void guestos_mgr_download_latest(const char *name)
 		guestos_images_download(os, download_complete_cb, NULL);
 }
 
-void guestos_mgr_update_images(void)
+void
+guestos_mgr_update_images(void)
 {
 	// TODO: iterate containers and then download latest os?
 	size_t n = guestos_mgr_get_guestos_count();
@@ -249,7 +259,8 @@ void guestos_mgr_update_images(void)
 	}
 }
 
-static char *write_to_tmpfile_new(unsigned char *buf, size_t buflen)
+static char *
+write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 {
 	char *file = mem_strdup("/tmp/tmpXXXXXXXX");
 	int fd = mkstemp(file);
@@ -266,9 +277,9 @@ static char *write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 	return NULL;
 }
 
-static void push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char *cfg_file,
-				  const char *sig_file, const char *cert_file,
-				  UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
+static void
+push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char *cfg_file, const char *sig_file,
+		      const char *cert_file, UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
 {
 	INFO("Push GuestOS config (Phase 2)");
 
@@ -355,8 +366,9 @@ cleanup_tmpfiles:
 	unlink(cert_file);
 }
 
-int guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen, unsigned char *cert,
-			    size_t certlen)
+int
+guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen, unsigned char *cert,
+			size_t certlen)
 {
 	INFO("Push GuestOS config (Phase 1)");
 
@@ -379,7 +391,8 @@ int guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *si
 	return res;
 }
 
-int guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
+int
+guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
 {
 	int ret = -1;
 	IF_TRUE_RETVAL(file_exists(LOCALCA_ROOT_CERT), ret);
@@ -396,7 +409,8 @@ int guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
 	return ret;
 }
 
-int guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
+int
+guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 {
 	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
 	const char *end_cert_str = "-----END CERTIFICATE-----";
@@ -440,7 +454,8 @@ out:
 
 /******************************************************************************/
 
-guestos_t *guestos_mgr_get_latest_by_name(const char *name, bool complete)
+guestos_t *
+guestos_mgr_get_latest_by_name(const char *name, bool complete)
 {
 	IF_NULL_RETVAL(name, NULL);
 
@@ -465,12 +480,14 @@ guestos_t *guestos_mgr_get_latest_by_name(const char *name, bool complete)
 	return latest_os;
 }
 
-size_t guestos_mgr_get_guestos_count(void)
+size_t
+guestos_mgr_get_guestos_count(void)
 {
 	return list_length(guestos_list);
 }
 
-guestos_t *guestos_mgr_get_guestos_by_index(size_t index)
+guestos_t *
+guestos_mgr_get_guestos_by_index(size_t index)
 {
 	return list_nth_data(guestos_list, index);
 }

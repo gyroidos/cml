@@ -28,13 +28,17 @@
 
 typedef struct proc_status proc_status_t;
 
-proc_status_t *proc_status_new(pid_t pid);
+proc_status_t *
+proc_status_new(pid_t pid);
 
-void proc_status_free(proc_status_t *status);
+void
+proc_status_free(proc_status_t *status);
 
-const char *proc_status_get_name(const proc_status_t *status);
+const char *
+proc_status_get_name(const proc_status_t *status);
 
-pid_t proc_status_get_ppid(const proc_status_t *status);
+pid_t
+proc_status_get_ppid(const proc_status_t *status);
 
 /**
  * Kills a process/service with a given name. If ppid is bigger
@@ -43,7 +47,8 @@ pid_t proc_status_get_ppid(const proc_status_t *status);
  * @param name The process name which should be killed.
  * @param sig The signal number, e.g. SIGKILL.
  */
-int proc_killall(pid_t ppid, const char *name, int sig);
+int
+proc_killall(pid_t ppid, const char *name, int sig);
 
 /**
  * Returns the pid of the process matching name and ppid.
@@ -51,6 +56,7 @@ int proc_killall(pid_t ppid, const char *name, int sig);
  * @param name The process name to find.
  * @return pid of matched process, 0 if no match, -1 on error.
  */
-pid_t proc_find(pid_t ppid, const char *name);
+pid_t
+proc_find(pid_t ppid, const char *name);
 
 #endif /* PROC_H */

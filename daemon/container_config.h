@@ -55,14 +55,17 @@ typedef struct container_config container_config_t;
  * @param len Length of the given buf.
  * @return The new container_config_t object or NULL on an error.
  */
-container_config_t *container_config_new(const char *file, const uint8_t *buf, size_t len);
+container_config_t *
+container_config_new(const char *file, const uint8_t *buf, size_t len);
 
 /**
  * Release the container_config_t object.
  */
-void container_config_free(container_config_t *config);
+void
+container_config_free(container_config_t *config);
 
-int container_config_write(const container_config_t *config);
+int
+container_config_write(const container_config_t *config);
 
 /*************************/
 /* GETTER + SETTER       */
@@ -71,34 +74,41 @@ int container_config_write(const container_config_t *config);
 /**
  * Get the container name.
  */
-const char *container_config_get_name(const container_config_t *config);
+const char *
+container_config_get_name(const container_config_t *config);
 
 /**
  * Set the container name.
  */
-void container_config_set_name(container_config_t *config, const char *name);
+void
+container_config_set_name(container_config_t *config, const char *name);
 
 /**
  * Get the 'guest' operating system type.
  */
-const char *container_config_get_guestos(const container_config_t *config);
+const char *
+container_config_get_guestos(const container_config_t *config);
 
 /**
  * Set the 'guest' operating system type.
  */
-void container_config_set_guestos(container_config_t *config, const char *operatingsystem);
+void
+container_config_set_guestos(container_config_t *config, const char *operatingsystem);
 
 /**
  * Get the configured maximum RAM amount the container may use.
  */
-unsigned int container_config_get_ram_limit(const container_config_t *config);
+unsigned int
+container_config_get_ram_limit(const container_config_t *config);
 
 /**
  * Set the maximum RAM amount the container may use.
  */
-void container_config_set_ram_limit(container_config_t *config, unsigned int ram_limit);
+void
+container_config_set_ram_limit(container_config_t *config, unsigned int ram_limit);
 
-void container_config_fill_mount(const container_config_t *config, mount_t *mnt);
+void
+container_config_fill_mount(const container_config_t *config, mount_t *mnt);
 #if 0
 uint64_t
 container_config_get_storage_size(const container_config_t *config);
@@ -107,105 +117,127 @@ void
 container_config_set_storage_size(container_config_t *config, uint64_t storage_size);
 #endif
 
-uint32_t container_config_get_color(const container_config_t *config);
+uint32_t
+container_config_get_color(const container_config_t *config);
 
-void container_config_set_color(container_config_t *config, uint32_t color);
+void
+container_config_set_color(container_config_t *config, uint32_t color);
 
-container_type_t container_config_get_type(const container_config_t *config);
+container_type_t
+container_config_get_type(const container_config_t *config);
 
-uint64_t container_config_get_guestos_version(const container_config_t *config);
+uint64_t
+container_config_get_guestos_version(const container_config_t *config);
 
-void container_config_set_guestos_version(container_config_t *config, uint64_t guestos_version);
+void
+container_config_set_guestos_version(container_config_t *config, uint64_t guestos_version);
 
 /**
  * Get the autostart flag which indicates whether the container
  * should be started automatially.
  */
-bool container_config_get_autostart(container_config_t *config);
+bool
+container_config_get_autostart(container_config_t *config);
 
 /**
  * Get the autostart flag which indicates whether the container
  * should be started automatially.
  */
-void container_config_set_autostart(container_config_t *config, bool autostart);
+void
+container_config_set_autostart(container_config_t *config, bool autostart);
 
 /**
  * Indicates whether the container is allowed to initiate switches to other containers.
  */
-bool container_config_get_allow_container_switch(const container_config_t *config);
+bool
+container_config_get_allow_container_switch(const container_config_t *config);
 
 /**
  * Sets whether the container is allowed to initiate switches to other containers.
  */
-void container_config_set_allow_container_switch(container_config_t *config, bool container_switch);
+void
+container_config_set_allow_container_switch(container_config_t *config, bool container_switch);
 
 /**
  * Indicates whether the container is allowed to be started automatically after a0.
  */
-bool container_config_get_allow_autostart(const container_config_t *config);
+bool
+container_config_get_allow_autostart(const container_config_t *config);
 
 /**
  * Sets whether the container is allowed to be started automatically after a0.
  */
-void container_config_set_allow_autostart(container_config_t *config, bool allow_autostart);
+void
+container_config_set_allow_autostart(container_config_t *config, bool allow_autostart);
 
 /**
  * Provides the list of enabled features in the container's config file
  */
-list_t *container_config_get_feature_list_new(const container_config_t *config);
+list_t *
+container_config_get_feature_list_new(const container_config_t *config);
 
 /**
  * Provides the list of network interfaces assigned to the container from the container's config file
  */
 
-list_t *container_config_get_net_ifaces_list_new(const container_config_t *config);
+list_t *
+container_config_get_net_ifaces_list_new(const container_config_t *config);
 
 /**
  * Provides the list of hardware devices explicitely allowed for the container from the container's config file
  */
 
-char **container_config_get_dev_allow_list_new(const container_config_t *config);
+char **
+container_config_get_dev_allow_list_new(const container_config_t *config);
 
 /**
  * Provides the list of hardware devices exclusively assigned to the container from the container's config file
  */
 
-char **container_config_get_dev_assign_list_new(const container_config_t *config);
+char **
+container_config_get_dev_assign_list_new(const container_config_t *config);
 
 /**
  * Get the dns_server ip addr set for the container.
  */
-const char *container_config_get_dns_server(const container_config_t *config);
+const char *
+container_config_get_dns_server(const container_config_t *config);
 
 /**
  * Indicates whether the container has an own network namespace
  */
-bool container_config_has_netns(const container_config_t *config);
+bool
+container_config_has_netns(const container_config_t *config);
 
 /**
  * Adds the given interface name to the list of network interfaces assigned to the container
  */
-void container_config_append_net_ifaces(const container_config_t *config, const char *iface);
+void
+container_config_append_net_ifaces(const container_config_t *config, const char *iface);
 
 /**
  * Removes the given interface name from the list of network interfaces assigned to the container
  */
-void container_config_remove_net_ifaces(const container_config_t *config, const char *iface);
+void
+container_config_remove_net_ifaces(const container_config_t *config, const char *iface);
 
 /**
  * Reads the container config for vnet interfaces and returns a list of the
  * corresponding container_vnet_cfg structures.
  */
-list_t *container_config_get_vnet_cfg_list_new(const container_config_t *config);
+list_t *
+container_config_get_vnet_cfg_list_new(const container_config_t *config);
 
 /**
  * Returns the container specific array used to appened to evn buffer on start
  */
-char **container_config_get_init_env(const container_config_t *cfg);
+char **
+container_config_get_init_env(const container_config_t *cfg);
 
 /**
  * Returns the size of init env array
  */
-size_t container_config_get_init_env_len(const container_config_t *cfg);
+size_t
+container_config_get_init_env_len(const container_config_t *cfg);
 
 #endif /* C_CONFIG_H */

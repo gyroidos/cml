@@ -35,7 +35,8 @@
 #include "common/protobuf.h"
 
 /******************************************************************************/
-guestos_config_t *guestos_config_new_from_file(const char *file)
+guestos_config_t *
+guestos_config_new_from_file(const char *file)
 {
 	ASSERT(file);
 	DEBUG("Loading GuestOS config from \"%s\".", file);
@@ -47,7 +48,8 @@ guestos_config_t *guestos_config_new_from_file(const char *file)
 	return cfg;
 }
 
-guestos_config_t *guestos_config_new_from_buffer(unsigned char *buf, size_t buflen)
+guestos_config_t *
+guestos_config_new_from_buffer(unsigned char *buf, size_t buflen)
 {
 	ASSERT(buf);
 	DEBUG("Loading GuestOS config from string.");
@@ -64,13 +66,15 @@ guestos_config_t *guestos_config_new_from_buffer(unsigned char *buf, size_t bufl
  * parts of the operating system, i.e. the configuration and the images.
  * @param cfg The operating system to be freed.
  */
-void guestos_config_free(guestos_config_t *cfg)
+void
+guestos_config_free(guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	protobuf_free_message((ProtobufCMessage *)cfg);
 }
 
-int guestos_config_write_to_file(const guestos_config_t *cfg, const char *file)
+int
+guestos_config_write_to_file(const guestos_config_t *cfg, const char *file)
 {
 	ASSERT(cfg);
 	return protobuf_message_write_to_file(file, (ProtobufCMessage *)cfg);
@@ -78,7 +82,8 @@ int guestos_config_write_to_file(const guestos_config_t *cfg, const char *file)
 
 /******************************************************************************/
 
-static inline enum mount_type guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
+static inline enum mount_type
+guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 {
 	switch (mt) {
 		//TODO Prettify this
@@ -133,7 +138,8 @@ guestos_config_mount_type_to_protobuf(enum mount_type mt)
 }
 #endif // currently unused
 
-static void guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount_t *mount)
+static void
+guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount_t *mount)
 {
 	ASSERT(mount);
 
@@ -151,13 +157,15 @@ static void guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_m
 	}
 }
 
-void guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
+void
+guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
 {
 	ASSERT(cfg);
 	guestos_config_fill_mount_internal(cfg->mounts, cfg->n_mounts, mount);
 }
 
-void guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
+void
+guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
 {
 	ASSERT(cfg);
 	guestos_config_fill_mount_internal(cfg->mounts_setup, cfg->n_mounts_setup, mount);
@@ -165,31 +173,36 @@ void guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount
 
 /******************************************************************************/
 
-const char *guestos_config_get_name(const guestos_config_t *cfg)
+const char *
+guestos_config_get_name(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->name;
 }
 
-const char *guestos_config_get_hardware(const guestos_config_t *cfg)
+const char *
+guestos_config_get_hardware(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->hardware;
 }
 
-uint64_t guestos_config_get_version(const guestos_config_t *cfg)
+uint64_t
+guestos_config_get_version(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->version;
 }
 
-const char *guestos_config_get_init(const guestos_config_t *cfg)
+const char *
+guestos_config_get_init(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->init_path;
 }
 
-char **guestos_config_get_init_argv_new(const guestos_config_t *cfg)
+char **
+guestos_config_get_init_argv_new(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 
@@ -203,19 +216,22 @@ char **guestos_config_get_init_argv_new(const guestos_config_t *cfg)
 	return init_argv;
 }
 
-size_t guestos_config_get_init_env_len(const guestos_config_t *cfg)
+size_t
+guestos_config_get_init_env_len(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->n_init_env;
 }
 
-char **guestos_config_get_init_env(const guestos_config_t *cfg)
+char **
+guestos_config_get_init_env(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->init_env;
 }
 
-uint32_t guestos_config_get_min_ram_limit(const guestos_config_t *cfg)
+uint32_t
+guestos_config_get_min_ram_limit(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->has_min_ram_limit ? cfg->min_ram_limit : 0;
@@ -227,37 +243,43 @@ uint32_t guestos_config_get_max_ram_limit(const guestos_config_t *cfg)
 	return cfg->has_max_ram_limit ? cfg->max_ram_limit : 0;
 }
 */
-uint32_t guestos_config_get_def_ram_limit(const guestos_config_t *cfg)
+uint32_t
+guestos_config_get_def_ram_limit(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->has_def_ram_limit ? cfg->def_ram_limit : 0;
 }
 
-bool guestos_config_get_feature_vpn(const guestos_config_t *cfg)
+bool
+guestos_config_get_feature_vpn(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->feature_vpn ? cfg->feature_vpn : false;
 }
 
-bool guestos_config_get_feature_bg_booting(const guestos_config_t *cfg)
+bool
+guestos_config_get_feature_bg_booting(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->feature_bg_booting ? cfg->feature_bg_booting : false;
 }
 
-bool guestos_config_get_feature_devtmpfs(const guestos_config_t *cfg)
+bool
+guestos_config_get_feature_devtmpfs(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->feature_devtmpfs ? cfg->feature_devtmpfs : false;
 }
 
-bool guestos_config_get_feature_install_guest(const guestos_config_t *cfg)
+bool
+guestos_config_get_feature_install_guest(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->feature_install_guest ? cfg->feature_install_guest : false;
 }
 
-const char *guestos_config_get_update_base_url(const guestos_config_t *cfg)
+const char *
+guestos_config_get_update_base_url(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
 	return cfg->update_base_url;

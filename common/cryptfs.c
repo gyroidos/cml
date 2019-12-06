@@ -62,7 +62,8 @@
 
 /******************************************************************************/
 
-static void ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
+static void
+ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
 {
 	memset(io, 0, dataSize);
 	io->data_size = dataSize;
@@ -76,7 +77,8 @@ static void ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, u
 		strncpy(io->name, name, sizeof(io->name) - 1);
 }
 
-static unsigned long get_blkdev_size(int fd)
+static unsigned long
+get_blkdev_size(int fd)
 {
 	unsigned long nr_sec;
 
@@ -86,7 +88,8 @@ static unsigned long get_blkdev_size(int fd)
 	return nr_sec;
 }
 
-char *cryptfs_get_device_path_new(const char *label)
+char *
+cryptfs_get_device_path_new(const char *label)
 {
 	return mem_printf("%s%s", CRYPT_PATH_PREFIX, label);
 }
@@ -117,8 +120,9 @@ convert_key_to_hex_ascii(unsigned char *master_key, unsigned int keysize,
 }
 #endif
 
-static int load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name,
-				     int fs_size, int fd)
+static int
+load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name, int fs_size,
+			  int fd)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
@@ -164,7 +168,8 @@ static int load_crypto_mapping_table(const char *real_blk_name, const char *mast
 	}
 }
 
-static int create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name)
+static int
+create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
@@ -235,7 +240,8 @@ errout:
 /* TODO:
  * maybe we need to wait a bit before device is created 
  */
-static char *create_device_node(const char *name)
+static char *
+create_device_node(const char *name)
 {
 	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
 
@@ -275,7 +281,8 @@ static char *create_device_node(const char *name)
 	return device;
 }
 
-char *cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key)
+char *
+cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key)
 //			 char *crypto_sys_path, unsigned int max_path)
 {
 	if (create_crypto_blk_dev(real_blkdev, key, label) < 0)
@@ -284,7 +291,8 @@ char *cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const
 	return create_device_node(label);
 }
 
-int cryptfs_delete_blk_dev(const char *name)
+int
+cryptfs_delete_blk_dev(const char *name)
 {
 	int fd;
 	char buffer[DM_CRYPT_BUF_SIZE];

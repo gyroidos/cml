@@ -50,7 +50,8 @@ struct uuid {
 	char *string;
 };
 
-static int uuid_fill_from_string(uuid_t *uuid, const char *string)
+static int
+uuid_fill_from_string(uuid_t *uuid, const char *string)
 {
 	TRACE("Trying to fill UUID from string: %s", string);
 
@@ -74,7 +75,8 @@ error:
 	return -1;
 }
 
-uuid_t *uuid_new(char const *uuid)
+uuid_t *
+uuid_new(char const *uuid)
 {
 	uuid_t *u = mem_new0(uuid_t, 1);
 	u->string = mem_new0(char, 37);
@@ -140,7 +142,8 @@ error:
 	return NULL;
 }
 
-bool uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2)
+bool
+uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2)
 {
 	IF_NULL_RETVAL(uuid1, false);
 	IF_NULL_RETVAL(uuid2, false);
@@ -152,7 +155,8 @@ bool uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2)
 	return false;
 }
 
-void uuid_free(uuid_t *uuid)
+void
+uuid_free(uuid_t *uuid)
 {
 	IF_NULL_RETURN(uuid);
 
@@ -160,7 +164,8 @@ void uuid_free(uuid_t *uuid)
 	mem_free(uuid);
 }
 
-const char *uuid_string(const uuid_t *uuid)
+const char *
+uuid_string(const uuid_t *uuid)
 {
 	IF_NULL_RETVAL(uuid, NULL);
 	return uuid->string;

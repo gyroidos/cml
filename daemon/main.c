@@ -51,7 +51,8 @@ static logf_handler_t *cml_daemon_logfile_handler = NULL;
 
 /******************************************************************************/
 
-static void main_core_dump_enable(void)
+static void
+main_core_dump_enable(void)
 {
 	struct rlimit core_limit;
 
@@ -62,12 +63,14 @@ static void main_core_dump_enable(void)
 		ERROR_ERRNO("Could not set rlimits for core dump generation");
 }
 
-static void main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+static void
+main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	FATAL("Received SIGINT...");
 }
 
-static void main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+static void
+main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	DEBUG("Logfile will be closed and a new file opened");
 	logf_unregister(cml_daemon_logfile_handler);
@@ -77,7 +80,8 @@ static void main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *dat
 
 /******************************************************************************/
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	const char *path;
 

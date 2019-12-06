@@ -42,7 +42,8 @@ typedef struct uuid uuid_t;
  * generates a random UUID.
  * @return New UUID.
  */
-uuid_t *uuid_new(char const *uuid);
+uuid_t *
+uuid_new(char const *uuid);
 
 /**
  * Test two UUIDs for equality.
@@ -51,7 +52,8 @@ uuid_t *uuid_new(char const *uuid);
  * @param uuid2 Second UUID.
  * @return True if uuid1 and uuid2 are equal. False if not.
  */
-bool uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2);
+bool
+uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2);
 
 /**
  * Free a UUID.
@@ -59,7 +61,8 @@ bool uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2);
  * @param uuid UUID to be freed.
  * @return True if uuid1 and uuid2 are equal. False if not.
  */
-void uuid_free(uuid_t *uuid);
+void
+uuid_free(uuid_t *uuid);
 
 /**
  * Get a string representation of the UUID.
@@ -67,6 +70,7 @@ void uuid_free(uuid_t *uuid);
  * @param uuid UUID for which the string representation is returned.
  * @return The string representation of uuid.
  */
-const char *uuid_string(const uuid_t *uuid);
+const char *
+uuid_string(const uuid_t *uuid);
 
 #endif /* UUID_H */
