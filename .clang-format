@@ -1,7 +1,7 @@
 # (modified) Linux kernel coding style
 #
 # The changes made to the upstream Linux coding style are:
-# - 120 column limit instead of 80
+# - 100 column limit instead of 80
 # - deleted foreach macros 
 # 
 # SPDX-License-Identifier: GPL-2.0
@@ -58,7 +58,7 @@ BreakConstructorInitializersBeforeComma: false
 #BreakConstructorInitializers: BeforeComma # Unknown to clang-format-4.0
 BreakAfterJavaFieldAnnotations: false
 BreakStringLiterals: false
-ColumnLimit: 120
+ColumnLimit: 100
 CommentPragmas: '^ IWYU pragma:'
 #CompactNamespaces: false # Unknown to clang-format-4.0
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
