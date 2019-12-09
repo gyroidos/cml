@@ -46,7 +46,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+// clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
+// clang-format on
 
 // TODO: centrally define key length in container or other module?
 #define TOKEN_KEY_LEN 64

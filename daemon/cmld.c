@@ -54,7 +54,9 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+// clang-format off
 #define CMLD_CONTROL_SOCKET SOCK_PATH(control)
+// clang-format on
 
 #define CMLD_SUSPEND_TIMEOUT 5000
 

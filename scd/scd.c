@@ -50,7 +50,9 @@
 #include <unistd.h>
 #include <dirent.h>
 
+// clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
+// clang-format on
 
 // Do not edit! This path is also configured in cmld.c
 #define DEVICE_CONF "/data/cml/device.conf"

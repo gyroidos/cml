@@ -40,7 +40,9 @@
 #include <signal.h>
 #include <getopt.h>
 
+// clang-format off
 #define TPM2D_CONTROL_SOCKET SOCK_PATH(tpm2d-control)
+// clang-format on
 #define TPM2D_RCONTROL_PORT 9505
 
 static bool use_simulator = false;

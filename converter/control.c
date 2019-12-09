@@ -36,7 +36,9 @@
 #include <stdbool.h>
 #include <unistd.h>
 
+// clang-format off
 #define CONTROL_SOCKET SOCK_PATH(control)
+// clang-format on
 
 static int
 send_message(ControllerToDaemon *msg)

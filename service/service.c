@@ -43,7 +43,9 @@
 
 #include "dumb_init.h"
 
+// clang-format off
 #define SERVICE_SOCKET SOCK_PATH(service)
+// clang-format on
 #define LOGFILE_PATH "/var/log/container.log"
 
 static logf_handler_t *service_logfile_handler = NULL;
