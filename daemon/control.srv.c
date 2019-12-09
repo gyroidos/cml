@@ -63,7 +63,9 @@ int main()
 	cmld_stub_init(cmld_fd[1]);
 	UNUSED container_t *a0 = cmld_stub_container_create("A0");
 	UNUSED container_t *a1 = cmld_stub_container_create("A1");
+        // clang-format off
 	control_t *control = control_local_new(SOCK_PATH(control));
+        // clang-format on
 	event_loop();
 	control_free(control);
 

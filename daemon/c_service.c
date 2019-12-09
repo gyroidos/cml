@@ -41,7 +41,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+// clang-format off
 #define C_SERVICE_SOCKET SOCK_PATH(service)
+// clang-format on
 
 struct c_service {
 	container_t *container; // weak reference

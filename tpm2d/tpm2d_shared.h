@@ -15,7 +15,9 @@
 #define TPM2D_ATT_PARENT_PUB_FILE	TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_pt_pub.bin"
 #define TPM2D_ATT_CERT_FILE		"/data/cml/tokens/device.cert"
 
+// clang-format off
 #define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
+// clang-format on
 
 // WARNING overwrite this with proper auth in production builds
 #define TPM2D_PRIMARY_STORAGE_KEY_PW	NULL

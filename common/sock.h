@@ -56,7 +56,9 @@
 #else
 #define CMLD_SOCKET_DIR "/run/socket"
 #endif
+// clang-format off
 #define SOCK_PATH(name) CMLD_SOCKET_DIR"/cml-"#name
+// clang-format on
 
 /**
  * Creates a new UNIX socket of the given type.
