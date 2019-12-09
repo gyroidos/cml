@@ -22,8 +22,7 @@ gzopen_frontend(char *pathname, int oflags, int mode)
 	int fd;
 	gzFile *gzfs = gzfiles;
 
-	switch (oflags & O_ACCMODE)
-	{
+	switch (oflags & O_ACCMODE) {
 	case O_WRONLY:
 		gzoflags = "wb";
 		break;
@@ -46,7 +45,7 @@ gzopen_frontend(char *pathname, int oflags, int mode)
 	}
 
 	if (fd > gzfiles_tail) {
-		gzfs = reallocarray(gzfiles, fd+1, sizeof(gzFile));
+		gzfs = reallocarray(gzfiles, fd + 1, sizeof(gzFile));
 		if (gzfs == NULL) {
 			errno = ENOMEM;
 			return -1;
@@ -67,12 +66,12 @@ gzclose_frontend(int fd)
 {
 	int ret = gzclose(gzfiles[fd]);
 	gzfiles[fd] = NULL;
-	for (int i=0; i < gzfiles_tail; ++i) {
+	for (int i = 0; i < gzfiles_tail; ++i) {
 		if (gzfiles[i] != NULL)
 			fd = i;
 	}
 
-	gzFile *gzfs = reallocarray(gzfiles, fd+1, sizeof(gzFile));
+	gzFile *gzfs = reallocarray(gzfiles, fd + 1, sizeof(gzFile));
 	if (gzfs == NULL) {
 		errno = ENOMEM;
 		return -1;
@@ -83,17 +82,15 @@ gzclose_frontend(int fd)
 }
 
 static ssize_t
-gzread_frontend(int fd, void* buf, size_t count)
+gzread_frontend(int fd, void *buf, size_t count)
 {
 	return gzread(gzfiles[fd], buf, count);
 }
 
 static ssize_t
-gzwrite_frontend(int fd, const void* buf, size_t count)
+gzwrite_frontend(int fd, const void *buf, size_t count)
 {
-	return gzwrite(gzfiles[fd], (void*)buf, count);
+	return gzwrite(gzfiles[fd], (void *)buf, count);
 }
 
-tartype_t gztype = { (openfunc_t) gzopen_frontend, gzclose_frontend,
-	gzread_frontend, gzwrite_frontend };
-
+tartype_t gztype = { (openfunc_t)gzopen_frontend, gzclose_frontend, gzread_frontend, gzwrite_frontend };

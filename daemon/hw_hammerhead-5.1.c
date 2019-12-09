@@ -49,7 +49,7 @@
 #define LED_B_ON_OFF_MS "/sys/class/leds/blue/on_off_ms"
 
 #define LED_ON_DEFAULT 10000 /* Max value from kernel driver; should not be below 500 */
-#define LED_OFF_DEFAULT 1	/* Min value from kernel driver */
+#define LED_OFF_DEFAULT 1 /* Min value from kernel driver */
 
 #define LED_ON_BLINK 500
 #define LED_OFF_BLINK 3000
@@ -106,7 +106,6 @@ static const char *hw_hammerhead_devices_whitelist_base[] = {
 
 	"c 252:* rwm", // rtc*
 
-
 	/*************/
 	/* Block     */
 	//"b 179:0 rwm", // mmcblk0
@@ -142,10 +141,8 @@ static const char *hw_hammerhead_devices_whitelist_priv[] = {
 /**
  * List of audio devices
  */
-static const char *hw_hammerhead_devices_whitelist_audio[] = {
-	"c 116:* rwm", // ALSA Audio
-	NULL
-};
+static const char *hw_hammerhead_devices_whitelist_audio[] = { "c 116:* rwm", // ALSA Audio
+							       NULL };
 
 static char *hw_hammerhead_serial_number = NULL;
 static char *hw_hammerhead_name = NULL;
@@ -233,7 +230,7 @@ hardware_set_led(uint32_t color, bool should_blink)
 	file_printf(LED_B_ON_OFF_MS, "%d %d\n", led_time_on, led_time_off);
 	IF_FALSE_RETVAL(file_printf(LED_R, "%u\n", (color >> 24) & 0xff) >= 0, -1);
 	IF_FALSE_RETVAL(file_printf(LED_G, "%u\n", (color >> 16) & 0xff) >= 0, -1);
-	IF_FALSE_RETVAL(file_printf(LED_B, "%u\n", (color >>  8) & 0xff) >= 0, -1);
+	IF_FALSE_RETVAL(file_printf(LED_B, "%u\n", (color >> 8) & 0xff) >= 0, -1);
 	file_printf(LED_START, "%d\n", 1);
 
 	return 0;
@@ -300,15 +297,15 @@ hardware_get_active_cgroups_subsystems(void)
 	return subsys_list;
 }
 
-list_t*
-hardware_get_nw_name_list(void) {
-
+list_t *
+hardware_get_nw_name_list(void)
+{
 	list_t *nw_name_list = NULL;
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
 
-list_t*
+list_t *
 hardware_get_nw_mv_name_list(void)
 {
 	/*
@@ -316,9 +313,9 @@ hardware_get_nw_mv_name_list(void)
 	 * which is usually rmnet0
 	 */
 	list_t *nw_name_list = NULL;
-	for (int i=0; i<8; ++i)
+	for (int i = 0; i < 8; ++i)
 		nw_name_list = list_append(nw_name_list, mem_printf("rmnet%d", i));
-	for (int i=0; i<9; ++i)
+	for (int i = 0; i < 9; ++i)
 		nw_name_list = list_append(nw_name_list, mem_printf("rev_rmnet%d", i));
 	return nw_name_list;
 }
@@ -395,16 +392,18 @@ hardware_get_random(unsigned char *buf, size_t len)
 	const char *sw = "/dev/random";
 	if (!file_exists(rnd)) {
 		if (!file_exists(sw)) {
-			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
+			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!",
+			      rnd, sw);
 			return -1;
 		}
-		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
+		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.",
+		     rnd, sw);
 		rnd = sw;
 	}
-	return file_read(rnd, (char*)buf, len);
+	return file_read(rnd, (char *)buf, len);
 }
 
-#define CMLD_PATH_WAKE_LOCK   "/sys/power/wake_lock"
+#define CMLD_PATH_WAKE_LOCK "/sys/power/wake_lock"
 #define CMLD_PATH_WAKE_UNLOCK "/sys/power/wake_unlock"
 
 void

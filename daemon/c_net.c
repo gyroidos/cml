@@ -59,7 +59,7 @@
 #define IPV4_SUBNET_OFFS 0
 
 /* Max number of network structures that can be allocated depends on the available subnets */
-#define MAX_NUM_DEVICES (255-IPV4_SUBNET_OFFS)
+#define MAX_NUM_DEVICES (255 - IPV4_SUBNET_OFFS)
 
 /* Path to search for net devices */
 #define SYS_NET_PATH "/sys/class/net"
@@ -91,7 +91,7 @@ typedef struct {
 	bool configure; // do ip/routing configuration
 	char *veth_cmld_name; //!< associated veth name in root ns
 	char *veth_cont_name; //!< veth name in the container's ns
-	char *subnet;	      //!< string with subnet (x.x.x.x/y)
+	char *subnet; //!< string with subnet (x.x.x.x/y)
 	struct in_addr ipv4_cmld_addr; //!< associated ipv4 address in root ns
 	struct in_addr ipv4_cont_addr; //!< ipv4 address of container
 	struct in_addr ipv4_bc_addr; //!< ipv4 bcaddr of container/cmld subnet
@@ -103,7 +103,7 @@ typedef struct {
 /* Network structure with specific network settings */
 struct c_net {
 	container_t *container; //!< container which the c_net struct is associated to
-	uint16_t adb_port;	//!< forwarded port for adb in container
+	uint16_t adb_port; //!< forwarded port for adb in container
 	bool ns_net; //!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container
@@ -121,7 +121,8 @@ static bool *address_offsets = NULL;
  * indicates that a container releases its addresses.
  */
 static void
-c_net_unset_offset(int offset) {
+c_net_unset_offset(int offset)
+{
 	ASSERT(offset >= 0 && offset < MAX_NUM_DEVICES);
 	TRACE("Offset %d released by a container", offset);
 
@@ -133,7 +134,8 @@ c_net_unset_offset(int offset) {
  * @return failure, return -1, else return first free offset
  */
 static int
-c_net_set_next_offset(void) {
+c_net_set_next_offset(void)
+{
 	if (!address_offsets) {
 		address_offsets = mem_new0(bool, MAX_NUM_DEVICES);
 		address_offsets[0] = true;
@@ -141,8 +143,7 @@ c_net_set_next_offset(void) {
 		return 0;
 	}
 
-
-	for (int i=0; i < MAX_NUM_DEVICES; i++) {
+	for (int i = 0; i < MAX_NUM_DEVICES; i++) {
 		if (!address_offsets[i]) {
 			TRACE("Offset %d occupied by a container", i);
 			address_offsets[i] = true;
@@ -163,7 +164,7 @@ c_net_get_next_ipv4_cmld_addr(int offset, struct in_addr *ipv4_addr)
 {
 	ASSERT(ipv4_addr);
 
-	char * ipv4_next = mem_printf(IPV4_CMLD_ADDRESS, offset+IPV4_SUBNET_OFFS);
+	char *ipv4_next = mem_printf(IPV4_CMLD_ADDRESS, offset + IPV4_SUBNET_OFFS);
 
 	if (!ipv4_next) {
 		ERROR("failed to allocate ipv4 address string");
@@ -210,7 +211,7 @@ c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
 {
 	ASSERT(ipv4_addr);
 
-	char * ipv4_next = mem_printf(IPV4_CONT_ADDRESS, offset+IPV4_SUBNET_OFFS);
+	char *ipv4_next = mem_printf(IPV4_CONT_ADDRESS, offset + IPV4_SUBNET_OFFS);
 
 	if (!ipv4_next) {
 		ERROR("failed to allocate ipv4 address string");
@@ -248,7 +249,6 @@ c_net_is_veth_used(const char *if_name)
 
 	/* read the network directory and compare names */
 	while ((dp = readdir(dirp)) != NULL) {
-
 		char *path = mem_printf("%s/%s", SYS_NET_PATH, dp->d_name);
 
 		TRACE("veth lookup path: %s, name: %s, parameter to match: %s", path, dp->d_name, if_name);
@@ -301,10 +301,7 @@ c_net_rename_ifi(const char *old_ifi_name, const char *new_ifi_name)
 		return -1;
 	}
 
-	struct ifinfomsg link_req = {
-		.ifi_family = AF_INET,
-		.ifi_index = ifi_index_old
-	};
+	struct ifinfomsg link_req = { .ifi_family = AF_INET, .ifi_index = ifi_index_old };
 
 	/* Fill netlink message header */
 	if (nl_msg_set_type(req, RTM_NEWLINK))
@@ -332,11 +329,11 @@ c_net_rename_ifi(const char *old_ifi_name, const char *new_ifi_name)
 
 	return 0;
 
-	msg_err:
-		ERROR("failed to create/send netlink message");
-		nl_msg_free(req);
-		nl_sock_free(nl_sock);
-		return -1;
+msg_err:
+	ERROR("failed to create/send netlink message");
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return -1;
 }
 
 /**
@@ -374,8 +371,7 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid)
 
 	/* Prepare the request message */
 	struct ifinfomsg link_req = {
-		.ifi_family = AF_INET,
-		.ifi_index = ifi_index	/* The index of the interface */
+		.ifi_family = AF_INET, .ifi_index = ifi_index /* The index of the interface */
 	};
 
 	/* Fill netlink message header */
@@ -404,11 +400,11 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid)
 
 	return 0;
 
-	msg_err:
-		ERROR("failed to create/send netlink message");
-		nl_msg_free(req);
-		nl_sock_free(nl_sock);
-		return -1;
+msg_err:
+	ERROR("failed to create/send netlink message");
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return -1;
 }
 
 /**
@@ -422,9 +418,6 @@ c_net_remove_ifi(const char *ifi_name, const pid_t pid)
 	int ret = network_move_link_ns(pid, 1, ifi_name);
 	return ret;
 }
-
-
-
 
 /**
  * This function creates a veth pair veth1/veth2 (in the root namespace)
@@ -452,15 +445,13 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 	}
 
 	/* Prepare request message */
-	struct ifinfomsg link_req = {
-		.ifi_family = AF_INET
-	};
+	struct ifinfomsg link_req = { .ifi_family = AF_INET };
 
 	struct rtattr *attr1, *attr2, *attr3;
 
 	/* Fill netlink message header */
 	if (nl_msg_set_type(req, RTM_NEWLINK))
-	goto msg_err;
+		goto msg_err;
 
 	/* Set appropriate flags for request, creating new object,
 	 * exclusive access and acknowledgment response */
@@ -499,9 +490,9 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 
 	/* Close nested attributes */
 	if (nl_msg_end_nested_attr(req, attr3))
-	    goto msg_err;
+		goto msg_err;
 	if (nl_msg_end_nested_attr(req, attr2))
-	    goto msg_err;
+		goto msg_err;
 	if (nl_msg_end_nested_attr(req, attr1))
 		goto msg_err;
 
@@ -513,7 +504,6 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 	if (nl_msg_add_buffer(req, IFLA_ADDRESS, (char *)veth1_mac, 6))
 		goto msg_err;
 
-
 	/* Send request message and wait for the response message */
 	if (nl_msg_send_kernel_verify(nl_sock, req))
 		goto msg_err;
@@ -523,11 +513,11 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 
 	return 0;
 
-	msg_err:
-		ERROR("failed to create/send netlink message");
-		nl_msg_free(req);
-		nl_sock_free(nl_sock);
-		return -1;
+msg_err:
+	ERROR("failed to create/send netlink message");
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return -1;
 }
 
 /**
@@ -536,8 +526,7 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
  * We use this in the root namespace and in the container's namespace.
  */
 static int
-c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr,
-			const struct in_addr *ipv4_bcaddr)
+c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr, const struct in_addr *ipv4_bcaddr)
 {
 	ASSERT(ifi_name);
 
@@ -567,12 +556,10 @@ c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr,
 	}
 
 	/* Prepare the request message */
-	struct ifaddrmsg ip_req = {
-		.ifa_family = AF_INET,
-		.ifa_prefixlen = IPV4_PREFIX,
-		.ifa_index = ifi_index,	/* The index of the interface */
-		.ifa_scope = RT_SCOPE_UNIVERSE
-	};
+	struct ifaddrmsg ip_req = { .ifa_family = AF_INET,
+				    .ifa_prefixlen = IPV4_PREFIX,
+				    .ifa_index = ifi_index, /* The index of the interface */
+				    .ifa_scope = RT_SCOPE_UNIVERSE };
 
 	/* Fill netlink message header */
 	if (nl_msg_set_type(req, RTM_NEWADDR))
@@ -608,11 +595,11 @@ c_net_set_ipv4(const char *ifi_name, const struct in_addr *ipv4_addr,
 
 	return 0;
 
-	msg_err:
-		ERROR("failed to create/send netlink message");
-		nl_msg_free(req);
-		nl_sock_free(nl_sock);
-		return -1;
+msg_err:
+	ERROR("failed to create/send netlink message");
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return -1;
 }
 
 static c_net_interface_t *
@@ -651,9 +638,7 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	for (list_t *l = vnet_cfg_list; l; l = l->next) {
 		container_vnet_cfg_t *cfg = l->data;
 
-		c_net_interface_t *ni = c_net_interface_new(cfg->vnet_name,
-							    cfg->vnet_mac,
-							    cfg->configure);
+		c_net_interface_t *ni = c_net_interface_new(cfg->vnet_name, cfg->vnet_mac, cfg->configure);
 		ASSERT(ni);
 		net->interface_list = list_append(net->interface_list, ni);
 
@@ -669,12 +654,11 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	if (adb_port > 0) {
 		INFO("Generating debug veth %s", ADB_INTERFACE_NAME);
 		uint8_t mac[6];
-		file_read("/dev/urandom", (char*)mac, 6);
+		file_read("/dev/urandom", (char *)mac, 6);
 		mac[0] &= 0xfe; /* clear multicast bit */
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
-		c_net_interface_t *ni_adb =
-			c_net_interface_new(ADB_INTERFACE_NAME, mac, true);
+		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME, mac, true);
 		net->interface_list = list_append(net->interface_list, ni_adb);
 	}
 
@@ -704,24 +688,23 @@ c_net_setup_port_forwarding(c_net_interface_t *ni, uint16_t srcport, uint16_t ds
 static int
 c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 {
-	if (network_set_flag(if_name, up?IFF_UP:IFF_DOWN))
+	if (network_set_flag(if_name, up ? IFF_UP : IFF_DOWN))
 		return -1;
 #ifdef ANDROID
 	// setup proper route to subnet via interface
 	int error = network_setup_route(subnet, if_name, up);
 	if (error) {
-		if (error!=2) {
+		if (error != 2) {
 			ERROR("Failed to setup route %s (%i)", subnet, error);
 			return -1;
 		}
-		WARN("Failed to setup route %s (already %s)", subnet, up?"exists":"removed");
+		WARN("Failed to setup route %s (already %s)", subnet, up ? "exists" : "removed");
 	}
 #else
 	TRACE("Skipping network_setup_route(%s,%s,%d)", subnet, if_name, up);
 #endif
 	return 0;
 }
-
 
 #ifdef ANDROID
 static int
@@ -734,7 +717,7 @@ c_net_write_dhcp_config(c_net_interface_t *ni)
 	char *conf_dir = mem_printf("/data/misc/dhcp/dnsmasq.d");
 	char *conf_file = mem_printf("%s/%s.conf", conf_dir, ni->veth_cmld_name);
 	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
-	char *ipv4_end  = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
+	char *ipv4_end = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
 
 	// create config dir if not created yet
 	if (dir_mkdir_p(conf_dir, 0755) < 0) {
@@ -742,8 +725,8 @@ c_net_write_dhcp_config(c_net_interface_t *ni)
 		goto out;
 	}
 
-	bytes_written = file_printf(conf_file, "interface=%s\n dhcp-range=%s,%s,1h", ni->veth_cmld_name,
-			ipv4_start, ipv4_end);
+	bytes_written =
+		file_printf(conf_file, "interface=%s\n dhcp-range=%s,%s,1h", ni->veth_cmld_name, ipv4_start, ipv4_end);
 
 	if (chmod(conf_file, 00644) < 0)
 		ERROR_ERRNO("changing of file access rights failed");
@@ -764,7 +747,6 @@ out:
 void
 c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
-
 	c_net_interface_t *ni = data;
 	pid_t pid;
 	int status = 0;
@@ -799,7 +781,7 @@ c_net_udhcpd_start(c_net_interface_t *ni)
 	char *run_dir = mem_printf("/run/udhcpd");
 	char *conf_file = mem_printf("%s/%s.conf", run_dir, ni->veth_cmld_name);
 	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
-	char *ipv4_end  = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
+	char *ipv4_end = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
 	char *lease_file = mem_printf("%s/%s.leases", run_dir, ni->veth_cmld_name);
 	char *pid_file = mem_printf("%s/%s.pid", run_dir, ni->veth_cmld_name);
 
@@ -813,10 +795,14 @@ c_net_udhcpd_start(c_net_interface_t *ni)
 	if (ni->dhcpd_pid > 0)
 		c_net_udhcpd_stop(ni);
 
-	bytes_written = file_printf(conf_file, "interface %s\n" "start %s\n" "end %s\n"
-					"option subnet %s\n" "lease_file %s\n" "pidfile %s",
-			ni->veth_cmld_name, ipv4_start, ipv4_end,
-			IPV4_DHCP_MASK, lease_file, pid_file);
+	bytes_written = file_printf(conf_file,
+				    "interface %s\n"
+				    "start %s\n"
+				    "end %s\n"
+				    "option subnet %s\n"
+				    "lease_file %s\n"
+				    "pidfile %s",
+				    ni->veth_cmld_name, ipv4_start, ipv4_end, IPV4_DHCP_MASK, lease_file, pid_file);
 
 	IF_FALSE_GOTO(bytes_written > 0, out);
 
@@ -931,8 +917,7 @@ err:
 		// delete veth pair if it was created!
 		if (c_net_is_veth_used(ni->veth_cmld_name)) {
 			if (network_delete_link(ni->veth_cmld_name))
-				TRACE("network interface %s could not be destroyed",
-							ni->veth_cmld_name);
+				TRACE("network interface %s could not be destroyed", ni->veth_cmld_name);
 		}
 		mem_free(ni->veth_cmld_name);
 		ni->veth_cmld_name = NULL;
@@ -958,7 +943,8 @@ c_net_start_pre_clone(c_net_t *net)
 
 	/* If container has no network namespace, we can just skip, as every networking
 	 * operation will be skipped */
-	if (!net->ns_net) return 0;
+	if (!net->ns_net)
+		return 0;
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
@@ -1103,7 +1089,7 @@ c_net_start_child(c_net_t *net)
 	}
 
 	// setup default route for first ni
-	c_net_interface_t* first_ni = list_nth_data(net->interface_list, 0);
+	c_net_interface_t *first_ni = list_nth_data(net->interface_list, 0);
 	if (first_ni->configure)
 		network_setup_default_route(inet_ntoa(first_ni->ipv4_cmld_addr), true);
 
@@ -1121,7 +1107,6 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	/* shut the network interface down */
 	// check if iface was allready destroyed by kernel
 	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
-
 		if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, false))
 			WARN("network interface could not be gracefully shut down");
 
@@ -1173,8 +1158,8 @@ c_net_cleanup(c_net_t *net)
 		}
 		if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
 			if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT, false))
-				WARN("Failed to remove port forwarding from %" PRIu16 " to %s:%" PRIu16,
-						net->adb_port, inet_ntoa(ni->ipv4_cont_addr), ADB_DAEMON_PORT);
+				WARN("Failed to remove port forwarding from %" PRIu16 " to %s:%" PRIu16, net->adb_port,
+				     inet_ntoa(ni->ipv4_cont_addr), ADB_DAEMON_PORT);
 		} else {
 			if (network_setup_masquerading(ni->subnet, false))
 				WARN("Failed to remove masquerading from %s", ni->subnet);
@@ -1221,7 +1206,7 @@ c_net_free(c_net_t *net)
 }
 
 char *
-c_net_get_ip_new(c_net_t* net)
+c_net_get_ip_new(c_net_t *net)
 {
 	if (!net->ns_net)
 		return NULL;
@@ -1231,7 +1216,7 @@ c_net_get_ip_new(c_net_t* net)
 }
 
 char *
-c_net_get_subnet_new(c_net_t* net)
+c_net_get_subnet_new(c_net_t *net)
 {
 	if (!net->ns_net)
 		return NULL;
@@ -1246,8 +1231,8 @@ c_net_get_interface_mapping_new(c_net_t *net)
 	list_t *mapping = NULL;
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
-		container_vnet_cfg_t* vnet_cfg = container_vnet_cfg_new(
-			ni->nw_name, ni->veth_cmld_name, ni->veth_mac, ni->configure);
+		container_vnet_cfg_t *vnet_cfg =
+			container_vnet_cfg_new(ni->nw_name, ni->veth_cmld_name, ni->veth_mac, ni->configure);
 		mapping = list_append(mapping, vnet_cfg);
 	}
 	return mapping;

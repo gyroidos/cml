@@ -61,16 +61,16 @@
 // time between reconnection attempts of a remote client socket
 #define CONTROL_REMOTE_RECONNECT_INTERVAL 10000
 
-#define LOGGER_ENTRY_MAX_LEN             (5*1024)
+#define LOGGER_ENTRY_MAX_LEN (5 * 1024)
 
 struct control {
-	int sock;		// listen socket fd
+	int sock; // listen socket fd
 	int sock_client;
 	//char const *format;	// TBD control message encoding format
 	//uint32_t permissions; // TBD
 	int type;
-	char *hostip;		// remote host for inet (MDM) connection
-	int port;		// remote port
+	char *hostip; // remote host for inet (MDM) connection
+	int port; // remote port
 	bool connected; // FIXME: we should reconsider this...
 	event_timer_t *reconnect_timer;
 	bool privileged;
@@ -109,7 +109,7 @@ control_logf(logf_prio_t prio, const char *msg, UNUSED void *data)
 			continue;
 
 		LogMessage message = LOG_MESSAGE__INIT;
-		message.prio = (LogPriority) prio; // FIXME
+		message.prio = (LogPriority)prio; // FIXME
 		message.msg = mem_strdup(msg);
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE;
@@ -117,7 +117,7 @@ control_logf(logf_prio_t prio, const char *msg, UNUSED void *data)
 		if (cmld_get_device_uuid()) {
 			out.device_uuid = mem_strdup(cmld_get_device_uuid());
 		}
-		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *) &out) < 0) {
+		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send log message");
 			//Do not try to reconnect here
 			//Reconnection handling is done by control_cb_recv_message()
@@ -128,21 +128,20 @@ control_logf(logf_prio_t prio, const char *msg, UNUSED void *data)
 	log_bomb_prevention = false;
 }
 
-static void
-UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level,
-						bool send_last_line_info)
+static void UNUSED
+control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool send_last_line_info)
 {
 	int fp_low = -1;
 	bool skipped_lines = false;
 	FILE *fp = NULL;
-	char* line;
-	char line_low[LOGGER_ENTRY_MAX_LEN+1];
+	char *line;
+	char line_low[LOGGER_ENTRY_MAX_LEN + 1];
 	size_t HEADER_LENGTH = 21;
 	ssize_t bytes_read;
 	bool file_is_open = false;
 
 	LogMessage message = LOG_MESSAGE__INIT;
-	message.prio = (LogPriority) LOGF_PRIO_DEBUG;
+	message.prio = (LogPriority)LOGF_PRIO_DEBUG;
 	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 	out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE;
 	if (cmld_get_device_uuid()) {
@@ -155,8 +154,7 @@ UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level,
 		fp_low = open(log_file_name, O_RDONLY | O_NONBLOCK);
 		if (fp_low == -1) {
 			ERROR("Could not open %s", log_file_name);
-		}
-		else {
+		} else {
 			file_is_open = true;
 		}
 	} else {
@@ -164,21 +162,20 @@ UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level,
 		line = NULL;
 		if (fp == NULL) {
 			ERROR("Could not open %s", log_file_name);
-		}
-		else {
+		} else {
 			file_is_open = true;
 		}
 	}
 
 	while (file_is_open) {
 		if (read_low_level) {
-            /* The driver let's us read entry by entry */
+			/* The driver let's us read entry by entry */
 			bytes_read = read(fp_low, line_low, LOGGER_ENTRY_MAX_LEN);
 			if (bytes_read <= 0)
 				break;
-			char *first_string = line_low+HEADER_LENGTH;
+			char *first_string = line_low + HEADER_LENGTH;
 			size_t string_len = strlen(first_string);
-			char *second_string = line_low+HEADER_LENGTH+string_len+1;
+			char *second_string = line_low + HEADER_LENGTH + string_len + 1;
 			message.msg = mem_printf("%s/%s", first_string, second_string);
 		} else {
 			size_t len = 0;
@@ -188,7 +185,7 @@ UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level,
 			message.msg = mem_strdup(line);
 		}
 		out.log_message = &message;
-		if (protobuf_send_message(fd, (ProtobufCMessage *) &out) < 0) {
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR_ERRNO("Could not finish sending %s", log_file_name);
 			skipped_lines = true;
 			break;
@@ -198,7 +195,7 @@ UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level,
 	if (send_last_line_info) {
 		message.msg = "Last line of log";
 		out.log_message = &message;
-		if (protobuf_send_message(fd, (ProtobufCMessage *) &out) < 0) {
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR("Could not sent last line info for %s", log_file_name);
 		}
 	}
@@ -206,8 +203,7 @@ UNUSED control_send_log_file(int fd, char *log_file_name, bool read_low_level,
 	if (file_is_open) {
 		if (read_low_level) {
 			close(fp_low);
-		}
-		else {
+		} else {
 			fclose(fp);
 			if (line)
 				free(line);
@@ -318,7 +314,7 @@ control_container_status_free(ContainerStatus *c_status)
 }
 
 static ssize_t
-control_read_send(control_t * control, int fd)
+control_read_send(control_t *control, int fd)
 {
 	uint8_t buf[1024];
 	ssize_t count = -1;
@@ -336,8 +332,7 @@ control_read_send(control_t * control, int fd)
 
 		TRACE("[CONTROL] Read %zd bytes: %s. Sending to control client...", count, buf);
 
-		if (protobuf_send_message(control->sock_client,
-				(ProtobufCMessage *) & out) < 0) {
+		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
 		}
 	}
@@ -346,12 +341,12 @@ control_read_send(control_t * control, int fd)
 }
 
 static void
-control_cb_read_console(int fd, unsigned events, event_io_t * io, void *data)
+control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 {
 	control_t *control = data;
 
-	TRACE("Console callback called, events: read: %u, write: %u, except: %u",
-		(events & EVENT_IO_READ), (events & EVENT_IO_WRITE), (events & EVENT_IO_EXCEPT));
+	TRACE("Console callback called, events: read: %u, write: %u, except: %u", (events & EVENT_IO_READ),
+	      (events & EVENT_IO_WRITE), (events & EVENT_IO_EXCEPT));
 
 	if ((events & EVENT_IO_READ)) {
 		TRACE("Got output from exec'ed command, trying to read from console socket");
@@ -377,7 +372,7 @@ control_cb_read_console(int fd, unsigned events, event_io_t * io, void *data)
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
 
-		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *) & out) < 0) {
+		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
 		}
 
@@ -410,13 +405,13 @@ static list_t *
 control_build_container_list_from_uuids(size_t n_uuids, char **uuids)
 {
 	list_t *containers = NULL;
-	if (n_uuids > 0) {    // uuid list given in incoming message
+	if (n_uuids > 0) { // uuid list given in incoming message
 		for (size_t i = 0; i < n_uuids; i++) {
 			container_t *container = control_get_container_by_uuid_string(uuids[i]);
 			if (container != NULL)
 				containers = list_append(containers, container);
 		}
-	} else {    // empty uuid list, return status for all containers
+	} else { // empty uuid list, return status for all containers
 		n_uuids = cmld_containers_get_count();
 		for (size_t i = 0; i < n_uuids; i++) {
 			container_t *container = cmld_container_get_by_index(i);
@@ -439,41 +434,41 @@ control_send_message(control_message_t message, int fd)
 	out.code = DAEMON_TO_CONTROLLER__CODE__RESPONSE;
 	out.has_response = true;
 	switch (message) {
-		case CONTROL_RESPONSE_CONTAINER_START_OK:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_OK;
-			break;
+	case CONTROL_RESPONSE_CONTAINER_START_OK:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_OK;
+		break;
 
-		case CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_LOCK_FAILED;
-			break;
+	case CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_LOCK_FAILED;
+		break;
 
-		case CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_UNLOCK_FAILED;
-			break;
+	case CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_UNLOCK_FAILED;
+		break;
 
-		case CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_PASSWD_WRONG;
-			break;
+	case CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_PASSWD_WRONG;
+		break;
 
-		case CONTROL_RESPONSE_CONTAINER_START_EEXIST:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_EEXIST;
-			break;
+	case CONTROL_RESPONSE_CONTAINER_START_EEXIST:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_EEXIST;
+		break;
 
-		case CONTROL_RESPONSE_DEVICE_LOCKED_TILL_REBOOT:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_LOCKED_TILL_REBOOT;
-			break;
+	case CONTROL_RESPONSE_DEVICE_LOCKED_TILL_REBOOT:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_LOCKED_TILL_REBOOT;
+		break;
 
-		case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_FAILED:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_FAILED;
-			break;
+	case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_FAILED;
+		break;
 
-		case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_SUCCESSFUL:
-			out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_SUCCESSFUL;
-			break;
+	case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_SUCCESSFUL:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_SUCCESSFUL;
+		break;
 
-		default:
-			DEBUG("Unknown message `%d' (not sent)", message);
-			return -1;
+	default:
+		DEBUG("Unknown message `%d' (not sent)", message);
+		return -1;
 	}
 
 	return protobuf_send_message(fd, (ProtobufCMessage *)&out);
@@ -524,8 +519,8 @@ control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED in
 		WARN("PUSH_GUESTOS_CONFIG without config certificate");
 	else {
 		guestos_mgr_push_config(msg->guestos_config_file.data, msg->guestos_config_file.len,
-			msg->guestos_config_signature.data, msg->guestos_config_signature.len,
-			msg->guestos_config_certificate.data, msg->guestos_config_certificate.len);
+					msg->guestos_config_signature.data, msg->guestos_config_signature.len,
+					msg->guestos_config_certificate.data, msg->guestos_config_certificate.len);
 	}
 }
 
@@ -564,7 +559,7 @@ control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
 	}
 
 	switch (msg->command) {
-	// Global commands:
+		// Global commands:
 
 	case CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS: {
 		control_handle_cmd_list_guestos_configs(msg, fd);
@@ -610,12 +605,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	}
 
 	// get container for container-specific commands in advance
-	container_t *container = (msg->n_container_uuids == 1)
-		? control_get_container_by_uuid_string(msg->container_uuids[0])
-		: NULL;
+	container_t *container =
+		(msg->n_container_uuids == 1) ? control_get_container_by_uuid_string(msg->container_uuids[0]) : NULL;
 
 	switch (msg->command) {
-	// Global commands:
+		// Global commands:
 
 	case CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS: {
 		control_handle_cmd_list_guestos_configs(msg, fd);
@@ -650,8 +644,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS: {
 		// assemble list of relevant containers and allocate memory for result
-		list_t *containers = control_build_container_list_from_uuids(
-				msg->n_container_uuids, msg->container_uuids);
+		list_t *containers =
+			control_build_container_list_from_uuids(msg->n_container_uuids, msg->container_uuids);
 		size_t n = list_length(containers);
 		ContainerStatus **results = mem_new(ContainerStatus *, n);
 
@@ -679,8 +673,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG: {
 		// assemble list of relevant containers and allocate memory for result
-		list_t *containers = control_build_container_list_from_uuids(
-				msg->n_container_uuids, msg->container_uuids);
+		list_t *containers =
+			control_build_container_list_from_uuids(msg->n_container_uuids, msg->container_uuids);
 		size_t n = list_length(containers);
 		ContainerConfig **results = mem_new0(ContainerConfig *, n);
 		char **result_uuids = mem_new(char *, n);
@@ -695,32 +689,29 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			TRACE("Getting container config for container %s", container_get_name(container));
 			const char *config_filename = container_get_config_filename(container);
 			if (!config_filename) {
-				WARN("Container %s has no config file set. Skipping.",
-						container_get_name(container));
+				WARN("Container %s has no config file set. Skipping.", container_get_name(container));
 			} else {
-				TRACE("Container %s has config file; appending to list...", container_get_name(container));
-				results[number_of_configs] = (ContainerConfig *)
-					protobuf_message_new_from_textfile(
-							config_filename,
-							&container_config__descriptor);
-				if(results[number_of_configs] == NULL) {
+				TRACE("Container %s has config file; appending to list...",
+				      container_get_name(container));
+				results[number_of_configs] = (ContainerConfig *)protobuf_message_new_from_textfile(
+					config_filename, &container_config__descriptor);
+				if (results[number_of_configs] == NULL) {
 					WARN("The config file of container %s is missing. Skipping.",
-						container_get_name(container));
+					     container_get_name(container));
 					continue;
 				}
 				// overwrite vnet config with runtime configuration
-				size_t n_vnet_configs =
-					results[number_of_configs]->n_vnet_configs;
+				size_t n_vnet_configs = results[number_of_configs]->n_vnet_configs;
 				for (size_t i = 0; i < n_vnet_configs; ++i) {
-					protobuf_free_message((ProtobufCMessage *)
-						results[number_of_configs]->vnet_configs[i]);
-					TRACE("freed config time results[%zu]->vnet_configs[%zu]",
-							number_of_configs, i);
+					protobuf_free_message(
+						(ProtobufCMessage *)results[number_of_configs]->vnet_configs[i]);
+					TRACE("freed config time results[%zu]->vnet_configs[%zu]", number_of_configs,
+					      i);
 				}
 				mem_free(results[number_of_configs]->vnet_configs);
 				list_t *vnet_runtime_cfg_list = container_get_vnet_runtime_cfg_new(container);
 				int vnet_config_len = list_length(vnet_runtime_cfg_list);
-				ContainerVnetConfig **vnet_configs = mem_new0(ContainerVnetConfig*, vnet_config_len);
+				ContainerVnetConfig **vnet_configs = mem_new0(ContainerVnetConfig *, vnet_config_len);
 				for (int i = 0; i < vnet_config_len; ++i) {
 					container_vnet_cfg_t *vnet_cfg = list_nth_data(vnet_runtime_cfg_list, i);
 					vnet_configs[i] = mem_new0(ContainerVnetConfig, 1);
@@ -729,17 +720,15 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 					if (vnet_cfg->rootns_name)
 						vnet_configs[i]->if_rootns_name = mem_strdup(vnet_cfg->rootns_name);
 					vnet_configs[i]->if_mac =
-						mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
-								":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
-							vnet_cfg->vnet_mac[0], vnet_cfg->vnet_mac[1],
-							vnet_cfg->vnet_mac[2], vnet_cfg->vnet_mac[3],
-							vnet_cfg->vnet_mac[4], vnet_cfg->vnet_mac[5]);
+						mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
+							   ":%02" PRIx8 ":%02" PRIx8,
+							   vnet_cfg->vnet_mac[0], vnet_cfg->vnet_mac[1],
+							   vnet_cfg->vnet_mac[2], vnet_cfg->vnet_mac[3],
+							   vnet_cfg->vnet_mac[4], vnet_cfg->vnet_mac[5]);
 					vnet_configs[i]->configure = vnet_cfg->configure;
 					TRACE("setup runtime vnet_configs[%d] vnetc: %s, vnetr: %s (%s)", i,
-						vnet_configs[i]->if_name,
-						vnet_configs[i]->if_rootns_name,
-						vnet_configs[i]->configure ? "configured" : "manual"
-					);
+					      vnet_configs[i]->if_name, vnet_configs[i]->if_rootns_name,
+					      vnet_configs[i]->configure ? "configured" : "manual");
 					mem_free(vnet_cfg);
 				}
 				list_delete(vnet_runtime_cfg_list);
@@ -774,7 +763,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		for (size_t i = 0; i < number_of_configs; i++) {
 			mem_free(result_uuids[i]);
 			if (results[i] != NULL)
-				protobuf_free_message((ProtobufCMessage *) results[i]);
+				protobuf_free_message((ProtobufCMessage *)results[i]);
 		}
 		mem_free(result_uuids);
 		mem_free(results);
@@ -813,7 +802,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			cmld_guestos_delete(msg->guestos_name);
 		}
 	} break;
-
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA: {
 		if (!msg->has_guestos_rootcert)
@@ -883,9 +871,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				WARN("Could not send empty Response to CREATE");
 			break;
 		}
-		container_t *c = cmld_container_create_from_config(
-				msg->container_config_file.data,
-				msg->container_config_file.len);
+		container_t *c = cmld_container_create_from_config(msg->container_config_file.data,
+								   msg->container_config_file.len);
 		if (NULL == c) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to CREATE");
@@ -893,9 +880,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 
 		ccfg = mem_new(ContainerConfig *, 1);
-		ccfg[0] = (ContainerConfig *) protobuf_message_new_from_textfile(
-						container_get_config_filename(c),
-						&container_config__descriptor);
+		ccfg[0] = (ContainerConfig *)protobuf_message_new_from_textfile(container_get_config_filename(c),
+										&container_config__descriptor);
 		cuuid_str = mem_new(char *, 1);
 		cuuid_str[0] = mem_strdup(uuid_string(container_get_uuid(c)));
 
@@ -918,7 +904,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		mem_free(cuuid_str[0]);
 		mem_free(cuuid_str);
-		protobuf_free_message((ProtobufCMessage *) ccfg[0]);
+		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
 		mem_free(ccfg);
 	} break;
 
@@ -953,9 +939,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				WARN("Could not send empty Response to UPDATE_CONFIG");
 			break;
 		}
-		int res = container_update_config(container,
-				msg->container_config_file.data,
-				msg->container_config_file.len);
+		int res = container_update_config(container, msg->container_config_file.data,
+						  msg->container_config_file.len);
 		if (res) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to UPDATE_CONFIG");
@@ -963,9 +948,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 
 		ccfg = mem_new(ContainerConfig *, 1);
-		ccfg[0] = (ContainerConfig *) protobuf_message_new_from_textfile(
-						container_get_config_filename(container),
-						&container_config__descriptor);
+		ccfg[0] = (ContainerConfig *)protobuf_message_new_from_textfile(
+			container_get_config_filename(container), &container_config__descriptor);
 		cuuid_str = mem_new(char *, 1);
 		cuuid_str[0] = mem_strdup(uuid_string(container_get_uuid(container)));
 
@@ -993,7 +977,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		mem_free(cuuid_str[0]);
 		mem_free(cuuid_str);
-		protobuf_free_message((ProtobufCMessage *) ccfg[0]);
+		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
 		mem_free(ccfg);
 	} break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
@@ -1047,14 +1031,14 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		res = cmld_container_snapshot(container);
 		break;
 
-	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE : {
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE: {
 		IF_NULL_RETURN(container);
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
 		container_add_net_iface(container, net_iface, persistent);
 	} break;
 
-	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE : {
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE: {
 		IF_NULL_RETURN(container);
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
@@ -1088,9 +1072,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		// collect garbage
 		list_delete(link_list);
 		for (size_t i = 0; i < n; i++)
-		mem_free(results[i]);
+			mem_free(results[i]);
 		mem_free(results);
-        } break;
+	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_PID: {
 		IF_NULL_RETURN(container);
@@ -1102,46 +1086,47 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send container PID to MDM");
 		}
-        } break;
+	} break;
 
-	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD:{
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD: {
 		IF_NULL_RETURN(container);
-			TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
+		TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
 
-			if ((! container) || container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
-				ERROR("Failed to exec");
+		if ((!container) ||
+		    container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args, msg->exec_args) < 0) {
+			ERROR("Failed to exec");
 
-				DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-				out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+			out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
 
-				if (protobuf_send_message(control->sock_client, (ProtobufCMessage *) & out) < 0) {
-					WARN("Could not send exec output to MDM");
-				}
-
-				TRACE("Sent notification of command termination to control client");
-				break;
-
-			} else {
-				DEBUG("Registering read callback for cmld console socket");
-				event_io_t *event = event_io_new(container_get_console_sock_cmld(container),
-										EVENT_IO_READ | EVENT_IO_EXCEPT, control_cb_read_console, control);
-				event_add_io(event);
+			if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
+				WARN("Could not send exec output to MDM");
 			}
+
+			TRACE("Sent notification of command termination to control client");
+			break;
+
+		} else {
+			DEBUG("Registering read callback for cmld console socket");
+			event_io_t *event =
+				event_io_new(container_get_console_sock_cmld(container),
+					     EVENT_IO_READ | EVENT_IO_EXCEPT, control_cb_read_console, control);
+			event_add_io(event);
 		}
-		break;
+	} break;
 
-	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT:{
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT: {
 		IF_NULL_RETURN(container);
-			TRACE("Got input for exec'ed process. Sending message on fd");
+		TRACE("Got input for exec'ed process. Sending message on fd");
 
-			if (container != NULL) {
-				int ret = container_write_exec_input(container, msg->exec_input);
-				if (ret < 0) {
-					ERROR_ERRNO("Failed to write input to exec'ed process");
-				}
-			} else {
-				ERROR("No container UUID given");
+		if (container != NULL) {
+			int ret = container_write_exec_input(container, msg->exec_input);
+			if (ret < 0) {
+				ERROR_ERRNO("Failed to write input to exec'ed process");
 			}
+		} else {
+			ERROR("No container UUID given");
+		}
 		break;
 	}
 	default:
@@ -1167,7 +1152,7 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 	bool connection_error = false;
 	control_t *control = data;
 
-	if ( (events & EVENT_IO_WRITE) && control->type == AF_INET) {
+	if ((events & EVENT_IO_WRITE) && control->type == AF_INET) {
 		int res;
 		socklen_t res_len = sizeof(int);
 		if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &res, &res_len) < 0) {
@@ -1177,8 +1162,7 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 		if (res != 0) {
 			TRACE("res of getsockopt for %d says error %s", fd, strerror(res));
 			connection_error = true;
-		}
-		else {
+		} else {
 			DEBUG("Connected to remote host %s:%d", control->hostip, control->port);
 			control->connected = true;
 			container_t *container_a0 = cmld_containers_get_a0();
@@ -1187,8 +1171,7 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 			char *phone_number = container_get_phone_number(container_a0);
 
 			/* send LOGON_DEVICE message */
-			DEBUG("Sending LOGON_DEVICE message to remote host %s:%d",
-					control->hostip, control->port);
+			DEBUG("Sending LOGON_DEVICE message to remote host %s:%d", control->hostip, control->port);
 			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 			out.code = DAEMON_TO_CONTROLLER__CODE__LOGON_DEVICE;
 			if (cmld_get_device_uuid()) {
@@ -1203,19 +1186,19 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 				DEBUG("Setting hardware serial number: %s", hardware_get_serial_number());
 				out.logon_hardware_serial = mem_strdup(hardware_get_serial_number());
 			}
-			if(imei) {
+			if (imei) {
 				DEBUG("Setting imei: %s", imei);
 				out.logon_imei = mem_strdup(imei);
 			}
-			if(mac_address) {
+			if (mac_address) {
 				DEBUG("Setting MAC address: %s", mac_address);
 				out.logon_mac_address = mem_strdup(mac_address);
 			}
-			if(phone_number) {
+			if (phone_number) {
 				DEBUG("Setting phone_number: %s", phone_number);
 				out.logon_phone_number = mem_strdup(phone_number);
 			}
-			if (protobuf_send_message(fd, (ProtobufCMessage *) &out) < 0) {
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 				WARN("Could not send LOGON message");
 			}
 			DEBUG("Sent LOGON message");
@@ -1232,9 +1215,9 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 			io = event_io_new(control->sock_client, EVENT_IO_READ, control_cb_recv_message, control);
 			event_add_io(io);
 		}
-	}
-	else if (events & EVENT_IO_READ) {
-		ControllerToDaemon *msg = (ControllerToDaemon *)protobuf_recv_message(fd, &controller_to_daemon__descriptor);
+	} else if (events & EVENT_IO_READ) {
+		ControllerToDaemon *msg =
+			(ControllerToDaemon *)protobuf_recv_message(fd, &controller_to_daemon__descriptor);
 		if (msg != NULL) {
 			if (control->privileged) {
 				control_handle_message(control, msg, fd);
@@ -1248,10 +1231,11 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 		}
 		if (!(events & EVENT_IO_EXCEPT)) {
 			WARN("Failed to receive and decode ControllerToDaemon protobuf message!");
-			if(control->type == AF_INET) connection_error = true;
+			if (control->type == AF_INET)
+				connection_error = true;
 		}
 	}
-	if ( (events & EVENT_IO_EXCEPT) || connection_error) {
+	if ((events & EVENT_IO_EXCEPT) || connection_error) {
 		TRACE("MDM Connection Error: %d", (int)connection_error);
 		event_remove_io(io);
 		event_io_free(io);
@@ -1299,7 +1283,7 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 		protobuf_free_message((ProtobufCMessage *)msg);
 	}
 	// also check EXCEPT flag
-	if(events & EVENT_IO_EXCEPT) {
+	if (events & EVENT_IO_EXCEPT) {
 		INFO("Control client closed connection; disconnecting control socket.");
 		goto connection_err;
 	}
@@ -1387,9 +1371,9 @@ control_remote_reconnect_cb(UNUSED event_timer_t *timer, void *data)
 	/* connection succeeded so register socket for receiving data */
 	fd_make_non_blocking(control->sock_client);
 
-	event_io_t *event = event_io_new(control->sock_client, EVENT_IO_READ|EVENT_IO_WRITE, control_cb_recv_message, control);
+	event_io_t *event =
+		event_io_new(control->sock_client, EVENT_IO_READ | EVENT_IO_WRITE, control_cb_recv_message, control);
 	event_add_io(event);
-
 }
 /**
  * helper function to register timer for reconnect handler

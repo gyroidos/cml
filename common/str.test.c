@@ -34,7 +34,6 @@
 #include "str.h"
 #include "macro.h"
 
-
 /** Unit Test str main function
   *
   */
@@ -115,7 +114,7 @@ main(int argc, char **argv)
 
 	str = str_new(NULL);
 	DEBUG("Test str_new and str_length: %d", str_length(str));
-	ASSERT(str_length(str) == 0 && *str_buffer(str)=='\0' );
+	ASSERT(str_length(str) == 0 && *str_buffer(str) == '\0');
 
 	str = str_new_len(0);
 	DEBUG("Test str_new_len and str_length: %d", str_length(str));

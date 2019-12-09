@@ -46,4 +46,3 @@ hardware_get_serial_number(void)
 {
 	return "1234567890";
 }
-

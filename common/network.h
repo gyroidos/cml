@@ -84,7 +84,7 @@ network_setup_route_table(const char *table_id, const char *net_dst, const char 
  * Add (or remove) simple iptables rule.
  */
 int
-network_iptables(const char *table, const char *chain, const char* net_src, const char *jmp_target, bool add);
+network_iptables(const char *table, const char *chain, const char *net_src, const char *jmp_target, bool add);
 
 /**
  * Setup a localnet portforwarding
@@ -134,12 +134,13 @@ network_routing_rules_set_all_main(bool flush);
 /*
  * Moves a network interface from one namespace specified by pid to another
  */
-int network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface);
+int
+network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface);
 
 /*
  * Generates a list containing description lines of network links available in the namespace specified by the given pid
  */
-int network_list_link_ns(pid_t pid, list_t** link_list);
+int
+network_list_link_ns(pid_t pid, list_t **link_list);
 
 #endif /* NETWORK_H */
-

@@ -112,7 +112,8 @@ main(int argc, char **argv)
 	event_add_signal(sig);
 
 	DEBUG("Initializing cmld...");
-	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, main_logfile_rename_cb, NULL);
+	event_timer_t *logfile_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, main_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
 	if (cmld_init(path) < 0)

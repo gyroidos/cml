@@ -39,43 +39,39 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#define timespec_cmp(a, b, CMP)						\
-	(((a)->tv_sec == (b)->tv_sec) ?					\
-	 ((a)->tv_nsec CMP (b)->tv_nsec) :				\
-	 ((a)->tv_sec CMP (b)->tv_sec))
+#define timespec_cmp(a, b, CMP)                                                                                        \
+	(((a)->tv_sec == (b)->tv_sec) ? ((a)->tv_nsec CMP(b)->tv_nsec) : ((a)->tv_sec CMP(b)->tv_sec))
 
-#define timespec_add(a, b, result)					\
-	do {								\
-		(result)->tv_sec = (a)->tv_sec + (b)->tv_sec;		\
-		(result)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec;	\
-		if ((result)->tv_nsec >= 1000000000L) {			\
-			(result)->tv_nsec -= 1000000000L;		\
-			++(result)->tv_sec;				\
-		}							\
+#define timespec_add(a, b, result)                                                                                     \
+	do {                                                                                                           \
+		(result)->tv_sec = (a)->tv_sec + (b)->tv_sec;                                                          \
+		(result)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec;                                                       \
+		if ((result)->tv_nsec >= 1000000000L) {                                                                \
+			(result)->tv_nsec -= 1000000000L;                                                              \
+			++(result)->tv_sec;                                                                            \
+		}                                                                                                      \
 	} while (0)
 
-#define timespec_sub(a, b, result)					\
-	do {								\
-		(result)->tv_sec = (a)->tv_sec - (b)->tv_sec;		\
-		(result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec;	\
-		if ((result)->tv_nsec < 0) {				\
-			(result)->tv_nsec += 1000000000L;		\
-			--(result)->tv_sec;				\
-		}							\
+#define timespec_sub(a, b, result)                                                                                     \
+	do {                                                                                                           \
+		(result)->tv_sec = (a)->tv_sec - (b)->tv_sec;                                                          \
+		(result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec;                                                       \
+		if ((result)->tv_nsec < 0) {                                                                           \
+			(result)->tv_nsec += 1000000000L;                                                              \
+			--(result)->tv_sec;                                                                            \
+		}                                                                                                      \
 	} while (0)
 
-#define timespec_set(a, result)						\
-	do {								\
-		(result)->tv_sec = (a)->tv_sec;				\
-		(result)->tv_nsec = (a)->tv_nsec;			\
+#define timespec_set(a, result)                                                                                        \
+	do {                                                                                                           \
+		(result)->tv_sec = (a)->tv_sec;                                                                        \
+		(result)->tv_nsec = (a)->tv_nsec;                                                                      \
 	} while (0)
 
-#define timespec_now(result)						\
-	ASSERT(clock_gettime(CLOCK_MONOTONIC_RAW, result) >= 0)
+#define timespec_now(result) ASSERT(clock_gettime(CLOCK_MONOTONIC_RAW, result) >= 0)
 
-#define timespec_debug(msg, a)						\
-	DEBUG(msg ": (%s)->tv_sec=%u, (%s)->tv_nsec=%09u",		\
-		#a, (unsigned) (a)->tv_sec, #a, (unsigned) (a)->tv_nsec)
+#define timespec_debug(msg, a)                                                                                         \
+	DEBUG(msg ": (%s)->tv_sec=%u, (%s)->tv_nsec=%09u", #a, (unsigned)(a)->tv_sec, #a, (unsigned)(a)->tv_nsec)
 
 struct event_timer {
 	void (*func)(event_timer_t *timer, void *data); /**< the function to call when the event is triggered */
@@ -87,14 +83,16 @@ struct event_timer {
 };
 
 struct event_io {
-	void (*func)(int fd, unsigned events, event_io_t *io, void *data); /**< the function to call when the event is triggered */
+	void (*func)(int fd, unsigned events, event_io_t *io,
+		     void *data); /**< the function to call when the event is triggered */
 	void *data; /**< a data pointer to pass to the callback function */
 	int fd; /**< the file descriptor which should be watched */
 	unsigned events; /**< mask of events to listen for */
 };
 
 struct event_inotify {
-	void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data); /**< the function to call when the event is triggered */
+	void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify,
+		     void *data); /**< the function to call when the event is triggered */
 	void *data; /**< a data pointer to pass to the callback function */
 	char *path; /**< the path to be watched */
 	uint32_t mask; /**< a bit-mask of events to be watched for */
@@ -103,7 +101,8 @@ struct event_inotify {
 };
 
 struct event_signal {
-	void (*func)(int signum, event_signal_t *sig, void *data); /**< the function to call when the event is triggered */
+	void (*func)(int signum, event_signal_t *sig,
+		     void *data); /**< the function to call when the event is triggered */
 	void *data; /**< a data pointer to pass to the callback function */
 	int signum; /**< the signal number of interes */
 	bool todo; /**< helper variable for event_signal_handler() */
@@ -187,12 +186,8 @@ event_timeout_handler(void)
 					timespec_add(&timer->diff, &timer->next, &timer->next);
 
 				TRACE("Handling timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)",
-						(void *) timer,
-						CAST_FUNCPTR_VOIDPTR timer->func,
-						timer->data,
-						(unsigned) timer->diff.tv_sec,
-						(unsigned) timer->diff.tv_nsec,
-						timer->repeat);
+				      (void *)timer, CAST_FUNCPTR_VOIDPTR timer->func, timer->data,
+				      (unsigned)timer->diff.tv_sec, (unsigned)timer->diff.tv_nsec, timer->repeat);
 
 				(timer->func)(timer, timer->data);
 			}
@@ -251,13 +246,9 @@ event_add_timer(event_timer_t *timer)
 
 	event_timer_list = list_append(event_timer_list, timer);
 
-	TRACE("Added timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)",
-			(void *) timer,
-			CAST_FUNCPTR_VOIDPTR timer->func,
-			timer->data,
-			(unsigned) timer->diff.tv_sec,
-			(unsigned) timer->diff.tv_nsec,
-			timer->repeat);
+	TRACE("Added timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)", (void *)timer,
+	      CAST_FUNCPTR_VOIDPTR timer->func, timer->data, (unsigned)timer->diff.tv_sec,
+	      (unsigned)timer->diff.tv_nsec, timer->repeat);
 }
 
 void
@@ -265,16 +256,12 @@ event_remove_timer(event_timer_t *timer)
 {
 	IF_NULL_RETURN(timer);
 
-	TRACE("Removing timer event %p from list %p", (void *) timer, (void *) event_timer_list);
+	TRACE("Removing timer event %p from list %p", (void *)timer, (void *)event_timer_list);
 	event_timer_list = list_remove(event_timer_list, timer);
 
-	TRACE("Removed timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)",
-			(void *) timer,
-			CAST_FUNCPTR_VOIDPTR timer->func,
-			timer->data,
-			(unsigned) timer->diff.tv_sec,
-			(unsigned) timer->diff.tv_nsec,
-			timer->repeat);
+	TRACE("Removed timer event %p (func=%p, data=%p, diff=%u.%09us, repeat=%d)", (void *)timer,
+	      CAST_FUNCPTR_VOIDPTR timer->func, timer->data, (unsigned)timer->diff.tv_sec,
+	      (unsigned)timer->diff.tv_nsec, timer->repeat);
 }
 
 /******************************************************************************/
@@ -319,26 +306,27 @@ event_reset_fd(void)
 static void
 wrapped_remove_timer(void *elem)
 {
-	event_remove_timer((event_timer_t *) elem);
+	event_remove_timer((event_timer_t *)elem);
 	event_timer_free(elem);
 }
 
 static void
 wrapped_remove_signal(void *elem)
 {
-	event_remove_signal((event_signal_t *) elem);
+	event_remove_signal((event_signal_t *)elem);
 	event_signal_free(elem);
 }
 
 static void
 wrapped_remove_inotify(void *elem)
 {
-	event_remove_inotify((event_inotify_t *) elem);
+	event_remove_inotify((event_inotify_t *)elem);
 	event_inotify_free(elem);
 }
 
 void
-event_reset() {
+event_reset()
+{
 	TRACE("Resetting event epoll fd");
 	event_reset_fd();
 
@@ -398,25 +386,23 @@ event_add_io(event_io_t *io)
 	else
 		event_io_active++;
 
-	TRACE("Added io event %p (func=%p, data=%p, fd=%d, events=0x%x)",
-			(void *) io, CAST_FUNCPTR_VOIDPTR io->func,
-			io->data, io->fd, io->events);
+	TRACE("Added io event %p (func=%p, data=%p, fd=%d, events=0x%x)", (void *)io, CAST_FUNCPTR_VOIDPTR io->func,
+	      io->data, io->fd, io->events);
 }
 
 void
 event_remove_io(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
-	TRACE("Removing io event %p", (void *) io);
+	TRACE("Removing io event %p", (void *)io);
 
 	if (epoll_ctl(event_epoll_fd(0), EPOLL_CTL_DEL, io->fd, NULL) < 0)
 		WARN_ERRNO("epoll_ctl failed"); // TODO: handle error?
 	else
 		event_io_active--;
 
-	TRACE("Removed io event %p (func=%p, data=%p, fd=%d, events=0x%x)",
-			(void *) io, CAST_FUNCPTR_VOIDPTR io->func,
-			io->data, io->fd, io->events);
+	TRACE("Removed io event %p (func=%p, data=%p, fd=%d, events=0x%x)", (void *)io, CAST_FUNCPTR_VOIDPTR io->func,
+	      io->data, io->fd, io->events);
 	//TODO unlink?
 }
 
@@ -427,8 +413,7 @@ event_epoll(int timeout)
 	int n, i;
 
 	TRACE("Calling epoll_wait with timeout=%ums", timeout);
-	n = epoll_wait(event_epoll_fd(0), epoll_events, ELEMENTSOF(epoll_events),
-			timeout);
+	n = epoll_wait(event_epoll_fd(0), epoll_events, ELEMENTSOF(epoll_events), timeout);
 	if (n < 0) {
 		if (errno == EINTR) // caused by suspend (no real error)
 			TRACE_ERRNO("epoll_wait interrupted by system");
@@ -450,9 +435,8 @@ event_epoll(int timeout)
 			e |= (events & EPOLLHUP) ? EVENT_IO_EXCEPT : 0;
 			e |= (events & EPOLLPRI) ? EVENT_IO_PRI : 0;
 
-			TRACE("Handling io event %p (func=%p, data=%p, fd=%d, events=0x%x)",
-					(void *) io, CAST_FUNCPTR_VOIDPTR io->func,
-					io->data, io->fd, io->events);
+			TRACE("Handling io event %p (func=%p, data=%p, fd=%d, events=0x%x)", (void *)io,
+			      CAST_FUNCPTR_VOIDPTR io->func, io->data, io->fd, io->events);
 
 			(io->func)(io->fd, e, io, io->data);
 
@@ -488,8 +472,8 @@ event_inotify_handler(int wd, const char *path, uint32_t mask)
 			inotify->todo = false;
 
 			TRACE("Handling inotify event %p (func=%p, data=%p, wd=%d, path=%s, mask=0x%08x)",
-					(void *) inotify, CAST_FUNCPTR_VOIDPTR inotify->func,
-					inotify->data, wd, inotify->path, inotify->mask);
+			      (void *)inotify, CAST_FUNCPTR_VOIDPTR inotify->func, inotify->data, wd, inotify->path,
+			      inotify->mask);
 
 			if (path) {
 				char *full_path = mem_printf("%s/%s", inotify->path, path);
@@ -514,7 +498,7 @@ event_inotify_handler(int wd, const char *path, uint32_t mask)
 static void
 event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *data)
 {
-	char buf[(8 * (sizeof(struct inotify_event) + NAME_MAX + 1))] __attribute__ ((aligned(8)));
+	char buf[(8 * (sizeof(struct inotify_event) + NAME_MAX + 1))] __attribute__((aligned(8)));
 	char *p;
 	ssize_t n;
 
@@ -527,33 +511,25 @@ event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *da
 	if (!n)
 		return;
 
-	for (p = buf; p < buf + n; ) {
-		struct inotify_event *e = (struct inotify_event *) p;
+	for (p = buf; p < buf + n;) {
+		struct inotify_event *e = (struct inotify_event *)p;
 		const char *name = e->len ? e->name : NULL;
 
 		TRACE("Read inotify event %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s"
-				"(wd=%d, mask=0x%08x, cookie=0x%08x, name=%s)",
-				e->mask & IN_ACCESS ? "IN_ACCESS " : "",
-				e->mask & IN_MODIFY ? "IN_MODIFY " : "",
-				e->mask & IN_ATTRIB ? "IN_ATTRIB " : "",
-				e->mask & IN_CLOSE_WRITE ? "IN_CLOSE_WRITE " : "",
-				e->mask & IN_CLOSE_NOWRITE ? "IN_CLOSE_NOWRITE " : "",
-				e->mask & IN_OPEN ? "IN_OPEN " : "",
-				e->mask & IN_MOVED_FROM ? "IN_MOVED_FROM " : "",
-				e->mask & IN_MOVED_TO ? "IN_MOVED_TO " : "",
-				e->mask & IN_CREATE ? "IN_CREATE " : "",
-				e->mask & IN_DELETE ? "IN_DELETE " : "",
-				e->mask & IN_DELETE_SELF ? "IN_DELETE_SELF " : "",
-				e->mask & IN_MOVE_SELF ? "IN_MOVE_SELF " : "",
-				e->mask & IN_UNMOUNT ? "IN_UNMOUNT " : "",
-				e->mask & IN_Q_OVERFLOW ? "IN_Q_OVERFLOW " : "",
-				e->mask & IN_IGNORED ? "IN_IGNORED " : "",
-				e->wd, e->mask, e->cookie, name);
+		      "(wd=%d, mask=0x%08x, cookie=0x%08x, name=%s)",
+		      e->mask & IN_ACCESS ? "IN_ACCESS " : "", e->mask & IN_MODIFY ? "IN_MODIFY " : "",
+		      e->mask & IN_ATTRIB ? "IN_ATTRIB " : "", e->mask & IN_CLOSE_WRITE ? "IN_CLOSE_WRITE " : "",
+		      e->mask & IN_CLOSE_NOWRITE ? "IN_CLOSE_NOWRITE " : "", e->mask & IN_OPEN ? "IN_OPEN " : "",
+		      e->mask & IN_MOVED_FROM ? "IN_MOVED_FROM " : "", e->mask & IN_MOVED_TO ? "IN_MOVED_TO " : "",
+		      e->mask & IN_CREATE ? "IN_CREATE " : "", e->mask & IN_DELETE ? "IN_DELETE " : "",
+		      e->mask & IN_DELETE_SELF ? "IN_DELETE_SELF " : "", e->mask & IN_MOVE_SELF ? "IN_MOVE_SELF " : "",
+		      e->mask & IN_UNMOUNT ? "IN_UNMOUNT " : "", e->mask & IN_Q_OVERFLOW ? "IN_Q_OVERFLOW " : "",
+		      e->mask & IN_IGNORED ? "IN_IGNORED " : "", e->wd, e->mask, e->cookie, name);
 
 		event_inotify_handler(e->wd, name, e->mask);
 
 		p += sizeof(struct inotify_event) + e->len;
-        }
+	}
 }
 
 static int
@@ -575,7 +551,8 @@ event_inotify_fd(void)
 }
 
 event_inotify_t *
-event_inotify_new(const char *path, uint32_t mask, void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data)
+event_inotify_new(const char *path, uint32_t mask,
+		  void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data)
 {
 	event_inotify_t *inotify;
 
@@ -617,9 +594,8 @@ event_add_inotify(event_inotify_t *inotify)
 
 	event_inotify_list = list_append(event_inotify_list, inotify);
 
-	TRACE("Added inotify event %p (func=%p, data=%p, wd=%d, path=%s, mask=0x%08x)",
-			(void *) inotify, CAST_FUNCPTR_VOIDPTR inotify->func,
-			inotify->data, inotify->wd, inotify->path, inotify->mask);
+	TRACE("Added inotify event %p (func=%p, data=%p, wd=%d, path=%s, mask=0x%08x)", (void *)inotify,
+	      CAST_FUNCPTR_VOIDPTR inotify->func, inotify->data, inotify->wd, inotify->path, inotify->mask);
 
 	return 0;
 }
@@ -629,7 +605,7 @@ event_remove_inotify(event_inotify_t *inotify)
 {
 	IF_NULL_RETURN(inotify);
 
-	TRACE("Removing inotify event %p", (void *) inotify);
+	TRACE("Removing inotify event %p", (void *)inotify);
 	event_inotify_list = list_remove(event_inotify_list, inotify);
 
 	/* walk through list and check if there are other handlers on the same
@@ -640,10 +616,12 @@ event_remove_inotify(event_inotify_t *inotify)
 		if (inotify_cur->wd == inotify->wd) {
 			if (!others)
 				/* If the handler is the first of the others it should overwrite the mask */
-				inotify_cur->wd = inotify_add_watch(event_inotify_fd(), inotify_cur->path, inotify_cur->mask);
+				inotify_cur->wd =
+					inotify_add_watch(event_inotify_fd(), inotify_cur->path, inotify_cur->mask);
 			else
 				/* There was already another handler which reset the mask, so we add now */
-				inotify_cur->wd = inotify_add_watch(event_inotify_fd(), inotify_cur->path, inotify_cur->mask | IN_MASK_ADD);
+				inotify_cur->wd = inotify_add_watch(event_inotify_fd(), inotify_cur->path,
+								    inotify_cur->mask | IN_MASK_ADD);
 			others = true;
 		}
 	}
@@ -656,9 +634,8 @@ event_remove_inotify(event_inotify_t *inotify)
 		}
 	}
 
-	TRACE("Removed inotify event %p (func=%p, data=%p, wd=%d, path=%s, mask=0x%08x)",
-			(void *) inotify, CAST_FUNCPTR_VOIDPTR inotify->func,
-			inotify->data, inotify->wd, inotify->path, inotify->mask);
+	TRACE("Removed inotify event %p (func=%p, data=%p, wd=%d, path=%s, mask=0x%08x)", (void *)inotify,
+	      CAST_FUNCPTR_VOIDPTR inotify->func, inotify->data, inotify->wd, inotify->path, inotify->mask);
 }
 
 /******************************************************************************/
@@ -696,9 +673,8 @@ event_add_signal(event_signal_t *sig)
 
 	event_signal_list = list_append(event_signal_list, sig);
 
-	TRACE("Added signal event %p (func=%p, data=%p, signal=%d (%s))",
-			(void *) sig, CAST_FUNCPTR_VOIDPTR sig->func, sig->data,
-			sig->signum, strsignal(sig->signum));
+	TRACE("Added signal event %p (func=%p, data=%p, signal=%d (%s))", (void *)sig, CAST_FUNCPTR_VOIDPTR sig->func,
+	      sig->data, sig->signum, strsignal(sig->signum));
 }
 
 void
@@ -706,12 +682,11 @@ event_remove_signal(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
-	TRACE("Removing signal event %p from list", (void *) sig);
+	TRACE("Removing signal event %p from list", (void *)sig);
 	event_signal_list = list_remove(event_signal_list, sig);
 
-	TRACE("Removed signal event %p (func=%p, data=%p, signal=%d (%s))",
-			(void *) sig, CAST_FUNCPTR_VOIDPTR sig->func, sig->data,
-			sig->signum, strsignal(sig->signum));
+	TRACE("Removed signal event %p (func=%p, data=%p, signal=%d (%s))", (void *)sig, CAST_FUNCPTR_VOIDPTR sig->func,
+	      sig->data, sig->signum, strsignal(sig->signum));
 }
 
 static void
@@ -751,9 +726,8 @@ event_signal_handler(void)
 		if (sig->todo && received[sig->signum]) {
 			sig->todo = false;
 
-			TRACE("Handling signal event %p (func=%p, data=%p, signal=%d (%s))",
-					(void *) sig, CAST_FUNCPTR_VOIDPTR sig->func, sig->data,
-					sig->signum, strsignal(sig->signum));
+			TRACE("Handling signal event %p (func=%p, data=%p, signal=%d (%s))", (void *)sig,
+			      CAST_FUNCPTR_VOIDPTR sig->func, sig->data, sig->signum, strsignal(sig->signum));
 
 			(sig->func)(sig->signum, sig, sig->data);
 
@@ -763,8 +737,7 @@ event_signal_handler(void)
 				l = event_signal_list;
 			else
 				break;
-		}
-		else {
+		} else {
 			l = l->next;
 		}
 	}
@@ -778,9 +751,8 @@ event_signal_handler(void)
 static void
 event_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 {
-        if (sigaction(signum, act, oldact) < 0)
-		WARN_ERRNO("sigaction failed for signal %s (%d)",
-				 strsignal(signum), signum);
+	if (sigaction(signum, act, oldact) < 0)
+		WARN_ERRNO("sigaction failed for signal %s (%d)", strsignal(signum), signum);
 }
 
 static void
@@ -805,13 +777,13 @@ event_init(void)
 
 	event_sigaction(SIGTERM, &action, NULL);
 	event_sigaction(SIGQUIT, &action, NULL);
-	event_sigaction(SIGINT,  &action, NULL);
+	event_sigaction(SIGINT, &action, NULL);
 	event_sigaction(SIGALRM, &action, NULL);
 	event_sigaction(SIGCHLD, &action, NULL);
 	event_sigaction(SIGPIPE, &action, NULL);
 	event_sigaction(SIGUSR1, &action, NULL);
 	event_sigaction(SIGUSR2, &action, NULL);
-	event_sigaction(SIGHUP,  &action, NULL);
+	event_sigaction(SIGHUP, &action, NULL);
 
 	event_initialized = true;
 }

@@ -159,7 +159,6 @@ out:
 	return ret;
 }
 
-
 int
 file_move(const char *src, const char *dst, size_t bs)
 {
@@ -254,7 +253,6 @@ file_printf_append(const char *file, const char *fmt, ...)
 	mem_free(buf);
 	return ret;
 }
-
 
 int
 file_read(const char *file, char *buf, size_t len)

@@ -37,7 +37,7 @@ bool
 display_is_on(void);
 
 display_wake_t *
-display_register_wake_oneshot_cb(void (* func)(void *), void *data);
+display_register_wake_oneshot_cb(void (*func)(void *), void *data);
 
 void
 display_unregister_wake_oneshot_cb(display_wake_t *display_wake);
@@ -48,7 +48,7 @@ display_unregister_wake_oneshot_cb(display_wake_t *display_wake);
  */
 
 display_sleep_t *
-display_register_sleep_oneshot_cb(void (* func)(void *), void *data);
+display_register_sleep_oneshot_cb(void (*func)(void *), void *data);
 
 void
 display_unregister_sleep_oneshot_cb(display_sleep_t *display_sleep);

@@ -41,7 +41,8 @@
 /**
  * Helper function to create a socket pair.
  */
-void make_socketpair(int fds[2])
+void
+make_socketpair(int fds[2])
 {
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == -1) {
 		perror("socketpair");
@@ -49,7 +50,8 @@ void make_socketpair(int fds[2])
 	}
 }
 
-int main()
+int
+main()
 {
 	logf_register(&logf_test_write, stdout);
 

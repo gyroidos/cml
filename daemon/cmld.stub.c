@@ -51,7 +51,7 @@ cmld_stub_container_create(const char *container_name)
 {
 	container_t *container = container_stub_new(container_name);
 	if (container) {
-		g_containers = list_append(g_containers, (void *) container);
+		g_containers = list_append(g_containers, (void *)container);
 		++g_nr_containers;
 	}
 	return container;
@@ -84,7 +84,7 @@ cmld_container_destroy(container_t *container)
 	dprintf(g_feedback_fd, "%s: %s", __func__, container_get_name(container));
 
 	--g_nr_containers;
-	g_containers = list_remove(g_containers, (void *) container);
+	g_containers = list_remove(g_containers, (void *)container);
 	if (g_foreground == container) {
 		if (g_nr_containers > 0)
 			cmld_container_switch(cmld_container_get_by_index(0));
@@ -112,8 +112,8 @@ cmld_container_switch(container_t *container)
 int
 cmld_container_start(container_t *container, const char *key, bool no_switch)
 {
-	dprintf(g_feedback_fd, "%s: %s, key=%s, no_switch=%s", __func__,
-	        container_get_name(container), key ? key : "NULL", no_switch ? "true" : "false");
+	dprintf(g_feedback_fd, "%s: %s, key=%s, no_switch=%s", __func__, container_get_name(container),
+		key ? key : "NULL", no_switch ? "true" : "false");
 
 	if (!no_switch)
 		cmld_container_switch(container);
@@ -170,14 +170,14 @@ cmld_container_wipe(container_t *container)
 void
 cmld_wipe_device()
 {
-
 	return;
 }
 
 container_t *
 cmld_container_get_by_uuid(uuid_t *uuid)
 {
-	if (uuid) for (list_t *l = g_containers; l; l = l->next) {
+	if (uuid)
+		for (list_t *l = g_containers; l; l = l->next) {
 			container_t *container = (container_t *)l->data;
 			const uuid_t *c_uuid = container_get_uuid(container);
 			if (c_uuid && uuid_equals(uuid, c_uuid))
@@ -201,7 +201,8 @@ cmld_containers_get_count()
 container_t *
 cmld_container_get_by_index(int index)
 {
-	if (index >= 0 && index < g_nr_containers) for (list_t *l = g_containers; l; l = l->next, index--) {
+	if (index >= 0 && index < g_nr_containers)
+		for (list_t *l = g_containers; l; l = l->next, index--) {
 			if (0 == index)
 				return (container_t *)l->data;
 		}

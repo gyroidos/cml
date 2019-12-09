@@ -30,7 +30,7 @@
 #ifndef REBOOT_H
 #define REBOOT_H
 
-enum command {REBOOT, POWER_OFF};
+enum command { REBOOT, POWER_OFF };
 
 /**
  * Reboots the system or performs a related action.

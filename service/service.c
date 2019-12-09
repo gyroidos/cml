@@ -60,11 +60,11 @@ service_set_hostname(int fd)
 	ServiceToCmldMessage msg = SERVICE_TO_CMLD_MESSAGE__INIT;
 	msg.code = SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_NAME_REQ;
 
-	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *) &msg);
+	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *)&msg);
 	if (msg_size < 0)
 		WARN("Could not send ireqest for hostname!, error: %zd\n", msg_size);
 
-	resp = (CmldToServiceMessage *) protobuf_recv_message(fd, &cmld_to_service_message__descriptor);
+	resp = (CmldToServiceMessage *)protobuf_recv_message(fd, &cmld_to_service_message__descriptor);
 
 	//protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
 	if (!resp || (resp->code != CMLD_TO_SERVICE_MESSAGE__CODE__CONTAINER_CFG_NAME)) {
@@ -88,7 +88,7 @@ service_set_hostname(int fd)
 
 	mem_free(line);
 	if (resp)
-		protobuf_free_message((ProtobufCMessage *) resp);
+		protobuf_free_message((ProtobufCMessage *)resp);
 
 	return rc;
 }
@@ -104,11 +104,11 @@ service_set_dnsserver(int fd)
 	ServiceToCmldMessage msg = SERVICE_TO_CMLD_MESSAGE__INIT;
 	msg.code = SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_DNS_REQ;
 
-	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *) &msg);
+	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *)&msg);
 	if (msg_size < 0)
 		WARN("Could not send reqest for dns_server!, error: %zd\n", msg_size);
 
-	resp = (CmldToServiceMessage *) protobuf_recv_message(fd, &cmld_to_service_message__descriptor);
+	resp = (CmldToServiceMessage *)protobuf_recv_message(fd, &cmld_to_service_message__descriptor);
 
 	if (!resp || (resp->code != CMLD_TO_SERVICE_MESSAGE__CODE__CONTAINER_CFG_DNS)) {
 		dns_addr = "8.8.8.8";
@@ -121,7 +121,7 @@ service_set_dnsserver(int fd)
 
 	mem_free(line);
 	if (resp)
-		protobuf_free_message((ProtobufCMessage *) resp);
+		protobuf_free_message((ProtobufCMessage *)resp);
 
 	return rc;
 }
@@ -190,11 +190,10 @@ main(int argc, char **argv)
 	INFO("Minimal init done, going to start child, %s ...", argv[1]);
 #endif
 
-
 	ServiceToCmldMessage msg = SERVICE_TO_CMLD_MESSAGE__INIT;
 	msg.code = SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED;
 
-	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) &msg);
+	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)&msg);
 	if (msg_size < 0)
 		WARN("Could not send boot complete msg!, error: %zd\n", msg_size);
 
@@ -202,7 +201,7 @@ main(int argc, char **argv)
 	close(sock);
 
 	if (do_init) {
-		if (!strcmp(argv[1], "init")){
+		if (!strcmp(argv[1], "init")) {
 			argv[1] = "/sbin/init";
 			execvp(argv[1], &argv[1]);
 			WARN("Error starting container init!");
@@ -215,5 +214,4 @@ main(int argc, char **argv)
 	dumb_init_signal_handler();
 
 	return 0;
-
 }

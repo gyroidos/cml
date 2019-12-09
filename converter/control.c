@@ -43,7 +43,7 @@ send_message(ControllerToDaemon *msg)
 {
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, CONTROL_SOCKET);
 	IF_TRUE_RETVAL(sock < 0, -1);
-	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) msg);
+	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)msg);
 	if (msg_size < 0)
 		ERROR("error sending message");
 
@@ -58,7 +58,7 @@ control_is_enabled(void)
 }
 
 int
-control_push_guestos(char* cfgfile, char* certfile, char* sigfile)
+control_push_guestos(char *cfgfile, char *certfile, char *sigfile)
 {
 	int ret = -1;
 	uint8_t *cfg = NULL;
@@ -83,22 +83,22 @@ control_push_guestos(char* cfgfile, char* certfile, char* sigfile)
 	}
 
 	cfg = mem_alloc(cfglen);
-	if (file_read(cfgfile, (char*)cfg, cfglen) < 0) {
+	if (file_read(cfgfile, (char *)cfg, cfglen) < 0) {
 		ERROR("Error reading %s.", cfgfile);
 		goto out;
 	}
 	sig = mem_alloc(siglen);
-	if (file_read(sigfile, (char*)sig, siglen) < 0) {
+	if (file_read(sigfile, (char *)sig, siglen) < 0) {
 		ERROR("Error reading %s.", sigfile);
 		goto out;
 	}
 	cert = mem_alloc(certlen);
-	if (file_read(certfile, (char*)cert, certlen) < 0) {
+	if (file_read(certfile, (char *)cert, certlen) < 0) {
 		ERROR("Error reading %s.", certfile);
 		goto out;
 	}
-	INFO("Pushing cfg %s (len %zu), sig %s (len %zu), and cert %s (len %zu).",
-			cfgfile, (size_t)cfglen, sigfile, (size_t)siglen, certfile, (size_t)certlen);
+	INFO("Pushing cfg %s (len %zu), sig %s (len %zu), and cert %s (len %zu).", cfgfile, (size_t)cfglen, sigfile,
+	     (size_t)siglen, certfile, (size_t)certlen);
 
 	// build ControllerToDaemon message
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
@@ -135,7 +135,7 @@ control_register_localca(char *ca_cert_file)
 		return ret;
 	}
 	uint8_t *ca_cert = mem_alloc(ca_cert_len);
-	if (file_read(ca_cert_file, (char*)ca_cert, ca_cert_len) < 0) {
+	if (file_read(ca_cert_file, (char *)ca_cert, ca_cert_len) < 0) {
 		ERROR("Error reading %s.", ca_cert_file);
 		goto out;
 	}
@@ -154,4 +154,3 @@ out:
 		mem_free(ca_cert);
 	return ret;
 }
-

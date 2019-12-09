@@ -45,8 +45,7 @@ static list_t *measurement_list = NULL;
 static size_t measurement_list_len = 0;
 
 int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid,
-		const uint8_t *datahash, size_t datahash_len)
+ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash, size_t datahash_len)
 {
 	// input checks
 	IF_NULL_RETVAL(filename, -1);
@@ -56,9 +55,10 @@ ml_measurement_list_append(const char *filename, TPM_ALG_ID algid,
 	// check if filehash is in list
 	for (list_t *l = measurement_list; l; l = l->next) {
 		ml_elem_t *ml_elem = l->data;
-		if (NULL == ml_elem) continue;
+		if (NULL == ml_elem)
+			continue;
 		if ((0 == memcmp(ml_elem->datahash, datahash, datahash_len)) &&
-			(0 == memcmp(ml_elem->filename, filename, strlen(filename)))) {
+		    (0 == memcmp(ml_elem->filename, filename, strlen(filename)))) {
 			return 0; // container image with that name alread in list
 		}
 	}
@@ -90,14 +90,14 @@ static const char *
 halg_id_to_ima_string(TPM_ALG_ID alg_id)
 {
 	switch (alg_id) {
-		case TPM_ALG_SHA1:
-			return "sha1";
-		case TPM_ALG_SHA256:
-			return "sha256";
-		case TPM_ALG_SHA384:
-			return "sha384";
-		default:
-			return "none";
+	case TPM_ALG_SHA1:
+		return "sha1";
+	case TPM_ALG_SHA256:
+		return "sha256";
+	case TPM_ALG_SHA384:
+		return "sha384";
+	default:
+		return "none";
 	}
 }
 
@@ -113,12 +113,12 @@ ml_get_ima_ml_string_list_new(void)
 
 	list_t *ima_list = NULL;
 	while (-1 != getline(&line, &line_len, fp)) {
-		line[line_len-1] = '\0'; // overwrite '\n'
+		line[line_len - 1] = '\0'; // overwrite '\n'
 		ima_list = list_append(ima_list, mem_strdup(line));
 	}
 
 	fclose(fp);
-	if(line)
+	if (line)
 		mem_free(line);
 	return ima_list;
 }
@@ -128,9 +128,9 @@ ml_get_measurement_list_strings_new(size_t *strings_len)
 {
 	list_t *ima_strings_list = ml_get_ima_ml_string_list_new();
 	*strings_len = measurement_list_len + list_length(ima_strings_list);
-	char **strings = mem_new0(char*, *strings_len);
+	char **strings = mem_new0(char *, *strings_len);
 
-	int i=0;
+	int i = 0;
 	for (list_t *l = ima_strings_list; l; l = l->next, ++i) {
 		char *ima_ml_string = l->data;
 		strings[i] = ima_ml_string;
@@ -139,14 +139,12 @@ ml_get_measurement_list_strings_new(size_t *strings_len)
 	list_delete(ima_strings_list); // only deletes the list elements not the element's data
 
 	for (list_t *l = measurement_list; l; l = l->next, ++i) {
-		ml_elem_t *ml_elem = l->data;	
+		ml_elem_t *ml_elem = l->data;
 		char *hex_datahash = convert_bin_to_hex_new(ml_elem->datahash, ml_elem->hash_len);
 		const char *halg_string = halg_id_to_ima_string(ml_elem->algid);
-		char *hex_template = convert_bin_to_hex_new(ml_elem->template->pcr_value,
-				ml_elem->template->pcr_size);
-		strings[i] = mem_printf("%d %s ima-ng %s:%s %s",
-				CONTAINER_PCR_INDEX, hex_template,
-				halg_string, hex_datahash, ml_elem->filename);
+		char *hex_template = convert_bin_to_hex_new(ml_elem->template->pcr_value, ml_elem->template->pcr_size);
+		strings[i] = mem_printf("%d %s ima-ng %s:%s %s", CONTAINER_PCR_INDEX, hex_template, halg_string,
+					hex_datahash, ml_elem->filename);
 		INFO("ML (%d): %s", i, strings[i]);
 		mem_free(hex_datahash);
 		mem_free(hex_template);

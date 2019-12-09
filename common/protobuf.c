@@ -22,7 +22,7 @@
  */
 
 #include "protobuf.h"
-#include <stdio.h>  // for protobuf-c-text.h
+#include <stdio.h> // for protobuf-c-text.h
 #include <google/protobuf-c/protobuf-c-text.h>
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -34,23 +34,23 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define PROTOBUF_MAX_MESSAGE_SIZE 1024*1024
+#define PROTOBUF_MAX_MESSAGE_SIZE 1024 * 1024
 
 // TODO update naming scheme
 
 ssize_t
-protobuf_send_message(int fd, const ProtobufCMessage* message)
+protobuf_send_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
 	uint32_t buflen = protobuf_c_message_get_packed_size(message);
 	IF_FALSE_RETVAL(buflen < PROTOBUF_MAX_MESSAGE_SIZE, -1);
 
-	ssize_t bytes_sent = fd_write(fd, (char *) &(uint32_t){htonl(buflen)}, sizeof(uint32_t));
+	ssize_t bytes_sent = fd_write(fd, (char *)&(uint32_t){ htonl(buflen) }, sizeof(uint32_t));
 	if (-1 == bytes_sent)
 		goto error_write;
-	TRACE("sent protobuf message length (%zd bytes sent, %zu bytes expected, len=%d)",
-			bytes_sent, sizeof(uint32_t), buflen);
+	TRACE("sent protobuf message length (%zd bytes sent, %zu bytes expected, len=%d)", bytes_sent, sizeof(uint32_t),
+	      buflen);
 	ASSERT((size_t)bytes_sent == sizeof(uint32_t));
 
 	// serialized form of message with all default values has zero length
@@ -64,7 +64,7 @@ protobuf_send_message(int fd, const ProtobufCMessage* message)
 
 	// TODO sending large messages: might have to send multiple chunks
 	// need good (generic?!) solution that interacts nicely with event handling!
-	bytes_sent = fd_write(fd, (char *) buf, buflen);
+	bytes_sent = fd_write(fd, (char *)buf, buflen);
 	mem_free(buf);
 	if (-1 == bytes_sent)
 		goto error_write;
@@ -79,23 +79,22 @@ error_write:
 	return -1;
 }
 
-
 ProtobufCMessage *
 protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(descriptor);
 
 	uint32_t buflen = 0;
-	ssize_t bytes_read = fd_read(fd, (char *) &buflen, sizeof(buflen));
+	ssize_t bytes_read = fd_read(fd, (char *)&buflen, sizeof(buflen));
 	if (-1 == bytes_read)
 		goto error_read;
-	if (0 == bytes_read) {// EOF / remote end closed the connection
+	if (0 == bytes_read) { // EOF / remote end closed the connection
 		DEBUG("client on fd %d closed connection.", fd);
 		return NULL;
 	}
 	buflen = ntohl(buflen);
-	TRACE("read protobuf message length (%zd bytes read, %zu bytes expected, len=%d)",
-			bytes_read, sizeof(buflen), buflen);
+	TRACE("read protobuf message length (%zd bytes read, %zu bytes expected, len=%d)", bytes_read, sizeof(buflen),
+	      buflen);
 	if (((size_t)bytes_read != sizeof(buflen))) {
 		ERROR("Protocol violation!");
 		return NULL;
@@ -108,7 +107,7 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
 
 	uint8_t *buf = mem_alloc(buflen);
-	bytes_read = fd_read(fd, (char *) buf, buflen);
+	bytes_read = fd_read(fd, (char *)buf, buflen);
 	if (-1 == bytes_read) {
 		mem_free(buf);
 		goto error_read;
@@ -116,15 +115,15 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	TRACE("read protobuf message data (%zd bytes read, %u bytes expected)", bytes_read, buflen);
 
 	if ((size_t)bytes_read != buflen) {
-		ERROR("Dropped protobuf message (expected length : %zd bytes read != %u bytes expected)",
-			bytes_read, buflen);
+		ERROR("Dropped protobuf message (expected length : %zd bytes read != %u bytes expected)", bytes_read,
+		      buflen);
 		mem_free(buf);
 		goto error_read;
 	}
 	// TODO: what if only part of a message could be read?
 	// need good (generic?!) solution that interacts nicely with event handling!
 
-	ProtobufCMessage* msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
+	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
 	mem_free(buf);
 	return msg;
 
@@ -134,7 +133,8 @@ error_read:
 }
 
 void
-protobuf_free_message(ProtobufCMessage *message) {
+protobuf_free_message(ProtobufCMessage *message)
+{
 	if (!message) {
 		WARN("Trying to free NULL protobuf message!");
 		return;
@@ -159,14 +159,13 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message)
 	return bytes_written;
 }
 
-
 ProtobufCMessage *
 protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(filename);
 	ASSERT(descriptor);
-	TRACE("Reading text protobuf message (%s) from file \"%s\".",
-			descriptor->name ? descriptor->name : "UNKNOWN", filename);
+	TRACE("Reading text protobuf message (%s) from file \"%s\".", descriptor->name ? descriptor->name : "UNKNOWN",
+	      filename);
 
 	ProtobufCTextError res;
 	memset(&res, 0, sizeof(res));
@@ -179,13 +178,13 @@ protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageD
 	fclose(file);
 	if (!msg) {
 		ERROR("Failed to parse text protobuf message (%s) from file \"%s\". Reason: %s.",
-				descriptor->name ? descriptor->name : "UNKNOWN", filename,
-				res.error_txt ? res.error_txt : "UNKNOWN" );
+		      descriptor->name ? descriptor->name : "UNKNOWN", filename,
+		      res.error_txt ? res.error_txt : "UNKNOWN");
 		return NULL;
 	}
 	if (!res.complete) {
 		ERROR("Incomplete text protobuf message (%s) in file \"%s\".",
-				descriptor->name ? descriptor->name : "UNKNOWN", filename);
+		      descriptor->name ? descriptor->name : "UNKNOWN", filename);
 		protobuf_free_message(msg);
 		return NULL;
 	}
@@ -194,27 +193,23 @@ protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageD
 	return msg;
 }
 
-
 ProtobufCMessage *
 protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(string);
 	ASSERT(descriptor);
-	TRACE("Parsing text protobuf message (%s) from string.",
-			descriptor->name ? descriptor->name : "UNKNOWN");
+	TRACE("Parsing text protobuf message (%s) from string.", descriptor->name ? descriptor->name : "UNKNOWN");
 
 	ProtobufCTextError res;
 	memset(&res, 0, sizeof(res));
 	ProtobufCMessage *msg = protobuf_c_text_from_string(descriptor, string, &res, NULL);
 	if (!msg) {
 		ERROR("Failed to parse text protobuf message (%s) from string. Reason: %s.",
-				descriptor->name ? descriptor->name : "UNKNOWN",
-				res.error_txt ? res.error_txt : "UNKNOWN" );
+		      descriptor->name ? descriptor->name : "UNKNOWN", res.error_txt ? res.error_txt : "UNKNOWN");
 		return NULL;
 	}
 	if (!res.complete) {
-		ERROR("Incomplete text protobuf message (%s).",
-				descriptor->name ? descriptor->name : "UNKNOWN");
+		ERROR("Incomplete text protobuf message (%s).", descriptor->name ? descriptor->name : "UNKNOWN");
 		protobuf_free_message(msg);
 		return NULL;
 	}
@@ -229,9 +224,9 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufC
 	ASSERT(buf);
 	ASSERT(descriptor);
 	TRACE("Parsing text protobuf message (%s) from buffer %p (length=%zu).",
-			descriptor->name ? descriptor->name : "UNKNOWN", buf, buflen);
+	      descriptor->name ? descriptor->name : "UNKNOWN", buf, buflen);
 
-	char *string = mem_alloc(buflen+1);
+	char *string = mem_alloc(buflen + 1);
 	memcpy(string, buf, buflen);
 	string[buflen] = '\0';
 
@@ -261,4 +256,3 @@ protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message)
 	}
 	return len;
 }
-

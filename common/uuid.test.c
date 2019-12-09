@@ -27,8 +27,9 @@
 
 #include "common/macro.h"
 
-int main() {
-
+int
+main()
+{
 	logf_register(&logf_file_write, stdout);
 
 	uuid_t *uuid_rand1 = uuid_new(NULL);
@@ -46,7 +47,7 @@ int main() {
 
 	DEBUG("UUID1: %s", uuid_string(uuid1));
 	/* Test the uuid_string method */
-	ASSERT(!strcmp(uuid_string(uuid1),uuid_str));
+	ASSERT(!strcmp(uuid_string(uuid1), uuid_str));
 
 	uuid_t *uuid2 = uuid_new("425a83cf-7d22-4561-ac08-20817d94da3b");
 	ASSERT(uuid2);

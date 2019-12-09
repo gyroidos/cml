@@ -36,17 +36,17 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#define BUF_SIZE 10*4096
+#define BUF_SIZE 10 * 4096
 #define CURL_PATH "curl"
 
 #define MEDIA_TYPE_MANIFEST_LIST_V2 "application/vnd.docker.distribution.manifest.list.v2+json"
 #define MEDIA_TYPE_MANIFEST_V2 "application/vnd.docker.distribution.manifest.v2+json"
 #define MEDIA_TYPE_MANIFEST_V1 "application/vnd.docker.distribution.manifest.v1+json"
 
-static char* host_url = NULL;
+static char *host_url = NULL;
 
 static void
-docker_remote_file_free(docker_remote_file_t* rf)
+docker_remote_file_free(docker_remote_file_t *rf)
 {
 	if (rf->media_type)
 		mem_free(rf->media_type);
@@ -64,10 +64,10 @@ docker_remote_file_free(docker_remote_file_t* rf)
 	mem_free(rf);
 }
 
-static docker_remote_file_t*
-parse_remote_file_new(cJSON *rf_obj, char* suffix)
+static docker_remote_file_t *
+parse_remote_file_new(cJSON *rf_obj, char *suffix)
 {
-	docker_remote_file_t *rf = mem_new0(docker_remote_file_t,1);
+	docker_remote_file_t *rf = mem_new0(docker_remote_file_t, 1);
 	rf->suffix = mem_strdup(suffix);
 
 	cJSON *jmedia_type = cJSON_GetObjectItem(rf_obj, "mediaType");
@@ -93,14 +93,12 @@ parse_remote_file_new(cJSON *rf_obj, char* suffix)
 			rf->platform_variant = mem_strdup(jplatform_variant->valuestring);
 	}
 
-	INFO ("Parsed remote file: \n\t type: %s\n\t size: %d\n\t digest %s :: %s (arch %s:%s)",
-			rf->media_type, rf->size, rf->digest_algorithm, rf->digest,
-			rf->platform_arch, rf->platform_variant);
+	INFO("Parsed remote file: \n\t type: %s\n\t size: %d\n\t digest %s :: %s (arch %s:%s)", rf->media_type,
+	     rf->size, rf->digest_algorithm, rf->digest, rf->platform_arch, rf->platform_variant);
 	return rf;
 }
 
-
-docker_manifest_list_t*
+docker_manifest_list_t *
 docker_parse_manifest_list_new(const char *raw_file_buffer)
 {
 	cJSON *jroot = NULL;
@@ -120,15 +118,13 @@ docker_parse_manifest_list_new(const char *raw_file_buffer)
 		if (cJSON_IsString(jarchitecture) && cJSON_IsString(jtag)) {
 			ml->schema_version = 2;
 			ml->manifests_size = 1;
-			ml->manifests = mem_alloc0(sizeof(docker_remote_file_t*));
+			ml->manifests = mem_alloc0(sizeof(docker_remote_file_t *));
 			ml->manifests[0] = mem_alloc0(sizeof(docker_remote_file_t));
-			ml->manifests[0]->media_type =
-					mem_strdup(MEDIA_TYPE_MANIFEST_V2);
+			ml->manifests[0]->media_type = mem_strdup(MEDIA_TYPE_MANIFEST_V2);
 			ml->manifests[0]->size = 0;
 			ml->manifests[0]->digest_algorithm = NULL;
 			ml->manifests[0]->digest = mem_strdup(jtag->valuestring);
-			ml->manifests[0]->platform_arch =
-					mem_strdup(jarchitecture->valuestring);
+			ml->manifests[0]->platform_arch = mem_strdup(jarchitecture->valuestring);
 		} else {
 			ERROR("Unsuported schema verison = %d", ml->schema_version);
 			mem_free(ml);
@@ -152,8 +148,8 @@ docker_parse_manifest_list_new(const char *raw_file_buffer)
 			ml->media_type = mem_strdup(jmedia_type->valuestring);
 		}
 
-		ml->manifests = mem_alloc0(ml->manifests_size*sizeof(docker_remote_file_t*));
-		for (int i=0; i < ml->manifests_size; ++i) {
+		ml->manifests = mem_alloc0(ml->manifests_size * sizeof(docker_remote_file_t *));
+		for (int i = 0; i < ml->manifests_size; ++i) {
 			cJSON *item = cJSON_GetArrayItem(jmanifests, i);
 			ml->manifests[i] = parse_remote_file_new(item, ".json");
 		}
@@ -174,14 +170,14 @@ docker_manifest_list_free(docker_manifest_list_t *ml)
 {
 	if (ml->media_type)
 		mem_free(ml->media_type);
-	for (int i=0; i < ml->manifests_size; ++i) {
+	for (int i = 0; i < ml->manifests_size; ++i) {
 		if (ml->manifests[i])
 			docker_remote_file_free(ml->manifests[i]);
 	}
 	mem_free(ml);
 }
 
-docker_manifest_t*
+docker_manifest_t *
 docker_parse_manifest_new(const char *raw_file_buffer)
 {
 	cJSON *jroot = NULL;
@@ -203,8 +199,8 @@ docker_parse_manifest_new(const char *raw_file_buffer)
 
 	cJSON *jlayers = cJSON_GetObjectItem(jroot, "layers");
 	manifest->layers_size = cJSON_GetArraySize(jlayers);
-	manifest->layers = mem_alloc0(manifest->layers_size*sizeof(docker_remote_file_t*));
-	for (int i=0; i < manifest->layers_size; ++i) {
+	manifest->layers = mem_alloc0(manifest->layers_size * sizeof(docker_remote_file_t *));
+	for (int i = 0; i < manifest->layers_size; ++i) {
 		cJSON *item = cJSON_GetArrayItem(jlayers, i);
 		manifest->layers[i] = parse_remote_file_new(item, ".tar.gz");
 	}
@@ -222,14 +218,14 @@ docker_manifest_free(docker_manifest_t *manifest)
 	if (manifest->config)
 		docker_remote_file_free(manifest->config);
 
-	for (int i=0; i < manifest->layers_size; ++i) {
+	for (int i = 0; i < manifest->layers_size; ++i) {
 		if (manifest->layers[i])
 			docker_remote_file_free(manifest->layers[i]);
 	}
 	mem_free(manifest);
 }
 
-docker_config_t*
+docker_config_t *
 docker_parse_config_new(const char *raw_file_buffer)
 {
 	cJSON *jroot = NULL;
@@ -266,8 +262,8 @@ docker_parse_config_new(const char *raw_file_buffer)
 	cJSON *jenv = cJSON_GetObjectItem(jconfig, "Env");
 	if (cJSON_IsArray(jenv)) {
 		config->env_size = cJSON_GetArraySize(jenv);
-		config->env = mem_alloc0(config->env_size*sizeof(char*));
-		for (int i=0; i < config->env_size; ++i) {
+		config->env = mem_alloc0(config->env_size * sizeof(char *));
+		for (int i = 0; i < config->env_size; ++i) {
 			cJSON *item = cJSON_GetArrayItem(jenv, i);
 			if (item && item->type == cJSON_String)
 				config->env[i] = mem_strdup(item->valuestring);
@@ -277,8 +273,8 @@ docker_parse_config_new(const char *raw_file_buffer)
 	cJSON *jcmd = cJSON_GetObjectItem(jconfig, "Cmd");
 	if (cJSON_IsArray(jcmd)) {
 		config->cmd_size = cJSON_GetArraySize(jcmd);
-		config->cmd = mem_alloc0(config->cmd_size*sizeof(char*));
-		for (int i=0; i < config->cmd_size; ++i) {
+		config->cmd = mem_alloc0(config->cmd_size * sizeof(char *));
+		for (int i = 0; i < config->cmd_size; ++i) {
 			cJSON *item = cJSON_GetArrayItem(jcmd, i);
 			if (item && item->type == cJSON_String)
 				config->cmd[i] = mem_strdup(item->valuestring);
@@ -288,8 +284,8 @@ docker_parse_config_new(const char *raw_file_buffer)
 	cJSON *jentrypoint = cJSON_GetObjectItem(jconfig, "Entrypoint");
 	if (cJSON_IsArray(jentrypoint)) {
 		config->entrypoint_size = cJSON_GetArraySize(jentrypoint);
-		config->entrypoint = mem_alloc0(config->entrypoint_size*sizeof(char*));
-		for (int i=0; i < config->entrypoint_size; ++i) {
+		config->entrypoint = mem_alloc0(config->entrypoint_size * sizeof(char *));
+		for (int i = 0; i < config->entrypoint_size; ++i) {
 			cJSON *item = cJSON_GetArrayItem(jentrypoint, i);
 			if (item && item->type == cJSON_String)
 				config->entrypoint[i] = mem_strdup(item->valuestring);
@@ -319,11 +315,14 @@ docker_parse_config_new(const char *raw_file_buffer)
 }
 
 void
-docker_config_free(docker_config_t* cfg)
+docker_config_free(docker_config_t *cfg)
 {
-	if (cfg->hostname) mem_free(cfg->hostname);
-	if (cfg->domainname) mem_free(cfg->domainname);
-	if (cfg->user) mem_free(cfg->user);
+	if (cfg->hostname)
+		mem_free(cfg->hostname);
+	if (cfg->domainname)
+		mem_free(cfg->domainname);
+	if (cfg->user)
+		mem_free(cfg->user);
 
 	for (list_t *l = cfg->exposedports_list; l; l = l->next) {
 		mem_free(l->data);
@@ -331,19 +330,19 @@ docker_config_free(docker_config_t* cfg)
 	list_delete(cfg->exposedports_list);
 
 	if (cfg->env) {
-		for (int i=0; i < cfg->env_size; ++i)
+		for (int i = 0; i < cfg->env_size; ++i)
 			mem_free(cfg->env[i]);
 		mem_free(cfg->env);
 	}
 
 	if (cfg->cmd) {
-		for (int i=0; i < cfg->cmd_size; ++i)
+		for (int i = 0; i < cfg->cmd_size; ++i)
 			mem_free(cfg->cmd[i]);
 		mem_free(cfg->cmd);
 	}
 
 	if (cfg->entrypoint) {
-		for (int i=0; i < cfg->entrypoint_size; ++i)
+		for (int i = 0; i < cfg->entrypoint_size; ++i)
 			mem_free(cfg->entrypoint[i]);
 		mem_free(cfg->entrypoint);
 	}
@@ -363,22 +362,22 @@ docker_set_host_url(const char *url)
 }
 
 int
-docker_generate_basic_auth(const char* user, const char* password, const char* token_file)
+docker_generate_basic_auth(const char *user, const char *password, const char *token_file)
 {
 	int ret = 0;
 
 	char *in = mem_printf("%s:%s", user, password);
-	size_t out_size = 256*sizeof(char);
+	size_t out_size = 256 * sizeof(char);
 	char *out = mem_alloc0(out_size);
 
 	INFO("Generating login token");
-	b64_ntop ((unsigned char *)in, strlen(in), out, out_size);
+	b64_ntop((unsigned char *)in, strlen(in), out, out_size);
 
-        // DEBUG("Basic Auth Token: %s\n", out);
+	// DEBUG("Basic Auth Token: %s\n", out);
 	char *auth = mem_printf("Authorization: Basic %s", out);
 	char *url = mem_printf("https://%s", host_url);
 
-	const char * const argv[] = {CURL_PATH, "-fsSL", "-H", auth, url, NULL};
+	const char *const argv[] = { CURL_PATH, "-fsSL", "-H", auth, url, NULL };
 	ret = util_fork_and_execvp(CURL_PATH, argv);
 	if (ret == 0) {
 		INFO("Auth OK. Storing access token!");
@@ -394,14 +393,14 @@ docker_generate_basic_auth(const char* user, const char* password, const char* t
 }
 
 char *
-docker_get_curl_token_new(char *image_name, char* token_file)
+docker_get_curl_token_new(char *image_name, char *token_file)
 {
 	char *url = mem_printf("https://auth.docker.io/token?service="
-			"registry.docker.io&scope=repository:%s%s:pull",
-			!strchr(image_name, '/') ? "library/" : "", image_name);
+			       "registry.docker.io&scope=repository:%s%s:pull",
+			       !strchr(image_name, '/') ? "library/" : "", image_name);
 
 	if (!file_exists(token_file)) {
-		const char * const argv[] = {CURL_PATH, "-fsSL", url, "-o", token_file, NULL};
+		const char *const argv[] = { CURL_PATH, "-fsSL", url, "-o", token_file, NULL };
 		util_fork_and_execvp(CURL_PATH, argv);
 	}
 
@@ -416,7 +415,7 @@ docker_get_curl_token_new(char *image_name, char* token_file)
 	jroot = cJSON_Parse(buf);
 	cJSON *jtoken = cJSON_GetObjectItem(jroot, "token");
 
-	char * token = mem_strdup(jtoken->valuestring);
+	char *token = mem_strdup(jtoken->valuestring);
 	//DEBUG("token: %s", token);
 
 	mem_free(url);
@@ -425,21 +424,21 @@ docker_get_curl_token_new(char *image_name, char* token_file)
 }
 
 int
-docker_download_manifest_list(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag)
+docker_download_manifest_list(const char *curl_token, const char *out_file, const char *image_name,
+			      const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
-	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url,
-			!strchr(image_name, '/') ? "library/" : "",
-			image_name, image_tag);
+	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url, !strchr(image_name, '/') ? "library/" : "",
+			       image_name, image_tag);
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
 	char *acceptlist = "Accept: " MEDIA_TYPE_MANIFEST_LIST_V2;
 
-	const char * const argv_basic[] = {CURL_PATH, "-fsSL", "-H", auth_basic,
-			"-H", acceptlist, url, "-o", out_file, NULL};
-	const char * const argv_bearer[] = {CURL_PATH, "-fsSL", "-H", auth_bearer,
-			"-H", acceptlist, url, "-o", out_file, NULL};
+	const char *const argv_basic[] = { CURL_PATH,  "-fsSL", "-H", auth_basic, "-H",
+					   acceptlist, url,     "-o", out_file,   NULL };
+	const char *const argv_bearer[] = { CURL_PATH,  "-fsSL", "-H", auth_bearer, "-H",
+					    acceptlist, url,     "-o", out_file,    NULL };
 
 	int ret = util_fork_and_execvp(CURL_PATH, argv_bearer);
 	if (ret != 0) {
@@ -454,22 +453,21 @@ docker_download_manifest_list(const char *curl_token, const char* out_file, cons
 }
 
 int
-docker_download_manifest(const char *curl_token, const char* out_file, const char *image_name, const char *image_tag)
+docker_download_manifest(const char *curl_token, const char *out_file, const char *image_name, const char *image_tag)
 {
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/manifests/%s", image_name, image_tag);
-	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url,
-			!strchr(image_name, '/') ? "library/" : "",
-			image_name, image_tag);
+	char *url = mem_printf("https://%s/v2/%s%s/manifests/%s", host_url, !strchr(image_name, '/') ? "library/" : "",
+			       image_name, image_tag);
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
 	char *acceptv2 = "Accept: " MEDIA_TYPE_MANIFEST_V2;
 	char *acceptv1 = "Accept: " MEDIA_TYPE_MANIFEST_V1;
 
-	const char * const argv_basic[] = {CURL_PATH, "-fsSL", "-H", auth_basic,
-			"-H", acceptv2, "-H", acceptv1, url, "-o", out_file, NULL};
-	const char * const argv_bearer[] = {CURL_PATH, "-fsSL", "-H", auth_bearer,
-			"-H", acceptv2, "-H", acceptv1, url, "-o", out_file, NULL};
+	const char *const argv_basic[] = { CURL_PATH, "-fsSL",  "-H", auth_basic, "-H",     acceptv2,
+					   "-H",      acceptv1, url,  "-o",       out_file, NULL };
+	const char *const argv_bearer[] = { CURL_PATH, "-fsSL",  "-H", auth_bearer, "-H",     acceptv2,
+					    "-H",      acceptv1, url,  "-o",	out_file, NULL };
 
 	int ret = util_fork_and_execvp(CURL_PATH, argv_bearer);
 	if (ret != 0) {
@@ -484,10 +482,11 @@ docker_download_manifest(const char *curl_token, const char* out_file, const cha
 }
 
 static int
-download_docker_remote_file(const char *curl_token, const docker_remote_file_t* rf, const char* out_path, const char *image_name)
+download_docker_remote_file(const char *curl_token, const docker_remote_file_t *rf, const char *out_path,
+			    const char *image_name)
 {
 	int ret = 0;
-	char* image_hash = NULL;
+	char *image_hash = NULL;
 
 	char *out_file = mem_printf("%s/%s%s", out_path, rf->digest, rf->suffix);
 
@@ -502,14 +501,16 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t* 
 	}
 
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/blobs/%s:%s",
-	char *url = mem_printf("https://%s/v2/%s%s/blobs/%s:%s", host_url,
-			!strchr(image_name, '/') ? "library/" : "", image_name,
-			rf->digest_algorithm, rf->digest);
+	char *url = mem_printf("https://%s/v2/%s%s/blobs/%s:%s", host_url, !strchr(image_name, '/') ? "library/" : "",
+			       image_name, rf->digest_algorithm, rf->digest);
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
-	const char * const argv_bearer[] = {CURL_PATH, "-fSL", "--progress", "-H", auth_bearer, url, "-o", out_file, NULL};
-	const char * const argv_basic[] = {CURL_PATH, "-fSL", "--progress", "-H", auth_basic, url, "-o", out_file, NULL};
+	const char *const argv_bearer[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_bearer,
+					    url,       "-o",   out_file,     NULL };
+	const char *const argv_basic[] = {
+		CURL_PATH, "-fSL", "--progress", "-H", auth_basic, url, "-o", out_file, NULL
+	};
 
 	ret = util_fork_and_execvp(CURL_PATH, argv_bearer);
 	if (ret != 0)
@@ -538,14 +539,15 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t* 
 }
 
 int
-docker_download_image(char *curl_token, const docker_manifest_t *manifest, const char* out_path, const char* image_name, const char *image_tag)
+docker_download_image(char *curl_token, const docker_manifest_t *manifest, const char *out_path, const char *image_name,
+		      const char *image_tag)
 {
 	int ret = download_docker_remote_file(curl_token, manifest->config, out_path, image_name);
 	if (ret < 0) {
 		ERROR("Failed to download %s!", manifest->config->digest);
 		return -1;
 	}
-	for (int i=0; i < manifest->layers_size; ++i) {
+	for (int i = 0; i < manifest->layers_size; ++i) {
 		ret = download_docker_remote_file(curl_token, manifest->layers[i], out_path, image_name);
 		if (ret < 0) {
 			ERROR("Failed to download %s!", manifest->config->digest);
@@ -555,4 +557,3 @@ docker_download_image(char *curl_token, const docker_manifest_t *manifest, const
 	INFO("Download image %s:%s completed!", image_name, image_tag);
 	return 0;
 }
-

@@ -30,30 +30,26 @@
 #include <sys/reboot.h>
 #endif
 
-
-
 int
 reboot_reboot(int cmd)
 {
 	int res = -1;
 	switch (cmd) {
-		case REBOOT:
-			#ifdef ANDROID
-			// ANDROID_RB_RESTART is deprecated and no longer recommended to be used
-			res = android_reboot(ANDROID_RB_RESTART, 0, 0);
-			#else
-			res = reboot(RB_AUTOBOOT);
-			#endif
-			break;
-		case POWER_OFF:
-			#ifdef ANDROID
- 			res = android_reboot(ANDROID_RB_POWEROFF, 0, 0);
-			#else
-			res = reboot(RB_POWER_OFF);		
-			#endif
-			break;
+	case REBOOT:
+#ifdef ANDROID
+		// ANDROID_RB_RESTART is deprecated and no longer recommended to be used
+		res = android_reboot(ANDROID_RB_RESTART, 0, 0);
+#else
+		res = reboot(RB_AUTOBOOT);
+#endif
+		break;
+	case POWER_OFF:
+#ifdef ANDROID
+		res = android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+#else
+		res = reboot(RB_POWER_OFF);
+#endif
+		break;
 	}
 	return res;
 }
-
-

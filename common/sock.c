@@ -32,14 +32,14 @@
 #include <arpa/inet.h> // inet_addr
 #include <netdb.h>
 
-#define MAKE_SOCKADDR_UN(addr, path) \
-	struct sockaddr_un addr = { .sun_family = AF_UNIX }; \
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1); \
-	addr.sun_path[sizeof(addr.sun_path)-1] = '\0'
+#define MAKE_SOCKADDR_UN(addr, path)                                                                                   \
+	struct sockaddr_un addr = { .sun_family = AF_UNIX };                                                           \
+	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);                                                       \
+	addr.sun_path[sizeof(addr.sun_path) - 1] = '\0'
 
-#define MAKE_SOCKADDR_IN(addr, server_ip, server_port) \
-	struct sockaddr_in addr = { .sin_family = AF_INET }; \
-	addr.sin_addr.s_addr = inet_addr(server_ip); \
+#define MAKE_SOCKADDR_IN(addr, server_ip, server_port)                                                                 \
+	struct sockaddr_in addr = { .sin_family = AF_INET };                                                           \
+	addr.sin_addr.s_addr = inet_addr(server_ip);                                                                   \
 	addr.sin_port = htons(server_port)
 
 int
@@ -61,7 +61,6 @@ sock_unix_connect(int sock, const char *path)
 	if (-1 == res)
 		WARN_ERRNO("Failed to connect UNIX socket to %s.", path);
 	return res;
-
 }
 
 int
@@ -167,8 +166,7 @@ sock_inet_connect(int sock, const char *ip, int port)
 static int
 sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 {
-
-	char addr_str[INET6_ADDRSTRLEN] = {0};
+	char addr_str[INET6_ADDRSTRLEN] = { 0 };
 	void *addr_ptr = NULL;
 
 	if (addrinfo->ai_family == AF_INET) {
@@ -179,9 +177,8 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 
 	if (addr_ptr) {
 		inet_ntop(addrinfo->ai_family, addr_ptr, addr_str, sizeof(addr_str));
-		INFO("Trying to connect to IPv%d address: %s (%s)",
-				addrinfo->ai_family == PF_INET6 ? 6 : 4,
-				addr_str, addrinfo->ai_canonname);
+		INFO("Trying to connect to IPv%d address: %s (%s)", addrinfo->ai_family == PF_INET6 ? 6 : 4, addr_str,
+		     addrinfo->ai_canonname);
 	} else {
 		INFO("Trying to connect to unknown protocol address on %s", addrinfo->ai_canonname);
 	}
@@ -225,7 +222,7 @@ sock_inet_create_and_connect(int type, const char *node, const char *service)
 	struct addrinfo *cur = res;
 
 	/* iterate over the linked list until a connect succeeds */
-	while(cur) {
+	while (cur) {
 		sock = sock_inet_connect_addrinfo(cur);
 		if (sock != -1) {
 			break;

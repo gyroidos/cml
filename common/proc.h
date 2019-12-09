@@ -60,4 +60,3 @@ pid_t
 proc_find(pid_t ppid, const char *name);
 
 #endif /* PROC_H */
-

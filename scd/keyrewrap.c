@@ -36,7 +36,7 @@ main(int argc, char **argv)
 	ASSERT(argc >= 3);
 	char *token_path_old = argv[1];
 	char *token_path_new = argv[2];
-	
+
 	logf_register(&logf_file_write, stdout);
 
 	token_old = softtoken_new_from_p12(token_path_old);

@@ -34,11 +34,11 @@
 
 struct softtoken {
 	char *token_file; // absolute path to softtoken w. filename
-	bool locked;	    // whether the token is locked or not
+	bool locked; // whether the token is locked or not
 	unsigned wrong_unlock_attempts; // wrong consecutive password attempts
 	EVP_PKEY *pkey; // holds the token public key pair when unlocked
 	X509 *cert; // holds the token's certificate, if available
-	STACK_OF(X509) *ca; // holds the token's certificate chain, if available
+	STACK_OF(X509) * ca; // holds the token's certificate chain, if available
 };
 
 softtoken_t *
@@ -58,13 +58,11 @@ softtoken_new_from_p12(const char *filename)
 }
 
 int
-softtoken_change_passphrase(softtoken_t *token, const char *oldpass,
-					const char *newpass)
+softtoken_change_passphrase(softtoken_t *token, const char *oldpass, const char *newpass)
 {
 	ASSERT(token);
 	return ssl_newpass_pkcs12_token(token->token_file, oldpass, newpass);
 }
-
 
 /**
  * Free key and certificate data.
@@ -105,7 +103,7 @@ softtoken_free(softtoken_t *token)
 
 int
 softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
-		unsigned char **wrapped_key, int *wrapped_key_len)
+		   unsigned char **wrapped_key, int *wrapped_key_len)
 {
 	ASSERT(token);
 	// TODO allow wrapping (encryption with public key) even with locked token?
@@ -118,7 +116,7 @@ softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t pl
 
 int
 softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
-		unsigned char **plain_key, int *plain_key_len)
+		     unsigned char **plain_key, int *plain_key_len)
 {
 	ASSERT(token);
 	if (softtoken_is_locked(token)) {
@@ -143,8 +141,8 @@ softtoken_is_locked(softtoken_t *token)
 }
 
 int
-softtoken_unlock(softtoken_t *token, char *passphrase) {
-
+softtoken_unlock(softtoken_t *token, char *passphrase)
+{
 	ASSERT(token);
 
 	if (!softtoken_is_locked(token)) {
@@ -161,8 +159,7 @@ softtoken_unlock(softtoken_t *token, char *passphrase) {
 		ERROR("No token present");
 		return -1;
 	}
-	int res = ssl_read_pkcs12_token(token->token_file, passphrase,
-			&token->pkey, &token->cert, &token->ca);
+	int res = ssl_read_pkcs12_token(token->token_file, passphrase, &token->pkey, &token->cert, &token->ca);
 	if (res == -1) // wrong password
 		token->wrong_unlock_attempts++;
 	else if (res == 0) {
@@ -178,8 +175,8 @@ softtoken_unlock(softtoken_t *token, char *passphrase) {
 }
 
 int
-softtoken_lock(softtoken_t *token) {
-
+softtoken_lock(softtoken_t *token)
+{
 	ASSERT(token);
 
 	if (softtoken_is_locked(token)) {

@@ -31,9 +31,10 @@
 #include "mem.h"
 #include "macro.h"
 
-#define DEBUG_THRESHOLD(size) \
-	do { if (size > (1024 * 1024)) \
-		DEBUG("Allocating a large memory area of %zu bytes", size); \
+#define DEBUG_THRESHOLD(size)                                                                                          \
+	do {                                                                                                           \
+		if (size > (1024 * 1024))                                                                              \
+			DEBUG("Allocating a large memory area of %zu bytes", size);                                    \
 	} while (0)
 
 void *

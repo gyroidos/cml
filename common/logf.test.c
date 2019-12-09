@@ -40,7 +40,7 @@
 int
 main(int argc, char **argv)
 {
-/*
+	/*
 	logf_register(&logf_file_write, stdout);
 	logf_register(&logf_file_write, stderr);
 	logf_register(&logf_file_write, fopen("log.cmld", "a"));
@@ -99,4 +99,3 @@ main(int argc, char **argv)
 
 	return 0;
 }
-

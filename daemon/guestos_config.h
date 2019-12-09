@@ -179,4 +179,3 @@ const char *
 guestos_config_get_update_base_url(const guestos_config_t *cfg);
 
 #endif /* GUESTOS_CONFIG_H */
-

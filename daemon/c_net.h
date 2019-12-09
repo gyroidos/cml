@@ -81,7 +81,7 @@ c_net_cleanup(c_net_t *net);
  * returns NULL if the container has no netns
  */
 char *
-c_net_get_ip_new(c_net_t* net);
+c_net_get_ip_new(c_net_t *net);
 
 /*
  * return a new string with the containers subnet which is
@@ -89,7 +89,7 @@ c_net_get_ip_new(c_net_t* net);
  * returns NULL if the container has no netns
  */
 char *
-c_net_get_subnet_new(c_net_t* net);
+c_net_get_subnet_new(c_net_t *net);
 
 /**
  * This function moves the network interface to the corresponding namespace,
@@ -98,7 +98,6 @@ c_net_get_subnet_new(c_net_t* net);
  */
 int
 c_net_move_ifi(const char *ifi_name, const pid_t pid);
-
 
 /**
  * This function removes the network interface from the corresponding namespace,

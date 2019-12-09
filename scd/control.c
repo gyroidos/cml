@@ -51,28 +51,28 @@
 #define KEY_LENGTH_BYTES 64
 
 struct scd_control {
-	int sock;		// listen socket fd
+	int sock; // listen socket fd
 };
 
 UNUSED static list_t *control_list = NULL;
 
 /* keep in sync with offered algorithms by protobuf */
 static char *
-switch_proto_hash_algo(int hash_algo) {
-
-	char * ret = NULL;
+switch_proto_hash_algo(int hash_algo)
+{
+	char *ret = NULL;
 	switch (hash_algo) {
-		case HASH_ALGO__SHA1: {
-			ret = "SHA1";
-		} break;
-		case HASH_ALGO__SHA256: {
-			ret = "SHA256";
-		} break;
-		case HASH_ALGO__SHA512: {
-			ret = "SHA512";
-		} break;
-		default:
-			ERROR("No valid hash algorithm specified");
+	case HASH_ALGO__SHA1: {
+		ret = "SHA1";
+	} break;
+	case HASH_ALGO__SHA256: {
+		ret = "SHA256";
+	} break;
+	case HASH_ALGO__SHA512: {
+		ret = "SHA512";
+	} break;
+	default:
+		ERROR("No valid hash algorithm specified");
 		break;
 	}
 	return ret;
@@ -107,7 +107,6 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 static TokenToDaemon__Code
 scd_control_handle_verify(const DaemonToToken *msg)
 {
-	
 	int ret;
 	TokenToDaemon__Code out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
 	char *hash_algo = switch_proto_hash_algo(msg->hash_algo);
@@ -120,9 +119,7 @@ scd_control_handle_verify(const DaemonToToken *msg)
 		verified = true;
 	} else {
 		// Try all CA files in trusted CA store
-		struct verify_cert_ca_cb_data cb_data = {
-			.cert_file = msg->verify_cert_file,
-			.verified = false };
+		struct verify_cert_ca_cb_data cb_data = { .cert_file = msg->verify_cert_file, .verified = false };
 
 		dir_foreach(TRUSTED_CA_STORE, scd_control_verify_cert_ca_cb, &cb_data);
 		if (cb_data.verified) {
@@ -151,10 +148,10 @@ scd_control_handle_verify(const DaemonToToken *msg)
 	return out_code;
 
 do_signature:
-	if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file,
-			    msg->verify_data_file, hash_algo)) == 0) {
+	if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file, msg->verify_data_file,
+					hash_algo)) == 0) {
 		out_code = (verified) ? TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD :
-			TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED;
+					TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED;
 	} else if (ret == -1) {
 		ERROR("Signature invalid");
 		out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE;
@@ -180,9 +177,8 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			free(msg_text);
 	}
 
-	switch(msg->code) {
+	switch (msg->code) {
 	case DAEMON_TO_TOKEN__CODE__UNLOCK: {
-
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED;
 
@@ -202,15 +198,13 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 					out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 				else
 					out.code = TOKEN_TO_DAEMON__CODE__PASSWD_WRONG;
-			}
-			else
+			} else
 				out.code = TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED;
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__LOCK: {
-
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__LOCK_FAILED;
 
@@ -224,9 +218,8 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__WRAP_KEY: {
-
 		int wrapped_key_len;
-		unsigned char * wrapped_key;
+		unsigned char *wrapped_key;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__WRAPPED_KEY;
 
@@ -237,12 +230,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("Token is locked. Unlock first.");
 		} else if (!msg->has_unwrapped_key) {
 			ERROR("Unwrapped key not specified.");
-		} else if (softtoken_wrap_key(token, msg->unwrapped_key.data, msg->unwrapped_key.len,
-					&wrapped_key, &wrapped_key_len) == 0) {
-
-				out.has_wrapped_key = true;
-				out.wrapped_key.len = wrapped_key_len;
-				out.wrapped_key.data = wrapped_key;
+		} else if (softtoken_wrap_key(token, msg->unwrapped_key.data, msg->unwrapped_key.len, &wrapped_key,
+					      &wrapped_key_len) == 0) {
+			out.has_wrapped_key = true;
+			out.wrapped_key.len = wrapped_key_len;
+			out.wrapped_key.data = wrapped_key;
 		} else {
 			ERROR("Key wrapping failed");
 		}
@@ -252,7 +244,6 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			mem_free(wrapped_key);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
-
 		int unwrapped_key_len;
 		unsigned char *unwrapped_key;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
@@ -265,12 +256,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("Token is locked. Unlock first.");
 		} else if (!msg->has_wrapped_key) {
 			ERROR("Wrapped key not specified.");
-		} else if (softtoken_unwrap_key(token, msg->wrapped_key.data, msg->wrapped_key.len,
-					&unwrapped_key, &unwrapped_key_len) == 0) {
-
-				out.has_unwrapped_key = true;
-				out.unwrapped_key.len = unwrapped_key_len;
-				out.unwrapped_key.data = unwrapped_key;
+		} else if (softtoken_unwrap_key(token, msg->wrapped_key.data, msg->wrapped_key.len, &unwrapped_key,
+						&unwrapped_key_len) == 0) {
+			out.has_unwrapped_key = true;
+			out.unwrapped_key.len = unwrapped_key_len;
+			out.unwrapped_key.data = unwrapped_key;
 		} else {
 			ERROR("Key unwrapping failed");
 		}
@@ -280,7 +270,6 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			mem_free(unwrapped_key);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CHANGE_PIN: {
-
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 
@@ -292,8 +281,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		} else if (softtoken_is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 		} else {
-			int ret = softtoken_change_passphrase(token,
-						 msg->token_pin, msg->token_newpin);
+			int ret = softtoken_change_passphrase(token, msg->token_pin, msg->token_newpin);
 			if (ret == 0)
 				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
 			else
@@ -312,7 +300,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			csr_len = file_size(DEVICE_CSR_FILE);
 			// we set maximum read length one byte grater than file_size
 			// since file_read sets '\0' char at the end of the buffer
-			csr = file_read_new(DEVICE_CSR_FILE, csr_len+1);
+			csr = file_read_new(DEVICE_CSR_FILE, csr_len + 1);
 			if (csr_len < 0 || csr == NULL) {
 				out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CSR_ERROR;
 			} else {
@@ -334,8 +322,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		} else if (!msg->has_device_cert) {
 			ERROR("No device_cert in msg!");
 			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR;
-		} else if (-1 == file_write(DEVICE_CERT_FILE, msg->device_cert.data,
-					 		msg->device_cert.len)) {
+		} else if (-1 == file_write(DEVICE_CERT_FILE, msg->device_cert.data, msg->device_cert.len)) {
 			ERROR("writing device cert to file :%s", DEVICE_CERT_FILE);
 			out.code = TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR;
 		} else {
@@ -344,10 +331,9 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE: {
-
 		unsigned int hash_len;
 		char *hash_algo;
-		unsigned char * hash = NULL;
+		unsigned char *hash = NULL;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR;
 
@@ -369,7 +355,6 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			mem_free(hash);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE: {
-
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = scd_control_handle_verify(msg);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
@@ -403,7 +388,7 @@ scd_control_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void
 		protobuf_free_message((ProtobufCMessage *)msg);
 		DEBUG("Handled control connection %d", fd);
 	}
-	if(events & EVENT_IO_EXCEPT) {
+	if (events & EVENT_IO_EXCEPT) {
 		INFO("Control client closed connection; disconnecting control socket.");
 		goto connection_err;
 	}
@@ -475,4 +460,3 @@ scd_control_new(const char *path)
 
 	return scd_control;
 }
-

@@ -47,19 +47,13 @@ struct container_config {
 	ContainerConfig *cfg;
 };
 
-#define C_CONFIG_MAX_RAM_LIMIT  (1<<30)     // TODO 1GB? (< 4GB due to uint32)
-#define C_CONFIG_MAX_STORAGE    (4LL<<30)   // TODO 4GB?
+#define C_CONFIG_MAX_RAM_LIMIT (1 << 30) // TODO 1GB? (< 4GB due to uint32)
+#define C_CONFIG_MAX_STORAGE (4LL << 30) // TODO 4GB?
 
 // used to validate config
 #define C_CONFIG_FEATURES_LEN 7
 static const char *container_config_features[C_CONFIG_FEATURES_LEN] = {
-	"generic",
-	"bluetooth",
-	"camera",
-	"gapps",
-	"gps",
-	"telephony",
-	"fhgapps",
+	"generic", "bluetooth", "camera", "gapps", "gps", "telephony", "fhgapps",
 };
 
 /**
@@ -128,15 +122,13 @@ container_config_new(const char *file, const uint8_t *buf, size_t len)
 
 	if (buf) {
 		DEBUG("Loading container config from buf storing to file \"%s\".", file);
-		ccfg = (ContainerConfig *)
-		       protobuf_message_new_from_buf(buf, len, &container_config__descriptor);
+		ccfg = (ContainerConfig *)protobuf_message_new_from_buf(buf, len, &container_config__descriptor);
 		if (!ccfg)
 			WARN("Failed loading container config from buf");
 	}
 	if (!ccfg) {
 		DEBUG("Loading container config from file \"%s\".", file);
-		ccfg = (ContainerConfig *)
-			protobuf_message_new_from_textfile(file, &container_config__descriptor);
+		ccfg = (ContainerConfig *)protobuf_message_new_from_textfile(file, &container_config__descriptor);
 		if (!ccfg) {
 			WARN("Failed loading container config from file \"%s\".", file);
 			return NULL;
@@ -153,7 +145,7 @@ void
 container_config_free(container_config_t *config)
 {
 	ASSERT(config);
-	protobuf_free_message((ProtobufCMessage *) config->cfg);
+	protobuf_free_message((ProtobufCMessage *)config->cfg);
 	mem_free(config->file);
 	mem_free(config);
 }
@@ -165,7 +157,7 @@ container_config_write(const container_config_t *config)
 	ASSERT(config->cfg);
 	ASSERT(config->file);
 
-	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *) config->cfg) < 0) {
+	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *)config->cfg) < 0) {
 		WARN("Could not write container config to \"%s\"", config->file);
 		return -1;
 	}
@@ -224,8 +216,7 @@ container_config_set_ram_limit(container_config_t *config, unsigned int ram_limi
 	ASSERT(config->cfg);
 	// TODO sanity checks for max. number of potatoes, etc.
 	if (ram_limit > C_CONFIG_MAX_RAM_LIMIT) {
-		WARN("Cannot set ram_limit to %d, maximum is %d.",
-				ram_limit, C_CONFIG_MAX_RAM_LIMIT);
+		WARN("Cannot set ram_limit to %d, maximum is %d.", ram_limit, C_CONFIG_MAX_RAM_LIMIT);
 		return;
 	}
 	config->cfg->ram_limit = ram_limit;
@@ -245,8 +236,7 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		ASSERT(name);
 		mount_entry_t *mntent = mount_get_entry_by_img(mnt, name);
 		if (!mntent) {
-			WARN("Unknown mount entry \"%s\" in config for container \"%s\", skipping!",
-					name, cfg->name);
+			WARN("Unknown mount entry \"%s\" in config for container \"%s\", skipping!", name, cfg->name);
 			continue;
 		}
 
@@ -255,12 +245,13 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		mount_entry_set_img(mntent, file);
 
 		if ((mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) ||
-				(mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)) {
+		    (mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RW)) {
 			uint64_t size = cfg->image_sizes[i]->image_size;
 			mount_entry_set_size(mntent, size);
 		} else {
 			ERROR("Forbidden: Cannot override image size for mount entry \"%s\" "
-					"in config for container \"%s\"!", name, cfg->name);
+			      "in config for container \"%s\"!",
+			      name, cfg->name);
 		}
 	}
 }
@@ -382,13 +373,13 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 	return net_ifaces_list;
 }
 
-char**
+char **
 container_config_get_dev_allow_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 
-	char** dev_whitelist = mem_new0(char *, config->cfg->n_allow_dev + 1);
+	char **dev_whitelist = mem_new0(char *, config->cfg->n_allow_dev + 1);
 	for (size_t i = 0; i < config->cfg->n_allow_dev; i++) {
 		dev_whitelist[i] = mem_strdup(config->cfg->allow_dev[i]);
 	}
@@ -396,12 +387,12 @@ container_config_get_dev_allow_list_new(const container_config_t *config)
 	return dev_whitelist;
 }
 
-char**
+char **
 container_config_get_dev_assign_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-	char** dev_assign_list = mem_new0(char *, config->cfg->n_assign_dev + 1);
+	char **dev_assign_list = mem_new0(char *, config->cfg->n_assign_dev + 1);
 	for (size_t i = 0; i < config->cfg->n_assign_dev; i++) {
 		dev_assign_list[i] = mem_strdup(config->cfg->assign_dev[i]);
 	}
@@ -451,7 +442,7 @@ container_config_append_net_ifaces(const container_config_t *config, const char 
 	int n = config->cfg->n_net_ifaces++;
 	char **old_net_ifaces = config->cfg->net_ifaces;
 
-	config->cfg->net_ifaces = mem_new0(char*, n+1);
+	config->cfg->net_ifaces = mem_new0(char *, n + 1);
 
 	for (int i = 0; i < n; i++) {
 		config->cfg->net_ifaces[i] = mem_strdup(old_net_ifaces[i]);
@@ -480,7 +471,7 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 	if (nremove == 0)
 		return;
 
-	config->cfg->net_ifaces = mem_new0(char*, n - nremove);
+	config->cfg->net_ifaces = mem_new0(char *, n - nremove);
 	config->cfg->n_net_ifaces = n - nremove;
 
 	for (int i = 0, j = 0; i < n; i++) {
@@ -499,48 +490,39 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 	ASSERT(config->cfg);
 
 	list_t *if_cfg_list = NULL;
-	for (size_t i=0; i < config->cfg->n_vnet_configs; ++i) {
+	for (size_t i = 0; i < config->cfg->n_vnet_configs; ++i) {
 		uint8_t mac[6];
 		if (config->cfg->vnet_configs[i]->if_mac == NULL) {
-			INFO("Generating new mac for if %s",
-				config->cfg->vnet_configs[i]->if_name);
-			file_read("/dev/urandom", (char*)mac, 6);
+			INFO("Generating new mac for if %s", config->cfg->vnet_configs[i]->if_name);
+			file_read("/dev/urandom", (char *)mac, 6);
 			config->cfg->vnet_configs[i]->if_mac =
-				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
-						":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
-					mac[0], mac[1], mac[2],
-					mac[3], mac[4], mac[5]);
+				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
+					   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		} else {
-			INFO("Using mac %s for if %s",
-				config->cfg->vnet_configs[i]->if_mac,
-				config->cfg->vnet_configs[i]->if_name);
+			INFO("Using mac %s for if %s", config->cfg->vnet_configs[i]->if_mac,
+			     config->cfg->vnet_configs[i]->if_name);
 			sscanf(config->cfg->vnet_configs[i]->if_mac,
-				"%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
-						":%02" SCNx8 ":%02" SCNx8,
-				&mac[0], &mac[1], &mac[2],
-				&mac[3], &mac[4], &mac[5]);
+			       "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8, &mac[0],
+			       &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
 		}
 		// sanitize mac veth otherwise kernel may reject the mac
 		mac[0] &= 0xfe; /* clear multicast bit */
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
-		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(
-			config->cfg->vnet_configs[i]->if_name, NULL, mac,
-			config->cfg->vnet_configs[i]->configure
-		);
+		container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(config->cfg->vnet_configs[i]->if_name, NULL, mac,
+								      config->cfg->vnet_configs[i]->configure);
 		if_cfg_list = list_append(if_cfg_list, if_cfg);
 	}
 
 	if (if_cfg_list == NULL) {
 		list_t *nw_name_list = hardware_get_nw_name_list();
-		for (list_t* l = nw_name_list; l != NULL; l = l->next) {
+		for (list_t *l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
 			uint8_t mac[6];
-			file_read("/dev/urandom", (char*)mac, 6);
+			file_read("/dev/urandom", (char *)mac, 6);
 			mac[0] &= 0xfe; /* clear multicast bit */
 			mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
-			container_vnet_cfg_t *if_cfg =
-				container_vnet_cfg_new(if_name, NULL, mac, true);
+			container_vnet_cfg_t *if_cfg = container_vnet_cfg_new(if_name, NULL, mac, true);
 			if_cfg_list = list_append(if_cfg_list, if_cfg);
 		}
 		list_delete(nw_name_list);

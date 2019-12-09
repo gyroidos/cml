@@ -111,7 +111,7 @@ mem_printf(const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 1, 2)))
 #endif
-;
+	;
 
 /**
  * Frees the allocated memory.
@@ -133,24 +133,21 @@ mem_free_array(void **array, size_t size);
  * Convenience wrapper macro for mem_alloc which calculates
  * the correct size to be allocated and casts accordingly.
  */
-#define mem_new(struct_type, n_structs) \
-	((struct_type *) mem_alloc(((size_t) sizeof(struct_type)) \
-					* ((size_t) (n_structs))))
+#define mem_new(struct_type, n_structs)                                                                                \
+	((struct_type *)mem_alloc(((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
 
 /**
  * Convenience wrapper macro for mem_alloc0 which calculates
  * the correct size to be allocated and casts accordingly.
  */
-#define mem_new0(struct_type, n_structs) \
-	((struct_type *) mem_alloc0(((size_t) sizeof(struct_type)) \
-					* ((size_t) (n_structs))))
+#define mem_new0(struct_type, n_structs)                                                                               \
+	((struct_type *)mem_alloc0(((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
 
 /**
  * Convenience wrapper macro for mem_realloc which calculates
  * the correct size to be allocated and casts accordingly.
  */
-#define mem_renew(struct_type, mem, n_structs) \
-	((struct_type *) mem_realloc((mem), ((size_t) sizeof(struct_type)) \
-					* ((size_t) (n_structs))))
+#define mem_renew(struct_type, mem, n_structs)                                                                         \
+	((struct_type *)mem_realloc((mem), ((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
 
 #endif /* MEM_H */

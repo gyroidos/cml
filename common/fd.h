@@ -73,4 +73,4 @@ fd_make_non_blocking(int fd);
 int
 fd_is_closed(int fd);
 
-#endif  // FD_H
+#endif // FD_H

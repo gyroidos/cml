@@ -32,7 +32,6 @@
  * performing remote attestation
  */
 
-
 #ifndef TPM2D_RCONTROL_H
 #define TPM2D_RCONTROL_H
 

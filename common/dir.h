@@ -50,6 +50,6 @@ int
 dir_mkdir_p(const char *path, mode_t mode);
 
 int
-dir_delete_folder(const char* path, const char* dir_name);
+dir_delete_folder(const char *path, const char *dir_name);
 
 #endif /* DIR_H */

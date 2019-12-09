@@ -43,9 +43,9 @@ struct mount_entry {
 	uint64_t default_size; /**< default size for EMPTY images */
 	uint64_t image_size; /**< size overwriting default_size */
 	// TODO: add list of hash, min/max size for EMPTY images, etc.
-	char* sha1;
-	char* sha256;
-	char* mount_data; /**< mount_data to use for mount syscall e.g. "uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:firmware_file:s0" */
+	char *sha1;
+	char *sha256;
+	char *mount_data; /**< mount_data to use for mount syscall e.g. "uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:firmware_file:s0" */
 };
 
 mount_t *
@@ -55,8 +55,8 @@ mount_new(void)
 }
 
 mount_entry_t *
-mount_add_entry(mount_t *mnt, enum mount_type type, const char *image_file,
-		const char *mount_point, const char *fs_type, uint64_t default_size)
+mount_add_entry(mount_t *mnt, enum mount_type type, const char *image_file, const char *mount_point,
+		const char *fs_type, uint64_t default_size)
 {
 	ASSERT(mnt);
 
@@ -203,7 +203,6 @@ mount_entry_set_sha1(mount_entry_t *mntent, char *sha1)
 	mntent->sha1 = mem_strdup(sha1);
 }
 
-
 void
 mount_entry_set_sha256(mount_entry_t *mntent, char *sha256)
 {
@@ -228,8 +227,7 @@ mount_entry_get_mount_data(const mount_entry_t *mntent)
 }
 
 static bool
-match_hash(const char *hash_name, size_t hash_len, const char *img_name,
-		const char *expected_hash, const char *hash)
+match_hash(const char *hash_name, size_t hash_len, const char *img_name, const char *expected_hash, const char *hash)
 {
 	ASSERT(hash_name);
 	ASSERT(img_name);
@@ -239,17 +237,16 @@ match_hash(const char *hash_name, size_t hash_len, const char *img_name,
 		return false;
 	}
 	if (!expected_hash) {
-		ERROR("Checking image %s.img with %s: reference hash value for image is missing",
-				img_name, hash_name);
+		ERROR("Checking image %s.img with %s: reference hash value for image is missing", img_name, hash_name);
 		return false;
 	}
 	size_t len = strlen(expected_hash);
-	if (len != 2*hash_len) {
-		ERROR("Checking image %s.img with %s: invalid hash length %zu/2, expected %zu/2 bytes",
-				img_name, hash_name, len, 2*hash_len);
+	if (len != 2 * hash_len) {
+		ERROR("Checking image %s.img with %s: invalid hash length %zu/2, expected %zu/2 bytes", img_name,
+		      hash_name, len, 2 * hash_len);
 		return false;
 	}
-	if (strncasecmp(expected_hash, hash, len+1)) {
+	if (strncasecmp(expected_hash, hash, len + 1)) {
 		DEBUG("Checking image %s.img with %s: hash mismatch", img_name, hash_name);
 		return false;
 	}
@@ -278,7 +275,8 @@ mount_entry_match_sha256(const mount_entry_t *e, const char *hash)
 }
 
 int
-mount_remount_root_ro(void) {
+mount_remount_root_ro(void)
+{
 	DEBUG("Remounting rootfs readonly");
 	int ret = mount("none", "/", "none", MS_REMOUNT | MS_RDONLY, NULL);
 	if (ret < 0)

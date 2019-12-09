@@ -34,7 +34,8 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 
-int setns(int fd, int nstype)
+int
+setns(int fd, int nstype)
 {
 	return syscall(__NR_setns, fd, nstype);
 }
@@ -42,13 +43,12 @@ int setns(int fd, int nstype)
 static void
 usage(char *pname)
 {
-	ERROR("Usage: %s container-pid cmd [arg...]\n",
-			pname);
+	ERROR("Usage: %s container-pid cmd [arg...]\n", pname);
 	exit(-1);
 }
 
 #define MAX_NS 10
-int fd[MAX_NS] = {0};
+int fd[MAX_NS] = { 0 };
 
 static int
 setns_cb(const char *path, const char *file, void *data)
@@ -101,7 +101,7 @@ main(int argc, char *argv[])
 	}
 
 	for (int j = 0; j < i; j++) {
-		if (setns(fd[j], 0) == -1) {     /* Join that namespace */
+		if (setns(fd[j], 0) == -1) { /* Join that namespace */
 			FATAL_ERRNO("Could not join namespace");
 		}
 	}
@@ -113,8 +113,8 @@ main(int argc, char *argv[])
 		FATAL_ERRNO("fork failed");
 	}
 
-	if (pid != 0) {                 /* Parent */
-		if (waitpid(-1, NULL, 0) == -1)     /* Wait for child */
+	if (pid != 0) { /* Parent */
+		if (waitpid(-1, NULL, 0) == -1) /* Wait for child */
 			FATAL_ERRNO("waitpid failed");
 		exit(0);
 	}
@@ -125,4 +125,3 @@ main(int argc, char *argv[])
 	execvp(argv[2], &argv[2]);
 	ERROR_ERRNO("execvp failed");
 }
-

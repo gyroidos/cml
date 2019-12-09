@@ -91,16 +91,14 @@ int
 fd_make_non_blocking(int fd)
 {
 	int flags = fcntl(fd, F_GETFL, 0);
-	if (-1 == flags)
-	{
+	if (-1 == flags) {
 		WARN_ERRNO("Failed to get flags for fd %d.", fd);
 		return flags;
 	}
 
 	flags |= O_NONBLOCK;
 	int res = fcntl(fd, F_SETFL, flags);
-	if (-1 == res)
-	{
+	if (-1 == res) {
 		WARN_ERRNO("Failed to set flags for socket %d.", fd);
 	}
 

@@ -47,11 +47,11 @@ struct attestation_resp_cb_data {
 static char *
 convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
-	char *hex = mem_alloc0(sizeof(char)*length*2 + 1);
+	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
-	for (int i=0; i < length; ++i) {
+	for (int i = 0; i < length; ++i) {
 		// remember snprintf additionally writs a '0' byte
-		snprintf(hex+i*2, 3, "%.2x", bin[i]);
+		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
 	}
 
 	return hex;
@@ -61,10 +61,10 @@ static bool
 attestation_verify_resp(Tpm2dToRemote *resp, uint8_t *nonce, size_t nonce_len)
 {
 	DEBUG("Got Response from TPM2D");
-	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
-	char * nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
+	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
+	char *nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
 	INFO("Response for Nonce %s, Response size=%zu", nonce_str,
-		protobuf_c_message_get_packed_size((ProtobufCMessage *) resp));
+	     protobuf_c_message_get_packed_size((ProtobufCMessage *)resp));
 	mem_free(nonce_str);
 	//TODO implement verification process
 	return true;
@@ -83,8 +83,7 @@ attestation_response_recv_cb(int fd, unsigned events, event_io_t *io, void *data
 
 	IF_FALSE_RETURN(events & EVENT_IO_READ);
 
-	Tpm2dToRemote *resp = (Tpm2dToRemote *)
-		protobuf_recv_message(fd, &tpm2d_to_remote__descriptor);
+	Tpm2dToRemote *resp = (Tpm2dToRemote *)protobuf_recv_message(fd, &tpm2d_to_remote__descriptor);
 	IF_NULL_GOTO_ERROR(resp, cleanup);
 
 	verified = attestation_verify_resp(resp, resp_cb_data->nonce, resp_cb_data->nonce_len);
@@ -123,15 +122,14 @@ attestation_do_request(const char *host, void (*resp_verified_cb)(bool))
 
 	DEBUG("Sending attestation request to TPM2D on %s:%s", host, TPM2D_SERVICE_PORT);
 
-	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) &msg);
+	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)&msg);
 	IF_TRUE_RETVAL(msg_size < 0, -1);
 
-	char * nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
+	char *nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
 	INFO("Request with Nonce %s, Request size=%zd", nonce_str, msg_size);
 	mem_free(nonce_str);
 
-	struct attestation_resp_cb_data *resp_cb_data =
-			mem_new0(struct attestation_resp_cb_data, 1);
+	struct attestation_resp_cb_data *resp_cb_data = mem_new0(struct attestation_resp_cb_data, 1);
 	resp_cb_data->resp_verified_cb = resp_verified_cb;
 	resp_cb_data->nonce = mem_new0(uint8_t, nonce_len);
 	memcpy(resp_cb_data->nonce, nonce, nonce_len);
@@ -139,8 +137,7 @@ attestation_do_request(const char *host, void (*resp_verified_cb)(bool))
 
 	DEBUG("Register Response handler on sockfd=%d", sock);
 	fd_make_non_blocking(sock);
-	event_io_t *event = event_io_new(sock, EVENT_IO_READ,
-			attestation_response_recv_cb, resp_cb_data);
+	event_io_t *event = event_io_new(sock, EVENT_IO_READ, attestation_response_recv_cb, resp_cb_data);
 	event_add_io(event);
 
 	return 0;

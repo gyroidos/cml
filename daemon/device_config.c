@@ -40,7 +40,6 @@ struct device_config {
 	DeviceConfig *cfg;
 };
 
-
 /******************************************************************************/
 
 device_config_t *
@@ -55,8 +54,7 @@ device_config_new(const char *path)
 		file = mem_strdup(path);
 		DEBUG("Loading device config from \"%s\".", file);
 
-		cfg = (DeviceConfig *)
-			protobuf_message_new_from_textfile(file, &device_config__descriptor);
+		cfg = (DeviceConfig *)protobuf_message_new_from_textfile(file, &device_config__descriptor);
 		if (!cfg) {
 			WARN("Failed loading device config from file \"%s\". Reverting to default values.", file);
 			cfg = mem_new(DeviceConfig, 1);
@@ -79,7 +77,7 @@ void
 device_config_free(device_config_t *config)
 {
 	ASSERT(config);
-	protobuf_free_message((ProtobufCMessage *) config->cfg);
+	protobuf_free_message((ProtobufCMessage *)config->cfg);
 	mem_free(config->file);
 	mem_free(config);
 }

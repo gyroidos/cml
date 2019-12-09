@@ -46,11 +46,11 @@ main(UNUSED int argc, UNUSED char **argv)
 	int ret;
 	if ((ret = container_start(container))) {
 		switch (ret) {
-			case CONTAINER_ERROR:
-			case CONTAINER_ERROR_UEVENT:
-				/* etc. pp. */
-			default:
-				FATAL_ERRNO("Starting a0 failed");
+		case CONTAINER_ERROR:
+		case CONTAINER_ERROR_UEVENT:
+			/* etc. pp. */
+		default:
+			FATAL_ERRNO("Starting a0 failed");
 		}
 	}
 }

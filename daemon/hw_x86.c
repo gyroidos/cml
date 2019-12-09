@@ -145,7 +145,7 @@ hardware_backlight_on()
 	return 0;
 }
 
-list_t*
+list_t *
 hardware_get_active_cgroups_subsystems(void)
 {
 	list_t *subsys_list = NULL;
@@ -161,15 +161,15 @@ hardware_get_active_cgroups_subsystems(void)
 	return subsys_list;
 }
 
-list_t*
-hardware_get_nw_name_list(void) {
-
+list_t *
+hardware_get_nw_name_list(void)
+{
 	list_t *nw_name_list = NULL;
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
 
-list_t*
+list_t *
 hardware_get_nw_mv_name_list(void)
 {
 	return NULL;
@@ -199,28 +199,33 @@ hardware_get_random(unsigned char *buf, size_t len)
 	const char *rnd = "/dev/hw_random";
 	const char *sw = "/dev/random";
 
-	size_t read = file_read(rnd, (char*)buf, len);
+	size_t read = file_read(rnd, (char *)buf, len);
 	if (read == len) {
 		return len;
 	} else {
 		if (!file_exists(sw)) {
-			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!", rnd, sw);
+			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!",
+			      rnd, sw);
 			return -1;
 		}
-		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.", rnd, sw);
-		return file_read(sw, (char*)buf, len);
+		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.",
+		     rnd, sw);
+		return file_read(sw, (char *)buf, len);
 	}
 }
 
 void
-hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len){}
+hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len)
+{
+}
 
 void
-hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len){}
+hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
+{
+}
 
 bool
 hardware_display_power_state(void)
 {
 	return false;
 }
-

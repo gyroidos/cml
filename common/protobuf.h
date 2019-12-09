@@ -120,5 +120,4 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufC
 ssize_t
 protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message);
 
-
 #endif // PROTOBUF_H

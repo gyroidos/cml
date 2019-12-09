@@ -32,19 +32,19 @@
 #define DISPLAY_TIMER_TIMEOUT 50
 
 struct display_sleep {
-	void (* func)(void *);
+	void (*func)(void *);
 	void *data;
 };
 
 struct display_wake {
-	void (* func)(void *);
+	void (*func)(void *);
 	void *data;
 };
 
 struct display_status {
 	display_sleep_t *sleep;
 	display_wake_t *wake;
-	void (* func)(bool, void *);
+	void (*func)(bool, void *);
 	void *data;
 };
 
@@ -103,8 +103,8 @@ display_register_sleep_oneshot_cb(void (*func)(void *), void *data)
 	display_sleep_cb_list = list_append(display_sleep_cb_list, sleep);
 
 	if (!timer_sleep) {
-		timer_sleep = event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER,
-			&display_sleep_cb, NULL);
+		timer_sleep =
+			event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER, &display_sleep_cb, NULL);
 		event_add_timer(timer_sleep);
 	}
 
@@ -160,8 +160,7 @@ display_register_wake_oneshot_cb(void (*func)(void *), void *data)
 	display_wake_cb_list = list_append(display_wake_cb_list, wake);
 
 	if (!timer_wake) {
-		timer_wake = event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER,
-			&display_wake_cb, NULL);
+		timer_wake = event_timer_new(DISPLAY_TIMER_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER, &display_wake_cb, NULL);
 		event_add_timer(timer_wake);
 	}
 

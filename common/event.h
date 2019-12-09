@@ -78,10 +78,10 @@ event_add_timer(event_timer_t *timer);
 void
 event_remove_timer(event_timer_t *timer);
 
-#define EVENT_IO_READ   (1 << 0)
-#define EVENT_IO_WRITE  (1 << 1)
+#define EVENT_IO_READ (1 << 0)
+#define EVENT_IO_WRITE (1 << 1)
 #define EVENT_IO_EXCEPT (1 << 2)
-#define EVENT_IO_PRI    (1 << 3)
+#define EVENT_IO_PRI (1 << 3)
 
 typedef struct event_io event_io_t;
 
@@ -135,7 +135,8 @@ event_reset();
 typedef struct event_inotify event_inotify_t;
 
 event_inotify_t *
-event_inotify_new(const char *path, uint32_t mask, void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data);
+event_inotify_new(const char *path, uint32_t mask,
+		  void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data);
 
 void
 event_inotify_free(event_inotify_t *inotify);
