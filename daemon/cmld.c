@@ -1039,21 +1039,52 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len)
 	return c;
 }
 
+static void
+cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+{
+	ASSERT(container);
+
+	/* skip if the container is not stopped */
+	IF_FALSE_RETURN_TRACE(container_get_state(container) == CONTAINER_STATE_STOPPED);
+
+	/* unregister observer */
+	if (cb)
+		container_unregister_observer(container, cb);
+
+	/* detroy the container */
+	if (container_destroy(container) < 0) {
+		ERROR("Could not destroy container");
+		return;
+	}
+
+	/* cleanup container */
+	cmld_containers_list = list_remove(cmld_containers_list, container);
+	container_free(container);
+}
+
 int
 cmld_container_destroy(container_t *container)
 {
-	int ret;
 	ASSERT(container);
 
 	// don't delete management container c0!
 	container_t *c0 = cmld_containers_get_a0();
 	IF_TRUE_RETVAL(c0 == container, -1);
 
-	ret = container_destroy(container);
-	cmld_containers_list = list_remove(cmld_containers_list, container);
-	container_free(container);
+	if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
+		container_kill(container);
 
-	return ret;
+		/* Register observer to wait for completed container_stop */
+		if (!container_register_observer(container, &cmld_container_destroy_cb, NULL)) {
+			DEBUG("Could not register destroy callback");
+			return -1;
+		}
+	} else {
+		/* Container is already stopped call cb directly */
+		cmld_container_destroy_cb(container, NULL, NULL);
+	}
+
+	return 0;
 }
 
 int

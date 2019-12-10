@@ -806,35 +806,6 @@ container_is_privileged(const container_t *container)
 }
 
 int
-container_destroy(container_t *container)
-{
-	int ret;
-	ASSERT(container);
-
-	INFO("Destroying conatiner %s with uuid=%s", container_get_name(container),
-	     uuid_string(container_get_uuid(container)));
-
-	if (file_is_dir(container_get_images_dir(container))) {
-		/* call to wipe will stop and cleanup container.
-		 * however, wipe only removes data images not configs */
-		if ((ret = container_wipe(container))) {
-			ERROR("Could not wipe container");
-			return ret;
-		}
-		if (rmdir(container_get_images_dir(container)))
-			WARN("Could not delete leftover container dir");
-	}
-	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
-	if (file_exists(file_name_created))
-		ret = unlink(file_name_created);
-	mem_free(file_name_created);
-
-	if ((ret = unlink(container_get_config_filename(container))))
-		ERROR_ERRNO("Can't delete config file!");
-	return ret;
-}
-
-int
 container_suspend(container_t *container)
 {
 	return c_service_send_message(container->service, C_SERVICE_MESSAGE_SUSPEND);
@@ -1703,6 +1674,37 @@ container_wipe(container_t *container)
 		/* Container is already stopped */
 		return container_wipe_finish(container);
 	}
+}
+
+int
+container_destroy(container_t *container)
+{
+	ASSERT(container);
+	int ret = -1;
+
+	INFO("Destroying conatiner %s with uuid=%s", container_get_name(container),
+	     uuid_string(container_get_uuid(container)));
+
+	/* wipe the container */
+	if (file_is_dir(container_get_images_dir(container))) {
+		// wipe_finish only removes data images not configs */
+		if ((ret = container_wipe_finish(container))) {
+			ERROR("Could not wipe container");
+			return ret;
+		}
+		if (rmdir(container_get_images_dir(container)))
+			WARN("Could not delete leftover container dir");
+	}
+
+	/* remove config files */
+	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
+	if (file_exists(file_name_created))
+		ret = unlink(file_name_created);
+	mem_free(file_name_created);
+
+	if ((ret = unlink(container_get_config_filename(container))))
+		ERROR_ERRNO("Can't delete config file!");
+	return ret;
 }
 
 static void
