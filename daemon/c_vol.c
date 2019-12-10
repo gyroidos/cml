@@ -1236,6 +1236,24 @@ error:
 	return -1;
 }
 
+bool
+c_vol_is_encrypted(c_vol_t *vol)
+{
+	size_t i, n;
+
+	ASSERT(vol);
+	ASSERT(vol->container);
+
+	n = mount_get_count(container_get_mount(vol->container));
+	for (i = 0; i < n; i++) {
+		const mount_entry_t *mntent;
+		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		if (mount_entry_is_encrypted(mntent))
+			return true;
+	}
+	return false;
+}
+
 void
 c_vol_cleanup(c_vol_t *vol)
 {

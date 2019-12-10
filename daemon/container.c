@@ -805,6 +805,13 @@ container_is_privileged(const container_t *container)
 	return container->privileged;
 }
 
+bool
+container_is_encrypted(const container_t *container)
+{
+	ASSERT(container);
+	return c_vol_is_encrypted(container->vol);
+}
+
 int
 container_suspend(container_t *container)
 {

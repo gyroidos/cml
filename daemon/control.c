@@ -1009,9 +1009,20 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				INFO("Setting Setup mode for Container!");
 				container_set_setup_mode(container, start_params->setup);
 			}
+			// key is asserted to be the user entered passwd/pin
+			res = cmld_container_start_with_smartcard(control, container, key);
+		} else if (container_is_encrypted(container)) {
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
+						   fd);
+		} else {
+			res = cmld_container_start(container, NULL);
+			if (res < 0) {
+				res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST,
+							   fd);
+			} else {
+				res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
+			}
 		}
-		// key is asserted to be the user entered passwd/pin
-		res = cmld_container_start_with_smartcard(control, container, key);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
