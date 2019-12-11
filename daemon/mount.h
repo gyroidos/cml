@@ -193,6 +193,12 @@ char *
 mount_entry_get_mount_data(const mount_entry_t *mntent);
 
 /**
+ * returns if a mount entry iuses encryption
+ */
+bool
+mount_entry_is_encrypted(const mount_entry_t *mntent);
+
+/**
  * Remounts rootfs read-only
  */
 int
