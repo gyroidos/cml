@@ -242,6 +242,8 @@ control_container_state_to_proto(container_state_t state)
 		return CONTAINER_STATE__SHUTDOWN;
 	case CONTAINER_STATE_SETUP:
 		return CONTAINER_STATE__SETUP;
+	case CONTAINER_STATE_REBOOTING:
+		return CONTAINER_STATE__REBOOTING;
 	default:
 		FATAL("Unhandled value for container_state_t: %d", state);
 	}

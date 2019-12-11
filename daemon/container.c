@@ -1027,7 +1027,7 @@ container_resume(container_t *container)
  * should make sure that the container and all its submodules are in the same
  * state they had immediately after their creation with _new().
  * Return values are not gathered, as the cleanup should just work as the system allows.
- * This function also sets the container's state to stopped.
+ * Remember to set container state correctly after the call to cleanup.
  */
 static void
 container_cleanup(container_t *container)
@@ -1049,15 +1049,12 @@ container_cleanup(container_t *container)
 		event_timer_free(container->stop_timer);
 		container->stop_timer = NULL;
 	}
-
 	if (container->start_timer) {
 		DEBUG("Remove container start timer for %s", container_get_description(container));
 		event_remove_timer(container->start_timer);
 		event_timer_free(container->start_timer);
 		container->start_timer = NULL;
 	}
-
-	container_set_state(container, CONTAINER_STATE_STOPPED);
 	container->time_started = -1;
 }
 
@@ -1079,6 +1076,7 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	int status = 0;
 	while ((pid = waitpid(-(container_pid), &status, WNOHANG))) {
 		if (pid == container_pid) {
+			bool rebooting = false;
 			if (WIFEXITED(status)) {
 				INFO("Container %s terminated (init process exited with status=%d)",
 				     container_get_description(container), WEXITSTATUS(status));
@@ -1086,14 +1084,22 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			} else if (WIFSIGNALED(status)) {
 				INFO("Container %s killed by signal %d",
 				     container_get_description(container), WTERMSIG(status));
+				/* Since Kernel 3.4 reboot inside pid namspaces
+				 * are signaled by SIGHUP (see manpage REBOOT(2)) */
+				if (WTERMSIG(status) == SIGHUP)
+					rebooting = true;
 			} else {
 				continue;
 			}
 			/* remove the sigchld callback for this container from the event loop */
 			event_remove_signal(sig);
 			event_signal_free(sig);
-			/* the cleanup also sets the container state to stopped... */
+			/* cleanup and set states accordingly to notify observers */
 			container_cleanup(container);
+			if (rebooting)
+				container_set_state(container, CONTAINER_STATE_REBOOTING);
+			else
+				container_set_state(container, CONTAINER_STATE_STOPPED);
 		} else if (pid == -1) {
 			if (errno == ECHILD)
 				DEBUG("Process group of container %s terminated completely",
@@ -1501,7 +1507,8 @@ container_start(container_t *container) //, const char *key)
 {
 	ASSERT(container);
 
-	if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
+	if ((container_get_state(container) != CONTAINER_STATE_STOPPED) &&
+	    (container_get_state(container) != CONTAINER_STATE_REBOOTING)) {
 		ERROR("Container %s is not stopped and can therefore not be started",
 		      container_get_description(container));
 		return CONTAINER_ERROR;
@@ -1712,6 +1719,7 @@ error_post_clone:
 
 error_pre_clone:
 	container_cleanup(container);
+	container_set_state(container, CONTAINER_STATE_STOPPED);
 	return ret;
 }
 

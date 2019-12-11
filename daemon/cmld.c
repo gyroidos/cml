@@ -102,6 +102,11 @@ static list_t *cmld_netif_phys_list = NULL;
 
 /******************************************************************************/
 
+static int
+cmld_start_a0(container_t *new_a0);
+
+/******************************************************************************/
+
 container_t *
 cmld_containers_get_a0()
 {
@@ -422,8 +427,9 @@ cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback
 {
 	container_connectivity_t conn = container_get_connectivity(c_root_netns);
 
-	if (container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) {
-		DEBUG("Container %s stopped, unregistering connectivity c_root_netns callback",
+	if ((container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) ||
+	    (container_get_state(c_root_netns) == CONTAINER_STATE_REBOOTING)) {
+		DEBUG("Container %s stopped/rebooting, unregistering connectivity c_root_netns callback",
 		      container_get_description(c_root_netns));
 		container_unregister_observer(c_root_netns, cb);
 	}
@@ -484,6 +490,13 @@ static void
 cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb,
 			     UNUSED void *data)
 {
+	if ((container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) ||
+	    (container_get_state(c_root_netns) == CONTAINER_STATE_REBOOTING)) {
+		DEBUG("Container %s stopped/rebooting, unregistering airplane_mode c_root_netns callback",
+		      container_get_description(c_root_netns));
+		container_unregister_observer(c_root_netns, cb);
+	}
+
 	bool mode = container_get_airplane_mode(c_root_netns);
 
 	/* check if anything has changed and return if not */
@@ -507,8 +520,9 @@ cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callbac
 static void
 cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void *data)
 {
-	if (container_get_state(aX) == CONTAINER_STATE_STOPPED) {
-		DEBUG("Container %s stopped, unregistering airplane_mode aX callback",
+	if ((container_get_state(aX) == CONTAINER_STATE_STOPPED) ||
+	    (container_get_state(aX) == CONTAINER_STATE_REBOOTING)) {
+		DEBUG("Container %s stopped/rebooting, unregistering airplane_mode aX callback",
 		      container_get_description(aX));
 		container_unregister_observer(aX, cb);
 	}
@@ -542,6 +556,20 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 		container_unregister_observer(container, cb);
 	}
 	// TODO think about if this is unregistered correctly in corner cases...
+}
+
+/*
+ * This callback handles internal reboot of container
+ */
+static void
+cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+{
+	if (container_get_state(container) == CONTAINER_STATE_REBOOTING) {
+		INFO("Rebooting container %s", container_get_description(container));
+		if (cmld_container_start(container, NULL))
+			WARN("Reboot of '%s' failed", container_get_description(container));
+		container_unregister_observer(container, cb);
+	}
 }
 
 static void
@@ -585,6 +613,11 @@ cmld_container_register_observers(container_t *container)
 			     container_get_description(container));
 		}
 	}
+	/* register an observer to capture the reboot command */
+	if (!container_register_observer(container, &cmld_reboot_container_cb, NULL)) {
+		WARN("Could not register container reboot observer callback for %s",
+		     container_get_description(container));
+	}
 }
 
 int
@@ -600,7 +633,8 @@ cmld_container_start(container_t *container, const char *key)
 		container_set_key(container, key);
 	}
 
-	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
+	if ((container_get_state(container) == CONTAINER_STATE_STOPPED) ||
+	    (container_get_state(container) == CONTAINER_STATE_REBOOTING)) {
 		/* container is not running => start it */
 		DEBUG("Container %s is not running => start it",
 		      container_get_description(container));
@@ -790,6 +824,20 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 	}
 }
 
+/*
+ * This callback handles internal reboot of a0
+ */
+static void
+cmld_reboot_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
+{
+	if (container_get_state(a0) == CONTAINER_STATE_REBOOTING) {
+		INFO("Rebooting container %s", container_get_description(a0));
+		if (cmld_start_a0(a0))
+			WARN("Reboot of '%s' failed", container_get_description(a0));
+		container_unregister_observer(a0, cb);
+	}
+}
+
 static int
 cmld_init_a0(const char *path, const char *c0os)
 {
@@ -867,6 +915,11 @@ cmld_start_a0(container_t *new_a0)
 	/* register an observer to capture the shutdown command for the special container a0 */
 	if (!container_register_observer(new_a0, &cmld_shutdown_a0_cb, NULL)) {
 		WARN("Could not register observer shutdown callback for a0");
+		return -1;
+	}
+	/* register an observer to capture the reboot command for the special container a0 */
+	if (!container_register_observer(new_a0, &cmld_reboot_a0_cb, NULL)) {
+		WARN("Could not register observer reboot callback for a0");
 		return -1;
 	}
 
