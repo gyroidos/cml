@@ -37,7 +37,6 @@
 #include "mem.h"
 #include "macro.h"
 
-
 /**
   * Sample test structure for the Unit Test
   */
@@ -47,14 +46,14 @@ typedef struct test_strct {
 	double z;
 } test_strct;
 
-
 /**
   * Helper function to test mem_vprintf
   *
   * @param n number of variable arguments
   * @return char-pointer to the vprintf output
   */
-static char *test_vprintf(int n, ...);
+static char *
+test_vprintf(int n, ...);
 
 /**
   * All functions from mem.c are basically tested in this function.
@@ -125,7 +124,8 @@ main(int argc, char **argv)
 	return 0;
 }
 
-static char *test_vprintf(int n, ...)
+static char *
+test_vprintf(int n, ...)
 {
 	va_list vl;
 	va_start(vl, n);

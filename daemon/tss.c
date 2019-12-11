@@ -85,21 +85,22 @@ tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo
 	msg.has_ml_hashalg = true;
 	msg.ml_hashalg = tss_hash_algo_get_len_proto(hashalgo);
 
-	if (protobuf_send_message(tss_sock, (ProtobufCMessage *) &msg) < 0) {
+	if (protobuf_send_message(tss_sock, (ProtobufCMessage *)&msg) < 0) {
 		WARN("Failed to send measurement to tpm2d");
 	}
 
-	TpmToController *resp = (TpmToController *)protobuf_recv_message(tss_sock, &tpm_to_controller__descriptor);
+	TpmToController *resp =
+		(TpmToController *)protobuf_recv_message(tss_sock, &tpm_to_controller__descriptor);
 	if (!resp) {
 		WARN("Failed to receive and decode TpmToController protobuf message!");
 		return;
 	}
 
 	if (resp->code != TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE ||
-			resp->response != TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK) {
+	    resp->response != TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK) {
 		ERROR("tpmd failed to append measurement to ML");
 	} else {
-		INFO("Sucessfully appended measurement to ML: file %s" , filename);
+		INFO("Sucessfully appended measurement to ML: file %s", filename);
 	}
 
 	protobuf_free_message((ProtobufCMessage *)resp);

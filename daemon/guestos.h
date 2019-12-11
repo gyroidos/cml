@@ -141,7 +141,6 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 bool
 guestos_images_are_complete(const guestos_t *os, bool thorough);
 
-
 /**
  * Callback type for guestos_images_check() to report whether all images of a GuestOS are complete.
  */
@@ -163,7 +162,7 @@ guestos_images_check(guestos_t *os, guestos_images_check_complete_cb_t cb, void 
  * have been downloaded completely.
  */
 typedef void (*guestos_images_download_complete_cb_t)(bool complete, unsigned int count,
-		guestos_t *os, void *data);
+						      guestos_t *os, void *data);
 
 /**
  * Check the required image files for the given GuestOS and download the missing/broken images.
@@ -183,7 +182,6 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
  */
 int
 guestos_images_flash(guestos_t *os);
-
 
 /******************************************************************************/
 
@@ -290,11 +288,9 @@ typedef enum guestos_verify_result {
 } guestos_verify_result_t;
 
 void
-guestos_set_verify_result(guestos_t *os,
-		guestos_verify_result_t verify_result);
+guestos_set_verify_result(guestos_t *os, guestos_verify_result_t verify_result);
 
 guestos_verify_result_t
 guestos_get_verify_result(const guestos_t *os);
 
 #endif /* GUESTOS_H */
-

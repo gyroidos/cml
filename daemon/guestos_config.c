@@ -34,7 +34,6 @@
 #include "common/mem.h"
 #include "common/protobuf.h"
 
-
 /******************************************************************************/
 guestos_config_t *
 guestos_config_new_from_file(const char *file)
@@ -42,8 +41,8 @@ guestos_config_new_from_file(const char *file)
 	ASSERT(file);
 	DEBUG("Loading GuestOS config from \"%s\".", file);
 
-	GuestOSConfig *cfg = (GuestOSConfig *)
-		protobuf_message_new_from_textfile(file, &guest_osconfig__descriptor);
+	GuestOSConfig *cfg = (GuestOSConfig *)protobuf_message_new_from_textfile(
+		file, &guest_osconfig__descriptor);
 	if (!cfg) {
 		ERROR("Failed loading GuestOS config from file \"%s\".", file);
 	}
@@ -56,14 +55,13 @@ guestos_config_new_from_buffer(unsigned char *buf, size_t buflen)
 	ASSERT(buf);
 	DEBUG("Loading GuestOS config from string.");
 
-	GuestOSConfig *cfg = (GuestOSConfig *)
-		protobuf_message_new_from_buf(buf, buflen, &guest_osconfig__descriptor);
+	GuestOSConfig *cfg = (GuestOSConfig *)protobuf_message_new_from_buf(
+		buf, buflen, &guest_osconfig__descriptor);
 	if (!cfg) {
 		ERROR("Failed loading GuestOS config from string.");
 	}
 	return cfg;
 }
-
 
 /**
  * Free an operating system data structure. Does not remove the persistent
@@ -74,14 +72,14 @@ void
 guestos_config_free(guestos_config_t *cfg)
 {
 	ASSERT(cfg);
-	protobuf_free_message((ProtobufCMessage *) cfg);
+	protobuf_free_message((ProtobufCMessage *)cfg);
 }
 
 int
 guestos_config_write_to_file(const guestos_config_t *cfg, const char *file)
 {
 	ASSERT(cfg);
-	return protobuf_message_write_to_file(file, (ProtobufCMessage *) cfg);
+	return protobuf_message_write_to_file(file, (ProtobufCMessage *)cfg);
 }
 
 /******************************************************************************/
@@ -149,9 +147,10 @@ guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount
 
 	for (size_t i = 0; i < n_mounts; i++) {
 		GuestOSMount *m = mounts[i];
-		mount_entry_t *e = mount_add_entry(mount,
-				guestos_config_mount_type_from_protobuf(m->mount_type),
-				m->image_file, m->mount_point, m->fs_type, m->def_size);
+		mount_entry_t *e =
+			mount_add_entry(mount,
+					guestos_config_mount_type_from_protobuf(m->mount_type),
+					m->image_file, m->mount_point, m->fs_type, m->def_size);
 		mount_entry_set_size(e, m->image_size);
 		if (m->image_sha1)
 			mount_entry_set_sha1(e, m->image_sha1);
@@ -159,7 +158,6 @@ guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount
 			mount_entry_set_sha256(e, m->image_sha2_256);
 		if (m->mount_data)
 			mount_entry_set_mount_data(e, m->mount_data);
-
 	}
 }
 
@@ -176,7 +174,6 @@ guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
 	ASSERT(cfg);
 	guestos_config_fill_mount_internal(cfg->mounts_setup, cfg->n_mounts_setup, mount);
 }
-
 
 /******************************************************************************/
 
@@ -218,7 +215,7 @@ guestos_config_get_init_argv_new(const guestos_config_t *cfg)
 	init_argv[0] = mem_strdup(cfg->init_path);
 
 	for (size_t i = 0; i < cfg->n_init_param; i++) {
-		init_argv[i+1] = mem_strdup(cfg->init_param[i]);
+		init_argv[i + 1] = mem_strdup(cfg->init_param[i]);
 	}
 	return init_argv;
 }

@@ -42,7 +42,8 @@ typedef struct c_net c_net_t;
  * Creates a new instances of the c_net structure, which should be done by a container
  */
 c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list, uint16_t adb_port);
+c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list,
+	  uint16_t adb_port);
 
 /**
  * Frees the struct
@@ -81,7 +82,7 @@ c_net_cleanup(c_net_t *net);
  * returns NULL if the container has no netns
  */
 char *
-c_net_get_ip_new(c_net_t* net);
+c_net_get_ip_new(c_net_t *net);
 
 /*
  * return a new string with the containers subnet which is
@@ -89,7 +90,7 @@ c_net_get_ip_new(c_net_t* net);
  * returns NULL if the container has no netns
  */
 char *
-c_net_get_subnet_new(c_net_t* net);
+c_net_get_subnet_new(c_net_t *net);
 
 /**
  * This function moves the network interface to the corresponding namespace,
@@ -98,7 +99,6 @@ c_net_get_subnet_new(c_net_t* net);
  */
 int
 c_net_move_ifi(const char *ifi_name, const pid_t pid);
-
 
 /**
  * This function removes the network interface from the corresponding namespace,

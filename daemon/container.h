@@ -81,7 +81,6 @@ typedef struct container_vnet_cfg {
 	bool configure;
 } container_vnet_cfg_t;
 
-
 /**
  * Represents the current container state.
  */
@@ -118,19 +117,18 @@ typedef enum {
 	CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI
 } container_connectivity_t;
 
-
 static inline bool
 container_connectivity_wifi(container_connectivity_t connectivity)
 {
-	return (connectivity == CONTAINER_CONNECTIVITY_WIFI_ONLY
-			|| connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
+	return (connectivity == CONTAINER_CONNECTIVITY_WIFI_ONLY ||
+		connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
 }
 
 static inline bool
 container_connectivity_mobile(container_connectivity_t connectivity)
 {
-	return (connectivity == CONTAINER_CONNECTIVITY_MOBILE_ONLY
-			|| connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
+	return (connectivity == CONTAINER_CONNECTIVITY_MOBILE_ONLY ||
+		connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
 }
 
 static inline bool
@@ -147,30 +145,13 @@ container_connectivity_online(container_connectivity_t connectivity)
  * @return The new container instance.
  */
 container_t *
-container_new_internal(
-	const uuid_t *uuid,
-	const char *name,
-	container_type_t type,
-	bool ns_usr,
-	bool ns_net,
-	bool privileged,
-	const guestos_t *os,
-	const char *config_filename,
-	const char *images_folder,
-	mount_t *mnt,
-	unsigned int ram_limit,
-	uint32_t color,
-	uint16_t adb_port,
-	bool allow_autostart,
-	list_t *feature_enabled,
-	const char *dns_server,
-	list_t *net_ifaces,
-	char **allowed_devices,
-	char **assigned_devices,
-	list_t *vnet_cfg_list,
-	char **init_env,
-	size_t init_env_len
-);
+container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
+		       bool ns_net, bool privileged, const guestos_t *os,
+		       const char *config_filename, const char *images_folder, mount_t *mnt,
+		       unsigned int ram_limit, uint32_t color, uint16_t adb_port,
+		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
+		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
+		       list_t *vnet_cfg_list, char **init_env, size_t init_env_len);
 
 /**
  * Creates a new container container object. There are three different cases
@@ -208,7 +189,7 @@ container_free(container_t *container);
 /**
  * Returns the name of the container.
  */
-const char*
+const char *
 container_get_name(const container_t *container);
 
 /**
@@ -364,7 +345,7 @@ container_resume(container_t *container);
  * Run a given command inside a container
  */
 int
-container_run( container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv);
+container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv);
 
 int
 container_write_exec_input(container_t *container, char *exec_input);
@@ -386,7 +367,7 @@ container_write_exec_input(container_t *container, char *exec_input);
  * the boot is now up to the guest OS.
  */
 int
-container_start(container_t *container);//, const char *key);
+container_start(container_t *container); //, const char *key);
 
 /**
  * Gracefully terminate the execution of a container. Gives the container the
@@ -510,10 +491,8 @@ container_get_type(const container_t *container);
  * state changes.
  */
 container_callback_t *
-container_register_observer(
-		container_t *container,
-		void (*cb)(container_t *, container_callback_t *, void *),
-		void *data);
+container_register_observer(container_t *container,
+			    void (*cb)(container_t *, container_callback_t *, void *), void *data);
 
 /**
  * Unregister observer callback.
@@ -578,19 +557,19 @@ container_get_wifi_user_enabled(container_t *container);
 void
 container_set_imei(container_t *container, char *imei);
 
-char*
+char *
 container_get_imei(container_t *container);
 
 void
 container_set_mac_address(container_t *container, char *mac_address);
 
-char*
+char *
 container_get_mac_address(container_t *container);
 
 void
 container_set_phone_number(container_t *container, char *phone_number);
 
-char*
+char *
 container_get_phone_number(container_t *container);
 
 bool
@@ -599,7 +578,7 @@ container_get_allow_autostart(container_t *container);
 /*
  * Retrive the corresponding GuestOS which is running in this container
  */
-const guestos_t*
+const guestos_t *
 container_get_guestos(const container_t *container);
 
 /*
@@ -650,7 +629,7 @@ container_set_radio_gateway(container_t *container, char *gateway);
 /**
  * Returns the ip address currently set for container.
  */
-const char*
+const char *
 container_get_dns_server(const container_t *container);
 
 bool
@@ -680,9 +659,11 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 int
 container_remove_net_iface(container_t *container, const char *iface, bool persistent);
 
-const char **container_get_dev_allow_list(const container_t *container);
+const char **
+container_get_dev_allow_list(const container_t *container);
 
-const char **container_get_dev_assign_list(const container_t *container);
+const char **
+container_get_dev_assign_list(const container_t *container);
 
 time_t
 container_get_uptime(const container_t *container);
@@ -697,8 +678,8 @@ container_set_setup_mode(container_t *container, bool setup);
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory
  */
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name,
-		       const uint8_t mac[6], bool configure);
+container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
+		       bool configure);
 
 /**
  * Free all memory used by a container_vnet_cfg_t data structure
@@ -722,6 +703,6 @@ container_get_vnet_runtime_cfg_new(container_t *container);
  * reload is necessary.
  */
 int
-container_update_config(container_t * container, uint8_t *buf, size_t buf_len);
+container_update_config(container_t *container, uint8_t *buf, size_t buf_len);
 
 #endif /* CONTAINER_H */

@@ -27,8 +27,8 @@
 #include "tpm2d.h"
 
 int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid,
-		const uint8_t *datahash, size_t datahash_len);
+ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
+			   size_t datahash_len);
 
 /**
  * Return the measurement list as string array and uses the inout parameter

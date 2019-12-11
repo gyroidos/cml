@@ -42,7 +42,7 @@
 
 /* Define some missing netlink defines in BIONIC */
 #ifndef VETH_INFO_PEER
-#define VETH_INFO_PEER          (0x01)
+#define VETH_INFO_PEER (0x01)
 #endif
 
 typedef struct nl_sock nl_sock_t;
@@ -83,7 +83,6 @@ nl_sock_xfrm_new();
  */
 nl_sock_t *
 nl_sock_default_new(int protocol);
-
 
 /**
  * Getter for fd of a nl_sock struct.

@@ -29,11 +29,7 @@
 /*
  * type of supported hashes
  */
-typedef enum {
-	TSS_SHA1 = 0,
-	TSS_SHA256,
-	TSS_SHA384
-} tss_hash_algo_t;
+typedef enum { TSS_SHA1 = 0, TSS_SHA256, TSS_SHA384 } tss_hash_algo_t;
 
 int
 tss_init(void);

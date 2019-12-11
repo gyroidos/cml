@@ -67,7 +67,7 @@ str_new_printf(const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 1, 2)))
 #endif
-;
+	;
 
 /**
  * Assigns the content of the supplied buffer to a string.
@@ -101,7 +101,7 @@ str_assign_printf(str_t *str, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
-;
+	;
 
 /**
  * Appends the content of the supplied buffer to a string.
@@ -135,7 +135,7 @@ str_append_printf(str_t *str, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
-;
+	;
 
 /**
  * Inserts the contents of the supplied buffer to a string at the specified position.

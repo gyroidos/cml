@@ -80,5 +80,4 @@ download_get_url(const download_t *dl);
 const char *
 download_get_file(const download_t *dl);
 
-#endif	// DOWNLOAD_H
-
+#endif // DOWNLOAD_H

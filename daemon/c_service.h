@@ -56,7 +56,9 @@ typedef enum {
  * @param container A pointer to the associated container.
  */
 c_service_t *
-c_service_new(container_t *container /*, configuration for communication with Trustme Service in container */);
+c_service_new(
+	container_t *
+		container /*, configuration for communication with Trustme Service in container */);
 
 /**
  * Resets the service to a defined state. The function may be called multiple

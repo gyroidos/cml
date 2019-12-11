@@ -50,9 +50,11 @@
 #define CONTROL_SOCKET SOCK_PATH(control)
 // clang-format on
 #define RUN_PATH "run"
-#define DEFAULT_KEY "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+#define DEFAULT_KEY                                                                                \
+	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
-static void print_usage(const char *cmd)
+static void
+print_usage(const char *cmd)
 {
 	printf("\n");
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
@@ -89,7 +91,8 @@ static void print_usage(const char *cmd)
 	exit(-1);
 }
 
-static int sock_connect(const char *socket_file)
+static int
+sock_connect(const char *socket_file)
 {
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, socket_file);
 	if (sock < 0)
@@ -97,16 +100,19 @@ static int sock_connect(const char *socket_file)
 	return sock;
 }
 
-static void send_message(int sock, ControllerToDaemon *msg)
+static void
+send_message(int sock, ControllerToDaemon *msg)
 {
-	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) msg);
+	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)msg);
 	if (msg_size < 0)
 		FATAL("error sending protobuf message\n");
 }
 
-static DaemonToController* recv_message(int sock)
+static DaemonToController *
+recv_message(int sock)
 {
-	DaemonToController *resp = (DaemonToController *) protobuf_recv_message(sock, &daemon_to_controller__descriptor);
+	DaemonToController *resp = (DaemonToController *)protobuf_recv_message(
+		sock, &daemon_to_controller__descriptor);
 	if (!resp)
 		FATAL("error receiving message\n");
 	return resp;
@@ -124,7 +130,7 @@ get_container_uuid_new(const char *identifier, int sock)
 	send_message(sock, &msg);
 
 	DaemonToController *resp = recv_message(sock);
-	for (size_t i=0; i < resp->n_container_status; ++i) {
+	for (size_t i = 0; i < resp->n_container_status; ++i) {
 		TRACE("name %s", resp->container_status[i]->name);
 		if (0 == strcmp(resp->container_status[i]->name, identifier)) {
 			uuid = uuid_new(resp->container_status[i]->uuid);
@@ -134,33 +140,25 @@ get_container_uuid_new(const char *identifier, int sock)
 	if (!uuid)
 		FATAL("Container with provided name does not exist!");
 
-	protobuf_free_message((ProtobufCMessage *) resp);
+	protobuf_free_message((ProtobufCMessage *)resp);
 	return uuid;
 }
 
-static const struct option global_options[] = {
-	{"socket",   required_argument, 0, 's'},
-	{"help",     no_argument, 0, 'h'},
-	{0, 0, 0, 0}
-};
+static const struct option global_options[] = { { "socket", required_argument, 0, 's' },
+						{ "help", no_argument, 0, 'h' },
+						{ 0, 0, 0, 0 } };
 
-static const struct option start_options[] = {
-	{"key",         optional_argument, 0, 'k'},
-	{"no-switch",   no_argument, 0, 'n'},
-	{"setup",       no_argument, 0, 's'},
-	{0, 0, 0, 0}
-};
+static const struct option start_options[] = { { "key", optional_argument, 0, 'k' },
+					       { "no-switch", no_argument, 0, 'n' },
+					       { "setup", no_argument, 0, 's' },
+					       { 0, 0, 0, 0 } };
 
-static const struct option assign_iface_options[] = {
-	{"iface",	required_argument, 0, 'i'},
-	{"persistent",	no_argument, 0, 'p'},
-	{0, 0, 0, 0}
-};
+static const struct option assign_iface_options[] = { { "iface", required_argument, 0, 'i' },
+						      { "persistent", no_argument, 0, 'p' },
+						      { 0, 0, 0, 0 } };
 
-static const struct option update_cfg_options[] = {
-	{"file",   required_argument, 0, 'f'},
-	{0, 0, 0, 0}
-};
+static const struct option update_cfg_options[] = { { "file", required_argument, 0, 'f' },
+						    { 0, 0, 0, 0 } };
 
 static char *
 get_password_new(const char *prompt)
@@ -183,14 +181,15 @@ get_password_new(const char *prompt)
 	if (fgets(buf, 128, stdin) == NULL)
 		buf[0] = '\0';
 	else
-		buf[strlen(buf)-1] = '\0';
+		buf[strlen(buf) - 1] = '\0';
 
 	// restore terminal config
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
 	return mem_strdup(buf);
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	logf_register(&logf_test_write, stderr);
 
@@ -202,8 +201,8 @@ int main(int argc, char *argv[])
 	struct termios termios_before;
 	tcgetattr(STDIN_FILENO, &termios_before);
 
-	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, "+s:h",
-					global_options, &option_index)); ) {
+	for (int c, option_index = 0;
+	     - 1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			socket_file = optarg;
@@ -247,36 +246,36 @@ int main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_guestos_config")) {
-		if (optind+2 >= argc)
+		if (optind + 2 >= argc)
 			print_usage(argv[0]);
 
-		const char* cfgfile = argv[optind++];
+		const char *cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
 		if (cfglen < 0)
 			FATAL("Error accessing config file %s.", cfgfile);
 
-		const char* sigfile = argv[optind++];
+		const char *sigfile = argv[optind++];
 		off_t siglen = file_size(sigfile);
 		if (siglen < 0)
 			FATAL("Error accessing signature file %s.", sigfile);
 
-		const char* certfile = argv[optind++];
+		const char *certfile = argv[optind++];
 		off_t certlen = file_size(certfile);
 		if (certlen < 0)
 			FATAL("Error accessing certificate file %s.", certfile);
 
 		unsigned char *cfg = mem_alloc(cfglen);
-		if (file_read(cfgfile, (char*)cfg, cfglen) < 0)
+		if (file_read(cfgfile, (char *)cfg, cfglen) < 0)
 			FATAL("Error reading %s. Aborting.", cfgfile);
 		unsigned char *sig = mem_alloc(siglen);
-		if (file_read(sigfile, (char*)sig, siglen) < 0)
+		if (file_read(sigfile, (char *)sig, siglen) < 0)
 			FATAL("Error reading %s. Aborting.", sigfile);
 		unsigned char *cert = mem_alloc(certlen);
-		if (file_read(certfile, (char*)cert, certlen) < 0)
+		if (file_read(certfile, (char *)cert, certlen) < 0)
 			FATAL("Error reading %s. Aborting.", certfile);
 
-		INFO("Pushing cfg %s (len %zu), sig %s (len %zu), and cert %s (len %zu).",
-				cfgfile, (size_t)cfglen, sigfile, (size_t)siglen, certfile, (size_t)certlen);
+		INFO("Pushing cfg %s (len %zu), sig %s (len %zu), and cert %s (len %zu).", cfgfile,
+		     (size_t)cfglen, sigfile, (size_t)siglen, certfile, (size_t)certlen);
 
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG;
 		msg.has_guestos_config_file = true;
@@ -292,7 +291,7 @@ int main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "remove_guestos")) {
 		// need exactly one more argument (container config file)
-		if (optind != argc-1)
+		if (optind != argc - 1)
 			print_usage(argv[0]);
 
 		char *os_name = argv[optind++];
@@ -304,7 +303,7 @@ int main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "ca_register")) {
 		// need exactly one more argument (container config file)
-		if (optind != argc-1)
+		if (optind != argc - 1)
 			print_usage(argv[0]);
 
 		const char *ca_cert_file = argv[optind++];
@@ -312,7 +311,7 @@ int main(int argc, char *argv[])
 		if (ca_cert_len < 0)
 			FATAL("Error accessing certificate file %s.", ca_cert_file);
 		uint8_t *ca_cert = mem_alloc(ca_cert_len);
-		if (file_read(ca_cert_file, (char*)ca_cert, ca_cert_len) < 0)
+		if (file_read(ca_cert_file, (char *)ca_cert, ca_cert_len) < 0)
 			FATAL("Error reading %s.", ca_cert_file);
 
 		INFO("Registering new CA by cert %s (len %zu).", ca_cert_file, (size_t)ca_cert_len);
@@ -325,7 +324,7 @@ int main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "pull_csr")) {
 		// need exactly one more argument (certificate file)
-		if (optind != argc-1)
+		if (optind != argc - 1)
 			print_usage(argv[0]);
 
 		has_response = true;
@@ -335,7 +334,7 @@ int main(int argc, char *argv[])
 	if (!strcasecmp(command, "push_cert")) {
 		has_response = true;
 		// need exactly one more argument (certificate file)
-		if (optind != argc-1)
+		if (optind != argc - 1)
 			print_usage(argv[0]);
 
 		const char *dev_cert_file = argv[optind++];
@@ -343,11 +342,11 @@ int main(int argc, char *argv[])
 		if (dev_cert_len < 0)
 			FATAL("Error accessing certificate file %s.", dev_cert_file);
 		uint8_t *dev_cert = mem_alloc(dev_cert_len);
-		if (file_read(dev_cert_file, (char*)dev_cert, dev_cert_len) < 0)
+		if (file_read(dev_cert_file, (char *)dev_cert, dev_cert_len) < 0)
 			FATAL("Error reading %s.", dev_cert_file);
 
-		INFO("Pushing new device certifcate from file %s (len %zu).",
-					dev_cert_file, (size_t)dev_cert_len);
+		INFO("Pushing new device certifcate from file %s (len %zu).", dev_cert_file,
+		     (size_t)dev_cert_len);
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT;
 		msg.has_device_cert = true;
 		msg.device_cert.len = dev_cert_len;
@@ -355,7 +354,7 @@ int main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "change_pin")) {
-		char* newpin_verify = NULL;
+		char *newpin_verify = NULL;
 		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CHANGE_DEVICE_PIN;
 		msg.device_pin = get_password_new("Current Password: ");
@@ -371,16 +370,16 @@ int main(int argc, char *argv[])
 	if (!strcasecmp(command, "create")) {
 		has_response = true;
 		// need exactly one more argument (container config file)
-		if (optind != argc-1)
+		if (optind != argc - 1)
 			print_usage(argv[0]);
 
-		const char* cfgfile = argv[optind++];
+		const char *cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
 		if (cfglen < 0)
 			FATAL("Error accessing container config file %s.", cfgfile);
 
 		unsigned char *cfg = mem_alloc(cfglen);
-		if (file_read(cfgfile, (char*)cfg, cfglen) < 0)
+		if (file_read(cfgfile, (char *)cfg, cfglen) < 0)
 			FATAL("Error reading %s. Aborting.", cfgfile);
 
 		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
@@ -404,22 +403,23 @@ int main(int argc, char *argv[])
 		char **start_argv = &argv[optind];
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
-		for (int c, option_index = 0; -1 != (c = getopt_long(start_argc, start_argv,
-						"k::s", start_options, &option_index)); ) {
+		for (int c, option_index = 0;
+		     - 1 != (c = getopt_long(start_argc, start_argv, "k::s", start_options,
+					     &option_index));) {
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg ? optarg : DEFAULT_KEY;
 				break;
 			case 's':
-                                container_start_params.has_setup = true;
-                                container_start_params.setup = true;
+				container_start_params.has_setup = true;
+				container_start_params.setup = true;
 				break;
 			default:
 				print_usage(argv[0]);
 				ASSERT(false); // never reached
 			}
 		}
-		optind += argc - start_argc;	// adjust optind to be used with argv
+		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
 	} else if (!strcasecmp(command, "freeze")) {
@@ -441,24 +441,25 @@ int main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 		has_response = true;
 	} else if (!strcasecmp(command, "update_config")) {
-		const char* cfgfile = NULL;
+		const char *cfgfile = NULL;
 		has_response = true;
-                optind--;
-                char **update_argv = &argv[optind];
-                int update_argc = argc - optind;
-                optind = 0; // reset optind to scan command-specific options
-                for (int c, option_index = 0; -1 != (c = getopt_long(update_argc, update_argv,
-                                                "f:", update_cfg_options, &option_index)); ) {
-                        switch (c) {
-                        case 'f':
+		optind--;
+		char **update_argv = &argv[optind];
+		int update_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     - 1 != (c = getopt_long(update_argc, update_argv, "f:", update_cfg_options,
+					     &option_index));) {
+			switch (c) {
+			case 'f':
 				cfgfile = optarg ? optarg : NULL;
-                                break;
-                        default:
-                                print_usage(argv[0]);
-                                ASSERT(false); // never reached
-                        }
-                }
-                optind += argc - update_argc;    // adjust optind to be used with argv
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
+		optind += argc - update_argc; // adjust optind to be used with argv
 
 		//const char* cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
@@ -466,7 +467,7 @@ int main(int argc, char *argv[])
 			FATAL("Error accessing container config file %s.", cfgfile);
 
 		unsigned char *cfg = mem_alloc(cfglen);
-		if (file_read(cfgfile, (char*)cfg, cfglen) < 0)
+		if (file_read(cfgfile, (char *)cfg, cfglen) < 0)
 			FATAL("Error reading %s. Aborting.", cfgfile);
 
 		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
@@ -476,41 +477,42 @@ int main(int argc, char *argv[])
 		msg.container_config_file.len = cfglen;
 		msg.container_config_file.data = cfg;
 	} else if (!strcasecmp(command, "ifaces")) {
-                msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
-                has_response = true;
-	} else if (!strcasecmp(command, "assign_iface") || !strcasecmp(command, "unassign_iface") ) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
+		has_response = true;
+	} else if (!strcasecmp(command, "assign_iface") || !strcasecmp(command, "unassign_iface")) {
 		AssignInterfaceParams assign_iface_params = ASSIGN_INTERFACE_PARAMS__INIT;
 		msg.assign_iface_params = &assign_iface_params;
 
-                optind--;
-                char **start_argv = &argv[optind];
-                int start_argc = argc - optind;
-                optind = 0; // reset optind to scan command-specific options
-                for (int c, option_index = 0; -1 != (c = getopt_long(start_argc, start_argv,
-                                                "i::p", assign_iface_options, &option_index)); ) {
-                        switch (c) {
-                        case 'i':
-                                assign_iface_params.iface_name = optarg;
-                                break;
-                        case 'p':
-                                assign_iface_params.has_persistent = true;
-                                assign_iface_params.persistent = true;
-                                break;
-                        default:
-                                print_usage(argv[0]);
-                                ASSERT(false); // never reached
-                        }
-                }
-                optind += argc - start_argc;    // adjust optind to be used with argv
+		optind--;
+		char **start_argv = &argv[optind];
+		int start_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     - 1 != (c = getopt_long(start_argc, start_argv, "i::p", assign_iface_options,
+					     &option_index));) {
+			switch (c) {
+			case 'i':
+				assign_iface_params.iface_name = optarg;
+				break;
+			case 'p':
+				assign_iface_params.has_persistent = true;
+				assign_iface_params.persistent = true;
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
+		optind += argc - start_argc; // adjust optind to be used with argv
 
 		if (!strcasecmp(command, "assign_iface")) {
-	                msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE;
-		} else if ( !strcasecmp(command, "unassign_iface") ){
-                        msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE;
+			msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE;
+		} else if (!strcasecmp(command, "unassign_iface")) {
+			msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE;
 		} else
 			ASSERT(false); // should never be reached
 	} else if (!strcasecmp(command, "run")) {
-		if (optind > argc-2)
+		if (optind > argc - 2)
 			print_usage(argv[0]);
 
 		has_response = true;
@@ -528,7 +530,7 @@ int main(int argc, char *argv[])
 			msg.exec_pty = 1;
 		}
 
-		if (optind > argc-2)
+		if (optind > argc - 2)
 			print_usage(argv[0]);
 
 		msg.exec_command = argv[optind];
@@ -539,7 +541,7 @@ int main(int argc, char *argv[])
 
 			while (optind < argc - 1) {
 				TRACE("[CLIENT] Parsing command arguments at index %d, optind: %d: %s",
-					argcount,optind, argv[optind]);
+				      argcount, optind, argv[optind]);
 				msg.exec_args[argcount] = mem_strdup(argv[optind]);
 
 				optind++;
@@ -571,18 +573,18 @@ send_message:
 	if (!strcasecmp(command, "run")) {
 		TRACE("[CLIENT] Processing response for run command");
 
-		if(msg.exec_pty) {
+		if (msg.exec_pty) {
 			TRACE("[CLIENT] Setting termios for PTY");
 			struct termios termios_run = termios_before;
-			termios_run.c_cflag &= ~(ICRNL | IXON | IXOFF );
+			termios_run.c_cflag &= ~(ICRNL | IXON | IXOFF);
 			termios_run.c_oflag &= ~(OPOST);
 			termios_run.c_lflag &= ~(ISIG | ICANON | ECHO | ECHOCTL);
 			tcsetattr(STDIN_FILENO, TCSANOW, &termios_run);
 		}
 
 		//free exec arguments
-		TRACE("[CLIENT] Freeing %zu args at %p", msg.n_exec_args, (void*) msg.exec_args);
-		mem_free_array((void *) msg.exec_args, msg.n_exec_args);
+		TRACE("[CLIENT] Freeing %zu args at %p", msg.n_exec_args, (void *)msg.exec_args);
+		mem_free_array((void *)msg.exec_args, msg.n_exec_args);
 		TRACE("[CLIENT] after free ");
 
 		int pid = fork();
@@ -600,20 +602,20 @@ send_message:
 				TRACE("[CLIENT] Trying to read input for exec'ed process");
 
 				if ((count = read(STDIN_FILENO, buf, 127)) > 0) {
-
 					buf[count] = 0;
 
 					TRACE("[CLIENT] Got input for exec'ed process: %s", buf);
 
 					ControllerToDaemon inputmsg = CONTROLLER_TO_DAEMON__INIT;
-					inputmsg.container_uuids = mem_new(char*, 1);
+					inputmsg.container_uuids = mem_new(char *, 1);
 					inputmsg.container_uuids[0] = (char *)uuid_string(uuid);
 					inputmsg.n_container_uuids = 1;
 					inputmsg.command =
 						CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
 					inputmsg.exec_input = buf;
 
-					TRACE("[CLIENT] Sending input for exec'ed process in container %s", argv[optind]);
+					TRACE("[CLIENT] Sending input for exec'ed process in container %s",
+					      argv[optind]);
 
 					send_message(sock, &inputmsg);
 					mem_free(inputmsg.container_uuids);
@@ -621,7 +623,8 @@ send_message:
 				}
 			}
 		} else {
-			TRACE("[CLIENT] Exec'ed process outputreceiving  child forked, PID: %i", getpid());
+			TRACE("[CLIENT] Exec'ed process outputreceiving  child forked, PID: %i",
+			      getpid());
 
 			while (1) {
 				TRACE("[CLIENT] Waiting for command output message from cmld");
@@ -631,12 +634,14 @@ send_message:
 
 				size_t written = 0, current = 0;
 				if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_OUTPUT) {
-					TRACE("[CLIENT] Message length; %zu\n", resp->exec_output.len);
+					TRACE("[CLIENT] Message length; %zu\n",
+					      resp->exec_output.len);
 					while (written < resp->exec_output.len) {
 						TRACE("[CLIENT] Writing exec output to stdout");
-						if ((current = write(STDOUT_FILENO,
-								resp->exec_output.data + written,
-								resp->exec_output.len - written))) {
+						if ((current = write(
+							     STDOUT_FILENO,
+							     resp->exec_output.data + written,
+							     resp->exec_output.len - written))) {
 							written += current;
 						}
 						fflush(stdout);
@@ -670,7 +675,7 @@ send_message:
 			if (!resp->has_device_csr) {
 				ERROR("DEVICE_CSR_ERROR: Device not in Provisioning mode!");
 			} else if (-1 == file_write(dev_csr_file, (char *)resp->device_csr.data,
-						resp->device_csr.len)) {
+						    resp->device_csr.len)) {
 				ERROR("writing device csr to %s", dev_csr_file);
 			} else {
 				INFO("device csr written to %s", dev_csr_file);
@@ -678,15 +683,15 @@ send_message:
 		} break;
 		default:
 			// TODO for now just dump the response in text format
-			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
+			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 		}
-		protobuf_free_message((ProtobufCMessage *) resp);
+		protobuf_free_message((ProtobufCMessage *)resp);
 	}
 
 exit:
 	close(sock);
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
-	for (size_t i=0; i < msg.n_container_uuids; ++i)
+	for (size_t i = 0; i < msg.n_container_uuids; ++i)
 		mem_free(msg.container_uuids[i]);
 	mem_free(msg.container_uuids);
 	if (uuid)

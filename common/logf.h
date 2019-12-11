@@ -58,7 +58,7 @@
 #define LOGF_H
 
 typedef enum {
-	LOGF_PRIO_TRACE=1,
+	LOGF_PRIO_TRACE = 1,
 	LOGF_PRIO_DEBUG,
 	LOGF_PRIO_INFO,
 	LOGF_PRIO_WARN,
@@ -77,7 +77,7 @@ logf_message(logf_prio_t prio, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
-;
+	;
 
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
@@ -87,7 +87,7 @@ logf_message_errno(logf_prio_t prio, const char *fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 2, 3)))
 #endif
-;
+	;
 
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
@@ -97,7 +97,7 @@ logf_message_file(logf_prio_t prio, const char *file, int line, const char *fmt,
 #if defined(__GNUC__)
 	__attribute__((format(printf, 4, 5)))
 #endif
-;
+	;
 
 /**
  * This function is only implicitly used by the logging macros defined in macro.h
@@ -107,7 +107,7 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 #if defined(__GNUC__)
 	__attribute__((format(printf, 4, 5)))
 #endif
-;
+	;
 
 #ifndef DEBUG_BUILD
 // RELEASE BUILD: log INFO level and higher, include NEITHER file name NOR line number
@@ -115,13 +115,15 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 #define LOGF_LOG_MIN_PRIO LOGF_PRIO_INFO
 #endif
 
-#define logf_message_guard(level, ...) \
-	do { if (level >= LOGF_LOG_MIN_PRIO) \
-		logf_message(level, __VA_ARGS__); \
+#define logf_message_guard(level, ...)                                                             \
+	do {                                                                                       \
+		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
+			logf_message(level, __VA_ARGS__);                                          \
 	} while (0)
-#define logf_message_errno_guard(level, ...) \
-	do { if (level >= LOGF_LOG_MIN_PRIO) \
-		logf_message_errno(level, __VA_ARGS__); \
+#define logf_message_errno_guard(level, ...)                                                       \
+	do {                                                                                       \
+		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
+			logf_message_errno(level, __VA_ARGS__);                                    \
 	} while (0)
 
 #else /* DEBUG_BUILD */
@@ -135,17 +137,18 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 #define LOGF_LOG_MIN_PRIO LOGF_PRIO_DEBUG
 #endif
 
-#define logf_message_guard(level, ...) \
-	do { if (level >= LOGF_LOG_MIN_PRIO) \
-		logf_message_file(level, __FILE__, __LINE__, __VA_ARGS__); \
+#define logf_message_guard(level, ...)                                                             \
+	do {                                                                                       \
+		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
+			logf_message_file(level, __FILE__, __LINE__, __VA_ARGS__);                 \
 	} while (0)
-#define logf_message_errno_guard(level, ...) \
-	do { if (level >= LOGF_LOG_MIN_PRIO) \
-		logf_message_file_errno(level, __FILE__, __LINE__, __VA_ARGS__); \
+#define logf_message_errno_guard(level, ...)                                                       \
+	do {                                                                                       \
+		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
+			logf_message_file_errno(level, __FILE__, __LINE__, __VA_ARGS__);           \
 	} while (0)
 
 #endif /* DEBUG_BUILD */
-
 
 #define logf_fatal(...) logf_message_guard(LOGF_PRIO_FATAL, __VA_ARGS__)
 #define logf_fatal_errno(...) logf_message_errno_guard(LOGF_PRIO_FATAL, __VA_ARGS__)
@@ -164,8 +167,6 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 
 #define logf_trace(...) logf_message_guard(LOGF_PRIO_TRACE, __VA_ARGS__)
 #define logf_trace_errno(...) logf_message_errno_guard(LOGF_PRIO_TRACE, __VA_ARGS__)
-
-
 
 /**
  * Logs to all registered log writers (logf_*_write).

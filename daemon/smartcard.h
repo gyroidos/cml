@@ -36,8 +36,8 @@ smartcard_t *
 smartcard_new(const char *path);
 
 int
-smartcard_container_start_handler(smartcard_t* smartcard, control_t *control,
-		container_t *container, const char *passwd);
+smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
+				  container_t *container, const char *passwd);
 
 /**
  * Change the passphrase/pin of the associated device token smartcard
@@ -49,8 +49,8 @@ smartcard_container_start_handler(smartcard_t* smartcard, control_t *control,
  * return -1 on message transmission failure, 0 if message was sent to SCD
  */
 int
-smartcard_change_pin(smartcard_t* smartcard, control_t* control,
-				const char *passwd, const char *newpasswd);
+smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd,
+		     const char *newpasswd);
 
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...
@@ -58,17 +58,13 @@ smartcard_change_pin(smartcard_t* smartcard, control_t* control,
 /**
  * Choice of supported hash algorithms.
  */
-typedef enum smartcard_crypto_hashalgo {
-	SHA1,
-	SHA256,
-	SHA512
-} smartcard_crypto_hashalgo_t;
+typedef enum smartcard_crypto_hashalgo { SHA1, SHA256, SHA512 } smartcard_crypto_hashalgo_t;
 
 /**
  * Callback function for receiving the result of a hash operation.
  */
 typedef void (*smartcard_crypto_hash_callback_t)(const char *hash_string, const char *hash_file,
-		smartcard_crypto_hashalgo_t hash_algo, void *data);
+						 smartcard_crypto_hashalgo_t hash_algo, void *data);
 
 /**
  * Requests the scd to hash the given file and report the hash to the given callback.
@@ -81,7 +77,7 @@ typedef void (*smartcard_crypto_hash_callback_t)(const char *hash_string, const 
  */
 int
 smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo,
-		smartcard_crypto_hash_callback_t cb, void *data);
+			   smartcard_crypto_hash_callback_t cb, void *data);
 
 /**
  * Requests the scd to hash the given file, wait for the result and directly return it.
@@ -92,7 +88,6 @@ smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalg
  */
 char *
 smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo);
-
 
 /**
  * Result of a signature verification.
@@ -109,8 +104,10 @@ typedef enum smartcard_crypto_verify_result {
  * Callback function for receiving the result of a signature verification.
  */
 typedef void (*smartcard_crypto_verify_callback_t)(smartcard_crypto_verify_result_t verify_result,
-		const char *data_file, const char *sig_file, const char *cert_file,
-		smartcard_crypto_hashalgo_t hash_algo, void *data);
+						   const char *data_file, const char *sig_file,
+						   const char *cert_file,
+						   smartcard_crypto_hashalgo_t hash_algo,
+						   void *data);
 
 /**
  * Requests the scd to verify the signature on the given datafile using the given certificate
@@ -126,7 +123,8 @@ typedef void (*smartcard_crypto_verify_callback_t)(smartcard_crypto_verify_resul
  */
 int
 smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const char *certfile,
-		smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_verify_callback_t cb, void *data);
+			     smartcard_crypto_hashalgo_t hashalgo,
+			     smartcard_crypto_verify_callback_t cb, void *data);
 
 /**
  * Requests the scd to verify the signature on the given datafile using the given certificate,
@@ -140,7 +138,7 @@ smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const ch
  */
 smartcard_crypto_verify_result_t
 smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, const char *certfile,
-		smartcard_crypto_hashalgo_t hashalgo);
+				   smartcard_crypto_hashalgo_t hashalgo);
 
 /**
  * Pulls the device CSR from the tokens directory,
@@ -164,7 +162,6 @@ smartcard_pull_csr_new(size_t *csr_len);
  * @param cert_len the size of the cert
  */
 void
-smartcard_push_cert(smartcard_t* smartcard, control_t *control, uint8_t *cert, size_t cert_len);
+smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len);
 
 #endif /* SMARTCARD_H */
-

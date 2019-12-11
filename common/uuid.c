@@ -55,12 +55,13 @@ uuid_fill_from_string(uuid_t *uuid, const char *string)
 {
 	TRACE("Trying to fill UUID from string: %s", string);
 
-	if (strlen(string)!=36) {
+	if (strlen(string) != 36) {
 		goto error;
 	}
 
-	int ret = sscanf(string, "%" SCNx32 "-%" SCNx16 "-%" SCNx16 "-%" SCNx16 "-%" SCNx64, &uuid->time_low,
-	                 &uuid->time_mid, &uuid->time_hi_and_version, &uuid->clock_seq, &uuid->node);
+	int ret = sscanf(string, "%" SCNx32 "-%" SCNx16 "-%" SCNx16 "-%" SCNx16 "-%" SCNx64,
+			 &uuid->time_low, &uuid->time_mid, &uuid->time_hi_and_version,
+			 &uuid->clock_seq, &uuid->node);
 
 	TRACE("Parsed %d values from string", ret);
 
@@ -75,7 +76,8 @@ error:
 	return -1;
 }
 
-uuid_t *uuid_new(char const *uuid)
+uuid_t *
+uuid_new(char const *uuid)
 {
 	uuid_t *u = mem_new0(uuid_t, 1);
 	u->string = mem_new0(char, 37);
@@ -92,9 +94,10 @@ uuid_t *uuid_new(char const *uuid)
 		/* Make sure the random UUID has the correct format */
 		u->time_hi_and_version &= 0x0fff; // Clear version bits
 		u->time_hi_and_version |= 0x4000; // Set to version 4 ((pseudo)random UUID)
-		u->clock_seq &= 0x3fff; // Clear reserved bits
-		u->clock_seq |= 0x8000; // Set reserved bits to 10 indicating UUID conforming to RFC 4122
-#else /* LINUX */
+		u->clock_seq &= 0x3fff;		  // Clear reserved bits
+		u->clock_seq |=
+			0x8000; // Set reserved bits to 10 indicating UUID conforming to RFC 4122
+#else				/* LINUX */
 		// get a uuid string from /proc/kernel/random/uuid
 		FILE *f = fopen("/proc/sys/kernel/random/uuid", "r");
 		if (!f) {
@@ -122,14 +125,15 @@ uuid_t *uuid_new(char const *uuid)
 	}
 
 	/* generate the UUID string from the filled structure */
-	snprintf(u->string, 37, "%08" PRIx32 "-%04" PRIx16 "-%04" PRIx16 "-%04" PRIx16 "-%012" PRIx64,
-	         u->time_low, u->time_mid, u->time_hi_and_version, u->clock_seq, u->node);
+	snprintf(u->string, 37,
+		 "%08" PRIx32 "-%04" PRIx16 "-%04" PRIx16 "-%04" PRIx16 "-%012" PRIx64, u->time_low,
+		 u->time_mid, u->time_hi_and_version, u->clock_seq, u->node);
 
 	/* final check if the input string and the generated string match */
 	if (uuid) {
 		if (strncasecmp(uuid, u->string, 37)) {
-			WARN("%s and %s are not equal! Final check for string equality failed, not generating an UUID", uuid,
-			     u->string);
+			WARN("%s and %s are not equal! Final check for string equality failed, not generating an UUID",
+			     uuid, u->string);
 			goto error;
 		}
 	}
@@ -141,22 +145,21 @@ error:
 	return NULL;
 }
 
-
-bool uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2)
+bool
+uuid_equals(const uuid_t *uuid1, const uuid_t *uuid2)
 {
 	IF_NULL_RETVAL(uuid1, false);
 	IF_NULL_RETVAL(uuid2, false);
 
-	if (uuid1->time_low == uuid2->time_low &&
-	    uuid1->time_mid == uuid2->time_mid &&
+	if (uuid1->time_low == uuid2->time_low && uuid1->time_mid == uuid2->time_mid &&
 	    uuid1->time_hi_and_version == uuid2->time_hi_and_version &&
-	    uuid1->clock_seq == uuid2->clock_seq &&
-	    uuid1->node == uuid2->node)
+	    uuid1->clock_seq == uuid2->clock_seq && uuid1->node == uuid2->node)
 		return true;
 	return false;
 }
 
-void uuid_free(uuid_t *uuid)
+void
+uuid_free(uuid_t *uuid)
 {
 	IF_NULL_RETURN(uuid);
 
@@ -170,4 +173,3 @@ uuid_string(const uuid_t *uuid)
 	IF_NULL_RETVAL(uuid, NULL);
 	return uuid->string;
 }
-

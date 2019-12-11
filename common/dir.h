@@ -44,12 +44,13 @@
  * @returns -1 on error and the number of callbacks which returned a value > 0 on success.
  */
 int
-dir_foreach(const char *path, int (*func)(const char *path, const char *file, void *data), void *data);
+dir_foreach(const char *path, int (*func)(const char *path, const char *file, void *data),
+	    void *data);
 
 int
 dir_mkdir_p(const char *path, mode_t mode);
 
 int
-dir_delete_folder(const char* path, const char* dir_name);
+dir_delete_folder(const char *path, const char *dir_name);
 
 #endif /* DIR_H */

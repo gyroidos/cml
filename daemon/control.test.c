@@ -39,12 +39,12 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-
 /**
  * Reads a feedback string from the given file descriptor and compares it
  * with the expected result.
  */
-bool check_feedback_str(int fd, const char *expected_format, ...)
+bool
+check_feedback_str(int fd, const char *expected_format, ...)
 {
 	char expected_buf[4096];
 	va_list argptr;
@@ -70,11 +70,12 @@ bool check_feedback_str(int fd, const char *expected_format, ...)
  * @param sock_path path of the socket file to bind the socket to
  * @return the pid of the child process
  */
-static pid_t fork_child(const char *sock_path)
+static pid_t
+fork_child(const char *sock_path)
 {
 	static int sync_pipe[2];
 	int res = pipe(sync_pipe);
-	ASSERT(res==0);
+	ASSERT(res == 0);
 
 	pid_t pid = fork();
 
@@ -115,7 +116,8 @@ static pid_t fork_child(const char *sock_path)
  * Injects the given ControllerToDaemon message to the handle_control_message()
  * function in the control module (static test of control module logic).
  */
-void inject_message_static(ControllerToDaemon *msg, void *data)
+void
+inject_message_static(ControllerToDaemon *msg, void *data)
 {
 	int csock_write_fd = (int)data;
 	control_handle_message(msg, csock_write_fd);
@@ -126,7 +128,8 @@ void inject_message_static(ControllerToDaemon *msg, void *data)
  * connected to the control module (integration test of control module including
  * event loop).
  */
-void inject_message_sock(ControllerToDaemon *msg, void *data)
+void
+inject_message_sock(ControllerToDaemon *msg, void *data)
 {
 	int csock_fd = (int)data;
 	protobuf_send_message(csock_fd, (ProtobufCMessage *)msg);
@@ -146,9 +149,9 @@ void inject_message_sock(ControllerToDaemon *msg, void *data)
  * @param cmld_fd   file descriptor through which results are returned from the cmld stub
  * @param expected_results  array with expected result strings (NULL-terminated)
  */
-bool test_handle_message(ControllerToDaemon *msg,
-                         void (*inject)(ControllerToDaemon *msg, void *data), void *data,
-                         int cmld_fd, const char **expected_results)
+bool
+test_handle_message(ControllerToDaemon *msg, void (*inject)(ControllerToDaemon *msg, void *data),
+		    void *data, int cmld_fd, const char **expected_results)
 {
 	int bytes_available = 0;
 	// make sure there is no unhandled feedback (from previous test case)
@@ -161,7 +164,7 @@ bool test_handle_message(ControllerToDaemon *msg,
 	// check if feedback for triggered actions in cmld module
 	// matches the expected results (in their given order)
 	if (expected_results)
-		for (const char * expected; (expected = *expected_results++);)
+		for (const char *expected; (expected = *expected_results++);)
 			ASSERT(check_feedback_str(cmld_fd, expected));
 
 	// make sure there is no unexpected feedback left unhandled
@@ -174,7 +177,8 @@ bool test_handle_message(ControllerToDaemon *msg,
 /**
  * Helper function to create a socket pair.
  */
-void make_socketpair(int fds[2])
+void
+make_socketpair(int fds[2])
 {
 	if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) == -1) {
 		perror("socketpair");
@@ -192,7 +196,9 @@ void make_socketpair(int fds[2])
  * @param data      data for the inject function
  * @param csock_read_fdr     file descriptor responses from the control module can be read
  */
-void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *data), void *data, int csock_read_fd)
+void
+run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *data), void *data,
+	      int csock_read_fd)
 {
 	container_t *a0 = cmld_container_get_by_index(0);
 	container_t *a1 = cmld_container_get_by_index(1);
@@ -217,12 +223,11 @@ void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *da
 
 	// test CONTAINER_START
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
-	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_start: A0, key=NULL, no_switch=false",
-		"cmld_container_switch: A0", /* start switches by default */
-		NULL
-	});
+	test_handle_message(
+		&msg_in, inject, data, cmld_fd,
+		(const char *[]){ "cmld_container_start: A0, key=NULL, no_switch=false",
+				  "cmld_container_switch: A0", /* start switches by default */
+				  NULL });
 	//ASSERT(cmld_containers_get_foreground() == a0);
 
 	// test CONTAINER_START with key without switch
@@ -233,68 +238,55 @@ void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *da
 	msg_in.container_start_params = &start_params;
 	msg_in.container_uuids[0] = (char *)uuid_string(container_get_uuid(a1));
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_start: A1, key=ABCD, no_switch=true",
-		/* no switch this time! */
-		NULL
-	});
+			    (const char *[]){ "cmld_container_start: A1, key=ABCD, no_switch=true",
+					      /* no switch this time! */
+					      NULL });
 	//ASSERT(cmld_containers_get_foreground() == a0);
 	msg_in.container_start_params = NULL;
 
 	// test CONTAINER_SWITCH
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_SWITCH;
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_switch: A1", NULL
-	});
+			    (const char *[]){ "cmld_container_switch: A1", NULL });
 	//ASSERT(cmld_containers_get_foreground() == a1);
 
 	// test CONTAINER_STOP
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_stop: A1", NULL
-	});
+			    (const char *[]){ "cmld_container_stop: A1", NULL });
 
 	// test CONTAINER_FREEZE
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE;
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_freeze: A1", NULL
-	});
+			    (const char *[]){ "cmld_container_freeze: A1", NULL });
 
 	// test CONTAINER_UNFREEZE
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNFREEZE;
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_unfreeze: A1", NULL
-	});
+			    (const char *[]){ "cmld_container_unfreeze: A1", NULL });
 
 	// test CONTAINER_WIPE
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_WIPE;
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_wipe: A1", NULL
-	});
+			    (const char *[]){ "cmld_container_wipe: A1", NULL });
 
 	// test CONTAINER_SNAPSHOT
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_SNAPSHOT;
 	test_handle_message(&msg_in, inject, data, cmld_fd,
-	(const char*[]) {
-		"cmld_container_snapshot: A1", NULL
-	});
+			    (const char *[]){ "cmld_container_snapshot: A1", NULL });
 
 	// test GET_CONTAINER_STATUS
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 	test_handle_message(&msg_in, inject, data, cmld_fd, NULL);
 	// recv container state, decode and check
-	DaemonToController *cout = (DaemonToController *)protobuf_recv_message(csock_read_fd, &daemon_to_controller__descriptor);
+	DaemonToController *cout = (DaemonToController *)protobuf_recv_message(
+		csock_read_fd, &daemon_to_controller__descriptor);
 	ASSERT(cout->n_container_status == 1);
 	ASSERT(cout->container_status != NULL);
-	ASSERT(cout->container_status[0]->uuid && !strcmp(cout->container_status[0]->uuid,
-	                uuid_string(container_get_uuid(a1))));
-	ASSERT(cout->container_status[0]->name && !strcmp(cout->container_status[0]->name,
-	                container_get_name(a1)));
+	ASSERT(cout->container_status[0]->uuid &&
+	       !strcmp(cout->container_status[0]->uuid, uuid_string(container_get_uuid(a1))));
+	ASSERT(cout->container_status[0]->name &&
+	       !strcmp(cout->container_status[0]->name, container_get_name(a1)));
 	ASSERT(cout->container_status[0]->foreground == true);
 	protobuf_free_message((ProtobufCMessage *)cout);
 
@@ -303,29 +295,33 @@ void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *da
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 	msg_in.n_container_uuids = 0;
 	test_handle_message(&msg_in, inject, data, cmld_fd, NULL);
-	cout = (DaemonToController *)protobuf_recv_message(csock_read_fd, &daemon_to_controller__descriptor);
+	cout = (DaemonToController *)protobuf_recv_message(csock_read_fd,
+							   &daemon_to_controller__descriptor);
 	ASSERT(cout->n_container_configs == 0);
 	ASSERT(cout->container_configs == NULL);
 	protobuf_free_message((ProtobufCMessage *)cout);
 
 	// test Container_GET_CONTAINER_CONFIG 2
 	DEBUG("test Container_GET_CONTAINER_CONFIG 2");
-	file_write("test_A0.conf", "name: \"a0\"\nguest_os: \"a0os\"\nguestos_version: 20150408\ncolor: 1426918911", -1);
-	file_write("test_A1.conf", "name: \"a1\"\nguest_os: \"a1os\"\nguestos_version: 20150409\ncolor: 1426918912", -1);
+	file_write("test_A0.conf",
+		   "name: \"a0\"\nguest_os: \"a0os\"\nguestos_version: 20150408\ncolor: 1426918911",
+		   -1);
+	file_write("test_A1.conf",
+		   "name: \"a1\"\nguest_os: \"a1os\"\nguestos_version: 20150409\ncolor: 1426918912",
+		   -1);
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 	msg_in.n_container_uuids = 0;
 	test_handle_message(&msg_in, inject, data, cmld_fd, NULL);
-	cout = (DaemonToController *)protobuf_recv_message(csock_read_fd, &daemon_to_controller__descriptor);
+	cout = (DaemonToController *)protobuf_recv_message(csock_read_fd,
+							   &daemon_to_controller__descriptor);
 	ASSERT(cout->n_container_configs == 2);
 	ASSERT(cout->container_configs != NULL);
-	ASSERT(cout->container_configs[0]->name && !strcmp(cout->container_configs[0]->name,
-	                "a0"));
-	ASSERT(cout->container_configs[1]->name && !strcmp(cout->container_configs[1]->name,
-	                "a1"));
-	ASSERT(cout->container_configs[0]->guest_os && !strcmp(cout->container_configs[0]->guest_os,
-	                "a0os"));
-	ASSERT(cout->container_configs[1]->guest_os && !strcmp(cout->container_configs[1]->guest_os,
-	                "a1os"));
+	ASSERT(cout->container_configs[0]->name && !strcmp(cout->container_configs[0]->name, "a0"));
+	ASSERT(cout->container_configs[1]->name && !strcmp(cout->container_configs[1]->name, "a1"));
+	ASSERT(cout->container_configs[0]->guest_os &&
+	       !strcmp(cout->container_configs[0]->guest_os, "a0os"));
+	ASSERT(cout->container_configs[1]->guest_os &&
+	       !strcmp(cout->container_configs[1]->guest_os, "a1os"));
 	ASSERT(cout->container_configs[0]->guestos_version == 20150408);
 	ASSERT(cout->container_configs[1]->guestos_version == 20150409);
 	ASSERT(cout->container_configs[0]->color == 1426918911);
@@ -345,20 +341,23 @@ void run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *da
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS;
 	msg_in.n_container_uuids = 0;
 	test_handle_message(&msg_in, inject, data, cmld_fd, NULL);
-	cout = (DaemonToController *)protobuf_recv_message(csock_read_fd, &daemon_to_controller__descriptor);
+	cout = (DaemonToController *)protobuf_recv_message(csock_read_fd,
+							   &daemon_to_controller__descriptor);
 	//protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)cout);
 	ASSERT(cout->container_status == NULL);
 	ASSERT(cout->n_container_uuids == (size_t)cmld_containers_get_count());
 	ASSERT(cout->container_uuids);
 	for (size_t i = 0; i < cout->n_container_uuids; i++) {
 		container_t *container = cmld_container_get_by_index(i);
-		ASSERT(cout->container_uuids[i] && !strcmp(cout->container_uuids[i], uuid_string(container_get_uuid(container))));
+		ASSERT(cout->container_uuids[i] &&
+		       !strcmp(cout->container_uuids[i],
+			       uuid_string(container_get_uuid(container))));
 	}
 	protobuf_free_message((ProtobufCMessage *)cout);
 }
 
-
-int main()
+int
+main()
 {
 	logf_register(&logf_test_write, stdout);
 
@@ -373,7 +372,8 @@ int main()
 	UNUSED container_t *a0 = cmld_stub_container_create("A0");
 	UNUSED container_t *a1 = cmld_stub_container_create("A1");
 	const char *control_sock_path = "control.test.sock";
-	pid_t child = fork_child(control_sock_path);   // fork child (use same setup for unit and integration tests)
+	pid_t child = fork_child(
+		control_sock_path); // fork child (use same setup for unit and integration tests)
 
 	// STAGE 1 (unit test): directly call handle_message
 	// (tests internal logic only; needs access to static function)
@@ -395,7 +395,8 @@ int main()
 
 		int sock = sock_unix_create_and_connect(SOCK_STREAM, control_sock_path);
 		if (sock == -1) {
-			ERROR_ERRNO("Failed to create local control socket file %s.", control_sock_path);
+			ERROR_ERRNO("Failed to create local control socket file %s.",
+				    control_sock_path);
 			kill(child, SIGKILL); // kill child
 			return -1;
 		}

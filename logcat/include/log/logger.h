@@ -22,30 +22,29 @@
  * driver unless an upgrade to a newer ABI version is requested.
  */
 struct logger_entry {
-    uint16_t    len;    /* length of the payload */
-    uint16_t    __pad;  /* no matter what, we get 2 bytes of padding */
-    int32_t     pid;    /* generating process's pid */
-    int32_t     tid;    /* generating process's tid */
-    int32_t     sec;    /* seconds since Epoch */
-    int32_t     nsec;   /* nanoseconds */
-    char        msg[0]; /* the entry's payload */
+	uint16_t len;   /* length of the payload */
+	uint16_t __pad; /* no matter what, we get 2 bytes of padding */
+	int32_t pid;    /* generating process's pid */
+	int32_t tid;    /* generating process's tid */
+	int32_t sec;    /* seconds since Epoch */
+	int32_t nsec;   /* nanoseconds */
+	char msg[0];    /* the entry's payload */
 };
 
 /* user space structure returned by a namespace-aware logger */
 struct logger_entry_ns {
-    uint16_t    len;    /* length of the payload */
-    uint16_t    __pad;  /* no matter what, we get 2 bytes of padding */
-    int32_t     pid;    /* generating process's pid */
-    int32_t     tid;    /* generating process's tid */
-    int32_t     ns_initpid; /* generating process' device ns initpid */
-    int32_t     ns_pid; /* generating process' real pid */
-    int32_t     ns_tid; /* generating process' real tid */
-    char        ns_tag[DEV_NS_TAG_LEN]; /* device ns identifier */
-    int32_t     sec;    /* seconds since Epoch */
-    int32_t     nsec;   /* nanoseconds */
-    char        msg[0]; /* the entry's payload */
+	uint16_t len;		     /* length of the payload */
+	uint16_t __pad;		     /* no matter what, we get 2 bytes of padding */
+	int32_t pid;		     /* generating process's pid */
+	int32_t tid;		     /* generating process's tid */
+	int32_t ns_initpid;	  /* generating process' device ns initpid */
+	int32_t ns_pid;		     /* generating process' real pid */
+	int32_t ns_tid;		     /* generating process' real tid */
+	char ns_tag[DEV_NS_TAG_LEN]; /* device ns identifier */
+	int32_t sec;		     /* seconds since Epoch */
+	int32_t nsec;		     /* nanoseconds */
+	char msg[0];		     /* the entry's payload */
 };
-
 
 /*
  * The userspace structure for version 2 of the logger_entry ABI.
@@ -53,36 +52,36 @@ struct logger_entry_ns {
  * is called with version==2
  */
 struct logger_entry_v2 {
-    uint16_t    len;       /* length of the payload */
-    uint16_t    hdr_size;  /* sizeof(struct logger_entry_v2) */
-    int32_t     pid;       /* generating process's pid */
-    int32_t     tid;       /* generating process's tid */
-    int32_t     sec;       /* seconds since Epoch */
-    int32_t     nsec;      /* nanoseconds */
-    uint32_t    euid;      /* effective UID of logger */
-    char        msg[0];    /* the entry's payload */
+	uint16_t len;      /* length of the payload */
+	uint16_t hdr_size; /* sizeof(struct logger_entry_v2) */
+	int32_t pid;       /* generating process's pid */
+	int32_t tid;       /* generating process's tid */
+	int32_t sec;       /* seconds since Epoch */
+	int32_t nsec;      /* nanoseconds */
+	uint32_t euid;     /* effective UID of logger */
+	char msg[0];       /* the entry's payload */
 };
 
 /* v2 of the user space structure returned by a namespace-aware logger */
 struct logger_entry_ns_v2 {
-    uint16_t    len;       /* length of the payload */
-    uint16_t    hdr_size;  /* sizeof(struct logger_entry_v2) */
-    int32_t     pid;       /* generating process's pid */
-    int32_t     tid;       /* generating process's tid */
-    int32_t     ns_initpid; /* generating process' device ns initpid */
-    int32_t     ns_pid; /* generating process' real pid */
-    int32_t     ns_tid; /* generating process' real tid */
-    char        ns_tag[DEV_NS_TAG_LEN]; /* device ns identifier */
-    int32_t     sec;       /* seconds since Epoch */
-    int32_t     nsec;      /* nanoseconds */
-    uint32_t    euid;      /* effective UID of logger */
-    char        msg[0];    /* the entry's payload */
+	uint16_t len;		     /* length of the payload */
+	uint16_t hdr_size;	   /* sizeof(struct logger_entry_v2) */
+	int32_t pid;		     /* generating process's pid */
+	int32_t tid;		     /* generating process's tid */
+	int32_t ns_initpid;	  /* generating process' device ns initpid */
+	int32_t ns_pid;		     /* generating process' real pid */
+	int32_t ns_tid;		     /* generating process' real tid */
+	char ns_tag[DEV_NS_TAG_LEN]; /* device ns identifier */
+	int32_t sec;		     /* seconds since Epoch */
+	int32_t nsec;		     /* nanoseconds */
+	uint32_t euid;		     /* effective UID of logger */
+	char msg[0];		     /* the entry's payload */
 };
 
-#define LOGGER_LOG_MAIN		"log/main"
-#define LOGGER_LOG_RADIO	"log/radio"
-#define LOGGER_LOG_EVENTS	"log/events"
-#define LOGGER_LOG_SYSTEM	"log/system"
+#define LOGGER_LOG_MAIN "log/main"
+#define LOGGER_LOG_RADIO "log/radio"
+#define LOGGER_LOG_EVENTS "log/events"
+#define LOGGER_LOG_SYSTEM "log/system"
 
 /*
  * The maximum size of the log entry payload that can be
@@ -90,27 +89,27 @@ struct logger_entry_ns_v2 {
  * more than this amount to /dev/log/[*] will result in a
  * truncated log entry.
  */
-#define LOGGER_ENTRY_MAX_PAYLOAD	4076
+#define LOGGER_ENTRY_MAX_PAYLOAD 4076
 
 /*
  * The maximum size of a log entry which can be read from the
  * kernel logger driver. An attempt to read less than this amount
  * may result in read() returning EINVAL.
  */
-#define LOGGER_ENTRY_MAX_LEN		(5*1024)
+#define LOGGER_ENTRY_MAX_LEN (5 * 1024)
 
 #ifdef HAVE_IOCTL
 
 #include <sys/ioctl.h>
 
-#define __LOGGERIO	0xAE
+#define __LOGGERIO 0xAE
 
-#define LOGGER_GET_LOG_BUF_SIZE		_IO(__LOGGERIO, 1) /* size of log */
-#define LOGGER_GET_LOG_LEN		_IO(__LOGGERIO, 2) /* used log len */
-#define LOGGER_GET_NEXT_ENTRY_LEN	_IO(__LOGGERIO, 3) /* next entry len */
-#define LOGGER_FLUSH_LOG		_IO(__LOGGERIO, 4) /* flush log */
-#define LOGGER_GET_VERSION		_IO(__LOGGERIO, 5) /* abi version */
-#define LOGGER_SET_VERSION		_IO(__LOGGERIO, 6) /* abi version */
+#define LOGGER_GET_LOG_BUF_SIZE _IO(__LOGGERIO, 1)   /* size of log */
+#define LOGGER_GET_LOG_LEN _IO(__LOGGERIO, 2)	/* used log len */
+#define LOGGER_GET_NEXT_ENTRY_LEN _IO(__LOGGERIO, 3) /* next entry len */
+#define LOGGER_FLUSH_LOG _IO(__LOGGERIO, 4)	  /* flush log */
+#define LOGGER_GET_VERSION _IO(__LOGGERIO, 5)	/* abi version */
+#define LOGGER_SET_VERSION _IO(__LOGGERIO, 6)	/* abi version */
 
 #endif // HAVE_IOCTL
 

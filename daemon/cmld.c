@@ -61,15 +61,15 @@
 #define CMLD_SUSPEND_TIMEOUT 5000
 
 // files and directories in cmld's home path /data/cml
-#define CMLD_PATH_DEVICE_CONF		"device.conf"
-#define CMLD_PATH_USERS_DIR		"users"
-#define CMLD_PATH_GUESTOS_DIR		"operatingsystems"
-#define CMLD_PATH_CONTAINERS_DIR	"containers"
-#define CMLD_PATH_CONTAINER_KEYS_DIR    "keys"
-#define CMLD_PATH_CONTAINER_TOKENS_DIR    "tokens"
-#define CMLD_PATH_SHARED_DATA_DIR	"shared"
+#define CMLD_PATH_DEVICE_CONF "device.conf"
+#define CMLD_PATH_USERS_DIR "users"
+#define CMLD_PATH_GUESTOS_DIR "operatingsystems"
+#define CMLD_PATH_CONTAINERS_DIR "containers"
+#define CMLD_PATH_CONTAINER_KEYS_DIR "keys"
+#define CMLD_PATH_CONTAINER_TOKENS_DIR "tokens"
+#define CMLD_PATH_SHARED_DATA_DIR "shared"
 
-#define CMLD_WAKE_LOCK_STARTUP           "ContainerStartup"
+#define CMLD_WAKE_LOCK_STARTUP "ContainerStartup"
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
@@ -77,7 +77,7 @@
 
 // TODO think about using an own variable for a0
 //static container_t *cmld_a0 = NULL;
-static const char* cmld_path = "/data/cml";
+static const char *cmld_path = "/data/cml";
 
 static list_t *cmld_containers_list = NULL; // first element is a0
 
@@ -103,10 +103,10 @@ container_t *
 cmld_containers_get_a0()
 {
 	//return a0;
-        uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
-        container_t *container = cmld_container_get_by_uuid(a0_uuid);
-        mem_free(a0_uuid);
-        return container;
+	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
+	container_t *container = cmld_container_get_by_uuid(a0_uuid);
+	mem_free(a0_uuid);
+	return container;
 }
 
 container_t *
@@ -127,7 +127,7 @@ cmld_container_get_c_root_netns()
 			}
 		}
 	}
-	return ((found)? found : found_a0);
+	return ((found) ? found : found_a0);
 }
 
 container_t *
@@ -204,7 +204,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 		return 0;
 
 	char *prefix = mem_strdup(name);
-	prefix[len-5] = '\0';
+	prefix[len - 5] = '\0';
 
 	int res = 0;
 	char *dir = mem_printf("%s/%s", path, prefix);
@@ -221,17 +221,18 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 			container_state_t state = container_get_state(c);
 			if (state != CONTAINER_STATE_STOPPED) {
 				DEBUG("Not loading %s for already created and not stopped container %s.",
-					name, container_get_name(c));
+				      name, container_get_name(c));
 				goto cleanup;
 			}
 			DEBUG("Removing outdated created container %s for config update",
-				container_get_name(c));
+			      container_get_name(c));
 			cmld_containers_list = list_remove(cmld_containers_list, c);
 			container_free(c);
 		}
 		c = container_new(path, uuid, NULL, 0);
 		if (c) {
-			DEBUG("Loaded config for container %s from %s", container_get_name(c), name);
+			DEBUG("Loaded config for container %s from %s", container_get_name(c),
+			      name);
 			cmld_containers_list = list_append(cmld_containers_list, c);
 			res = 1;
 			goto cleanup;
@@ -278,8 +279,8 @@ cmld_reload_containers(void)
  * "1970" and renames the found files with a new timestamp
  */
 void
-cmld_rename_logfiles() {
-
+cmld_rename_logfiles()
+{
 	DIR *directory = NULL;
 	struct dirent *entry = NULL;
 
@@ -294,13 +295,18 @@ cmld_rename_logfiles() {
 					ERROR("Could not tokenize logfile name %s", entry->d_name);
 					continue;
 				}
-				char *filename_with_correct_timestamp = logf_file_new_name(filename);
-				char *old_filename_with_path = mem_printf("%s/%s", LOGFILE_DIR, entry->d_name);
-				char *new_filename_with_path = mem_printf("%s/%s", LOGFILE_DIR, filename_with_correct_timestamp);
+				char *filename_with_correct_timestamp =
+					logf_file_new_name(filename);
+				char *old_filename_with_path =
+					mem_printf("%s/%s", LOGFILE_DIR, entry->d_name);
+				char *new_filename_with_path = mem_printf(
+					"%s/%s", LOGFILE_DIR, filename_with_correct_timestamp);
 				if (rename(old_filename_with_path, new_filename_with_path))
-					ERROR_ERRNO("Rename not successful %s -> %s", old_filename_with_path, new_filename_with_path);
+					ERROR_ERRNO("Rename not successful %s -> %s",
+						    old_filename_with_path, new_filename_with_path);
 				else
-					DEBUG("Rename successful %s -> %s", old_filename_with_path, new_filename_with_path);
+					DEBUG("Rename successful %s -> %s", old_filename_with_path,
+					      new_filename_with_path);
 				mem_free(filename_with_old_timestamp);
 				mem_free(filename_with_correct_timestamp);
 				mem_free(old_filename_with_path);
@@ -308,10 +314,8 @@ cmld_rename_logfiles() {
 			}
 		}
 		closedir(directory);
-	}
-	else
+	} else
 		ERROR("Couldn't open the directory %s", LOGFILE_DIR);
-
 }
 
 /**
@@ -344,12 +348,12 @@ cmld_mobile_change_cb(bool active)
 		INFO("Global mobile data activated");
 		/* setup route over a0 with rild */
 		container_t *a0 = cmld_containers_get_a0();
-		char* a0_ipaddr = container_get_first_ip_new(a0);
-		char* a0_subnet = container_get_first_subnet_new(a0);
-		network_setup_route_table(hardware_get_routing_table_radio(),
-				a0_subnet, hardware_get_radio_ifname(), true);
-		network_setup_default_route_table(hardware_get_routing_table_radio(),
-				a0_ipaddr, true);
+		char *a0_ipaddr = container_get_first_ip_new(a0);
+		char *a0_subnet = container_get_first_subnet_new(a0);
+		network_setup_route_table(hardware_get_routing_table_radio(), a0_subnet,
+					  hardware_get_radio_ifname(), true);
+		network_setup_default_route_table(hardware_get_routing_table_radio(), a0_ipaddr,
+						  true);
 		mem_free(a0_ipaddr);
 		mem_free(a0_subnet);
 	} else {
@@ -391,7 +395,7 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 		container_oom_protect_service(container);
 		// enable ipforwarding when the container in root netns has started
 		if (!container_has_netns(container))
-				network_enable_ip_forwarding();
+			network_enable_ip_forwarding();
 		container_unregister_observer(container, cb);
 
 		/* Make KSM aggressive to immmediately share as many pages as
@@ -401,13 +405,14 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 }
 
 static void
-cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
+cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb,
+			    UNUSED void *data)
 {
 	container_connectivity_t conn = container_get_connectivity(c_root_netns);
 
 	if (container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) {
 		DEBUG("Container %s stopped, unregistering connectivity c_root_netns callback",
-				container_get_description(c_root_netns));
+		      container_get_description(c_root_netns));
 		container_unregister_observer(c_root_netns, cb);
 	}
 
@@ -421,15 +426,18 @@ cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback
 	DEBUG("Global connectivity changed from %d to %d", old_conn, cmld_connectivity);
 
 	/* detect changes in connection state and call the respective callbacks */
-	if (container_connectivity_wifi(cmld_connectivity) != container_connectivity_wifi(old_conn)) {
+	if (container_connectivity_wifi(cmld_connectivity) !=
+	    container_connectivity_wifi(old_conn)) {
 		/* wifi connectivity has changed */
 		cmld_wifi_change_cb(container_connectivity_wifi(cmld_connectivity));
 	}
-	if (container_connectivity_mobile(cmld_connectivity) != container_connectivity_mobile(old_conn)) {
+	if (container_connectivity_mobile(cmld_connectivity) !=
+	    container_connectivity_mobile(old_conn)) {
 		/* mobile connectivity has changed */
 		cmld_mobile_change_cb(container_connectivity_mobile(cmld_connectivity));
 	}
-	if (container_connectivity_online(cmld_connectivity) != container_connectivity_online(old_conn)) {
+	if (container_connectivity_online(cmld_connectivity) !=
+	    container_connectivity_online(old_conn)) {
 		/* internet connectivity has changed */
 		cmld_online_change_cb(container_connectivity_online(cmld_connectivity));
 	}
@@ -461,7 +469,8 @@ cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback
 //}
 
 static void
-cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb, UNUSED void *data)
+cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb,
+			     UNUSED void *data)
 {
 	bool mode = container_get_airplane_mode(c_root_netns);
 
@@ -488,14 +497,15 @@ cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void 
 {
 	if (container_get_state(aX) == CONTAINER_STATE_STOPPED) {
 		DEBUG("Container %s stopped, unregistering airplane_mode aX callback",
-				container_get_description(aX));
+		      container_get_description(aX));
 		container_unregister_observer(aX, cb);
 	}
 
 	if (cmld_airplane_mode == container_get_airplane_mode(aX))
 		return;
 
-	DEBUG("Setting global airplane mode %d in container %s", cmld_airplane_mode, container_get_description(aX));
+	DEBUG("Setting global airplane mode %d in container %s", cmld_airplane_mode,
+	      container_get_description(aX));
 
 	container_set_airplane_mode(aX, cmld_airplane_mode);
 }
@@ -509,12 +519,12 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 	/* Check if the container got over the initial starting phase */
 	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
 		/* Initialize unpriv control interface on the socket previously bound into container */
-		if(!control_new(*control_sock_p, false)) {
+		if (!control_new(*control_sock_p, false)) {
 			WARN("Could not create unpriv control socket for %s",
-				container_get_description(container));
+			     container_get_description(container));
 		} else {
 			INFO("Create unpriv control socket for %s",
-				container_get_description(container));
+			     container_get_description(container));
 		}
 		mem_free(control_sock_p);
 		container_unregister_observer(container, cb);
@@ -529,36 +539,38 @@ cmld_container_register_observers(container_t *container)
 	 * ATTENTION: All these callbacks MUST deregister themselves as soon as the container is stopped */
 	if (!container_register_observer(container, &cmld_container_boot_complete_cb, NULL)) {
 		ERROR("Could not register container boot complete observer callback for %s",
-				container_get_description(container));
+		      container_get_description(container));
 	}
 	// first container without netns 'c_root_netns' is responsible for global cannectivity
 	if (container == cmld_container_get_c_root_netns()) {
 		INFO("Container %s is sharing root network namespace, connect global connectivity observers!",
-			container_get_description(container));
+		     container_get_description(container));
 
 		if (!container_register_observer(container, &cmld_connectivity_rootns_cb, NULL)) {
 			ERROR("Could not register connectivity observer callback for %s",
-					container_get_description(container));
+			      container_get_description(container));
 		}
 
 		if (!container_register_observer(container, &cmld_airplane_mode_rootns_cb, NULL)) {
 			ERROR("Could not register airplane_mode observer callback for %s",
-					container_get_description(container));
+			      container_get_description(container));
 		}
 	} else {
 		if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
 			ERROR("Could not register airplane mode observer callback for %s",
-					container_get_description(container));
+			      container_get_description(container));
 		}
 	}
 	if (guestos_get_feature_install_guest(container_get_os(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
 		int *control_sock_p = mem_new0(int, 1);
-		*control_sock_p = container_bind_socket_before_start(container, CMLD_CONTROL_SOCKET);
+		*control_sock_p =
+			container_bind_socket_before_start(container, CMLD_CONTROL_SOCKET);
 
-		if (!container_register_observer(container, &cmld_init_control_cb, control_sock_p)) {
+		if (!container_register_observer(container, &cmld_init_control_cb,
+						 control_sock_p)) {
 			WARN("Could not register observer init control callback for %s",
-					container_get_description(container));
+			     container_get_description(container));
 		}
 	}
 }
@@ -578,21 +590,25 @@ cmld_container_start(container_t *container, const char *key)
 
 	if (container_get_state(container) == CONTAINER_STATE_STOPPED) {
 		/* container is not running => start it */
-		DEBUG("Container %s is not running => start it", container_get_description(container));
+		DEBUG("Container %s is not running => start it",
+		      container_get_description(container));
 
 		cmld_container_register_observers(container);
 
 		// We only support "background-start"...
 		if (!guestos_get_feature_bg_booting(container_get_guestos(container))) {
-			WARN("Guest OS of the container %s does not support background booting", container_get_description(container));
+			WARN("Guest OS of the container %s does not support background booting",
+			     container_get_description(container));
 			return -1;
 		}
 		if (container_start(container)) {
-			WARN("Start of background container %s failed", container_get_description(container));
+			WARN("Start of background container %s failed",
+			     container_get_description(container));
 			return -1;
 		}
 	} else {
-		DEBUG("Container %s has been already started", container_get_description(container));
+		DEBUG("Container %s has been already started",
+		      container_get_description(container));
 	}
 	return 0;
 }
@@ -608,7 +624,7 @@ cmld_container_start_with_smartcard(control_t *control, container_t *container, 
 }
 
 int
-cmld_change_device_pin(control_t* control, const char *passwd, const char *newpasswd)
+cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd)
 {
 	return smartcard_change_pin(cmld_smartcard, control, passwd, newpasswd);
 }
@@ -628,7 +644,8 @@ cmld_get_control_gui_sock(void)
 /******************************************************************************/
 
 // TODO: how should we encrypt a0?
-#define A0_KEY "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+#define A0_KEY                                                                                     \
+	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
 static void
 cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
@@ -659,7 +676,8 @@ cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
 			container_t *container = l->data;
 			if (container_get_allow_autostart(container)) {
-				INFO("Autostarting container %s in background", container_get_name(container));
+				INFO("Autostarting container %s in background",
+				     container_get_name(container));
 				cmld_container_start(container, NULL);
 			}
 		}
@@ -682,11 +700,11 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	container_unregister_observer(container, cb);
 
 	DEBUG("Device shutdown: container %s went down, checking others before shutdown",
-		container_get_description(container));
+	      container_get_description(container));
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		if (!(container_get_state(l->data) == CONTAINER_STATE_STOPPED ||
-			container_get_state(l->data) == CONTAINER_STATE_ZOMBIE)) {
+		      container_get_state(l->data) == CONTAINER_STATE_ZOMBIE)) {
 			DEBUG("Device shutdown: There are still running containers, can't shut down");
 			return;
 		}
@@ -695,11 +713,11 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	/* all containers are down, so shut down */
 	DEBUG("Device shutdown: last container down; shutdown now");
 
-	#ifndef TRUSTME_DEBUG
+#ifndef TRUSTME_DEBUG
 	reboot_reboot(POWER_OFF);
 	// should never arrive here, but in case the shutdown fails somehow, we exit
 	exit(0);
-	#endif /* TRUSTME_DEBUG */
+#endif /* TRUSTME_DEBUG */
 }
 
 /**
@@ -707,14 +725,14 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
  * trigger the graceful shutdown of the other running containers
  */
 static void
-cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data) {
-
+cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
+{
 	container_state_t a0_state = container_get_state(a0);
 	bool shutdown_now = true;
 
 	/* only execute the callback if a0 goes down */
 	if (!(a0_state == CONTAINER_STATE_SHUTTING_DOWN || a0_state == CONTAINER_STATE_STOPPED ||
-		    a0_state == CONTAINER_STATE_ZOMBIE)) {
+	      a0_state == CONTAINER_STATE_ZOMBIE)) {
 		return;
 	}
 
@@ -728,15 +746,17 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 	 */
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		if (!(container_get_state(l->data) == CONTAINER_STATE_STOPPED ||
-			container_get_state(l->data) == CONTAINER_STATE_ZOMBIE)) {
+		      container_get_state(l->data) == CONTAINER_STATE_ZOMBIE)) {
 			shutdown_now = false;
-			if (!container_register_observer(l->data, &cmld_shutdown_container_cb, NULL)) {
+			if (!container_register_observer(l->data, &cmld_shutdown_container_cb,
+							 NULL)) {
 				ERROR("Could not register observer shutdown callback for %s",
-					container_get_description(l->data));
+				      container_get_description(l->data));
 			}
-			if (l->data != a0 && !(container_get_state(l->data) == CONTAINER_STATE_SHUTTING_DOWN)) {
+			if (l->data != a0 &&
+			    !(container_get_state(l->data) == CONTAINER_STATE_SHUTTING_DOWN)) {
 				DEBUG("Device shutdown: There is another running container:%s. Shut it down first",
-					container_get_description(l->data));
+				      container_get_description(l->data));
 				cmld_container_stop(l->data);
 			}
 		}
@@ -773,7 +793,8 @@ cmld_init_a0(const char *path, const char *c0os)
 	}
 
 	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
-	char *a0_config_file = mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000.conf");
+	char *a0_config_file =
+		mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000.conf");
 	if (file_exists(a0_config_file)) {
 		// let do load_containers() do the rest
 		INFO("Load c0 config from file %s", a0_config_file);
@@ -787,9 +808,11 @@ cmld_init_a0(const char *path, const char *c0os)
 	bool a0_ns_net = true;
 	bool privileged = true;
 
-	container_t *new_a0 = container_new_internal(a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net, privileged, a0_os, NULL,
-			      a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, NULL,
-			      cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, 0);
+	container_t *new_a0 =
+		container_new_internal(a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net,
+				       privileged, a0_os, NULL, a0_images_folder, a0_mnt,
+				       a0_ram_limit, 0xffffff00, 0, false, NULL,
+				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, 0);
 
 	/* depending on the storage of the a0 pointer, do ONE of the following: */
 	/* store a0 as first element of the cmld_containers_list */
@@ -837,7 +860,8 @@ cmld_start_a0(container_t *new_a0)
 }
 
 static void
-cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if, const char *host_gateway)
+cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if,
+		  const char *host_gateway)
 {
 	/*
 	 * Increase the max socket send buffer size which is used for all types of
@@ -845,7 +869,7 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	 * order to send moderately large messages (e.g. wallpaper data) over the
 	 * unix domain socket to the cmld without blocking for several seconds.
 	 */
-	if (file_printf("/proc/sys/net/core/wmem_max", "%d", 1024*1024) < 0)
+	if (file_printf("/proc/sys/net/core/wmem_max", "%d", 1024 * 1024) < 0)
 		WARN("Could not increase max OS send buffer size");
 
 	/* configure loopback interface of root network namespace */
@@ -864,7 +888,6 @@ cmld_init(const char *path)
 	INFO("Storage path is %s", path);
 	cmld_path = path;
 
-
 	/* Currently the given path is used by the config module to generate the
 	 * paths and it must therefore be ensured that it exists before loading
 	 * the config file. */
@@ -882,22 +905,20 @@ cmld_init(const char *path)
 		WARN("Could not initialize device config");
 	mem_free(device_path);
 
-	cmld_tune_network(device_config_get_host_addr(device_config), device_config_get_host_subnet(device_config),
-			device_config_get_host_if(device_config), device_config_get_host_gateway(device_config));
+	cmld_tune_network(device_config_get_host_addr(device_config),
+			  device_config_get_host_subnet(device_config),
+			  device_config_get_host_if(device_config),
+			  device_config_get_host_gateway(device_config));
 
-	cmld_shared_data_dir = mem_printf("%s/%s", path,
-			CMLD_PATH_SHARED_DATA_DIR);
+	cmld_shared_data_dir = mem_printf("%s/%s", path, CMLD_PATH_SHARED_DATA_DIR);
 	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir shared data directory %s",
-				cmld_shared_data_dir);
+		FATAL_ERRNO("Could not mkdir shared data directory %s", cmld_shared_data_dir);
 
 	// Store uuid from device config. TODO: free?
 	cmld_device_uuid = mem_strdup(device_config_get_uuid(device_config));
 
 	const char *update_base_url = device_config_get_update_base_url(device_config);
-	cmld_device_update_base_url = update_base_url
-		? mem_strdup(update_base_url)
-		: NULL;
+	cmld_device_update_base_url = update_base_url ? mem_strdup(update_base_url) : NULL;
 
 	const char *host_dns = device_config_get_host_dns(device_config);
 	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
@@ -947,16 +968,15 @@ cmld_init(const char *path)
 	INFO("got MDM node and service %s and %s.", mdm_node, mdm_service);
 	if (mdm_node && mdm_service) {
 		cmld_control_mdm = control_remote_new(mdm_node, mdm_service);
-			if (!cmld_control_mdm) {
-				WARN_ERRNO("Could not init MDM control socket");
+		if (!cmld_control_mdm) {
+			WARN_ERRNO("Could not init MDM control socket");
 		}
 	} else {
 		WARN("Could not get a valid MDM configuration from config file");
 	}
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
-	bool allow_locally_signed =
-		device_config_get_locally_signed_images(device_config);
+	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0)
 		FATAL("Could not load guest operating systems");
 	mem_free(guestos_path);
@@ -1010,7 +1030,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len)
 	container_t *c = container_new(path, NULL, config, config_len);
 	if (c) {
 		DEBUG("Created container %s (uuid=%s).", container_get_name(c),
-				uuid_string(container_get_uuid(c)));
+		      uuid_string(container_get_uuid(c)));
 		cmld_containers_list = list_append(cmld_containers_list, c);
 	} else {
 		WARN("Could not create new container object from config");
@@ -1044,22 +1064,23 @@ cmld_container_stop(container_t *container)
 	DEBUG("Trying to stop container %s", container_get_description(container));
 
 	if (!((container_get_state(container) == CONTAINER_STATE_RUNNING) ||
-		(container_get_state(container) == CONTAINER_STATE_SETUP))) {
-		ERROR("Container %s not running, unable to stop", container_get_description(container));
+	      (container_get_state(container) == CONTAINER_STATE_SETUP))) {
+		ERROR("Container %s not running, unable to stop",
+		      container_get_description(container));
 		return -1;
 	}
 
 	/* if a foreground container is stopped, switch back to a0 */
-//	container_t *fg = cmld_containers_get_foreground();
-//	container_t *a0 = cmld_containers_get_a0();
+	//	container_t *fg = cmld_containers_get_foreground();
+	//	container_t *a0 = cmld_containers_get_a0();
 
-//	if (a0 && a0 != container) {
-//		if (container == fg && container_get_state(a0) == CONTAINER_STATE_RUNNING) {
-//			DEBUG("Stop a foreground container, switch to a0");
-//			if (cmld_container_switch_to_a0() < 0)
-//				WARN("Switch to A0 failed");
-//		}
-//	}
+	//	if (a0 && a0 != container) {
+	//		if (container == fg && container_get_state(a0) == CONTAINER_STATE_RUNNING) {
+	//			DEBUG("Stop a foreground container, switch to a0");
+	//			if (cmld_container_switch_to_a0() < 0)
+	//				WARN("Switch to A0 failed");
+	//		}
+	//	}
 
 	return container_stop(container);
 }
@@ -1113,8 +1134,8 @@ cmld_container_wipe(container_t *container)
 }
 
 void
-cmld_wipe_device() {
-
+cmld_wipe_device()
+{
 	dir_delete_folder(cmld_path, CMLD_PATH_GUESTOS_DIR);
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINERS_DIR);
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINER_KEYS_DIR);
@@ -1124,7 +1145,8 @@ cmld_wipe_device() {
 }
 
 const char *
-cmld_get_c0os(void){
+cmld_get_c0os(void)
+{
 	return cmld_c0os_name;
 }
 

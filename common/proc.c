@@ -102,19 +102,19 @@ proc_status_new(pid_t pid)
 
 	tmp = strstr(buf, "\nUid:");
 	IF_NULL_GOTO(tmp, error);
-	n = sscanf(tmp, "\nUid:\t%u\t%u\t%u\t%u\n", &status->ruid,
-			&status->euid, &status->suid, &status->fuid);
+	n = sscanf(tmp, "\nUid:\t%u\t%u\t%u\t%u\n", &status->ruid, &status->euid, &status->suid,
+		   &status->fuid);
 	IF_FALSE_GOTO(n == 4, error);
-	TRACE("Parsed uid for %d: %u %u %u %u", pid, status->ruid,
-			status->euid, status->suid, status->fuid);
+	TRACE("Parsed uid for %d: %u %u %u %u", pid, status->ruid, status->euid, status->suid,
+	      status->fuid);
 
 	tmp = strstr(buf, "\nGid:");
 	IF_NULL_GOTO(tmp, error);
-	n = sscanf(tmp, "\nGid:\t%u\t%u\t%u\t%u\n", &status->rgid,
-			&status->egid, &status->sgid, &status->fgid);
+	n = sscanf(tmp, "\nGid:\t%u\t%u\t%u\t%u\n", &status->rgid, &status->egid, &status->sgid,
+		   &status->fgid);
 	IF_FALSE_GOTO(n == 4, error);
-	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid,
-			status->egid, status->sgid, status->fgid);
+	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid, status->egid, status->sgid,
+	      status->fgid);
 
 	mem_free(buf);
 	return status;

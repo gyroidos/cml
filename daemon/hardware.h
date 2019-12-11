@@ -144,7 +144,7 @@ bool
 hardware_is_led_on();
 
 int
-hardware_register_fb_status_cb(void (* func)(bool));
+hardware_register_fb_status_cb(void (*func)(bool));
 
 const char *
 hardware_get_audio_device_dir(void);
@@ -186,21 +186,21 @@ hardware_suspend_unblock(const char *name, size_t name_len);
 /**
  * Returns a list containing strings of the active cgroups subsystems
  */
-list_t*
+list_t *
 hardware_get_active_cgroups_subsystems(void);
 
 /**
  * Returns list of network interfaces which should be
  * generated and connected(routed) to outside world
  */
-list_t*
+list_t *
 hardware_get_nw_name_list(void);
 
 /**
  * Returns list of network interfaces which should be moved
  * into the privileged container's netns
  */
-list_t*
+list_t *
 hardware_get_nw_mv_name_list(void);
 
 /**
@@ -216,4 +216,3 @@ const char *
 hardware_get_routing_table_radio(void);
 
 #endif /* HARDWARE_H */
-

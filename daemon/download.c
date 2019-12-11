@@ -117,7 +117,7 @@ download_start(download_t *dl)
 	ASSERT(dl);
 	pid_t pid = fork();
 
-	char *const argv[] = {WGET_PATH, "-O", dl->file, dl->url, NULL};
+	char *const argv[] = { WGET_PATH, "-O", dl->file, dl->url, NULL };
 
 	switch (pid) {
 	case -1:
@@ -150,4 +150,3 @@ download_get_file(const download_t *dl)
 	ASSERT(dl);
 	return dl->file;
 }
-

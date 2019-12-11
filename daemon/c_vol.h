@@ -57,4 +57,3 @@ void
 c_vol_cleanup(c_vol_t *vol);
 
 #endif /* C_VOL_H */
-

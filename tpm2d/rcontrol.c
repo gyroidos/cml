@@ -44,7 +44,7 @@
 #include <google/protobuf-c/protobuf-c-text.h>
 
 struct tpm2d_rcontrol {
-	int sock;		// listen ip socket fd
+	int sock; // listen ip socket fd
 };
 
 /**
@@ -87,12 +87,12 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 	tss2_init();
 
-	switch(msg->code) {
+	switch (msg->code) {
 	case REMOTE_TO_TPM2D__CODE__ATTESTATION_REQ: {
 		Pcr **out_pcrs = NULL;
 		int pcr_regs = 0;
 		int pcr_indices = 0;
-		tpm2d_pcr_t** pcr_array = NULL;
+		tpm2d_pcr_t **pcr_array = NULL;
 		tpm2d_quote_t *quote = NULL;
 		uint8_t *attestation_cert = NULL;
 		size_t att_cert_len = 0;
@@ -105,35 +105,34 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		out.code = TPM2D_TO_REMOTE__CODE__ATTESTATION_RES;
 
 		switch (msg->atype) {
-			case IDS_ATTESTATION_TYPE__BASIC:
-				TRACE("atype BASIC");
-				pcr_regs = 12;
-				break;
-			case IDS_ATTESTATION_TYPE__ALL:
-				TRACE("atype ALL");
-				pcr_regs = 24;
-				break;
-			case IDS_ATTESTATION_TYPE__ADVANCED:
-				TRACE("atype ADVACE");
-				pcr_regs = (msg->has_pcrs) ? msg->pcrs : 0;
-				break;
-			default:
-				goto err_att_req;
-				break;
+		case IDS_ATTESTATION_TYPE__BASIC:
+			TRACE("atype BASIC");
+			pcr_regs = 12;
+			break;
+		case IDS_ATTESTATION_TYPE__ALL:
+			TRACE("atype ALL");
+			pcr_regs = 24;
+			break;
+		case IDS_ATTESTATION_TYPE__ADVANCED:
+			TRACE("atype ADVACE");
+			pcr_regs = (msg->has_pcrs) ? msg->pcrs : 0;
+			break;
+		default:
+			goto err_att_req;
+			break;
 		}
 		pcr_indices = pcr_regs - 1;
 
-		pcr_array = mem_alloc0(sizeof(tpm2d_pcr_t*) * pcr_regs);
-		for (int i=0; i < pcr_regs; ++i) {
+		pcr_array = mem_alloc0(sizeof(tpm2d_pcr_t *) * pcr_regs);
+		for (int i = 0; i < pcr_regs; ++i) {
 			pcr_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
 
 			IF_NULL_GOTO_ERROR(pcr_array[i], err_att_req);
 			INFO("PCR%d: size %zu", i, pcr_array[i]->pcr_size);
 		}
 
-		quote = tpm2_quote_new(pcr_indices, att_key_handle,
-				TPM2D_ATT_KEY_PW, msg->qualifyingdata.data,
-				msg->qualifyingdata.len);
+		quote = tpm2_quote_new(pcr_indices, att_key_handle, TPM2D_ATT_KEY_PW,
+				       msg->qualifyingdata.data, msg->qualifyingdata.len);
 		IF_NULL_GOTO_ERROR(quote, err_att_req);
 
 		// add device certificate to quote
@@ -144,7 +143,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 			goto err_att_req;
 		}
 		if (fstat(fileno(fp), &stat_buf) == -1) {
-		        ERROR("Error accessing device cert file");
+			ERROR("Error accessing device cert file");
 			fclose(fp);
 			goto err_att_req;
 		}
@@ -152,7 +151,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		attestation_cert = mem_new(uint8_t, att_cert_len);
 
 		if ((fread(attestation_cert, sizeof(uint8_t), att_cert_len, fp)) != att_cert_len) {
-		        ERROR("Error reading out device cert file");
+			ERROR("Error reading out device cert file");
 			fclose(fp);
 			goto err_att_req;
 		}
@@ -164,7 +163,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 		Pcr out_pcr = PCR__INIT;
 		out_pcrs = mem_new(Pcr *, pcr_regs);
-		for (int i=0; i < pcr_regs; ++i) {
+		for (int i = 0; i < pcr_regs; ++i) {
 			out_pcr.has_value = true;
 			out_pcr.value.data = pcr_array[i]->pcr_value;
 			out_pcr.value.len = pcr_array[i]->pcr_size;
@@ -197,15 +196,15 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-err_att_req:
+	err_att_req:
 		tpm2d_flush_as_key_handle();
 
-		for (size_t i=0; i< out.n_ml_entry; ++i) {
+		for (size_t i = 0; i < out.n_ml_entry; ++i) {
 			mem_free(out.ml_entry[i]);
 		}
 
 		if (pcr_array)
-			for (int i=0; i < pcr_regs; ++i) {
+			for (int i = 0; i < pcr_regs; ++i) {
 				if (pcr_array[i])
 					tpm2_pcrread_free(pcr_array[i]);
 				if (out_pcrs && out_pcrs[i])
@@ -245,7 +244,8 @@ tpm2d_rcontrol_cb_recv_message(int fd, unsigned events, event_io_t *io, void *da
 	ASSERT(rcontrol);
 
 	if (events & EVENT_IO_READ) {
-		RemoteToTpm2d *msg = (RemoteToTpm2d *)protobuf_recv_message(fd, &remote_to_tpm2d__descriptor);
+		RemoteToTpm2d *msg =
+			(RemoteToTpm2d *)protobuf_recv_message(fd, &remote_to_tpm2d__descriptor);
 		// close connection if client EOF, or protocol parse error
 		IF_NULL_GOTO_TRACE(msg, connection_err);
 
@@ -300,7 +300,8 @@ tpm2d_rcontrol_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 
 	fd_make_non_blocking(cfd);
 
-	event_io_t *event = event_io_new(cfd, EVENT_IO_READ, tpm2d_rcontrol_cb_recv_message, rcontrol);
+	event_io_t *event =
+		event_io_new(cfd, EVENT_IO_READ, tpm2d_rcontrol_cb_recv_message, rcontrol);
 	event_add_io(event);
 }
 
@@ -316,9 +317,9 @@ tpm2d_rcontrol_new(const char *ip, int port)
 	tpm2d_rcontrol_t *tpm2d_rcontrol = mem_new0(tpm2d_rcontrol_t, 1);
 	tpm2d_rcontrol->sock = sock;
 
-	event_io_t *event = event_io_new(sock, EVENT_IO_READ, tpm2d_rcontrol_cb_accept, tpm2d_rcontrol);
+	event_io_t *event =
+		event_io_new(sock, EVENT_IO_READ, tpm2d_rcontrol_cb_accept, tpm2d_rcontrol);
 	event_add_io(event);
 
 	return tpm2d_rcontrol;
 }
-

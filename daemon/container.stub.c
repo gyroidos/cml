@@ -99,25 +99,26 @@ container_get_state(UNUSED const container_t *container)
 }
 
 pid_t
-container_get_pid(UNUSED const container_t *container) {
+container_get_pid(UNUSED const container_t *container)
+{
 	return 0;
 }
 
-char*
+char *
 container_get_imei(container_t *container)
 {
 	ASSERT(container);
 	return container->imei;
 }
 
-char*
+char *
 container_get_mac_address(container_t *container)
 {
 	ASSERT(container);
 	return container->mac_address;
 }
 
-char*
+char *
 container_get_phone_number(container_t *container)
 {
 	ASSERT(container);

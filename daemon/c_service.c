@@ -64,8 +64,7 @@ c_service_send_container_cfg_name_proto(c_service_t *service)
 	int ret = -1;
 
 	INFO("Sending container config name %s to container %s",
-			container_get_name(service->container),
-			container_get_description(service->container));
+	     container_get_name(service->container), container_get_description(service->container));
 
 	/* fill connectivity and send to TrustmeService */
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
@@ -73,7 +72,7 @@ c_service_send_container_cfg_name_proto(c_service_t *service)
 
 	message_proto.container_cfg_name = mem_strdup(container_get_name(service->container));
 
-	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
+	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 
 	mem_free(message_proto.container_cfg_name);
 	return ret;
@@ -86,8 +85,8 @@ c_service_send_container_cfg_dns_proto(c_service_t *service)
 	int ret = -1;
 
 	INFO("Sending container config dns %s to container %s",
-			container_get_dns_server(service->container),
-			container_get_description(service->container));
+	     container_get_dns_server(service->container),
+	     container_get_description(service->container));
 
 	/* fill connectivity and send to TrustmeService */
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
@@ -95,12 +94,11 @@ c_service_send_container_cfg_dns_proto(c_service_t *service)
 
 	message_proto.container_cfg_dns = mem_strdup(container_get_dns_server(service->container));
 
-	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
+	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 
 	mem_free(message_proto.container_cfg_dns);
 	return ret;
 }
-
 
 /**
  * Processes the received protobuf message and calls the relevant callback
@@ -118,104 +116,101 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 
 	TRACE("Received message code from Trustme Service: %d", message->code);
 	switch (message->code) {
-		case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
-			container_set_state(service->container, CONTAINER_STATE_RUNNING);
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
+		container_set_state(service->container, CONTAINER_STATE_RUNNING);
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_SUSPEND_COMPLETED:
-			// currently empty
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_SUSPEND_COMPLETED:
+		// currently empty
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_RESUME_COMPLETED:
-			// currently empty
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_RESUME_COMPLETED:
+		// currently empty
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__SUSPEND_COMPLETED:
-			INFO("Received a suspend completed message from container %s",
-				container_get_description(service->container));
-			container_set_screen_on(service->container, false);
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__SUSPEND_COMPLETED:
+		INFO("Received a suspend completed message from container %s",
+		     container_get_description(service->container));
+		container_set_screen_on(service->container, false);
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__RESUME_COMPLETED:
-			INFO("Received a resume completed message from container %s",
-				container_get_description(service->container));
-			container_set_screen_on(service->container, true);
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__RESUME_COMPLETED:
+		INFO("Received a resume completed message from container %s",
+		     container_get_description(service->container));
+		container_set_screen_on(service->container, true);
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__SHUTDOWN:
-			// check container state and take action if container is not
-			// stopped or just shutting down
-			if (container_get_state(service->container) == CONTAINER_STATE_SHUTTING_DOWN) {
-				INFO("TrustmeService received container shutdown message for %s",
-					container_get_description(service->container));
-			}
-			else if (container_get_state(service->container) == CONTAINER_STATE_STOPPED) {
-				ERROR("TrustmeService received a notification that a stopped container %s \
+	case SERVICE_TO_CMLD_MESSAGE__CODE__SHUTDOWN:
+		// check container state and take action if container is not
+		// stopped or just shutting down
+		if (container_get_state(service->container) == CONTAINER_STATE_SHUTTING_DOWN) {
+			INFO("TrustmeService received container shutdown message for %s",
+			     container_get_description(service->container));
+		} else if (container_get_state(service->container) == CONTAINER_STATE_STOPPED) {
+			ERROR("TrustmeService received a notification that a stopped container %s \
 					is shutting down",
-					container_get_description(service->container));
-			} else {
-				INFO("TrustmeService received a notification that the container %s is \
+			      container_get_description(service->container));
+		} else {
+			INFO("TrustmeService received a notification that the container %s is \
 					shutting down, so try to stop it from our side",
-					container_get_description(service->container));
-				// container_stop kills the container if there is a problem
-				container_stop(service->container);
-			}
-			break;
+			     container_get_description(service->container));
+			// container_stop kills the container if there is a problem
+			container_stop(service->container);
+		}
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__MASTER_CLEAR:
-			container_wipe(service->container);
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__MASTER_CLEAR:
+		container_wipe(service->container);
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__CONNECTIVITY_CHANGE:
-			INFO("Received connectivity change message `%d' from container %s",
-				message->connectivity,
-				container_get_description(service->container));
+	case SERVICE_TO_CMLD_MESSAGE__CODE__CONNECTIVITY_CHANGE:
+		INFO("Received connectivity change message `%d' from container %s",
+		     message->connectivity, container_get_description(service->container));
 
-			service->connectivity = (container_connectivity_t) message->connectivity;
-			container_set_connectivity(service->container, (container_connectivity_t) message->connectivity);
-			break;
+		service->connectivity = (container_connectivity_t)message->connectivity;
+		container_set_connectivity(service->container,
+					   (container_connectivity_t)message->connectivity);
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__AIRPLANE_MODE_CHANGED:
-			INFO("Received airplane mode change message `%d' from container %s",
-				message->airplane_mode,
-				container_get_description(service->container));
+	case SERVICE_TO_CMLD_MESSAGE__CODE__AIRPLANE_MODE_CHANGED:
+		INFO("Received airplane mode change message `%d' from container %s",
+		     message->airplane_mode, container_get_description(service->container));
 
-			service->airplane_mode = message->airplane_mode;
-			container_set_airplane_mode(service->container, message->airplane_mode);
-			break;
+		service->airplane_mode = message->airplane_mode;
+		container_set_airplane_mode(service->container, message->airplane_mode);
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__IMEI_MAC_PHONENO:
-			INFO("Received imei: %s, mac: %s and phoneno.: %s from container %s",
-				message->imei ? message->imei : "",
-				message->mac ? message->mac : "",
-				message->phonenumber ? message-> phonenumber : "",
-				container_get_description(service->container));
-			if (message->imei)
-				container_set_imei(service->container, message->imei);
-			if (message->mac)
-				container_set_mac_address(service->container, message->mac);
-			if (message->phonenumber)
-				container_set_phone_number(service->container, message->phonenumber);
+	case SERVICE_TO_CMLD_MESSAGE__CODE__IMEI_MAC_PHONENO:
+		INFO("Received imei: %s, mac: %s and phoneno.: %s from container %s",
+		     message->imei ? message->imei : "", message->mac ? message->mac : "",
+		     message->phonenumber ? message->phonenumber : "",
+		     container_get_description(service->container));
+		if (message->imei)
+			container_set_imei(service->container, message->imei);
+		if (message->mac)
+			container_set_mac_address(service->container, message->mac);
+		if (message->phonenumber)
+			container_set_phone_number(service->container, message->phonenumber);
 
-			break;
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_NAME_REQ:
-			INFO("Received a reqest for the container name from container %s",
-				container_get_description(service->container));
-			if (c_service_send_container_cfg_name_proto(service))
-				INFO("sent reply to conatiner");
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_NAME_REQ:
+		INFO("Received a reqest for the container name from container %s",
+		     container_get_description(service->container));
+		if (c_service_send_container_cfg_name_proto(service))
+			INFO("sent reply to conatiner");
+		break;
 
-		case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_DNS_REQ:
-			INFO("Received a reqest for the container name from container %s",
-				container_get_description(service->container));
-			if (c_service_send_container_cfg_dns_proto(service))
-				INFO("sent reply to conatiner");
-			break;
+	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_DNS_REQ:
+		INFO("Received a reqest for the container name from container %s",
+		     container_get_description(service->container));
+		if (c_service_send_container_cfg_dns_proto(service))
+			INFO("sent reply to conatiner");
+		break;
 
-		default:
-			WARN("Received unknown message code from Trustme Service: %d", message->code);
-			return;
+	default:
+		WARN("Received unknown message code from Trustme Service: %d", message->code);
+		return;
 	}
 }
 
@@ -231,19 +226,19 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 	c_service_t *service = data;
 
 	if (events & EVENT_IO_READ) {
-		ServiceToCmldMessage *message =
-			(ServiceToCmldMessage *) protobuf_recv_message(fd, &service_to_cmld_message__descriptor);
+		ServiceToCmldMessage *message = (ServiceToCmldMessage *)protobuf_recv_message(
+			fd, &service_to_cmld_message__descriptor);
 		// close connection if client EOF, or protocol parse error
 		IF_NULL_GOTO_TRACE(message, connection_err);
 
 		c_service_handle_received_message(service, message);
-		protobuf_c_message_free_unpacked((ProtobufCMessage *) message, NULL);
+		protobuf_c_message_free_unpacked((ProtobufCMessage *)message, NULL);
 	}
 
 	// also check EXCEPT flag
 	if (events & EVENT_IO_EXCEPT) {
 		WARN("Exception on connected socket to TrustmeService; "
-			"closing socket and deregistering c_service_cb_receive_message");
+		     "closing socket and deregistering c_service_cb_receive_message");
 		goto connection_err;
 	}
 	return;
@@ -276,9 +271,11 @@ c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 	if ((service->sock_connected = sock_unix_accept(fd)) < 0)
 		goto error;
 
-	TRACE("Accepted connection %d from %s", service->sock_connected, container_get_description(service->container));
+	TRACE("Accepted connection %d from %s", service->sock_connected,
+	      container_get_description(service->container));
 
-	service->event_io_sock_connected = event_io_new(service->sock_connected, EVENT_IO_READ, &c_service_cb_receive_message, service);
+	service->event_io_sock_connected = event_io_new(service->sock_connected, EVENT_IO_READ,
+							&c_service_cb_receive_message, service);
 	event_add_io(service->event_io_sock_connected);
 
 	// We leave service->sock open so the TrustmeService could connect
@@ -302,9 +299,8 @@ c_service_send_connectivity_proto(c_service_t *service, container_connectivity_t
 {
 	ASSERT(service);
 
-	INFO("Trying to send and enforce connectivity status %d to container %s",
-			connectivity,
-			container_get_description(service->container));
+	INFO("Trying to send and enforce connectivity status %d to container %s", connectivity,
+	     container_get_description(service->container));
 
 	/* fill connectivity and send to TrustmeService */
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
@@ -313,11 +309,12 @@ c_service_send_connectivity_proto(c_service_t *service, container_connectivity_t
 	message_proto.has_connectivity = true;
 	message_proto.connectivity = (const ContainerConnectivity)connectivity;
 
-	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
+	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
 static void
-c_service_connectivity_observer_cb(container_t *container, UNUSED container_callback_t *cb, void *data)
+c_service_connectivity_observer_cb(container_t *container, UNUSED container_callback_t *cb,
+				   void *data)
 {
 	c_service_t *service = data;
 
@@ -328,7 +325,7 @@ c_service_connectivity_observer_cb(container_t *container, UNUSED container_call
 		/* container connectivity state changed from outside, try to enforce it into the container */
 		if (c_service_send_connectivity_proto(service, desired) < 0) {
 			WARN("Failed to send connectivity status to container %s",
-					container_get_description(container));
+			     container_get_description(container));
 		}
 	}
 }
@@ -338,9 +335,8 @@ c_service_send_airplane_mode_proto(c_service_t *service, bool airplane_mode)
 {
 	ASSERT(service);
 
-	INFO("Trying to send and enforce airplane mode %d to container %s",
-			airplane_mode,
-			container_get_description(service->container));
+	INFO("Trying to send and enforce airplane mode %d to container %s", airplane_mode,
+	     container_get_description(service->container));
 
 	/* fill connectivity and send to TrustmeService */
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
@@ -349,11 +345,12 @@ c_service_send_airplane_mode_proto(c_service_t *service, bool airplane_mode)
 	message_proto.has_airplane_mode = true;
 	message_proto.airplane_mode = airplane_mode;
 
-	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
+	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
 static void
-c_service_airplane_mode_observer_cb(container_t *container, UNUSED container_callback_t *cb, void *data)
+c_service_airplane_mode_observer_cb(container_t *container, UNUSED container_callback_t *cb,
+				    void *data)
 {
 	c_service_t *service = data;
 
@@ -364,7 +361,7 @@ c_service_airplane_mode_observer_cb(container_t *container, UNUSED container_cal
 		/* container airplane mode changed from outside, try to enforce it into the container */
 		if (c_service_send_airplane_mode_proto(service, desired) < 0) {
 			WARN("Failed to send airplane mode change to container %s",
-					container_get_description(container));
+			     container_get_description(container));
 		}
 	}
 }
@@ -427,7 +424,8 @@ c_service_cleanup(c_service_t *service)
 	}
 }
 
-int c_service_stop(c_service_t *service)
+int
+c_service_stop(c_service_t *service)
 {
 	ASSERT(service);
 
@@ -472,18 +470,21 @@ c_service_start_pre_exec(c_service_t *service)
 		return -1;
 
 	// Now wait for initial connect from TrustmeService to socket.
-	service->event_io_sock = event_io_new(service->sock, EVENT_IO_READ, &c_service_cb_accept, service);
+	service->event_io_sock =
+		event_io_new(service->sock, EVENT_IO_READ, &c_service_cb_accept, service);
 	event_add_io(service->event_io_sock);
 
 	/* register connectivity observer */
-	service->connectivity_observer = container_register_observer(service->container, &c_service_connectivity_observer_cb, service);
+	service->connectivity_observer = container_register_observer(
+		service->container, &c_service_connectivity_observer_cb, service);
 	if (!service->connectivity_observer) {
 		WARN("Could not register connectivity observer callback");
 		return -1;
 	}
 
 	/* register airplane_mode observer */
-	service->airplane_mode_observer = container_register_observer(service->container, &c_service_airplane_mode_observer_cb, service);
+	service->airplane_mode_observer = container_register_observer(
+		service->container, &c_service_airplane_mode_observer_cb, service);
 	if (!service->airplane_mode_observer) {
 		WARN("Could not register airplane mode observer callback");
 		return -1;
@@ -503,7 +504,7 @@ c_service_send_message_proto(c_service_t *service, unsigned int code)
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
 	message_proto.code = code;
 
-	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *) &message_proto);
+	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
 int
@@ -513,33 +514,37 @@ c_service_send_message(c_service_t *service, c_service_message_t message)
 	ASSERT(service);
 
 	if (service->sock_connected < 0) {
-		WARN("Trying to send message `%d' to Trustme Service but socket is not connected. " \
-			 "We ignore this for now because the Trustme Service is probably still booting...", message);
+		WARN("Trying to send message `%d' to Trustme Service but socket is not connected. "
+		     "We ignore this for now because the Trustme Service is probably still booting...",
+		     message);
 		// TODO in the future, we should maybe buffer 'message' and try to resend
 		// it once the Trustme Service has connected.
 
-		// If we want to shut the container down, return -1 
+		// If we want to shut the container down, return -1
 		// to have it killed immediately, not waiting for the timeout
-		if (message == C_SERVICE_MESSAGE_SHUTDOWN) return -1;
+		if (message == C_SERVICE_MESSAGE_SHUTDOWN)
+			return -1;
 
 		return 0;
 	}
 
 	int ret = -1;
 	switch (message) {
-		case C_SERVICE_MESSAGE_SHUTDOWN:
-			ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__SHUTDOWN);
-			break;
+	case C_SERVICE_MESSAGE_SHUTDOWN:
+		ret = c_service_send_message_proto(service,
+						   CMLD_TO_SERVICE_MESSAGE__CODE__SHUTDOWN);
+		break;
 
-		case C_SERVICE_MESSAGE_SUSPEND:
-			ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__SUSPEND);
-			break;
+	case C_SERVICE_MESSAGE_SUSPEND:
+		ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__SUSPEND);
+		break;
 
-		case C_SERVICE_MESSAGE_RESUME:
-			if ((ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__RESUME)) < 0)
-				break;
-			//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
+	case C_SERVICE_MESSAGE_RESUME:
+		if ((ret = c_service_send_message_proto(service,
+							CMLD_TO_SERVICE_MESSAGE__CODE__RESUME)) < 0)
 			break;
+		//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
+		break;
 
 		/*
 		case C_SERVICE_MESSAGE_WALLPAPER:
@@ -547,17 +552,18 @@ c_service_send_message(c_service_t *service, c_service_message_t message)
 			break;
 		*/
 
-		case C_SERVICE_MESSAGE_AUDIO_SUSPEND:
-			ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_SUSPEND);
-			break;
+	case C_SERVICE_MESSAGE_AUDIO_SUSPEND:
+		ret = c_service_send_message_proto(service,
+						   CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_SUSPEND);
+		break;
 
-		case C_SERVICE_MESSAGE_AUDIO_RESUME:
-			//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
-			break;
+	case C_SERVICE_MESSAGE_AUDIO_RESUME:
+		//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
+		break;
 
-		default:
-			WARN("Unknown message `%d' (not sent)", message);
-			return -1;
+	default:
+		WARN("Unknown message `%d' (not sent)", message);
+		return -1;
 	}
 
 	if (ret < 0)
