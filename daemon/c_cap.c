@@ -59,7 +59,7 @@ c_cap_set_current_process(const container_t *container)
 #endif
 	/* 20 */ C_CAP_DROP(CAP_SYS_PACCT);
 	///* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
-	/* 22 */ C_CAP_DROP(CAP_SYS_BOOT);
+	///* 22 */ C_CAP_DROP(CAP_SYS_BOOT);
 
 	///* 23 */ C_CAP_DROP(CAP_SYS_NICE); /* Is needed for some usecases*/
 	///* 24 */ C_CAP_DROP(CAP_SYS_RESOURCE); /* does NOT work */
