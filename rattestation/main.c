@@ -43,11 +43,11 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
 	IF_TRUE_RETVAL(0 > length, NULL);
 
-	char *hex = mem_alloc0(sizeof(char)*length*2 + 1);
+	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
 
-	for (int i=0; i < length; ++i) {
+	for (int i = 0; i < length; ++i) {
 		// remember snprintf additionally writs a '0' byte
-		snprintf(hex+i*2, 3, "%.2x", bin[i]);
+		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
 	}
 
 	return hex;
@@ -76,7 +76,7 @@ main(int argc, char **argv)
 	logf_handler_set_prio(ipagent_logfile_handler, LOGF_PRIO_TRACE);
 	logf_handler_set_prio(ipagent_logfile_handler_stdout, LOGF_PRIO_TRACE);
 
-	char *rhost = (argc < 2) ? "127.0.0.1": argv[1];
+	char *rhost = (argc < 2) ? "127.0.0.1" : argv[1];
 
 	event_init();
 

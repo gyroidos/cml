@@ -43,8 +43,7 @@ softtoken_new_from_p12(const char *filename);
  * of the softtoken token.
  */
 int
-softtoken_change_passphrase(softtoken_t *token, const char *oldpass,
-					const char *newpass);
+softtoken_change_passphrase(softtoken_t *token, const char *oldpass, const char *newpass);
 
 /**
  * unlocks a softtoken with a password.
@@ -84,7 +83,7 @@ softtoken_free(softtoken_t *token);
  */
 int
 softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
-		unsigned char **wrapped_key, int *wrapped_key_len);
+		   unsigned char **wrapped_key, int *wrapped_key_len);
 
 /**
  * unwraps a symmetric container key wrapped_key of length wrapped_key_len with a
@@ -92,7 +91,6 @@ softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t pl
  */
 int
 softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
-		unsigned char **plain_key, int *plain_key_len);
+		     unsigned char **plain_key, int *plain_key_len);
 
 #endif /* SOFTTOKEN_H */
-

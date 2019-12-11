@@ -31,15 +31,13 @@ guestos_mgr_update_images(void)
 	return;
 }
 
-
 int
 guestos_mgr_push_config(UNUSED unsigned char *cfg, UNUSED size_t cfglen, UNUSED unsigned char *sig,
-		UNUSED size_t siglen, UNUSED unsigned char *cert, UNUSED size_t certlen)
+			UNUSED size_t siglen, UNUSED unsigned char *cert, UNUSED size_t certlen)
 {
 	// TODO
 	return 0;
 }
-
 
 size_t
 guestos_mgr_get_guestos_count(void)

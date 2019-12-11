@@ -76,7 +76,7 @@ nvmcrypt_init(bool use_secure_boot_policy);
  *  		real key stored inside an nvindex of the TPM.
  */
 nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char* device_path, const char* fde_pw);
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw);
 
 /**
  * This function locks the nvm key inside the TPM for further reading

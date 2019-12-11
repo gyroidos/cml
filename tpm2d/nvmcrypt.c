@@ -39,10 +39,9 @@ static nvmcrypt_fde_state_t fde_state = FDE_RESET;
 static bool secure_boot = false;
 static uint8_t *nvmcrypt_nvindex_policy = NULL;
 
-
 static TPM_RC
 nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session_handle,
-			TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
+			      TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
 {
 	TPM_RC ret;
 	tpm2d_pcr_t **pcrs = NULL;
@@ -50,7 +49,7 @@ nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session
 
 	if (session_type == TPM_SE_TRIAL) {
 		pcrs_len = 1;
-		pcrs = mem_alloc0(sizeof(tpm2d_pcr_t*) * pcrs_len);
+		pcrs = mem_alloc0(sizeof(tpm2d_pcr_t *) * pcrs_len);
 
 		// read one PCR, namely PCR 7 (efi secure boot variables)
 		pcrs[0] = tpm2_pcrread_new(0x7, TPM2D_HASH_ALGORITHM);
@@ -66,8 +65,9 @@ nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session
 	// mask PCR 7
 	ret = tpm2_policypcr(*session_handle, 0x80, pcrs, pcrs_len);
 cleanup:
-	for (size_t i=0; i < pcrs_len; ++i)
-		if (pcrs[i]) tpm2_pcrread_free(pcrs[i]);
+	for (size_t i = 0; i < pcrs_len; ++i)
+		if (pcrs[i])
+			tpm2_pcrread_free(pcrs[i]);
 	if (pcrs)
 		mem_free(pcrs);
 
@@ -94,11 +94,10 @@ nvmcrypt_create_policy(void)
 	IF_FALSE_RETVAL(TPM_RC_SUCCESS == ret, ret);
 
 	return tpm2_flushcontext(se_trial);
-
 }
 
 static uint8_t *
-nvmcrypt_load_key_new(const char * fde_key_pw)
+nvmcrypt_load_key_new(const char *fde_key_pw)
 {
 	TPMI_SH_AUTH_SESSION se_handle;
 	int ret = 0;
@@ -109,7 +108,8 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 	if (tpm2_nv_get_data_size(TPM2D_FDE_NV_HANDLE) != 0) {
 		if (secure_boot) {
 			//ret = nvmcrypt_start_policy_session(TPM_SE_POLICY, &se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw);
-			ret = nvmcrypt_start_policy_session(TPM_SE_POLICY, &se_handle, TPM_RH_NULL, NULL);
+			ret = nvmcrypt_start_policy_session(TPM_SE_POLICY, &se_handle, TPM_RH_NULL,
+							    NULL);
 		} else {
 			// let nv_read do its own auth session
 			se_handle = TPM_RH_NULL;
@@ -117,14 +117,16 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 		}
 		if (TPM_RC_SUCCESS == ret) {
 			fde_key = mem_new(uint8_t, FDE_KEY_LEN);
-			ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, &key_len);
+			ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key,
+					   &key_len);
 
 			if (TPM_RC_SUCCESS == ret) {
 				fde_state = FDE_OK;
 				INFO("Loaded FDE Key from NVRAM");
 				//ret = tpm2_flushcontext(se_handle);
 				if (TPM_RC_SUCCESS != ret)
-					WARN("Failed flush policy session after nvread with error code: %08x", ret);
+					WARN("Failed flush policy session after nvread with error code: %08x",
+					     ret);
 				return fde_key;
 			}
 
@@ -156,22 +158,24 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 		goto err;
 	}
 
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_definespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE,
-						key_len, NULL, fde_key_pw, nvmcrypt_nvindex_policy))) {
+	if (TPM_RC_SUCCESS !=
+	    (ret = tpm2_nv_definespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE, key_len, NULL,
+				       fde_key_pw, nvmcrypt_nvindex_policy))) {
 		ERROR("Failed to generate nv area for fde key with error code: %08x", ret);
 		goto err;
 	}
 
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_write(TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, key_len))) {
+	if (TPM_RC_SUCCESS !=
+	    (ret = tpm2_nv_write(TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, key_len))) {
 		ERROR("Failed to write fde key to nv area with error code: %08x", ret);
 		goto err;
-
 	}
 
 	if (secure_boot) {
-		if (TPM_RC_SUCCESS != (ret = nvmcrypt_start_policy_session(TPM_SE_POLICY, &se_handle,
-							TPM_RH_NULL, NULL))) {
-			ERROR("Failed to start policy session for nvread! with error code: %08x", ret);
+		if (TPM_RC_SUCCESS != (ret = nvmcrypt_start_policy_session(
+					       TPM_SE_POLICY, &se_handle, TPM_RH_NULL, NULL))) {
+			ERROR("Failed to start policy session for nvread! with error code: %08x",
+			      ret);
 			goto err;
 		}
 	} else {
@@ -179,7 +183,8 @@ nvmcrypt_load_key_new(const char * fde_key_pw)
 		se_handle = TPM_RH_NULL;
 	}
 
-	if (TPM_RC_SUCCESS != (ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw, verify_key, &verify_key_len))) {
+	if (TPM_RC_SUCCESS != (ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw,
+						  verify_key, &verify_key_len))) {
 		ERROR("Failed to read fde key from nv area with error code: %08x", ret);
 		goto err;
 	}
@@ -208,20 +213,20 @@ err:
 }
 
 nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char* device_path, const char *fde_pw)
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 {
 	IF_TRUE_RETVAL(device_path == NULL || !file_exists(device_path), FDE_NO_DEVICE);
 	char *dev_name = basename(device_path);
 
-	uint8_t * key = nvmcrypt_load_key_new(fde_pw);
+	uint8_t *key = nvmcrypt_load_key_new(fde_pw);
 	IF_NULL_RETVAL(key, fde_state);
 
 	// cryptfs_setup_volume_new expects an ascii string as key
-	char * ascii_key = convert_bin_to_hex_new(key, FDE_KEY_LEN);
+	char *ascii_key = convert_bin_to_hex_new(key, FDE_KEY_LEN);
 
 	INFO("Setting up crypto device mapping for %s to %s", device_path, dev_name);
 
-	char* mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key);
+	char *mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key);
 
 	if (mapped_path == NULL) {
 		ERROR("Failed to setup device mapping for %s", device_path);
@@ -245,8 +250,8 @@ nvmcrypt_dm_lock(const char *fde_pw)
 nvmcrypt_fde_state_t
 nvmcrypt_dm_reset(const char *hierarchy_pw)
 {
-	if (TPM_RC_SUCCESS == tpm2_nv_undefinespace(TPM2D_KEY_HIERARCHY,
-			       TPM2D_FDE_NV_HANDLE, hierarchy_pw))
+	if (TPM_RC_SUCCESS ==
+	    tpm2_nv_undefinespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE, hierarchy_pw))
 		fde_state = FDE_RESET;
 	return fde_state;
 }

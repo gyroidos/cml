@@ -43,9 +43,9 @@
 void
 timer_cb(event_timer_t *timer, void *data)
 {
-	int *count = (int *) data;
+	int *count = (int *)data;
 
-	DEBUG("timer cb: timer=%p, count=%d", (void *) timer, *count);
+	DEBUG("timer cb: timer=%p, count=%d", (void *)timer, *count);
 	if (!(*count)--) {
 		event_remove_timer(timer);
 		event_timer_free(timer);
@@ -59,9 +59,9 @@ timer_cb(event_timer_t *timer, void *data)
 void
 timer_cb2(event_timer_t *timer, void *data)
 {
-	char *payload = (char *) data;
+	char *payload = (char *)data;
 
-	DEBUG("timer cb: timer=%p, payload=%s", (void *) timer, payload);
+	DEBUG("timer cb: timer=%p, payload=%s", (void *)timer, payload);
 }
 
 /** Test callback for signal events
@@ -72,10 +72,9 @@ timer_cb2(event_timer_t *timer, void *data)
 void
 signal_cb(int signum, event_signal_t *sig, void *data)
 {
-
 	DEBUG("received signal");
-	event_remove_io((event_io_t*) data);
-	event_io_free((event_io_t*) data);
+	event_remove_io((event_io_t *)data);
+	event_io_free((event_io_t *)data);
 }
 
 /** Test callback for io events
@@ -99,8 +98,8 @@ void
 timer_cb3(event_timer_t *timer, void *data)
 {
 	DEBUG("event timer 3 called");
-	event_remove_signal((event_signal_t*) data);
-	event_signal_free((event_signal_t*) data);
+	event_remove_signal((event_signal_t *)data);
+	event_signal_free((event_signal_t *)data);
 }
 
 /** Dummy timer callback
@@ -119,8 +118,8 @@ void
 timer_cb5(event_timer_t *timer, void *data)
 {
 	DEBUG("event timer 5 called");
-	event_remove_timer((event_timer_t*) data);
-	event_timer_free((event_timer_t*) data);
+	event_remove_timer((event_timer_t *)data);
+	event_timer_free((event_timer_t *)data);
 }
 
 /** Main unit test function for event queue

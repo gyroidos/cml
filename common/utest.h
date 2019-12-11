@@ -22,13 +22,17 @@
  */
 
 #define __android_log_write utest___android_log_write
-int utest___android_log_write(int prio, const char *tag, const char *text);
+int
+utest___android_log_write(int prio, const char *tag, const char *text);
 
 #define klog_init utest_klog_init
-void utest_klog_init(void);
+void
+utest_klog_init(void);
 
 #define klog_set_level utest_klog_set_level
-void utest_klog_set_level(int level);
+void
+utest_klog_set_level(int level);
 
 #define klog_write utest_klog_write
-void utest_klog_write(int level, const char *fmt, ...);
+void
+utest_klog_write(int level, const char *fmt, ...);

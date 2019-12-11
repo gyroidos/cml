@@ -39,7 +39,6 @@
 // Only used on platforms without TPM, otherwise TPM-bound key is used
 #define DEVICE_KEY_FILE SCD_TOKEN_DIR "/device.key"
 
-
 /**
  * Returns the directory in which the token files are stored.
  * Currently, only softtokens in the form of .p12 files are supported.
@@ -60,4 +59,3 @@ bool
 scd_in_provisioning_mode(void);
 
 #endif // SCD_H
-

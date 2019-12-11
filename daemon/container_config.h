@@ -180,7 +180,7 @@ container_config_get_feature_list_new(const container_config_t *config);
  * Provides the list of network interfaces assigned to the container from the container's config file
  */
 
-list_t*
+list_t *
 container_config_get_net_ifaces_list_new(const container_config_t *config);
 
 /**
@@ -209,11 +209,11 @@ container_config_get_dns_server(const container_config_t *config);
 bool
 container_config_has_netns(const container_config_t *config);
 
-
 /**
  * Adds the given interface name to the list of network interfaces assigned to the container
  */
-void container_config_append_net_ifaces(const container_config_t *config, const char *iface);
+void
+container_config_append_net_ifaces(const container_config_t *config, const char *iface);
 
 /**
  * Removes the given interface name from the list of network interfaces assigned to the container

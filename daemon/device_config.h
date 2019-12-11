@@ -101,4 +101,3 @@ device_config_get_host_if(const device_config_t *config);
 bool
 device_config_get_locally_signed_images(const device_config_t *config);
 #endif /* DEVICE_H */
-

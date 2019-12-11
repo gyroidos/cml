@@ -74,7 +74,8 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	DEBUG("Logfile will be closed and a new file opened");
 	logf_unregister(cml_daemon_logfile_handler);
-	cml_daemon_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-daemon"));
+	cml_daemon_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new("/data/logs/cml-daemon"));
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_WARN);
 }
 
@@ -93,7 +94,8 @@ main(int argc, char **argv)
 
 	// TODO: where should we store the log files?
 	// TODO: disable for non developer builds?
-	cml_daemon_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-daemon"));
+	cml_daemon_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new("/data/logs/cml-daemon"));
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 
 	main_core_dump_enable();
@@ -112,7 +114,9 @@ main(int argc, char **argv)
 	event_add_signal(sig);
 
 	DEBUG("Initializing cmld...");
-	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, main_logfile_rename_cb, NULL);
+	event_timer_t *logfile_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER,
+				main_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
 	if (cmld_init(path) < 0)

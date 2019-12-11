@@ -222,7 +222,6 @@ cmld_change_device_pin(control_t *control, const char *passwd, const char *newpa
 void
 cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
 
-
 /**
  * Delete a GuestOS by given name
  * Try to delete the latest GuestOS by the given name. This Function silently
@@ -233,7 +232,4 @@ cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
 void
 cmld_guestos_delete(const char *guestos_name);
 
-
-
 #endif /* CMLD_H */
-

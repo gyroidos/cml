@@ -69,7 +69,8 @@ tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(tpm2d_logfile_handler);
-	tpm2d_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-tpm2d"));
+	tpm2d_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new("/data/logs/cml-tpm2d"));
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);
 }
 
@@ -78,9 +79,11 @@ tpm2d_setup_salt_key(void)
 {
 	// create primary key in NULL hierarchy wwhcih is used for session encryption
 	int ret;
-	if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R,
-			NULL, NULL, NULL, &tpm2d_salt_key_handle))) {
-		FATAL("Failed to create primary key for session encryption with error code: %08x", ret);
+	if (TPM_RC_SUCCESS !=
+	    (ret = tpm2_createprimary_asym(TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R, NULL, NULL, NULL,
+					   &tpm2d_salt_key_handle))) {
+		FATAL("Failed to create primary key for session encryption with error code: %08x",
+		      ret);
 	}
 }
 
@@ -97,14 +100,15 @@ tpm2d_get_as_key_handle(void)
 	if (TPM_RH_NULL == tpm2d_as_key_handle_tr) {
 		int ret;
 		// load attestation key
-		if (TPM_RC_SUCCESS != (ret = tpm2_load(tpm2d_as_key_handle_pt_ps,
-					tpm2d_as_key_pwd_pt, TPM2D_ATT_PRIV_FILE,
-					TPM2D_ATT_PUB_FILE, &tpm2d_as_key_handle_tr))) {
+		if (TPM_RC_SUCCESS !=
+		    (ret = tpm2_load(tpm2d_as_key_handle_pt_ps, tpm2d_as_key_pwd_pt,
+				     TPM2D_ATT_PRIV_FILE, TPM2D_ATT_PUB_FILE,
+				     &tpm2d_as_key_handle_tr))) {
 			ERROR("Failed to load attestation key with error code: %08x", ret);
 			return TPM_RH_NULL;
 		} else {
 			INFO("Loaded signing key for attestation with handle %08x from parent handle %08x.",
-				tpm2d_as_key_handle_tr, tpm2d_as_key_handle_pt_ps);
+			     tpm2d_as_key_handle_tr, tpm2d_as_key_handle_pt_ps);
 		}
 	}
 	return tpm2d_as_key_handle_tr;
@@ -139,30 +143,39 @@ tpm2d_setup_keys(void)
 	}
 retry:
 	// create attestation key based on a persistent parent key
-	if (TPM_RC_SUCCESS != (ret = tpm2_create_asym(tpm2d_as_key_handle_pt_ps, TPM2D_KEY_TYPE_STORAGE_U,
-				(TPMA_OBJECT_FIXEDTPM | TPMA_OBJECT_FIXEDPARENT),
-				tpm2d_as_key_pwd_pt, TPM2D_ATT_KEY_PW,
-				TPM2D_ATT_PRIV_FILE, TPM2D_ATT_PUB_FILE, TPM2D_ATT_TSS_FILE))) {
+	if (TPM_RC_SUCCESS !=
+	    (ret = tpm2_create_asym(tpm2d_as_key_handle_pt_ps, TPM2D_KEY_TYPE_STORAGE_U,
+				    (TPMA_OBJECT_FIXEDTPM | TPMA_OBJECT_FIXEDPARENT),
+				    tpm2d_as_key_pwd_pt, TPM2D_ATT_KEY_PW, TPM2D_ATT_PRIV_FILE,
+				    TPM2D_ATT_PUB_FILE, TPM2D_ATT_TSS_FILE))) {
 		if (handle_possibly_uninit) {
 			INFO("Attestation parent possibly unitialized, trying to create and persist a primary key");
 			// create primary key
-			if (TPM_RC_SUCCESS != (ret = tpm2_createprimary_asym(TPM2D_KEY_HIERARCHY, TPM2D_KEY_TYPE_STORAGE_R, NULL,
-					tpm2d_as_key_pwd_pt, TPM2D_ATT_PARENT_PUB_FILE, &tpm2d_as_key_handle_pt_tr))) {
+			if (TPM_RC_SUCCESS !=
+			    (ret = tpm2_createprimary_asym(
+				     TPM2D_KEY_HIERARCHY, TPM2D_KEY_TYPE_STORAGE_R, NULL,
+				     tpm2d_as_key_pwd_pt, TPM2D_ATT_PARENT_PUB_FILE,
+				     &tpm2d_as_key_handle_pt_tr))) {
 				dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
-				FATAL("Failed to create att primary key with error code: %08x", ret);
+				FATAL("Failed to create att primary key with error code: %08x",
+				      ret);
 			}
 			INFO("Created att primary key with handle %08x", tpm2d_as_key_handle_pt_tr);
 
-			if (TPM_RC_SUCCESS != (ret = tpm2_evictcontrol(TPM2D_KEY_HIERARCHY, NULL,
-								tpm2d_as_key_handle_pt_tr, tpm2d_as_key_handle_pt_ps))) {
+			if (TPM_RC_SUCCESS !=
+			    (ret = tpm2_evictcontrol(TPM2D_KEY_HIERARCHY, NULL,
+						     tpm2d_as_key_handle_pt_tr,
+						     tpm2d_as_key_handle_pt_ps))) {
 				dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
-				FATAL("Failed to persist att primary key with error code: %08x", ret);
+				FATAL("Failed to persist att primary key with error code: %08x",
+				      ret);
 			}
-			INFO("Persisted att primary key with handle %08x -> %08x", tpm2d_as_key_handle_pt_tr,
-					tpm2d_as_key_handle_pt_ps);
+			INFO("Persisted att primary key with handle %08x -> %08x",
+			     tpm2d_as_key_handle_pt_tr, tpm2d_as_key_handle_pt_ps);
 			handle_possibly_uninit = false;
 
-			if (TPM_RC_SUCCESS != (ret = tpm2_flushcontext(tpm2d_as_key_handle_pt_tr))) {
+			if (TPM_RC_SUCCESS !=
+			    (ret = tpm2_flushcontext(tpm2d_as_key_handle_pt_tr))) {
 				ERROR("Failed to flush transient object handle of att primary key");
 			}
 			goto retry;
@@ -171,7 +184,8 @@ retry:
 			FATAL("Failed to create attestation key with error code: %08x", ret);
 		}
 	} else {
-		INFO("Created signing key for attestation in %s, not loading need to wait for provsg ...", token_dir);
+		INFO("Created signing key for attestation in %s, not loading need to wait for provsg ...",
+		     token_dir);
 	}
 	mem_free(token_dir);
 }
@@ -191,8 +205,8 @@ tpm2d_init(void)
 
 	// setup directory for session artefacts, generated by tss2
 	if (mkdir(session_dir, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir data dir: %s", TPM2D_BASE_DIR"/session");
-	if (setenv("TPM_DATA_DIR", TPM2D_BASE_DIR"/session", 1) < 0)
+		FATAL_ERRNO("Could not mkdir data dir: %s", TPM2D_BASE_DIR "/session");
+	if (setenv("TPM_DATA_DIR", TPM2D_BASE_DIR "/session", 1) < 0)
 		FATAL_ERRNO("Could not set environment!");
 
 	// if real hw tpm exists, setup environment
@@ -273,23 +287,21 @@ print_usage(const char *cmd)
 	exit(-1);
 }
 
-static const struct option global_options[] = {
-	{"sim",  no_argument, 0, 's'},
-	{"help", no_argument, 0, 'h'},
-	{0, 0, 0, 0}
-};
+static const struct option global_options[] = { { "sim", no_argument, 0, 's' },
+						{ "help", no_argument, 0, 'h' },
+						{ 0, 0, 0, 0 } };
 
 int
-main(UNUSED int argc, char **argv) {
-
+main(UNUSED int argc, char **argv)
+{
 	if (file_exists("/dev/log/main"))
 		logf_register(&logf_android_write, logf_android_new(argv[0]));
 	else
 		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
-	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, ":sh",
-					global_options, &option_index)); ) {
+	for (int c, option_index = 0;
+	     - 1 != (c = getopt_long(argc, argv, ":sh", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			use_simulator = true;
@@ -299,7 +311,8 @@ main(UNUSED int argc, char **argv) {
 		}
 	}
 
-	tpm2d_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-tpm2d"));
+	tpm2d_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new("/data/logs/cml-tpm2d"));
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);
 
 	INFO("Starting tpm2d ...");
@@ -311,7 +324,9 @@ main(UNUSED int argc, char **argv) {
 	event_signal_t *sig_term = event_signal_new(SIGTERM, &main_sigterm_cb, NULL);
 	event_add_signal(sig_term);
 
-	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, tpm2d_logfile_rename_cb, NULL);
+	event_timer_t *logfile_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER,
+				tpm2d_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
 	tpm2d_init();

@@ -35,10 +35,9 @@
 void
 guestos_mgr_update_images(void);
 
-
 int
 guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen,
-		unsigned char *cert, size_t certlen);
+			unsigned char *cert, size_t certlen);
 
 size_t
 guestos_mgr_get_guestos_count(void);
@@ -50,4 +49,3 @@ void *
 guestos_get_raw_ptr(const guestos_t *os);
 
 #endif // GUESTOS_STUB_H
-

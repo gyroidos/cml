@@ -69,7 +69,6 @@ guestos_mgr_delete(guestos_t *os);
 
 /******************************************************************************/
 
-
 /**
  * Installs the given new or updated GuestOS config.
  * @param cfg	    buffer with the new/updated GuestOS config to install
@@ -82,7 +81,7 @@ guestos_mgr_delete(guestos_t *os);
  */
 int
 guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen,
-		unsigned char *cert, size_t certlen);
+			unsigned char *cert, size_t certlen);
 
 /**
  * Downloads (if necessary) the images for the latest versions of the installed GuestOSes
@@ -105,7 +104,6 @@ guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen);
  */
 int
 guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen);
-
 
 /******************************************************************************/
 
@@ -139,4 +137,3 @@ guestos_mgr_get_guestos_by_index(size_t i);
 /******************************************************************************/
 
 #endif /* GUESTOS_MGR_H */
-

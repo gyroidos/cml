@@ -68,7 +68,7 @@ static void
 guestos_mgr_purge_obsolete(void)
 {
 	INFO("Looking for obsolete GuestOSes to purge...");
-	for (list_t *l = guestos_list; l; ) {
+	for (list_t *l = guestos_list; l;) {
 		list_t *next = l->next;
 		guestos_t *os = l->data;
 		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
@@ -96,7 +96,7 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	char *cert_file = guestos_get_cert_file_new(dir);
 
 	smartcard_crypto_verify_result_t verify_result = smartcard_crypto_verify_file_block(
-			cfg_file, sig_file, cert_file, GUESTOS_MGR_VERIFY_HASH_ALGO);
+		cfg_file, sig_file, cert_file, GUESTOS_MGR_VERIFY_HASH_ALGO);
 
 	switch (verify_result) {
 	case VERIFY_GOOD:
@@ -113,14 +113,14 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	default:
 		guestos_verified = GUESTOS_UNSIGNED;
 		ERROR("Signature verification failed (%d) while loading GuestOS config %s, skipping.",
-				verify_result, cfg_file);
+		      verify_result, cfg_file);
 		res = 1;
 		goto cleanup_files;
 	}
 
 	if (guestos_mgr_add_from_file(cfg_file, guestos_verified) < 0) {
 		WARN("Could not add guest operating system from file %s.", cfg_file);
-	} else  {
+	} else {
 		res = 1;
 	}
 
@@ -157,7 +157,7 @@ guestos_mgr_is_guestos_used_by_containers(const char *os_name)
 {
 	ASSERT(os_name);
 	int n = cmld_containers_get_count();
-	for (int i=0; i<n; i++) {
+	for (int i = 0; i < n; i++) {
 		container_t *c = cmld_container_get_by_index(i);
 		const char *container_os_name = guestos_get_name(container_get_os(c));
 		if (!strcmp(container_os_name, os_name)) {
@@ -206,7 +206,8 @@ guestos_mgr_delete(guestos_t *os)
 	ASSERT(os);
 	const char *os_name = guestos_get_name(os);
 	if (guestos_mgr_is_guestos_used_by_containers(os_name)) {
-		WARN("Containers which use guestos %s still exist! Not deleting anything.", os_name);
+		WARN("Containers which use guestos %s still exist! Not deleting anything.",
+		     os_name);
 		return;
 	}
 
@@ -219,7 +220,6 @@ guestos_mgr_delete(guestos_t *os)
 
 /******************************************************************************/
 
-
 static void
 download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)
 {
@@ -227,10 +227,9 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED vo
 
 	if (!complete || count > 0) {
 		INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE,
-			complete ? GUESTOS_MGR_UPDATE_SUCCESS : GUESTOS_MGR_UPDATE_FAILED);
+		     complete ? GUESTOS_MGR_UPDATE_SUCCESS : GUESTOS_MGR_UPDATE_FAILED);
 	}
 }
-
 
 /**
  * Downloads, if necessary, the images for the latest (by version) available GuestOS with the given name.
@@ -252,7 +251,7 @@ guestos_mgr_update_images(void)
 {
 	// TODO: iterate containers and then download latest os?
 	size_t n = guestos_mgr_get_guestos_count();
-	for (size_t i=0; i<n; i++) {
+	for (size_t i = 0; i < n; i++) {
 		guestos_t *os = guestos_mgr_get_guestos_by_index(i);
 		const char *os_name = guestos_get_name(os);
 		if (guestos_mgr_is_guestos_used_by_containers(os_name)) {
@@ -261,14 +260,13 @@ guestos_mgr_update_images(void)
 	}
 }
 
-
 static char *
 write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 {
 	char *file = mem_strdup("/tmp/tmpXXXXXXXX");
 	int fd = mkstemp(file);
 	if (fd != -1) {
-		int len = fd_write(fd, (char *) buf, buflen);
+		int len = fd_write(fd, (char *)buf, buflen);
 		close(fd);
 		if (len >= 0 && (size_t)len == buflen)
 			return file;
@@ -280,11 +278,10 @@ write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 	return NULL;
 }
 
-
 static void
-push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
-		const char *cfg_file, const char *sig_file, const char *cert_file,
-		UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
+push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char *cfg_file,
+		      const char *sig_file, const char *cert_file,
+		      UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
 {
 	INFO("Push GuestOS config (Phase 2)");
 
@@ -300,7 +297,7 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 		// fallthrough
 	default:
 		ERROR("Signature verification failed (%d) for pushed GuestOS config %s, skipping.",
-				verify_result, cfg_file);
+		      verify_result, cfg_file);
 		goto cleanup_tmpfiles;
 	}
 
@@ -318,12 +315,12 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 		uint64_t old_ver = guestos_get_version(old_os);
 		if (os_ver <= old_ver) {
 			WARN("Skipping update of GuestOS %s version %" PRIu64
-					" to older/same version %" PRIu64 ".",
-					os_name, old_ver, os_ver);
+			     " to older/same version %" PRIu64 ".",
+			     os_name, old_ver, os_ver);
 			goto cleanup_os;
 		}
-		DEBUG("Updating GuestOS config for %s from v%" PRIu64 " to v%" PRIu64 ".",
-				os_name, old_ver, os_ver);
+		DEBUG("Updating GuestOS config for %s from v%" PRIu64 " to v%" PRIu64 ".", os_name,
+		      old_ver, os_ver);
 	} else {
 		// Fresh install
 		DEBUG("Installing GuestOS config for %s v%" PRIu64 ".", os_name, os_ver);
@@ -338,18 +335,18 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 
 	// 2. save pushed config, signature and cert
 	if (file_move(cfg_file, guestos_get_cfg_file(os), GUESTOS_MGR_FILE_MOVE_BLOCKSIZE) < 0) {
-		ERROR_ERRNO("Failed to move GuestOS config %s to %s",
-				cfg_file, guestos_get_cfg_file(os));
+		ERROR_ERRNO("Failed to move GuestOS config %s to %s", cfg_file,
+			    guestos_get_cfg_file(os));
 		goto cleanup_purge;
 	}
 	if (file_move(sig_file, guestos_get_sig_file(os), GUESTOS_MGR_FILE_MOVE_BLOCKSIZE) < 0) {
-		ERROR_ERRNO("Failed to move GuestOS config signature %s to %s",
-				sig_file, guestos_get_sig_file(os));
+		ERROR_ERRNO("Failed to move GuestOS config signature %s to %s", sig_file,
+			    guestos_get_sig_file(os));
 		goto cleanup_purge;
 	}
 	if (file_move(cert_file, guestos_get_cert_file(os), GUESTOS_MGR_FILE_MOVE_BLOCKSIZE) < 0) {
-		ERROR_ERRNO("Failed to move GuestOS config certificate %s to %s",
-				cert_file, guestos_get_cert_file(os));
+		ERROR_ERRNO("Failed to move GuestOS config certificate %s to %s", cert_file,
+			    guestos_get_cert_file(os));
 		goto cleanup_purge;
 	}
 
@@ -357,7 +354,8 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result,
 	guestos_list = list_append(guestos_list, os);
 
 	INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
-		 cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD : GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
+	     cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD :
+				     GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
 
 	// 4. trigger image download if os is used by a container or a fresh install
 	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os) {
@@ -376,10 +374,9 @@ cleanup_tmpfiles:
 	unlink(cert_file);
 }
 
-
 int
 guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen,
-		unsigned char *cert, size_t certlen)
+			unsigned char *cert, size_t certlen)
 {
 	INFO("Push GuestOS config (Phase 1)");
 
@@ -389,7 +386,8 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 	int res = -1;
 	if (tmp_cfg_file && tmp_sig_file && tmp_cert_file) {
 		res = smartcard_crypto_verify_file(tmp_cfg_file, tmp_sig_file, tmp_cert_file,
-				GUESTOS_MGR_VERIFY_HASH_ALGO, push_config_verify_cb, NULL);
+						   GUESTOS_MGR_VERIFY_HASH_ALGO,
+						   push_config_verify_cb, NULL);
 	}
 	if (res < 0) {
 		unlink(tmp_cfg_file);
@@ -411,12 +409,13 @@ guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
 	char *tmp_cacert_file = write_to_tmpfile_new(cacert, cacertlen);
 	IF_NULL_RETVAL(tmp_cacert_file, ret);
 
-	if ((ret = file_move(tmp_cacert_file, LOCALCA_ROOT_CERT, GUESTOS_MGR_FILE_MOVE_BLOCKSIZE)) < 0) {
-		ERROR_ERRNO("Failed to move localca root certificate %s to %s",
-				tmp_cacert_file, LOCALCA_ROOT_CERT);
+	if ((ret = file_move(tmp_cacert_file, LOCALCA_ROOT_CERT, GUESTOS_MGR_FILE_MOVE_BLOCKSIZE)) <
+	    0) {
+		ERROR_ERRNO("Failed to move localca root certificate %s to %s", tmp_cacert_file,
+			    LOCALCA_ROOT_CERT);
 	} else {
-		INFO("Successfully installed localca root certificate %s to %s",
-				tmp_cacert_file, LOCALCA_ROOT_CERT);
+		INFO("Successfully installed localca root certificate %s to %s", tmp_cacert_file,
+		     LOCALCA_ROOT_CERT);
 	}
 	mem_free(tmp_cacert_file);
 	return ret;
@@ -426,7 +425,7 @@ int
 guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 {
 	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
-	const char *end_cert_str   = "-----END CERTIFICATE-----";
+	const char *end_cert_str = "-----END CERTIFICATE-----";
 
 	int ret = -1;
 	if (!file_is_dir(TRUSTED_CA_STORE))
@@ -435,7 +434,7 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 	// Sanity check file is a certificate
 	size_t end_offset = cacertlen - strlen(end_cert_str) - 1;
 	if (strncmp((char *)cacert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
-			strncmp((char*)cacert+end_offset, end_cert_str, strlen(end_cert_str)) != 0) {
+	    strncmp((char *)cacert + end_offset, end_cert_str, strlen(end_cert_str)) != 0) {
 		ERROR("Sanity check failed. provided data is not an encoded certificate");
 		return ret;
 	}
@@ -454,11 +453,11 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 	}
 
 	if ((ret = file_move(tmp_cacert_file, cacert_file, GUESTOS_MGR_FILE_MOVE_BLOCKSIZE)) < 0) {
-		ERROR_ERRNO("Failed to move new ca certificate %s to %s",
-				tmp_cacert_file, cacert_file);
+		ERROR_ERRNO("Failed to move new ca certificate %s to %s", tmp_cacert_file,
+			    cacert_file);
 	} else {
-		INFO("Successfully installed new ca certificate %s to %s",
-				tmp_cacert_file, cacert_file);
+		INFO("Successfully installed new ca certificate %s to %s", tmp_cacert_file,
+		     cacert_file);
 	}
 out:
 	mem_free(cacert_file);
@@ -466,8 +465,6 @@ out:
 	mem_free(tmp_cacert_file);
 	return ret;
 }
-
-
 
 /******************************************************************************/
 
@@ -484,8 +481,9 @@ guestos_mgr_get_latest_by_name(const char *name, bool complete)
 			uint64_t version = guestos_get_version(os);
 			// TODO cache image complete result in guestos instance and get rid of check here?
 			if (complete && !guestos_images_are_complete(os, false)) {
-				DEBUG("GuestOS %s v%" PRIu64 " is incomplete (missing images) or broken, skipping.",
-						guestos_get_name(os), version);
+				DEBUG("GuestOS %s v%" PRIu64
+				      " is incomplete (missing images) or broken, skipping.",
+				      guestos_get_name(os), version);
 				continue;
 			}
 			if (version > latest_version) {
@@ -497,20 +495,17 @@ guestos_mgr_get_latest_by_name(const char *name, bool complete)
 	return latest_os;
 }
 
-
 size_t
 guestos_mgr_get_guestos_count(void)
 {
 	return list_length(guestos_list);
 }
 
-
 guestos_t *
 guestos_mgr_get_guestos_by_index(size_t index)
 {
 	return list_nth_data(guestos_list, index);
 }
-
 
 #if 0
 const guestos_mount_t *

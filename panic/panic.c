@@ -51,36 +51,37 @@ static int copied_kernel_log_fd = -1;
 static int kernel_log_file_fd = -1;
 
 UNUSED static void
-panic_start_cml_logcat(void) {
-
+panic_start_cml_logcat(void)
+{
 	DEBUG("Starting to read logcat");
-	char* logfile_name = mem_printf("%s%s", LOGFILE_DIR, "logcat");
+	char *logfile_name = mem_printf("%s%s", LOGFILE_DIR, "logcat");
 	FILE *logcat_fd = logf_file_new(logfile_name);
 	mem_free(logfile_name);
 	DEBUG("Writing logcat in file %s", logfile_name);
 	dup2(fileno(logcat_fd), 1);
 	dup2(fileno(logcat_fd), 2);
 	fclose(logcat_fd);
-	execl("/sbin/cml-logcat", "cml-logcat", "-A", "-b", "radio", "-b", "system", "-b", "main","-v","time", NULL);
+	execl("/sbin/cml-logcat", "cml-logcat", "-A", "-b", "radio", "-b", "system", "-b", "main",
+	      "-v", "time", NULL);
 	ERROR_ERRNO("Could not exec cml-logcat");
 }
 
 static void
-panic_read_kernel_log(void) {
-
-
+panic_read_kernel_log(void)
+{
 	if (copied_kernel_log_fd > 0) {
 		close(copied_kernel_log_fd);
 	}
 	if (kernel_log_file_fd > 0) {
 		close(kernel_log_file_fd);
 	}
-	char* logfile_name = mem_printf("%s%s", LOGFILE_DIR, "kmsg");
+	char *logfile_name = mem_printf("%s%s", LOGFILE_DIR, "kmsg");
 	char *copied_kernel_log = logf_file_new_name(logfile_name);
 	mem_free(logfile_name);
 	copied_kernel_log_fd = open(copied_kernel_log, O_WRONLY | O_CREAT | O_APPEND, 00666);
 	if (copied_kernel_log_fd < 0) {
-		ERROR_ERRNO("Could not open output file to copy kernel log to %s", copied_kernel_log);
+		ERROR_ERRNO("Could not open output file to copy kernel log to %s",
+			    copied_kernel_log);
 		mem_free(copied_kernel_log);
 		return;
 	}
@@ -91,8 +92,8 @@ panic_read_kernel_log(void) {
 	}
 
 	int bytes_read = 1;
-	char* buf = mem_new(char, BUF_SIZE_READ_KERNEL_LOG);
-	while(bytes_read > 0) {
+	char *buf = mem_new(char, BUF_SIZE_READ_KERNEL_LOG);
+	while (bytes_read > 0) {
 		bytes_read = read(kernel_log_file_fd, buf, BUF_SIZE_READ_KERNEL_LOG);
 		if (bytes_read == 0) {
 			break;
@@ -102,7 +103,8 @@ panic_read_kernel_log(void) {
 		} else {
 			int bytes_written = write(copied_kernel_log_fd, buf, bytes_read);
 			if (bytes_written < 0) {
-				ERROR_ERRNO("Could not copy kernel log to output file %s.", copied_kernel_log);
+				ERROR_ERRNO("Could not copy kernel log to output file %s.",
+					    copied_kernel_log);
 				break;
 			}
 		}
@@ -113,15 +115,16 @@ panic_read_kernel_log(void) {
 }
 
 static int
-panic_restart_child(int pid, void (*func)(void)) {
-
+panic_restart_child(int pid, void (*func)(void))
+{
 	if (pid != 0) {
 		int ret_val = kill(pid, SIGTERM);
 		if (ret_val) {
-			ERROR_ERRNO("Could not send SIGTERM to %i. Child process could not be terminated.", pid);
+			ERROR_ERRNO(
+				"Could not send SIGTERM to %i. Child process could not be terminated.",
+				pid);
 			return -1;
-		}
-		else {
+		} else {
 			DEBUG("Successfully sent SIGTERM to child process %i.", pid);
 		}
 	}
@@ -142,10 +145,12 @@ panic_restart_child(int pid, void (*func)(void)) {
 					DEBUG("Child process still running, sending SIGKILL");
 					int ret_val = kill(pid, SIGKILL);
 					if (ret_val) {
-						ERROR_ERRNO("Could not send SIGKILL to %i. Child process could not be terminated.", pid);
-					}
-					else {
-						DEBUG("Successfully sent SIGKILL to child process %i.", pid);
+						ERROR_ERRNO(
+							"Could not send SIGKILL to %i. Child process could not be terminated.",
+							pid);
+					} else {
+						DEBUG("Successfully sent SIGKILL to child process %i.",
+						      pid);
 					}
 				} else {
 					DEBUG("Child is killed");
@@ -158,8 +163,8 @@ panic_restart_child(int pid, void (*func)(void)) {
 }
 
 static void
-panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data) {
-
+panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+{
 	if (kernel_log_pid > 0) {
 		DEBUG("Logfiles must be closed and new files opened");
 	}
@@ -180,13 +185,14 @@ panic_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data) {
 }
 
 static void
-panic_delete_old_logs_cb(UNUSED event_timer_t *timer, UNUSED void *data) {
-
+panic_delete_old_logs_cb(UNUSED event_timer_t *timer, UNUSED void *data)
+{
 	DIR *directory = NULL;
 	struct dirent *entry = NULL;
 	struct stat stat_buf;
 
-	DEBUG("Opening %s to look for logs older than %i (= %i seconds) days", LOGFILE_DIR, MAX_LOGFILE_AGE_IN_DAYS, MAX_DAYS_IN_SECONDS);
+	DEBUG("Opening %s to look for logs older than %i (= %i seconds) days", LOGFILE_DIR,
+	      MAX_LOGFILE_AGE_IN_DAYS, MAX_DAYS_IN_SECONDS);
 	directory = opendir(LOGFILE_DIR);
 	if (directory != NULL) {
 		while ((entry = readdir(directory)) != NULL) {
@@ -199,38 +205,40 @@ panic_delete_old_logs_cb(UNUSED event_timer_t *timer, UNUSED void *data) {
 			if (stat_buf.st_mtime) {
 				double diff = difftime(time(0), stat_buf.st_mtime);
 				if (diff > MAX_DAYS_IN_SECONDS) {
-					DEBUG("Logfile %s was last modified more than %i days ago", entry_name_with_path, MAX_LOGFILE_AGE_IN_DAYS);
+					DEBUG("Logfile %s was last modified more than %i days ago",
+					      entry_name_with_path, MAX_LOGFILE_AGE_IN_DAYS);
 					DEBUG("Deleting %s", entry_name_with_path);
 					int ret = remove(entry_name_with_path);
 					if (ret) {
-						ERROR_ERRNO("%s could not be removed", entry_name_with_path);
+						ERROR_ERRNO("%s could not be removed",
+							    entry_name_with_path);
 					}
 				}
 			}
 			mem_free(entry_name_with_path);
 		}
 		closedir(directory);
-	}
-	else {
+	} else {
 		ERROR_ERRNO("Couldn't open the directory %s", LOGFILE_DIR);
 	}
 }
 
-char*
-panic_find_last_kmsg(void) {
-
+char *
+panic_find_last_kmsg(void)
+{
 	DIR *directory = NULL;
 	struct dirent *entry = NULL;
 	struct stat stat_buf;
 	double smallest_diff = DBL_MAX;
-	char* filename_of_latest_kmsg = NULL;
+	char *filename_of_latest_kmsg = NULL;
 
 	DEBUG("Opening %s to look for last kmsg", LOGFILE_DIR);
 	directory = opendir(LOGFILE_DIR);
 	if (directory != NULL) {
 		while ((entry = readdir(directory)) != NULL) {
 			if (strstr(entry->d_name, "kmsg") != NULL) {
-				char *entry_name_with_path = mem_printf("%s%s", LOGFILE_DIR, entry->d_name);
+				char *entry_name_with_path =
+					mem_printf("%s%s", LOGFILE_DIR, entry->d_name);
 				if (stat(entry_name_with_path, &stat_buf) == -1) {
 					ERROR_ERRNO("Could not stat %s", entry->d_name);
 					mem_free(entry_name_with_path);
@@ -240,28 +248,28 @@ panic_find_last_kmsg(void) {
 					double diff = difftime(time(0), stat_buf.st_mtime);
 					if (diff < smallest_diff) {
 						smallest_diff = diff;
-						filename_of_latest_kmsg = mem_strdup(entry_name_with_path);
+						filename_of_latest_kmsg =
+							mem_strdup(entry_name_with_path);
 					}
 				}
 				mem_free(entry_name_with_path);
 			}
 		}
 		closedir(directory);
-	}
-	else {
+	} else {
 		ERROR_ERRNO("Couldn't open the directory %s", LOGFILE_DIR);
 	}
 	return filename_of_latest_kmsg;
 }
 
 void
-panic_search_for_kernel_panic_in_last_kmsg() {
-
+panic_search_for_kernel_panic_in_last_kmsg()
+{
 	FILE *f;
 	char *buf;
 	int n;
 
-	char* filename_of_latest_kmsg = panic_find_last_kmsg();
+	char *filename_of_latest_kmsg = panic_find_last_kmsg();
 
 	if (filename_of_latest_kmsg != NULL) {
 		DEBUG("Trying to read last kmsg which is %s", filename_of_latest_kmsg);
@@ -274,7 +282,7 @@ panic_search_for_kernel_panic_in_last_kmsg() {
 				DEBUG("No kernel panic found, exiting...");
 			} else {
 				DEBUG("Found a kernel panic in last kmsg");
-				char* logfile_name = mem_printf("%s%s", LOGFILE_DIR, "panic");
+				char *logfile_name = mem_printf("%s%s", LOGFILE_DIR, "panic");
 				f = logf_file_new(logfile_name);
 				if (f != NULL) {
 					DEBUG("Dumping to file %s", logfile_name);
@@ -312,10 +320,14 @@ main(UNUSED int argc, char **argv)
 
 	panic_logfile_rename_cb(NULL, NULL);
 	event_init();
-	event_timer_t *logfile_timer = event_timer_new(HOURS_TO_MILLISECONDS(2), EVENT_TIMER_REPEAT_FOREVER, panic_logfile_rename_cb, NULL);
+	event_timer_t *logfile_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(2), EVENT_TIMER_REPEAT_FOREVER,
+				panic_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
-	event_timer_t *delete_old_logs_timer = event_timer_new(HOURS_TO_MILLISECONDS(2), EVENT_TIMER_REPEAT_FOREVER, panic_delete_old_logs_cb, NULL);
+	event_timer_t *delete_old_logs_timer =
+		event_timer_new(HOURS_TO_MILLISECONDS(2), EVENT_TIMER_REPEAT_FOREVER,
+				panic_delete_old_logs_cb, NULL);
 	event_add_timer(delete_old_logs_timer);
 
 	event_loop();

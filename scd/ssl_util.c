@@ -76,7 +76,7 @@
 #define TEST_KEY_IDENTIFIER "hash"
 #define TEST_CERT_SERIAL 0
 #define TEST_NOT_BEFORE 0
-#define TEST_NOT_AFTER (60*60*24*365)
+#define TEST_NOT_AFTER (60 * 60 * 24 * 365)
 #define TEST_CERT_VERSION 2
 #define TEST_FRIENDLY_NAME "trust-me test user"
 
@@ -101,7 +101,7 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey
 
 /* adds an extension nid with name value to a stack of extensions*/
 static int
-add_ext_req(STACK_OF(X509_EXTENSION) *sk, int nid, char *value);
+add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 
 ENGINE *tpm_engine = NULL;
 
@@ -109,10 +109,10 @@ int
 ssl_init(bool use_tpm)
 {
 	// initialize OpenSSL stuff
-	OpenSSL_add_all_digests(); // loads digest algorithm names
-	OpenSSL_add_all_ciphers(); // loads cipher algorithm names
-	ERR_load_crypto_strings(); // load error strings
-	OpenSSL_add_all_algorithms(); // load internal table of algorithms
+	OpenSSL_add_all_digests();     // loads digest algorithm names
+	OpenSSL_add_all_ciphers();     // loads cipher algorithm names
+	ERR_load_crypto_strings();     // load error strings
+	OpenSSL_add_all_algorithms();  // load internal table of algorithms
 	ENGINE_load_builtin_engines(); // load all bundled ENGINEs into memory and make them visible
 	if (use_tpm) {
 		tpm_engine = ENGINE_by_id("tpm2");
@@ -132,7 +132,8 @@ ssl_init(bool use_tpm)
 		// TODO proper auth handling for hierarchies
 		// set the SRK passphrase to make storage key usable
 		if (TPM2D_PRIMARY_STORAGE_KEY_PW) {
-			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, TPM2D_PRIMARY_STORAGE_KEY_PW, NULL, 0)) {
+			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, TPM2D_PRIMARY_STORAGE_KEY_PW,
+					     NULL, 0)) {
 				ERROR("Failed to set SRK passphrase with  TPM2 engine");
 				goto error;
 			}
@@ -154,9 +155,9 @@ void
 ssl_free(void)
 {
 	// free OpenSSL stuff
-	ERR_free_strings(); // free error strings
-	EVP_cleanup(); // cleans loaded alogrithms, ciphers and digests
-	ENGINE_cleanup(); // cleanup previsouly loaded ENGINEs
+	ERR_free_strings();	   // free error strings
+	EVP_cleanup();		      // cleans loaded alogrithms, ciphers and digests
+	ENGINE_cleanup();	     // cleanup previsouly loaded ENGINEs
 	CRYPTO_cleanup_all_ex_data(); // cleans some more generally used memory
 	if (tpm_engine) {
 		ENGINE_free(tpm_engine);
@@ -166,8 +167,8 @@ ssl_free(void)
 }
 
 int
-ssl_read_pkcs12_token(const char *token_file, const char *passphrase,
-		EVP_PKEY **pkey, X509 **cert, STACK_OF(X509) **ca)
+ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY **pkey, X509 **cert,
+		      STACK_OF(X509) * *ca)
 {
 	ASSERT(token_file);
 	ASSERT(passphrase);
@@ -216,14 +217,15 @@ ssl_read_pkcs12_token(const char *token_file, const char *passphrase,
 
 	ret = 0;
 end:
-	if (p12) PKCS12_free(p12);
+	if (p12)
+		PKCS12_free(p12);
 	mem_free(passphr);
 	return ret;
 }
 
 int
-ssl_create_csr(const char *req_file, const char *key_file,
-		const char *passphrase, const char *common_name, const char *uid, bool tpmkey)
+ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase,
+	       const char *common_name, const char *uid, bool tpmkey)
 {
 	ASSERT(req_file);
 	ASSERT(key_file);
@@ -285,8 +287,8 @@ ssl_create_csr(const char *req_file, const char *key_file,
 			}
 		}
 
-		if (!PEM_write_PrivateKey(fp, pkeyp, cipher, (unsigned char *) passphrase,
-					pass_len, NULL, NULL)) {
+		if (!PEM_write_PrivateKey(fp, pkeyp, cipher, (unsigned char *)passphrase, pass_len,
+					  NULL, NULL)) {
 			ERROR("Error writing CSR private key");
 			fclose(fp);
 			goto error;
@@ -298,12 +300,14 @@ ssl_create_csr(const char *req_file, const char *key_file,
 	X509_REQ_free(req);
 	return 0;
 error:
-	if (pkeyp) EVP_PKEY_free(pkeyp);
-	if (req) X509_REQ_free(req);
+	if (pkeyp)
+		EVP_PKEY_free(pkeyp);
+	if (req)
+		X509_REQ_free(req);
 	return -1;
 }
 
-static X509_REQ*
+static X509_REQ *
 ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey)
 {
 	ASSERT(pkeyp);
@@ -335,8 +339,8 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"C",
-				MBSTRING_ASC, (const unsigned char *) COUNTRY_C_CSR, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC,
+					(const unsigned char *)COUNTRY_C_CSR, -1, -1, 0)) {
 		ERROR("Error adding entry to CSR (C)");
 		goto error;
 	}
@@ -355,14 +359,14 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey
 	}
 	*/
 
-	if (!X509_NAME_add_entry_by_txt(name,"O",
-				MBSTRING_ASC, (const unsigned char *) ORGANIZATION_O_CSR, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "O", MBSTRING_ASC,
+					(const unsigned char *)ORGANIZATION_O_CSR, -1, -1, 0)) {
 		ERROR("Error adding entry to CSR (0)");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"OU",
-				MBSTRING_ASC, (const unsigned char *) ORG_UNIT_OU1_CSR, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "OU", MBSTRING_ASC,
+					(const unsigned char *)ORG_UNIT_OU1_CSR, -1, -1, 0)) {
 		ERROR("Error adding entry to CSR (OU #1)");
 		goto error;
 	}
@@ -375,8 +379,8 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey
 	}
 	*/
 
-	if (!X509_NAME_add_entry_by_txt(name,"CN",
-				MBSTRING_ASC, (const unsigned char *) common_name, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+					(const unsigned char *)common_name, -1, -1, 0)) {
 		ERROR("Error adding entry to CSR (CN)");
 		goto error;
 	}
@@ -430,7 +434,8 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey
 	return req;
 
 error:
-	if (req) X509_REQ_free(req);
+	if (req)
+		X509_REQ_free(req);
 	return NULL;
 }
 
@@ -468,8 +473,7 @@ ssl_mkkeypair()
 	}
 
 	//DEBUG("%s: DEBUG!", ERR_error_string(ERR_get_error(), NULL));
-	if (RSA_generate_key_ex(rsa, RSA_KEY_SIZE_MKKEYP, e, NULL) != 1)
-	{
+	if (RSA_generate_key_ex(rsa, RSA_KEY_SIZE_MKKEYP, e, NULL) != 1) {
 		ERROR("Error generating pkey pair");
 		//int lineno;
 		//const char * filename;
@@ -479,8 +483,7 @@ ssl_mkkeypair()
 	}
 
 	// since we return the keypair, we don't free the rsa structure
-	if (!EVP_PKEY_assign_RSA(pk,rsa))
-	{
+	if (!EVP_PKEY_assign_RSA(pk, rsa)) {
 		ERROR("Error in filling public key pair structure");
 		goto error;
 	}
@@ -499,7 +502,7 @@ error:
 }
 
 static int
-add_ext_req(STACK_OF(X509_EXTENSION) *sk, int nid, char *value)
+add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value)
 {
 	ASSERT(sk);
 	X509_EXTENSION *ex;
@@ -514,7 +517,7 @@ add_ext_req(STACK_OF(X509_EXTENSION) *sk, int nid, char *value)
 
 int
 ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_len,
-		unsigned char **wrapped_key, int *wrapped_key_len)
+	     unsigned char **wrapped_key, int *wrapped_key_len)
 {
 	ASSERT(pkey);
 	ASSERT(plain_key);
@@ -543,8 +546,7 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type) - 1);
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
-	if (!EVP_SealInit(ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1))
-	{
+	if (!EVP_SealInit(ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1)) {
 		WARN("EVP_SealInit failed.");
 		goto cleanup;
 	}
@@ -555,7 +557,7 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 		goto cleanup;
 	}
 	outlen += tmplen;
-	if (!EVP_SealFinal(ctx, out+tmplen, &tmplen)) {
+	if (!EVP_SealFinal(ctx, out + tmplen, &tmplen)) {
 		WARN("EVP_SealFinal failed.");
 		goto cleanup;
 	}
@@ -563,15 +565,25 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 
 	// TODO: really investigate why we need ek AND iv
 	// maybe use protobuf message to serialize
-	int len = sizeof(tmpkeylen)+tmpkeylen+iv_len+sizeof(outlen)+outlen;
-	unsigned char * p = mem_alloc(len);
+	int len = sizeof(tmpkeylen) + tmpkeylen + iv_len + sizeof(outlen) + outlen;
+	unsigned char *p = mem_alloc(len);
 	*wrapped_key_len = len;
 	*wrapped_key = p;
-	len = sizeof(tmpkeylen); memcpy(p, &tmpkeylen, len); p += len;
-	len = sizeof(outlen); memcpy(p, &outlen, len); p += len;
-	len = iv_len; memcpy(p, iv_buf, len); p += len;
-	len = tmpkeylen; memcpy(p, tmpkey, len); p += len;
-	len = outlen; memcpy(p, out, len); p += len;
+	len = sizeof(tmpkeylen);
+	memcpy(p, &tmpkeylen, len);
+	p += len;
+	len = sizeof(outlen);
+	memcpy(p, &outlen, len);
+	p += len;
+	len = iv_len;
+	memcpy(p, iv_buf, len);
+	p += len;
+	len = tmpkeylen;
+	memcpy(p, tmpkey, len);
+	p += len;
+	len = outlen;
+	memcpy(p, out, len);
+	p += len;
 
 	res = 0;
 cleanup:
@@ -584,7 +596,7 @@ cleanup:
 
 int
 ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_key_len,
-		unsigned char **plain_key, int *plain_key_len)
+	       unsigned char **plain_key, int *plain_key_len)
 {
 	ASSERT(pkey);
 	ASSERT(wrapped_key);
@@ -600,18 +612,22 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 	}
 
 	int iv_len = EVP_CIPHER_iv_length(type);
-	if (wrapped_key_len < 2*sizeof(int)+iv_len) {
+	if (wrapped_key_len < 2 * sizeof(int) + iv_len) {
 		WARN("Given wrapped key is invalid/corrupted.");
 		return res;
 	}
-	int tmpkeylen = *((int*)wrapped_key); wrapped_key += sizeof(int);
-	int keylen = *((int*)wrapped_key); wrapped_key += sizeof(int);
-	if (wrapped_key_len != 2*sizeof(int)+iv_len+tmpkeylen+keylen) {
+	int tmpkeylen = *((int *)wrapped_key);
+	wrapped_key += sizeof(int);
+	int keylen = *((int *)wrapped_key);
+	wrapped_key += sizeof(int);
+	if (wrapped_key_len != 2 * sizeof(int) + iv_len + tmpkeylen + keylen) {
 		WARN("Given wrapped key is invalid/corrupted.");
 		return res;
 	}
-	const unsigned char *iv_buf = wrapped_key; wrapped_key += iv_len;
-	const unsigned char *tmpkey = wrapped_key; wrapped_key += tmpkeylen;
+	const unsigned char *iv_buf = wrapped_key;
+	wrapped_key += iv_len;
+	const unsigned char *tmpkey = wrapped_key;
+	wrapped_key += tmpkeylen;
 	const unsigned char *key = wrapped_key;
 
 	EVP_CIPHER_CTX *ctx;
@@ -623,8 +639,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 	unsigned char *out = mem_alloc(keylen + EVP_CIPHER_block_size(type));
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
-	if (!EVP_OpenInit(ctx, type, tmpkey, tmpkeylen, iv_buf, pkey))
-	{
+	if (!EVP_OpenInit(ctx, type, tmpkey, tmpkeylen, iv_buf, pkey)) {
 		WARN("EVP_OpenInit failed.");
 		goto cleanup;
 	}
@@ -635,7 +650,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 		goto cleanup;
 	}
 	outlen += tmplen;
-	if (!EVP_OpenFinal(ctx, out+tmplen, &tmplen)) {
+	if (!EVP_OpenFinal(ctx, out + tmplen, &tmplen)) {
 		WARN("EVP_OpenFinal failed.");
 		goto cleanup;
 	}
@@ -650,11 +665,12 @@ cleanup:
 	return res;
 }
 
-int cb_verify_ignore_time(int ok, X509_STORE_CTX *ctx) {
-
+int
+cb_verify_ignore_time(int ok, X509_STORE_CTX *ctx)
+{
 	/* Tolerate certificate expiration and not yet valid case */
 	if (X509_STORE_CTX_get_error(ctx) == X509_V_ERR_CERT_HAS_EXPIRED ||
-		X509_STORE_CTX_get_error(ctx) == X509_V_ERR_CERT_NOT_YET_VALID) {
+	    X509_STORE_CTX_get_error(ctx) == X509_V_ERR_CERT_NOT_YET_VALID) {
 		WARN("Ignored certificate not yet valid or expiration error");
 		return 1;
 	}
@@ -662,7 +678,8 @@ int cb_verify_ignore_time(int ok, X509_STORE_CTX *ctx) {
 	return ok;
 }
 
-int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_file, bool ignore_time)
+int
+ssl_verify_certificate(const char *test_cert_file, const char *root_cert_file, bool ignore_time)
 {
 	X509 *test_cert = NULL;
 	X509_STORE *store = NULL;
@@ -688,7 +705,7 @@ int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_fil
 		X509_STORE_set_verify_cb(store, cb_verify_ignore_time);
 	}
 
-	if(!X509_STORE_load_locations(store, root_cert_file, NULL)) {
+	if (!X509_STORE_load_locations(store, root_cert_file, NULL)) {
 		ERROR("Failed to load root CA");
 		ret = -2;
 		goto end;
@@ -701,20 +718,20 @@ int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_fil
 		goto end;
 	}
 
-	if(!PEM_read_bio_X509(stackbio, &test_cert, 0, NULL)) {
+	if (!PEM_read_bio_X509(stackbio, &test_cert, 0, NULL)) {
 		ERROR("Failed to load cert from certificate under test");
 		ret = -2;
 		goto end;
 	}
 
-	if (!(chainstack = sk_X509_new_null())){
+	if (!(chainstack = sk_X509_new_null())) {
 		ERROR("Error setting up certificate chain");
-		ret=-2;
+		ret = -2;
 		goto end;
 	}
 
 	X509 *chain_cert = NULL;
-	while(PEM_read_bio_X509(stackbio, &chain_cert, 0, NULL)) {
+	while (PEM_read_bio_X509(stackbio, &chain_cert, 0, NULL)) {
 		if (!sk_X509_push(chainstack, chain_cert)) {
 			ERROR("Error reading next cert of the chain");
 			ret = -2;
@@ -726,14 +743,15 @@ int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_fil
 	if (!sk_X509_num(chainstack))
 		WARN("Certificate under test has no chain");
 
-	if(!X509_STORE_CTX_init(context, store, test_cert, chainstack)) {
+	if (!X509_STORE_CTX_init(context, store, test_cert, chainstack)) {
 		ERROR("Error in certificate verification (init store_ctx)");
 		ret = -2;
 		goto end;
 	}
 
 	int verify_ret = X509_verify_cert(context);
-	const char *verify_string = X509_verify_cert_error_string(X509_STORE_CTX_get_error(context));
+	const char *verify_string =
+		X509_verify_cert_error_string(X509_STORE_CTX_get_error(context));
 
 	INFO("Verification return status: %s", verify_string);
 
@@ -744,8 +762,7 @@ int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_fil
 		if (verify_ret == 0) {
 			ret = -1;
 			ERROR("Certificate invalid");
-		}
-		else {
+		} else {
 			ret = -2;
 			ERROR("Unexpected failure during certificate validation");
 		}
@@ -753,25 +770,29 @@ int ssl_verify_certificate(const char *test_cert_file, const char *root_cert_fil
 		int store_ctx_error = X509_STORE_CTX_get_error(context);
 		int store_ctx_error_depth = X509_STORE_CTX_get_error_depth(context);
 		ERROR("Certificate is not valid, error #%d (%s) at cert chain depth: %d",
-			store_ctx_error, verify_string, store_ctx_error_depth);
+		      store_ctx_error, verify_string, store_ctx_error_depth);
 	}
 
 end:
 	if (context != NULL) {
-	    X509_STORE_CTX_cleanup(context);
-	    X509_STORE_CTX_free(context);
+		X509_STORE_CTX_cleanup(context);
+		X509_STORE_CTX_free(context);
 	}
-	if (store != NULL) X509_STORE_free(store);
-	if (stackbio != NULL) BIO_free(stackbio);
-	if (chainstack != NULL) sk_X509_pop_free(chainstack, X509_free);
-	if (test_cert != NULL) X509_free(test_cert);
+	if (store != NULL)
+		X509_STORE_free(store);
+	if (stackbio != NULL)
+		BIO_free(stackbio);
+	if (chainstack != NULL)
+		sk_X509_pop_free(chainstack, X509_free);
+	if (test_cert != NULL)
+		X509_free(test_cert);
 	return ret;
 }
 
 int
-ssl_verify_signature(const char *cert_file, const char *signature_file,
-	const char *signed_file, const char *hash_algo) {
-
+ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file,
+		     const char *hash_algo)
+{
 	ASSERT(cert_file);
 	ASSERT(signature_file);
 	ASSERT(signed_file);
@@ -796,7 +817,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file,
 		ret = -2;
 		goto error;
 	}
-	if (PEM_read_X509(fp, &test_cert, NULL,  NULL) == NULL) {
+	if (PEM_read_X509(fp, &test_cert, NULL, NULL) == NULL) {
 		ERROR("Error in signature verification (loading certificate file)");
 		ret = -2;
 		goto error;
@@ -886,7 +907,8 @@ ssl_verify_signature(const char *cert_file, const char *signature_file,
 		if (ret == -1)
 			ret = -2;
 		// verification failed
-		else ret = -1;
+		else
+			ret = -1;
 	} else {
 		DEBUG("Signature successfully verified");
 		ret = 0;
@@ -910,8 +932,9 @@ error:
 	return ret;
 }
 
-unsigned char *ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash_algo) {
-
+unsigned char *
+ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash_algo)
+{
 	ASSERT(file_to_hash);
 	ASSERT(hash_algo);
 
@@ -955,7 +978,7 @@ unsigned char *ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, c
 	}
 	fclose(fp);
 
-	ret = (unsigned char *) mem_alloc0(EVP_MAX_MD_SIZE);
+	ret = (unsigned char *)mem_alloc0(EVP_MAX_MD_SIZE);
 	if (EVP_DigestFinal(md_ctx, ret, calc_len) != 1) {
 		ERROR("Error in file hashing (computing hash)");
 		mem_free(ret);
@@ -978,8 +1001,8 @@ error:
 }
 
 int
-ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
-    const char *passphrase, const char *user_name)
+ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const char *passphrase,
+			const char *user_name)
 {
 	ASSERT(token_file && passphrase);
 
@@ -1002,7 +1025,8 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 	DEBUG("Self-Signed certificate created");
 
 	//TODO determine parameters (curr. use defaults). cert could be NULL, depending on what we aim to do.
-	if ((p12 = PKCS12_create(passphr, TEST_FRIENDLY_NAME, pkey, cert, NULL, 0, 0, 0, 0, 0)) == NULL) {
+	if ((p12 = PKCS12_create(passphr, TEST_FRIENDLY_NAME, pkey, cert, NULL, 0, 0, 0, 0, 0)) ==
+	    NULL) {
 		ERROR("Error creating PKCS#12 softtoken structure");
 		goto error;
 	}
@@ -1041,8 +1065,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 		}
 		fclose(fp);
 		DEBUG("Stored self-signed certificate and softtoken");
-	}
-	else {
+	} else {
 		DEBUG("Stored softtoken");
 	}
 	DEBUG("EVP_PKEY_free %p", (void *)pkey);
@@ -1056,16 +1079,18 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file,
 	DEBUG("all free done");
 	return 0;
 error:
-	if (pkey) EVP_PKEY_free(pkey);
-	if (cert) X509_free(cert);
-	if (p12) PKCS12_free(p12);
+	if (pkey)
+		EVP_PKEY_free(pkey);
+	if (cert)
+		X509_free(cert);
+	if (p12)
+		PKCS12_free(p12);
 	mem_free(passphr);
 	return -1;
 }
 
 int
-ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass,
-						const char *newpass)
+ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char *newpass)
 {
 	ASSERT(token_file);
 
@@ -1106,7 +1131,8 @@ ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass,
 	PKCS12_free(p12);
 	return 0;
 error:
-	if (p12) PKCS12_free(p12);
+	if (p12)
+		PKCS12_free(p12);
 	return -1;
 }
 
@@ -1139,7 +1165,7 @@ ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name)
 		goto error;
 	}
 
-	if (!X509_gmtime_adj(X509_get_notAfter(cert), (long) TEST_NOT_AFTER)) {
+	if (!X509_gmtime_adj(X509_get_notAfter(cert), (long)TEST_NOT_AFTER)) {
 		ERROR("Error setting timestamp to certificate");
 		goto error;
 	}
@@ -1158,44 +1184,44 @@ ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name)
 	 * correct string type and performing checks on its length.
 	 * Normally we'd check the return value for errors...
 	 */
-	if (!X509_NAME_add_entry_by_txt(name,"C",
-				MBSTRING_ASC, (const unsigned char*) TEST_C, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (const unsigned char *)TEST_C, -1,
+					-1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"ST",
-				MBSTRING_ASC, (const unsigned char*) TEST_ST, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "ST", MBSTRING_ASC, (const unsigned char *)TEST_ST,
+					-1, -1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"L",
-				MBSTRING_ASC, (const unsigned char*) TEST_L, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "L", MBSTRING_ASC, (const unsigned char *)TEST_L, -1,
+					-1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"O",
-				MBSTRING_ASC, (const unsigned char*) TEST_O, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "O", MBSTRING_ASC, (const unsigned char *)TEST_O, -1,
+					-1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"OU",
-				MBSTRING_ASC, (const unsigned char*) TEST_OU1, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "OU", MBSTRING_ASC, (const unsigned char *)TEST_OU1,
+					-1, -1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"OU",
-				MBSTRING_ASC, (const unsigned char*) TEST_OU2, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "OU", MBSTRING_ASC, (const unsigned char *)TEST_OU2,
+					-1, -1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
 
-	if (!X509_NAME_add_entry_by_txt(name,"CN",
-				MBSTRING_ASC, (const unsigned char*) common_name, -1, -1, 0)) {
+	if (!X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+					(const unsigned char *)common_name, -1, -1, 0)) {
 		ERROR("Error adding entry to certificate");
 		goto error;
 	}
@@ -1275,8 +1301,8 @@ ssl_add_ext_cert(X509 *cert, int nid, char *value)
 }
 
 int
-ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file, bool tpmkey) {
-
+ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_file, bool tpmkey)
+{
 	ASSERT(csr_file);
 	ASSERT(cert_file);
 	ASSERT(key_file);
@@ -1307,7 +1333,7 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 
 	if (!tpmkey) {
 		// read signing key
-		if ((key = BIO_new_file(key_file,"r")) == NULL) {
+		if ((key = BIO_new_file(key_file, "r")) == NULL) {
 			ERROR("Error reading csr signing priv key");
 			goto error;
 		}
@@ -1330,7 +1356,8 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 	} else {
 		DEBUG("Load key for signing into TPM");
 		// TODO same as above, need proper passphrase handling to avoid input prompt
-		if ((key_evp_priv = ENGINE_load_private_key(tpm_engine, key_file, NULL, NULL)) == NULL) {
+		if ((key_evp_priv = ENGINE_load_private_key(tpm_engine, key_file, NULL, NULL)) ==
+		    NULL) {
 			ERROR("Error loading csr signing key pair into TPM");
 			goto error;
 		}
@@ -1357,7 +1384,7 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 		goto error;
 	}
 
-	if (!X509_gmtime_adj(X509_get_notAfter(cert_x509), (long) TEST_NOT_AFTER)) {
+	if (!X509_gmtime_adj(X509_get_notAfter(cert_x509), (long)TEST_NOT_AFTER)) {
 		ERROR("Error setting timestamp to certificate");
 		goto error;
 	}
@@ -1396,7 +1423,7 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 	X509_EXTENSION *ext;
 	ext_stack = X509_REQ_get_extensions(csr_x509);
 	int i;
-	for(i = 0; i < sk_X509_EXTENSION_num(ext_stack); i++) {
+	for (i = 0; i < sk_X509_EXTENSION_num(ext_stack); i++) {
 		ext = sk_X509_EXTENSION_value(ext_stack, i);
 		if (!X509_add_ext(cert_x509, ext, -1)) {
 			ERROR("Error copying extensions from req to cert");
@@ -1428,14 +1455,22 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 	ret = 0;
 
 error:
-	if (csr) BIO_free(csr);
-	if (cert) BIO_free(cert);
-	if (key) BIO_free(key);
-	if (key_evp_priv) EVP_PKEY_free(key_evp_priv);
-	if (cert_x509) X509_free(cert_x509);
-	if (csr_x509) X509_REQ_free(csr_x509);
+	if (csr)
+		BIO_free(csr);
+	if (cert)
+		BIO_free(cert);
+	if (key)
+		BIO_free(key);
+	if (key_evp_priv)
+		EVP_PKEY_free(key_evp_priv);
+	if (cert_x509)
+		X509_free(cert_x509);
+	if (csr_x509)
+		X509_REQ_free(csr_x509);
 	// EVP_PKEY_free also frees rsa key if assigned
-	if (key_evp_pub) EVP_PKEY_free(key_evp_pub);
-	if (ext_stack) sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
+	if (key_evp_pub)
+		EVP_PKEY_free(key_evp_pub);
+	if (ext_stack)
+		sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
 	return ret;
 }

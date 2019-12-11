@@ -40,7 +40,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-static void print_usage(const char *cmd)
+static void
+print_usage(const char *cmd)
 {
 	printf("\n");
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
@@ -57,48 +58,49 @@ static void print_usage(const char *cmd)
 	exit(-1);
 }
 
-static void send_message(const char *socket_file, ControllerToTpm *msg, bool has_response)
+static void
+send_message(const char *socket_file, ControllerToTpm *msg, bool has_response)
 {
 	// send message
-	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) msg);
+	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)msg);
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, socket_file);
 	if (sock < 0) {
 		exit(-3);
 	}
-	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *) msg);
+	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)msg);
 	if (msg_size < 0) {
 		exit(-4);
 	}
 	// recv response if applicable
 	// TODO for now just dump the response in text format
 	if (has_response) {
-		TpmToController *resp = (TpmToController *) protobuf_recv_message(sock, &tpm_to_controller__descriptor);
+		TpmToController *resp = (TpmToController *)protobuf_recv_message(
+			sock, &tpm_to_controller__descriptor);
 		if (!resp) {
 			exit(-5);
 		}
 		DEBUG("Got Response from TPM2Controller");
-		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
-		protobuf_free_message((ProtobufCMessage *) resp);
+		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
+		protobuf_free_message((ProtobufCMessage *)resp);
 	}
 
 	shutdown(sock, SHUT_RDWR);
 	close(sock);
 }
 
-static const struct option global_options[] = {
-	{"socket",   required_argument, 0, 's'},
-	{"help",     no_argument, 0, 'h'},
-	{0, 0, 0, 0}
-};
+static const struct option global_options[] = { { "socket", required_argument, 0, 's' },
+						{ "help", no_argument, 0, 'h' },
+						{ 0, 0, 0, 0 } };
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	logf_register(&logf_test_write, stderr);
 
 	bool has_response = false;
 	const char *socket_file = TPM2D_SOCKET;
-	for (int c, option_index = 0; -1 != (c = getopt_long(argc, argv, "+s:h",
-					global_options, &option_index)); ) {
+	for (int c, option_index = 0;
+	     - 1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			socket_file = optarg;
@@ -203,4 +205,3 @@ send_message:
 
 	return 0;
 }
-

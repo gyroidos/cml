@@ -56,7 +56,7 @@ list_append(list_t *list, void *data)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Joins two lists by appending list_append to list. If one of
@@ -102,7 +102,7 @@ list_unlink(list_t *list, list_t *elem)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Deletes the first element from the list that contains the supplied data
@@ -118,7 +118,7 @@ list_remove(list_t *list, void *data)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Returns the first element from the list that contains the supplied data
@@ -174,7 +174,7 @@ list_prepend(list_t *list, void *data)
 #if defined(__GNUC__)
 	__attribute__((warn_unused_result))
 #endif
-;
+	;
 
 /**
  * Returns the last element of the list.
@@ -194,17 +194,16 @@ list_tail(list_t *list);
  * @return The head of the list (or NULL if the element was the only element
  *         of the list or the list was already NULL).
  */
-	list_t *
-	list_replace(list_t *list, list_t *elem,void * data)
+list_t *
+list_replace(list_t *list, list_t *elem, void *data)
 #if defined(__GNUC__)
-	        __attribute__((warn_unused_result))
+	__attribute__((warn_unused_result))
 #endif
-;
-
+	;
 
 /**
  * Calls the given function on each list element
  */
 void
-list_foreach(list_t *list, void (func)(void *));
+list_foreach(list_t *list, void(func)(void *));
 #endif /* LIST_H */

@@ -201,8 +201,7 @@ str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 		buf = str->buf + offset;
 
 		if (pos < str->len)
-			  memmove(str->buf + pos + len, str->buf + pos,
-					str->len - pos);
+			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
 
 		if (offset < pos) {
 			precount = MIN(len, pos - offset);
@@ -210,12 +209,10 @@ str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 		}
 
 		if (len > precount)
-			memcpy(str->buf + pos + precount,
-					buf + precount + len, len - precount);
+			memcpy(str->buf + pos + precount, buf + precount + len, len - precount);
 	} else {
 		if (pos < str->len)
-			memmove(str->buf + pos + len, str->buf + pos,
-					str->len - pos);
+			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
 
 		memcpy(str->buf + pos, buf, len);
 	}

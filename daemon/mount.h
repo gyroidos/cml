@@ -42,22 +42,23 @@ typedef struct mount_entry mount_entry_t;
  * An enum to present the type of mountable image files for operating systems.
  */
 enum mount_type {
-	MOUNT_TYPE_SHARED = 1,  /**< image file is shared by all containers of the operating system type */
-	MOUNT_TYPE_DEVICE = 2,  /**< image file is copied from a device partition */
-	MOUNT_TYPE_DEVICE_RW = 3,  /**< image file is copied from a device partition */
-	MOUNT_TYPE_EMPTY = 4,   /**< image file is generated on container start if not available */
-	MOUNT_TYPE_COPY = 5,    // TODO: remove
-	MOUNT_TYPE_FLASH = 6,	///< image to be flashed to a partition
-	MOUNT_TYPE_OVERLAY_RO = 7, /**< image file that contains features e.g. 
+	MOUNT_TYPE_SHARED =
+		1, /**< image file is shared by all containers of the operating system type */
+	MOUNT_TYPE_DEVICE = 2,    /**< image file is copied from a device partition */
+	MOUNT_TYPE_DEVICE_RW = 3, /**< image file is copied from a device partition */
+	MOUNT_TYPE_EMPTY = 4, /**< image file is generated on container start if not available */
+	MOUNT_TYPE_COPY = 5,  // TODO: remove
+	MOUNT_TYPE_FLASH = 6, ///< image to be flashed to a partition
+	MOUNT_TYPE_OVERLAY_RO = 7,    /**< image file that contains features e.g. 
 				      gps, camera ... as overly for system */
-	MOUNT_TYPE_SHARED_RW = 8,  /**< image file is shared by all containers of the operating
+	MOUNT_TYPE_SHARED_RW = 8,     /**< image file is shared by all containers of the operating
 				      system type and an individual writable tmpfs is mounted
 				      as overlay to each container */
-	MOUNT_TYPE_OVERLAY_RW = 9,  /**< image file is shared by all containers of the operating
+	MOUNT_TYPE_OVERLAY_RW = 9,    /**< image file is shared by all containers of the operating
 				      system type and an individual writable persitent fs is mounted
 				      as overlay to each container */
-	MOUNT_TYPE_BIND_FILE = 10,     /**< file is bind mounted to container (RO) */
-	MOUNT_TYPE_BIND_FILE_RW = 11,  /**< file is bind mounted to container (RW) */
+	MOUNT_TYPE_BIND_FILE = 10,    /**< file is bind mounted to container (RO) */
+	MOUNT_TYPE_BIND_FILE_RW = 11, /**< file is bind mounted to container (RW) */
 };
 
 mount_t *
@@ -74,8 +75,8 @@ mount_new(void);
  * @return pointer to the newly added mount entry
  */
 mount_entry_t *
-mount_add_entry(mount_t *mnt, enum mount_type type, const char *image_file,
-		const char *mount_point, const char *fs_type, uint64_t default_size);
+mount_add_entry(mount_t *mnt, enum mount_type type, const char *image_file, const char *mount_point,
+		const char *fs_type, uint64_t default_size);
 
 /**
  * Frees the mount_t instance.
@@ -195,7 +196,7 @@ mount_entry_get_mount_data(const mount_entry_t *mntent);
  * Remounts rootfs read-only
  */
 int
-mount_remount_root_ro (void);
+mount_remount_root_ro(void);
 
 /**
  * Mounts kernel debugfs
@@ -203,4 +204,3 @@ mount_remount_root_ro (void);
 int
 mount_debugfs(void);
 #endif /* MOUNT_H */
-

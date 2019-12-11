@@ -52,7 +52,8 @@ typedef struct event_timer event_timer_t;
  * @return The newly created timer.
  */
 event_timer_t *
-event_timer_new(int timeout, int repeat, void (*func)(event_timer_t *timer, void *data), void *data);
+event_timer_new(int timeout, int repeat, void (*func)(event_timer_t *timer, void *data),
+		void *data);
 
 /**
  * Frees the allocated memory of the timer.
@@ -78,10 +79,10 @@ event_add_timer(event_timer_t *timer);
 void
 event_remove_timer(event_timer_t *timer);
 
-#define EVENT_IO_READ   (1 << 0)
-#define EVENT_IO_WRITE  (1 << 1)
+#define EVENT_IO_READ (1 << 0)
+#define EVENT_IO_WRITE (1 << 1)
 #define EVENT_IO_EXCEPT (1 << 2)
-#define EVENT_IO_PRI    (1 << 3)
+#define EVENT_IO_PRI (1 << 3)
 
 typedef struct event_io event_io_t;
 
@@ -96,7 +97,8 @@ typedef struct event_io event_io_t;
  * @return The newly created I/O event.
  */
 event_io_t *
-event_io_new(int fd, unsigned events, void (*func)(int fd, unsigned events, event_io_t *io, void *data), void *data);
+event_io_new(int fd, unsigned events,
+	     void (*func)(int fd, unsigned events, event_io_t *io, void *data), void *data);
 
 /**
  * Frees the allocated memory of the I/O event.
@@ -135,7 +137,10 @@ event_reset();
 typedef struct event_inotify event_inotify_t;
 
 event_inotify_t *
-event_inotify_new(const char *path, uint32_t mask, void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify, void *data), void *data);
+event_inotify_new(const char *path, uint32_t mask,
+		  void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify,
+			       void *data),
+		  void *data);
 
 void
 event_inotify_free(event_inotify_t *inotify);

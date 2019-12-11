@@ -28,7 +28,7 @@ bool
 control_is_enabled(void);
 
 int
-control_push_guestos(char* cfgfile, char* certfile, char* sigfile);
+control_push_guestos(char *cfgfile, char *certfile, char *sigfile);
 
 int
 control_register_localca(char *ca_cert_file);

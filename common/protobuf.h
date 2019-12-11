@@ -93,7 +93,8 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message);
  *          must be released with protobuf_free_message()
  */
 ProtobufCMessage *
-protobuf_message_new_from_textfile(const char *filename, const ProtobufCMessageDescriptor *descriptor);
+protobuf_message_new_from_textfile(const char *filename,
+				   const ProtobufCMessageDescriptor *descriptor);
 
 /**
  * Parses a protobuf message as defined by the given descriptor
@@ -108,7 +109,8 @@ ProtobufCMessage *
 protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor);
 
 ProtobufCMessage *
-protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufCMessageDescriptor *descriptor);
+protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
+			      const ProtobufCMessageDescriptor *descriptor);
 
 /**
  * Writes a textual representation of the given protobuf message to the given file.
@@ -119,6 +121,5 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen, const ProtobufC
  */
 ssize_t
 protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message);
-
 
 #endif // PROTOBUF_H

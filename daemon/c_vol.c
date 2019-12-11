@@ -82,7 +82,7 @@ struct c_vol {
 /******************************************************************************/
 
 static int
-c_vol_fork_and_execvp(const char * const *argv)
+c_vol_fork_and_execvp(const char *const *argv)
 {
 	int status;
 	pid_t pid = fork();
@@ -92,7 +92,7 @@ c_vol_fork_and_execvp(const char * const *argv)
 		ERROR_ERRNO("Could not fork for %s", argv[0]);
 		return -1;
 	case 0:
-		execvp(argv[0], (char * const *)argv);
+		execvp(argv[0], (char *const *)argv);
 		ERROR_ERRNO("Could not execvp %s", argv[0]);
 		return -1;
 	default:
@@ -107,7 +107,6 @@ c_vol_fork_and_execvp(const char * const *argv)
 	}
 	return -1;
 }
-
 
 /**
  * Allocate a new string with the full image path for one mount point.
@@ -142,7 +141,7 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		return mem_printf("%s/%s", SHARED_FILES_PATH, mount_entry_get_img(mntent));
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
-				mount_entry_get_type(mntent), mount_entry_get_img(mntent));
+		      mount_entry_get_type(mntent), mount_entry_get_img(mntent));
 		return NULL;
 	}
 
@@ -171,7 +170,7 @@ c_vol_check_image(c_vol_t *vol, const char *img)
 	return ret;
 }
 
-static char*
+static char *
 c_vol_create_loopdev_new(int *fd, const char *img)
 {
 	char *dev = loopdev_new();
@@ -212,7 +211,7 @@ c_vol_create_image_empty(const char *img, uint64_t size)
 	storage_size = MAX(size, 10);
 	storage_size *= 1024 * 1024;
 
-	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long) storage_size);
+	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long)storage_size);
 
 	fd = open(img, O_LARGEFILE | O_WRONLY | O_CREAT | O_TRUNC, 0666);
 	if (fd < 0) {
@@ -246,7 +245,7 @@ c_vol_create_image_empty(const char *img, uint64_t size)
 static int
 c_vol_btrfs_regen_uuid(const char *dev)
 {
-	const char * const argv_regen[] = { BTRFSTUNE, "-f", "-u", dev, NULL };
+	const char *const argv_regen[] = { BTRFSTUNE, "-f", "-u", dev, NULL };
 	return c_vol_fork_and_execvp(argv_regen);
 }
 
@@ -328,7 +327,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 		return c_vol_create_image_device(vol, img, mntent);
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
-				mount_entry_get_type(mntent), mount_entry_get_img(mntent));
+		      mount_entry_get_type(mntent), mount_entry_get_img(mntent));
 		return -1;
 	}
 
@@ -347,7 +346,7 @@ c_vol_format_image(const char *dev, const char *fs)
 		ERROR("Could not create filesystem of type %s on %s", fs, dev);
 		return -1;
 	}
-	const char * const argv_mkfs[] = {mkfs_bin, dev, NULL};
+	const char *const argv_mkfs[] = { mkfs_bin, dev, NULL };
 	return c_vol_fork_and_execvp(argv_mkfs);
 }
 
@@ -378,9 +377,10 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	}
 	subvol_path = mem_printf("%s/%s", tmp_mount, subvol);
 
-	const char * const argv_list[] = {"btrfs", "subvol", "list", subvol_path, NULL};
+	const char *const argv_list[] = { "btrfs", "subvol", "list", subvol_path, NULL };
 	if (-1 == (ret = c_vol_fork_and_execvp(argv_list))) {
-		const char * const argv_create[] = {"btrfs", "subvol", "create", subvol_path, NULL};
+		const char *const argv_create[] = { "btrfs", "subvol", "create", subvol_path,
+						    NULL };
 		if (-1 == (ret = c_vol_fork_and_execvp(argv_create))) {
 			ERROR_ERRNO("Could not create btrfs subvol %s", subvol);
 		} else {
@@ -400,9 +400,8 @@ out:
 }
 
 static int
-c_vol_mount_overlay(const char *target_dir, const char *upper_fstype,
-			const char *lowerfs_type, int mount_flags, char *mount_data,
-			const char *upper_dev, const char *lower_dev)
+c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char *lowerfs_type,
+		    int mount_flags, char *mount_data, const char *upper_dev, const char *lower_dev)
 {
 	char *lower_dir, *upper_dir, *work_dir, *overlayfs_mount_dir;
 
@@ -450,8 +449,8 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype,
 			goto error;
 		}
 		// mount ro image lower
-		if (mount(lower_dev, lower_dir, lowerfs_type,
-					mount_flags | MS_RDONLY, mount_data) < 0) {
+		if (mount(lower_dev, lower_dir, lowerfs_type, mount_flags | MS_RDONLY, mount_data) <
+		    0) {
 			ERROR_ERRNO("Could not mount %s to %s", lower_dev, lower_dir);
 			goto error;
 		}
@@ -465,18 +464,17 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype,
 		}
 	}
 	DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, lower_dir=%s, target dir=%s",
-			work_dir, upper_dir, lower_dir, target_dir);
+	      work_dir, upper_dir, lower_dir, target_dir);
 	// create mount option string (try to mask absolute paths)
 	char *cwd = get_current_dir_name();
 	char *overlayfs_options;
 	if (chdir(overlayfs_mount_dir)) {
-		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s",
-			lower_dir, upper_dir, work_dir);
+		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s", lower_dir,
+					       upper_dir, work_dir);
 	} else {
-		overlayfs_options =
-			mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
-		TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ",
-			cwd, overlayfs_mount_dir, overlayfs_options);
+		overlayfs_options = mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
+		TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd, overlayfs_mount_dir,
+		      overlayfs_options);
 	}
 	INFO("mount_dir: %s", target_dir);
 	// mount overlayfs to dir
@@ -506,7 +504,7 @@ error:
 }
 
 static int
-c_vol_mount_file_bind(const char* src, const char *dst, unsigned long flags)
+c_vol_mount_file_bind(const char *src, const char *dst, unsigned long flags)
 {
 	char *_src = mem_strdup(src);
 	char *_dst = mem_strdup(dst);
@@ -544,9 +542,10 @@ c_vol_mount_file_bind(const char* src, const char *dst, unsigned long flags)
 	 * see, https://lwn.net/Articles/281157/
 	 */
 	if (flags & MS_RDONLY) { // ro bind mounts do not work directly
-		if (mount("none", dst, "bind", flags|MS_RDONLY|MS_REMOUNT, NULL) < 0) {
+		if (mount("none", dst, "bind", flags | MS_RDONLY | MS_REMOUNT, NULL) < 0) {
 			ERROR_ERRNO("Failed to remount bind"
-				" mount %s to %s read-only", src, dst);
+				    " mount %s to %s read-only",
+				    src, dst);
 		}
 	}
 	DEBUG("Sucessfully bind mounted %s to %s", src, dst);
@@ -569,12 +568,12 @@ err:
  * @return -1 on error else 0.
  */
 static int
-c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
+c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
 	char *img, *dev, *dir;
 	int fd = 0;
 	bool new_image = false;
-	bool encrypted = false;	    // TODO: should we encrypt all img files except shared images?
+	bool encrypted = false; // TODO: should we encrypt all img files except shared images?
 	bool overlay = false;
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
@@ -588,40 +587,38 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	else
 		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
 
-
 	img = c_vol_image_path_new(vol, mntent);
 	if (!img)
 		goto error;
 
-
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
 	case MOUNT_TYPE_DEVICE:
-		mountflags |= MS_RDONLY;    // add read-only flag for shared or device images types
+		mountflags |= MS_RDONLY; // add read-only flag for shared or device images types
 		break;
 	case MOUNT_TYPE_OVERLAY_RO:
-		mountflags |= MS_RDONLY;    // add read-only flag for upper image
+		mountflags |= MS_RDONLY; // add read-only flag for upper image
 		overlay = true;
 		break;
 	case MOUNT_TYPE_SHARED_RW:
 		overlay = true;
 		break;
 	case MOUNT_TYPE_DEVICE_RW:
-		break;	    // stick to defaults
+		break; // stick to defaults
 	case MOUNT_TYPE_OVERLAY_RW:
 		overlay = true;
-		encrypted = true;	    // create as encrypted image
+		encrypted = true; // create as encrypted image
 		break;
 	case MOUNT_TYPE_EMPTY:
-		encrypted = true;	    // create as encrypted image
+		encrypted = true; // create as encrypted image
 		break;
 	case MOUNT_TYPE_BIND_FILE:
-		mountflags |= MS_RDONLY;    // Fallthrough
+		mountflags |= MS_RDONLY; // Fallthrough
 	case MOUNT_TYPE_BIND_FILE_RW:
-		mountflags |= MS_BIND;      // use bind mount
+		mountflags |= MS_BIND; // use bind mount
 		IF_TRUE_GOTO(-1 == c_vol_mount_file_bind(img, dir, mountflags), error);
 		goto final;
-	case MOUNT_TYPE_COPY:		    // deprecated
+	case MOUNT_TYPE_COPY: // deprecated
 		//WARN("Found deprecated MOUNT_TYPE_COPY");
 		break;
 	case MOUNT_TYPE_FLASH:
@@ -629,7 +626,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		goto final;
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
-				mount_entry_get_type(mntent), mount_entry_get_img(mntent));
+		      mount_entry_get_type(mntent), mount_entry_get_img(mntent));
 		goto error;
 	}
 
@@ -638,7 +635,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		DEBUG_ERRNO("Could not mkdir %s", dir);
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
-		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags, mount_entry_get_mount_data(mntent)) >= 0) {
+		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags,
+			  mount_entry_get_mount_data(mntent)) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
 			goto final;
 		} else {
@@ -653,11 +651,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			goto error;
 		}
 	}
-	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED
-			|| mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW
-			|| mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
-		if (guestos_check_mount_image_block(container_get_os(vol->container), mntent, true)
-				!= CHECK_IMAGE_GOOD) {
+	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
+	    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
+	    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
+		if (guestos_check_mount_image_block(container_get_os(vol->container), mntent,
+						    true) != CHECK_IMAGE_GOOD) {
 			ERROR("Cannot mount image %s: image file is corrupted", img);
 			goto error;
 		}
@@ -670,12 +668,12 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		char *label, *crypt;
 
 		if (!container_get_key(vol->container)) {
-		    ERROR("Trying to mount encrypted volume without key...");
-		    goto error;
+			ERROR("Trying to mount encrypted volume without key...");
+			goto error;
 		}
 
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
-				mount_entry_get_img(mntent));
+				   mount_entry_get_img(mntent));
 
 		crypt = cryptfs_get_device_path_new(label);
 		if (file_is_blk(crypt)) {
@@ -684,7 +682,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
 
 			mem_free(crypt);
-			crypt = cryptfs_setup_volume_new(label, dev, container_get_key(vol->container));
+			crypt = cryptfs_setup_volume_new(label, dev,
+							 container_get_key(vol->container));
 
 			if (!crypt) {
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
@@ -710,7 +709,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		char *upper_dev = NULL;
 		char *lower_dev = NULL;
 		switch (mount_entry_get_type(mntent)) {
-
 		case MOUNT_TYPE_OVERLAY_RW: {
 			upper_dev = dev;
 			upper_fstype = mount_entry_get_fs(mntent);
@@ -722,23 +720,23 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 				DEBUG("Successfully formatted new image %s using %s", img, dev);
 			}
 			if (!strcmp("btrfs", upper_fstype) &&
-				!strncmp("subvol", mount_entry_get_mount_data(mntent), 6)) {
+			    !strncmp("subvol", mount_entry_get_mount_data(mntent), 6)) {
 				c_vol_btrfs_create_subvol(dev, mount_entry_get_mount_data(mntent));
 			}
 		} break;
 
 		case MOUNT_TYPE_OVERLAY_RO: {
 			// check if its a feature mount and if the container has the feature enabled
-			const char* img_name = mount_entry_get_img(mntent);
+			const char *img_name = mount_entry_get_img(mntent);
 			size_t feature_len = strlen("feature_");
-			if (strncmp(img_name , "feature_", feature_len) == 0) {
+			if (strncmp(img_name, "feature_", feature_len) == 0) {
 				if (!container_is_feature_enabled(vol->container,
-								 img_name+feature_len)) {
+								  img_name + feature_len)) {
 					DEBUG("Feature %s not enabled, skipping...",
-							img_name+feature_len);
+					      img_name + feature_len);
 					goto final;
 				}
-				DEBUG("Going to mount feature %s", img_name+feature_len);
+				DEBUG("Going to mount feature %s", img_name + feature_len);
 			}
 			upper_dev = dev;
 			upper_fstype = mount_entry_get_fs(mntent);
@@ -757,8 +755,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		}
 
 		if (c_vol_mount_overlay(dir, upper_fstype, lower_fstype, mountflags,
-					mount_entry_get_mount_data(mntent),
-					upper_dev, lower_dev) < 0) {
+					mount_entry_get_mount_data(mntent), upper_dev,
+					lower_dev) < 0) {
 			ERROR_ERRNO("Could not mount %s to %s", img, dir);
 			goto error;
 		}
@@ -766,16 +764,18 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 		goto final;
 	}
 
-	DEBUG("Mounting image %s %s using %s to %s",
-	      img, mountflags & MS_RDONLY ? "ro" : "rw" , dev, dir);
+	DEBUG("Mounting image %s %s using %s to %s", img, mountflags & MS_RDONLY ? "ro" : "rw", dev,
+	      dir);
 
-	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags, mount_entry_get_mount_data(mntent)) >= 0) {
+	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags,
+		  mount_entry_get_mount_data(mntent)) >= 0) {
 		DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
 		goto final;
 	}
 
 	// retry with default options if selinux is disabled .. (e.g. context= will cause an EINVAL)
-	if (is_selinux_disabled() && mount(dev, dir, mount_entry_get_fs(mntent), mountflags, NULL) >= 0) {
+	if (is_selinux_disabled() &&
+	    mount(dev, dir, mount_entry_get_fs(mntent), mountflags, NULL) >= 0) {
 		DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
 		goto final;
 	}
@@ -786,13 +786,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	}
 
 	INFO("Could not mount image %s using %s to %s because an invalid "
-			"superblock was detected.", img, dev, dir);
+	     "superblock was detected.",
+	     img, dev, dir);
 
 	if (mount_entry_get_type(mntent) != MOUNT_TYPE_EMPTY)
 		goto error;
 
 	/* TODO better password handling before in order to remove this condition. */
-	if (encrypted  && !new_image) {
+	if (encrypted && !new_image) {
 		DEBUG("Possibly the wrong password was specified. Abort container start.");
 		goto error;
 	}
@@ -807,7 +808,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t* mntent)
 	DEBUG("Mounting image %s using %s to %s (2nd try)", img, dev, dir);
 
 	// 2nd try to mount image...
-	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags, mount_entry_get_mount_data(mntent)) < 0) {
+	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags,
+		  mount_entry_get_mount_data(mntent)) < 0) {
 		ERROR("Could not mount image %s using %s to %s", img, dev, dir);
 		goto error;
 	}
@@ -850,7 +852,7 @@ c_vol_cleanup_dm(c_vol_t *vol)
 		mntent = mount_get_entry(container_get_mount(vol->container), i);
 
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
-				mount_entry_get_img(mntent));
+				   mount_entry_get_img(mntent));
 		DEBUG("Trying to delete dm %s", label);
 		// we just try to delete all mounts and ignore their type...
 		if (cryptfs_delete_blk_dev(label) < 0)
@@ -883,7 +885,7 @@ c_vol_mount_images(c_vol_t *vol, const char *root)
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
 	// in setup mode mount container images under {root}/setup subfolder
-	char *c_root = mem_printf("%s%s", root, (setup_mode) ? "/setup":"");
+	char *c_root = mem_printf("%s%s", root, (setup_mode) ? "/setup" : "");
 
 	if (setup_mode) {
 		n = mount_get_count(container_get_mount_setup(vol->container));
@@ -924,15 +926,16 @@ err:
 static void
 c_vol_fixup_logdev()
 {
-	char *log_buffers[4] = {"events", "main", "radio", "system"};
-	for (int i=0; i < 4; ++i) {
+	char *log_buffers[4] = { "events", "main", "radio", "system" };
+	for (int i = 0; i < 4; ++i) {
 		char *log_buffer_src = mem_printf("/dev/log_%s", log_buffers[i]);
 		if (file_exists(log_buffer_src)) {
 			char *log_buffer_dest = mem_printf("/dev/log/%s", log_buffers[i]);
 			if (mkdir("/dev/log", 0755) < 0 && errno != EEXIST)
 				WARN_ERRNO("Could not mkdir /dev/log dir for container logging");
 			if (file_move(log_buffer_src, log_buffer_dest, 0))
-				WARN_ERRNO("Could not move %s log buffer to %s", log_buffer_src, log_buffer_dest);
+				WARN_ERRNO("Could not move %s log buffer to %s", log_buffer_src,
+					   log_buffer_dest);
 			mem_free(log_buffer_dest);
 		}
 		mem_free(log_buffer_src);
@@ -973,8 +976,8 @@ c_vol_start_pre_clone(const c_vol_t *vol)
 	for (int i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
 		mntent = mount_get_entry(container_get_mount(vol->container), i);
-		if (mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE_RW
-				|| mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE ) {
+		if (mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE_RW ||
+		    mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE) {
 			contains_bind = true;
 		}
 	}
@@ -1003,7 +1006,8 @@ c_vol_start_pre_clone(const c_vol_t *vol)
 	}
 	bind_dev = c_vol_create_loopdev_new(&loop_fd, bind_img_path);
 	IF_NULL_GOTO(bind_dev, err);
-	if (mount(bind_dev, SHARED_FILES_PATH, "ext4", MS_NOATIME|MS_NODEV|MS_NOEXEC, NULL) < 0) {
+	if (mount(bind_dev, SHARED_FILES_PATH, "ext4", MS_NOATIME | MS_NODEV | MS_NOEXEC, NULL) <
+	    0) {
 		ERROR_ERRNO("Failed to mount %s to %s", bind_img_path, SHARED_FILES_PATH);
 		goto err;
 	}
@@ -1033,7 +1037,8 @@ c_vol_start_child(c_vol_t *vol)
 	INFO("Mounting rootfs to %s", root);
 
 	if (mkdir(container_get_images_dir(vol->container), 0755) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Cound not mkdir container directory %s", container_get_images_dir(vol->container));
+		ERROR_ERRNO("Cound not mkdir container directory %s",
+			    container_get_images_dir(vol->container));
 		goto error;
 	}
 
@@ -1116,7 +1121,8 @@ c_vol_start_child(c_vol_t *vol)
 	DEBUG("Mounting /dev");
 	char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	const char *devfstype =
-		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" : "tmpfs";
+		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" :
+										      "tmpfs";
 	unsigned long devopts = MS_RELATIME | MS_NOSUID;
 	char *dev_mnt = mem_printf("%s/%s/", root, "dev");
 
@@ -1124,14 +1130,16 @@ c_vol_start_child(c_vol_t *vol)
 		WARN_ERRNO("Could not mkdir %s", dev_mnt);
 
 	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container))) {
-		if (mount("/dev", dev_mnt, devfstype, devopts|MS_BIND, mount_data) < 0)
+		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND, mount_data) < 0)
 			WARN_ERRNO("Could not bind mount /dev");
 
-		if (mount("/dev", dev_mnt, devfstype, devopts|MS_BIND|MS_RDONLY|MS_REMOUNT, mount_data) < 0)
+		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND | MS_RDONLY | MS_REMOUNT,
+			  mount_data) < 0)
 			WARN_ERRNO("Could not remount /dev (ro)");
 
 		//mount writable tmpfs over /dev
-		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, mount_data, NULL, NULL) < 0)
+		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, mount_data, NULL,
+					NULL) < 0)
 			WARN_ERRNO("Could not mount tmpfs overlay to /dev");
 	} else {
 		if (mount(devfstype, dev_mnt, devfstype, devopts, mount_data) < 0)
@@ -1190,12 +1198,14 @@ c_vol_start_child(c_vol_t *vol)
 	 * (system/core/init/init.c and external/libselinux/src/android.c) */
 	if (is_selinux_enabled()) {
 		DEBUG("Mounting /sys/fs/selinux");
-		if (mount("selinuxfs", "/sys/fs/selinux", "selinuxfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
+		if (mount("selinuxfs", "/sys/fs/selinux", "selinuxfs", MS_RELATIME | MS_NOSUID,
+			  NULL) < 0)
 			WARN_ERRNO("Could not mount /sys/fs/selinuxfs");
 	}
 
 	DEBUG("Mounting securityfs to /sys/kernel/security");
-	if (mount("securityfs", "/sys/kernel/security", "securityfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
+	if (mount("securityfs", "/sys/kernel/security", "securityfs", MS_RELATIME | MS_NOSUID,
+		  NULL) < 0)
 		WARN_ERRNO("Could not mount securityfs to /sys/kernel/security");
 
 	c_vol_fixup_logdev();
@@ -1210,7 +1220,7 @@ c_vol_start_child(c_vol_t *vol)
 	DEBUG("Mounting /run");
 	if (mkdir("/run", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /run");
-	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME| MS_NOSUID| MS_NODEV, mount_data) < 0)
+	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, mount_data) < 0)
 		WARN_ERRNO("Could not mount /run");
 
 	if (mkdir(CMLD_SOCKET_DIR, 0755) < 0 && errno != EEXIST)

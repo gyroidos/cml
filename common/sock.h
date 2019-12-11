@@ -42,10 +42,10 @@
 /* Add missing defines from linux/net.h: */
 /* Flags for socket, socketpair, accept4 */
 #ifndef SOCK_CLOEXEC
-#define SOCK_CLOEXEC	O_CLOEXEC
+#define SOCK_CLOEXEC O_CLOEXEC
 #endif
 #ifndef SOCK_NONBLOCK
-#define SOCK_NONBLOCK	O_NONBLOCK
+#define SOCK_NONBLOCK O_NONBLOCK
 #endif
 
 /**
