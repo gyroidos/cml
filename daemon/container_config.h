@@ -229,6 +229,13 @@ list_t *
 container_config_get_vnet_cfg_list_new(const container_config_t *config);
 
 /**
+ * Reads the container config for usb devices and returns a list
+ * of the corresponding uevent_usbdev_t structures.
+ */
+list_t *
+container_config_get_usbdev_list_new(const container_config_t *config);
+
+/**
  * Returns the container specific array used to appened to evn buffer on start
  */
 char **

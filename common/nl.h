@@ -54,7 +54,7 @@ typedef struct nl_msg nl_msg_t;
  * @return Pointer to nl_sock; NULL in case of failure
  */
 nl_sock_t *
-nl_sock_uevent_new();
+nl_sock_uevent_new(pid_t udevd_pid);
 
 /**
  * Allocates, opens and returns a nl_sock object of family NETLINK_ROUTE with various netlink options.

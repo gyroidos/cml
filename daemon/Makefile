@@ -46,6 +46,7 @@ PROTO_SRC := \
 
 SRC_FILES := main.c \
 	cmld.c \
+	uevent.c \
 	container.c \
 	common/uuid.c \
 	control.c \

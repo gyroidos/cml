@@ -48,6 +48,7 @@
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "hardware.h"
+#include "uevent.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -165,6 +166,9 @@ struct container {
 	// list of exclusively assigned devices (rules)
 	char **device_assigned_list;
 
+	// list of uevent_usbdev_t devices to allow/assign for container
+	list_t *usbdev_list;
+
 	char *dns_server;
 	time_t time_started;
 	time_t time_created;
@@ -240,7 +244,8 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       unsigned int ram_limit, uint32_t color, uint16_t adb_port,
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
-		       list_t *vnet_cfg_list, char **init_env, size_t init_env_len)
+		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
+		       size_t init_env_len)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -381,6 +386,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->time_created = container_get_creation_time_from_file(container);
 	container->device_allowed_list = allowed_devices;
 	container->device_assigned_list = assigned_devices;
+	container->usbdev_list = usbdev_list;
 
 	container->setup_mode = false;
 
@@ -523,6 +529,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 					 cmld_get_device_host_dns();
 
 	list_t *vnet_cfg_list = (ns_net) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
+	list_t *usbdev_list = container_config_get_usbdev_list_new(conf);
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
@@ -534,7 +541,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
 				       images_dir, mnt, ram_limit, color, adb_port, allow_autostart,
 				       feature_enabled, dns_server, net_ifaces, allowed_devices,
-				       assigned_devices, vnet_cfg_list, init_env, init_env_len);
+				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
+				       init_env_len);
 	if (c)
 		container_config_write(conf);
 
@@ -613,6 +621,11 @@ container_free(container_t *container)
 		mem_free(container->dns_server);
 	mem_free(container->device_allowed_list);
 	mem_free(container->device_assigned_list);
+
+	for (list_t *l = container->usbdev_list; l; l = l->next) {
+		mem_free(l->data);
+	}
+	list_delete(container->usbdev_list);
 	mem_free(container);
 }
 
@@ -2150,6 +2163,12 @@ container_get_dev_assign_list(const container_t *container)
 	return (const char **)container->device_assigned_list;
 }
 
+list_t *
+container_get_usbdev_list(const container_t *container)
+{
+	return container->usbdev_list;
+}
+
 void
 container_set_setup_mode(container_t *container, bool setup)
 {
@@ -2198,4 +2217,16 @@ container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
 	ret = container_config_write(conf);
 	container_config_free(conf);
 	return ret;
+}
+
+int
+container_device_allow(container_t *container, int major, int minor, bool assign)
+{
+	return c_cgroups_devices_chardev_allow(container->cgroups, major, minor, assign);
+}
+
+int
+container_device_deny(container_t *container, int major, int minor)
+{
+	return c_cgroups_devices_chardev_deny(container->cgroups, major, minor);
 }

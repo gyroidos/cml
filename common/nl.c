@@ -44,6 +44,15 @@
 #define NL_DEFAULT_SOCK_SNDBUF_SIZE 32768
 #define NL_UEVENT_SOCK_RCVBUF_SIZE (256 * 1024)
 
+// only trust udev messages from this pid
+static pid_t trusted_udevd_pid = -1;
+
+enum udev_monitor_netlink_group {
+	UDEV_MONITOR_NONE,
+	UDEV_MONITOR_KERNEL,
+	UDEV_MONITOR_UDEV,
+};
+
 /**
  * Netlink socket
  */
@@ -267,9 +276,10 @@ err:
 }
 
 nl_sock_t *
-nl_sock_uevent_new()
+nl_sock_uevent_new(pid_t udevd_pid)
 {
 	TRACE("Creating uevent nl socket");
+	trusted_udevd_pid = udevd_pid;
 	return nl_sock_new(NETLINK_KOBJECT_UEVENT);
 }
 
@@ -427,8 +437,18 @@ nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 		return -1;
 	}
 
-	if (nladdr.nl_groups == 0 || nladdr.nl_pid != 0) {
-		/* ignoring non-kernel or unicast netlink message */
+	if (nladdr.nl_groups == 0) {
+		/* ignoring unicast netlink message */
+		return -1;
+	}
+	if ((nladdr.nl_groups == UDEV_MONITOR_KERNEL) && (nladdr.nl_pid != 0)) {
+		/* ignoring unicast netlink message */
+		return -1;
+	}
+	// FIXME in case of shared network namspace pid of udevd can be faked
+	if ((nladdr.nl_groups == UDEV_MONITOR_UDEV) &&
+	    (trusted_udevd_pid != (pid_t)nladdr.nl_pid)) {
+		/* ignoring udev events not from our init  */
 		return -1;
 	}
 
@@ -466,7 +486,7 @@ nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool rec
 	}
 
 	if (receive_uevent && nl_verify_uevent_source(&m, nladdr)) {
-		WARN("Detected possibly malicious uevent");
+		TRACE("Detected possibly malicious uevent");
 		goto error;
 	}
 
@@ -485,15 +505,15 @@ nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool rec
 		goto error;
 	}
 
-	/* Check if the sender ist the kernel and the protocol family fits */
-	if (nladdr.nl_family != AF_NETLINK || nladdr.nl_pid != 0) {
+	/* Check if protocol family fits */
+	if (nladdr.nl_family != AF_NETLINK) {
 		goto error;
 	}
 
 	return received;
 
 error:
-	WARN("Purged netlink message, as it did not pass sanity checks");
+	TRACE("Purged netlink message, as it did not pass sanity checks");
 	memset(buf, 0, len);
 	errno = EIO;
 	return -1;

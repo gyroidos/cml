@@ -151,7 +151,8 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       unsigned int ram_limit, uint32_t color, uint16_t adb_port,
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
-		       list_t *vnet_cfg_list, char **init_env, size_t init_env_len);
+		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
+		       size_t init_env_len);
 
 /**
  * Creates a new container container object. There are three different cases
@@ -710,5 +711,23 @@ container_get_vnet_runtime_cfg_new(container_t *container);
  */
 int
 container_update_config(container_t *container, uint8_t *buf, size_t buf_len);
+
+/**
+ * Get the list of usb devices which are set in container config.
+ */
+list_t *
+container_get_usbdev_list(const container_t *container);
+
+/**
+ * Allow device access by major, minor number of device.
+ */
+int
+container_device_allow(container_t *container, int major, int minor, bool assign);
+
+/**
+ * Remove previously allowed device access by major, minor number of device.
+ */
+int
+container_device_deny(container_t *container, int major, int minor);
 
 #endif /* CONTAINER_H */

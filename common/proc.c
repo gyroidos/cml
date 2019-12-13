@@ -194,13 +194,13 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 		return 0;
 
 	proc_status_t *status = proc_status_new(pid);
-	IF_NULL_RETVAL(status, 0);
+	IF_NULL_RETVAL_TRACE(status, 0);
 
 	pid_t ppid = proc_status_get_ppid(status);
 	const char *name = proc_status_get_name(status);
 
 	if ((pf->ppid == ppid) && !strcmp(name, pf->name)) {
-		DEBUG("Found pid %d with ppid %d and name %s", pid, ppid, pf->name);
+		TRACE("Found pid %d with ppid %d and name %s", pid, ppid, pf->name);
 		pf->match = pid;
 		//return -1; // TODO maybe adapt dir_foreach to allow aborting the directory traversing without indicating an error
 	}
