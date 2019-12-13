@@ -541,8 +541,13 @@ main(int argc, char *argv[])
 		msg.exec_command = argv[optind];
 
 		if (optind < argc - 1) {
-			TRACE("[CLIENT] Allocating %zu bytes for arguments", sizeof(char *) * argc);
-			msg.exec_args = mem_alloc(sizeof(char *) * argc);
+			size_t len;
+			if (__builtin_mul_overflow(sizeof(char *), argc, &len)) {
+				ERROR("Too many arguments specified. Overflow detected.");
+				exit(-1);
+			}
+			TRACE("[CLIENT] Allocating %zu bytes for arguments", len);
+			msg.exec_args = mem_alloc(len);
 
 			while (optind < argc - 1) {
 				TRACE("[CLIENT] Parsing command arguments at index %d, optind: %d: %s",
