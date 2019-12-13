@@ -47,6 +47,9 @@ c_vol_new(const container_t *container);
 void
 c_vol_free(c_vol_t *vol);
 
+bool
+c_vol_is_encrypted(c_vol_t *vol);
+
 /* Start hooks */
 int
 c_vol_start_pre_clone(const c_vol_t *vol);

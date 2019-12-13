@@ -330,6 +330,12 @@ bool
 container_is_privileged(const container_t *container);
 
 /**
+ * Get the information if the conatiner has encrypted volumes.
+ */
+bool
+container_is_encrypted(const container_t *container);
+
+/**
  * Suspends the container before moving it into background
  */
 int

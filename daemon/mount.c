@@ -276,6 +276,21 @@ mount_entry_match_sha256(const mount_entry_t *e, const char *hash)
 	return match_hash("SHA256", 32, img_name, expected, hash);
 }
 
+bool
+mount_entry_is_encrypted(const mount_entry_t *e)
+{
+	ASSERT(e);
+
+	switch (e->type) {
+	case MOUNT_TYPE_EMPTY:
+		return strncmp(e->fs_type, "tmpfs", 5);
+	case MOUNT_TYPE_OVERLAY_RW:
+		return true;
+	default:
+		return false;
+	}
+}
+
 int
 mount_remount_root_ro(void)
 {

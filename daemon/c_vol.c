@@ -573,7 +573,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	char *img, *dev, *dir;
 	int fd = 0;
 	bool new_image = false;
-	bool encrypted = false; // TODO: should we encrypt all img files except shared images?
+	bool encrypted = mount_entry_is_encrypted(mntent);
 	bool overlay = false;
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
@@ -601,17 +601,12 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		overlay = true;
 		break;
 	case MOUNT_TYPE_SHARED_RW:
+	case MOUNT_TYPE_OVERLAY_RW:
 		overlay = true;
 		break;
 	case MOUNT_TYPE_DEVICE_RW:
-		break; // stick to defaults
-	case MOUNT_TYPE_OVERLAY_RW:
-		overlay = true;
-		encrypted = true; // create as encrypted image
-		break;
 	case MOUNT_TYPE_EMPTY:
-		encrypted = true; // create as encrypted image
-		break;
+		break; // stick to defaults
 	case MOUNT_TYPE_BIND_FILE:
 		mountflags |= MS_RDONLY; // Fallthrough
 	case MOUNT_TYPE_BIND_FILE_RW:
@@ -1239,6 +1234,24 @@ c_vol_start_child(c_vol_t *vol)
 error:
 	mem_free(root);
 	return -1;
+}
+
+bool
+c_vol_is_encrypted(c_vol_t *vol)
+{
+	size_t i, n;
+
+	ASSERT(vol);
+	ASSERT(vol->container);
+
+	n = mount_get_count(container_get_mount(vol->container));
+	for (i = 0; i < n; i++) {
+		const mount_entry_t *mntent;
+		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		if (mount_entry_is_encrypted(mntent))
+			return true;
+	}
+	return false;
 }
 
 void
