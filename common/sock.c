@@ -191,6 +191,7 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 
 	if (connect(sock, addrinfo->ai_addr, addrinfo->ai_addrlen) == -1) {
 		WARN_ERRNO("Could not connect socket");
+		close(sock);
 		return -1;
 	}
 
