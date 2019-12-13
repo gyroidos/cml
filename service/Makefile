@@ -57,10 +57,12 @@ protobuf: c_service.proto container.proto control.proto guestos.proto common/log
 	protoc-c --c_out=. guestos.proto
 	$(MAKE) -C common protobuf
 
-service: protobuf $(SRC_FILES)
+$(SRC_FILES): protobuf
+
+service: $(SRC_FILES)
 	$(CC) $(LOCAL_CFLAGS) $(CLAGS) $(SRC_FILES) -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
-service-static: protobuf $(SRC_FILES)
+service-static: $(SRC_FILES)
 	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) -lprotobuf-c -lprotobuf-c-text -o cml-service-container
 
 
