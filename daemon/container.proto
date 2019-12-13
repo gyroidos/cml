@@ -39,6 +39,12 @@ message ContainerVnetConfig {
 	// TODO Define configuration, for now just use hardcoded default config in c_net
 }
 
+message ContainerUsbConfig {
+	required string id = 1;
+	required string serial = 2;
+	required bool assign = 3 [default = false];
+}
+
 /**
  * Type of container KVM|CONTAINER
  */
@@ -88,6 +94,9 @@ message ContainerConfig {
 
 	// list of virtual network interface configuration
 	repeated ContainerVnetConfig vnet_configs = 27;
+
+	// list of virtual network interface configuration
+	repeated ContainerUsbConfig usb_configs = 28;
 }
 
 /**

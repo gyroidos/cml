@@ -47,6 +47,7 @@
 #include "smartcard.h"
 #include "tss.h"
 #include "ksm.h"
+#include "uevent.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -808,11 +809,10 @@ cmld_init_a0(const char *path, const char *c0os)
 	bool a0_ns_net = true;
 	bool privileged = true;
 
-	container_t *new_a0 =
-		container_new_internal(a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net,
-				       privileged, a0_os, NULL, a0_images_folder, a0_mnt,
-				       a0_ram_limit, 0xffffff00, 0, false, NULL,
-				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, 0);
+	container_t *new_a0 = container_new_internal(
+		a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net, privileged, a0_os, NULL,
+		a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, NULL,
+		cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, NULL, 0);
 
 	/* depending on the storage of the a0 pointer, do ONE of the following: */
 	/* store a0 as first element of the cmld_containers_list */
@@ -939,6 +939,9 @@ cmld_init(const char *path)
 		FATAL("Could not init power module");
 	INFO("power initialized.");
 #endif
+	if (uevent_init() < 0)
+		FATAL("Could not init uevent module");
+	INFO("uevent initialized.");
 
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");

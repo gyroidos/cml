@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -55,6 +55,11 @@ c_cgroups_devices_allow_audio(c_cgroups_t *cgroups);
 
 int
 c_cgroups_devices_deny_audio(c_cgroups_t *cgroups);
+
+int
+c_cgroups_devices_chardev_allow(c_cgroups_t *cgroups, int major, int minor, bool assign);
+int
+c_cgroups_devices_chardev_deny(c_cgroups_t *cgroups, int major, int minor);
 
 /**
  * This function gets the ram_limit for the container from its associated container
