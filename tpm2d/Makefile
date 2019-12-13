@@ -51,17 +51,17 @@ SRC_FILES := \
 .PHONY: all
 all: tpm2d
 
-
 protobuf: attestation.proto tpm2d.proto
 	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
 
+$(SRC_FILES): protobuf
+
 libcommon:
 	$(MAKE) -C common libcommon
 
-tpm2d: protobuf libcommon $(SRC_FILES)
+tpm2d: libcommon $(SRC_FILES)
 	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -libmtss -lcrypto -Lcommon -lcommon -o tpm2d
-
 
 .PHONY: clean
 clean:
