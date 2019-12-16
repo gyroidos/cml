@@ -191,6 +191,7 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 
 	if (connect(sock, addrinfo->ai_addr, addrinfo->ai_addrlen) == -1) {
 		WARN_ERRNO("Could not connect socket");
+		close(sock);
 		return -1;
 	}
 
@@ -202,7 +203,7 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 int
 sock_inet_create_and_connect(int type, const char *node, const char *service)
 {
-	struct addrinfo hints, *res;
+	struct addrinfo hints, *res = NULL;
 	int sock = -1;
 
 	memset(&hints, 0, sizeof hints);
@@ -232,7 +233,9 @@ sock_inet_create_and_connect(int type, const char *node, const char *service)
 
 out:
 	/* free the linked list returned by getaddrinfo */
-	freeaddrinfo(res);
+	if (res != NULL) {
+		freeaddrinfo(res);
+	}
 
 	return sock;
 }
