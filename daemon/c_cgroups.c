@@ -872,7 +872,6 @@ c_cgroups_sys_usb_devices_dir_foreach_cb(const char *path, const char *name, voi
 	uevent_usbdev_t *usbdev = cgusbd->usbdev;
 	IF_NULL_RETVAL(usbdev, -1);
 
-
 	char *id_product_file = mem_printf("%s/%s/idProduct", path, name);
 	char *id_vendor_file = mem_printf("%s/%s/idVendor", path, name);
 	char *i_serial_file = mem_printf("%s/%s/serial", path, name);
@@ -952,8 +951,7 @@ c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
 	cgusbd->usbdev = usbdev;
 
 	// for the first time iterate through sysfs to find device
-	if (0 > dir_foreach(sysfs_path, &c_cgroups_sys_usb_devices_dir_foreach_cb,
-			    cgusbd)) {
+	if (0 > dir_foreach(sysfs_path, &c_cgroups_sys_usb_devices_dir_foreach_cb, cgusbd)) {
 		WARN("Could not open %s to find usb device!", sysfs_path);
 		ret = -1;
 	}
