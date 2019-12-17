@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -438,6 +438,14 @@ container_config_has_netns(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->netns;
+}
+
+bool
+container_config_has_userns(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->userns;
 }
 
 void

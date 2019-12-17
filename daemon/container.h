@@ -107,7 +107,8 @@ enum container_error {
 	CONTAINER_ERROR_CGROUPS,
 	CONTAINER_ERROR_NET,
 	CONTAINER_ERROR_SERVICE,
-	CONTAINER_ERROR_DEVNS
+	CONTAINER_ERROR_DEVNS,
+	CONTAINER_ERROR_USER
 };
 
 typedef enum {
@@ -642,6 +643,9 @@ container_get_dns_server(const container_t *container);
 bool
 container_has_netns(const container_t *container);
 
+bool
+container_has_userns(const container_t *container);
+
 /**
  * Returns the ip of the first interface set inside the container
  */
@@ -729,5 +733,30 @@ container_device_allow(container_t *container, int major, int minor, bool assign
  */
 int
 container_device_deny(container_t *container, int major, int minor);
+
+/**
+ * Prepares a mount for shifted uid and gids of directory for the container's userns.
+ *
+ * Needs to be called in rootns for each filesystem image which should be mounted
+ * with shifted ids in child.
+ */
+int
+container_shift_ids(const container_t *container, const char *dir, bool is_root);
+
+/**
+ * Mounts all directories with shiftied uid and gids inside the container's userns.
+ *
+ * Needs to be called bevore exec usually in a start_child handler.
+ */
+int
+container_shift_mounts(const container_t *container);
+
+/**
+ * Returns the uid which is mapped to the rootuser inside the container
+ * 
+ * if userns is enabled this whould be a uid grater than 0.
+ */
+int
+container_get_uid(const container_t *container);
 
 #endif /* CONTAINER_H */

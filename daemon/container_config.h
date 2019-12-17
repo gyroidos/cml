@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -208,6 +208,12 @@ container_config_get_dns_server(const container_config_t *config);
  */
 bool
 container_config_has_netns(const container_config_t *config);
+
+/**
+ * Indicates whether the container has an own user namespace
+ */
+bool
+container_config_has_userns(const container_config_t *config);
 
 /**
  * Adds the given interface name to the list of network interfaces assigned to the container
