@@ -73,6 +73,8 @@ message ContainerConfig {
 
 	repeated string init_env = 8;	// environment variables
 
+	optional bool userns = 10 [default = true];
+
 	// Flags indicating the allows for containers:
 	optional bool allow_autostart = 17 [default = false];
 	// TODO: add further features as necessary

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -49,6 +49,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
@@ -62,6 +63,7 @@
 #endif
 #define BTRFSTUNE "btrfstune"
 #define MAKE_BTRFS "mkfs.btrfs"
+#define MDEV "mdev"
 
 #if 0
 #define ICC_SHARED_MOUNT "data/trustme-com"
@@ -549,6 +551,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool new_image = false;
 	bool encrypted = mount_entry_is_encrypted(mntent);
 	bool overlay = false;
+	bool shiftids = false;
+	bool is_root = mount_entry_get_dir(mntent)[0] == '/';
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
 	// default mountflags for most image types
@@ -556,7 +560,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	img = dev = dir = NULL;
 
-	if (mount_entry_get_dir(mntent)[0] == '/')
+	if (is_root)
 		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
 	else
 		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
@@ -577,18 +581,23 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	case MOUNT_TYPE_SHARED_RW:
 	case MOUNT_TYPE_OVERLAY_RW:
 		overlay = true;
+		shiftids = true;
 		break;
 	case MOUNT_TYPE_DEVICE_RW:
 	case MOUNT_TYPE_EMPTY:
+		shiftids = true;
 		break; // stick to defaults
 	case MOUNT_TYPE_BIND_FILE:
 		mountflags |= MS_RDONLY; // Fallthrough
 	case MOUNT_TYPE_BIND_FILE_RW:
+		if (container_has_userns(vol->container)) // skip
+			goto final;
 		mountflags |= MS_BIND; // use bind mount
 		IF_TRUE_GOTO(-1 == c_vol_mount_file_bind(img, dir, mountflags), error);
 		goto final;
 	case MOUNT_TYPE_COPY: // deprecated
 		//WARN("Found deprecated MOUNT_TYPE_COPY");
+		shiftids = true;
 		break;
 	case MOUNT_TYPE_FLASH:
 		DEBUG("Skipping mounting of FLASH type image %s", mount_entry_get_img(mntent));
@@ -783,9 +792,15 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		goto error;
 	}
 
+final:
+	if (shiftids)
+		if (container_shift_ids(vol->container, dir, is_root) < 0) {
+			ERROR_ERRNO("Shifting user and gids failed!");
+			goto error;
+		}
+
 	DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
 
-final:
 	if (dev)
 		loopdev_free(dev);
 	if (img)
@@ -932,8 +947,8 @@ c_vol_free(c_vol_t *vol)
 	mem_free(vol);
 }
 
-int
-c_vol_start_pre_clone(const c_vol_t *vol)
+static int
+c_vol_do_shared_bind_mounts(const c_vol_t *vol)
 {
 	ASSERT(vol);
 	char *bind_img_path = NULL;
@@ -996,7 +1011,7 @@ err:
 }
 
 int
-c_vol_start_child(c_vol_t *vol)
+c_vol_start_pre_clone(c_vol_t *vol)
 {
 	char *root;
 
@@ -1026,6 +1041,40 @@ c_vol_start_child(c_vol_t *vol)
 		ERROR("Could not mount images for container start");
 		goto error;
 	}
+
+	//FIXME should be before mounting images, because it sets up storage for bound files!
+	if (c_vol_do_shared_bind_mounts(vol) < 0) {
+		ERROR("Could not do shared bind mounts for container start");
+		goto error;
+	}
+	DEBUG("Mounting /dev");
+	char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
+	const char *devfstype =
+		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" :
+										      "tmpfs";
+	unsigned long devopts = MS_RELATIME | MS_NOSUID;
+	char *dev_mnt = mem_printf("%s/%s/", root, "dev");
+
+	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
+		WARN_ERRNO("Could not mkdir %s", dev_mnt);
+
+	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container))) {
+		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND, mount_data) < 0)
+			WARN_ERRNO("Could not bind mount /dev");
+
+		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND | MS_RDONLY | MS_REMOUNT,
+			  mount_data) < 0)
+			WARN_ERRNO("Could not remount /dev (ro)");
+
+		//mount writable tmpfs over /dev
+		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, mount_data, NULL,
+					NULL) < 0)
+			WARN_ERRNO("Could not mount tmpfs overlay to /dev");
+	} else {
+		if (mount(devfstype, dev_mnt, devfstype, devopts, mount_data) < 0)
+			WARN_ERRNO("Could not mount /dev");
+	}
+	mem_free(dev_mnt);
 
 	/*
 	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
@@ -1071,15 +1120,33 @@ c_vol_start_child(c_vol_t *vol)
 	}
 	mem_free(com_mnt_data);
 #endif
+	mem_free(root);
+	return 0;
+error:
+	mem_free(root);
+	return -1;
+}
 
-	// remount proc to reflect namespace change
-	if (umount("/proc") < 0 && errno != ENOENT) {
-		ERROR_ERRNO("Could not umount /proc");
-		goto error;
-	}
-	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
-		ERROR_ERRNO("Could not remount /proc");
-		goto error;
+int
+c_vol_start_child(c_vol_t *vol)
+{
+	char *root;
+
+	ASSERT(vol);
+
+	root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
+	INFO("Switching to new rootfs in '%s'", root);
+
+	if (!container_has_userns(vol->container)) {
+		// remount proc to reflect namespace change
+		if (umount("/proc") < 0 && errno != ENOENT) {
+			ERROR_ERRNO("Could not umount /proc");
+			goto error;
+		}
+		if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+			ERROR_ERRNO("Could not remount /proc");
+			goto error;
+		}
 	}
 
 	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM) {
@@ -1087,47 +1154,8 @@ c_vol_start_child(c_vol_t *vol)
 		return 0;
 	}
 
-	DEBUG("Mounting /dev");
-	char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
-	const char *devfstype =
-		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" :
-										      "tmpfs";
-	unsigned long devopts = MS_RELATIME | MS_NOSUID;
-	char *dev_mnt = mem_printf("%s/%s/", root, "dev");
-
-	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir %s", dev_mnt);
-
-	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container))) {
-		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND, mount_data) < 0)
-			WARN_ERRNO("Could not bind mount /dev");
-
-		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND | MS_RDONLY | MS_REMOUNT,
-			  mount_data) < 0)
-			WARN_ERRNO("Could not remount /dev (ro)");
-
-		//mount writable tmpfs over /dev
-		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, mount_data, NULL,
-					NULL) < 0)
-			WARN_ERRNO("Could not mount tmpfs overlay to /dev");
-	} else {
-		if (mount(devfstype, dev_mnt, devfstype, devopts, mount_data) < 0)
-			WARN_ERRNO("Could not mount /dev");
-	}
-	mem_free(dev_mnt);
-
-	if (umount2("/data", MNT_DETACH) < 0 && errno != ENOENT) {
-		ERROR_ERRNO("Could not umount /data");
-		goto error;
-	}
-
-	if (umount("/firmware") < 0 && errno != ENOENT) {
-		ERROR_ERRNO("Could not umount /firmware");
-		goto error;
-	}
-
-	if (umount("/firmware-mdm") < 0 && errno != ENOENT) {
-		ERROR_ERRNO("Could not umount /firmware-mdm");
+	if (container_shift_mounts(vol->container) < 0) {
+		ERROR_ERRNO("Mounting of shifting user and gids failed!");
 		goto error;
 	}
 
@@ -1136,6 +1164,7 @@ c_vol_start_child(c_vol_t *vol)
 		goto error;
 	}
 
+	// mount namespcae handles chroot jail breaks
 	if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
 		ERROR_ERRNO("Could not move mount for container start");
 		goto error;
@@ -1158,9 +1187,13 @@ c_vol_start_child(c_vol_t *vol)
 		WARN_ERRNO("Could not mount /proc");
 
 	DEBUG("Mounting /sys");
+	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
+	if (container_has_userns(vol->container) && container_has_netns(vol->container)) {
+		sysopts |= MS_RDONLY;
+	}
 	if (mkdir("/sys", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /sys");
-	if (mount("sys", "/sys", "sysfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
+	if (mount("sys", "/sys", "sysfs", sysopts, NULL) < 0)
 		WARN_ERRNO("Could not mount /sys");
 
 	/* Normally this would be done by the policy loading code in the android init process 
@@ -1189,12 +1222,12 @@ c_vol_start_child(c_vol_t *vol)
 	DEBUG("Mounting /run");
 	if (mkdir("/run", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /run");
-	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, mount_data) < 0)
+	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, NULL) < 0)
 		WARN_ERRNO("Could not mount /run");
 
 	if (mkdir(CMLD_SOCKET_DIR, 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir " CMLD_SOCKET_DIR);
-	if (mount("tmpfs", CMLD_SOCKET_DIR, "tmpfs", MS_RELATIME | MS_NOSUID, mount_data) < 0)
+	if (mount("tmpfs", CMLD_SOCKET_DIR, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
 		WARN_ERRNO("Could not mount " CMLD_SOCKET_DIR);
 
 	char *mount_output = file_read_new("/proc/self/mounts", 2048);

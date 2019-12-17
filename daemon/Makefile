@@ -1,6 +1,6 @@
 #
 # This file is part of trust|me
-# Copyright(c) 2013 - 2018 Fraunhofer AISEC
+# Copyright(c) 2013 - 2020 Fraunhofer AISEC
 # Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -68,6 +68,7 @@ SRC_FILES := main.c \
 	c_service.c \
 	display.c \
 	c_net.c \
+	c_user.c \
 	c_vol.c \
 	common/network.c \
 	common/proc.c \

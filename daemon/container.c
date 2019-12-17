@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -38,6 +38,7 @@
 #include "common/proc.h"
 
 #include "cmld.h"
+#include "c_user.h"
 #include "c_cgroups.h"
 #include "c_net.h"
 #include "c_vol.h"
@@ -145,6 +146,7 @@ struct container {
 	int sync_sock_child;  /* child sock for start synchronization */
 
 	// Submodules
+	c_user_t *user;
 	c_cgroups_t *cgroups;
 	c_net_t *net; /* encapsulates given network interfaces*/
 
@@ -305,6 +307,13 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->ram_limit = ram_limit;
 
 	/* Create submodules */
+	container->user = c_user_new(container, ns_usr);
+	if (!container->user) {
+		WARN("Could not initialize user subsystem for container %s (UUID: %s)",
+		     container->name, uuid_string(container->uuid));
+		goto error;
+	}
+
 	container->cgroups = c_cgroups_new(container);
 	if (!container->cgroups) {
 		WARN("Could not initialize cgroups subsystem for container %s (UUID: %s)",
@@ -510,7 +519,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		mount_free(mnt);
 		return NULL;
 	}
-	ns_usr = false;
+	ns_usr = container_config_has_userns(conf);
 	ns_net = container_config_has_netns(conf);
 
 	priv = guestos_is_privileged(os);
@@ -601,6 +610,8 @@ container_free(container_t *container)
 	if (container->mnt_setup)
 		mount_free(container->mnt_setup);
 
+	if (container->user)
+		c_user_free(container->user);
 	if (container->cgroups)
 		c_cgroups_free(container->cgroups);
 	if (container->net)
@@ -851,6 +862,7 @@ container_cleanup(container_t *container)
 	c_service_cleanup(container->service);
 	c_net_cleanup(container->net);
 	c_run_cleanup(container->run);
+	c_user_cleanup(container->user);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol);
 
@@ -999,6 +1011,11 @@ container_start_child(void *data)
 		goto error;
 	}
 
+	if (c_user_start_child(container->user) < 0) {
+		ret = CONTAINER_ERROR_USER;
+		goto error;
+	}
+
 	if (c_cgroups_start_child(container->cgroups) < 0) {
 		ret = CONTAINER_ERROR_CGROUPS;
 		goto error;
@@ -1009,8 +1026,6 @@ container_start_child(void *data)
 		goto error;
 	}
 
-	/* Make sure to execute the c_vol hook first, since it brings the childs mounts into
-	 * place as it is expected by the other submodules */
 	if (c_vol_start_child(container->vol) < 0) {
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
@@ -1131,7 +1146,7 @@ container_start_child(void *data)
 	}
 
 	execve(guestos_get_init(container->os), container->init_argv, container->init_env);
-	WARN("Could not run exec for container %s", uuid_string(container->uuid));
+	WARN_ERRNO("Could not run exec for container %s", uuid_string(container->uuid));
 
 	return CONTAINER_ERROR;
 
@@ -1313,6 +1328,11 @@ container_start(container_t *container) //, const char *key)
 
 	/*********************************************************/
 	/* PRE CLONE HOOKS */
+	if (c_user_start_pre_clone(container->user) < 0) {
+		ret = CONTAINER_ERROR_USER;
+		goto error_pre_clone;
+	}
+
 	if (c_cgroups_start_pre_clone(container->cgroups) < 0) {
 		ret = CONTAINER_ERROR_CGROUPS;
 		goto error_pre_clone;
@@ -1414,6 +1434,11 @@ container_start(container_t *container) //, const char *key)
 
 	if (c_net_start_post_clone(container->net)) {
 		ret = CONTAINER_ERROR_NET;
+		goto error_post_clone;
+	}
+
+	if (c_user_start_post_clone(container->user)) {
+		ret = CONTAINER_ERROR_USER;
 		goto error_post_clone;
 	}
 
@@ -2089,6 +2114,13 @@ container_has_netns(const container_t *container)
 	return container->ns_net;
 }
 
+bool
+container_has_userns(const container_t *container)
+{
+	ASSERT(container);
+	return container->ns_usr;
+}
+
 char *
 container_get_first_ip_new(container_t *container)
 {
@@ -2229,4 +2261,31 @@ int
 container_device_deny(container_t *container, int major, int minor)
 {
 	return c_cgroups_devices_chardev_deny(container->cgroups, major, minor);
+}
+
+int
+container_shift_ids(const container_t *container, const char *dir, bool is_root)
+{
+	ASSERT(container);
+	if (!container->ns_usr)
+		return 0;
+
+	return c_user_shift_ids(container->user, dir, is_root);
+}
+
+int
+container_shift_mounts(const container_t *container)
+{
+	ASSERT(container);
+	if (!container->ns_usr)
+		return 0;
+
+	return c_user_shift_mounts(container->user);
+}
+
+int
+container_get_uid(const container_t *container)
+{
+	ASSERT(container);
+	return c_user_get_uid(container->user);
 }
