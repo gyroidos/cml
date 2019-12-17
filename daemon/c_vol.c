@@ -35,6 +35,7 @@
 #include "common/loopdev.h"
 #include "common/cryptfs.h"
 #include "common/dir.h"
+#include "common/proc.h"
 #include "common/sock.h"
 
 #include "cmld.h"
@@ -80,33 +81,6 @@ struct c_vol {
 };
 
 /******************************************************************************/
-
-static int
-c_vol_fork_and_execvp(const char *const *argv)
-{
-	int status;
-	pid_t pid = fork();
-
-	switch (pid) {
-	case -1:
-		ERROR_ERRNO("Could not fork for %s", argv[0]);
-		return -1;
-	case 0:
-		execvp(argv[0], (char *const *)argv);
-		ERROR_ERRNO("Could not execvp %s", argv[0]);
-		return -1;
-	default:
-		if (waitpid(pid, &status, 0) != pid) {
-			ERROR_ERRNO("Could not waitpid for '%s'", argv[0]);
-		} else if (!WIFEXITED(status)) {
-			ERROR("Child '%s' terminated abnormally", argv[0]);
-		} else {
-			TRACE("%s terminated normally", argv[0]);
-			return WEXITSTATUS(status) ? -1 : 0;
-		}
-	}
-	return -1;
-}
 
 /**
  * Allocate a new string with the full image path for one mount point.
@@ -246,7 +220,7 @@ static int
 c_vol_btrfs_regen_uuid(const char *dev)
 {
 	const char *const argv_regen[] = { BTRFSTUNE, "-f", "-u", dev, NULL };
-	return c_vol_fork_and_execvp(argv_regen);
+	return proc_fork_and_execvp(argv_regen);
 }
 
 static int
@@ -347,7 +321,7 @@ c_vol_format_image(const char *dev, const char *fs)
 		return -1;
 	}
 	const char *const argv_mkfs[] = { mkfs_bin, dev, NULL };
-	return c_vol_fork_and_execvp(argv_mkfs);
+	return proc_fork_and_execvp(argv_mkfs);
 }
 
 static int
@@ -378,10 +352,10 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	subvol_path = mem_printf("%s/%s", tmp_mount, subvol);
 
 	const char *const argv_list[] = { "btrfs", "subvol", "list", subvol_path, NULL };
-	if (-1 == (ret = c_vol_fork_and_execvp(argv_list))) {
+	if (-1 == (ret = proc_fork_and_execvp(argv_list))) {
 		const char *const argv_create[] = { "btrfs", "subvol", "create", subvol_path,
 						    NULL };
-		if (-1 == (ret = c_vol_fork_and_execvp(argv_create))) {
+		if (-1 == (ret = proc_fork_and_execvp(argv_create))) {
 			ERROR_ERRNO("Could not create btrfs subvol %s", subvol);
 		} else {
 			INFO("Created new suvol %s on btrfs device %s", subvol, dev);

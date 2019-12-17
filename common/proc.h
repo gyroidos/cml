@@ -59,4 +59,7 @@ proc_killall(pid_t ppid, const char *name, int sig);
 pid_t
 proc_find(pid_t ppid, const char *name);
 
+int
+proc_fork_and_execvp(const char *const *argv);
+
 #endif /* PROC_H */

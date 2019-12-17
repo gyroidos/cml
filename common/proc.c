@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 struct proc_killall {
 	pid_t ppid;
@@ -220,4 +221,31 @@ proc_find(pid_t ppid, const char *name)
 	}
 
 	return data.match;
+}
+
+int
+proc_fork_and_execvp(const char *const *argv)
+{
+	int status;
+	pid_t pid = fork();
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork for %s", argv[0]);
+		return -1;
+	case 0:
+		execvp(argv[0], (char *const *)argv);
+		ERROR_ERRNO("Could not execvp %s", argv[0]);
+		return -1;
+	default:
+		if (waitpid(pid, &status, 0) != pid) {
+			ERROR_ERRNO("Could not waitpid for '%s'", argv[0]);
+		} else if (!WIFEXITED(status)) {
+			ERROR("Child '%s' terminated abnormally", argv[0]);
+		} else {
+			TRACE("%s terminated normally", argv[0]);
+			return WEXITSTATUS(status) ? -1 : 0;
+		}
+	}
+	return -1;
 }
