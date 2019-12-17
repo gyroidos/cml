@@ -26,6 +26,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"
+#include "common/proc.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,36 +47,6 @@
 
 #define PKIGENSCRIPT_PATH UTIL_PKI_PATH "ssig_pki_generator.sh"
 #define PKIGENCONF_PATH UTIL_PKI_PATH "ssig_pki_generator.conf"
-
-int
-util_fork_and_execvp(const char *path, const char *const *argv)
-{
-	ASSERT(path);
-	//ASSERT(argv);	    // on some OSes, argv can be NULL...
-
-	pid_t pid = fork();
-	if (pid == -1) { // error
-		ERROR_ERRNO("Could not fork '%s'", path);
-	} else if (pid == 0) { // child
-		// cast away const from char (!) for compatibility with legacy (not so clever) execv API
-		// see discussion at http://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html#tag_16_111_08
-		execvp(path, (char *const *)argv);
-		ERROR_ERRNO("Could not execv '%s'", path);
-		exit(-1);
-	} else {
-		// parent
-		int status;
-		if (waitpid(pid, &status, 0) != pid) {
-			ERROR_ERRNO("Could not waitpid for '%s'", path);
-		} else if (!WIFEXITED(status)) {
-			ERROR("Child '%s' terminated abnormally", path);
-		} else {
-			// child terminated normally return exit status
-			return -WEXITSTATUS(status);
-		}
-	}
-	return -1;
-}
 
 //static int
 //str_hash(void *key)
@@ -110,7 +81,7 @@ int
 util_tar_extract(const char *tar_filename, const char *out_dir)
 {
 	const char *const argv[] = { TAR_PATH, "-xvf", tar_filename, "-C", out_dir, NULL };
-	return util_fork_and_execvp(argv[0], argv);
+	return proc_fork_and_execvp(argv[0], argv);
 }
 
 static char *
@@ -179,7 +150,7 @@ util_squash_image(const char *dir, const char *image_file)
 {
 	const char *const argv[] = { MKSQUASHFS_PATH, dir,  image_file,       "-noappend", "-comp",
 				     MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL };
-	return util_fork_and_execvp(MKSQUASHFS_PATH, argv);
+	return proc_fork_and_execvp(MKSQUASHFS_PATH, argv);
 }
 
 int
@@ -187,12 +158,12 @@ util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_fi
 {
 	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",   "-sha512", "-sign", key_file,
 				     "-out",	  sig_file, cfg_file,  NULL };
-	return util_fork_and_execvp(argv[0], argv);
+	return proc_fork_and_execvp(argv[0], argv);
 }
 
 int
 util_gen_pki(void)
 {
 	const char *const argv[] = { "bash", PKIGENSCRIPT_PATH, PKIGENCONF_PATH, NULL };
-	return util_fork_and_execvp(argv[0], argv);
+	return proc_fork_and_execvp(argv[0], argv);
 }
