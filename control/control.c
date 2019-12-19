@@ -121,27 +121,39 @@ recv_message(int sock)
 static uuid_t *
 get_container_uuid_new(const char *identifier, int sock)
 {
-	uuid_t *uuid = uuid_new(identifier);
-	if (uuid)
-		return uuid;
-
+	uuid_t *valid_uuid = NULL;
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
 	msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 	send_message(sock, &msg);
 
 	DaemonToController *resp = recv_message(sock);
-	for (size_t i = 0; i < resp->n_container_status; ++i) {
-		TRACE("name %s", resp->container_status[i]->name);
-		if (0 == strcmp(resp->container_status[i]->name, identifier)) {
-			uuid = uuid_new(resp->container_status[i]->uuid);
-			break;
+
+	uuid_t *uuid = uuid_new(identifier);
+	if (uuid) {
+		for (size_t i = 0; i < resp->n_container_status; ++i) {
+			TRACE("uuid %s", resp->container_status[i]->uuid);
+			if (0 == strcmp(resp->container_status[i]->uuid, uuid_string(uuid))) {
+				valid_uuid = uuid;
+				break;
+			}
+		}
+		if (valid_uuid == NULL)
+			mem_free(uuid);
+	} else {
+		INFO("Retrying with name");
+		for (size_t i = 0; i < resp->n_container_status; ++i) {
+			TRACE("name %s", resp->container_status[i]->name);
+			if (0 == strcmp(resp->container_status[i]->name, identifier)) {
+				valid_uuid = uuid_new(resp->container_status[i]->uuid);
+				break;
+			}
 		}
 	}
-	if (!uuid)
-		FATAL("Container with provided name does not exist!");
+	if (!valid_uuid)
+		FATAL("Container with provided uuid/name does not exist!");
 
 	protobuf_free_message((ProtobufCMessage *)resp);
-	return uuid;
+	return valid_uuid;
 }
 
 static const struct option global_options[] = { { "socket", required_argument, 0, 's' },
