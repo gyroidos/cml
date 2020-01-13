@@ -81,6 +81,7 @@ dir_mkdir_p(const char *path, mode_t mode)
 	int ret = 0;
 
 	//DEBUG("Doing mkdir -p on path %s", p);
+	mode_t old_mask = umask(0);
 
 	if (c[0] == '/') {
 		c++;
@@ -103,6 +104,7 @@ dir_mkdir_p(const char *path, mode_t mode)
 		ret = -1;
 	}
 out:
+	umask(old_mask);
 	mem_free(p);
 	return ret;
 }
