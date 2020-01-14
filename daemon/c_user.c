@@ -41,7 +41,7 @@
 
 #define UID_RANGE 10000
 #define UID_RANGES_START 30000
-#define MAX_UID_RANGES ((UINT_MAX - UID_RANGES_START) / UID_RANGE)
+#define MAX_UID_RANGES ((int)((UINT_MAX - UID_RANGES_START) / UID_RANGE))
 
 /* Paths for controling mappings */
 #define C_USER_UID_MAP_PATH "/proc/%d/uid_map"
@@ -61,7 +61,7 @@ struct c_user_shift {
 struct c_user {
 	container_t *container; //!< container which the c_user struct is associated to
 	bool ns_usr;		//!< indicates if the c_user structure has an user namespace
-	unsigned int offset;    //!< gives information about the uid mapping to be set
+	int offset;		//!< gives information about the uid mapping to be set
 	int uid_start;		//!< this is the start of uids and gids in the root namespace
 	list_t *marks;		//marks to be mounted in userns
 	int mark_index;
@@ -80,10 +80,11 @@ static bool *uid_offsets = NULL;
  * indicates that a container releases its addresses.
  */
 static void
-c_user_unset_offset(unsigned int offset)
+c_user_unset_offset(int offset)
 {
 	ASSERT(offset < MAX_UID_RANGES);
 	TRACE("UID offset %d released by a container", offset);
+	IF_TRUE_RETURN(offset == -1);
 
 	uid_offsets[offset] = false;
 }
@@ -102,7 +103,7 @@ c_user_set_next_offset(void)
 		return 0;
 	}
 
-	for (unsigned int i = 0; i < MAX_UID_RANGES; i++) {
+	for (int i = 0; i < MAX_UID_RANGES; i++) {
 		if (!uid_offsets[i]) {
 			TRACE("UID offset %d occupied by a container", i);
 			uid_offsets[i] = true;
@@ -122,16 +123,11 @@ c_user_set_next_uid_range_start(c_user_t *user)
 {
 	ASSERT(user);
 
-	int offset = c_user_set_next_offset();
-	IF_TRUE_RETVAL((offset < 0), -1);
+	user->offset = c_user_set_next_offset();
+	IF_TRUE_RETVAL((user->offset < 0), -1);
 
-	user->uid_start = UID_RANGES_START + ((unsigned int)offset) * UID_RANGE;
-
-	if (user->uid_start == 0) {
-		ERROR("failed to get free uid/gid map start");
-		return -1;
-	}
-	DEBUG("next free uid/gid map start is: %u", user->uid_start);
+	user->uid_start = UID_RANGES_START + (user->offset * UID_RANGE);
+	DEBUG("Next free uid/gid map start is: %u", user->uid_start);
 
 	return 0;
 }
