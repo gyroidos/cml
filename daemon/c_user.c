@@ -207,7 +207,7 @@ c_user_cleanup(c_user_t *user)
 	c_user_unset_offset(user->offset);
 
 	// cleanup shifted mounts in reverse order
-	for (list_t *l = list_tail(user->marks); l != user->marks; l = l->prev) {
+	for (list_t *l = list_tail(user->marks); l; l = l->prev) {
 		struct c_user_shift *shift = l->data;
 		if (shift->is_root) {
 			char *dev_dir = mem_printf("%s/dev", shift->target);
@@ -215,8 +215,11 @@ c_user_cleanup(c_user_t *user)
 				WARN_ERRNO("Could not umount dev on %s", dev_dir);
 			mem_free(dev_dir);
 		}
-		if (umount(shift->target) < 0)
-			WARN_ERRNO("Could not umount shift target on %s", shift->target);
+		if (umount(shift->target) < 0) {
+			if (umount2(shift->target, MNT_DETACH) < 0) {
+                                WARN_ERRNO("Could not umount shift target on '%s'", shift->target);
+                        }
+		}
 		if (umount(shift->mark) < 0)
 			WARN_ERRNO("Could not umount shift mark on %s", shift->mark);
 		mem_free(shift->mark);

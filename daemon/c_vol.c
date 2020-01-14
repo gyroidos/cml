@@ -410,11 +410,11 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 	DEBUG("Successfully mounted %s to %s", upper_dev, overlayfs_mount_dir);
 
 	// create mountpoint for upper dev
-	if (dir_mkdir_p(upper_dir, 0755) < 0) {
+	if (dir_mkdir_p(upper_dir, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
 		goto error;
 	}
-	if (dir_mkdir_p(work_dir, 0755) < 0) {
+	if (dir_mkdir_p(work_dir, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
 		goto error;
 	}
@@ -552,7 +552,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool encrypted = mount_entry_is_encrypted(mntent);
 	bool overlay = false;
 	bool shiftids = false;
-	bool is_root = mount_entry_get_dir(mntent)[0] == '/';
+	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
 	// default mountflags for most image types
@@ -560,7 +560,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	img = dev = dir = NULL;
 
-	if (is_root)
+	if (mount_entry_get_dir(mntent)[0] == '/')
 		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
 	else
 		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
@@ -847,9 +847,81 @@ c_vol_cleanup_dm(c_vol_t *vol)
 	return 0;
 }
 
+static int
+c_vol_umount_dir(const char *mount_dir)
+{
+	IF_NULL_RETVAL(mount_dir, -1);
+
+	while (file_is_mountpoint(mount_dir)) {
+		if (umount(mount_dir) < 0) {
+			if (umount2(mount_dir, MNT_DETACH) < 0) {
+				ERROR_ERRNO("Could not umount '%s'", mount_dir);
+				return -1;
+			}
+		}
+	}
+	return 0;
+}
+
+/**
+ * Umount all image files.
+ * This function is called in the rootns, to cleanup stopped container.
+ */
+static int
+c_vol_umount_all(c_vol_t *vol)
+{
+	int i, n;
+	char *root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
+
+	char *c_root = mem_printf("%s%s", root, "/setup");
+	bool setup_mode = file_is_mountpoint(c_root);
+
+	// umount /dev
+	char *mount_dir = mem_printf("%s/dev", root);
+	if (c_vol_umount_dir(mount_dir) < 0)
+		goto error;
+	mem_free(mount_dir);
+
+	if (setup_mode) {
+		// umount setup in revers order
+		n = mount_get_count(container_get_mount_setup(vol->container));
+		TRACE("n setup: %d", n);
+		for (i = n - 1; i >= 0; i--) {
+			const mount_entry_t *mntent;
+			TRACE("i setup: %d", i);
+			mntent = mount_get_entry(container_get_mount_setup(vol->container), i);
+			mount_dir = mem_printf("%s/%s", c_root, mount_entry_get_dir(mntent));
+			if (c_vol_umount_dir(mount_dir) < 0)
+				goto error;
+			mem_free(mount_dir);
+		}
+	}
+
+	// umount root in revers order
+	n = mount_get_count(container_get_mount(vol->container));
+	TRACE("n rootfs: %d", n);
+	for (i = n - 1; i >= 0; i--) {
+		const mount_entry_t *mntent;
+		TRACE("i rootfs: %d", i);
+		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mount_dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
+		if (c_vol_umount_dir(mount_dir) < 0)
+			goto error;
+		mem_free(mount_dir);
+	}
+	mem_free(root);
+	mem_free(c_root);
+	return 0;
+error:
+	mem_free(mount_dir);
+	mem_free(root);
+	mem_free(c_root);
+	return -1;
+}
+
 /**
  * Mount all image files.
- * This function is called in the child.
+ * This function is called in the rootns.
  * @param vol The vol struct for the container.
  * @param root Directory where the root file system should be mounted.
  */
@@ -860,11 +932,6 @@ c_vol_mount_images(c_vol_t *vol, const char *root)
 
 	ASSERT(vol);
 	ASSERT(root);
-
-	/*
-	 * We do not umount images here in case of an error because the mount
-	 * name space will be deleted in this case anyway.
-	 */
 
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
@@ -895,13 +962,13 @@ c_vol_mount_images(c_vol_t *vol, const char *root)
 		mntent = mount_get_entry(container_get_mount(vol->container), i);
 
 		if (c_vol_mount_image(vol, c_root, mntent) < 0) {
-			c_vol_cleanup_dm(vol);
 			goto err;
 		}
 	}
 	mem_free(c_root);
 	return 0;
 err:
+	c_vol_umount_all(vol);
 	c_vol_cleanup_dm(vol);
 	mem_free(c_root);
 	return -1;
@@ -1048,12 +1115,15 @@ c_vol_start_pre_clone(c_vol_t *vol)
 		goto error;
 	}
 	DEBUG("Mounting /dev");
-	char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
+	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	const char *devfstype =
 		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" :
 										      "tmpfs";
 	unsigned long devopts = MS_RELATIME | MS_NOSUID;
-	char *dev_mnt = mem_printf("%s/%s/", root, "dev");
+	char *dev_mnt = mem_printf("%s/%s", root, "dev");
+	int uid = container_get_uid(vol->container);
+	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
+					  mem_printf("uid=%d,gid=%d", uid, uid);
 
 	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir %s", dev_mnt);
@@ -1067,14 +1137,15 @@ c_vol_start_pre_clone(c_vol_t *vol)
 			WARN_ERRNO("Could not remount /dev (ro)");
 
 		//mount writable tmpfs over /dev
-		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, mount_data, NULL,
+		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, tmpfs_opts, NULL,
 					NULL) < 0)
 			WARN_ERRNO("Could not mount tmpfs overlay to /dev");
 	} else {
-		if (mount(devfstype, dev_mnt, devfstype, devopts, mount_data) < 0)
+		if (mount(devfstype, dev_mnt, devfstype, devopts, tmpfs_opts) < 0)
 			WARN_ERRNO("Could not mount /dev");
 	}
 	mem_free(dev_mnt);
+	mem_free(tmpfs_opts);
 
 	/*
 	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
@@ -1265,6 +1336,9 @@ void
 c_vol_cleanup(c_vol_t *vol)
 {
 	ASSERT(vol);
+
+	if (c_vol_umount_all(vol))
+		WARN("Could not umount all images properly");
 
 	// TODO: also tries to delete other directories (e.g. system), but doesn't succeed.
 	// There is only an eror message thrown, not an error returned
