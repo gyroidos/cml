@@ -158,9 +158,6 @@ static int
 c_user_setup_mapping(const c_user_t *user)
 {
 	ASSERT(user);
-	/* Skip this, if the container doesn't have a user namespace */
-	if (!user->ns_usr)
-		return 0;
 
 	char *uid_mapping = mem_printf(C_USER_MAP_FORMAT, 0, user->uid_start, UID_RANGE - 1);
 	INFO("mapping: '%s'", uid_mapping);
@@ -289,6 +286,10 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 int
 c_user_start_child(UNUSED const c_user_t *user)
 {
+	/* Skip this, if the container doesn't have a user namespace */
+	if (!user->ns_usr)
+		return 0;
+
 	INFO("uid %d, euid %d", getuid(), geteuid());
 	if (setuid(0) < 0) {
 		ERROR_ERRNO("Could not become root 'setuid(0)' in new userns");
@@ -384,12 +385,24 @@ c_user_start_pre_clone(c_user_t *user)
 int
 c_user_start_post_clone(const c_user_t *user)
 {
+	ASSERT(user);
+
+	/* Skip this, if the container doesn't have a user namespace */
+	if (!user->ns_usr)
+		return 0;
+
 	return c_user_setup_mapping(user);
 }
 
 int
 c_user_shift_mounts(const c_user_t *user)
 {
+	ASSERT(user);
+
+	/* Skip this, if the container doesn't have a user namespace */
+	if (!user->ns_usr)
+		return 0;
+
 	char *target_dev, *saved_dev;
 	target_dev = saved_dev = NULL;
 
@@ -429,21 +442,14 @@ c_user_shift_mounts(const c_user_t *user)
 			}
 			INFO("Successfully moved dev to shifted rootfs at '%s'", target_dev);
 		}
-		//mem_free(shift_mark->mark);
-		//mem_free(shift_mark->target);
-		//mem_free(shift_mark);
 	}
 
-	//mem_free(dev_mark);
-	//mem_free(dev_target);
-	//mem_free(shift_mark);
 	if (target_dev)
 		mem_free(target_dev);
 	if (saved_dev)
 		mem_free(saved_dev);
 	return 0;
 error:
-	//	mem_free(shift_mark);
 	if (target_dev)
 		mem_free(target_dev);
 	if (saved_dev)

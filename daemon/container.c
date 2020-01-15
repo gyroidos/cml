@@ -276,7 +276,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	/* initialize exit_status to 0 */
 	container->exit_status = 0;
 
-	container->ns_usr = ns_usr;
+	container->ns_usr = file_exists("/proc/self/ns/user") ? ns_usr : false;
 	container->ns_net = ns_net;
 	container->ns_ipc = hardware_supports_systemv_ipc() ? true : false;
 	container->privileged = privileged;
