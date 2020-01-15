@@ -1144,6 +1144,9 @@ c_vol_start_pre_clone(c_vol_t *vol)
 		if (mount(devfstype, dev_mnt, devfstype, devopts, tmpfs_opts) < 0)
 			WARN_ERRNO("Could not mount /dev");
 	}
+	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
+		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
+
 	mem_free(dev_mnt);
 	mem_free(tmpfs_opts);
 

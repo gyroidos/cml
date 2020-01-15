@@ -217,8 +217,8 @@ c_user_cleanup(c_user_t *user)
 		}
 		if (umount(shift->target) < 0) {
 			if (umount2(shift->target, MNT_DETACH) < 0) {
-                                WARN_ERRNO("Could not umount shift target on '%s'", shift->target);
-                        }
+				WARN_ERRNO("Could not umount shift target on '%s'", shift->target);
+			}
 		}
 		if (umount(shift->mark) < 0)
 			WARN_ERRNO("Could not umount shift mark on %s", shift->mark);
@@ -245,6 +245,42 @@ c_user_get_uid(const c_user_t *user)
 {
 	ASSERT(user);
 	return user->uid_start;
+}
+
+static int
+c_user_chown_dev_cb(const char *path, const char *file, void *data)
+{
+	int ret = 0;
+	c_user_t *user = data;
+	ASSERT(user);
+
+	char *file_to_chown = mem_printf("%s/%s", path, file);
+	if (file_is_dir(file_to_chown)) {
+		DEBUG("Path %s is dir", file_to_chown);
+		if (dir_foreach(file_to_chown, &c_user_chown_dev_cb, user) < 0) {
+			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
+			ret--;
+		}
+		if (chown(file_to_chown, user->uid_start, user->uid_start) < 0) {
+			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown,
+				    user->uid_start, user->uid_start);
+			ret--;
+		}
+	} else {
+		if (lchown(file_to_chown, user->uid_start, user->uid_start) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown,
+				    user->uid_start, user->uid_start);
+			ret--;
+		}
+	}
+	// chown .
+	if (chown(path, user->uid_start, user->uid_start) < 0) {
+		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, user->uid_start,
+			    user->uid_start);
+		ret--;
+	}
+	mem_free(file_to_chown);
+	return ret;
 }
 
 /**
@@ -290,6 +326,16 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 		goto error;
 	}
 
+	// if dev just chown the files
+	if (strlen(dir) >= 4 && !strcmp(strrchr(dir, '\0') - 4, "/dev")) {
+		if (dir_foreach(dir, &c_user_chown_dev_cb, user) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, user->uid_start,
+			      user->uid_start);
+			goto error;
+		}
+		goto success;
+	}
+
 	struct c_user_shift *shift_mark = mem_new0(struct c_user_shift, 1);
 	shift_mark->target = mem_strdup(dir);
 	shift_mark->mark =
@@ -307,7 +353,9 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 
 	user->marks = list_append(user->marks, shift_mark);
 
-	INFO("Successfully created new user namespace");
+success:
+
+	INFO("Successfully registered shifted uids for '%s'", dir);
 	return 0;
 error:
 	return -1;
