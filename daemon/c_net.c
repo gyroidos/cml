@@ -51,6 +51,7 @@
 #include "common/proc.h"
 #include "common/event.h"
 #include "container.h"
+#include "cmld.h"
 #include "hardware.h"
 
 /* Offset for ipv4/mac address allocation, e.g. 127.1.(IPV4_SUBNET_OFFS+x).2
@@ -1027,6 +1028,15 @@ c_net_start_post_clone(c_net_t *net)
 		DEBUG("move phys %s to the ns of this pid: %d", iff_name, pid);
 		if (c_net_move_ifi(iff_name, pid) < 0)
 			return -1;
+	}
+	if (container_is_privileged(net->container)) {
+		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
+			char *iff_name = l->data;
+
+			DEBUG("move phys %s to the ns of this pid: %d", iff_name, pid);
+			if (c_net_move_ifi(iff_name, pid) < 0)
+				return -1;
+		}
 	}
 
 	for (list_t *l = net->interface_list; l; l = l->next) {

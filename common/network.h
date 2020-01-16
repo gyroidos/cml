@@ -146,4 +146,10 @@ network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface);
 int
 network_list_link_ns(pid_t pid, list_t **link_list);
 
+/*
+ * Generates a list containing names of all available physical network interfaces
+ */
+list_t *
+network_get_physical_interfaces_new(void);
+
 #endif /* NETWORK_H */

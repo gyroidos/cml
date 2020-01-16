@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -98,6 +98,8 @@ static char *cmld_c0os_name = NULL;
 
 static char *cmld_shared_data_dir = NULL;
 
+static list_t *cmld_netif_phys_list = NULL;
+
 /******************************************************************************/
 
 container_t *
@@ -177,6 +179,12 @@ const char *
 cmld_get_shared_data_dir(void)
 {
 	return cmld_shared_data_dir;
+}
+
+list_t *
+cmld_get_netif_phys_list(void)
+{
+	return cmld_netif_phys_list;
 }
 
 bool
@@ -875,6 +883,8 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	/* configure loopback interface of root network namespace */
 	network_setup_loopback();
 
+	cmld_netif_phys_list = network_get_physical_interfaces_new();
+
 	DEBUG("Trying to configure eth0");
 	//network_set_ip_addr_of_interface("10.0.2.15", 24, "eth0");
 	network_set_ip_addr_of_interface(host_addr, host_subnet, host_if);
@@ -1195,4 +1205,30 @@ cmld_guestos_delete(const char *guestos_name)
 	IF_TRUE_RETURN(os == container_get_guestos(c0));
 
 	guestos_mgr_delete(os);
+}
+
+bool
+cmld_netif_phys_remove_by_name(const char *if_name)
+{
+	list_t *found = NULL;
+	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
+		char *cmld_if_name = l->data;
+		if (0 == strcmp(if_name, cmld_if_name)) {
+			found = l;
+			mem_free(cmld_if_name);
+			break;
+		}
+	}
+	if (found) {
+		INFO("Removing %s for global available physical netifs", if_name);
+		cmld_netif_phys_list = list_remove(cmld_netif_phys_list, found);
+		return true;
+	}
+	return false;
+}
+
+void
+cmld_netif_phys_add_by_name(const char *if_name)
+{
+	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
 }

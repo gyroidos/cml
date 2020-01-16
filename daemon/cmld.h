@@ -232,4 +232,35 @@ cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
 void
 cmld_guestos_delete(const char *guestos_name);
 
+/**
+ * Returns the list of currently available physical network interfaces
+ * not occupied by an application container. Used to assign theses
+ * interfaces to c0 in case of c0 uses a private network namespace.
+ */
+list_t *
+cmld_get_netif_phys_list(void);
+
+/**
+ * Removes the interface from cmld's list of available physical network
+ * interfaces. This is used during container config phases, where network
+ * interfaces are assigned directly to a container. The remaining physical
+ * interfaces are than assigned to the first privileged container with a
+ * private network namespace (usually c0).
+ *
+ * @param if_name name of the interface which should be removed.
+ * @return true if iface was available and removed, false otherwise.
+ */
+bool
+cmld_netif_phys_remove_by_name(const char *if_name);
+
+/**
+ * Adds the given interface to cmld's list of available physical network
+ * interfaces. This is used during runtime if a container releases its
+ * assignment.
+ *
+ * @param if_name name of the interface which should be added.
+ */
+void
+cmld_netif_phys_add_by_name(const char *if_name);
+
 #endif /* CMLD_H */
