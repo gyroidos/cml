@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -416,4 +416,23 @@ network_routing_rules_set_all_main(bool flush)
 	const char *const argv2[] = { IP_PATH,  "rule",		  "add", "from", "all",
 				      "lookup", IP_ROUTING_TABLE, NULL };
 	return proc_fork_and_execvp(argv2);
+}
+
+list_t *
+network_get_physical_interfaces_new()
+{
+	struct if_nameindex *if_ni, *i;
+	if_ni = if_nameindex();
+
+	list_t *if_name_list = NULL;
+
+	IF_NULL_RETVAL(if_ni, NULL);
+
+	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
+		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
+		if (file_exists(dev_drv_path))
+			if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+		mem_free(dev_drv_path);
+	}
+	return if_name_list;
 }

@@ -338,8 +338,10 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 
 	// network interfaces from container config
 	for (list_t *elem = net_ifaces; elem != NULL; elem = elem->next) {
-		DEBUG("List element in net_ifaces: %s", (char *)(elem->data));
-		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(elem->data));
+		char *if_name = elem->data;
+		DEBUG("List element in net_ifaces: %s", if_name);
+		if (cmld_netif_phys_remove_by_name(if_name))
+			nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(if_name));
 	}
 
 	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list, adb_port);
@@ -537,7 +539,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 					 container_config_get_dns_server(conf) :
 					 cmld_get_device_host_dns();
 
-	list_t *vnet_cfg_list = (ns_net) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
+	list_t *vnet_cfg_list =
+		(ns_net && !priv) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
 	list_t *usbdev_list = container_config_get_usbdev_list_new(conf);
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
@@ -2157,8 +2160,21 @@ int
 container_add_net_iface(container_t *container, const char *iface, bool persistent)
 {
 	ASSERT(container);
+
+	IF_FALSE_RETVAL(cmld_netif_phys_remove_by_name(iface), -1);
+
 	pid_t pid = container_get_pid(container);
-	int res = c_net_move_ifi(iface, pid);
+	pid_t pid_a0 = container_get_pid(cmld_containers_get_a0());
+
+	/* if c0 is running the interfaces is occupied by c0, thus we have
+	 * to take it bake to cml first.
+	 */
+	container_state_t state_a0 = container_get_state(cmld_containers_get_a0());
+	int res = 0;
+	if (state_a0 == CONTAINER_STATE_RUNNING || state_a0 == CONTAINER_STATE_BOOTING)
+		res = c_net_remove_ifi(iface, pid_a0);
+
+	res |= c_net_move_ifi(iface, pid);
 	if (res || !persistent)
 		return res;
 	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
@@ -2176,6 +2192,9 @@ container_remove_net_iface(container_t *container, const char *iface, bool persi
 	int res = c_net_remove_ifi(iface, pid);
 	if (res || !persistent)
 		return res;
+
+	cmld_netif_phys_add_by_name(iface);
+
 	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
 	container_config_write(conf);
