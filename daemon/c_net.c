@@ -974,7 +974,7 @@ c_net_start_pre_clone(c_net_t *net)
 }
 
 static int
-c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
+c_net_start_post_clone_interface(pid_t pid, pid_t pid_c0, c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -996,8 +996,12 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 		ni->veth_cmld_name = mem_strdup(hardware_get_radio_ifname());
 	}
 
-	if (!ni->configure)
+	if (!ni->configure) {
+		DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
+		if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
+			return -1;
 		return 0;
+	}
 
 	DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
 	/* Bring veth up */
@@ -1021,6 +1025,7 @@ c_net_start_post_clone(c_net_t *net)
 
 	/* Get container's pid */
 	pid_t pid = container_get_pid(net->container);
+	pid_t pid_c0 = container_get_pid(cmld_containers_get_a0());
 
 	for (list_t *l = net->interface_mv_name_list; l; l = l->next) {
 		char *iff_name = l->data;
@@ -1042,7 +1047,7 @@ c_net_start_post_clone(c_net_t *net)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
-		if (c_net_start_post_clone_interface(pid, ni) == -1)
+		if (c_net_start_post_clone_interface(pid, pid_c0, ni) == -1)
 			return -1;
 	}
 
