@@ -22,6 +22,7 @@
  */
 
 #include "protobuf.h"
+#include <errno.h>
 #include <stdio.h> // for protobuf-c-text.h
 #include <google/protobuf-c/protobuf-c-text.h>
 
@@ -85,7 +86,10 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	ASSERT(descriptor);
 
 	uint32_t buflen = 0;
-	ssize_t bytes_read = fd_read(fd, (char *)&buflen, sizeof(buflen));
+	ssize_t bytes_read;
+	do {
+		bytes_read = fd_read(fd, (char *)&buflen, sizeof(buflen));
+	} while (-1 == bytes_read && errno == EINTR);
 	if (-1 == bytes_read)
 		goto error_read;
 	if (0 == bytes_read) { // EOF / remote end closed the connection
@@ -107,7 +111,9 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
 
 	uint8_t *buf = mem_alloc(buflen);
-	bytes_read = fd_read(fd, (char *)buf, buflen);
+	do {
+		bytes_read = fd_read(fd, (char *)buf, buflen);
+	} while (-1 == bytes_read && errno == EINTR);
 	if (-1 == bytes_read) {
 		mem_free(buf);
 		goto error_read;
