@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -23,6 +23,8 @@
 
 #include "c_net.h"
 
+#define _GNU_SOURCE
+#include <sched.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <sys/socket.h>
@@ -108,6 +110,7 @@ struct c_net {
 	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container
+	pid_t c0_netns_pid;		// pid of corresponding configuration child in c0's netns
 };
 
 /**
@@ -614,6 +617,7 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 	ni->nw_name = mem_printf("%s", if_name);
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
+	ni->dhcpd_pid = -1;
 
 	return ni;
 }
@@ -632,6 +636,7 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	net->container = container;
 	net->ns_net = net_ns;
 	net->adb_port = adb_port;
+	net->c0_netns_pid = -1;
 
 	/* if the container does not have a network namespace, we don't execute any of this,
 	 * i.e. we always return at the start of the functions  */
@@ -773,8 +778,10 @@ static void
 c_net_udhcpd_stop(c_net_interface_t *ni)
 {
 	ASSERT(ni);
-	if (ni->dhcpd_pid)
+	if (ni->dhcpd_pid > 0) {
+		DEBUG("Stopping dhcpd process with pid=%d!", ni->dhcpd_pid);
 		kill(ni->dhcpd_pid, SIGTERM);
+	}
 }
 
 static int
@@ -821,10 +828,10 @@ c_net_udhcpd_start(c_net_interface_t *ni)
 	} else if (ni->dhcpd_pid == 0) {
 		INFO("Starting '%s' for %s", dhcpd_argv[0], ni->veth_cmld_name);
 		execvp(dhcpd_argv[0], dhcpd_argv);
-		exit(1);
+		FATAL_ERRNO("dhcpd: Could not exec '%s'!", dhcpd_argv[0]);
 	} else {
-		event_signal_t *sig = event_signal_new(SIGCHLD, c_net_udhcpd_sigchld_cb, ni);
-		event_add_signal(sig);
+		event_signal_t *sigchld = event_signal_new(SIGCHLD, c_net_udhcpd_sigchld_cb, ni);
+		event_add_signal(sigchld);
 	}
 out:
 	mem_free(lease_file);
@@ -855,9 +862,14 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	if (ni->configure) {
 		/* Get root ns ipv4 address */
 		if (c_net_get_next_ipv4_cmld_addr(ni->cont_offset, &ni->ipv4_cmld_addr)) {
-			ERROR("failed to retrieve a root ns ip address");
+			ERROR("failed to retrieve a root/c0 ns ip address");
 			goto err;
 		}
+		/* set subnet string */
+		uint32_t ip = ntohl(ni->ipv4_cmld_addr.s_addr);
+		uint32_t mask = ~(((uint32_t)-1) >> IPV4_PREFIX);
+		struct in_addr net_prefix = { .s_addr = htonl(ip & mask) };
+		ni->subnet = mem_printf("%s/%d", inet_ntoa(net_prefix), IPV4_PREFIX);
 
 		/* Get container ns ipv4 address */
 		if (c_net_get_next_ipv4_cont_addr(ni->cont_offset, &ni->ipv4_cont_addr)) {
@@ -887,33 +899,6 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	/* Create veth pair */
 	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name, ni->veth_mac))
 		goto err;
-
-	if (ni->configure) {
-		DEBUG("Set root ns ipv4 address");
-
-		/* Set IPv4 address */
-		if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr, &ni->ipv4_bc_addr))
-			goto err;
-
-		// set subnet string
-		uint32_t ip = ntohl(ni->ipv4_cmld_addr.s_addr);
-		uint32_t mask = ~(((uint32_t)-1) >> IPV4_PREFIX);
-		struct in_addr net = { .s_addr = htonl(ip & mask) };
-		ni->subnet = mem_printf("%s/%d", inet_ntoa(net), IPV4_PREFIX);
-		IF_NULL_GOTO_ERROR(ni->subnet, err);
-
-#ifdef ANDROID
-		/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
-		if (ni->cont_offset > 0) {
-			if (c_net_write_dhcp_config(ni))
-				goto err;
-		}
-#else
-		/* Start busybox' dhcpd server for veth */
-		if (c_net_udhcpd_start(ni))
-			goto err;
-#endif
-	}
 
 	return 0;
 
@@ -961,20 +946,12 @@ c_net_start_pre_clone(c_net_t *net)
 			return -1;
 		if (!ni->configure)
 			continue;
-
-		if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
-			if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT, true))
-				return -1;
-		} else {
-			if (network_setup_masquerading(ni->subnet, true))
-				return -1;
-		}
 	}
 	return 0;
 }
 
 static int
-c_net_start_post_clone_interface(pid_t pid, pid_t pid_c0, c_net_interface_t *ni)
+c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -996,23 +973,39 @@ c_net_start_post_clone_interface(pid_t pid, pid_t pid_c0, c_net_interface_t *ni)
 		ni->veth_cmld_name = mem_strdup(hardware_get_radio_ifname());
 	}
 
-	if (!ni->configure) {
-		DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
-		if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
-			return -1;
-		return 0;
-	}
-
-	DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
-	/* Bring veth up */
-	if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
-		return -1;
-
 	return 0;
 }
 
+void
+c_net_cleanup_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
+{
+	c_net_t *net = data;
+	pid_t pid;
+	int status = 0;
+
+	ASSERT(net);
+
+	TRACE("cmld's c0 netns helper SIGCHLD handler called for PID %d", net->c0_netns_pid);
+	if ((pid = waitpid(net->c0_netns_pid, &status, WNOHANG)) > 0) {
+		TRACE("Reaped c0 netns helper process: %d", pid);
+		/* remove the sigchld callback for this container from the event loop */
+		event_remove_signal(sig);
+		event_signal_free(sig);
+		net->c0_netns_pid = -1;
+	} else {
+		TRACE("Failed to reap c0 netns helper process");
+	}
+}
+
+static void
+c_net_cleanup_c0_cb(int signum, event_signal_t *sig, void *data);
+
 /**
  * This function is responisble for moving the container interface to its corresponding namespace.
+ *
+ * It moves physical interfaces to its configured containers. Furher it creates a new child from
+ * cmld and joins this to c0's netns for configuring the network endpoint of container virtual
+ * veth's there.
  */
 int
 c_net_start_post_clone(c_net_t *net)
@@ -1034,7 +1027,7 @@ c_net_start_post_clone(c_net_t *net)
 		if (c_net_move_ifi(iff_name, pid) < 0)
 			return -1;
 	}
-	if (container_is_privileged(net->container)) {
+	if (pid == pid_c0 && container_is_privileged(net->container)) {
 		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
 			char *iff_name = l->data;
 
@@ -1042,15 +1035,97 @@ c_net_start_post_clone(c_net_t *net)
 			if (c_net_move_ifi(iff_name, pid) < 0)
 				return -1;
 		}
+		// nothing to be configured in c0 with private netns
+		return 0;
 	}
+
+	// nothing to be configured
+	if (NULL == net->interface_list)
+		return 0;
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
-		if (c_net_start_post_clone_interface(pid, pid_c0, ni) == -1)
+		if (c_net_start_post_clone_interface(pid, ni) == -1)
+			return -1;
+		DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
+		if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
 			return -1;
 	}
 
+	// configure moved rootns veth endpoint in c0's network namespace
+	net->c0_netns_pid = fork();
+	if (net->c0_netns_pid == -1) {
+		ERROR_ERRNO("Could not fork for switching to c0's netns");
+		return -1;
+	} else if (net->c0_netns_pid == 0) {
+		DEBUG("Configuring netifs in c0");
+
+		event_reset(); // reset event_loop of cloned from parent
+		char *c0_netns =
+			mem_printf("/proc/%d/ns/net", container_get_pid(cmld_containers_get_a0()));
+		int netns_fd = open(c0_netns, O_RDONLY);
+		mem_free(c0_netns);
+		if (netns_fd == -1)
+			FATAL_ERRNO("Could not open netns file of c0");
+		if (setns(netns_fd, CLONE_NEWNET) == -1)
+			FATAL_ERRNO("Could not join network namespace of c0");
+
+		// register new cleanup callback when cmld stops a container
+		event_signal_t *sigkill =
+			event_signal_new(SIGKILL | SIGTERM, c_net_cleanup_c0_cb, net);
+		event_add_signal(sigkill);
+
+		for (list_t *l = net->interface_list; l; l = l->next) {
+			c_net_interface_t *ni = l->data;
+			if (!ni->configure)
+				continue;
+
+			DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
+
+			/* Set IPv4 address */
+			if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr,
+					   &ni->ipv4_bc_addr))
+				FATAL_ERRNO("Cannot set ip for '%s' in c0!", ni->veth_cmld_name);
+
+			/* Bring veth up */
+			if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
+				FATAL_ERRNO("Could not configure %s in c0!", ni->veth_cmld_name);
+
+			/* Setup firewall for container connectivity */
+			if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
+				if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT,
+								true))
+					FATAL_ERRNO("Could not setup port forwarding for %s!",
+						    ni->veth_cmld_name);
+			} else {
+				if (network_setup_masquerading(ni->subnet, true))
+					FATAL_ERRNO("Could not setup masquerading for %s!",
+						    ni->veth_cmld_name);
+			}
+#ifdef ANDROID
+			/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
+			if (ni->cont_offset > 0) {
+				if (c_net_write_dhcp_config(ni))
+					FATAL_ERRNO("Could not write dhcpd config!");
+			}
+#else
+			/* Start busybox' dhcpd server for veth */
+			if (c_net_udhcpd_start(ni))
+				FATAL_ERRNO("Could not start udhcpd!");
+
+			DEBUG("Successfully configured %s in c0, wait for child to exit.",
+			      ni->veth_cmld_name);
+#endif
+		}
+		DEBUG("Setup of nis in netns of c0 done.");
+		event_loop();
+	} else {
+		DEBUG("Setup of nis should be done by pid=%d", net->c0_netns_pid);
+		// register new cleanup callback when cmld stops a container
+		event_signal_t *sig = event_signal_new(SIGCHLD, c_net_cleanup_sigchild_cb, net);
+		event_add_signal(sig);
+	}
 	return 0;
 }
 
@@ -1161,17 +1236,21 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 }
 
 /**
- * Cleans up the c_net_t struct and shuts down the network interface.
+ * Cleans up the c_net_t struct and shuts down the network interface (in c0's netns).
+ *
+ * This callback is registered in the configuration clone of cmld with c0 netns joind by setns
+ * (see c_net_start_post_clone() method). The cleanup method below is running in main process of cmld
+ * can trigger this by sending sigkill.
  */
-void
-c_net_cleanup(c_net_t *net)
+static void
+c_net_cleanup_c0_cb(int signum, event_signal_t *sig, void *data)
 {
+	c_net_t *net = data;
 	ASSERT(net);
 
-	/* We can skip this in case the container has no network ns */
-	if (!net->ns_net || !(list_length(net->interface_list)))
-		return;
+	IF_FALSE_RETURN(signum == SIGTERM || signum == SIGKILL);
 
+	DEBUG("Triggered Cleanup of net ifs in c0!");
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
@@ -1190,6 +1269,34 @@ c_net_cleanup(c_net_t *net)
 		}
 
 		c_net_cleanup_interface(ni);
+	}
+	event_remove_signal(sig);
+	event_signal_free(sig);
+
+	DEBUG("Cleanup of net ifs in c0 done, exiting netns child!");
+	exit(0);
+}
+
+/**
+ * Cleans up the c_net_t struct and shuts down the network interface.
+ */
+void
+c_net_cleanup(c_net_t *net)
+{
+	ASSERT(net);
+
+	/* We can skip this in case the container has no network ns */
+	if (!net->ns_net || !(list_length(net->interface_list)))
+		return;
+
+	for (list_t *l = net->interface_list; l; l = l->next) {
+		c_net_interface_t *ni = l->data;
+		c_net_cleanup_interface(ni);
+	}
+	if (net->c0_netns_pid > 0) {
+		DEBUG("notify our c0's netns config child (pid=%d) to do cleanup in c0",
+		      net->c0_netns_pid);
+		kill(net->c0_netns_pid, SIGTERM);
 	}
 }
 

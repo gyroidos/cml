@@ -244,7 +244,7 @@ cmld_get_netif_phys_list(void);
  * Removes the interface from cmld's list of available physical network
  * interfaces. This is used during container config phases, where network
  * interfaces are assigned directly to a container. The remaining physical
- * interfaces are than assigned to the first privileged container with a
+ * interfaces are then assigned to the first privileged container with a
  * private network namespace (usually c0).
  *
  * @param if_name name of the interface which should be removed.
