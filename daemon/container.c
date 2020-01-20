@@ -2166,12 +2166,13 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 	pid_t pid = container_get_pid(container);
 	pid_t pid_a0 = container_get_pid(cmld_containers_get_a0());
 
-	/* if c0 is running the interfaces is occupied by c0, thus we have
-	 * to take it bake to cml first.
+	/* if c0 is running the interface is occupied by c0, thus we have
+	 * to take it back to cml first.
 	 */
 	container_state_t state_a0 = container_get_state(cmld_containers_get_a0());
 	int res = 0;
-	if (state_a0 == CONTAINER_STATE_RUNNING || state_a0 == CONTAINER_STATE_BOOTING)
+	if (state_a0 == CONTAINER_STATE_RUNNING || state_a0 == CONTAINER_STATE_BOOTING ||
+	    state_a0 == CONTAINER_STATE_SETUP)
 		res = c_net_remove_ifi(iface, pid_a0);
 
 	res |= c_net_move_ifi(iface, pid);
