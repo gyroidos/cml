@@ -466,6 +466,10 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_SUCCESSFUL;
 		break;
 
+	case CONTROL_RESPONSE_CMD_UNSUPPORTED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED;
+		break;
+
 	default:
 		DEBUG("Unknown message `%d' (not sent)", message);
 		return -1;
@@ -551,7 +555,6 @@ static void
 control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
 {
 	IF_NULL_RETURN(msg);
-	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 
 	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
 		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
@@ -575,10 +578,8 @@ control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
 	} break;
 	default:
 		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
-		out.code = DAEMON_TO_CONTROLLER__CODE__RESPONSE;
-		out.code = DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED;
-		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
-			WARN("Could not response to fd=%d", fd);
+		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))
+			WARN("Could not send response to fd=%d", fd);
 	}
 }
 
@@ -1157,8 +1158,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		break;
 	}
 	default:
-		WARN("Unknown ControllerToDaemon command: %d received", msg->command);
-		/* DO NOTHING */
+		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
+		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))
+			WARN("Could not send response to fd=%d", fd);
 	}
 }
 
