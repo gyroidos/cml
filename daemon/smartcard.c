@@ -78,11 +78,15 @@ bytes_to_string_new(unsigned char *data, size_t len)
 static void
 smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned char *key, int keylen)
 {
+	int resp_fd = control_get_client_sock(startdata->control);
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
 	char *ascii_key = bytes_to_string_new(key, keylen);
 	//DEBUG("SCD: Container key (len=%d): %s", keylen, ascii_key);
 	DEBUG("SCD: %s: Starting...", container_get_name(startdata->container));
-	cmld_container_start(startdata->container, ascii_key);
+	if (-1 == cmld_container_start(startdata->container, ascii_key))
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
+	else
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
 	mem_free(ascii_key);
 }
 
@@ -104,7 +108,6 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
@@ -148,8 +151,6 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				    mkdir(startdata->smartcard->path, 00755) < 0) {
 					DEBUG_ERRNO("Could not mkdir %s",
 						    startdata->smartcard->path);
-					control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK,
-							     resp_fd);
 					done = true;
 					break;
 				}
