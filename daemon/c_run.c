@@ -238,6 +238,16 @@ setns(int fd, int nstype)
 #define MAX_NS 10
 int fd[MAX_NS] = { 0 };
 
+static bool
+is_self_userns_file(char *file)
+{
+	struct stat s, userns_s;
+	IF_TRUE_RETVAL_TRACE(stat(file, &s) == -1, false);
+	IF_TRUE_RETVAL_TRACE(stat("/proc/self/ns/user", &userns_s) == -1, false);
+
+	return (s.st_dev == userns_s.st_dev) && (s.st_ino == userns_s.st_ino) ? true : false;
+}
+
 static int
 setns_cb(const char *path, const char *file, void *data)
 {
@@ -245,6 +255,12 @@ setns_cb(const char *path, const char *file, void *data)
 
 	char *ns_file = mem_printf("%s%s", path, file);
 	TRACE("Opening namespace file %s", ns_file);
+
+	if (is_self_userns_file(ns_file)) {
+		TRACE("Joining same user namespace, not allowed and also not necessary -> skip.");
+		mem_free(ns_file);
+		return EXIT_SUCCESS;
+	}
 
 	if (*i >= MAX_NS) {
 		ERROR("Too many namespace files found in %s", path);
