@@ -1262,7 +1262,7 @@ c_vol_start_child(c_vol_t *vol)
 
 	DEBUG("Mounting /sys");
 	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
-	if (container_has_userns(vol->container) && container_has_netns(vol->container)) {
+	if (container_has_userns(vol->container) && !container_has_netns(vol->container)) {
 		sysopts |= MS_RDONLY;
 	}
 	if (mkdir("/sys", 0755) < 0 && errno != EEXIST)
