@@ -21,9 +21,10 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
+
 #include "c_net.h"
 
-#define _GNU_SOURCE
 #include <sched.h>
 #include <netinet/in.h>
 #include <stdbool.h>
