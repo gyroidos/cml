@@ -317,6 +317,17 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 
 	INFO("uid %d, euid %d", getuid(), geteuid());
 
+	// if dev or a cgroup subsys just chown the files
+	if ((strlen(dir) >= 4 && !strcmp(strrchr(dir, '\0') - 4, "/dev")) ||
+	    (strstr(dir, "/cgroup") != NULL)) {
+		if (dir_foreach(dir, &c_user_chown_dev_cb, user) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, user->uid_start,
+			      user->uid_start);
+			goto error;
+		}
+		goto success;
+	}
+
 	// create mountpoints for lower and upper dev
 	if (dir_mkdir_p(SHIFTFS_DIR, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir %s", SHIFTFS_DIR);
@@ -325,16 +336,6 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 	if (chmod(SHIFTFS_DIR, 00777) < 0) {
 		ERROR_ERRNO("Could not chmod %s", SHIFTFS_DIR);
 		goto error;
-	}
-
-	// if dev just chown the files
-	if (strlen(dir) >= 4 && !strcmp(strrchr(dir, '\0') - 4, "/dev")) {
-		if (dir_foreach(dir, &c_user_chown_dev_cb, user) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, user->uid_start,
-			      user->uid_start);
-			goto error;
-		}
-		goto success;
 	}
 
 	struct c_user_shift *shift_mark = mem_new0(struct c_user_shift, 1);
