@@ -1112,6 +1112,13 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 			goto error;
 		}
 
+		if (container_shift_ids(cgroups->container, subsys_child_path, false)) {
+			ERROR("Could not shift ids of cgroup subsys for userns");
+			mem_free(cgroup_tasks);
+			mem_free(subsys_child_path);
+			goto error;
+		}
+
 		/* assign the container to the cgroup */
 		if (file_printf(cgroup_tasks, "%d", container_get_pid(cgroups->container)) == -1) {
 			ERROR_ERRNO("Could not add container %s to its cgroup under %s",
