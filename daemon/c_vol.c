@@ -792,14 +792,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		goto error;
 	}
 
+	DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
+
 final:
 	if (shiftids)
 		if (container_shift_ids(vol->container, dir, is_root) < 0) {
 			ERROR_ERRNO("Shifting user and gids failed!");
 			goto error;
 		}
-
-	DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
 
 	if (dev)
 		loopdev_free(dev);
