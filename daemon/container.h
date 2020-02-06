@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -735,13 +735,20 @@ int
 container_device_deny(container_t *container, int major, int minor);
 
 /**
- * Prepares a mount for shifted uid and gids of directory for the container's userns.
+ * Checks if the device specified by the major and minor is allowed in this container.
+ */
+bool
+container_is_device_allowed(const container_t *container, int major, int minor);
+
+/**
+ * Prepares a mount for shifted uid and gids of directory/file for the container's userns.
  *
  * Needs to be called in rootns for each filesystem image which should be mounted
- * with shifted ids in child.
+ * with shifted ids in child. This is also be used to shift single files in the
+ * in uevent module for conatiner allowed devices.
  */
 int
-container_shift_ids(const container_t *container, const char *dir, bool is_root);
+container_shift_ids(const container_t *container, const char *path, bool is_root);
 
 /**
  * Mounts all directories with shiftied uid and gids inside the container's userns.
@@ -753,10 +760,17 @@ container_shift_mounts(const container_t *container);
 
 /**
  * Returns the uid which is mapped to the rootuser inside the container
- * 
+ *
  * if userns is enabled this whould be a uid grater than 0.
  */
 int
 container_get_uid(const container_t *container);
+
+/**
+ * Returns the directory where the container's file system tree
+ * is mounted in init mount namspace.
+ */
+char *
+container_get_rootdir(const container_t *container);
 
 #endif /* CONTAINER_H */

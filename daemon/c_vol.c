@@ -80,6 +80,7 @@
 
 struct c_vol {
 	const container_t *container;
+	char *root;
 };
 
 /******************************************************************************/
@@ -871,13 +872,11 @@ static int
 c_vol_umount_all(c_vol_t *vol)
 {
 	int i, n;
-	char *root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
-
-	char *c_root = mem_printf("%s%s", root, "/setup");
+	char *c_root = mem_printf("%s%s", vol->root, "/setup");
 	bool setup_mode = file_is_mountpoint(c_root);
 
 	// umount /dev
-	char *mount_dir = mem_printf("%s/dev", root);
+	char *mount_dir = mem_printf("%s/dev", vol->root);
 	if (c_vol_umount_dir(mount_dir) < 0)
 		goto error;
 	mem_free(mount_dir);
@@ -904,17 +903,15 @@ c_vol_umount_all(c_vol_t *vol)
 		const mount_entry_t *mntent;
 		TRACE("i rootfs: %d", i);
 		mntent = mount_get_entry(container_get_mount(vol->container), i);
-		mount_dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
+		mount_dir = mem_printf("%s/%s", vol->root, mount_entry_get_dir(mntent));
 		if (c_vol_umount_dir(mount_dir) < 0)
 			goto error;
 		mem_free(mount_dir);
 	}
-	mem_free(root);
 	mem_free(c_root);
 	return 0;
 error:
 	mem_free(mount_dir);
-	mem_free(root);
 	mem_free(c_root);
 	return -1;
 }
@@ -922,21 +919,18 @@ error:
 /**
  * Mount all image files.
  * This function is called in the rootns.
- * @param vol The vol struct for the container.
- * @param root Directory where the root file system should be mounted.
  */
 static int
-c_vol_mount_images(c_vol_t *vol, const char *root)
+c_vol_mount_images(c_vol_t *vol)
 {
 	size_t i, n;
 
 	ASSERT(vol);
-	ASSERT(root);
 
 	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
 
 	// in setup mode mount container images under {root}/setup subfolder
-	char *c_root = mem_printf("%s%s", root, (setup_mode) ? "/setup" : "");
+	char *c_root = mem_printf("%s%s", vol->root, (setup_mode) ? "/setup" : "");
 
 	if (setup_mode) {
 		n = mount_get_count(container_get_mount_setup(vol->container));
@@ -945,7 +939,7 @@ c_vol_mount_images(c_vol_t *vol, const char *root)
 
 			mntent = mount_get_entry(container_get_mount_setup(vol->container), i);
 
-			if (c_vol_mount_image(vol, root, mntent) < 0) {
+			if (c_vol_mount_image(vol, vol->root, mntent) < 0) {
 				goto err;
 			}
 		}
@@ -1002,6 +996,7 @@ c_vol_new(const container_t *container)
 
 	c_vol_t *vol = mem_new0(c_vol_t, 1);
 	vol->container = container;
+	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(container)));
 
 	return vol;
 }
@@ -1011,6 +1006,7 @@ c_vol_free(c_vol_t *vol)
 {
 	ASSERT(vol);
 
+	mem_free(vol->root);
 	mem_free(vol);
 }
 
@@ -1077,15 +1073,19 @@ err:
 	return -1;
 }
 
+char *
+c_vol_get_rootdir(c_vol_t *vol)
+{
+	ASSERT(vol);
+	return vol->root;
+}
+
 int
 c_vol_start_pre_clone(c_vol_t *vol)
 {
-	char *root;
-
 	ASSERT(vol);
 
-	root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
-	INFO("Mounting rootfs to %s", root);
+	INFO("Mounting rootfs to %s", vol->root);
 
 	if (mkdir(container_get_images_dir(vol->container), 0755) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Cound not mkdir container directory %s",
@@ -1098,13 +1098,13 @@ c_vol_start_pre_clone(c_vol_t *vol)
 		goto error;
 	}
 
-	if (mkdir(root, 0700) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Could not mkdir root dir %s for container start", root);
+	if (mkdir(vol->root, 0700) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir root dir %s for container start", vol->root);
 		goto error;
 	}
 
 	DEBUG("Mounting images");
-	if (c_vol_mount_images(vol, root) < 0) {
+	if (c_vol_mount_images(vol) < 0) {
 		ERROR("Could not mount images for container start");
 		goto error;
 	}
@@ -1117,7 +1117,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	DEBUG("Mounting /dev");
 	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	unsigned long devopts = MS_RELATIME | MS_NOSUID;
-	char *dev_mnt = mem_printf("%s/%s", root, "dev");
+	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
 	int uid = container_get_uid(vol->container);
 	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
 					  mem_printf("uid=%d,gid=%d", uid, uid);
@@ -1154,7 +1154,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
 	 * Remeber, This will only succeed if /sbin exists on a writable fs
 	 */
-	char *cservice_bin = mem_printf("%s/%s", root, CSERVICE_TARGET);
+	char *cservice_bin = mem_printf("%s/%s", vol->root, CSERVICE_TARGET);
 	if (file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0))
 		WARN_ERRNO("Could not copy %s to container", cservice_bin);
 	else if (chmod(cservice_bin, 0755))
@@ -1194,22 +1194,17 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	}
 	mem_free(com_mnt_data);
 #endif
-	mem_free(root);
 	return 0;
 error:
-	mem_free(root);
 	return -1;
 }
 
 int
 c_vol_start_child(c_vol_t *vol)
 {
-	char *root;
-
 	ASSERT(vol);
 
-	root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
-	INFO("Switching to new rootfs in '%s'", root);
+	INFO("Switching to new rootfs in '%s'", vol->root);
 
 	if (!container_has_userns(vol->container)) {
 		// remount proc to reflect namespace change
@@ -1223,18 +1218,16 @@ c_vol_start_child(c_vol_t *vol)
 		}
 	}
 
-	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM) {
-		mem_free(root);
+	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM)
 		return 0;
-	}
 
 	if (container_shift_mounts(vol->container) < 0) {
 		ERROR_ERRNO("Mounting of shifting user and gids failed!");
 		goto error;
 	}
 
-	if (chdir(root) < 0) {
-		ERROR_ERRNO("Could not chdir to root dir %s for container start", root);
+	if (chdir(vol->root) < 0) {
+		ERROR_ERRNO("Could not chdir to root dir %s for container start", vol->root);
 		goto error;
 	}
 
@@ -1309,11 +1302,9 @@ c_vol_start_child(c_vol_t *vol)
 	INFO("%s", mount_output);
 	mem_free(mount_output);
 
-	mem_free(root);
 	return 0;
 
 error:
-	mem_free(root);
 	return -1;
 }
 

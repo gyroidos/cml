@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -961,6 +961,27 @@ c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
 
 	mem_free(cgusbd);
 	return ret;
+}
+
+bool
+c_cgroups_devices_is_dev_allowed(c_cgroups_t *cgroups, int major, int minor)
+{
+	ASSERT(cgroups);
+	// also check wildcard '*' represented as -1 in list of (int,int)
+
+	/* search in assigned devices */
+	for (list_t *l = cgroups->assigned_devs; l != NULL; l = l->next) {
+		int *dev = l->data;
+		if ((dev[0] == -1 || major == dev[0]) && (dev[1] == -1 || minor == dev[1]))
+			return true;
+	}
+	/* search in allowed devices */
+	for (list_t *l = cgroups->allowed_devs; l != NULL; l = l->next) {
+		int *dev = l->data;
+		if ((dev[0] == -1 || major == dev[0]) && (dev[1] == -1 || minor == dev[1]))
+			return true;
+	}
+	return false;
 }
 
 /*******************/
