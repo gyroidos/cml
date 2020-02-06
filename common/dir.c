@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -22,6 +22,7 @@
  */
 
 #include "dir.h"
+#include "file.h"
 
 #include "macro.h"
 #include "logf.h"
@@ -155,5 +156,107 @@ dir_delete_folder(const char *path, const char *dir_name)
 	}
 	mem_free(dir_to_remove);
 
+	return ret;
+}
+
+static int
+dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
+{
+	const char *target = data;
+	ASSERT(target);
+
+	struct stat s;
+
+	int ret = 0;
+	char *file_src = mem_printf("%s/%s", path, name);
+	char *file_dst = mem_printf("%s/%s", target, name);
+
+	IF_TRUE_GOTO((ret = lstat(file_src, &s)), out);
+
+	switch (s.st_mode & S_IFMT) {
+	case S_IFBLK:
+	case S_IFCHR:
+		DEBUG("Copying device node %s -> %s", file_src, file_dst);
+		if ((ret = mknod(file_dst, s.st_mode, s.st_rdev)) < 0)
+			ERROR_ERRNO("Could not mknod at %s", file_dst);
+		if ((ret = chown(file_dst, s.st_uid, s.st_gid)) < 0)
+			ERROR_ERRNO("Could not chown node '%s' to (%d:%d)", file_dst, s.st_uid, s.st_gid);
+		break;
+	case S_IFLNK: {
+		char *target = mem_alloc0(s.st_size + 1);
+		IF_NULL_RETVAL(target, -1);
+		DEBUG("Copying link %s -> %s", file_src, file_dst);
+		ret = readlink(file_src, target, s.st_size + 1);
+		if (ret < 0 || ret > s.st_size) {
+			ERROR_ERRNO("Failed to read lnk");
+			mem_free(target);
+			ret = -1;
+			break;
+		}
+		if ((ret = symlink(target, file_dst)) < 0)
+			ERROR_ERRNO("Could not create symlink %s at %s", target, file_dst);
+		mem_free(target);
+	} break;
+	case S_IFIFO:
+	case S_IFSOCK:
+		DEBUG("Skip FIFO, SOCK %s -> %s", file_src, file_dst);
+		ret = 0;
+		break;
+	case S_IFDIR:
+		if (!file_exists(file_dst)) {
+			DEBUG("Creating target dir %s", file_dst);
+			if (mkdir(file_dst, s.st_mode) < 0) {
+				ERROR_ERRNO("Could not mkdir target dir %s", file_dst);
+				ret--;
+			} else if (chown(file_dst, s.st_uid, s.st_gid) < 0) {
+				ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_dst, s.st_uid, s.st_gid);
+				ret--;
+			}
+		}
+		if (dir_foreach(file_src, &dir_copy_folder_contents_cb, file_dst) < 0) {
+			ERROR("Could not copy all dir contents of %s -> %s ", file_src, file_dst);
+			ret--;
+		}
+		break;
+	case S_IFREG:
+		DEBUG("Copying reg file %s -> %s", file_src, file_dst);
+		if (file_copy(file_src, file_dst, -1, 512, 0)) {
+			ERROR("Could not copy file %s -> %s", file_src, file_dst);
+			ret--;
+		} else if (chown(file_dst, s.st_uid, s.st_gid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_dst, s.st_uid, s.st_gid);
+			ret--;
+		} else if (chmod(file_dst, s.st_mode))
+			WARN_ERRNO("Could not preserve mode for file_dst %s", file_dst);
+	}
+out:
+	mem_free(file_src);
+	mem_free(file_dst);
+	return ret;
+}
+
+int
+dir_copy_folder(const char *source, const char *target)
+{
+	struct stat s;
+	IF_TRUE_RETVAL(stat(source, &s), -1);
+
+	int ret = 0;
+	mode_t old_mask = umask(0);
+
+	DEBUG("Copying %s -> %s", source, target);
+	if (!file_exists(target)) {
+		if (mkdir(target, s.st_mode) < 0) {
+			ERROR_ERRNO("Could not mkdir target dir %s", target);
+			ret--;
+		}
+	}
+	// cast away const for callback definition
+	if (dir_foreach(source, &dir_copy_folder_contents_cb, (char *)target) < 0) {
+		ERROR("Could not copy all dir contents in %s", source);
+		ret--;
+	}
+
+	umask(old_mask);
 	return ret;
 }
