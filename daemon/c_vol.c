@@ -1116,9 +1116,6 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	}
 	DEBUG("Mounting /dev");
 	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
-	const char *devfstype =
-		guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) ? "devtmpfs" :
-										      "tmpfs";
 	unsigned long devopts = MS_RELATIME | MS_NOSUID;
 	char *dev_mnt = mem_printf("%s/%s", root, "dev");
 	int uid = container_get_uid(vol->container);
@@ -1128,24 +1125,27 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir %s", dev_mnt);
 
-	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container))) {
-		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND, mount_data) < 0)
+	if (guestos_get_feature_devtmpfs(container_get_guestos(vol->container)) &&
+	    !container_has_userns(vol->container)) {
+		if (mount("/dev", dev_mnt, NULL, devopts | MS_BIND, NULL) < 0)
 			WARN_ERRNO("Could not bind mount /dev");
 
-		if (mount("/dev", dev_mnt, devfstype, devopts | MS_BIND | MS_RDONLY | MS_REMOUNT,
-			  mount_data) < 0)
+		if (mount("/dev", dev_mnt, NULL, devopts | MS_BIND | MS_RDONLY | MS_REMOUNT, NULL) <
+		    0)
 			WARN_ERRNO("Could not remount /dev (ro)");
 
 		//mount writable tmpfs over /dev
-		if (c_vol_mount_overlay(dev_mnt, "tmpfs", devfstype, devopts, tmpfs_opts, NULL,
-					NULL) < 0)
+		if (c_vol_mount_overlay(dev_mnt, "tmpfs", NULL, devopts, tmpfs_opts, NULL, NULL) <
+		    0)
 			WARN_ERRNO("Could not mount tmpfs overlay to /dev");
 	} else {
-		if (mount(devfstype, dev_mnt, devfstype, devopts, tmpfs_opts) < 0)
+		if (mount("tmpfs", dev_mnt, "tmpfs", devopts, tmpfs_opts) < 0)
 			WARN_ERRNO("Could not mount /dev");
+		if (dir_copy_folder("/dev", dev_mnt) < 0)
+			ERROR_ERRNO("Could not populate /dev");
+		if (container_shift_ids(vol->container, dev_mnt, false) < 0)
+			WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
 	}
-	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
-		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
 
 	mem_free(dev_mnt);
 	mem_free(tmpfs_opts);
