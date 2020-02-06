@@ -31,6 +31,8 @@ LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -f
 SRC_FILES := \
         common/list.c \
         common/logf.c \
+        common/fd.c \
+        common/file.c \
         common/dir.c \
         common/mem.c \
         run.c

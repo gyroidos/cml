@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -52,5 +52,8 @@ dir_mkdir_p(const char *path, mode_t mode);
 
 int
 dir_delete_folder(const char *path, const char *dir_name);
+
+int
+dir_copy_folder(const char *source, const char *target);
 
 #endif /* DIR_H */
