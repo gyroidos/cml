@@ -77,10 +77,12 @@ void
 c_user_free(c_user_t *user);
 
 /**
- * Prepares a directory for mounting with shifted ids for this c_user_t
+ * Shifts or sets uid/gids of path using the parent ids for this c_user_t
+ *
+ * Call this inside the parent user_ns.
  */
 int
-c_user_shift_ids(c_user_t *user, const char *dir, bool is_root);
+c_user_shift_ids(c_user_t *user, const char *path, bool is_root);
 
 /**
  * Mounts all directories with shifted ids for this c_user_t

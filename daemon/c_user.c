@@ -316,12 +316,12 @@ c_user_start_child(UNUSED const c_user_t *user)
 }
 
 /**
- * Prepares uid/gids of dir using the parent ids for this c_user_t
+ * Shifts or sets uid/gids of path using the parent ids for this c_user_t
  *
- * Call this before entering the new user_ns.
+ * Call this inside the parent user_ns.
  */
 int
-c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
+c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 {
 	/* We can skip this in case the container has no user ns */
 	if (!user->ns_usr)
@@ -329,11 +329,21 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 
 	INFO("uid %d, euid %d", getuid(), geteuid());
 
+	// if we just got a single file chown this and return
+	if (file_exists(path) && !file_is_dir(path)) {
+		if (lchown(path, user->uid_start, user->uid_start) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", path, user->uid_start,
+				    user->uid_start);
+			goto error;
+		}
+		goto success;
+	}
+
 	// if dev or a cgroup subsys just chown the files
-	if ((strlen(dir) >= 4 && !strcmp(strrchr(dir, '\0') - 4, "/dev")) ||
-	    (strstr(dir, "/cgroup") != NULL)) {
-		if (dir_foreach(dir, &c_user_chown_dev_cb, user) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, user->uid_start,
+	if ((strlen(path) >= 4 && !strcmp(strrchr(path, '\0') - 4, "/dev")) ||
+	    (strstr(path, "/cgroup") != NULL)) {
+		if (dir_foreach(path, &c_user_chown_dev_cb, user) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, user->uid_start,
 			      user->uid_start);
 			goto error;
 		}
@@ -351,7 +361,7 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 	}
 
 	struct c_user_shift *shift_mark = mem_new0(struct c_user_shift, 1);
-	shift_mark->target = mem_strdup(dir);
+	shift_mark->target = mem_strdup(path);
 	shift_mark->mark =
 		mem_printf("%s/%s/mark/%d", SHIFTFS_DIR,
 			   uuid_string(container_get_uuid(user->container)), user->mark_index++);
@@ -360,8 +370,8 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 		ERROR_ERRNO("Could not mkdir shiftfs dir %s", shift_mark->mark);
 		goto error;
 	}
-	if (mount(dir, shift_mark->mark, "shiftfs", 0, "mark") < 0) {
-		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", dir, shift_mark->mark);
+	if (mount(path, shift_mark->mark, "shiftfs", 0, "mark") < 0) {
+		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", path, shift_mark->mark);
 		goto error;
 	}
 
@@ -369,7 +379,7 @@ c_user_shift_ids(c_user_t *user, const char *dir, bool is_root)
 
 success:
 
-	INFO("Successfully registered shifted uids for '%s'", dir);
+	INFO("Successfully shifted uids for '%s'", path);
 	return 0;
 error:
 	return -1;

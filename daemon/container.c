@@ -2283,14 +2283,26 @@ container_device_deny(container_t *container, int major, int minor)
 	return c_cgroups_devices_chardev_deny(container->cgroups, major, minor);
 }
 
+bool
+container_is_device_allowed(const container_t *container, int major, int minor)
+{
+	return c_cgroups_devices_is_dev_allowed(container->cgroups, major, minor);
+}
+
+char *
+container_get_rootdir(const container_t *container)
+{
+	return c_vol_get_rootdir(container->vol);
+}
+
 int
-container_shift_ids(const container_t *container, const char *dir, bool is_root)
+container_shift_ids(const container_t *container, const char *path, bool is_root)
 {
 	ASSERT(container);
 	if (!container->ns_usr)
 		return 0;
 
-	return c_user_shift_ids(container->user, dir, is_root);
+	return c_user_shift_ids(container->user, path, is_root);
 }
 
 int

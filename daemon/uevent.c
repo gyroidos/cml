@@ -28,15 +28,20 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <libgen.h>
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "cmld.h"
+#include "container.h"
 #include "common/event.h"
 #include "common/fd.h"
+#include "common/file.h"
+#include "common/dir.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/nl.h"
@@ -383,6 +388,39 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 	return -1;
 }
 
+static int
+uevent_create_device_node(struct uevent *uevent, container_t *container)
+{
+	char *path = mem_printf("%s/dev/%s", container_get_rootdir(container), uevent->devname);
+
+	if (file_exists(path)) {
+		mem_free(path);
+		return 0;
+	}
+	if (dir_mkdir_p(dirname(path), 0755) < 0) {
+		ERROR("Could not create path for device node");
+		goto err;
+	}
+	dev_t dev = makedev(uevent->major, uevent->minor);
+	mode_t mode = strcmp(uevent->devtype, "disk") ? S_IFBLK : S_IFCHR;
+	INFO("Creating device node (%c %d:%d) in %s", mode & S_IFBLK ? 'd' : 'c', uevent->major,
+	     uevent->minor, path);
+	if (mknod(path, mode, dev) < 0) {
+		ERROR("Could not create device node");
+		goto err;
+	}
+	if (container_shift_ids(container, path, false) < 0) {
+		ERROR("Failed to fixup uids for '%s' in usernamspace of container %s", path,
+		      container_get_name(container));
+		goto err;
+	}
+	mem_free(path);
+	return 0;
+err:
+	mem_free(path);
+	return -1;
+}
+
 static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
@@ -403,6 +441,14 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		if ((container_get_state(c) == CONTAINER_STATE_BOOTING) ||
 		    (container_get_state(c) == CONTAINER_STATE_RUNNING) ||
 		    (container_get_state(c) == CONTAINER_STATE_SETUP)) {
+			if (!container_is_device_allowed(c, uevent->major, uevent->minor))
+				continue;
+
+			if (uevent_create_device_node(uevent, c) < 0) {
+				ERROR("Could not create device node");
+				continue;
+			}
+
 			if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len,
 						     container_get_pid(c),
 						     container_has_userns(c)) < 0) {
@@ -466,7 +512,20 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 
 				container_device_allow(mapping->container, mapping->usbdev->major,
 						       mapping->usbdev->minor, mapping->assign);
+
+				if (uevent_create_device_node(uevent, mapping->container) < 0)
+					WARN("Could not create device node");
 			}
+		}
+		for (int i = 0; i < cmld_containers_get_count(); ++i) {
+			container_t *c = cmld_container_get_by_index(i);
+			char *devname = mem_printf(container_get_rootdir(c), uevent->devname);
+			if (container_shift_ids(c, devname, false) < 0)
+				ERROR("Failed to fixup uids for '%s' in usernamspace of container %s",
+				      devname, container_get_name(c));
+			else
+				DEBUG("Fixup uids for '%s'", devname);
+			mem_free(devname);
 		}
 		return;
 	}
