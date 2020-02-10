@@ -247,33 +247,40 @@ c_user_get_uid(const c_user_t *user)
 static int
 c_user_chown_dev_cb(const char *path, const char *file, void *data)
 {
+	struct stat s;
 	int ret = 0;
 	c_user_t *user = data;
 	ASSERT(user);
 
 	char *file_to_chown = mem_printf("%s/%s", path, file);
+	if (lstat(file_to_chown, &s) == -1) {
+		mem_free(file_to_chown);
+		return -1;
+	}
+
+	uid_t uid = s.st_uid + user->uid_start;
+	gid_t gid = s.st_gid + user->uid_start;
+
 	if (file_is_dir(file_to_chown)) {
 		DEBUG("Path %s is dir", file_to_chown);
 		if (dir_foreach(file_to_chown, &c_user_chown_dev_cb, user) < 0) {
 			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
 			ret--;
 		}
-		if (chown(file_to_chown, user->uid_start, user->uid_start) < 0) {
-			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown,
-				    user->uid_start, user->uid_start);
+		if (chown(file_to_chown, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
 			ret--;
 		}
 	} else {
-		if (lchown(file_to_chown, user->uid_start, user->uid_start) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown,
-				    user->uid_start, user->uid_start);
+		if (lchown(file_to_chown, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
+				    gid);
 			ret--;
 		}
 	}
 	// chown .
-	if (chown(path, user->uid_start, user->uid_start) < 0) {
-		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, user->uid_start,
-			    user->uid_start);
+	if (chown(path, uid, gid) < 0) {
+		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
 		ret--;
 	}
 	mem_free(file_to_chown);
