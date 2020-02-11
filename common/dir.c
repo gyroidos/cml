@@ -180,7 +180,8 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		if ((ret = mknod(file_dst, s.st_mode, s.st_rdev)) < 0)
 			ERROR_ERRNO("Could not mknod at %s", file_dst);
 		if ((ret = chown(file_dst, s.st_uid, s.st_gid)) < 0)
-			ERROR_ERRNO("Could not chown node '%s' to (%d:%d)", file_dst, s.st_uid, s.st_gid);
+			ERROR_ERRNO("Could not chown node '%s' to (%d:%d)", file_dst, s.st_uid,
+				    s.st_gid);
 		break;
 	case S_IFLNK: {
 		char *target = mem_alloc0(s.st_size + 1);
@@ -209,7 +210,8 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 				ERROR_ERRNO("Could not mkdir target dir %s", file_dst);
 				ret--;
 			} else if (chown(file_dst, s.st_uid, s.st_gid) < 0) {
-				ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_dst, s.st_uid, s.st_gid);
+				ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_dst,
+					    s.st_uid, s.st_gid);
 				ret--;
 			}
 		}
@@ -224,7 +226,8 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 			ERROR("Could not copy file %s -> %s", file_src, file_dst);
 			ret--;
 		} else if (chown(file_dst, s.st_uid, s.st_gid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_dst, s.st_uid, s.st_gid);
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_dst, s.st_uid,
+				    s.st_gid);
 			ret--;
 		} else if (chmod(file_dst, s.st_mode))
 			WARN_ERRNO("Could not preserve mode for file_dst %s", file_dst);

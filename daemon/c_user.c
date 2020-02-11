@@ -25,6 +25,7 @@
 
 #define _GNU_SOURCE
 #include <fcntl.h>
+#include <grp.h>
 #include <limits.h>
 #include <sys/mount.h>
 #include <sched.h>
@@ -304,6 +305,10 @@ c_user_start_child(UNUSED const c_user_t *user)
 	}
 	if (setgid(0) < 0) {
 		ERROR_ERRNO("Could not set gid to '0' in new userns");
+		return -1;
+	}
+	if (setgroups(0, NULL) < 0) {
+		ERROR_ERRNO("Could not setgroups to '0' in new userns");
 		return -1;
 	}
 	INFO("uid %d, euid %d", getuid(), geteuid());

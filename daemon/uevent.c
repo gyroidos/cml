@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2019 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,17 +21,30 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
 #include "uevent.h"
-
 #include <arpa/inet.h>
+#include <sched.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <grp.h>
+
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "cmld.h"
 #include "common/event.h"
+#include "common/fd.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/nl.h"
 #include "common/proc.h"
+
+#ifndef UEVENT_SEND
+#define UEVENT_SEND 16
+#endif
 
 static nl_sock_t *uevent_netlink_sock = NULL;
 static event_io_t *uevent_io_event = NULL;
@@ -298,6 +311,111 @@ uevent_get_usb_product(struct uevent *uevent)
 	return id_product;
 }
 
+/**
+ * This function forks a new child in the target netns (and userns) of netns_pid
+ * in which the uevents should be injected. In the child the UEVENT netlink socket
+ * is connected and a new message containing the raw uevent will be created and
+ * sent to that socket.
+ */
+static int
+uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_userns)
+{
+	int status;
+	pid_t pid = fork();
+
+	if (pid == -1) {
+		ERROR_ERRNO("Could not fork for switching to netns of %d", netns_pid);
+		return -1;
+	} else if (pid == 0) {
+		if (join_userns) {
+			char *usrns = mem_printf("/proc/%d/ns/user", netns_pid);
+			int usrns_fd = open(usrns, O_RDONLY);
+			if (usrns_fd == -1)
+				FATAL_ERRNO("Could not open userns file %s!", usrns);
+			mem_free(usrns);
+			if (setns(usrns_fd, CLONE_NEWUSER) == -1)
+				FATAL_ERRNO("Could not join uesr namespace of pid %d!", netns_pid);
+			if (setuid(0) < 0)
+				FATAL_ERRNO("Could setuid to root in user namespace of pid %d!",
+					    netns_pid);
+			if (setgid(0) < 0)
+				FATAL_ERRNO("Could setgid to root in user namespace of pid %d!",
+					    netns_pid);
+			if (setgroups(0, NULL) < 0)
+				FATAL_ERRNO("Could setgroups to root in user namespace of pid %d!",
+					    netns_pid);
+		}
+		char *netns = mem_printf("/proc/%d/ns/net", netns_pid);
+		int netns_fd = open(netns, O_RDONLY);
+		if (netns_fd == -1)
+			FATAL_ERRNO("Could not open netns file %s!", netns);
+		mem_free(netns);
+		if (setns(netns_fd, CLONE_NEWNET) == -1)
+			FATAL_ERRNO("Could not join network namespace of pid %d!", netns_pid);
+		nl_sock_t *target = nl_sock_uevent_new(0);
+		if (NULL == target)
+			FATAL("Could not connect to nl socket!");
+		nl_msg_t *nl_msg = nl_msg_new();
+		if (NULL == nl_msg)
+			FATAL_ERRNO("Could not allocate nl_msg!");
+		if (nl_msg_set_type(nl_msg, UEVENT_SEND) < 0)
+			FATAL("Could not set type UEVENT_SEND of nl_msg!");
+		if (nl_msg_set_flags(nl_msg, NLM_F_ACK | NLM_F_REQUEST))
+			FATAL("Could not set flages for acked request of nl_msg!");
+		if (nl_msg_set_buf_unaligned(nl_msg, uevent, size) < 0)
+			FATAL_ERRNO("Could not add uevent to nl_msg!");
+		if (nl_msg_send_kernel(target, nl_msg) < 0)
+			FATAL_ERRNO("Could not inject uevent!");
+		if (nl_msg_receive_and_check_kernel(target))
+			FATAL_ERRNO("Could not verify resp to injected uevent!");
+		nl_sock_free(target);
+		nl_msg_free(nl_msg);
+		exit(0);
+	} else {
+		if (waitpid(pid, &status, 0) != pid) {
+			ERROR_ERRNO("Could not waitpid for '%d'", pid);
+		} else if (!WIFEXITED(status)) {
+			ERROR("Child %d in netns_pid '%d' terminated abnormally", pid, netns_pid);
+		} else {
+			return WEXITSTATUS(status) ? -1 : 0;
+		}
+	}
+	return -1;
+}
+
+static void
+handle_kernel_event(struct uevent *uevent, char *raw_p)
+{
+	uevent_parse(uevent, raw_p);
+
+	/* just handle add,remove or change events to containers */
+	IF_TRUE_RETURN_TRACE(strncmp(uevent->action, "add", 3) &&
+			     strncmp(uevent->action, "remove", 6) &&
+			     strncmp(uevent->action, "change", 6));
+
+	/* Iterate over containers */
+	for (int i = 0; i < cmld_containers_get_count(); i++) {
+		container_t *c = cmld_container_get_by_index(i);
+		if (!c) {
+			WARN("Could not get container with index %d", i);
+			continue;
+		}
+		if ((container_get_state(c) == CONTAINER_STATE_BOOTING) ||
+		    (container_get_state(c) == CONTAINER_STATE_RUNNING) ||
+		    (container_get_state(c) == CONTAINER_STATE_SETUP)) {
+			if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len,
+						     container_get_pid(c),
+						     container_has_userns(c)) < 0) {
+				WARN("Could not inject uevent into netns of container %s!",
+				     container_get_name(c));
+			} else {
+				TRACE("Sucessfully injected uevent into netns of container %s!",
+				      container_get_name(c));
+			}
+		}
+	}
+}
+
 static void
 handle_udev_event(struct uevent *uevent, char *raw_p)
 {
@@ -359,8 +477,9 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 {
 	struct uevent *uev = mem_new0(struct uevent, 1);
 
+	// read uevent into raw buffer and assure that last char is '\0'
 	if ((uev->msg_len = nl_msg_receive_kernel(uevent_netlink_sock, uev->msg.raw,
-						  sizeof(uev->msg.raw), true)) <= 0) {
+						  sizeof(uev->msg.raw) - 1, true)) <= 0) {
 		WARN("could not read uevent");
 		goto err;
 	}
@@ -381,21 +500,15 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		}
 		raw_p += uev->msg.nlh.properties_off;
 		handle_udev_event(uev, raw_p);
+	} else if (strchr(raw_p, '@')) {
+		/* kernel message */
+		TRACE("kernel uevent: %s", raw_p);
+		raw_p += strlen(raw_p) + 1;
+		handle_kernel_event(uev, raw_p);
 	} else {
 		/* kernel message */
-		raw_p += strlen(raw_p) + 1;
-		// kernel uvents are redundant
+		TRACE("no uevent: %s", raw_p);
 	}
-
-#if 0
-	int i=0;
-	while(*raw_p || raw_p < uev->msg.raw + uev->msg_len) {
-		INFO("uevent_raw[%d] '%s'", i++, raw_p);
-		/* advance to after the next \0 */
-		while(*raw_p++)
-			;
-	}
-#endif
 err:
 	mem_free(uev);
 }
@@ -408,6 +521,12 @@ uevent_init()
 
 	if (!(uevent_netlink_sock = nl_sock_uevent_new(udevd_pid))) {
 		ERROR("Could not open netlink socket");
+		return -1;
+	}
+
+	if (fd_make_non_blocking(nl_sock_get_fd(uevent_netlink_sock))) {
+		ERROR("Could not set fd of netlink sockt to non blocking!");
+		nl_sock_free(uevent_netlink_sock);
 		return -1;
 	}
 
