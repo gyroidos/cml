@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -32,6 +32,8 @@
 #include <asm/types.h>
 #include <linux/netlink.h>
 #include <linux/xfrm.h>
+
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "macro.h"
 #include "mem.h"
@@ -112,6 +114,8 @@ nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t si
 
 	/* Check for overflow in message buffer */
 	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(len) > msg->size) {
+		TRACE("aligend size: %u len %d, msg->size %zu",
+		      NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(len), len, msg->size);
 		errno = EOVERFLOW;
 		return -1;
 	}
@@ -179,7 +183,8 @@ nl_sock_conf_xfrm_sock(nl_sock_t *sock)
 	ASSERT(sock);
 
 	// use default netlink conf
-	nl_sock_conf_route_sock(sock);
+	if (nl_sock_conf_route_sock(sock) < 0)
+		return -1;
 
 	// subscribe to sa related events
 	sock->local.nl_groups =
@@ -196,17 +201,27 @@ static int
 nl_sock_conf_uevent_sock(nl_sock_t *sock)
 {
 	ASSERT(sock);
-
-	int rcvbuf_size = NL_UEVENT_SOCK_RCVBUF_SIZE;
 	int passcreds = 1;
+	const int sndbuf_size = NL_DEFAULT_SOCK_SNDBUF_SIZE;
+	const int rcvbuf_size = NL_UEVENT_SOCK_RCVBUF_SIZE;
 
-	/* Set receive buffer size, overwrite SO_RCVBUF, overwrite the rmem_max limit */
-	if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf_size, sizeof(rcvbuf_size)) < 0)
+	/* Set send buffer size */
+	if (setsockopt(sock->fd, SOL_SOCKET, SO_SNDBUF, &sndbuf_size, sizeof(sndbuf_size)) < 0) {
+		TRACE_ERRNO("Failed to set SO_SNDBUF!");
 		return -1;
+	}
+
+	/* Set receive buffer size */
+	if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf_size, sizeof(rcvbuf_size)) < 0) {
+		TRACE_ERRNO("Failed to set SO_RECVBUF!");
+		return -1;
+	}
 
 	/* Set SO_PASSCRED option in order to receive credentials (maybe the containers need this) */
-	if (setsockopt(sock->fd, SOL_SOCKET, SO_PASSCRED, &passcreds, sizeof(passcreds)) < 0)
+	if (setsockopt(sock->fd, SOL_SOCKET, SO_PASSCRED, &passcreds, sizeof(passcreds)) < 0) {
+		TRACE_ERRNO("Failed to set SO_PASSCRED!");
 		return -1;
+	}
 
 	sock->local.nl_family = AF_NETLINK;
 	sock->local.nl_groups = 0xffffffff;
@@ -261,7 +276,7 @@ nl_sock_new(int protocol)
 	if (getsockname(ret->fd, (struct sockaddr *)&ret->local, &socklen) < 0)
 		goto err;
 
-	TRACE("Socket initialization done, sockaddr groups: %d, port id: %d", ret->local.nl_groups,
+	TRACE("Socket initialization done, sockaddr groups: %u, port id: %u", ret->local.nl_groups,
 	      ret->local.nl_pid);
 
 	/* Sanity check */
@@ -493,11 +508,11 @@ nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool rec
 	TRACE("Received a message from kernel");
 
 	TRACE("Sent from this address:");
-	TRACE("sockaddr_nl{nl_family: %u, nl_pad:%u, nl_pid: %d, nl_groups: %u}", nladdr.nl_family,
+	TRACE("sockaddr_nl{nl_family: %u, nl_pad:%u, nl_pid: %u, nl_groups: %u}", nladdr.nl_family,
 	      nladdr.nl_pad, nladdr.nl_pid, nladdr.nl_groups);
 
 	TRACE("Arrived on this socket");
-	TRACE("nl_sock{fd:%d, local: nl_family: %u, nl_pad:%u, nl_pid: %d, nl_groups: %u}", nl->fd,
+	TRACE("nl_sock{fd:%d, local: nl_family: %u, nl_pad:%u, nl_pid: %u, nl_groups: %u}", nl->fd,
 	      nl->local.nl_family, nl->local.nl_pad, nl->local.nl_pid, nl->local.nl_groups);
 
 	/* Check for truncated messages */
@@ -725,4 +740,49 @@ nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg)
 	memcpy(NLMSG_DATA(&msg->nlmsghdr), rtmsg, size);
 
 	return nl_msg_set_len(msg, size);
+}
+
+int
+nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size)
+{
+	ASSERT(msg);
+
+	/* Check for overflow in message buffer */
+	if (NLMSG_LENGTH(size) > msg->size) {
+		TRACE("size: %zu, msg->size %zu", size, msg->size);
+		errno = EOVERFLOW;
+		return -1;
+	}
+	memcpy(NLMSG_DATA(&msg->nlmsghdr), buf, size);
+
+	return nl_msg_set_len(msg, size);
+}
+
+int
+nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
+{
+	ASSERT(nl);
+
+	char *buf = NULL;
+	int ret = 0;
+
+	buf = mem_new0(char, NL_DEFAULT_SOCK_RCVBUF_SIZE);
+	IF_NULL_RETVAL_TRACE(buf, -1);
+
+	if (nl_msg_receive_kernel(nl, buf, NL_DEFAULT_SOCK_RCVBUF_SIZE, false) < 0) {
+		mem_free(buf);
+		return -1;
+	}
+
+	struct nlmsghdr *msg = (struct nlmsghdr *)buf;
+	if (msg->nlmsg_type == NLMSG_ERROR) {
+		TRACE("Message is a response from previous request");
+		struct nlmsgerr *err = NLMSG_DATA(msg);
+		if (err->error != 0) {
+			errno = -err->error;
+			ret = -1;
+		}
+	}
+	mem_free(buf);
+	return ret;
 }

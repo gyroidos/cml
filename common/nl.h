@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -227,5 +227,21 @@ nl_msg_add_string(nl_msg_t *msg, int type, const char *str);
  */
 int
 nl_msg_add_u32(nl_msg_t *msg, int type, uint32_t val);
+
+/**
+ * Sets the message payload unaligned according to the given buffer.
+ * The message length is adapted accordingly to the size argument.
+ * @return failure: -1, success: 0
+ */
+int
+nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size);
+
+/**
+ * Receives and checks a response from the netlink socket nl
+ * The errno is set accordingly, if the recevied message had an error code set.
+ * @return failure: -1, success: 0
+ */
+int
+nl_msg_receive_and_check_kernel(const nl_sock_t *nl);
 
 #endif /* NL_H_ */
