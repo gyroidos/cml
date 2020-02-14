@@ -32,7 +32,7 @@
 #include <fcntl.h>
 #include <grp.h>
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "cmld.h"
 #include "common/event.h"
@@ -591,4 +591,12 @@ uevent_unregister_usbdevice(container_t *container, uevent_usbdev_t *usbdev)
 	uevent_container_dev_mapping_free(mapping_to_remove);
 
 	return 0;
+}
+
+void
+uevent_udev_trigger_coldboot(void)
+{
+	const char *const argv[] = { "udevadm", "trigger", "--action=add", NULL };
+	if (-1 == proc_fork_and_execvp(argv))
+		WARN("Could not trigger coldboot uevents!");
 }

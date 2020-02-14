@@ -405,6 +405,9 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 		// enable ipforwarding when the container in root netns has started
 		if (!container_has_netns(container))
 			network_enable_ip_forwarding();
+		// fixup device nodes in userns by triggering uevent forwarding of coldboot events
+		if (container_has_userns(container))
+			uevent_udev_trigger_coldboot();
 		container_unregister_observer(container, cb);
 
 		/* Make KSM aggressive to immmediately share as many pages as
@@ -680,6 +683,9 @@ cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 		DEBUG("a0 booted successfully!");
 		container_oom_protect_service(container);
 		cmld_rename_logfiles();
+		// fixup device nodes in userns by triggering uevent forwarding of coldboot events
+		if (container_has_userns(container))
+			uevent_udev_trigger_coldboot();
 		container_unregister_observer(container, cb);
 
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
