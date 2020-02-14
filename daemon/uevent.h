@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2019 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -87,5 +87,12 @@ uevent_register_usbdevice(container_t *container, uevent_usbdev_t *usbdev);
   */
 int
 uevent_unregister_usbdevice(container_t *container, uevent_usbdev_t *usbdev);
+
+/**
+  * Trigger cold boot events to allow user namespaced containers to fixup
+  * their device nodes by udevd in container
+  */
+void
+uevent_udev_trigger_coldboot(void);
 
 #endif /* UEVENT_H */
