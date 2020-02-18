@@ -159,17 +159,46 @@ dir_delete_folder(const char *path, const char *dir_name)
 	return ret;
 }
 
+typedef struct dir_copy_params {
+	char *target;
+	void *data;
+	bool (*filter)(const char *file, void *data);
+} dir_copy_params_t;
+
+static dir_copy_params_t *
+dir_copy_params_new(const char *path, const char* name, bool (*filter)(const char *file, void *data), void *data)
+{
+	struct dir_copy_params *params = mem_new0(struct dir_copy_params, 1);
+	params->target = name ? mem_printf("%s/%s", path, name) : mem_strdup(path);
+	params->data = data;
+	params->filter = filter;
+	return params;
+}
+static void
+dir_copy_params_free(dir_copy_params_t *params)
+{
+	mem_free(params->target);
+	mem_free(params);
+}
+
 static int
 dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 {
-	const char *target = data;
-	ASSERT(target);
+	dir_copy_params_t *p = data;
+	ASSERT(p);
 
 	struct stat s;
 
 	int ret = 0;
 	char *file_src = mem_printf("%s/%s", path, name);
-	char *file_dst = mem_printf("%s/%s", target, name);
+	dir_copy_params_t *params = dir_copy_params_new(p->target, name, p->filter, p->data);
+	char *file_dst = params->target;
+
+	TRACE("p->taget:%s params->target: %s", p->target, params->target);
+
+	// skip filtered files
+	if (params->filter && (!params->filter(file_src, params->data)))
+		goto out;
 
 	IF_TRUE_GOTO((ret = lstat(file_src, &s)), out);
 
@@ -185,7 +214,10 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		break;
 	case S_IFLNK: {
 		char *target = mem_alloc0(s.st_size + 1);
-		IF_NULL_RETVAL(target, -1);
+		if (target == NULL) {
+			ret = -1;
+			goto out;
+		}
 		DEBUG("Copying link %s -> %s", file_src, file_dst);
 		ret = readlink(file_src, target, s.st_size + 1);
 		if (ret < 0 || ret > s.st_size) {
@@ -215,7 +247,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 				ret--;
 			}
 		}
-		if (dir_foreach(file_src, &dir_copy_folder_contents_cb, file_dst) < 0) {
+		if (dir_foreach(file_src, &dir_copy_folder_contents_cb, params) < 0) {
 			ERROR("Could not copy all dir contents of %s -> %s ", file_src, file_dst);
 			ret--;
 		}
@@ -233,13 +265,14 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 			WARN_ERRNO("Could not preserve mode for file_dst %s", file_dst);
 	}
 out:
+	dir_copy_params_free(params);
 	mem_free(file_src);
-	mem_free(file_dst);
 	return ret;
 }
 
 int
-dir_copy_folder(const char *source, const char *target)
+dir_copy_folder(const char *source, const char *target,
+		bool (*filter)(const char *file, void *data), void *filter_data)
 {
 	struct stat s;
 	IF_TRUE_RETVAL(stat(source, &s), -1);
@@ -254,12 +287,13 @@ dir_copy_folder(const char *source, const char *target)
 			ret--;
 		}
 	}
-	// cast away const for callback definition
-	if (dir_foreach(source, &dir_copy_folder_contents_cb, (char *)target) < 0) {
+	dir_copy_params_t *params = dir_copy_params_new(target, NULL, filter, filter_data);
+	if (dir_foreach(source, &dir_copy_folder_contents_cb, params) < 0) {
 		ERROR("Could not copy all dir contents in %s", source);
 		ret--;
 	}
 
 	umask(old_mask);
+	dir_copy_params_free(params);
 	return ret;
 }
