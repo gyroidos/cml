@@ -33,6 +33,7 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <stdbool.h>
 
 /**
  * Read a directory and call a callback for each entry.
@@ -53,7 +54,17 @@ dir_mkdir_p(const char *path, mode_t mode);
 int
 dir_delete_folder(const char *path, const char *dir_name);
 
+/**
+ * Copy a directory recursively. If the callback function filter() is defined,
+ * it is used to filter out files accordingly during copy.
+ *
+ * @param source source path to be copied from.
+ * @param target target path which should be created and copied to.
+ * @param filter_data A data object given to the filter() callback function.
+ * @returns -1 on error and the number of callbacks which returned a value > 0 on success.
+ */
 int
-dir_copy_folder(const char *source, const char *target);
+dir_copy_folder(const char *source, const char *target,
+		bool (*filter)(const char *file, void *data), void *filter_data);
 
 #endif /* DIR_H */

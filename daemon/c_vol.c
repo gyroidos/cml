@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #define _LARGEFILE64_SOURCE
 
 #ifndef _GNU_SOURCE
@@ -987,6 +989,31 @@ c_vol_fixup_logdev()
 	}
 }
 
+static bool
+c_vol_populate_dev_filter_cb(const char *dev_node, void *data)
+{
+	c_vol_t *vol = data;
+	ASSERT(vol);
+
+	struct stat s;
+	IF_TRUE_RETVAL(lstat(dev_node, &s), true);
+
+	switch (s.st_mode & S_IFMT) {
+	case S_IFBLK:
+	case S_IFCHR:
+		if (!container_is_device_allowed(vol->container, major(s.st_rdev),
+						 minor(s.st_rdev))) {
+			TRACE("filter device %s (%d:%d)", dev_node, major(s.st_rdev),
+			      minor(s.st_rdev));
+			return false;
+		}
+		// Fallthrough
+	default:
+		return true;
+	}
+	return true;
+}
+
 /******************************************************************************/
 
 c_vol_t *
@@ -1141,7 +1168,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	} else {
 		if (mount("tmpfs", dev_mnt, "tmpfs", devopts, tmpfs_opts) < 0)
 			WARN_ERRNO("Could not mount /dev");
-		if (dir_copy_folder("/dev", dev_mnt) < 0)
+		if (dir_copy_folder("/dev", dev_mnt, &c_vol_populate_dev_filter_cb, vol) < 0)
 			ERROR_ERRNO("Could not populate /dev");
 		if (container_shift_ids(vol->container, dev_mnt, false) < 0)
 			WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
