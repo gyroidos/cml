@@ -543,7 +543,7 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	int iv_len = EVP_CIPHER_iv_length(type);
 	unsigned char *iv_buf = mem_alloc(iv_len);
 
-	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type) - 1);
+	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type));
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
 	if (!EVP_SealInit(ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1)) {
