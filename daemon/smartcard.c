@@ -97,10 +97,28 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 	int resp_fd = control_get_client_sock(startdata->control);
 	bool done = false;
 
-	if (events & EVENT_IO_READ) {
+	if (events & EVENT_IO_EXCEPT) {
+		ERROR("Container start failed");
+
+		event_remove_io(io);
+		mem_free(io);
+		mem_free(startdata);
+		return;
+	} else	if (events & EVENT_IO_READ) {
 		// use protobuf for communication with scd
 		TokenToDaemon *msg =
 			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+
+		if (! msg) {
+			ERROR("Failed to receive message althoug EVENT_IO_READ was set. Aborting container start.");
+
+			event_remove_io(io);
+			mem_free(io);
+			mem_free(startdata);
+			return;
+		}
+
+
 		switch (msg->code) {
 		case TOKEN_TO_DAEMON__CODE__LOCK_FAILED: {
 			WARN("Locking the token failed.");
