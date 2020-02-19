@@ -166,7 +166,8 @@ typedef struct dir_copy_params {
 } dir_copy_params_t;
 
 static dir_copy_params_t *
-dir_copy_params_new(const char *path, const char* name, bool (*filter)(const char *file, void *data), void *data)
+dir_copy_params_new(const char *path, const char *name,
+		    bool (*filter)(const char *file, void *data), void *data)
 {
 	struct dir_copy_params *params = mem_new0(struct dir_copy_params, 1);
 	params->target = name ? mem_printf("%s/%s", path, name) : mem_strdup(path);
