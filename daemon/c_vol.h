@@ -58,6 +58,8 @@ int
 c_vol_start_pre_clone(c_vol_t *vol);
 int
 c_vol_start_child(c_vol_t *vol);
+int
+c_vol_start_pre_exec(c_vol_t *vol);
 
 void
 c_vol_cleanup(c_vol_t *vol);

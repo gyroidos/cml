@@ -1230,6 +1230,10 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		WARN("c_cgroups_start_pre_exec failed");
 		goto error_pre_exec;
 	}
+	if (c_vol_start_pre_exec(container->vol) < 0) {
+		WARN("c_vol_start_pre_exec failed");
+		goto error_pre_exec;
+	}
 
 	if (c_service_start_pre_exec(container->service) < 0) {
 		WARN("c_service_start_pre_exec failed");
