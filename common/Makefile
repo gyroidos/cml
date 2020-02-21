@@ -39,6 +39,7 @@ OBJS_COMMON := \
 	logf.o \
 	mem.o \
 	str.o \
+	ns.o \
 	nl.o
 
 OBJS_COMMON_FULL := \
