@@ -253,4 +253,10 @@ container_config_get_init_env(const container_config_t *cfg);
 size_t
 container_config_get_init_env_len(const container_config_t *cfg);
 
+size_t
+container_config_get_fifos_len(const container_config_t *config);
+
+char **
+container_config_get_fifos(const container_config_t *config);
+
 #endif /* C_CONFIG_H */

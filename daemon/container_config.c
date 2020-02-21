@@ -582,3 +582,18 @@ container_config_get_init_env(const container_config_t *config)
 	ASSERT(config->cfg);
 	return config->cfg->init_env;
 }
+
+size_t
+container_config_get_fifos_len(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->n_fifos;
+}
+char **
+container_config_get_fifos(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->fifos;
+}
