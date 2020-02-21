@@ -99,6 +99,11 @@ message ContainerConfig {
 
 	// list of virtual network interface configuration
 	repeated ContainerUsbConfig usb_configs = 28;
+
+	// number of pipes from c0 to this container
+	// control erweitern: get container pipe fd
+	// use bindmount mechanism from c_vol
+	repeated string fifos = 29;
 }
 
 /**
