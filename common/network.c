@@ -430,8 +430,23 @@ network_get_physical_interfaces_new()
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
-		if (file_exists(dev_drv_path))
-			if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+		if (file_exists(dev_drv_path)) {
+			// if wifi add coresponding phy to list
+			char *dev_phy_path =
+				mem_printf("/sys/class/net/%s/phy80211/name", i->if_name);
+			char *dev_name = NULL;
+			if (file_exists(dev_phy_path)) {
+				dev_name = file_read_new(dev_phy_path, 128);
+				if (!dev_name) {
+					mem_free(dev_phy_path);
+					continue;
+				}
+			} else {
+				dev_name = mem_strdup(i->if_name);
+			}
+			if_name_list = list_append(if_name_list, dev_name);
+			mem_free(dev_phy_path);
+		}
 		mem_free(dev_drv_path);
 	}
 	return if_name_list;
