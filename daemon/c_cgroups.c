@@ -967,8 +967,7 @@ bool
 c_cgroups_devices_is_dev_allowed(c_cgroups_t *cgroups, int major, int minor)
 {
 	ASSERT(cgroups);
-	// also check wildcard '*' represented as -1 in list of (int,int)
-	IF_TRUE_RETVAL(major < 0 || minor < 0, false);
+	IF_TRUE_RETVAL_TRACE(major < 0 || minor < 0, false);
 
 	int dev[2] = { major, minor };
 
