@@ -117,18 +117,18 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 	int ret = 0;
 	char *file_to_remove = mem_printf("%s/%s", path, name);
 	if (stat(file_to_remove, &stat_buffer) == 0 && !S_ISDIR(stat_buffer.st_mode)) {
-		DEBUG("Unlinking file %s", file_to_remove);
+		TRACE("Unlinking file %s", file_to_remove);
 		if (unlink(file_to_remove) == -1) {
 			ERROR_ERRNO("Could not delete file %s", file_to_remove);
 			ret--;
 		}
 	} else {
-		DEBUG("Path %s is dir", file_to_remove);
+		TRACE("Path %s is dir", file_to_remove);
 		if (dir_foreach(file_to_remove, &dir_unlink_folder_contents_cb, NULL) < 0) {
 			ERROR_ERRNO("Could not delete all dir contents in %s", file_to_remove);
 			ret--;
 		}
-		DEBUG("Removing now empty dir %s", file_to_remove);
+		TRACE("Removing now empty dir %s", file_to_remove);
 		if (rmdir(file_to_remove) < 0) {
 			ERROR_ERRNO("Could not delete dir %s", file_to_remove);
 			ret--;
@@ -149,7 +149,7 @@ dir_delete_folder(const char *path, const char *dir_name)
 		ERROR_ERRNO("Could not delete all dir contents in %s", dir_to_remove);
 		ret--;
 	}
-	DEBUG("Removing now empty dir %s", dir_to_remove);
+	TRACE("Removing now empty dir %s", dir_to_remove);
 	if (rmdir(dir_to_remove) < 0) {
 		ERROR_ERRNO("Could not delete dir %s", dir_to_remove);
 		ret--;
@@ -206,7 +206,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
 	case S_IFCHR:
-		DEBUG("Copying device node %s -> %s", file_src, file_dst);
+		TRACE("Copying device node %s -> %s", file_src, file_dst);
 		if ((ret = mknod(file_dst, s.st_mode, s.st_rdev)) < 0)
 			ERROR_ERRNO("Could not mknod at %s", file_dst);
 		if ((ret = chown(file_dst, s.st_uid, s.st_gid)) < 0)
@@ -219,7 +219,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 			ret = -1;
 			goto out;
 		}
-		DEBUG("Copying link %s -> %s", file_src, file_dst);
+		TRACE("Copying link %s -> %s", file_src, file_dst);
 		ret = readlink(file_src, target, s.st_size + 1);
 		if (ret < 0 || ret > s.st_size) {
 			ERROR_ERRNO("Failed to read lnk");
@@ -233,12 +233,12 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 	} break;
 	case S_IFIFO:
 	case S_IFSOCK:
-		DEBUG("Skip FIFO, SOCK %s -> %s", file_src, file_dst);
+		TRACE("Skip FIFO, SOCK %s -> %s", file_src, file_dst);
 		ret = 0;
 		break;
 	case S_IFDIR:
 		if (!file_exists(file_dst)) {
-			DEBUG("Creating target dir %s", file_dst);
+			TRACE("Creating target dir %s", file_dst);
 			if (mkdir(file_dst, s.st_mode) < 0) {
 				ERROR_ERRNO("Could not mkdir target dir %s", file_dst);
 				ret--;
@@ -254,7 +254,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		}
 		break;
 	case S_IFREG:
-		DEBUG("Copying reg file %s -> %s", file_src, file_dst);
+		TRACE("Copying reg file %s -> %s", file_src, file_dst);
 		if (file_copy(file_src, file_dst, -1, 512, 0)) {
 			ERROR("Could not copy file %s -> %s", file_src, file_dst);
 			ret--;
