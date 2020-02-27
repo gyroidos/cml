@@ -21,7 +21,7 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #define _LARGEFILE64_SOURCE
 
@@ -1147,7 +1147,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	int uid = container_get_uid(vol->container);
 	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
 					  mem_printf("uid=%d,gid=%d", uid, uid);
-	if (mkdir("/dev", 0755) < 0 && errno != EEXIST)
+	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /dev");
 	if (mount("tmpfs", dev_mnt, "tmpfs", MS_RELATIME | MS_NOSUID, tmpfs_opts) < 0)
 		WARN_ERRNO("Could not mount /dev");
