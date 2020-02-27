@@ -919,12 +919,14 @@ container_get_cgroups(const container_t *container)
 int
 container_add_pid_to_cgroups(const container_t *container, pid_t pid)
 {
+	ASSERT(container);
 	return c_cgroups_add_pid(container->cgroups, pid);
 }
 
 int
 container_set_cap_current_process(const container_t *container)
 {
+	ASSERT(container);
 	return c_cap_set_current_process(container);
 }
 
@@ -1052,6 +1054,8 @@ container_cleanup(container_t *container)
 void
 container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
+	ASSERT(data);
+
 	container_t *container = data;
 
 	DEBUG("SIGCHLD handler called for container %s with PID %d",
@@ -1139,6 +1143,8 @@ container_close_all_fds()
 static int
 container_start_child(void *data)
 {
+	ASSERT(data);
+
 	int ret = 0;
 
 	container_t *container = data;
@@ -1363,6 +1369,8 @@ container_start_timeout_cb(event_timer_t *timer, void *data)
 static void
 container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
+	ASSERT(data);
+
 	char msg;
 	container_t *container = data;
 
@@ -1882,6 +1890,7 @@ container_snapshot(container_t *container)
 static int
 container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 {
+	ASSERT(data);
 	container_t *container = data;
 	/* Only do the rest of the callback if the file name ends with .img */
 	int len = strlen(name);
@@ -2275,6 +2284,7 @@ container_get_guestos(const container_t *container)
 bool
 container_is_feature_enabled(const container_t *container, const char *feature)
 {
+	ASSERT(container);
 	for (list_t *l = container->feature_enabled_list; l; l = l->next) {
 		char *feature_enabled = l->data;
 		if (strcmp(feature, feature_enabled) == 0)
@@ -2286,6 +2296,7 @@ container_is_feature_enabled(const container_t *container, const char *feature)
 static void
 container_set_feature_enable(container_t *container, const char *feature)
 {
+	ASSERT(container);
 	if (container_is_feature_enabled(container, feature))
 		return;
 
@@ -2368,6 +2379,7 @@ container_get_first_subnet_new(container_t *container)
 time_t
 container_get_uptime(const container_t *container)
 {
+	ASSERT(container);
 	if (container->time_started < 0)
 		return 0;
 
@@ -2378,6 +2390,7 @@ container_get_uptime(const container_t *container)
 time_t
 container_get_creation_time(const container_t *container)
 {
+	ASSERT(container);
 	if (container->time_created < 0)
 		return 0;
 	return container->time_created;
@@ -2433,18 +2446,21 @@ container_remove_net_iface(container_t *container, const char *iface, bool persi
 const char **
 container_get_dev_allow_list(const container_t *container)
 {
+	ASSERT(container);
 	return (const char **)container->device_allowed_list;
 }
 
 const char **
 container_get_dev_assign_list(const container_t *container)
 {
+	ASSERT(container);
 	return (const char **)container->device_assigned_list;
 }
 
 list_t *
 container_get_usbdev_list(const container_t *container)
 {
+	ASSERT(container);
 	return container->usbdev_list;
 }
 
@@ -2491,6 +2507,7 @@ container_get_vnet_runtime_cfg_new(container_t *container)
 int
 container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
 {
+	ASSERT(container);
 	int ret;
 	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len);
 	ret = container_config_write(conf);
@@ -2501,18 +2518,21 @@ container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
 int
 container_device_allow(container_t *container, int major, int minor, bool assign)
 {
+	ASSERT(container);
 	return c_cgroups_devices_chardev_allow(container->cgroups, major, minor, assign);
 }
 
 int
 container_device_deny(container_t *container, int major, int minor)
 {
+	ASSERT(container);
 	return c_cgroups_devices_chardev_deny(container->cgroups, major, minor);
 }
 
 bool
 container_is_device_allowed(const container_t *container, int major, int minor)
 {
+	ASSERT(container);
 	return c_cgroups_devices_is_dev_allowed(container->cgroups, major, minor);
 }
 
