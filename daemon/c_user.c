@@ -263,7 +263,7 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 	gid_t gid = s.st_gid + user->uid_start;
 
 	if (file_is_dir(file_to_chown)) {
-		DEBUG("Path %s is dir", file_to_chown);
+		TRACE("Path %s is dir", file_to_chown);
 		if (dir_foreach(file_to_chown, &c_user_chown_dev_cb, user) < 0) {
 			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
 			ret--;
@@ -292,13 +292,15 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
  * Become root in new userns
  */
 int
-c_user_start_child(UNUSED const c_user_t *user)
+c_user_start_child(const c_user_t *user)
 {
+	ASSERT(user);
+
 	/* Skip this, if the container doesn't have a user namespace */
 	if (!user->ns_usr)
 		return 0;
 
-	INFO("uid %d, euid %d", getuid(), geteuid());
+	TRACE("uid %d, euid %d", getuid(), geteuid());
 	if (setuid(0) < 0) {
 		ERROR_ERRNO("Could not become root 'setuid(0)' in new userns");
 		return -1;
@@ -311,7 +313,7 @@ c_user_start_child(UNUSED const c_user_t *user)
 		ERROR_ERRNO("Could not setgroups to '0' in new userns");
 		return -1;
 	}
-	INFO("uid %d, euid %d", getuid(), geteuid());
+	TRACE("uid %d, euid %d", getuid(), geteuid());
 	return 0;
 }
 
@@ -323,11 +325,13 @@ c_user_start_child(UNUSED const c_user_t *user)
 int
 c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 {
+	ASSERT(user);
+
 	/* We can skip this in case the container has no user ns */
 	if (!user->ns_usr)
 		return 0;
 
-	INFO("uid %d, euid %d", getuid(), geteuid());
+	TRACE("uid %d, euid %d", getuid(), geteuid());
 
 	// if we just got a single file chown this and return
 	if (file_exists(path) && !file_is_dir(path)) {
@@ -429,7 +433,7 @@ c_user_shift_mounts(const c_user_t *user)
 	char *target_dev, *saved_dev;
 	target_dev = saved_dev = NULL;
 
-	INFO("uid %d, euid %d", getuid(), geteuid());
+	TRACE("uid %d, euid %d", getuid(), geteuid());
 	for (list_t *l = user->marks; l; l = l->next) {
 		struct c_user_shift *shift_mark = l->data;
 
