@@ -547,6 +547,15 @@ fifo_loop(char * fifo_path_c0, char *fifo_path_container) {
 
 }
 
+static bool
+container_uuid_is_c0id(uuid_t *uuid)
+{
+	ASSERT(uuid);
+	uuid_t *uuid_c0 = uuid_new("00000000-0000-0000-0000-000000000000");
+	bool ret = uuid_equals(uuid, uuid_c0);
+	mem_free(uuid_c0);
+	return ret;
+}
 
 /**
  * Creates a new container container object. There are three different cases
@@ -679,8 +688,9 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 					 container_config_get_dns_server(conf) :
 					 cmld_get_device_host_dns();
 
-	list_t *vnet_cfg_list =
-		(ns_net && !priv) ? container_config_get_vnet_cfg_list_new(conf) : NULL;
+	list_t *vnet_cfg_list = (ns_net && !container_uuid_is_c0id(uuid)) ?
+				       container_config_get_vnet_cfg_list_new(conf) :
+				       NULL;
 	list_t *usbdev_list = container_config_get_usbdev_list_new(conf);
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
