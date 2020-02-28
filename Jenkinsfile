@@ -4,7 +4,7 @@ pipeline {
    stages {
       stage('Repo') {
 	 steps {
-             sh 'repo init -u https://github.com/trustm3/trustme_main.git -b master -m ids-x86-yocto.xml'
+             sh 'repo init -u https://github.com/trustm3/trustme_main.git -b zeus -m yocto-x86-genericx86-64.xml'
              sh 'mkdir -p .repo/local_manifests'
              sh '''
                 echo "<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>" > .repo/local_manifests/jenkins.xml
