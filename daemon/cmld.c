@@ -875,7 +875,7 @@ cmld_start_a0(container_t *new_a0)
 
 static void
 cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if,
-		  const char *host_gateway)
+		  const char *host_gateway, const char *host_dns)
 {
 	/*
 	 * Increase the max socket send buffer size which is used for all types of
@@ -890,6 +890,10 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	network_setup_loopback();
 
 	cmld_netif_phys_list = network_get_physical_interfaces_new();
+
+	/* configure resolver of root network namespace */
+	if (-1 == file_printf("/etc/resolv.conf", "nameserver %s", host_dns))
+		WARN("Could not setup dns server for CML");
 
 	DEBUG("Trying to configure eth0");
 	//network_set_ip_addr_of_interface("10.0.2.15", 24, "eth0");
@@ -924,7 +928,8 @@ cmld_init(const char *path)
 	cmld_tune_network(device_config_get_host_addr(device_config),
 			  device_config_get_host_subnet(device_config),
 			  device_config_get_host_if(device_config),
-			  device_config_get_host_gateway(device_config));
+			  device_config_get_host_gateway(device_config),
+			  device_config_get_host_dns(device_config));
 
 	cmld_shared_data_dir = mem_printf("%s/%s", path, CMLD_PATH_SHARED_DATA_DIR);
 	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
