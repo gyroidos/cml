@@ -86,6 +86,9 @@
 #define ADB_INTERFACE_NAME "adb"
 #define ADB_DAEMON_PORT 5555
 
+// uplink interface for cmld inside of routing container (c0)
+#define CML_UPLINK_INTERFACE_NAME "cml"
+
 /* Network prefix */
 #define IPV4_PREFIX 24
 
@@ -645,6 +648,19 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 		return net;
 	}
 
+	// add cml interface as uplink for cmld through c0
+	if (container_uuid_is_c0id(container_get_uuid(container))) {
+		INFO("Generating uplink veth %s", CML_UPLINK_INTERFACE_NAME);
+		uint8_t mac[6];
+		file_read("/dev/urandom", (char *)mac, 6);
+		mac[0] &= 0xfe; /* clear multicast bit */
+		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
+
+		c_net_interface_t *ni_cml =
+			c_net_interface_new(CML_UPLINK_INTERFACE_NAME, mac, true);
+		net->interface_list = list_append(net->interface_list, ni_cml);
+	}
+
 	for (list_t *l = vnet_cfg_list; l; l = l->next) {
 		container_vnet_cfg_t *cfg = l->data;
 
@@ -1036,8 +1052,6 @@ c_net_start_post_clone(c_net_t *net)
 			if (c_net_move_ifi(iff_name, pid) < 0)
 				return -1;
 		}
-		// nothing to be configured in c0 with private netns
-		return 0;
 	}
 
 	// nothing to be configured
@@ -1049,6 +1063,8 @@ c_net_start_post_clone(c_net_t *net)
 
 		if (c_net_start_post_clone_interface(pid, ni) == -1)
 			return -1;
+		if (pid == pid_c0) //skip moving interfaces defined for c0 (e.g. uplink iiff)
+			continue;
 		DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
 		if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
 			return -1;
@@ -1077,12 +1093,24 @@ c_net_start_post_clone(c_net_t *net)
 			event_signal_new(SIGKILL | SIGTERM, c_net_cleanup_c0_cb, net);
 		event_add_signal(sigkill);
 
+		// enable forwarding for container conectivity
+		network_enable_ip_forwarding();
+
 		for (list_t *l = net->interface_list; l; l = l->next) {
 			c_net_interface_t *ni = l->data;
 			if (!ni->configure)
 				continue;
 
 			DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
+
+			/* Configure uplink of CML in c0 */
+			if (!strcmp(ni->nw_name, CML_UPLINK_INTERFACE_NAME)) {
+				if (network_setup_masquerading(ni->subnet, true))
+					FATAL_ERRNO("Could not setup masquerading for %s!",
+						    ni->veth_cmld_name);
+				// configuration of interface is done in root netns below
+				continue;
+			}
 
 			/* Set IPv4 address */
 			if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr,
@@ -1126,6 +1154,24 @@ c_net_start_post_clone(c_net_t *net)
 		// register new cleanup callback when cmld stops a container
 		event_signal_t *sig = event_signal_new(SIGCHLD, c_net_cleanup_sigchild_cb, net);
 		event_add_signal(sig);
+
+		/* setup uplink of cml */
+		c_net_interface_t *ni = list_nth_data(net->interface_list, 0);
+		if (ni && !strcmp(ni->nw_name, CML_UPLINK_INTERFACE_NAME)) {
+			/* Set IPv4 address */
+			if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr,
+					   &ni->ipv4_bc_addr))
+				FATAL_ERRNO("Cannot set ip for uplink iff '%s'!",
+					    ni->veth_cmld_name);
+
+			/* Bring veth up */
+			if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
+				FATAL_ERRNO("Could not configure uplink %s!", ni->veth_cmld_name);
+
+			if (network_setup_default_route(inet_ntoa(ni->ipv4_cont_addr), true))
+				ERROR("Failed to setup gateway for CML's uplink");
+			// TODO firewall connections to cml
+		}
 	}
 	return 0;
 }
@@ -1186,11 +1232,6 @@ c_net_start_child(c_net_t *net)
 		if (c_net_start_child_interface(ni) == -1)
 			return -1;
 	}
-
-	// setup default route for first ni
-	c_net_interface_t *first_ni = list_nth_data(net->interface_list, 0);
-	if (first_ni->configure)
-		network_setup_default_route(inet_ntoa(first_ni->ipv4_cmld_addr), true);
 
 	return 0;
 }

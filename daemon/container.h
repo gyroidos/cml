@@ -773,4 +773,14 @@ container_get_uid(const container_t *container);
 char *
 container_get_rootdir(const container_t *container);
 
+/**
+ * Checks if the containers uuid is the all zero uuid which
+ * is assigned to c0.
+ *
+ * This function can be used to check if the container is c0
+ * even if the container is not yet fulle created.
+ */
+bool
+container_uuid_is_c0id(const uuid_t *uuid);
+
 #endif /* CONTAINER_H */
