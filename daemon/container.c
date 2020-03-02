@@ -547,8 +547,8 @@ fifo_loop(char * fifo_path_c0, char *fifo_path_container) {
 
 }
 
-static bool
-container_uuid_is_c0id(uuid_t *uuid)
+bool
+container_uuid_is_c0id(const uuid_t *uuid)
 {
 	ASSERT(uuid);
 	uuid_t *uuid_c0 = uuid_new("00000000-0000-0000-0000-000000000000");
