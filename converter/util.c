@@ -81,7 +81,7 @@ int
 util_tar_extract(const char *tar_filename, const char *out_dir)
 {
 	const char *const argv[] = { TAR_PATH, "-xvf", tar_filename, "-C", out_dir, NULL };
-	return proc_fork_and_execvp(argv[0], argv);
+	return proc_fork_and_execvp(argv);
 }
 
 static char *
@@ -150,7 +150,7 @@ util_squash_image(const char *dir, const char *image_file)
 {
 	const char *const argv[] = { MKSQUASHFS_PATH, dir,  image_file,       "-noappend", "-comp",
 				     MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL };
-	return proc_fork_and_execvp(MKSQUASHFS_PATH, argv);
+	return proc_fork_and_execvp(argv);
 }
 
 int
@@ -158,12 +158,12 @@ util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_fi
 {
 	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",   "-sha512", "-sign", key_file,
 				     "-out",	  sig_file, cfg_file,  NULL };
-	return proc_fork_and_execvp(argv[0], argv);
+	return proc_fork_and_execvp(argv);
 }
 
 int
 util_gen_pki(void)
 {
 	const char *const argv[] = { "bash", PKIGENSCRIPT_PATH, PKIGENCONF_PATH, NULL };
-	return proc_fork_and_execvp(argv[0], argv);
+	return proc_fork_and_execvp(argv);
 }
