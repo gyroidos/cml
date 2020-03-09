@@ -384,7 +384,7 @@ docker_generate_basic_auth(const char *user, const char *password, const char *t
 	char *url = mem_printf("https://%s", host_url);
 
 	const char *const argv[] = { CURL_PATH, "-fsSL", "-H", auth, url, NULL };
-	ret = proc_fork_and_execvp(CURL_PATH, argv);
+	ret = proc_fork_and_execvp(argv);
 	if (ret == 0) {
 		INFO("Auth OK. Storing access token!");
 		file_printf(token_file, "{ \"token\": \"%s\" }", out);
@@ -407,7 +407,7 @@ docker_get_curl_token_new(char *image_name, char *token_file)
 
 	if (!file_exists(token_file)) {
 		const char *const argv[] = { CURL_PATH, "-fsSL", url, "-o", token_file, NULL };
-		proc_fork_and_execvp(CURL_PATH, argv);
+		proc_fork_and_execvp(argv);
 	}
 
 	cJSON *jroot = NULL;
@@ -446,10 +446,10 @@ docker_download_manifest_list(const char *curl_token, const char *out_file, cons
 	const char *const argv_bearer[] = { CURL_PATH,  "-fsSL", "-H", auth_bearer, "-H",
 					    acceptlist, url,     "-o", out_file,    NULL };
 
-	int ret = proc_fork_and_execvp(CURL_PATH, argv_bearer);
+	int ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0) {
 		INFO("Bearer auth failed (curl returned %d), trying Basic auth", ret);
-		ret = proc_fork_and_execvp(CURL_PATH, argv_basic);
+		ret = proc_fork_and_execvp(argv_basic);
 	}
 
 	mem_free(url);
@@ -478,10 +478,10 @@ docker_download_manifest(const char *curl_token, const char *out_file, const cha
 					    "-H",      acceptv2, "-H",     acceptv1,
 					    url,       "-o",     out_file, NULL };
 
-	int ret = proc_fork_and_execvp(CURL_PATH, argv_bearer);
+	int ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0) {
 		INFO("Bearer auth failed (curl returned %d), trying Basic auth", ret);
-		ret = proc_fork_and_execvp(CURL_PATH, argv_basic);
+		ret = proc_fork_and_execvp(argv_basic);
 	}
 
 	mem_free(url);
@@ -521,9 +521,9 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 	const char *const argv_basic[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_basic,
 					   url,       "-o",   out_file,     NULL };
 
-	ret = proc_fork_and_execvp(CURL_PATH, argv_bearer);
+	ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0)
-		ret = proc_fork_and_execvp(CURL_PATH, argv_basic);
+		ret = proc_fork_and_execvp(argv_basic);
 
 	mem_free(url);
 	mem_free(auth_basic);
