@@ -126,7 +126,11 @@ pipeline {
 
    post {
       always {
-         archiveArtifacts artifacts: 'out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img', fingerprint: true
+         sh '''
+            xz -T 0 -f out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img
+         '''
+
+         archiveArtifacts artifacts: 'out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img.xz', fingerprint: true
       }
    }
 }
