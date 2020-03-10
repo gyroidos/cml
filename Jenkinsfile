@@ -111,6 +111,8 @@ pipeline {
                export LANG=en_US.UTF-8
                export LANGUAGE=en_US.UTF-8
 
+               umask 002
+
                if [ ! -d /source_mirror/sources ]; then
                   mkdir /source_mirror/sources
                fi
