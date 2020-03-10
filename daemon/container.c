@@ -2578,3 +2578,10 @@ container_get_uid(const container_t *container)
 	ASSERT(container);
 	return c_user_get_uid(container->user);
 }
+
+container_token_type_t
+container_get_token_type(const container_t *container)
+{
+	ASSERT(container);
+	return container_config_get_token_type(container->config);
+}

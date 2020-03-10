@@ -73,6 +73,37 @@ container_config_proto_to_type(ContainerType type)
 	}
 }
 
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+container_token_type_t
+container_config_proto_to_token_type(ContainerTokenType type)
+{
+	switch (type) {
+	case CONTAINER_TOKEN_TYPE__NONE:
+		return CONTAINER_TOKEN_TYPE_NONE;
+	case CONTAINER_TOKEN_TYPE__DEVICE:
+		return CONTAINER_TOKEN_TYPE_DEVCIE;
+	case CONTAINER_TOKEN_TYPE__USB:
+		return CONTAINER_TOKEN_TYPE_USB;
+	default:
+		FATAL("Unhandled value for ContainerTokenType: %d", type);
+	}
+}
+
+static uevent_usbdev_type_t
+container_config_proto_to_usb_type(ContainerUsbType type)
+{
+	switch (type) {
+	case CONTAINER_USB_TYPE__GENERIC:
+		return UEVENT_USBDEV_TYPE_GENERIC;
+	case CONTAINER_USB_TYPE__TOKEN:
+		return UEVENT_USBDEV_TYPE_TOKEN;
+	default:
+		FATAL("Unhandled value for ContainerTokenType: %d", type);
+	}
+}
+
 /******************************************************************************/
 
 #if 0
@@ -560,7 +591,8 @@ container_config_get_usbdev_list_new(const container_config_t *config)
 		uint16_t vendor, product;
 		sscanf(config->cfg->usb_configs[i]->id, "%hx:%hx", &vendor, &product);
 		uevent_usbdev_t *usbdev =
-			uevent_usbdev_new(vendor, product, config->cfg->usb_configs[i]->serial,
+			uevent_usbdev_new(container_config_proto_to_usb_type(config->cfg->type),
+					  vendor, product, config->cfg->usb_configs[i]->serial,
 					  config->cfg->usb_configs[i]->assign);
 		usbdev_list = list_append(usbdev_list, usbdev);
 	}
@@ -596,4 +628,12 @@ container_config_get_fifos(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->fifos;
+}
+
+container_token_type_t
+container_config_get_token_type(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->token_type;
 }
