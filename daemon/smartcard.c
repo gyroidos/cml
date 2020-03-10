@@ -258,28 +258,50 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	ASSERT(smartcard);
 	ASSERT(control);
 	ASSERT(container);
-	ASSERT(passwd);
 
-	int pw_size = strlen(passwd);
-	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
-
-	// register callback handler
 	smartcard_startdata_t *startdata = mem_alloc(sizeof(smartcard_startdata_t));
 	startdata->smartcard = smartcard;
 	startdata->container = container;
 	startdata->control = control;
 
-	// TODO register timer if socket does not respond
-	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
-					 smartcard_cb_start_container, startdata);
-	event_add_io(event);
-	DEBUG("SCD: Registered start container callback for key from scd");
-	// unlock token
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__UNLOCK;
-	out.token_pin = mem_strdup(passwd);
-	protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-	mem_free(out.token_pin);
+
+	switch (container_get_token_type(container)) {
+	case CONTAINER_TOKEN_TYPE_DEVICE: {
+		int pw_size = strlen(passwd);
+		DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
+		// register callback handler
+
+		// TODO register timer if socket does not respond
+		event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
+						 smartcard_cb_start_container, startdata);
+		event_add_io(event);
+		DEBUG("SCD: Registered start container callback for key from scd");
+		// unlock token
+		DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+		out.code = DAEMON_TO_TOKEN__CODE__UNLOCK;
+		out.token_pin = mem_strdup(passwd);
+		protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+		mem_free(out.token_pin);
+	} break;
+	case CONTAINER_TOKEN_TYPE_USB: {
+		int resp_fd = control_get_client_sock(startdata->control);
+		// TODO implement
+		key = usb_token_get_key(passwd);
+		if (NULL == key) {
+			ERROR("Unlocking the token failed.");
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED,
+					     resp_fd);
+			mem_free(start_data);
+			return -1;
+		}
+		smartcard_start_container_internal(startdata, key, keylen);
+		mem_free(startdata);
+	} break;
+	default: {
+		ERROR("Token type not supported!");
+		mem_free(startdata);
+		return -1;
+	}
 
 	return 0;
 }

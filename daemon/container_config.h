@@ -259,4 +259,10 @@ container_config_get_fifos_len(const container_config_t *config);
 char **
 container_config_get_fifos(const container_config_t *config);
 
+/**
+ * Returns the type of the token which is used for encryption
+ */
+container_token_type_t
+container_config_get_token_type(const container_config_t *config);
+
 #endif /* C_CONFIG_H */

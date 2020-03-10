@@ -70,6 +70,15 @@ typedef enum {
 } container_type_t;
 
 /**
+ * TODO
+ */
+typedef enum {
+	CONTAINER_TOKEN_TYPE_NONE = 1,
+	CONTAINER_TOKEN_TYPE_DEVICE,
+	CONTAINER_TOKEN_TYPE_USB,
+} container_token_type_t;
+
+/**
  * Structure to define the configuration for a virtual network
  * interface in a container. It defines the name and if cmld
  * should configure it in its c_net submodule.

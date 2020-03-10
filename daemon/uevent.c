@@ -67,12 +67,14 @@ struct uevent_usbdev {
 	int major;
 	int minor;
 	bool assign;
+	uevent_usbdev_type_t type;	
 };
 
 uevent_usbdev_t *
-uevent_usbdev_new(uint16_t id_vendor, uint16_t id_product, char *i_serial, bool assign)
+uevent_usbdev_new(uevent_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product, char *i_serial, bool assign)
 {
 	uevent_usbdev_t *usbdev = mem_new0(uevent_usbdev_t, 1);
+	usbdev->type = type;
 	usbdev->id_vendor = id_vendor;
 	usbdev->id_product = id_product;
 	usbdev->i_serial = mem_strdup(i_serial);
