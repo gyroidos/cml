@@ -1252,6 +1252,9 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 
 	c_cgroups_cleanup_freeze_timer(cgroups);
 
+	// temporarily add systemd to list
+	cgroups->active_cgroups = list_prepend(cgroups->active_cgroups, "systemd");
+
 	/* remove the cgroup if it exists and free the subsys list */
 	for (list_t *l = cgroups->active_cgroups; l; l = l->next) {
 		char *subsys = l->data;
@@ -1272,6 +1275,9 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 		mem_free(subsys_path);
 	}
 
+	// remove temporarily added head
+	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
+
 	/* unregister usbdevs from uevent subsystem for hotplugging */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
 		uevent_usbdev_t *usbdev = l->data;
@@ -1283,11 +1289,14 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 		int *dev_elem = (int *)elem->data;
 		c_cgroups_list_remove(&global_assigned_devs_list, dev_elem);
 	}
+	list_delete(cgroups->assigned_devs);
+	cgroups->assigned_devs = NULL;
+
 	/* free allowed devices */
 	for (list_t *elem = cgroups->allowed_devs; elem != NULL; elem = elem->next) {
 		int *dev_elem = (int *)elem->data;
 		c_cgroups_list_remove(&global_allowed_devs_list, dev_elem);
 	}
-
-	list_delete(cgroups->assigned_devs);
+	list_delete(cgroups->allowed_devs);
+	cgroups->allowed_devs = NULL;
 }
