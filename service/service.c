@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -64,7 +64,7 @@ service_set_hostname(int fd)
 
 	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *)&msg);
 	if (msg_size < 0)
-		WARN("Could not send ireqest for hostname!, error: %zd\n", msg_size);
+		WARN("Could not send request for hostname!, error: %zd\n", msg_size);
 
 	resp = (CmldToServiceMessage *)protobuf_recv_message(fd,
 							     &cmld_to_service_message__descriptor);
@@ -72,7 +72,7 @@ service_set_hostname(int fd)
 	//protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *) resp);
 	if (!resp || (resp->code != CMLD_TO_SERVICE_MESSAGE__CODE__CONTAINER_CFG_NAME)) {
 		name = "localhost";
-		WARN("Wrong Response Message received! faling back to default hostname: %s", name);
+		WARN("Wrong Response Message received! Falling back to default hostname: %s", name);
 	} else
 		name = resp->container_cfg_name;
 
@@ -111,14 +111,14 @@ service_set_dnsserver(int fd)
 
 	ssize_t msg_size = protobuf_send_message(fd, (ProtobufCMessage *)&msg);
 	if (msg_size < 0)
-		WARN("Could not send reqest for dns_server!, error: %zd\n", msg_size);
+		WARN("Could not send request for dns_server!, error: %zd\n", msg_size);
 
 	resp = (CmldToServiceMessage *)protobuf_recv_message(fd,
 							     &cmld_to_service_message__descriptor);
 
 	if (!resp || (resp->code != CMLD_TO_SERVICE_MESSAGE__CODE__CONTAINER_CFG_DNS)) {
 		dns_addr = "8.8.8.8";
-		WARN("Wrong response message received! falling back to default dns: %s", dns_addr);
+		WARN("Wrong response message received! Falling back to default dns: %s", dns_addr);
 	} else
 		dns_addr = resp->container_cfg_dns;
 
@@ -160,16 +160,15 @@ service_fork_execvp(char *prog, char **argv)
 int
 main(int argc, char **argv)
 {
-	bool do_init = true;
+	logf_register(&logf_file_write, stdout);
+	bool do_init = getpid() == 1;
 
-	//logf = fopen (LOGFILE_PATH, "w+");
+	if (!do_init && argc > 1) {
+		FATAL("Not running as init, so we do not accept parameters for child process!");
+	}
+
 	service_logfile_handler = logf_register(&logf_file_write, logf_file_new(LOGFILE_PATH));
 	logf_handler_set_prio(service_logfile_handler, LOGF_PRIO_TRACE);
-
-	if (argc < 2) {
-		INFO("No child program specified, so we do not run as init!");
-		do_init = false;
-	}
 
 	const char *socket_file = SERVICE_SOCKET;
 	if (!file_exists(socket_file))
@@ -185,13 +184,13 @@ main(int argc, char **argv)
 	if (service_set_hostname(sock) < 0)
 		WARN("Failed to set hostname");
 	else
-		DEBUG("Sucessfully setup hostname");
+		DEBUG("Successfully setup hostname");
 
 	// set dns server received from cmld
 	if (service_set_dnsserver(sock) < 0)
 		WARN("Failed to set DNS server");
 	else
-		DEBUG("Sucessfully setup DNS server");
+		DEBUG("Successfully setup DNS server");
 
 	INFO("Minimal init done, going to start child, %s ...", argv[1]);
 #endif
