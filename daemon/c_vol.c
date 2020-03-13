@@ -83,6 +83,7 @@
 struct c_vol {
 	const container_t *container;
 	char *root;
+	int overlay_count;
 };
 
 /******************************************************************************/
@@ -380,22 +381,17 @@ out:
 
 static int
 c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char *lowerfs_type,
-		    int mount_flags, char *mount_data, const char *upper_dev, const char *lower_dev)
+		    int mount_flags, char *mount_data, const char *upper_dev, const char *lower_dev,
+		    const char *overlayfs_mount_dir)
 {
-	char *lower_dir, *upper_dir, *work_dir, *overlayfs_mount_dir;
+	char *lower_dir, *upper_dir, *work_dir;
 
-	lower_dir = upper_dir = work_dir = overlayfs_mount_dir = NULL;
+	lower_dir = upper_dir = work_dir = NULL;
 	upper_dev = (upper_dev) ? upper_dev : "tmpfs";
 
 	// create mountpoints for lower and upper dev
-	if (dir_mkdir_p("/tmp/overlayfs", 0755) < 0) {
-		ERROR_ERRNO("Could not mkdir /tmp/overlayfs");
-		return -1;
-	}
-	overlayfs_mount_dir = mem_printf("/tmp/overlayfs/tmp.XXXXXX");
-	if (NULL == mkdtemp(overlayfs_mount_dir)) {
+	if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
 		ERROR_ERRNO("Could not mkdir overlayfs dir %s", overlayfs_mount_dir);
-		mem_free(overlayfs_mount_dir);
 		return -1;
 	}
 	lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
@@ -469,9 +465,11 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 	if (chdir(cwd))
 		WARN("Could not change back to former cwd %s", cwd);
 	mem_free(cwd);
+	mem_free(lower_dir);
+	mem_free(upper_dir);
+	mem_free(work_dir);
 	return 0;
 error:
-	mem_free(overlayfs_mount_dir);
 	if (file_is_link(lower_dir)) {
 		if (unlink(lower_dir))
 			WARN_ERRNO("could not remove temporary link %s", lower_dir);
@@ -735,13 +733,19 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 
+		char *overlayfs_mount_dir =
+			mem_printf("/tmp/overlayfs/%s/%d",
+				   uuid_string(container_get_uuid(vol->container)),
+				   ++vol->overlay_count);
 		if (c_vol_mount_overlay(dir, upper_fstype, lower_fstype, mountflags,
-					mount_entry_get_mount_data(mntent), upper_dev,
-					lower_dev) < 0) {
+					mount_entry_get_mount_data(mntent), upper_dev, lower_dev,
+					overlayfs_mount_dir) < 0) {
 			ERROR_ERRNO("Could not mount %s to %s", img, dir);
+			mem_free(overlayfs_mount_dir);
 			goto error;
 		}
 		DEBUG("Successfully mounted %s using overlay to %s", img, dir);
+		mem_free(overlayfs_mount_dir);
 		goto final;
 	}
 
@@ -910,6 +914,25 @@ c_vol_umount_all(c_vol_t *vol)
 			goto error;
 		mem_free(mount_dir);
 	}
+	if (rmdir(vol->root) < 0)
+		TRACE("Unable to remove %s", mount_dir);
+
+	// umount overlay mounts
+	for (i = 1; i <= vol->overlay_count; ++i) {
+		mount_dir = mem_printf("/tmp/overlayfs/%s/%d",
+				       uuid_string(container_get_uuid(vol->container)), i);
+		if (c_vol_umount_dir(mount_dir) < 0)
+			goto error;
+		if (rmdir(mount_dir) < 0)
+			TRACE("Unable to remove %s", mount_dir);
+		mem_free(mount_dir);
+	}
+	mount_dir =
+		mem_printf("/tmp/overlayfs/%s", uuid_string(container_get_uuid(vol->container)));
+	if (rmdir(mount_dir) < 0)
+		TRACE("Unable to remove %s", mount_dir);
+	mem_free(mount_dir);
+
 	mem_free(c_root);
 	return 0;
 error:
@@ -1024,6 +1047,7 @@ c_vol_new(const container_t *container)
 	c_vol_t *vol = mem_new0(c_vol_t, 1);
 	vol->container = container;
 	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(container)));
+	vol->overlay_count = 0;
 
 	return vol;
 }
