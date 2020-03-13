@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -20,6 +20,9 @@
  * Contact Information:
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
+
+#define _GNU_SOURCE
+#include <sched.h>
 
 #include "mount.h"
 
@@ -309,4 +312,22 @@ mount_debugfs(void)
 	if (ret < 0)
 		WARN_ERRNO("Could not mount debugfs");
 	return ret;
+}
+
+int
+mount_private_tmp(void)
+{
+	if (unshare(CLONE_NEWNS)) {
+		ERROR_ERRNO("Could not unshare host mount ns!");
+		return -1;
+	}
+	if (umount("/tmp") < 0 && errno != ENOENT) {
+		ERROR_ERRNO("Could not umount /tmp");
+		return -1;
+	}
+	if (mount("tmpfs", "/tmp", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, NULL) < 0) {
+		ERROR_ERRNO("Could not mount /tmp");
+		return -1;
+	}
+	return 0;
 }

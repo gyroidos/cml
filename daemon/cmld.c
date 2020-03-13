@@ -961,6 +961,9 @@ cmld_init(const char *path)
 	INFO("Storage path is %s", path);
 	cmld_path = path;
 
+	if (mount_private_tmp())
+		FATAL("Could not setup private tmp!");
+
 	/* Currently the given path is used by the config module to generate the
 	 * paths and it must therefore be ensured that it exists before loading
 	 * the config file. */
