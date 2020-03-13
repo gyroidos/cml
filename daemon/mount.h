@@ -209,4 +209,15 @@ mount_remount_root_ro(void);
  */
 int
 mount_debugfs(void);
+
+/**
+ * Mounts a tmpfs for container setup privatly for cmld
+ *
+ * This hides the cmld's view of container mounts from processes
+ * in the rest of the CML, e.g., s shell process for debugging and
+ * adminstration.
+ */
+int
+mount_private_tmp(void);
+
 #endif /* MOUNT_H */
