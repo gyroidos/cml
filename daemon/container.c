@@ -2486,6 +2486,13 @@ container_set_setup_mode(container_t *container, bool setup)
 	container->setup_mode = setup;
 }
 
+bool
+container_has_setup_mode(const container_t *container)
+{
+	ASSERT(container);
+	return container->setup_mode;
+}
+
 container_vnet_cfg_t *
 container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
 		       bool configure)
