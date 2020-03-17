@@ -36,11 +36,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <sys/capability.h>
 #include <linux/netlink.h>
-
-//#define IPTABLES_PATH "/sbin/iptables"
-//#define IP_PATH "/sbin/ip"
 
 #define IPTABLES_PATH "iptables"
 #define IP_PATH "ip"
@@ -64,8 +60,6 @@
 #define LOOPBACK_OLD_PREFIX 8
 #define LOOPBACK_PREFIX 16
 #define LOCALHOST_IP "127.0.0.1"
-
-#define MAX_CAP_NUM (CAP_TO_INDEX(CAP_LAST_CAP) + 1)
 
 static int
 network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *action)
