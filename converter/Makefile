@@ -1,6 +1,6 @@
 #
 # This file is part of trust|me
-# Copyright(c) 2013 - 2019 Fraunhofer AISEC
+# Copyright(c) 2013 - 2020 Fraunhofer AISEC
 # Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -35,11 +35,6 @@ PROTO_SRC := \
 	guestos.pb-c.c
 
 SRC_FILES := \
-	common/sock.c \
-	common/protobuf.c \
-	common/dir.c \
-	common/file.c \
-	common/fd.c \
 	cJSON/cJSON.c \
 	gzopen.c \
 	util.c \
@@ -48,7 +43,7 @@ SRC_FILES := \
 	converter.c
 
 LD_LIB_FLAGS := \
-	-Lcommon -lcommon \
+	-Lcommon -lcommon_full \
 	-lprotobuf-c \
 	-lprotobuf-c-text \
 	-lz \
@@ -68,7 +63,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto
 ${PROTO_SRC}: protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_full
 
 converter: libcommon ${SRC_FILES} ${PROTO_SRC}
 	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} ${LD_LIB_FLAGS} -o $@
