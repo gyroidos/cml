@@ -1,6 +1,6 @@
 #
 # This file is part of trust|me
-# Copyright(c) 2013 - 2018 Fraunhofer AISEC
+# Copyright(c) 2013 - 2020 Fraunhofer AISEC
 # Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -32,13 +32,6 @@ LOCAL_CFLAGS += -DDEBUG_BUILD
 
 
 SRC_FILES := \
-	common/list.c \
-	common/logf.c \
-	common/mem.c \
-	common/protobuf.c \
-	common/sock.c \
-	common/file.c \
-	common/fd.c \
 	dumb_init.c \
 	c_service.pb-c.c \
 	container.pb-c.c \
@@ -46,6 +39,11 @@ SRC_FILES := \
 	guestos.pb-c.c \
 	common/logf.pb-c.c \
 	service.c
+
+LD_LIB_FLAGS := \
+	-Lcommon -lcommon_full \
+	-lprotobuf-c \
+	-lprotobuf-c-text
 
 .PHONY: all
 all: service
@@ -59,11 +57,14 @@ protobuf: c_service.proto container.proto control.proto guestos.proto common/log
 
 $(SRC_FILES): protobuf
 
-service: $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(CLAGS) $(SRC_FILES) -lprotobuf-c -lprotobuf-c-text -o cml-service-container
+libcommon:
+	$(MAKE) -C common libcommon_full
 
-service-static: $(SRC_FILES)
-	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) -lprotobuf-c -lprotobuf-c-text -o cml-service-container
+service: libcommon $(SRC_FILES)
+	$(CC) $(LOCAL_CFLAGS) $(CLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container
+
+service-static: libcommon $(SRC_FILES)
+	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container
 
 
 .PHONY: clean
