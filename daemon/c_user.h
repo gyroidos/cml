@@ -90,4 +90,10 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root);
 int
 c_user_shift_mounts(const c_user_t *user);
 
+/**
+ * Become root in userns
+ */
+int
+c_user_setuid0(const c_user_t *user);
+
 #endif /* C_USER_H */
