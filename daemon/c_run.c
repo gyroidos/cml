@@ -342,7 +342,10 @@ do_exec(c_run_t *run)
 	container_add_pid_to_cgroups(run->container, getpid());
 
 	c_run_set_namespaces(container_get_pid(run->container));
-
+	if (container_setuid0(run->container)) {
+		ERROR("Could not become root in userns!");
+		goto error;
+	}
 	container_set_cap_current_process(run->container);
 
 	TRACE("[EXEC]: Executing command %s in process with PID: %d, PGID: %d, PPID: %d", run->cmd,

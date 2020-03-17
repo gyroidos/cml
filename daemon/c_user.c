@@ -292,7 +292,7 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
  * Become root in new userns
  */
 int
-c_user_start_child(const c_user_t *user)
+c_user_setuid0(const c_user_t *user)
 {
 	ASSERT(user);
 
@@ -315,6 +315,13 @@ c_user_start_child(const c_user_t *user)
 	}
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 	return 0;
+}
+
+int
+c_user_start_child(const c_user_t *user)
+{
+	ASSERT(user);
+	return c_user_setuid0(user);
 }
 
 /**

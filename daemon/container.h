@@ -689,6 +689,8 @@ container_set_setup_mode(container_t *container, bool setup);
 bool
 container_has_setup_mode(const container_t *container);
 
+int
+container_setuid0(const container_t *container);
 
 /**
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory

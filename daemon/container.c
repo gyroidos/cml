@@ -942,6 +942,13 @@ container_get_console_sock_cmld(const container_t *container)
 }
 
 int
+container_setuid0(const container_t *container)
+{
+	ASSERT(container);
+	return c_user_setuid0(container->user);
+}
+
+int
 container_get_exit_status(const container_t *container)
 {
 	ASSERT(container);
