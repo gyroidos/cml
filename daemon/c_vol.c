@@ -554,7 +554,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool overlay = false;
 	bool shiftids = false;
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
-	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
+	bool setup_mode = container_has_setup_mode(vol->container);
 
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
@@ -879,7 +879,7 @@ c_vol_umount_all(c_vol_t *vol)
 {
 	int i, n;
 	char *c_root = mem_printf("%s%s", vol->root, "/setup");
-	bool setup_mode = file_is_mountpoint(c_root);
+	bool setup_mode = container_has_setup_mode(vol->container);
 
 	// umount /dev
 	char *mount_dir = mem_printf("%s/dev", vol->root);
@@ -952,7 +952,7 @@ c_vol_mount_images(c_vol_t *vol)
 
 	ASSERT(vol);
 
-	bool setup_mode = container_get_state(vol->container) == CONTAINER_STATE_SETUP;
+	bool setup_mode = container_has_setup_mode(vol->container);
 
 	// in setup mode mount container images under {root}/setup subfolder
 	char *c_root = mem_printf("%s%s", vol->root, (setup_mode) ? "/setup" : "");
