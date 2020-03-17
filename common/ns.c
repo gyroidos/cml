@@ -13,7 +13,8 @@
  * This function forks a new child in the given target namespaces and executes the given function
  */
 int
-namespace_exec(pid_t ns_pid, const char * const *namespaces, const size_t ns_len, int (*func)(const void **), const void **data)
+namespace_exec(pid_t ns_pid, const char *const *namespaces, const size_t ns_len,
+	       int (*func)(const void **), const void **data)
 {
 	TRACE("Executing function in namespace with pid %d", ns_pid);
 
@@ -34,7 +35,7 @@ namespace_exec(pid_t ns_pid, const char * const *namespaces, const size_t ns_len
 	} else if (pid == 0) {
 		TRACE("Child to join namespaces forked");
 
-		for (size_t i=0; i<ns_len; i++) {
+		for (size_t i = 0; i < ns_len; i++) {
 			char *ns_path = mem_printf("/proc/%d/ns/%s", ns_pid, namespaces[i]);
 			int ns_fd = open(ns_path, O_RDONLY);
 
@@ -46,7 +47,8 @@ namespace_exec(pid_t ns_pid, const char * const *namespaces, const size_t ns_len
 			}
 
 			if (setns(ns_fd, 0) == -1) {
-				TRACE_ERRNO("Could not join %s namespace of pid %d!", ns_path, ns_pid);
+				TRACE_ERRNO("Could not join %s namespace of pid %d!", ns_path,
+					    ns_pid);
 				return -1;
 			}
 
@@ -70,7 +72,8 @@ namespace_exec(pid_t ns_pid, const char * const *namespaces, const size_t ns_len
 			int ret = -1;
 			ret = WEXITSTATUS(estatus) ? -1 : 0;
 
-			TRACE("Namespace exec child exited with status %d, returning %d", estatus, ret);
+			TRACE("Namespace exec child exited with status %d, returning %d", estatus,
+			      ret);
 			return ret;
 		}
 	}
@@ -78,4 +81,3 @@ namespace_exec(pid_t ns_pid, const char * const *namespaces, const size_t ns_len
 	TRACE("An error occured in namespace_exec, returning -1");
 	return -1;
 }
-

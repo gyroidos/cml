@@ -379,8 +379,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		goto error;
 	}
 
-
-
 	// construct an argv buffer for execve
 	container->init_argv = guestos_get_init_argv_new(os);
 
@@ -418,23 +416,23 @@ error:
 }
 
 int
-create_fifos(void **data) {
-	if(! data) {
+create_fifos(void **data)
+{
+	if (!data) {
 		ERROR("Argument array was NULL, returning...");
 		return -1;
 	}
 
-	char *uuid = (char *) data[0];
-	container_t *container = (container_t *) data[1];
+	char *uuid = (char *)data[0];
+	container_t *container = (container_t *)data[1];
 
-	if(! container) {
+	if (!container) {
 		ERROR("Container to create FIFOs was NULL, returning...");
 		return -1;
 	}
 
-
-
-	DEBUG("Creating fifos for container %s [%d], uuid: %p", container->name, container->pid, (uuid) ? uuid : "NULL");
+	DEBUG("Creating fifos for container %s [%d], uuid: %p", container->name, container->pid,
+	      (uuid) ? uuid : "NULL");
 
 	// create pipe ends in c0 as listed in container config
 	char *fifo_dir;
@@ -462,7 +460,7 @@ create_fifos(void **data) {
 
 		char *fifo_path = mem_printf("%s/%s", fifo_dir, fifo);
 
-		if(! fifo_path) {
+		if (!fifo_path) {
 			ERROR_ERRNO("Failed to mem_printf FIFO path");
 		}
 
@@ -481,12 +479,12 @@ create_fifos(void **data) {
 }
 
 static int
-fifo_loop(char * fifo_path_c0, char *fifo_path_container) {
+fifo_loop(char *fifo_path_c0, char *fifo_path_container)
+{
 	int fromfd = -1, tofd = -1;
 
 	//keep repopening c0 pipe end when closed
 	while (1) {
-
 		if (fromfd != -1 && close(fromfd)) {
 			TRACE_ERRNO("Failed to close old reading fd");
 		}
@@ -494,7 +492,6 @@ fifo_loop(char * fifo_path_c0, char *fifo_path_container) {
 		if (tofd != -1 && close(tofd)) {
 			TRACE_ERRNO("Failed to close old reading fd");
 		}
-
 
 		fromfd = open(fifo_path_c0, O_RDONLY);
 
@@ -506,7 +503,7 @@ fifo_loop(char * fifo_path_c0, char *fifo_path_container) {
 		DEBUG("Opened reading end for %s", fifo_path_c0);
 
 		int tofd = open(fifo_path_container, O_WRONLY);
-		if(-1 == tofd) {
+		if (-1 == tofd) {
 			ERROR_ERRNO("Failed to open tofd at %s, exiting ...", fifo_path_container);
 			exit(-1);
 		}
@@ -524,27 +521,27 @@ fifo_loop(char * fifo_path_c0, char *fifo_path_container) {
 				TRACE("[READLOOP] Read returned %d, writing to target FIFO", count);
 
 				buf[count] = 0;
-				TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, fromfd, buf);
+				TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, fromfd,
+				      buf);
 
 				int current = 0, total = count;
 				while (current < total) {
 					if (0 > (count = write(tofd, buf, count))) {
-						TRACE_ERRNO("[READLOOP] an error ocurred during write, try to repopen pipes");
+						TRACE_ERRNO(
+							"[READLOOP] an error ocurred during write, try to repopen pipes");
 						break;
 					}
 
 					current += count;
 
-					TRACE("[READLOOP] Wrote %d bytes to fd: %d: %s, current: %d, total: %d", count, tofd, buf, current, total);
+					TRACE("[READLOOP] Wrote %d bytes to fd: %d: %s, current: %d, total: %d",
+					      count, tofd, buf, current, total);
 				}
 			} else {
 				TRACE("[READLOOP] Read returned %d, try to reopen fds", count);
 			}
 		}
-
 	}
-
-
 }
 
 bool
@@ -689,8 +686,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 					 cmld_get_device_host_dns();
 
 	list_t *vnet_cfg_list = (ns_net && !container_uuid_is_c0id(uuid)) ?
-				       container_config_get_vnet_cfg_list_new(conf) :
-				       NULL;
+					container_config_get_vnet_cfg_list_new(conf) :
+					NULL;
 	list_t *usbdev_list = container_config_get_usbdev_list_new(conf);
 
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
@@ -708,13 +705,12 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 		fifo_list = list_append(fifo_list, mem_strdup(fifos[i]));
 
-		if(fifo_list == NULL) {
+		if (fifo_list == NULL) {
 			ERROR_ERRNO("Failed to append %s to container's FIFO list", fifos[i]);
-			break;;
+			break;
+			;
 		}
 	}
-
-
 
 	container_t *c =
 		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
@@ -724,8 +720,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 				       init_env_len, fifo_list);
 	if (c)
 		container_config_write(conf);
-
-
 
 	uuid_free(uuid);
 
@@ -1329,7 +1323,6 @@ container_start_child(void *data)
 		}
 	}
 
-
 	execve(guestos_get_init(container->os), container->init_argv, container->init_env);
 	WARN_ERRNO("Could not run exec for container %s", uuid_string(container->uuid));
 
@@ -1581,8 +1574,6 @@ container_start(container_t *container) //, const char *key)
 	container->sync_sock_parent = fd[0];
 	container->sync_sock_child = fd[1];
 
-
-
 	/*********************************************************/
 	/* CLONE */
 
@@ -1603,7 +1594,6 @@ container_start(container_t *container) //, const char *key)
 
 	/* close the childs end of the sync sockets */
 	close(container->sync_sock_child);
-
 
 	/*********************************************************/
 	/* REGISTER SOCKET TO RECEIVE STATUS MESSAGES FROM CHILD */
@@ -1637,30 +1627,31 @@ container_start(container_t *container) //, const char *key)
 		goto error_post_clone;
 	}
 
-
 	container_t *c0 = cmld_containers_get_a0();
 	if (c0 && c0->pid != container->pid) {
 		DEBUG("Preparing container FIFOs");
-		const char * namespaces[1];
+		const char *namespaces[1];
 		int ns_count = 0;
 
 		namespaces[ns_count] = "mnt";
 		ns_count++;
 
-		const void * args[2];
+		const void *args[2];
 		args[0] = NULL;
 		args[1] = container;
 
 		DEBUG("Creating FIFOs in c0, namespace[0]==%s, ns_pid=%d", namespaces[0], c0->pid);
-		if(-1 == namespace_exec(c0->pid, namespaces, ns_count, create_fifos, args)) {
+		if (-1 == namespace_exec(c0->pid, namespaces, ns_count, create_fifos, args)) {
 			WARN("Failed to prepare container FIFOs in c0");
 			goto error_post_clone;
 		}
 
 		args[0] = uuid_string(container->uuid);
 
-		DEBUG("Creating FIFOs in target container, namespace[0]==%s, ns_pid=%d", namespaces[0], container->pid);
-		if(-1 == namespace_exec(container->pid, namespaces, ns_count, create_fifos, args)) {
+		DEBUG("Creating FIFOs in target container, namespace[0]==%s, ns_pid=%d",
+		      namespaces[0], container->pid);
+		if (-1 ==
+		    namespace_exec(container->pid, namespaces, ns_count, create_fifos, args)) {
 			WARN("Failed to prepare container FIFOs in c0");
 			goto error_post_clone;
 		}
@@ -1676,13 +1667,17 @@ container_start(container_t *container) //, const char *key)
 				ERROR("Failed to clone forwarding child");
 				goto error_post_clone;
 			} else if (pid == 0) {
-
 				DEBUG("Preparing forwarding for FIFO \'%s\'", fifo);
 
-				char *fifo_path_c0 = mem_printf("/tmp/%s/%s/%s", uuid_string(c0->uuid), "/data/fifos", fifo);
-				char *fifo_path_container = mem_printf("/tmp/%s/%s/%s", uuid_string(container->uuid), "/data/fifos", fifo);
+				char *fifo_path_c0 =
+					mem_printf("/tmp/%s/%s/%s", uuid_string(c0->uuid),
+						   "/data/fifos", fifo);
+				char *fifo_path_container =
+					mem_printf("/tmp/%s/%s/%s", uuid_string(container->uuid),
+						   "/data/fifos", fifo);
 
-				DEBUG("Forwarding from %s to %s", fifo_path_c0, fifo_path_container);
+				DEBUG("Forwarding from %s to %s", fifo_path_c0,
+				      fifo_path_container);
 
 				fifo_loop(fifo_path_c0, fifo_path_container);
 
@@ -1692,10 +1687,9 @@ container_start(container_t *container) //, const char *key)
 			DEBUG("Forked FIFO forwarding child %d for %s", pid, fifo);
 		}
 
-	} else if (strcmp((char *) c0->uuid, (char *) container->uuid)) {
+	} else if (strcmp((char *)c0->uuid, (char *)container->uuid)) {
 		DEBUG("No c0 running, not preparing FIFOs for container %s", container->name);
 	}
-
 
 	/*********************************************************/
 	/* NOTIFY CHILD TO START */
