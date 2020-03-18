@@ -61,12 +61,12 @@
 #ifdef true
 #undef true
 #endif
-#define true((cJSON_bool)1)
+#define true ((cJSON_bool)1)
 
 #ifdef false
 #undef false
 #endif
-#define false((cJSON_bool)0)
+#define false ((cJSON_bool)0)
 
 typedef struct {
 	const unsigned char *json;
