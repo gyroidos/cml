@@ -166,6 +166,8 @@ sock_inet_connect(int sock, const char *ip, int port)
 static int
 sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 {
+	IF_NULL_RETVAL(addrinfo, -1);
+
 	char addr_str[INET6_ADDRSTRLEN] = { 0 };
 	void *addr_ptr = NULL;
 
