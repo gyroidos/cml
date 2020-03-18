@@ -792,4 +792,10 @@ container_get_rootdir(const container_t *container);
 bool
 container_uuid_is_c0id(const uuid_t *uuid);
 
+/**
+ * Returns the type of the token that is used with the container
+ */
+container_token_type_t
+container_get_token_type(const container_t *container);
+
 #endif /* CONTAINER_H */
