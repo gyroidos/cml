@@ -40,8 +40,9 @@
 #include "common/dir.h"
 #include "container.h"
 
-#define UID_RANGE 10000
-#define UID_RANGES_START 30000
+#define UID_RANGE 100000
+#define UID_RANGES_START 100000
+#define UID_MAX 65535
 #define MAX_UID_RANGES ((int)((UINT_MAX - UID_RANGES_START) / UID_RANGE))
 
 /* Paths for controling mappings */
@@ -160,7 +161,7 @@ c_user_setup_mapping(const c_user_t *user)
 {
 	ASSERT(user);
 
-	char *uid_mapping = mem_printf(C_USER_MAP_FORMAT, 0, user->uid_start, UID_RANGE - 1);
+	char *uid_mapping = mem_printf(C_USER_MAP_FORMAT, 0, user->uid_start, UID_MAX);
 	INFO("mapping: '%s'", uid_mapping);
 
 	char *uid_map_path = mem_printf(C_USER_UID_MAP_PATH, container_get_pid(user->container));
@@ -261,6 +262,14 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 
 	uid_t uid = s.st_uid + user->uid_start;
 	gid_t gid = s.st_gid + user->uid_start;
+
+	// avoid shifting twice
+	uid_t uid_overflow = user->uid_start + UID_MAX;
+	if (uid > uid_overflow) {
+		mem_free(file_to_chown);
+		return 0;
+	}
+		
 
 	if (file_is_dir(file_to_chown)) {
 		TRACE("Path %s is dir", file_to_chown);
