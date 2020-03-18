@@ -37,6 +37,13 @@
 
 #define UEVENT_BUF_LEN 64 * 1024
 
+
+
+typedef enum uevent_usbdev_type {
+	UEVENT_USBDEV_TYPE_GENERIC = 1,
+	UEVENT_USBDEV_TYPE_TOKEN
+} uevent_usbdev_type_t;
+
 /**
  * Structure to define the mapping of event to usb device
 
@@ -48,7 +55,7 @@
 typedef struct uevent_usbdev uevent_usbdev_t;
 
 uevent_usbdev_t *
-uevent_usbdev_new(uint16_t id_vendor, uint16_t id_product, char *i_serial, bool assign);
+uevent_usbdev_new(uevent_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product, char *i_serial, bool assign);
 
 uint16_t
 uevent_usbdev_get_id_vendor(uevent_usbdev_t *usbdev);

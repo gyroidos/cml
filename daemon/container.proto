@@ -48,7 +48,7 @@ message ContainerUsbConfig {
 	required string id = 1;
 	required string serial = 2;
 	required bool assign = 3 [default = false];
-	required ContainerUsbType = 4 [default = GENERIC];
+	required ContainerUsbType type = 4 [default = GENERIC];
 }
 
 /**

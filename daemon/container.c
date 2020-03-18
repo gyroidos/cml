@@ -440,7 +440,7 @@ container_uuid_is_c0id(const uuid_t *uuid)
 }
 
 /**
- * Creates a new container container object. There are three different cases
+ * Creates a new container object. There are three different cases
  * depending on the combination of the given parameters:
  *
  * uuid && !config: In this case, a container with the given UUID must be already
@@ -2435,5 +2435,10 @@ container_token_type_t
 container_get_token_type(const container_t *container)
 {
 	ASSERT(container);
-	return container_config_get_token_type(container->config);
+
+	container_token_type_t ret;
+	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
+	ret =  container_config_get_token_type(conf);
+	container_config_free(conf);
+	return ret;
 }
