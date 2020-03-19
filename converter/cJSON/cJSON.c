@@ -61,12 +61,16 @@
 #ifdef true
 #undef true
 #endif
+// clang-format off
 #define true ((cJSON_bool)1)
+// clang-format on
 
 #ifdef false
 #undef false
 #endif
+// clang-format off
 #define false ((cJSON_bool)0)
+// clang-format on
 
 typedef struct {
 	const unsigned char *json;
