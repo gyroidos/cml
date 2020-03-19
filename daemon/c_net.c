@@ -1232,6 +1232,13 @@ c_net_start_child(c_net_t *net)
 		if (c_net_start_child_interface(ni) == -1)
 			return -1;
 	}
+	/* default inet uplink through first configured iif */
+	c_net_interface_t *ni = list_nth_data(net->interface_list, 0);
+	if (ni->configure && !container_uuid_is_c0id(container_get_uuid(net->container))) {
+		if (network_setup_default_route(inet_ntoa(ni->ipv4_cmld_addr), true))
+			WARN("Failed to setup gateway for %s", ni->veth_cont_name);
+	}
+
 
 	return 0;
 }
