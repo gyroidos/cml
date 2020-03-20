@@ -99,31 +99,6 @@ pipeline {
             '''
          }
       }
-      stage('Update_Mirror') {
-         agent { dockerfile {
-            dir 'trustme/build/yocto/docker'
-            args '--entrypoint=\'\' -v /yocto_mirror:/source_mirror'
-            reuseNode true
-         } }
-         steps {
-            sh '''
-               export LC_ALL=en_US.UTF-8
-               export LANG=en_US.UTF-8
-               export LANGUAGE=en_US.UTF-8
-
-               umask 002
-
-               if [ ! -d /source_mirror/sources ]; then
-                  mkdir /source_mirror/sources
-               fi
-               for i in out-yocto/downloads/*; do
-                  if [ -f $i ] && [ ! -L $i ]; then
-                     cp -v $i /source_mirror/sources/
-                  fi
-               done
-            '''
-         }
-      }
    }
 
    post {
