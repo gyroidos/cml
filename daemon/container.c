@@ -383,7 +383,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->init_argv = guestos_get_init_argv_new(os);
 
 	// construct an NULL terminated env buffer for execve
-	container->init_env = mem_new0(char *, guestos_get_init_env_len(os) + init_env + 1);
+	container->init_env = mem_new0(char *, guestos_get_init_env_len(os) + init_env_len + 1);
 	size_t i = 0;
 	char **os_env = guestos_get_init_env(os);
 	for (; i < guestos_get_init_env_len(os); i++)
