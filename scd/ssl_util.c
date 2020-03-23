@@ -283,6 +283,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 			pass_len = strlen(passphrase);
 			if (!(cipher = EVP_get_cipherbyname(CIPHER_PW_CSR))) {
 				ERROR("Error setting up cipher for CSR private key encryption");
+				fclose(fp);
 				goto error;
 			}
 		}
