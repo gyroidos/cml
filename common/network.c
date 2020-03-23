@@ -97,8 +97,10 @@ network_list_link_ns(pid_t pid, list_t **link_list)
 	char *line = mem_new0(char, line_size);
 
 	fp = popen(command, "r");
-	if (fp == NULL)
+	if (fp == NULL) {
+		mem_free(line);
 		return -1;
+	}
 
 	int n = 0;
 	while (fgets(line + n, line_size - n, fp) != NULL) {
