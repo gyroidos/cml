@@ -393,6 +393,7 @@ control_get_container_by_uuid_string(const char *uuid_str)
 	container_t *container = cmld_container_get_by_uuid(uuid);
 	if (!container) {
 		WARN("Could not find container for UUID %s", uuid_string(uuid));
+		uuid_free(uuid);
 		return NULL;
 	}
 	uuid_free(uuid);
