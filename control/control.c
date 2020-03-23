@@ -138,7 +138,7 @@ get_container_uuid_new(const char *identifier, int sock)
 			}
 		}
 		if (valid_uuid == NULL)
-			mem_free(uuid);
+			uuid_free(uuid);
 	} else {
 		INFO("Retrying with name");
 		for (size_t i = 0; i < resp->n_container_status; ++i) {
