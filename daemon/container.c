@@ -550,7 +550,7 @@ container_uuid_is_c0id(const uuid_t *uuid)
 	ASSERT(uuid);
 	uuid_t *uuid_c0 = uuid_new("00000000-0000-0000-0000-000000000000");
 	bool ret = uuid_equals(uuid, uuid_c0);
-	mem_free(uuid_c0);
+	uuid_free(uuid_c0);
 	return ret;
 }
 
