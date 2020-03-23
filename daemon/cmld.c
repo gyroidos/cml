@@ -113,7 +113,7 @@ cmld_containers_get_a0()
 	//return a0;
 	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
 	container_t *container = cmld_container_get_by_uuid(a0_uuid);
-	mem_free(a0_uuid);
+	uuid_free(a0_uuid);
 	return container;
 }
 
@@ -256,7 +256,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 
 cleanup:
 	if (uuid)
-		mem_free(uuid);
+		uuid_free(uuid);
 	mem_free(dir);
 	mem_free(prefix);
 	return res;
@@ -885,7 +885,7 @@ cmld_init_a0(const char *path, const char *c0os)
 	mem_free(a0_images_folder);
 
 out:
-	mem_free(a0_uuid);
+	uuid_free(a0_uuid);
 	mem_free(a0_config_file);
 
 	return 0;
