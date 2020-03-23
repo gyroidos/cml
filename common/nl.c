@@ -257,13 +257,13 @@ nl_sock_new(int protocol)
 
 	if (protocol == NETLINK_KOBJECT_UEVENT) {
 		if (nl_sock_conf_uevent_sock(ret))
-			return NULL;
+			goto err;
 	} else if (protocol == NETLINK_ROUTE) {
 		if (nl_sock_conf_route_sock(ret))
-			return NULL;
+			goto err;
 	} else if (protocol == NETLINK_XFRM) {
 		if (nl_sock_conf_xfrm_sock(ret))
-			return NULL;
+			goto err;
 	}
 
 	/* Bind on the local socket. Kernel sets address pid automatically. */
