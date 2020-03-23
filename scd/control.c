@@ -454,6 +454,7 @@ scd_control_new(const char *path)
 	}
 	if (listen(sock, SCD_CONTROL_SOCK_LISTEN_BACKLOG) < 0) {
 		WARN_ERRNO("Could not listen on new control sock");
+		close(sock);
 		return NULL;
 	}
 
