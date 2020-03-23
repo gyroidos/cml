@@ -961,6 +961,7 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
 #else
 	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
 		ERROR("Allocating EVP_MD failed!");
+		fclose(fp);
 		return NULL;
 	}
 #endif
