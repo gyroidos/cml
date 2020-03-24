@@ -201,11 +201,11 @@ logf_file_new_name(const char *name)
 	char *n;
 
 	if (gettimeofday(&tv, NULL) < 0)
-		FATAL("Failed to get time of day. Aborting.\n");
+		FATAL_ERRNO("Failed to get time of day. Aborting.\n");
 
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL)
-		FATAL("Failed to get local time. Aborting.\n");
+		FATAL_ERRNO("Failed to get local time. Aborting.\n");
 
 	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", tm))
 		buf1[0] = '\0';
@@ -238,11 +238,10 @@ logf_file_write_timestamp(FILE *stream)
 	struct timeval tv;
 	struct tm *tm;
 
-	if (gettimeofday(&tv, NULL) < 0)
-		return;
+	IF_TRUE_RETURN_ERROR_ERRNO((gettimeofday(&tv, NULL) < 0))
 
 	tm = localtime(&tv.tv_sec);
-	IF_NULL_RETURN_ERROR(tm);
+	IF_NULL_RETURN_ERROR_ERRNO(tm);
 
 	if (!stream)
 		return;
