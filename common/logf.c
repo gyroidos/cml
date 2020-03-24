@@ -238,7 +238,7 @@ logf_file_write_timestamp(FILE *stream)
 	struct timeval tv;
 	struct tm *tm;
 
-	IF_TRUE_RETURN_ERROR_ERRNO((gettimeofday(&tv, NULL) < 0))
+	IF_TRUE_RETURN_ERROR_ERRNO((gettimeofday(&tv, NULL) < 0));
 
 	tm = localtime(&tv.tv_sec);
 	IF_NULL_RETURN_ERROR_ERRNO(tm);
