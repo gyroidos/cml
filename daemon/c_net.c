@@ -651,8 +651,10 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	// add cml interface as uplink for cmld through c0
 	if (container_uuid_is_c0id(container_get_uuid(container))) {
 		INFO("Generating uplink veth %s", CML_UPLINK_INTERFACE_NAME);
-		uint8_t mac[6];
-		file_read("/dev/urandom", (char *)mac, 6);
+		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+		if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+			WARN_ERRNO("Failed to read from /dev/urandom");
+		}
 		mac[0] &= 0xfe; /* clear multicast bit */
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
@@ -681,8 +683,10 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 
 	if (adb_port > 0) {
 		INFO("Generating debug veth %s", ADB_INTERFACE_NAME);
-		uint8_t mac[6];
-		file_read("/dev/urandom", (char *)mac, 6);
+		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+		if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+			WARN_ERRNO("Failed to read from /dev/urandom");
+		}
 		mac[0] &= 0xfe; /* clear multicast bit */
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
