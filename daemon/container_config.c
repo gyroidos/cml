@@ -506,10 +506,12 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 
 	list_t *if_cfg_list = NULL;
 	for (size_t i = 0; i < config->cfg->n_vnet_configs; ++i) {
-		uint8_t mac[6];
+		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
 		if (config->cfg->vnet_configs[i]->if_mac == NULL) {
 			INFO("Generating new mac for if %s", config->cfg->vnet_configs[i]->if_name);
-			file_read("/dev/urandom", (char *)mac, 6);
+			if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+				WARN_ERRNO("Failed to read from /dev/urandom");
+			}
 			config->cfg->vnet_configs[i]->if_mac =
 				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
 					   ":%02" PRIx8 ":%02" PRIx8,
@@ -536,8 +538,10 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 		list_t *nw_name_list = hardware_get_nw_name_list();
 		for (list_t *l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
-			uint8_t mac[6];
-			file_read("/dev/urandom", (char *)mac, 6);
+			uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+			if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+				WARN_ERRNO("Failed to read from /dev/urandom");
+			}
 			mac[0] &= 0xfe; /* clear multicast bit */
 			mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 			container_vnet_cfg_t *if_cfg =
