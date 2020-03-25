@@ -501,7 +501,9 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 								 msg->hash_value.len);
 				task->hash_complete(hash, task->hash_file, task->hash_algo,
 						    task->data);
-				mem_free(hash);
+				if (hash != NULL) {
+					mem_free(hash);
+				}
 				break;
 			}
 			ERROR("Missing hash_value in CRYPTO_HASH_OK response!"); // fallthrough

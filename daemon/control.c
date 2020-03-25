@@ -199,7 +199,9 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
 			ERROR("Could not sent last line info for %s", log_file_name);
 		}
 	}
-	mem_free(out.device_uuid);
+	if (out.device_uuid != NULL) {
+		mem_free(out.device_uuid);
+	}
 	if (file_is_open) {
 		if (read_low_level) {
 			close(fp_low);
