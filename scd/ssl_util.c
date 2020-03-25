@@ -283,6 +283,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 			pass_len = strlen(passphrase);
 			if (!(cipher = EVP_get_cipherbyname(CIPHER_PW_CSR))) {
 				ERROR("Error setting up cipher for CSR private key encryption");
+				fclose(fp);
 				goto error;
 			}
 		}
@@ -961,6 +962,7 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
 #else
 	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
 		ERROR("Allocating EVP_MD failed!");
+		fclose(fp);
 		return NULL;
 	}
 #endif

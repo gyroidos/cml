@@ -550,7 +550,7 @@ container_uuid_is_c0id(const uuid_t *uuid)
 	ASSERT(uuid);
 	uuid_t *uuid_c0 = uuid_new("00000000-0000-0000-0000-000000000000");
 	bool ret = uuid_equals(uuid, uuid_c0);
-	mem_free(uuid_c0);
+	uuid_free(uuid_c0);
 	return ret;
 }
 
@@ -633,6 +633,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		mem_free(config_filename);
 		mem_free(images_dir);
 		uuid_free(uuid);
+		container_config_free(conf);
 		return NULL;
 	}
 
@@ -662,6 +663,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low",
 		     new_guestos_version, name);
 		WARN("Current version is %" PRIu64 "; Aborting...", current_guestos_version);
+		mem_free(config_filename);
+		mem_free(images_dir);
 		uuid_free(uuid);
 		container_config_free(conf);
 		mount_free(mnt);
@@ -722,6 +725,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		container_config_write(conf);
 
 	uuid_free(uuid);
+	mem_free(images_dir);
+	mem_free(config_filename);
 
 	for (list_t *l = vnet_cfg_list; l; l = l->next) {
 		container_vnet_cfg_t *vnet_cfg = l->data;
