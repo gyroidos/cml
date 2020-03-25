@@ -509,6 +509,7 @@ iterate_images_start(guestos_t *os, iterate_images_callback_t iter_cb,
 	if (iterate_images_trigger_check(task))
 		return true;
 
+	mount_free(mnt);
 	iterate_images_free(task);
 	return false;
 }
@@ -960,6 +961,8 @@ guestos_purge(guestos_t *os)
 	if (rmdir(dir) < 0) {
 		WARN_ERRNO("Failed to remove directory %s", dir);
 	}
+
+	mount_free(mnt);
 }
 
 const char *
