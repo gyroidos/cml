@@ -382,8 +382,17 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	// construct an argv buffer for execve
 	container->init_argv = guestos_get_init_argv_new(os);
 
-	// construct an NULL terminated env buffer for execve
-	container->init_env = mem_new0(char *, guestos_get_init_env_len(os) + init_env_len + 1);
+	// construct a NULL terminated env buffer for execve
+	size_t total_len;
+	if (__builtin_add_overflow(guestos_get_init_env_len(os), init_env_len, &total_len)) {
+		WARN("Overflow detected when calculating buffer size for container's env");
+		goto error;
+	}
+	if (__builtin_add_overflow(total_len, 1, &total_len)) {
+		WARN("Overflow detected when calculating buffer size for container's env");
+		goto error;
+	}
+	container->init_env = mem_new0(char *, total_len);
 	size_t i = 0;
 	char **os_env = guestos_get_init_env(os);
 	for (; i < guestos_get_init_env_len(os); i++)
