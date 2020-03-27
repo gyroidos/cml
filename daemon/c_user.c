@@ -269,7 +269,6 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 		mem_free(file_to_chown);
 		return 0;
 	}
-		
 
 	if (file_is_dir(file_to_chown)) {
 		TRACE("Path %s is dir", file_to_chown);

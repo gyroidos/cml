@@ -1239,7 +1239,6 @@ c_net_start_child(c_net_t *net)
 			WARN("Failed to setup gateway for %s", ni->veth_cont_name);
 	}
 
-
 	return 0;
 }
 
