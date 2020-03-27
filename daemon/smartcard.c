@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -404,12 +404,19 @@ smartcard_crypto_verify_result_from_proto(TokenToDaemon__Code code)
 typedef struct crypto_callback_task {
 	smartcard_crypto_hash_callback_t hash_complete;
 	smartcard_crypto_verify_callback_t verify_complete;
+	smartcard_crypto_verify_buf_callback_t verify_buf_complete;
 	void *data;
 	char *hash_file;
 	smartcard_crypto_hashalgo_t hash_algo;
 	char *verify_data_file;
 	char *verify_sig_file;
 	char *verify_cert_file;
+	unsigned char *verify_data_buf;
+	unsigned char *verify_sig_buf;
+	unsigned char *verify_cert_buf;
+	size_t verify_data_buf_len;
+	size_t verify_sig_buf_len;
+	size_t verify_cert_buf_len;
 } crypto_callback_task_t;
 
 static crypto_callback_task_t *
@@ -439,6 +446,29 @@ crypto_callback_verify_task_new(smartcard_crypto_verify_callback_t cb, void *dat
 	return task;
 }
 
+static crypto_callback_task_t *
+crypto_callback_verify_buf_task_new(smartcard_crypto_verify_buf_callback_t cb, void *data,
+				    const unsigned char *data_buf, size_t data_buf_len,
+				    const unsigned char *sig_buf, size_t sig_buf_len,
+				    const unsigned char *cert_buf, size_t cert_buf_len,
+				    smartcard_crypto_hashalgo_t hash_algo)
+{
+	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
+	task->verify_buf_complete = cb;
+	task->data = data;
+	task->hash_algo = hash_algo;
+	task->verify_data_buf = mem_new0(unsigned char, data_buf_len);
+	task->verify_sig_buf = mem_new0(unsigned char, sig_buf_len);
+	task->verify_cert_buf = mem_new0(unsigned char, cert_buf_len);
+	memcpy(task->verify_data_buf, data_buf, data_buf_len);
+	memcpy(task->verify_sig_buf, sig_buf, sig_buf_len);
+	memcpy(task->verify_cert_buf, cert_buf, cert_buf_len);
+	task->verify_data_buf_len = data_buf_len;
+	task->verify_sig_buf_len = sig_buf_len;
+	task->verify_cert_buf_len = cert_buf_len;
+	return task;
+}
+
 static void
 crypto_callback_task_free(crypto_callback_task_t *task)
 {
@@ -447,6 +477,9 @@ crypto_callback_task_free(crypto_callback_task_t *task)
 	mem_free(task->verify_data_file);
 	mem_free(task->verify_sig_file);
 	mem_free(task->verify_cert_file);
+	mem_free(task->verify_data_buf);
+	mem_free(task->verify_sig_buf);
+	mem_free(task->verify_cert_buf);
 }
 
 static void
@@ -482,9 +515,19 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-			task->verify_complete(smartcard_crypto_verify_result_from_proto(msg->code),
-					      task->verify_data_file, task->verify_sig_file,
-					      task->verify_cert_file, task->hash_algo, task->data);
+			if (task->verify_complete) {
+				task->verify_complete(
+					smartcard_crypto_verify_result_from_proto(msg->code),
+					task->verify_data_file, task->verify_sig_file,
+					task->verify_cert_file, task->hash_algo, task->data);
+			} else if (task->verify_buf_complete) {
+				task->verify_buf_complete(
+					smartcard_crypto_verify_result_from_proto(msg->code),
+					task->verify_data_buf, task->verify_data_buf_len,
+					task->verify_sig_buf, task->verify_sig_buf_len,
+					task->verify_cert_buf, task->verify_cert_buf_len,
+					task->hash_algo, task->data);
+			}
 			break;
 		default:
 			ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
@@ -579,6 +622,42 @@ smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const ch
 	out.verify_cert_file = task->verify_cert_file;
 	out.has_hash_algo = true;
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
+	if (smartcard_send_crypto(&out, task) < 0) {
+		crypto_callback_task_free(task);
+		return -1;
+	}
+	return 0;
+}
+
+int
+smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsigned char *sig_buf,
+			    size_t sig_buf_len, unsigned char *cert_buf, size_t cert_buf_len,
+			    smartcard_crypto_hashalgo_t hashalgo,
+			    smartcard_crypto_verify_buf_callback_t cb, void *data)
+{
+	ASSERT(data_buf);
+	ASSERT(sig_buf);
+	ASSERT(cert_buf);
+	ASSERT(cb);
+
+	crypto_callback_task_t *task =
+		crypto_callback_verify_buf_task_new(cb, data, data_buf, data_buf_len, sig_buf,
+						    sig_buf_len, cert_buf, cert_buf_len, hashalgo);
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF;
+	out.has_verify_data_buf = true;
+	out.verify_data_buf.data = data_buf;
+	out.verify_data_buf.len = data_buf_len;
+	out.has_verify_sig_buf = true;
+	out.verify_sig_buf.data = sig_buf;
+	out.verify_sig_buf.len = sig_buf_len;
+	out.has_verify_cert_buf = true;
+	out.verify_cert_buf.data = cert_buf;
+	out.verify_cert_buf.len = cert_buf_len;
+	out.has_hash_algo = true;
+	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
+
 	if (smartcard_send_crypto(&out, task) < 0) {
 		crypto_callback_task_free(task);
 		return -1;
@@ -693,6 +772,51 @@ smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, co
 	default:
 		ERROR("Invalid TokenToDaemon command %d when verifying file %s with signature %s and certificate %s",
 		      msg->code, datafile, sigfile, certfile);
+	}
+	protobuf_free_message((ProtobufCMessage *)msg);
+	return ret;
+}
+
+smartcard_crypto_verify_result_t
+smartcard_crypto_verify_buf_block(unsigned char *data_buf, size_t data_buf_len,
+				  unsigned char *sig_buf, size_t sig_buf_len,
+				  unsigned char *cert_buf, size_t cert_buf_len,
+				  smartcard_crypto_hashalgo_t hashalgo)
+{
+	ASSERT(data_buf);
+	ASSERT(sig_buf);
+	ASSERT(cert_buf);
+
+	smartcard_crypto_verify_result_t ret = VERIFY_ERROR;
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF;
+	out.has_verify_data_buf = true;
+	out.verify_data_buf.data = data_buf;
+	out.verify_data_buf.len = data_buf_len;
+	out.has_verify_sig_buf = true;
+	out.verify_sig_buf.data = sig_buf;
+	out.verify_sig_buf.len = sig_buf_len;
+	out.has_verify_cert_buf = true;
+	out.verify_cert_buf.data = cert_buf;
+	out.verify_cert_buf.len = cert_buf_len;
+	out.has_hash_algo = true;
+	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
+
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
+	IF_NULL_RETVAL(msg, VERIFY_ERROR);
+
+	switch (msg->code) {
+	// deal with CRYPTO_VERIFY_* cases
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
+		ret = smartcard_crypto_verify_result_from_proto(msg->code);
+		break;
+	default:
+		ERROR("Invalid TokenToDaemon command %d when verifying buffer", msg->code);
 	}
 	protobuf_free_message((ProtobufCMessage *)msg);
 	return ret;

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -53,6 +53,7 @@ message DaemonToToken {
 		// crypto commands unrelated to actual secure element (FIXME move elsewhere?!)
 		CRYPTO_HASH_FILE = 50;		// compute hash for file [hash_file]
 		CRYPTO_VERIFY_FILE = 60;	// verify certificate and signature on data given in [verify_*_file]
+		CRYPTO_VERIFY_BUF = 61;	// verify certificate and signature on data given in [verify_*_buf]
 	}
 
 
@@ -75,6 +76,10 @@ message DaemonToToken {
 	optional string verify_data_file = 60;	// file with data to verify
 	optional string verify_sig_file = 61;	// file with signature for data file
 	optional string verify_cert_file = 62;	// file with certificate
+
+	optional bytes verify_data_buf = 70;	// buf with data to verify
+	optional bytes verify_sig_buf = 71;	// buf with signature for data file
+	optional bytes verify_cert_buf = 72;	// buf with certificate
 }
 
 message TokenToDaemon {

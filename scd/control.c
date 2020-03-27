@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -57,25 +57,42 @@ struct scd_control {
 UNUSED static list_t *control_list = NULL;
 
 /* keep in sync with offered algorithms by protobuf */
-static char *
+static const char *
 switch_proto_hash_algo(int hash_algo)
 {
-	char *ret = NULL;
 	switch (hash_algo) {
 	case HASH_ALGO__SHA1: {
-		ret = "SHA1";
+		return "SHA1";
 	} break;
 	case HASH_ALGO__SHA256: {
-		ret = "SHA256";
+		return "SHA256";
 	} break;
 	case HASH_ALGO__SHA512: {
-		ret = "SHA512";
+		return "SHA512";
 	} break;
 	default:
 		ERROR("No valid hash algorithm specified");
 		break;
 	}
-	return ret;
+	return NULL;
+}
+
+static char *
+write_to_tmpfile_new(unsigned char *buf, size_t buflen)
+{
+	char *file = mem_strdup("/tmp/tmpXXXXXXXX");
+	int fd = mkstemp(file);
+	if (fd != -1) {
+		int len = fd_write(fd, (char *)buf, buflen);
+		close(fd);
+		if (len >= 0 && (size_t)len == buflen)
+			return file;
+		ERROR("Failed to write entire data (%zu bytes) to temp file %s", buflen, file);
+	} else {
+		ERROR("Failed to create temp file.");
+	}
+	mem_free(file);
+	return NULL;
 }
 
 struct verify_cert_ca_cb_data {
@@ -105,21 +122,21 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 }
 
 static TokenToDaemon__Code
-scd_control_handle_verify(const DaemonToToken *msg)
+scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_file,
+			  const char *verify_cert_file, const char *hash_algo)
 {
 	int ret;
 	TokenToDaemon__Code out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
-	char *hash_algo = switch_proto_hash_algo(msg->hash_algo);
 	IF_NULL_RETVAL(hash_algo, out_code);
 
 	bool verified = false;
 	// At first, we explicitly assume that the file to be verified is a software update file,
 	// and we thus use the software signing root CA.
-	if ((ret = ssl_verify_certificate(msg->verify_cert_file, SSIG_ROOT_CERT, true)) == 0) {
+	if ((ret = ssl_verify_certificate(verify_cert_file, SSIG_ROOT_CERT, true)) == 0) {
 		verified = true;
 	} else {
 		// Try all CA files in trusted CA store
-		struct verify_cert_ca_cb_data cb_data = { .cert_file = msg->verify_cert_file,
+		struct verify_cert_ca_cb_data cb_data = { .cert_file = verify_cert_file,
 							  .verified = false };
 
 		dir_foreach(TRUSTED_CA_STORE, scd_control_verify_cert_ca_cb, &cb_data);
@@ -137,7 +154,7 @@ scd_control_handle_verify(const DaemonToToken *msg)
 	IF_TRUE_GOTO(verified, do_signature);
 
 	// Retry with Local CA
-	if ((ret = ssl_verify_certificate(msg->verify_cert_file, LOCALCA_ROOT_CERT, true)) == 0) {
+	if ((ret = ssl_verify_certificate(verify_cert_file, LOCALCA_ROOT_CERT, true)) == 0) {
 		goto do_signature;
 	} else if (ret == -1) {
 		ERROR("Certificate not a valid local ssig cert");
@@ -149,8 +166,8 @@ scd_control_handle_verify(const DaemonToToken *msg)
 	return out_code;
 
 do_signature:
-	if ((ret = ssl_verify_signature(msg->verify_cert_file, msg->verify_sig_file,
-					msg->verify_data_file, hash_algo)) == 0) {
+	if ((ret = ssl_verify_signature(verify_cert_file, verify_sig_file, verify_data_file,
+					hash_algo)) == 0) {
 		out_code = (verified) ? TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD :
 					TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED;
 	} else if (ret == -1) {
@@ -336,7 +353,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE: {
 		unsigned int hash_len;
-		char *hash_algo;
+		const char *hash_algo;
 		unsigned char *hash = NULL;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR;
@@ -358,9 +375,42 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		if (hash)
 			mem_free(hash);
 	} break;
+	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF: {
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
+		char *tmp_data_file =
+			write_to_tmpfile_new(msg->verify_data_buf.data, msg->verify_data_buf.len);
+		char *tmp_sig_file =
+			write_to_tmpfile_new(msg->verify_sig_buf.data, msg->verify_sig_buf.len);
+		char *tmp_cert_file =
+			write_to_tmpfile_new(msg->verify_cert_buf.data, msg->verify_cert_buf.len);
+		if (tmp_data_file && tmp_sig_file && tmp_cert_file) {
+			out.code =
+				scd_control_handle_verify(tmp_data_file, tmp_sig_file,
+							  tmp_cert_file,
+							  switch_proto_hash_algo(msg->hash_algo));
+		}
+
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (tmp_data_file) {
+			unlink(tmp_data_file);
+			mem_free(tmp_data_file);
+		}
+		if (tmp_sig_file) {
+			unlink(tmp_sig_file);
+			mem_free(tmp_sig_file);
+		}
+		if (tmp_cert_file) {
+			unlink(tmp_cert_file);
+			mem_free(tmp_cert_file);
+		}
+
+	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE: {
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
-		out.code = scd_control_handle_verify(msg);
+		out.code = scd_control_handle_verify(msg->verify_data_file, msg->verify_sig_file,
+						     msg->verify_cert_file,
+						     switch_proto_hash_algo(msg->hash_algo));
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
 	default:
