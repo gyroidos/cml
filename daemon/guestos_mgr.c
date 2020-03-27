@@ -279,9 +279,10 @@ write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 }
 
 static void
-push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char *cfg_file,
-		      const char *sig_file, const char *cert_file,
-		      UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
+push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsigned char *cfg_buf,
+			  size_t cfg_buf_len, unsigned char *sig_buf, size_t sig_buf_len,
+			  unsigned char *cert_buf, size_t cert_buf_len,
+			  UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
 {
 	INFO("Push GuestOS config (Phase 2)");
 
@@ -296,15 +297,15 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char
 		}
 		// fallthrough
 	default:
-		ERROR("Signature verification failed (%d) for pushed GuestOS config %s, skipping.",
-		      verify_result, cfg_file);
-		goto cleanup_tmpfiles;
+		ERROR("Signature verification failed (%d) for pushed GuestOS config buffer, skipping.",
+		      verify_result);
+		return;
 	}
 
-	guestos_t *os = guestos_new_from_file(cfg_file, guestos_basepath);
+	guestos_t *os = guestos_new_from_buffer(cfg_buf, cfg_buf_len, guestos_basepath);
 	if (!os) {
-		ERROR("Could not instantiate GuestOS from temp file %s", cfg_file);
-		goto cleanup_tmpfiles;
+		ERROR("Could not instantiate GuestOS from buffer");
+		return;
 	}
 
 	const char *os_name = guestos_get_name(os);
@@ -334,18 +335,18 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char
 	}
 
 	// 2. save pushed config, signature and cert
-	if (file_move(cfg_file, guestos_get_cfg_file(os), GUESTOS_MGR_FILE_MOVE_BLOCKSIZE) < 0) {
-		ERROR_ERRNO("Failed to move GuestOS config %s to %s", cfg_file,
+	if (file_write(guestos_get_cfg_file(os), (char *)cfg_buf, cfg_buf_len) < 0) {
+		ERROR_ERRNO("Failed to write GuestOS config from buffer to %s",
 			    guestos_get_cfg_file(os));
 		goto cleanup_purge;
 	}
-	if (file_move(sig_file, guestos_get_sig_file(os), GUESTOS_MGR_FILE_MOVE_BLOCKSIZE) < 0) {
-		ERROR_ERRNO("Failed to move GuestOS config signature %s to %s", sig_file,
+	if (file_write(guestos_get_sig_file(os), (char *)sig_buf, sig_buf_len) < 0) {
+		ERROR_ERRNO("Failed to write GuestOS config signature from buffer to %s",
 			    guestos_get_sig_file(os));
 		goto cleanup_purge;
 	}
-	if (file_move(cert_file, guestos_get_cert_file(os), GUESTOS_MGR_FILE_MOVE_BLOCKSIZE) < 0) {
-		ERROR_ERRNO("Failed to move GuestOS config certificate %s to %s", cert_file,
+	if (file_write(guestos_get_cert_file(os), (char *)cert_buf, cert_buf_len) < 0) {
+		ERROR_ERRNO("Failed to write GuestOS config certificate from buffer to %s",
 			    guestos_get_cert_file(os));
 		goto cleanup_purge;
 	}
@@ -353,9 +354,9 @@ push_config_verify_cb(smartcard_crypto_verify_result_t verify_result, const char
 	// 3. register new os instance
 	guestos_list = list_append(guestos_list, os);
 
-	INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
-	     cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD :
-				     GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
+	//INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
+	//     cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD :
+	//			     GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
 
 	// 4. trigger image download if os is used by a container or a fresh install
 	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os) {
@@ -368,10 +369,6 @@ cleanup_purge:
 	guestos_purge(os);
 cleanup_os:
 	guestos_free(os);
-cleanup_tmpfiles:
-	unlink(cfg_file);
-	unlink(sig_file);
-	unlink(cert_file);
 }
 
 int
@@ -380,23 +377,12 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 {
 	INFO("Push GuestOS config (Phase 1)");
 
-	char *tmp_cfg_file = write_to_tmpfile_new(cfg, cfglen);
-	char *tmp_sig_file = write_to_tmpfile_new(sig, siglen);
-	char *tmp_cert_file = write_to_tmpfile_new(cert, certlen);
 	int res = -1;
-	if (tmp_cfg_file && tmp_sig_file && tmp_cert_file) {
-		res = smartcard_crypto_verify_file(tmp_cfg_file, tmp_sig_file, tmp_cert_file,
-						   GUESTOS_MGR_VERIFY_HASH_ALGO,
-						   push_config_verify_cb, NULL);
+	if (cfg && sig && cert) {
+		res = smartcard_crypto_verify_buf(cfg, cfglen, sig, siglen, cert, certlen,
+						  GUESTOS_MGR_VERIFY_HASH_ALGO,
+						  push_config_verify_buf_cb, NULL);
 	}
-	if (res < 0) {
-		unlink(tmp_cfg_file);
-		unlink(tmp_sig_file);
-		unlink(tmp_cert_file);
-	}
-	mem_free(tmp_cfg_file);
-	mem_free(tmp_sig_file);
-	mem_free(tmp_cert_file);
 	return res;
 }
 
