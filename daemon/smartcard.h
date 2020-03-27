@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -101,13 +101,20 @@ typedef enum smartcard_crypto_verify_result {
 } smartcard_crypto_verify_result_t;
 
 /**
- * Callback function for receiving the result of a signature verification.
+ * Callback function for receiving the result of a signature verification (file)
  */
 typedef void (*smartcard_crypto_verify_callback_t)(smartcard_crypto_verify_result_t verify_result,
 						   const char *data_file, const char *sig_file,
 						   const char *cert_file,
 						   smartcard_crypto_hashalgo_t hash_algo,
 						   void *data);
+/**
+ * Callback function for receiving the result of a signature verification (buffer)
+ */
+typedef void (*smartcard_crypto_verify_buf_callback_t)(
+	smartcard_crypto_verify_result_t verify_result, unsigned char *data_buf,
+	size_t data_buf_len, unsigned char *sig_buf, size_t sig_buf_len, unsigned char *cert_buf,
+	size_t cert_buf_len, smartcard_crypto_hashalgo_t hash_algo, void *data);
 
 /**
  * Requests the scd to verify the signature on the given datafile using the given certificate
@@ -139,6 +146,46 @@ smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const ch
 smartcard_crypto_verify_result_t
 smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, const char *certfile,
 				   smartcard_crypto_hashalgo_t hashalgo);
+
+/**
+ * Requests the scd to verify the signature on the given data buffer using the given certificate
+ * and report the result to the given callback.
+ *
+ * @param data the buffer whose signature shall be verified
+ * @param data_len len of the data buffer
+ * @param sig with the signature on data
+ * @param sig_len len of the signature
+ * @param cert buffer containing the certificate (with public key) to verify the signature in sig on data
+ * @param cert_len len of the certificate
+ * @param hash_algo the hash algorithm to use
+ * @param cb the callback to receive the result
+ * @param data custom data parameter to pass to the callback
+ * @return 0 if the verification request was sent and the callback is expected to be called, -1 otherwise
+ */
+int
+smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsigned char *sig_buf,
+			    size_t sig_buf_len, unsigned char *cert_buf, size_t cert_buf_len,
+			    smartcard_crypto_hashalgo_t hashalgo,
+			    smartcard_crypto_verify_buf_callback_t cb, void *data);
+
+/**
+ * Requests the scd to verify the signature on the given data buffer using the given certificate,
+ * wait for the result and directly return it.
+ *
+ * @param data_buf the buffer whose signature shall be verified
+ * @param data_buf_len len of the data buffer
+ * @param sig_buf with the signature on data
+ * @param sig_buf_len len of the signature
+ * @param cert_buf buffer containing the certificate (with public key) to verify the signature in sig on data
+ * @param cert_buf_len len of the certificate
+ * @param hash_algo the hash algorithm to use
+ * @return the result of the verification
+ */
+smartcard_crypto_verify_result_t
+smartcard_crypto_verify_buf_block(unsigned char *data_buf, size_t data_buf_len,
+				  unsigned char *sig_buf, size_t sig_buf_len,
+				  unsigned char *cert_buf, size_t cert_buf_len,
+				  smartcard_crypto_hashalgo_t hashalgo);
 
 /**
  * Pulls the device CSR from the tokens directory,
