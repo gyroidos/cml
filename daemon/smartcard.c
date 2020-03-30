@@ -69,7 +69,15 @@ static char *
 bytes_to_string_new(unsigned char *data, size_t len)
 {
 	IF_NULL_RETVAL(data, NULL);
-	char *str = mem_alloc(2 * len + 1);
+	size_t len_chunk = 0;
+	if (__builtin_mul_overflow(2, len, &len_chunk)) {
+		FATAL("Integer overflow detected. Aborting to prevent heap buffer overflow.");
+	}
+	if (__builtin_add_overflow(len_chunk, 1, &len_chunk)) {
+		FATAL("Integer overflow detected. Aborting to prevent heap buffer overflow.");
+	}
+
+	char *str = mem_alloc(len_chunk);
 	for (size_t i = 0; i < len; i++)
 		snprintf(str + 2 * i, 3, "%02x", data[i]);
 	return str;
@@ -78,6 +86,7 @@ bytes_to_string_new(unsigned char *data, size_t len)
 static void
 smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned char *key, int keylen)
 {
+	ASSERT(keylen > 0);
 	int resp_fd = control_get_client_sock(startdata->control);
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
 	char *ascii_key = bytes_to_string_new(key, keylen);
