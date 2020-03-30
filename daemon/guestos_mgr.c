@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -50,7 +50,8 @@
 #define GUESTOS_MGR_UPDATE_TITLE "Trustme Update"
 #define GUESTOS_MGR_UPDATE_DOWNLOAD "Downloading..."
 #define GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI "Waiting for WiFi connection..."
-#define GUESTOS_MGR_UPDATE_SUCCESS "Reboot to install"
+#define GUESTOS_MGR_UPDATE_SUCCESS "Reboot to install/activate"
+#define GUESTOS_MGR_UPDATE_FLASH_FAILED "Flashing to device partitions failed"
 #define GUESTOS_MGR_UPDATE_FAILED "Download failed"
 
 #define SCD_TOKEN_DIR "/data/cml/tokens"
@@ -224,10 +225,15 @@ static void
 download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)
 {
 	IF_NULL_RETURN_ERROR(os);
+	IF_TRUE_RETURN_TRACE(count > 0);
 
-	if (!complete || count > 0) {
-		INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE,
-		     complete ? GUESTOS_MGR_UPDATE_SUCCESS : GUESTOS_MGR_UPDATE_FAILED);
+	if (complete) {
+		if (guestos_images_flash(os) < 0)
+			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+		else
+			INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
+	} else {
+		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FAILED);
 	}
 }
 
@@ -244,6 +250,12 @@ guestos_mgr_download_latest(const char *name)
 	IF_NULL_RETURN_WARN(os);
 	if (!guestos_images_are_complete(os, false))
 		guestos_images_download(os, download_complete_cb, NULL);
+	else {
+		if (guestos_images_flash(os) < 0)
+			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+		else
+			INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
+	}
 }
 
 void
