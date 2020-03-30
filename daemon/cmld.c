@@ -843,17 +843,6 @@ cmld_init_a0(const char *path, const char *c0os)
 {
 	/* Get the a0 guestos */
 	guestos_t *a0_os = guestos_mgr_get_latest_by_name(c0os, true);
-	// TODO discuss if flashing should be done here or elsewhere
-
-	int flash_result = guestos_images_flash(a0_os);
-	if (flash_result < 0) {
-		FATAL("Failed to verify and/or flash a0 images!");
-	}
-	if (flash_result > 0) {
-		INFO("Flashed %d image(s), rebooting device ...", flash_result);
-		reboot_reboot(REBOOT);
-		FATAL("Failed to reboot!");
-	}
 
 	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
 	char *a0_config_file =
