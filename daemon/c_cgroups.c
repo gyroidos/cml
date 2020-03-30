@@ -266,7 +266,6 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 		mem_free(path);
 		return -1;
 	}
-	mem_free(path);
 
 	// second allow in child list of container
 	char *path_child = mem_printf("%s/devices/%s/child/devices.allow", CGROUPS_FOLDER,
@@ -274,12 +273,14 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 	if (file_exists(path_child)) {
 		if (file_write(path, rule, -1) == -1) {
 			ERROR_ERRNO("Failed to write to %s", path);
+			mem_free(path);
 			mem_free(path_child);
 			return -1;
 		}
 	}
-	mem_free(path_child);
 
+	mem_free(path);
+	mem_free(path_child);
 	return 0;
 }
 

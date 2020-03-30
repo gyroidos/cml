@@ -115,11 +115,18 @@ mem_printf(const char *fmt, ...)
 
 /**
  * Frees the allocated memory.
- * This is a wrapper for free(3) (which is provided for consistency).
- * @param mem Memory to be freed.
+ * This is a wrapper for free(3) which crashes if we try
+ * to free a NULL pointer. If we seccessfully free a pointer,
+ * the wrapper sets it to NULL to prevent use-after-free,
+ * double-free and similar exploitable issues.
+ * @param mem Memory pointer to be freed.
  */
-void
-mem_free(void *mem);
+#define mem_free(ptr)                                                                              \
+	do {                                                                                       \
+		ASSERT(ptr);                                                                       \
+		free(ptr);                                                                         \
+		ptr = NULL;                                                                        \
+	} while (0)
 
 /**
  * Frees the allocated memory of each array element and the array itself.

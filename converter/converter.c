@@ -83,9 +83,12 @@ get_ifname_ip_new(const char *ifname)
 	IF_FALSE_GOTO_DEBUG_ERRNO((ioctl(sock, SIOCGIFADDR, &ifr) == 0), err);
 	ip = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
 
-	ip_str = strdup(inet_ntoa(ip));
+	ip_str = mem_strdup(inet_ntoa(ip));
 err:
 	close(sock);
+	if (ip_str == NULL) {
+		FATAL_ERRNO("Failed to get ifname %s ip address string.", ifname);
+	}
 	return ip_str;
 }
 

@@ -86,7 +86,7 @@ mem_strndup(const char *str, size_t len)
 char *
 mem_vprintf(const char *fmt, va_list ap)
 {
-	char *p;
+	char *p = NULL;
 	ASSERT(fmt);
 	ASSERT(vasprintf(&p, fmt, ap) >= 0);
 	return p;
@@ -95,19 +95,13 @@ mem_vprintf(const char *fmt, va_list ap)
 char *
 mem_printf(const char *fmt, ...)
 {
-	char *p;
+	char *p = NULL;
 	va_list ap;
 	ASSERT(fmt);
 	va_start(ap, fmt);
 	ASSERT(vasprintf(&p, fmt, ap) >= 0);
 	va_end(ap);
 	return p;
-}
-
-void
-mem_free(void *mem)
-{
-	free(mem);
 }
 
 void
