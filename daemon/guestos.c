@@ -822,7 +822,10 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 
 	int res = -1;
 	char *img_path = mem_printf("%s/%s.img", guestos_get_dir(os), img_name);
-	char *flash_path = mem_printf("%s%s", hardware_get_block_by_name_path(), flash_partition);
+	char *flash_path =
+		hardware_get_block_by_name_path() ?
+			mem_printf("%s%s", hardware_get_block_by_name_path(), flash_partition) :
+			mem_strdup(flash_partition);
 	DEBUG("Flashing image %s to partition %s", img_path, flash_path);
 
 	switch (verify_partition(img_path, flash_path)) {
