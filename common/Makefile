@@ -23,9 +23,21 @@
 
 
 CC ?= gcc
+DEVELOPMENT_BUILD ?= y
 
 LOCAL_CFLAGS += -I../include -pedantic -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -fPIC
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -fPIC
+ifeq ($(CC),gcc)
+    # clang does not support stack clash protection yet
+    LOCAL_CFLAGS += -fstack-clash-protection
+endif
+ifeq ($(DEVELOPMENT_BUILD),y)
+    # When developing we want to have a pure, warning-free build;
+    # Therefore we catch all warnings hard with -Werror
+    # Also, we enable sanitization for easier debugging
+    LOCAL_CFLAGS += -DDEBUG_BUILD -Werror
+    #LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
+endif
 
 .PHONY: all
 all: libcommon
@@ -60,13 +72,22 @@ libcommon: $(OBJS_COMMON)
 libcommon_full: $(OBJS_COMMON_FULL)
 	ar rcs libcommon_full.a $^
 
-.c.o:
-	${CC} -c ${LOCAL_CFLAGS} $< -o $@
+%.o: %.c
+	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
 	
-
 logf.pb-c.c: logf.proto
 	protoc-c --c_out=. $<
 
+TEST_SUITES := \
+    mem.test.c
+
+common.test: $(TEST_SUITES) munit.h munit.c common.test.c
+	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c
+
+.PHONY: test
+test: libcommon_full common.test
+	./common.test
+
 .PHONY: clean
 clean:
-	rm -f *.o *.a *.pb-c.*
+	rm -f *.o *.a *.pb-c.* common.test
