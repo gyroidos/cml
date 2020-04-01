@@ -141,20 +141,46 @@ mem_free_array(void **array, size_t size);
  * the correct size to be allocated and casts accordingly.
  */
 #define mem_new(struct_type, n_structs)                                                            \
-	((struct_type *)mem_alloc(((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
+	__extension__({                                                                            \
+		size_t _total_len = 0;                                                             \
+		size_t _lvalue = (size_t)sizeof(struct_type);                                      \
+		size_t _rvalue = (size_t)(n_structs);                                              \
+		if (__builtin_mul_overflow(_lvalue, _rvalue, &_total_len)) {                       \
+			FATAL("Detected integer overflow in allocation size. \
+                                Aborting to prevent heap overflow.");                              \
+		}                                                                                  \
+		(struct_type *)mem_alloc(_total_len);                                              \
+	})
 
 /**
  * Convenience wrapper macro for mem_alloc0 which calculates
  * the correct size to be allocated and casts accordingly.
  */
 #define mem_new0(struct_type, n_structs)                                                           \
-	((struct_type *)mem_alloc0(((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
-
+	__extension__({                                                                            \
+		size_t _total_len = 0;                                                             \
+		size_t _lvalue = (size_t)sizeof(struct_type);                                      \
+		size_t _rvalue = (size_t)(n_structs);                                              \
+		if (__builtin_mul_overflow(_lvalue, _rvalue, &_total_len)) {                       \
+			FATAL("Detected integer overflow in allocation size. \
+                                Aborting to prevent heap overflow.");                              \
+		}                                                                                  \
+		(struct_type *)mem_alloc0(_total_len);                                             \
+	})
 /**
  * Convenience wrapper macro for mem_realloc which calculates
  * the correct size to be allocated and casts accordingly.
  */
 #define mem_renew(struct_type, mem, n_structs)                                                     \
-	((struct_type *)mem_realloc((mem), ((size_t)sizeof(struct_type)) * ((size_t)(n_structs))))
+	__extension__({                                                                            \
+		size_t _total_len = 0;                                                             \
+		size_t _lvalue = (size_t)sizeof(struct_type);                                      \
+		size_t _rvalue = (size_t)(n_structs);                                              \
+		if (__builtin_mul_overflow(_lvalue, _rvalue, &_total_len)) {                       \
+			FATAL("Detected integer overflow in allocation size. \
+                                Aborting to prevent heap overflow.");                              \
+		}                                                                                  \
+		(struct_type *)mem_realloc((mem), _total_len);                                     \
+	})
 
 #endif /* MEM_H */
