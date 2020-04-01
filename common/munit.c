@@ -94,6 +94,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <setjmp.h>
+#include <signal.h>
 
 #if !defined(MUNIT_NO_NL_LANGINFO) && !defined(_WIN32)
 #define MUNIT_NL_LANGINFO
@@ -1388,6 +1389,37 @@ munit_restore_stderr(int orig_stderr)
 }
 #endif /* !defined(MUNIT_NO_BUFFER) */
 
+static bool
+munit_test_expected_signal(const MunitTest *test, int sig_num)
+{
+	if ((test->options & MUNIT_TEST_OPTION_RECV_SIGINT) == MUNIT_TEST_OPTION_RECV_SIGINT) {
+		if (sig_num == SIGINT)
+			return true;
+	}
+
+	if ((test->options & MUNIT_TEST_OPTION_RECV_SIGABRT) == MUNIT_TEST_OPTION_RECV_SIGABRT) {
+		if (sig_num == SIGABRT)
+			return true;
+	}
+
+	if ((test->options & MUNIT_TEST_OPTION_RECV_SIGKILL) == MUNIT_TEST_OPTION_RECV_SIGKILL) {
+		if (sig_num == SIGKILL)
+			return true;
+	}
+
+	if ((test->options & MUNIT_TEST_OPTION_RECV_SIGSEGV) == MUNIT_TEST_OPTION_RECV_SIGSEGV) {
+		if (sig_num == SIGSEGV)
+			return true;
+	}
+
+	if ((test->options & MUNIT_TEST_OPTION_RECV_SIGALRM) == MUNIT_TEST_OPTION_RECV_SIGALRM) {
+		if (sig_num == SIGALRM)
+			return true;
+	}
+
+	return false;
+}
+
 /* Run a test with the specified parameters. */
 static void
 munit_test_runner_run_test_with_params(MunitTestRunner *runner, const MunitTest *test,
@@ -1418,6 +1450,30 @@ munit_test_runner_run_test_with_params(MunitTestRunner *runner, const MunitTest 
 	ssize_t read_res;
 	int status = 0;
 	pid_t changed_pid;
+
+	bool must_recv_signal = false;
+	char *sig_name = "NONE";
+
+	if ((test->options & MUNIT_TEST_OPTION_RECV_SIGINT) == MUNIT_TEST_OPTION_RECV_SIGINT) {
+		must_recv_signal = true;
+		sig_name = "SIGINT";
+	} else if ((test->options & MUNIT_TEST_OPTION_RECV_SIGABRT) ==
+		   MUNIT_TEST_OPTION_RECV_SIGABRT) {
+		must_recv_signal = true;
+		sig_name = "SIGABRT";
+	} else if ((test->options & MUNIT_TEST_OPTION_RECV_SIGKILL) ==
+		   MUNIT_TEST_OPTION_RECV_SIGKILL) {
+		must_recv_signal = true;
+		sig_name = "SIGKILL";
+	} else if ((test->options & MUNIT_TEST_OPTION_RECV_SIGSEGV) ==
+		   MUNIT_TEST_OPTION_RECV_SIGSEGV) {
+		must_recv_signal = true;
+		sig_name = "SIGSEGV";
+	} else if ((test->options & MUNIT_TEST_OPTION_RECV_SIGALRM) ==
+		   MUNIT_TEST_OPTION_RECV_SIGALRM) {
+		must_recv_signal = true;
+		sig_name = "SIGALRM";
+	}
 #endif
 
 	if (params != NULL) {
@@ -1528,25 +1584,79 @@ munit_test_runner_run_test_with_params(MunitTestRunner *runner, const MunitTest 
 							    "child exited with status %d",
 							    WEXITSTATUS(status));
 					report.errored++;
+				} else if (must_recv_signal) {
+					munit_logf_internal(
+						MUNIT_LOG_ERROR, stderr_buf,
+						"expected to receive %s, but child exited normally",
+						sig_name);
+					report.errored++;
 				}
 			} else {
 				if (WIFSIGNALED(status)) {
+					if (!must_recv_signal) {
 #if defined(_XOPEN_VERSION) && (_XOPEN_VERSION >= 700)
-					munit_logf_internal(MUNIT_LOG_ERROR, stderr_buf,
-							    "child killed by signal %d (%s)",
-							    WTERMSIG(status),
-							    strsignal(WTERMSIG(status)));
+						munit_logf_internal(
+							MUNIT_LOG_ERROR, stderr_buf,
+							"child killed by signal %d (%s)",
+							WTERMSIG(status),
+							strsignal(WTERMSIG(status)));
 #else
-					munit_logf_internal(MUNIT_LOG_ERROR, stderr_buf,
-							    "child killed by signal %d",
-							    WTERMSIG(status));
+						munit_logf_internal(MUNIT_LOG_ERROR, stderr_buf,
+								    "child killed by signal %d",
+								    WTERMSIG(status));
 #endif
+						report.errored++;
+					} else {
+						if (munit_test_expected_signal(test,
+									       WTERMSIG(status))) {
+							report.successful++;
+						} else {
+#if defined(_XOPEN_VERSION) && (_XOPEN_VERSION >= 700)
+							munit_logf_internal(
+								MUNIT_LOG_ERROR, stderr_buf,
+								"expected to receive %s, "
+								"but instead received %s",
+								sig_name,
+								strsignal(WTERMSIG(status)));
+#else
+							munit_logf_internal(
+								MUNIT_LOG_ERROR, stderr_buf,
+								"expected to receive %s, "
+								"but instead received signal %d",
+								sig_name, WTERMSIG(status));
+#endif
+							report.errored++;
+						}
+					}
 				} else if (WIFSTOPPED(status)) {
-					munit_logf_internal(MUNIT_LOG_ERROR, stderr_buf,
-							    "child stopped by signal %d",
-							    WSTOPSIG(status));
+					if (!must_recv_signal) {
+						munit_logf_internal(MUNIT_LOG_ERROR, stderr_buf,
+								    "child stopped by signal %d",
+								    WSTOPSIG(status));
+						report.errored++;
+					} else {
+						if (munit_test_expected_signal(test,
+									       WSTOPSIG(status))) {
+							report.successful++;
+						} else {
+#if defined(_XOPEN_VERSION) && (_XOPEN_VERSION >= 700)
+							munit_logf_internal(
+								MUNIT_LOG_ERROR, stderr_buf,
+								"expected to receive %s, "
+								"but instead received %s",
+								sig_name,
+								strsignal(WSTOPSIG(status)));
+#else
+							munit_logf_internal(
+								MUNIT_LOG_ERROR, stderr_buf,
+								"expected to receive %s, "
+								"but instead received signal %d",
+								sig_name, WSTOPSIG(status));
+#endif
+							report.errored++;
+						}
+					}
 				}
-				report.errored++;
 			}
 
 			close(pipefd[0]);
