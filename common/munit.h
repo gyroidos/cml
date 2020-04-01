@@ -397,7 +397,12 @@ munit_parameters_get(const MunitParameter params[], const char *key);
 typedef enum {
 	MUNIT_TEST_OPTION_NONE = 0,
 	MUNIT_TEST_OPTION_SINGLE_ITERATION = 1 << 0,
-	MUNIT_TEST_OPTION_TODO = 1 << 1
+	MUNIT_TEST_OPTION_TODO = 1 << 1,
+	MUNIT_TEST_OPTION_RECV_SIGINT = 1 << 2,
+	MUNIT_TEST_OPTION_RECV_SIGABRT = 1 << 3,
+	MUNIT_TEST_OPTION_RECV_SIGKILL = 1 << 4,
+	MUNIT_TEST_OPTION_RECV_SIGSEGV = 1 << 5,
+	MUNIT_TEST_OPTION_RECV_SIGALRM = 1 << 6,
 } MunitTestOptions;
 
 typedef MunitResult (*MunitTestFunc)(const MunitParameter params[], void *user_data_or_fixture);
