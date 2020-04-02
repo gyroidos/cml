@@ -1080,7 +1080,7 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 
 	container_t *container = data;
 
-	DEBUG("SIGCHLD handler called for container %s with PID %d",
+	TRACE("SIGCHLD handler called for container %s with PID %d",
 	      container_get_description(container), container->pid);
 
 	/* In the start function the childs init process gets set a process group which has
@@ -1144,7 +1144,7 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		}
 	}
 
-	DEBUG("No more childs to reap. Callback exiting...");
+	TRACE("No more childs to reap. Callback exiting...");
 }
 
 static int

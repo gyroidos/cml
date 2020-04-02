@@ -405,7 +405,7 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 	/* Sequence number of the message is set to socket fd, i.e. receiver knows sender socket */
 	nlmsg->nlmsg_seq = nl->fd;
 
-	DEBUG("Sending message on socket with fd %d to kernel", nl->fd);
+	TRACE("Sending message on socket with fd %d to kernel", nl->fd);
 
 	TRACE("Message for transmission:");
 	TRACE("nl_msg{size:%zu,nlmsghdr:nlmsg_len: %u, nlmsg_type: %u,nlmsg_flags: %u, "
