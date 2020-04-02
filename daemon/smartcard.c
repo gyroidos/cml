@@ -482,13 +482,21 @@ static void
 crypto_callback_task_free(crypto_callback_task_t *task)
 {
 	IF_NULL_RETURN(task);
-	mem_free(task->hash_file);
-	mem_free(task->verify_data_file);
-	mem_free(task->verify_sig_file);
-	mem_free(task->verify_cert_file);
-	mem_free(task->verify_data_buf);
-	mem_free(task->verify_sig_buf);
-	mem_free(task->verify_cert_buf);
+	if (task->hash_file)
+		mem_free(task->hash_file);
+	if (task->verify_data_file)
+		mem_free(task->verify_data_file);
+	if (task->verify_sig_file)
+		mem_free(task->verify_sig_file);
+	if (task->verify_cert_file)
+		mem_free(task->verify_cert_file);
+	if (task->verify_data_buf)
+		mem_free(task->verify_data_buf);
+	if (task->verify_sig_buf)
+		mem_free(task->verify_sig_buf);
+	if (task->verify_cert_buf)
+		mem_free(task->verify_cert_buf);
+	mem_free(task);
 }
 
 static void
@@ -767,7 +775,6 @@ smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, co
 	mem_free(out.verify_data_file);
 	mem_free(out.verify_sig_file);
 	mem_free(out.verify_cert_file);
-	mem_free(out.hash_file);
 
 	IF_NULL_RETVAL(msg, VERIFY_ERROR);
 

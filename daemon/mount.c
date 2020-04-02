@@ -87,12 +87,17 @@ mount_free(mount_t *mnt)
 	while (mnt->list) {
 		mount_entry_t *mntent = mnt->list->data;
 		ASSERT(mntent);
+		// free mandatory/required fields
 		mem_free(mntent->image_file);
 		mem_free(mntent->mount_point);
 		mem_free(mntent->fs_type);
-		mem_free(mntent->sha1);
-		mem_free(mntent->sha256);
-		mem_free(mntent->mount_data);
+		// free optional fields
+		if (mntent->sha1)
+			mem_free(mntent->sha1);
+		if (mntent->sha256)
+			mem_free(mntent->sha256);
+		if (mntent->mount_data)
+			mem_free(mntent->mount_data);
 		mnt->list = list_unlink(mnt->list, mnt->list);
 	}
 
