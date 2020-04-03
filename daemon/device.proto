@@ -44,8 +44,8 @@ message DeviceConfig {
 	// flag which decides led blinking
 	optional bool should_led_blink = 6 [default = false];
 
-	// configure os if the management container
-	optional string c0os = 7 [default = "a0os"];
+	// configure os of the management container
+	optional string c0os = 7 [default = "trustx-coreos"];
 
 	// configure network
 	optional string host_addr = 8 [default = ""];
