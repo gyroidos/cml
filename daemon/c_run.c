@@ -328,7 +328,9 @@ do_exec(c_run_t *run)
 
 	if (run->argc > 0 && run->argv != NULL) {
 		ssize_t i = 0;
-		exec_args = mem_alloc(sizeof(char *) * (run->argc + 1));
+		size_t total_len = ADD_WITH_OVERFLOW_CHECK(run->argc, (size_t)1);
+		total_len = MUL_WITH_OVERFLOW_CHECK(sizeof(char *), total_len);
+		exec_args = mem_alloc(total_len);
 
 		while (i < run->argc) {
 			TRACE("Got argument: %s", run->argv[i]);

@@ -49,7 +49,7 @@ nvmcrypt_start_policy_session(TPM_SE session_type, TPMI_SH_AUTH_SESSION *session
 
 	if (session_type == TPM_SE_TRIAL) {
 		pcrs_len = 1;
-		pcrs = mem_alloc0(sizeof(tpm2d_pcr_t *) * pcrs_len);
+		pcrs = mem_alloc0(MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(tpm2d_pcr_t *), pcrs_len));
 
 		// read one PCR, namely PCR 7 (efi secure boot variables)
 		pcrs[0] = tpm2_pcrread_new(0x7, TPM2D_HASH_ALGORITHM);

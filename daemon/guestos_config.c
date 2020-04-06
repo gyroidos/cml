@@ -211,7 +211,8 @@ guestos_config_get_init_argv_new(const guestos_config_t *cfg)
 	ASSERT(cfg);
 
 	// construct an NULL terminated argv buffer for execve
-	char **init_argv = mem_new0(char *, cfg->n_init_param + 2);
+	size_t total_len = ADD_WITH_OVERFLOW_CHECK(cfg->n_init_param, (size_t)2);
+	char **init_argv = mem_new0(char *, total_len);
 	init_argv[0] = mem_strdup(cfg->init_path);
 
 	for (size_t i = 0; i < cfg->n_init_param; i++) {

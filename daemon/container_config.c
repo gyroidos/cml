@@ -386,7 +386,8 @@ container_config_get_dev_allow_list_new(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 
-	char **dev_whitelist = mem_new0(char *, config->cfg->n_allow_dev + 1);
+	size_t total_len = ADD_WITH_OVERFLOW_CHECK(config->cfg->n_allow_dev, (size_t)1);
+	char **dev_whitelist = mem_new0(char *, total_len);
 	for (size_t i = 0; i < config->cfg->n_allow_dev; i++) {
 		dev_whitelist[i] = mem_strdup(config->cfg->allow_dev[i]);
 	}
@@ -399,7 +400,8 @@ container_config_get_dev_assign_list_new(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-	char **dev_assign_list = mem_new0(char *, config->cfg->n_assign_dev + 1);
+	size_t total_len = ADD_WITH_OVERFLOW_CHECK(config->cfg->n_assign_dev, (size_t)1);
+	char **dev_assign_list = mem_new0(char *, total_len);
 	for (size_t i = 0; i < config->cfg->n_assign_dev; i++) {
 		dev_assign_list[i] = mem_strdup(config->cfg->assign_dev[i]);
 	}
@@ -454,12 +456,13 @@ container_config_append_net_ifaces(const container_config_t *config, const char 
 	ASSERT(config);
 	ASSERT(config->cfg);
 
-	int n = config->cfg->n_net_ifaces++;
+	size_t n = config->cfg->n_net_ifaces++;
 	char **old_net_ifaces = config->cfg->net_ifaces;
 
-	config->cfg->net_ifaces = mem_new0(char *, n + 1);
+	size_t total_len = ADD_WITH_OVERFLOW_CHECK(n, (size_t)1);
+	config->cfg->net_ifaces = mem_new0(char *, total_len);
 
-	for (int i = 0; i < n; i++) {
+	for (size_t i = 0; i < n; i++) {
 		config->cfg->net_ifaces[i] = mem_strdup(old_net_ifaces[i]);
 		mem_free(old_net_ifaces[i]);
 	}

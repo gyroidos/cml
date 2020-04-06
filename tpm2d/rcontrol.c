@@ -123,7 +123,8 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		}
 		pcr_indices = pcr_regs - 1;
 
-		pcr_array = mem_alloc0(sizeof(tpm2d_pcr_t *) * pcr_regs);
+		pcr_array = mem_alloc0(
+			MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(tpm2d_pcr_t *), pcr_regs));
 		for (int i = 0; i < pcr_regs; ++i) {
 			pcr_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
 

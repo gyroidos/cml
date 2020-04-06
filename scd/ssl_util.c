@@ -544,7 +544,8 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	int iv_len = EVP_CIPHER_iv_length(type);
 	unsigned char *iv_buf = mem_alloc(iv_len);
 
-	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type));
+	unsigned char *out =
+		mem_alloc(ADD_WITH_OVERFLOW_CHECK(plain_key_len, EVP_CIPHER_block_size(type)));
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
 	if (!EVP_SealInit(ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1)) {
@@ -566,7 +567,10 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 
 	// TODO: really investigate why we need ek AND iv
 	// maybe use protobuf message to serialize
-	int len = sizeof(tmpkeylen) + tmpkeylen + iv_len + sizeof(outlen) + outlen;
+	size_t len = ADD_WITH_OVERFLOW_CHECK((size_t)sizeof(tmpkeylen), tmpkeylen);
+	len = ADD_WITH_OVERFLOW_CHECK(len, iv_len);
+	len = ADD_WITH_OVERFLOW_CHECK(len, sizeof(outlen));
+	len = ADD_WITH_OVERFLOW_CHECK(len, outlen);
 	unsigned char *p = mem_alloc(len);
 	*wrapped_key_len = len;
 	*wrapped_key = p;
@@ -637,7 +641,8 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 		return res;
 	}
 
-	unsigned char *out = mem_alloc(keylen + EVP_CIPHER_block_size(type));
+	unsigned char *out =
+		mem_alloc(ADD_WITH_OVERFLOW_CHECK(keylen, EVP_CIPHER_block_size(type)));
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
 	if (!EVP_OpenInit(ctx, type, tmpkey, tmpkeylen, iv_buf, pkey)) {

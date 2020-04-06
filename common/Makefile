@@ -79,7 +79,8 @@ logf.pb-c.c: logf.proto
 	protoc-c --c_out=. $<
 
 TEST_SUITES := \
-    mem.test.c
+    mem.test.c \
+    macro.test.c
 
 common.test: $(TEST_SUITES) munit.h munit.c common.test.c
 	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c

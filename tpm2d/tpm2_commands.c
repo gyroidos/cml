@@ -84,7 +84,10 @@ tss2_destroy(void)
 char *
 convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
-	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
+	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
+	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
+	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
+	char *hex = mem_alloc0(len);
 
 	for (int i = 0; i < length; ++i) {
 		// remember snprintf additionally writs a '0' byte
@@ -1180,7 +1183,8 @@ tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
 	// finally fill the output structure needed for protobuf
 	pcr = mem_alloc0(sizeof(tpm2d_pcr_t));
 	pcr->halg_id = in.pcrSelectionIn.pcrSelections[0].hash;
-	pcr->pcr_value = mem_alloc0(sizeof(uint8_t) * out.pcrValues.digests[0].t.size);
+	pcr->pcr_value = mem_alloc0(
+		MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(uint8_t), out.pcrValues.digests[0].t.size));
 	memcpy(pcr->pcr_value, out.pcrValues.digests[0].t.buffer, out.pcrValues.digests[0].t.size);
 	pcr->pcr_size = out.pcrValues.digests[0].t.size;
 	return pcr;
