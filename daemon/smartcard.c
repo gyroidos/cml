@@ -69,13 +69,8 @@ static char *
 bytes_to_string_new(unsigned char *data, size_t len)
 {
 	IF_NULL_RETVAL(data, NULL);
-	size_t len_chunk = 0;
-	if (__builtin_mul_overflow(2, len, &len_chunk)) {
-		FATAL("Integer overflow detected. Aborting to prevent heap buffer overflow.");
-	}
-	if (__builtin_add_overflow(len_chunk, 1, &len_chunk)) {
-		FATAL("Integer overflow detected. Aborting to prevent heap buffer overflow.");
-	}
+	size_t len_chunk = MUL_WITH_OVERFLOW_CHECK(len, (size_t)2);
+	len_chunk = ADD_WITH_OVERFLOW_CHECK(len_chunk, 1);
 
 	char *str = mem_alloc(len_chunk);
 	for (size_t i = 0; i < len; i++)

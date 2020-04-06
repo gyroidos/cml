@@ -47,7 +47,10 @@ struct attestation_resp_cb_data {
 static char *
 convert_bin_to_hex_new(const uint8_t *bin, int length)
 {
-	char *hex = mem_alloc0(sizeof(char) * length * 2 + 1);
+	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
+	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
+	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
+	char *hex = mem_alloc0(len);
 
 	for (int i = 0; i < length; ++i) {
 		// remember snprintf additionally writs a '0' byte

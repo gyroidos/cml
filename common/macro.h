@@ -767,6 +767,7 @@
 #define CAST_FUNCPTR_VOIDPTR (void *)
 #endif
 
+// math helpers
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
@@ -775,6 +776,78 @@
 #endif
 #ifndef ABS
 #define ABS(a) (((a) < 0) ? -(a) : (a))
+#endif
+
+/**
+ * Do normal addition, i.e. +, but abort if
+ * overflow is detected. This is helpful when we
+ * calculate with untrusted parameters and the result
+ * can (directly or indirectly) influence a security-sensitive
+ * variable (e.g. the size of a buffer).
+ *
+ * Example:
+ * int a = ADD_WITH_OVERFLOW_CHECK(10, 20); // results in 30
+ * int b = ADD_WITH_OVERFLOW_CHECK(100, MAX_INT); // aborts
+ **/
+#ifndef ADD_WITH_OVERFLOW_CHECK
+#define ADD_WITH_OVERFLOW_CHECK(x, y)                                                              \
+	__extension__({                                                                            \
+		typeof(x) _x = (x);                                                                \
+		typeof(y) _y = (y);                                                                \
+		typeof(x + y) _res;                                                                \
+		if (__builtin_add_overflow(_x, _y, &_res)) {                                       \
+			FATAL("Detected addition integer overflow.");                              \
+		}                                                                                  \
+		(_res);                                                                            \
+	})
+#endif
+
+/**
+ * Do normal subtraction, i.e. -, but abort if
+ * overflow is detected. This is helpful when we
+ * calculate with untrusted parameters and the result
+ * can (directly or indirectly) influence a security-sensitive
+ * variable (e.g. the size of a buffer).
+ *
+ * Example:
+ * int a = SUB_WITH_OVERFLOW_CHECK(10, 20); // results in -10
+ * int b = SUB_WITH_OVERFLOW_CHECK(MIN_INT, 1); // aborts
+ **/
+#ifndef SUB_WITH_OVERFLOW_CHECK
+#define SUB_WITH_OVERFLOW_CHECK(x, y)                                                              \
+	__extension__({                                                                            \
+		typeof(x) _x = (x);                                                                \
+		typeof(y) _y = (y);                                                                \
+		typeof(x - y) _res;                                                                \
+		if (__builtin_sub_overflow(_x, _y, &_res)) {                                       \
+			FATAL("Detected subtraction integer overflow.");                           \
+		}                                                                                  \
+		(_res);                                                                            \
+	})
+#endif
+
+/**
+ * Do normal multiplication, i.e. *, but abort if
+ * overflow is detected. This is helpful when we
+ * calculate with untrusted parameters and the result
+ * can (directly or indirectly) influence a security-sensitive
+ * variable (e.g. the size of a buffer).
+ *
+ * Example:
+ * int a = MUL_WITH_OVERFLOW_CHECK(10, 20); // results in 200
+ * int b = MUL_WITH_OVERFLOW_CHECK(MIN_INT, 2); // aborts
+ **/
+#ifndef MUL_WITH_OVERFLOW_CHECK
+#define MUL_WITH_OVERFLOW_CHECK(x, y)                                                              \
+	__extension__({                                                                            \
+		typeof(x) _x = (x);                                                                \
+		typeof(y) _y = (y);                                                                \
+		typeof(x * y) _res;                                                                \
+		if (__builtin_mul_overflow(_x, _y, &_res)) {                                       \
+			FATAL("Detected multiplication integer overflow.");                        \
+		}                                                                                  \
+		(_res);                                                                            \
+	})
 #endif
 
 #endif /* MACRO_H */

@@ -336,7 +336,7 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	IF_NULL_RETVAL(mount_data, -1);
 
 	int ret = 0;
-	char *token = strdup(mount_data);
+	char *token = mem_strdup(mount_data);
 	char *subvol = strtok(token, "=");
 	subvol = strtok(NULL, "=");
 	if (NULL == subvol) {
