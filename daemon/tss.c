@@ -55,7 +55,7 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 		return HASH_ALG_LEN__SHA384;
 	default:
 		ERROR("Unsupported value for tss_hash_algo_t: %d", algo);
-		return -1;
+		return 0;
 	}
 }
 
@@ -83,7 +83,10 @@ tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo
 	msg.ml_datahash.len = filehash_len;
 	msg.ml_datahash.data = filehash;
 	msg.has_ml_hashalg = true;
-	msg.ml_hashalg = tss_hash_algo_get_len_proto(hashalgo);
+
+	HashAlgLen hash_len = tss_hash_algo_get_len_proto(hashalgo);
+	IF_TRUE_RETURN(hash_len == 0);
+	msg.ml_hashalg = hash_len;
 
 	if (protobuf_send_message(tss_sock, (ProtobufCMessage *)&msg) < 0) {
 		WARN("Failed to send measurement to tpm2d");
