@@ -196,9 +196,9 @@ c_cgroups_dev_from_rule(const char *rule)
 	char *min_str = strtok_r(NULL, ":", &pointer);
 	ret[0] = -1;
 	ret[1] = -1;
-	if (strncmp("*", maj_str, 1))
+	if ((maj_str != NULL) && strncmp("*", maj_str, 1))
 		ret[0] = atoi(maj_str);
-	if (strncmp("*", min_str, 1))
+	if ((min_str != NULL) && strncmp("*", min_str, 1))
 		ret[1] = atoi(min_str);
 
 	mem_free(rule_cp);

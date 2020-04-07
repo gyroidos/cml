@@ -106,7 +106,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 		ERROR("Container start failed");
 
 		event_remove_io(io);
-		mem_free(io);
+		event_io_free(io);
 		mem_free(startdata);
 		return;
 	} else if (events & EVENT_IO_READ) {
@@ -115,10 +115,10 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
 
 		if (!msg) {
-			ERROR("Failed to receive message althoug EVENT_IO_READ was set. Aborting container start.");
+			ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting container start.");
 
 			event_remove_io(io);
-			mem_free(io);
+			event_io_free(io);
 			mem_free(startdata);
 			return;
 		}
@@ -241,7 +241,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 		if (done) {
 			event_remove_io(io);
-			mem_free(io);
+			event_io_free(io);
 			mem_free(startdata);
 		}
 	}
@@ -290,6 +290,12 @@ smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 		// use protobuf for communication with scd
 		TokenToDaemon *msg =
 			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+		if (!msg) {
+			ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard generic callback.");
+			event_remove_io(io);
+			event_io_free(io);
+			return;
+		}
 		switch (msg->code) {
 		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
 			WARN("Unlocking the token failed (locked till reboot).");
@@ -316,9 +322,8 @@ smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 			break;
 		}
 		protobuf_free_message((ProtobufCMessage *)msg);
-
 		event_remove_io(io);
-		mem_free(io);
+		event_io_free(io);
 	}
 }
 
@@ -506,6 +511,10 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 		// use protobuf for communication with scd
 		TokenToDaemon *msg =
 			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+		if (!msg) {
+			ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard crypto.");
+			goto cleanup;
+		}
 		switch (msg->code) {
 		// deal with CRYPTO_HASH_* cases
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK:
@@ -557,6 +566,7 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 		return; // do nothing (i.e. do not free resources) for other kinds of events
 	}
 
+cleanup:
 	event_remove_io(io);
 	event_io_free(io);
 	crypto_callback_task_free(task);

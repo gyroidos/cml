@@ -371,11 +371,14 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 		ERROR_ERRNO("Could not umount temporary mount of btrfs root volume %s!", dev);
 	}
 out:
-	unlink(tmp_mount);
+	if (tmp_mount)
+		unlink(tmp_mount);
 	if (subvol_path)
 		mem_free(subvol_path);
-	mem_free(tmp_mount);
-	mem_free(token);
+	if (tmp_mount)
+		mem_free(tmp_mount);
+	if (token)
+		mem_free(token);
 	return ret;
 }
 
