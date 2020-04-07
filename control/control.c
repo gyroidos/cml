@@ -711,7 +711,8 @@ exit:
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
 	for (size_t i = 0; i < msg.n_container_uuids; ++i)
 		mem_free(msg.container_uuids[i]);
-	mem_free(msg.container_uuids);
+	if (msg.container_uuids)
+		mem_free(msg.container_uuids);
 	if (uuid)
 		mem_free(uuid);
 
