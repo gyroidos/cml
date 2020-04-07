@@ -368,6 +368,11 @@ do_exec(c_run_t *run)
 		goto error;
 	}
 
+	if (NULL == exec_args) {
+		ERROR("No command was specified to execute. Exiting...");
+		exit(EXIT_FAILURE);
+	}
+
 	int ret = execve(run->cmd, exec_args, NULL);
 
 	mem_free_array((void *)exec_args, run->argc);
