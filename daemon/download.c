@@ -124,9 +124,19 @@ download_start(download_t *dl)
 		ERROR_ERRNO("Could not fork wget to download image %s", dl->file);
 		return -1;
 	case 0: {
-		execvp(argv[0], argv);
-		ERROR_ERRNO("Could not exec %s", argv[0]);
-		_exit(-1);
+		if (strlen(dl->url) > 7 && !strncmp(dl->url, "file://", 7)) {
+			char *local_dl_src = dl->url + 7;
+			INFO("Copying file from %s -> %s", local_dl_src, dl->file);
+			int ret =
+				file_copy(local_dl_src, dl->file, file_size(local_dl_src), 512, 0);
+			if (ret < 0)
+				ERROR("Failed retrieving '%s'!", dl->url);
+			_exit(ret);
+		} else {
+			execvp(argv[0], argv);
+			ERROR_ERRNO("Could not exec %s", argv[0]);
+			_exit(-1);
+		}
 	}
 	default:
 		DEBUG("Started wget with PID %d", pid);
