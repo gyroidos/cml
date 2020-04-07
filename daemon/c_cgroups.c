@@ -36,7 +36,10 @@
 #include "common/event.h"
 #include "common/dir.h"
 
+#include <limits.h>
+#include <errno.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -184,23 +187,46 @@ static int *
 c_cgroups_dev_from_rule(const char *rule)
 {
 	int *ret = mem_new0(int, 2);
+	ret[0] = -1;
+	ret[1] = -1;
+
 	char *rule_cp = mem_strdup(rule);
 	char *pointer;
-	UNUSED char *type;
+	char *type;
 	char *dev;
 
 	type = strtok_r(rule_cp, " ", &pointer);
-	dev = strtok_r(NULL, " ", &pointer);
-	pointer = NULL;
-	char *maj_str = strtok_r(dev, ":", &pointer);
-	char *min_str = strtok_r(NULL, ":", &pointer);
-	ret[0] = -1;
-	ret[1] = -1;
-	if ((maj_str != NULL) && strncmp("*", maj_str, 1))
-		ret[0] = atoi(maj_str);
-	if ((min_str != NULL) && strncmp("*", min_str, 1))
-		ret[1] = atoi(min_str);
+	IF_NULL_GOTO_TRACE(type, out);
 
+	dev = strtok_r(NULL, " ", &pointer);
+	IF_NULL_GOTO_TRACE(dev, out);
+
+	pointer = NULL;
+
+	char *maj_str = strtok_r(dev, ":", &pointer);
+	IF_NULL_GOTO_TRACE(maj_str, out);
+
+	char *min_str = strtok_r(NULL, ":", &pointer);
+	IF_NULL_GOTO_TRACE(min_str, out);
+
+	if (strncmp("*", maj_str, 1)) {
+		errno = 0;
+		long int parsed_int = strtol(maj_str, NULL, 10);
+		IF_TRUE_GOTO_TRACE(errno == ERANGE, out);
+		IF_TRUE_GOTO_TRACE(parsed_int < INT_MIN, out);
+		IF_TRUE_GOTO_TRACE(parsed_int > INT_MAX, out);
+		ret[0] = (int)parsed_int;
+	}
+	if (strncmp("*", min_str, 1)) {
+		errno = 0;
+		long int parsed_int = strtol(min_str, NULL, 10);
+		IF_TRUE_GOTO_TRACE(errno == ERANGE, out);
+		IF_TRUE_GOTO_TRACE(parsed_int < INT_MIN, out);
+		IF_TRUE_GOTO_TRACE(parsed_int > INT_MAX, out);
+		ret[1] = (int)parsed_int;
+	}
+
+out:
 	mem_free(rule_cp);
 	return ret;
 }
