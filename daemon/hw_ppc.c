@@ -133,9 +133,9 @@ hardware_get_random(unsigned char *buf, size_t len)
 	const char *rnd = "/dev/hwrng";
 	const char *sw = "/dev/random";
 
-	size_t read = file_read(rnd, (char *)buf, len);
-	if (read == len) {
-		return len;
+	int bytes_read = file_read(rnd, (char *)buf, len);
+	if (bytes_read > 0 && (size_t)bytes_read == len) {
+		return bytes_read;
 	} else {
 		if (!file_exists(sw)) {
 			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!",

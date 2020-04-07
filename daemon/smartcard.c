@@ -158,6 +158,10 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				      container_get_name(startdata->container), keyfile);
 				unsigned char key[TOKEN_MAX_WRAPPED_KEY_LEN];
 				int keylen = file_read(keyfile, (char *)key, sizeof(key));
+				if (keylen != sizeof(key)) {
+					ERROR("Failed to read key from file for container!");
+					break;
+				}
 				// unwrap via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 				out.code = DAEMON_TO_TOKEN__CODE__UNWRAP_KEY;
