@@ -69,6 +69,7 @@ static char *
 bytes_to_string_new(unsigned char *data, size_t len)
 {
 	IF_NULL_RETVAL(data, NULL);
+	IF_TRUE_RETVAL(len == 0, NULL);
 	size_t len_chunk = MUL_WITH_OVERFLOW_CHECK(len, (size_t)2);
 	len_chunk = ADD_WITH_OVERFLOW_CHECK(len_chunk, 1);
 
