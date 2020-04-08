@@ -115,17 +115,18 @@ mem_printf(const char *fmt, ...)
 
 /**
  * Frees the allocated memory.
- * This is a wrapper for free(3) which crashes if we try
- * to free a NULL pointer. If we seccessfully free a pointer,
+ * This is a wrapper for free(3).
+ * If we seccessfully free a pointer,
  * the wrapper sets it to NULL to prevent use-after-free,
  * double-free and similar exploitable issues.
  * @param mem Memory pointer to be freed.
  */
 #define mem_free(ptr)                                                                              \
 	do {                                                                                       \
-		ASSERT(ptr);                                                                       \
-		free(ptr);                                                                         \
-		ptr = NULL;                                                                        \
+		if (ptr) {                                                                         \
+			free(ptr);                                                                 \
+			ptr = NULL;                                                                \
+		}                                                                                  \
 	} while (0)
 
 /**
