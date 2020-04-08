@@ -22,9 +22,9 @@
 #
 
 CC ?= gcc
-DEVELOPMENT_BUILD ?= y
-AGGRESSIVE_WARNINGS ?= n
-SANITIZERS ?= n
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -pedantic -O2
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -DDEBUG_BUILD
 
 TRUSTME_HARDWARE := x86
 
@@ -51,7 +51,7 @@ ifeq ($(SANITIZERS),y)
     LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
 endif
 
-LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
+LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil -lctccid -lcardservice
 
 .PHONY: all
 all: cmld

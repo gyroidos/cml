@@ -30,6 +30,11 @@
 
 #include "container.h"
 
+#ifdef LOGF_MIN_PRIO
+#undef LOGF_MIN_PRIO
+#endif
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_WARN
+
 #include "common/event.h"
 #include "common/fd.h"
 #include "common/macro.h"

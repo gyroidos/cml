@@ -57,6 +57,8 @@
 /* Cipher for device CSR private key encryption */
 #define CIPHER_PW_CSR SN_aes_256_cbc
 #define CIPHER_KEY_WRAP SN_aes_256_cbc
+/* Cipher for key wrapping with symmetric key */
+#define CIPHER_KEY_WRAP_SKEY SN_id_aes256_wrap
 /* RSA key size when keypair is created */
 #define RSA_KEY_SIZE_MKKEYP 4096
 
@@ -669,6 +671,139 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 cleanup:
 	EVP_CIPHER_CTX_free(ctx);
 	return res;
+}
+
+int
+ssl_wrap_key_sym(const unsigned char *kek, const unsigned char *plain_key, size_t plain_key_len,
+	     unsigned char **wrapped_key, int *wrapped_key_len)
+{
+	ASSERT(kek);
+	ASSERT(plain_key);
+	ASSERT(wrapped_key);
+	ASSERT(wrapped_key_len);
+
+	int res = -1;
+	int tmplen = 0;
+	int outlen = 0;
+	const EVP_CIPHER *type;
+
+	if (!(type = EVP_get_cipherbyname(CIPHER_KEY_WRAP_SKEY))) {
+		ERROR("Error setting up cipher for key wrap");
+		return res;
+	}
+
+	EVP_CIPHER_CTX *ctx;
+	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
+		ERROR("Allocating EVP cipher failed!");
+		return res;
+	}
+
+	/* see https://mta.openssl.org/pipermail/openssl-users/2018-May/007998.html */
+	EVP_CIPHER_CTX_set_flags(ctx, EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
+
+	/* TODO: set proper iv */
+	DEBUG("IV length used: %d", EVP_CIPHER_iv_length(type));
+
+	/**
+	 * static default IV as defined in RFC 3394 
+	 * TODO: investigate whether a random IV which is passed along with the
+	 * 			wrapped key is possible and desirable
+	 */
+	unsigned char iv[] = {0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6};
+
+	/* TODO: investigate whether more space may be required */ 
+	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type));
+
+   if(1 != EVP_EncryptInit_ex(ctx, type, NULL, kek, iv)) {
+        ERROR("EVP_EncryptInit_ex failed");
+		goto cleanup;
+	}
+
+   if(1 != EVP_EncryptUpdate(ctx, out, &tmplen, plain_key, plain_key_len)) {
+        ERROR("EVP_EncryptUpdate failed");
+		goto cleanup;
+	}
+	outlen = tmplen;
+
+   if(1 != EVP_EncryptFinal_ex(ctx, out + tmplen, &tmplen)) {
+		ERROR("EVP_EncryptFinal_ex failed");
+		goto cleanup;
+	}
+    outlen += tmplen;
+
+	*wrapped_key_len = outlen;
+	*wrapped_key = out;
+
+	res = 0;
+cleanup:
+    EVP_CIPHER_CTX_free(ctx);
+	return res;
+}
+
+
+int
+ssl_unwrap_key_sym(const unsigned char *kek, const unsigned char *wrapped_key, size_t wrapped_key_len,
+	       unsigned char **plain_key, int *plain_key_len)
+{
+	ASSERT(kek);
+	ASSERT(plain_key);
+	ASSERT(wrapped_key);
+	ASSERT(wrapped_key_len);
+
+	int res = -1;
+	int tmplen = 0;
+	int outlen = 0;
+	const EVP_CIPHER *type;
+
+	if (!(type = EVP_get_cipherbyname(CIPHER_KEY_WRAP_SKEY))) {
+		ERROR("Error setting up cipher for key wrap");
+		return res;
+	}
+
+	EVP_CIPHER_CTX *ctx;
+	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
+		ERROR("Allocating EVP cipher failed!");
+		return res;
+	}
+
+	/* see https://mta.openssl.org/pipermail/openssl-users/2018-May/007998.html */
+	EVP_CIPHER_CTX_set_flags(ctx, EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
+
+	/**
+	 * static default IV as defined in RFC 3394 
+	 * TODO: investigate whether a random IV which is passed along with the
+	 * 			wrapped key is desirable and possible
+	 */
+	unsigned char iv[] = {0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6};
+
+	/* TODO: investigate whether more space may be required */ 
+	unsigned char *out = mem_alloc(wrapped_key_len + EVP_CIPHER_block_size(type));
+
+   if(1 != EVP_DecryptInit_ex(ctx, type, NULL, kek, iv)) {
+        ERROR("EVP_DecryptInit_ex failed");
+		goto cleanup;
+	}
+
+   if(1 != EVP_DecryptUpdate(ctx, out, &tmplen, wrapped_key, wrapped_key_len)) {
+        ERROR("EVP_DecryptUpdate failed");
+		goto cleanup;
+	}
+	outlen = tmplen;
+
+   if(1 != EVP_DecryptFinal_ex(ctx, out + tmplen, &tmplen)) {
+		ERROR("EVP_DecryptFinal_ex failed");
+		goto cleanup;
+	}
+    outlen += tmplen;
+
+	*plain_key_len = outlen;
+	*plain_key = out;
+
+	res = 0;
+cleanup:
+    EVP_CIPHER_CTX_free(ctx);
+	return res;
+
 }
 
 int

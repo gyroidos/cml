@@ -29,6 +29,11 @@
 #define _GNU_SOURCE
 #endif
 
+#ifdef LOGF_MIN_PRIO
+#undef LOGF_MIN_PRIO
+#endif
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_WARN
+
 #include "c_vol.h"
 
 #include "common/macro.h"

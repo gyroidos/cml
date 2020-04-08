@@ -23,6 +23,11 @@
 
 #include "c_user.h"
 
+#ifdef LOGF_MIN_PRIO
+#undef LOGF_MIN_PRIO
+#endif
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_WARN
+
 #define _GNU_SOURCE
 #include <fcntl.h>
 #include <grp.h>

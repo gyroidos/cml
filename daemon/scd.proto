@@ -34,6 +34,15 @@ enum HashAlgo {
 	SHA512 = 3;
 }
 
+/**
+ * Supported token types.
+ */
+enum TokenType {
+	NONE = 1;
+	DEVICE = 2;
+	USB = 3;
+}
+
 
 message DaemonToToken {
 	enum Code {
@@ -59,8 +68,16 @@ message DaemonToToken {
 
 	required Code code = 1;
 
-	optional string token_pin = 2;		// for unlocking and changeing of the token
-	optional string token_newpin = 3;	// for changeing pin of the token
+	optional string token_pin = 2;		// for unlocking and changing of the token
+	optional string token_newpin = 3;	// for changing pin of the token
+
+	// for identifying the type of the token 
+	optional TokenType token_type = 4 [default = DEVICE];
+
+	optional string container_uuid = 5;	// can be used as input for key wrapping
+	
+	/* TODO: must be implemented! */
+	optional bytes pairing_secret = 6; // to bind the token to the device
 
 	optional bytes unwrapped_key = 10;	// for wrapping a key
 	optional bytes wrapped_key = 11;	// for (un)wrapping a key

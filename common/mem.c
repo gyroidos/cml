@@ -83,6 +83,16 @@ mem_strndup(const char *str, size_t len)
 	return p;
 }
 
+unsigned char *
+mem_memcpy(const unsigned char *mem, size_t size)
+{	
+	ASSERT(mem);
+	unsigned char *p = mem_alloc0(size);
+	ASSERT(p);
+	memcpy(p, mem, size);
+	return p;
+}
+
 char *
 mem_vprintf(const char *fmt, va_list ap)
 {

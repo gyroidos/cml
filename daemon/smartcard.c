@@ -32,6 +32,7 @@
 #include "hardware.h"
 #include "control.h"
 
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/event.h"
 #include "common/logf.h"
@@ -45,14 +46,24 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sc-hsm-cardservice.h>
+#include <ctapi.h>
 
 // clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
 // clang-format on
 
 // TODO: centrally define key length in container or other module?
-#define TOKEN_KEY_LEN 64
+#define TOKEN_KEY_LEN 64 // actual encryption key
 #define TOKEN_MAX_WRAPPED_KEY_LEN 4096
+
+/*
+ * This is currently the Byte representation of the string "ABCD" (without trailing
+ * NULL Byte) to keep compatibility with the sc-hsm key-gen example.
+ * 
+ * TODO: should be bound securely to platform; e.g. using TPM
+ */
+const unsigned char PAIRING_SECRET[] = {0x41,0x42,0x43,0x44};
 
 struct smartcard {
 	int sock;
@@ -79,6 +90,20 @@ bytes_to_string_new(unsigned char *data, size_t len)
 	return str;
 }
 
+static TokenType
+smartcard_tokentype_to_proto(smartcard_tokentype_t tokentype) {
+	switch (tokentype) {
+		case NONE:
+			return TOKEN_TYPE__NONE;
+		case DEVICE:
+			return TOKEN_TYPE__DEVICE;
+		case USB:
+			return TOKEN_TYPE__USB;
+		default:
+			FATAL("Invalid smartcard_tokentype_t value : %d", tokentype);
+	}
+}
+
 static void
 smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned char *key, int keylen)
 {
@@ -87,7 +112,7 @@ smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned ch
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
 	char *ascii_key = bytes_to_string_new(key, keylen);
 	//DEBUG("SCD: Container key (len=%d): %s", keylen, ascii_key);
-	DEBUG("SCD: %s: Starting...", container_get_name(startdata->container));
+	DEBUG("SCD:Container  %s: Starting...", container_get_name(startdata->container));
 	if (-1 == cmld_container_start(startdata->container, ascii_key))
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
 	else
@@ -101,6 +126,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 	smartcard_startdata_t *startdata = data;
 	int resp_fd = control_get_client_sock(startdata->control);
 	bool done = false;
+
+	TRACE("smartcard_cb_start_container");
 
 	if (events & EVENT_IO_EXCEPT) {
 		ERROR("Container start failed");
@@ -158,7 +185,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				      container_get_name(startdata->container), keyfile);
 				unsigned char key[TOKEN_MAX_WRAPPED_KEY_LEN];
 				int keylen = file_read(keyfile, (char *)key, sizeof(key));
-				if (keylen != sizeof(key)) {
+				DEBUG("Length of existing key: %d", keylen);
+				if (keylen < 0) {
 					ERROR("Failed to read key from file for container!");
 					break;
 				}
@@ -168,8 +196,28 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				out.has_wrapped_key = true;
 				out.wrapped_key.len = keylen;
 				out.wrapped_key.data = key;
+				out.container_uuid = mem_strdup(uuid_string(container_get_uuid(
+								startdata->container)));
+
+				out.has_token_type = true;
+				switch (container_get_token_type(startdata->container)) {
+					case CONTAINER_TOKEN_TYPE_DEVICE: {
+					DEBUG("Using token type DEVICE");
+					out.token_type = smartcard_tokentype_to_proto(DEVICE);
+				} break;
+				case CONTAINER_TOKEN_TYPE_USB: {
+					DEBUG("Using token type USB");
+					out.token_type = smartcard_tokentype_to_proto(USB);
+				} break;
+				default: {}
+					ERROR("Token type not supported!");
+					return;
+				}
+
 				protobuf_send_message(startdata->smartcard->sock,
 						      (ProtobufCMessage *)&out);
+
+				mem_free(out.container_uuid);
 			} else {
 				DEBUG("No previous key found for container %s. Generating new key.",
 				      container_get_name(startdata->container));
@@ -195,8 +243,28 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				out.has_unwrapped_key = true;
 				out.unwrapped_key.len = keylen;
 				out.unwrapped_key.data = key;
+				out.container_uuid = mem_strdup(uuid_string(container_get_uuid(
+								startdata->container)));
+
+				out.has_token_type = true;
+				switch (container_get_token_type(startdata->container)) {
+					case CONTAINER_TOKEN_TYPE_DEVICE: {
+					DEBUG("Using token type DEVICE");
+					out.token_type = smartcard_tokentype_to_proto(DEVICE);
+				} break;
+				case CONTAINER_TOKEN_TYPE_USB: {
+					DEBUG("Using token type USB");
+					out.token_type = smartcard_tokentype_to_proto(USB);
+				} break;
+				default: {}
+					ERROR("Token type not supported!");
+					return;
+				}
+
 				protobuf_send_message(startdata->smartcard->sock,
 						      (ProtobufCMessage *)&out);
+
+				mem_free(out.container_uuid);
 			}
 			mem_free(keyfile);
 		} break;
@@ -204,10 +272,26 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			// lock token via scd
 			DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 			out.code = DAEMON_TO_TOKEN__CODE__LOCK;
+			out.has_token_type = true;
+			switch (container_get_token_type(startdata->container)) {
+					case CONTAINER_TOKEN_TYPE_DEVICE: {
+					DEBUG("Using token type DEVICE");
+					out.token_type = smartcard_tokentype_to_proto(DEVICE);
+				} break;
+				case CONTAINER_TOKEN_TYPE_USB: {
+					DEBUG("Using token type USB");
+					out.token_type = smartcard_tokentype_to_proto(USB);
+				} break;
+				default: {}
+					ERROR("Token type not supported!");
+					return;
+			}
 			protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
 			// start container
 			if (!msg->has_unwrapped_key) {
 				WARN("Expected derived key, but none was returned!");
+				/* TODO: should this be communicated to the controller? */
+				/* control seems to wait indefinitely if not */
 				break;
 			}
 			smartcard_start_container_internal(startdata, msg->unwrapped_key.data,
@@ -217,6 +301,20 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			// lock token via scd
 			DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 			out.code = DAEMON_TO_TOKEN__CODE__LOCK;
+			out.has_token_type = true;
+			switch (container_get_token_type(startdata->container)) {
+					case CONTAINER_TOKEN_TYPE_DEVICE: {
+					DEBUG("Using token type DEVICE");
+					out.token_type = smartcard_tokentype_to_proto(DEVICE);
+				} break;
+				case CONTAINER_TOKEN_TYPE_USB: {
+					DEBUG("Using token type USB");
+					out.token_type = smartcard_tokentype_to_proto(USB);
+				} break;
+				default: {}
+					ERROR("Token type not supported!");
+					return;
+			}
 			protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
 			// save wrapped key
 			if (!msg->has_wrapped_key) {
@@ -264,44 +362,58 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	startdata->container = container;
 	startdata->control = control;
 
+	int pw_size = strlen(passwd);
+	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
+	// register callback handler
+
+	// TODO register timer if socket does not respond
+	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
+					smartcard_cb_start_container, startdata);
+	event_add_io(event);
+	DEBUG("SCD: Registered start container callback for key from scd");
+
+	// unlock token
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__UNLOCK;
+	out.token_pin = mem_strdup(passwd);
+
+	/* TODO: properly implement pairing secret */
+	out.has_pairing_secret = true;
+	out.pairing_secret.len = sizeof(PAIRING_SECRET);
+	out.pairing_secret.data = mem_memcpy(PAIRING_SECRET, sizeof(PAIRING_SECRET));
 
 	switch (container_get_token_type(container)) {
-	case CONTAINER_TOKEN_TYPE_DEVICE: {
-		int pw_size = strlen(passwd);
-		DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
-		// register callback handler
+		case CONTAINER_TOKEN_TYPE_DEVICE: {
+			TRACE("Using token type DEVICE");
+			out.has_token_type = true;
+			out.token_type = smartcard_tokentype_to_proto(DEVICE);
+		} break;
 
-		// TODO register timer if socket does not respond
-		event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
-						 smartcard_cb_start_container, startdata);
-		event_add_io(event);
-		DEBUG("SCD: Registered start container callback for key from scd");
-		// unlock token
-		DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-		out.code = DAEMON_TO_TOKEN__CODE__UNLOCK;
-		out.token_pin = mem_strdup(passwd);
-		protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-		mem_free(out.token_pin);
-	} break;
-	case CONTAINER_TOKEN_TYPE_USB: {
-		int resp_fd = control_get_client_sock(startdata->control);
-		// TODO implement
-		key = usb_token_get_key(passwd);
-		if (NULL == key) {
-			ERROR("Unlocking the token failed.");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED,
-					     resp_fd);
-			mem_free(start_data);
+		case CONTAINER_TOKEN_TYPE_USB: {
+			TRACE("Using token type USB");
+			out.has_token_type = true;
+			out.token_type = smartcard_tokentype_to_proto(USB);
+		} break;
+
+		default: {
+			ERROR("Token type not supported!");
+			mem_free(startdata);
 			return -1;
 		}
-		smartcard_start_container_internal(startdata, key, keylen);
-		mem_free(startdata);
-	} break;
-	default: {
-		ERROR("Token type not supported!");
-		mem_free(startdata);
-		return -1;
 	}
+
+	DEBUG("Smartcard token type: %d", out.token_type);
+
+	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
+		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)&out, NULL);
+		TRACE("Sending DaemonToToken message:\n%s", msg_text ? msg_text : "NULL");
+		if (msg_text)
+			free(msg_text);
+	}
+
+	protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+	mem_free(out.token_pin);
+	mem_free(out.pairing_secret.data);
 
 	return 0;
 }

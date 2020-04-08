@@ -35,6 +35,12 @@ typedef struct smartcard smartcard_t;
 smartcard_t *
 smartcard_new(const char *path);
 
+/**
+ * Choice of supported token types.
+ * Must be kept in sync with scd.proto
+ */
+typedef enum smartcard_tokentype { NONE, DEVICE, USB } smartcard_tokentype_t;
+
 int
 smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 				  container_t *container, const char *passwd);
