@@ -21,14 +21,37 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
-
 CC ?= gcc
-LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -pedantic -O2
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
-LOCAL_CFLAGS += -DDEBUG_BUILD
-LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
+DEVELOPMENT_BUILD ?= y
+AGGRESSIVE_WARNINGS ?= n
+SANITIZERS ?= n
 
 TRUSTME_HARDWARE := x86
+
+LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -pedantic -O2
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+ifeq ($(CC),gcc)
+    # clang does not support stack clash protection yet
+    LOCAL_CFLAGS += -fstack-clash-protection
+endif
+ifeq ($(DEVELOPMENT_BUILD),y)
+    # what are we building? development or production code?
+    LOCAL_CFLAGS += -DDEBUG_BUILD
+endif
+ifeq ($(AGGRESSIVE_WARNINGS),y)
+    # on CI (and also for well-behaved developers) warnings should be
+    # converted to errors; this helps us redistribute the code base without any pain;
+    # pure builds are better than polluted builds. 
+    LOCAL_CFLAGS += -Werror
+endif
+ifeq ($(SANITIZERS),y)
+    # if requested, we enable sanitization for easier debugging 
+    # this requires libasan libasan-static libubsan libubsan-static
+    # to be installed on the build host
+    LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
+endif
+
+LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
 
 .PHONY: all
 all: cmld
@@ -92,15 +115,16 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	protoc-c --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 
-${PROTO_SRC}: protobuf
+$(PROTO_SRC): protobuf
 
 libcommon:
 	$(MAKE) -C common libcommon
 
-cmld: libcommon ${PROTO_SRC} ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} ${PROTO_SRC} ${LDLIBS} -o cmld
+cmld: libcommon $(PROTO_SRC) $(SRC_FILES)
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) $(LDLIBS) -o cmld
 
 
 .PHONY: clean
 clean:
 	rm -f cmld *.o *.pb-c.*
+	$(MAKE) -C common clean
