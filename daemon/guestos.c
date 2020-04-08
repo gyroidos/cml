@@ -692,7 +692,9 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 		     guestos_get_name(os));
 		return;
 	}
-	if ((!cmld_is_wifi_active()) && (!guestos_config_get_update_base_url(os->cfg))) {
+
+	if (strncmp(update_base_url, "file://", 7) && (!cmld_is_wifi_active()) &&
+	    (!guestos_config_get_update_base_url(os->cfg))) {
 		INFO("Wifi is not active => not downloading images for guestos %s",
 		     guestos_get_name(os));
 		return;
