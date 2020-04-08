@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -77,11 +77,12 @@ guestos_mgr_delete(guestos_t *os);
  * @param siglen    length of the given GuestOS config signature in the buffer
  * @param cert	    buffer with the software signing certificate
  * @param certlen   length of the given software signing cert in the buffer
+ * @param resp_fd   fd to control client, used to signal status of installation
  * @return -1 on error, 0 if installation was started (does NOT imply successful completion!)
  */
 int
 guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen,
-			unsigned char *cert, size_t certlen);
+			unsigned char *cert, size_t certlen, int resp_fd);
 
 /**
  * Downloads (if necessary) the images for the latest versions of the installed GuestOSes

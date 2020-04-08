@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -170,8 +170,10 @@ typedef void (*guestos_images_download_complete_cb_t)(bool complete, unsigned in
  * @param os the GuestOS instance whose images to verify and download
  * @param cb callback to deliver the result back to the caller (can be NULL if result is irrelevant)
  * @param data data parameter passed to the callback
+ * @return true if image download is ongoing
+ *
  */
-void
+bool
 guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb, void *data);
 
 /**

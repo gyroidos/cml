@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2019 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -475,6 +475,23 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_SUCCESSFUL;
 		break;
 
+	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_STARTED;
+		break;
+
+	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_WAITING:
+		out.response =
+			DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_WAITING;
+		break;
+
+	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_COMPLETED;
+		break;
+
+	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_FAILED;
+		break;
+
 	case CONTROL_RESPONSE_CMD_UNSUPPORTED:
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED;
 		break;
@@ -522,7 +539,7 @@ control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDaemon *msg, in
  * Used in both priv and unpriv control handlers.
  */
 static void
-control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED int fd)
+control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, int fd)
 {
 	if (!msg->has_guestos_config_file)
 		WARN("PUSH_GUESTOS_CONFIG without config file");
@@ -535,7 +552,8 @@ control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, UNUSED in
 					msg->guestos_config_signature.data,
 					msg->guestos_config_signature.len,
 					msg->guestos_config_certificate.data,
-					msg->guestos_config_certificate.len);
+					msg->guestos_config_certificate.len,
+					fd);
 	}
 }
 
