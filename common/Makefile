@@ -24,6 +24,8 @@
 
 CC ?= gcc
 DEVELOPMENT_BUILD ?= y
+AGGRESSIVE_WARNINGS ?= n
+SANITIZERS ?= n
 
 LOCAL_CFLAGS += -I../include -pedantic -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
 LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -fPIC
@@ -32,11 +34,20 @@ ifeq ($(CC),gcc)
     LOCAL_CFLAGS += -fstack-clash-protection
 endif
 ifeq ($(DEVELOPMENT_BUILD),y)
-    # When developing we want to have a pure, warning-free build;
-    # Therefore we catch all warnings hard with -Werror
-    # Also, we enable sanitization for easier debugging
-    LOCAL_CFLAGS += -DDEBUG_BUILD -Werror
-    #LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
+    # what are we building? development or production code?
+    LOCAL_CFLAGS += -DDEBUG_BUILD
+endif
+ifeq ($(AGGRESSIVE_WARNINGS),y)
+    # on CI (and also for well-behaved developers) warnings should be
+    # converted to errors; this helps us redistribute the code base without any pain;
+    # pure builds are better than polluted builds. 
+    LOCAL_CFLAGS += -Werror
+endif
+ifeq ($(SANITIZERS),y)
+    # if requested, we enable sanitization for easier debugging 
+    # this requires libasan libasan-static libubsan libubsan-static
+    # to be installed on the build host
+    LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
 endif
 
 .PHONY: all

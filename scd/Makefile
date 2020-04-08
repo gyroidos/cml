@@ -21,9 +21,35 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
+CC ?= gcc
+DEVELOPMENT_BUILD ?= y
+AGGRESSIVE_WARNINGS ?= n
+SANITIZERS ?= n
+
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
-LOCAL_CFLAGS += -DDEBUG_BUILD -DTPM_POSIX
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -DTPM_POSIX
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+ifeq ($(CC),gcc)
+    # clang does not support stack clash protection yet
+    LOCAL_CFLAGS += -fstack-clash-protection
+endif
+ifeq ($(DEVELOPMENT_BUILD),y)
+    # what are we building? development or production code?
+    LOCAL_CFLAGS += -DDEBUG_BUILD
+endif
+ifeq ($(AGGRESSIVE_WARNINGS),y)
+    # on CI (and also for well-behaved developers) warnings should be
+    # converted to errors; this helps us redistribute the code base without any pain;
+    # pure builds are better than polluted builds. 
+    LOCAL_CFLAGS += -Werror
+endif
+ifeq ($(SANITIZERS),y)
+    # if requested, we enable sanitization for easier debugging 
+    # this requires libasan libasan-static libubsan libubsan-static
+    # to be installed on the build host
+    LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
+endif
+
 
 SRC_FILES := \
 	common/list.c \
@@ -54,15 +80,16 @@ protobuf: device.proto scd.proto
 	protoc-c --c_out=. scd.proto
 	protoc-c --c_out=. device.proto
 
-${SRC_FILES}: protobuf
+$(SRC_FILES): protobuf
 
 libcommon:
 	$(MAKE) -C common libcommon
 
-scd: libcommon ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -o scd
+scd: libcommon $(SRC_FILES)
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -o scd
 
 
 .PHONY: clean
 clean:
 	rm -f scd *.o *.pb-c.*
+	$(MAKE) -C common clean

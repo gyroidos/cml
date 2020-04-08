@@ -21,13 +21,39 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
+CC ?= gcc
+DEVELOPMENT_BUILD ?= y
+AGGRESSIVE_WARNINGS ?= n
+SANITIZERS ?= n
+
 tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
 	-DTPM_POSIX
 
 LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon $(tss_cflags) -O2
-LOCAL_CFLAGS += -Wextra -Wcast-align -Wformat -Wformat-security -Werror -fstack-protector-all -fstack-clash-protection -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 #LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
+ifeq ($(CC),gcc)
+    # clang does not support stack clash protection yet
+    LOCAL_CFLAGS += -fstack-clash-protection
+endif
+ifeq ($(DEVELOPMENT_BUILD),y)
+    # what are we building? development or production code?
+    LOCAL_CFLAGS += -DDEBUG_BUILD
+endif
+ifeq ($(AGGRESSIVE_WARNINGS),y)
+    # on CI (and also for well-behaved developers) warnings should be
+    # converted to errors; this helps us redistribute the code base without any pain;
+    # pure builds are better than polluted builds. 
+    LOCAL_CFLAGS += -Werror
+endif
+ifeq ($(SANITIZERS),y)
+    # if requested, we enable sanitization for easier debugging 
+    # this requires libasan libasan-static libubsan libubsan-static
+    # to be installed on the build host
+    LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
+endif
+
 
 SRC_FILES := \
 	common/dir.c \
@@ -66,3 +92,4 @@ tpm2d: libcommon $(SRC_FILES)
 .PHONY: clean
 clean:
 	rm -f tpm2d *.o *.pb-c.*
+	$(MAKE) -C common clean
