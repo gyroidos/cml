@@ -224,18 +224,29 @@ guestos_mgr_delete(guestos_t *os)
 /******************************************************************************/
 
 static void
-download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)
+download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *data)
 {
-	IF_NULL_RETURN_ERROR(os);
+	int *resp_fd = data;
+	ASSERT(resp_fd);
+
+	control_message_t resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED;
+
+	IF_NULL_GOTO_ERROR(os, out);
 
 	if (complete && count > 0) {
-		if (guestos_images_flash(os) < 0)
+		if (guestos_images_flash(os) < 0) {
 			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
-		else
+		} else {
 			INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
+			resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED;
+		}
 	} else {
 		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FAILED);
 	}
+out:
+	if (control_send_message(resp, *resp_fd) < 0)
+		WARN("Could not send response to fd=%d", *resp_fd);
+	mem_free(resp_fd);
 }
 
 /**
@@ -243,20 +254,30 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED vo
  * @param name name of the GuestOS
  */
 static void
-guestos_mgr_download_latest(const char *name)
+guestos_mgr_download_latest(const char *name, int resp_fd)
 {
-	IF_NULL_RETURN(name);
+	control_message_t resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED;
+	IF_NULL_GOTO(name, out);
 
 	guestos_t *os = guestos_mgr_get_latest_by_name(name, false);
-	IF_NULL_RETURN_WARN(os);
-	if (!guestos_images_are_complete(os, false))
-		guestos_images_download(os, download_complete_cb, NULL);
-	else {
-		if (guestos_images_flash(os) < 0)
-			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+	IF_NULL_GOTO_WARN(os, out);
+	if (!guestos_images_are_complete(os, false)) {
+		int *cb_resp_fd = mem_new(int, 1);
+		*cb_resp_fd = resp_fd;
+		if (!guestos_images_download(os, download_complete_cb, cb_resp_fd))
+			resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_WAITING;
 		else
-			INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
+			return;
 	}
+	if (guestos_images_flash(os) < 0) {
+		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+	} else {
+		INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
+		resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED;
+	}
+out:
+	if (resp_fd > 0 && control_send_message(resp, resp_fd) < 0)
+		WARN("Could not send response to fd=%d", resp_fd);
 }
 
 void
@@ -268,7 +289,7 @@ guestos_mgr_update_images(void)
 		guestos_t *os = guestos_mgr_get_guestos_by_index(i);
 		const char *os_name = guestos_get_name(os);
 		if (guestos_mgr_is_guestos_used_by_containers(os_name)) {
-			guestos_mgr_download_latest(os_name);
+			guestos_mgr_download_latest(os_name, -1);
 		}
 	}
 }
@@ -295,9 +316,11 @@ static void
 push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsigned char *cfg_buf,
 			  size_t cfg_buf_len, unsigned char *sig_buf, size_t sig_buf_len,
 			  unsigned char *cert_buf, size_t cert_buf_len,
-			  UNUSED smartcard_crypto_hashalgo_t hash_algo, UNUSED void *data)
+			  UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
 {
 	INFO("Push GuestOS config (Phase 2)");
+	int *resp_fd = data;
+	ASSERT(resp_fd);
 
 	switch (verify_result) {
 	case VERIFY_GOOD:
@@ -312,13 +335,13 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	default:
 		ERROR("Signature verification failed (%d) for pushed GuestOS config buffer, skipping.",
 		      verify_result);
-		return;
+		goto err;
 	}
 
 	guestos_t *os = guestos_new_from_buffer(cfg_buf, cfg_buf_len, guestos_basepath);
 	if (!os) {
 		ERROR("Could not instantiate GuestOS from buffer");
-		return;
+		goto err;
 	}
 
 	const char *os_name = guestos_get_name(os);
@@ -375,28 +398,45 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	// 4. trigger image download if os is used by a container or a fresh install
 	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os || cml_update) {
 		INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_DOWNLOAD);
-		guestos_mgr_download_latest(os_name);
+		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED, *resp_fd) < 0)
+			WARN("Could not send response to fd=%d", *resp_fd);
+		guestos_mgr_download_latest(os_name, *resp_fd);
 	}
+
+	mem_free(resp_fd);
 	return;
 
 cleanup_purge:
 	guestos_purge(os);
 cleanup_os:
 	guestos_free(os);
+err:
+	if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, *resp_fd) < 0)
+		WARN("Could not send response to fd=%d", *resp_fd);
+	mem_free(resp_fd);
 }
 
 int
 guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, size_t siglen,
-			unsigned char *cert, size_t certlen)
+			unsigned char *cert, size_t certlen, int resp_fd)
 {
 	INFO("Push GuestOS config (Phase 1)");
 
 	int res = -1;
+	int *cb_resp_fd = mem_new0(int, 1);
+	*cb_resp_fd = resp_fd;
+
 	if (cfg && sig && cert) {
 		res = smartcard_crypto_verify_buf(cfg, cfglen, sig, siglen, cert, certlen,
 						  GUESTOS_MGR_VERIFY_HASH_ALGO,
-						  push_config_verify_buf_cb, NULL);
+						  push_config_verify_buf_cb, cb_resp_fd);
 	}
+	if (res < 0) {
+		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, resp_fd) < 0)
+			WARN("Could not send response to fd=%d", resp_fd);
+		mem_free(cb_resp_fd);
+	}
+
 	return res;
 }
 

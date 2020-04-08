@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -678,7 +678,7 @@ iterate_images_cb_download_check(iterate_images_t *task, guestos_check_mount_ima
 	iterate_images_free(task);
 }
 
-void
+bool
 guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb, void *data)
 {
 	ASSERT(os);
@@ -690,20 +690,20 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 		WARN("Cannot download images for GuestOS %s since no device update base URL"
 		     " was configured!",
 		     guestos_get_name(os));
-		return;
+		return os->downloading;
 	}
 
 	if (strncmp(update_base_url, "file://", 7) && (!cmld_is_wifi_active()) &&
 	    (!guestos_config_get_update_base_url(os->cfg))) {
 		INFO("Wifi is not active => not downloading images for guestos %s",
 		     guestos_get_name(os));
-		return;
+		return os->downloading;
 	}
 	// prevent bad things from happening when calling this function while already downloading
 	if (os->downloading) {
 		DEBUG("Download for GuestOS %s v%" PRIu64 " already in progress, returning...",
 		      guestos_get_name(os), guestos_get_version(os));
-		return;
+		return os->downloading;
 	}
 	// prepare image iteration
 	os->downloading = true;
@@ -716,8 +716,9 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 		if (cb)
 			cb(true, 0, os, data);
 		os->downloading = false;
-		return;
+		return os->downloading;
 	}
+	return os->downloading;
 }
 
 // FLASH IMAGES

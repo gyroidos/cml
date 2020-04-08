@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -58,6 +58,10 @@ typedef enum {
 	CONTROL_RESPONSE_DEVICE_PROVISIONING_ERROR,
 	CONTROL_RESPONSE_DEVICE_CERT_ERROR,
 	CONTROL_RESPONSE_DEVICE_CERT_OK,
+	CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED,
+	CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_WAITING,
+	CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED,
+	CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED,
 	CONTROL_RESPONSE_CMD_UNSUPPORTED,
 } control_message_t;
 
