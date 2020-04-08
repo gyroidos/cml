@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -34,6 +34,12 @@ typedef struct smartcard smartcard_t;
  */
 smartcard_t *
 smartcard_new(const char *path);
+
+/**
+ * Choice of supported token types.
+ * Must be kept in sync with scd.proto
+ */
+typedef enum smartcard_tokentype { NONE, DEVICE, USB } smartcard_tokentype_t;
 
 int
 smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,

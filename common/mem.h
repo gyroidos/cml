@@ -89,6 +89,18 @@ char *
 mem_strndup(const char *str, size_t len);
 
 /**
+ * Duplicates an array of unsigned char, but copies at most size bytes.
+ * Allocates sufficient memory.
+ * This is a wrapper for memcpy(3).
+ *
+ * @param mem The memory to duplicate.
+ * @param size The size of the memory.
+ * @return Pointer to the new array.
+ */
+unsigned char *
+mem_memcpy(const unsigned char *mem, size_t size);
+
+/**
  * Prints to a string allocated by this function.
  * This is a wrapper for vasprintf(3) which aborts if the function fails.
  *

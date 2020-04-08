@@ -30,6 +30,12 @@
 #include "hardware.h"
 #include "uevent.h"
 
+
+#ifdef LOGF_MIN_PRIO
+#undef LOGF_MIN_PRIO
+#endif
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_WARN
+
 #include "common/mem.h"
 #include "common/macro.h"
 #include "common/file.h"

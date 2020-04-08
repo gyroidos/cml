@@ -23,6 +23,11 @@
 
 #include "c_cap.h"
 
+#ifdef LOGF_MIN_PRIO
+#undef LOGF_MIN_PRIO
+#endif
+#define LOGF_MIN_PRIO LOGF_MIN_PRIO_WARN
+
 #include "common/macro.h"
 
 #include <sys/capability.h>
