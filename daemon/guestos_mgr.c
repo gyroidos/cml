@@ -225,9 +225,8 @@ static void
 download_complete_cb(bool complete, unsigned int count, guestos_t *os, UNUSED void *data)
 {
 	IF_NULL_RETURN_ERROR(os);
-	IF_TRUE_RETURN_TRACE(count > 0);
 
-	if (complete) {
+	if (complete && count > 0) {
 		if (guestos_images_flash(os) < 0)
 			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
 		else
