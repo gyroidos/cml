@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -258,6 +258,7 @@ main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_guestos_config")) {
+		has_response = true;
 		if (optind + 2 >= argc)
 			print_usage(argv[0]);
 
@@ -678,6 +679,7 @@ send_message:
 		ERROR_ERRNO("[CLIENT] command \"run\" failed");
 	}
 
+handle_resp:
 	// recv response if applicable
 	if (has_response) {
 		TRACE("[CLIENT] Awaiting response");
@@ -697,6 +699,19 @@ send_message:
 				ERROR("writing device csr to %s", dev_csr_file);
 			} else {
 				INFO("device csr written to %s", dev_csr_file);
+			}
+		} break;
+		case DAEMON_TO_CONTROLLER__CODE__RESPONSE: {
+			if (!resp->has_response)
+				break;
+			switch (resp->response) {
+			case DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_STARTED: {
+				INFO("Waiting for images to be transfered ...");
+				protobuf_free_message((ProtobufCMessage *)resp);
+				goto handle_resp;
+			} break;
+			default:
+				protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 			}
 		} break;
 		default:
