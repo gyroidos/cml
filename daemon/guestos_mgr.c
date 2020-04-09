@@ -54,6 +54,8 @@
 #define GUESTOS_MGR_UPDATE_FLASH_FAILED "Flashing to device partitions failed"
 #define GUESTOS_MGR_UPDATE_FAILED "Download failed"
 
+#define GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME "kernel"
+
 #define SCD_TOKEN_DIR "/data/cml/tokens"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
 #define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
@@ -321,6 +323,7 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 
 	const char *os_name = guestos_get_name(os);
 	uint64_t os_ver = guestos_get_version(os);
+	bool cml_update = !strcmp(os_name, GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME);
 	const guestos_t *old_os = guestos_mgr_get_latest_by_name(os_name, false);
 	if (old_os) {
 		// existing os of same name => verify and update
@@ -370,7 +373,7 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	//			     GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
 
 	// 4. trigger image download if os is used by a container or a fresh install
-	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os) {
+	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os || cml_update) {
 		INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_DOWNLOAD);
 		guestos_mgr_download_latest(os_name);
 	}
