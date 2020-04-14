@@ -1391,20 +1391,20 @@ c_net_free(c_net_t *net)
 char *
 c_net_get_ip_new(c_net_t *net)
 {
-	if (!net->ns_net)
-		return NULL;
+	IF_FALSE_RETVAL_TRACE(net->ns_net, NULL);
 
 	c_net_interface_t *ni0 = list_nth_data(net->interface_list, 0);
+	IF_NULL_RETVAL(ni0, NULL);
 	return mem_strdup(inet_ntoa(ni0->ipv4_cont_addr));
 }
 
 char *
 c_net_get_subnet_new(c_net_t *net)
 {
-	if (!net->ns_net)
-		return NULL;
+	IF_FALSE_RETVAL_TRACE(net->ns_net, NULL);
 
 	c_net_interface_t *ni0 = list_nth_data(net->interface_list, 0);
+	IF_NULL_RETVAL(ni0, NULL);
 	return mem_strdup(ni0->subnet);
 }
 
