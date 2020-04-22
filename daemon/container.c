@@ -26,7 +26,7 @@
 
 #include "container.h"
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/uuid.h"
@@ -2434,18 +2434,28 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 {
 	ASSERT(container);
 
+	int res = 0;
+	pid_t pid = container_get_pid(container);
+
+	container_state_t state_a0 = container_get_state(cmld_containers_get_a0());
+	bool a0_is_up = (state_a0 == CONTAINER_STATE_RUNNING ||
+			 state_a0 == CONTAINER_STATE_BOOTING || state_a0 == CONTAINER_STATE_SETUP);
+
+	if (cmld_containers_get_a0() == container) {
+		cmld_netif_phys_add_by_name(iface);
+		if (a0_is_up)
+			res = c_net_move_ifi(iface, pid);
+		return res;
+	}
+
 	IF_FALSE_RETVAL(cmld_netif_phys_remove_by_name(iface), -1);
 
-	pid_t pid = container_get_pid(container);
 	pid_t pid_a0 = container_get_pid(cmld_containers_get_a0());
 
 	/* if c0 is running the interface is occupied by c0, thus we have
 	 * to take it back to cml first.
 	 */
-	container_state_t state_a0 = container_get_state(cmld_containers_get_a0());
-	int res = 0;
-	if (state_a0 == CONTAINER_STATE_RUNNING || state_a0 == CONTAINER_STATE_BOOTING ||
-	    state_a0 == CONTAINER_STATE_SETUP)
+	if (a0_is_up)
 		res = c_net_remove_ifi(iface, pid_a0);
 
 	res |= c_net_move_ifi(iface, pid);

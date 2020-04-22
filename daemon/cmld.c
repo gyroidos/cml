@@ -1286,5 +1286,11 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 void
 cmld_netif_phys_add_by_name(const char *if_name)
 {
+	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
+		char *cmld_if_name = l->data;
+		if (0 == strcmp(if_name, cmld_if_name)) {
+			return;
+		}
+	}
 	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
 }
