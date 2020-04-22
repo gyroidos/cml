@@ -397,16 +397,19 @@ uevent_create_device_node(struct uevent *uevent, container_t *container)
 		mem_free(path);
 		return 0;
 	}
-	if (dir_mkdir_p(dirname(path), 0755) < 0) {
+
+	// dirname may modify original string, thus strdup
+	char *path_dirname = mem_strdup(path);
+	if (dir_mkdir_p(dirname(path_dirname), 0755) < 0) {
 		ERROR("Could not create path for device node");
 		goto err;
 	}
 	dev_t dev = makedev(uevent->major, uevent->minor);
-	mode_t mode = strcmp(uevent->devtype, "disk") ? S_IFBLK : S_IFCHR;
-	INFO("Creating device node (%c %d:%d) in %s", mode & S_IFBLK ? 'd' : 'c', uevent->major,
+	mode_t mode = strcmp(uevent->devtype, "disk") ? S_IFCHR : S_IFBLK;
+	INFO("Creating device node (%c %d:%d) in %s", S_ISBLK(mode) ? 'd' : 'c', uevent->major,
 	     uevent->minor, path);
 	if (mknod(path, mode, dev) < 0) {
-		ERROR("Could not create device node");
+		ERROR_ERRNO("Could not create device node");
 		goto err;
 	}
 	if (container_shift_ids(container, path, false) < 0) {
@@ -414,9 +417,11 @@ uevent_create_device_node(struct uevent *uevent, container_t *container)
 		      container_get_name(container));
 		goto err;
 	}
+	mem_free(path_dirname);
 	mem_free(path);
 	return 0;
 err:
+	mem_free(path_dirname);
 	mem_free(path);
 	return -1;
 }
