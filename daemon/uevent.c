@@ -124,6 +124,7 @@ struct uevent {
 	uint16_t id_vendor_id; //!< The udev event ID_VENDOR_ID inside of raw (usb relevenat)
 	uint16_t id_model_id;  //!< The udev event ID_MODEL_ID of the device (usb relevant)
 	char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)
+	char *interface;       //!< The uevent INTERFACE, points inside of raw
 };
 
 typedef struct uevent_container_dev_mapping {
@@ -231,6 +232,7 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 	uevent->id_model_id = 0;
 	uevent->id_vendor_id = 0;
 	uevent->id_serial_short = "";
+	uevent->interface = "";
 
 	uevent_trace(uevent, raw_p);
 
@@ -274,6 +276,9 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 		} else if (!strncmp(raw_p, "ID_SERIAL_SHORT=", 16)) {
 			raw_p += 16;
 			uevent->id_serial_short = raw_p;
+		} else if (!strncmp(raw_p, "INTERFACE=", 10)) {
+			raw_p += 10;
+			uevent->interface = raw_p;
 		}
 
 		/* advance to after the next \0 */
@@ -285,8 +290,8 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 			break;
 	}
 
-	TRACE("uevent { '%s', '%s', '%s', '%s', %d, %d }", uevent->action, uevent->devpath,
-	      uevent->subsystem, uevent->devname, uevent->major, uevent->minor);
+	TRACE("uevent { '%s', '%s', '%s', '%s', %d, %d, '%s'}", uevent->action, uevent->devpath,
+	      uevent->subsystem, uevent->devname, uevent->major, uevent->minor, uevent->interface);
 }
 
 static uint16_t
@@ -435,6 +440,15 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	IF_TRUE_RETURN_TRACE(strncmp(uevent->action, "add", 3) &&
 			     strncmp(uevent->action, "remove", 6) &&
 			     strncmp(uevent->action, "change", 6));
+
+	/* move network ifaces to c0 */
+	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
+	    !strstr(uevent->devpath, "virtual")) {
+		if (container_add_net_iface(cmld_containers_get_a0(), uevent->interface, false))
+			ERROR("Cannot move '%s' to c0!", uevent->interface);
+		else
+			INFO("Moved phys network interface '%s' to c0", uevent->interface);
+	}
 
 	/* Iterate over containers */
 	for (int i = 0; i < cmld_containers_get_count(); i++) {
