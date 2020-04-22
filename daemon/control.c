@@ -480,8 +480,7 @@ control_send_message(control_message_t message, int fd)
 		break;
 
 	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_WAITING:
-		out.response =
-			DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_WAITING;
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_WAITING;
 		break;
 
 	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED:
@@ -552,8 +551,7 @@ control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, int fd)
 					msg->guestos_config_signature.data,
 					msg->guestos_config_signature.len,
 					msg->guestos_config_certificate.data,
-					msg->guestos_config_certificate.len,
-					fd);
+					msg->guestos_config_certificate.len, fd);
 	}
 }
 

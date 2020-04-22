@@ -398,7 +398,8 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	// 4. trigger image download if os is used by a container or a fresh install
 	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os || cml_update) {
 		INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_DOWNLOAD);
-		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED, *resp_fd) < 0)
+		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED, *resp_fd) <
+		    0)
 			WARN("Could not send response to fd=%d", *resp_fd);
 		guestos_mgr_download_latest(os_name, *resp_fd);
 	}
