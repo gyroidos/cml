@@ -432,7 +432,8 @@ network_get_physical_interfaces_new()
 				mem_printf("/sys/class/net/%s/phy80211/name", i->if_name);
 			char *dev_name = NULL;
 			if (file_exists(dev_phy_path)) {
-				dev_name = file_read_new(dev_phy_path, 128);
+				//dev_name = file_read_new(dev_phy_path, 128);
+				DEBUG("Skip adding wifi interface to phys list for now!");
 				if (!dev_name) {
 					mem_free(dev_phy_path);
 					continue;

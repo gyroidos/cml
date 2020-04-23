@@ -361,7 +361,7 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid)
 
 	/* Get the interface index of the interface name */
 	if (!(ifi_index = if_nametoindex(ifi_name))) {
-		ERROR("veth interface name could not be resolved");
+		ERROR("eth interface name could not be resolved");
 		return -1;
 	}
 
