@@ -538,8 +538,10 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 		}
 		for (int i = 0; i < cmld_containers_get_count(); ++i) {
 			container_t *c = cmld_container_get_by_index(i);
-			char *devname =
-				mem_printf("%s/dev/%s", container_get_rootdir(c), uevent->devname);
+			// newer versions of udev prepends '/dev/' in DEVNAME
+			char *devname = mem_printf("%s%s", container_get_rootdir(c),
+						   strncmp("/dev/", uevent->devname, 4) ? "/dev/" : "",
+						   uevent->devname);
 			if (container_shift_ids(c, devname, false) < 0)
 				ERROR("Failed to fixup uids for '%s' in usernamspace of container %s",
 				      devname, container_get_name(c));
