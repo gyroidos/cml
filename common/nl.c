@@ -46,6 +46,8 @@
 #define NL_DEFAULT_SOCK_SNDBUF_SIZE 32768
 #define NL_UEVENT_SOCK_RCVBUF_SIZE (256 * 1024)
 
+#define NLA_DATA(nla) (char *) nla + NLA_HDRLEN
+
 // only trust udev messages from this pid
 static pid_t trusted_udevd_pid = -1;
 
@@ -106,31 +108,29 @@ nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t si
 	ASSERT((msg && !(size > 0 && !data)));
 
 	/* get length required for data of size bytes + header */
-	const int len = RTA_LENGTH(size);
+	const int len = NLA_HDRLEN + size;
 	struct nlmsghdr *nlmsg;
-	struct rtattr *rta = NULL;
+	struct nlattr *nla = NULL;
 
 	nlmsg = &msg->nlmsghdr;
 
 	/* Check for overflow in message buffer */
-	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(len) > msg->size) {
-		TRACE("aligend size: %u len %d, msg->size %zu",
-		      NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(len), len, msg->size);
+	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(len) > msg->size) {
 		errno = EOVERFLOW;
 		return -1;
 	}
 
 	/* Set the attribute metadata */
-	rta = (struct rtattr *)nl_msg_top(nlmsg);
-	rta->rta_type = type;
-	rta->rta_len = len;
+	nla = (struct nlattr *)nl_msg_top(nlmsg);
+	nla->nla_type = type;
+	nla->nla_len = len;
 
 	/* Copy the attribute payload */
 	if (data != NULL)
-		memcpy(RTA_DATA(rta), data, len);
+		memcpy(NLA_DATA(nla), data, len);
 
 	/* Adjust message length */
-	nlmsg->nlmsg_len = NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(len);
+	nlmsg->nlmsg_len = NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(len);
 
 	return 0;
 }
@@ -339,17 +339,17 @@ nl_sock_free(nl_sock_t *nl)
 	mem_free(nl);
 }
 
-struct rtattr *
+struct nlattr *
 nl_msg_start_nested_attr(nl_msg_t *msg, int type)
 {
 	ASSERT(msg);
 
-	struct rtattr *nested = NULL;
+	struct nlattr *nested = NULL;
 
 	/* Get pointer to the tail of the message payload.
 	 * nl_msg_add_attr assures that the message's size is large
 	 * enough to host the nested attribute. */
-	nested = (struct rtattr *)nl_msg_top(&msg->nlmsghdr);
+	nested = (struct nlattr *)nl_msg_top(&msg->nlmsghdr);
 
 	/* Create an additional attribute with a NULL payload */
 	if (nl_msg_add_attr(msg, type, NULL, 0))
@@ -359,11 +359,11 @@ nl_msg_start_nested_attr(nl_msg_t *msg, int type)
 }
 
 int
-nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr)
+nl_msg_end_nested_attr(nl_msg_t *msg, struct nlattr *attr)
 {
 	ASSERT(msg && attr);
 
-	attr->rta_len = (size_t)((long)nl_msg_top(&msg->nlmsghdr) - (long)attr);
+	attr->nla_len = (size_t)((long)nl_msg_top(&msg->nlmsghdr) - (long)attr);
 
 	return 0;
 }

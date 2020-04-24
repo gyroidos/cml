@@ -186,7 +186,7 @@ nl_msg_set_flags(nl_msg_t *msg, uint16_t flags);
  * @param type Type of the nested attribute
  * @return failure: NULL, success: pointer to the rtattr struct
  */
-struct rtattr *
+struct nlattr *
 nl_msg_start_nested_attr(nl_msg_t *msg, int type);
 
 /**
@@ -195,7 +195,7 @@ nl_msg_start_nested_attr(nl_msg_t *msg, int type);
  * @return failure: -1, success: 0
  */
 int
-nl_msg_end_nested_attr(nl_msg_t *msg, struct rtattr *attr);
+nl_msg_end_nested_attr(nl_msg_t *msg, struct nlattr *attr);
 
 /**
  * Expands the length of the netlink message by a len bytes

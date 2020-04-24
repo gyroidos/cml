@@ -456,7 +456,7 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 	/* Prepare request message */
 	struct ifinfomsg link_req = { .ifi_family = AF_INET };
 
-	struct rtattr *attr1, *attr2, *attr3;
+	struct nlattr *attr1, *attr2, *attr3;
 
 	/* Fill netlink message header */
 	if (nl_msg_set_type(req, RTM_NEWLINK))
