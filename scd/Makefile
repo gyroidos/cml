@@ -86,8 +86,8 @@ $(SRC_FILES): protobuf
 libcommon:
 	$(MAKE) -C common libcommon
 
-scd: libcommon ${SRC_FILES}
-	${CC} ${LOCAL_CFLAGS} ${SRC_FILES} -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -lctccid -lcardservice -o scd
+scd: libcommon $(SRC_FILES)
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -lctccid -lcardservice -o scd
 
 
 .PHONY: clean
