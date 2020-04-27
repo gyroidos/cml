@@ -290,8 +290,9 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			// start container
 			if (!msg->has_unwrapped_key) {
 				WARN("Expected derived key, but none was returned!");
-				/* TODO: should this be communicated to the controller? */
-				/* control seems to wait indefinitely if not */
+				control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
+					resp_fd);
+				done = true;
 				break;
 			}
 			smartcard_start_container_internal(startdata, msg->unwrapped_key.data,
