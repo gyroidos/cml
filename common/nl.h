@@ -37,7 +37,9 @@
 
 #include <stdint.h>
 #include <sys/socket.h>
+#include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <linux/genetlink.h>
 #include <stdbool.h>
 
 /* Define some missing netlink defines in BIONIC */
@@ -128,7 +130,6 @@ nl_msg_send_kernel_verify(const nl_sock_t *sock, const nl_msg_t *req);
 /**
  * Allocates a raw netlink message, which can be completed
  * with the set/add functions.
- * @param size You might want to use the default value NL_MSG_DEFAULT_SIZE
  * @return In case of failure, return NULL,
  *	    in case of success, return the allocated message.
  */
@@ -237,11 +238,27 @@ int
 nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size);
 
 /**
+ * Sets the request according to the given struct genlmsghdr
+ * The message length is adapted accordingly.
+ * @return failure: -1, success: 0
+ */
+int
+nl_msg_set_genl_hdr(nl_msg_t *msg, const struct genlmsghdr *hdr);
+
+/**
  * Receives and checks a response from the netlink socket nl
  * The errno is set accordingly, if the recevied message had an error code set.
  * @return failure: -1, success: 0
  */
 int
 nl_msg_receive_and_check_kernel(const nl_sock_t *nl);
+
+/**
+ * Probes the kernel for the given generic netlink family name and returns
+ * the corresponding id.
+ * @return family id, -1 on error
+ * */
+uint16_t
+nl_genl_family_getid(const char *family_name);
 
 #endif /* NL_H_ */

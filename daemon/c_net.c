@@ -350,8 +350,8 @@ msg_err:
  * specified by the pid (from root namespace to container namespace).
  * It transmits a netlink message using the netlink socket
  */
-int
-c_net_move_ifi(const char *ifi_name, const pid_t pid)
+static int
+c_net_rtnet_move_ns(const char *ifi_name, const pid_t pid)
 {
 	ASSERT(ifi_name);
 
@@ -414,6 +414,19 @@ msg_err:
 	nl_msg_free(req);
 	nl_sock_free(nl_sock);
 	return -1;
+}
+
+/**
+ * This function moves the network interface to the corresponding namespace,
+ * specified by the pid (from root namespace to container namespace).
+ */
+int
+c_net_move_ifi(const char *ifi_name, const pid_t pid)
+{
+	if (network_interface_is_wifi(ifi_name))
+		return network_nl80211_move_ns(ifi_name, pid);
+	else
+		return c_net_rtnet_move_ns(ifi_name, pid);
 }
 
 /**

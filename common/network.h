@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -151,5 +151,21 @@ network_list_link_ns(pid_t pid, list_t **link_list);
  */
 list_t *
 network_get_physical_interfaces_new(void);
+
+/**
+ * Checks if an interface is an wifi interface using sysfs.
+ */
+bool
+network_interface_is_wifi(const char *if_name);
+
+/**
+ * This function moves a wifi interface too the netns of pid.
+ *
+ * This is acomplished by looking up the corresponding phy interface
+ * index. After that the request to move the phy interface to the netns
+ * is handed over to the kernel using the nl82011 generic netlink interface.
+ */
+int
+network_nl80211_move_ns(const char *if_name, const pid_t pid);
 
 #endif /* NETWORK_H */
