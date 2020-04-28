@@ -37,6 +37,8 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <linux/netlink.h>
+#include <linux/genetlink.h>
+#include <linux/nl80211.h>
 
 #define IPTABLES_PATH "iptables"
 #define IP_PATH "ip"
@@ -414,6 +416,19 @@ network_routing_rules_set_all_main(bool flush)
 	return proc_fork_and_execvp(argv2);
 }
 
+bool
+network_interface_is_wifi(const char *if_name)
+{
+	bool ret;
+	char *phy_path;
+
+	phy_path = mem_printf("/sys/class/net/%s/phy80211", if_name);
+	ret = file_exists(phy_path);
+	mem_free(phy_path);
+
+	return ret;
+}
+
 list_t *
 network_get_physical_interfaces_new()
 {
@@ -426,25 +441,97 @@ network_get_physical_interfaces_new()
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
-		if (file_exists(dev_drv_path)) {
-			// if wifi add coresponding phy to list
-			char *dev_phy_path =
-				mem_printf("/sys/class/net/%s/phy80211/name", i->if_name);
-			char *dev_name = NULL;
-			if (file_exists(dev_phy_path)) {
-				//dev_name = file_read_new(dev_phy_path, 128);
-				DEBUG("Skip adding wifi interface to phys list for now!");
-				if (!dev_name) {
-					mem_free(dev_phy_path);
-					continue;
-				}
-			} else {
-				dev_name = mem_strdup(i->if_name);
-			}
-			if_name_list = list_append(if_name_list, dev_name);
-			mem_free(dev_phy_path);
-		}
+		if (file_exists(dev_drv_path))
+			if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
 		mem_free(dev_drv_path);
 	}
 	return if_name_list;
+}
+
+/**
+ * lookup the index of the phy interface coresponding to
+ * the wifi interface with if_name, e.g. wlan0
+ */
+static int
+network_nl80211_get_index(const char *if_name)
+{
+	int phy_index = -1;
+	char *phy_file = NULL;
+	char *dev_phy_path = mem_printf("/sys/class/net/%s/phy80211/index", if_name);
+
+	phy_file = file_read_new(dev_phy_path, 128);
+	IF_NULL_GOTO_ERROR(phy_file, out);
+
+	phy_index = atoi(phy_file);
+
+out:
+	mem_free(phy_file);
+	mem_free(dev_phy_path);
+	return phy_index;
+}
+
+/**
+ * This function moves a wifi interface too the netns of pid.
+ *
+ * This is acomplished by looking up the corresponding phy interface
+ * index. After that the request to move the phy interface to the netns
+ * is handed over to the kernel using the nl82011 generic netlink interface.
+ */
+int
+network_nl80211_move_ns(const char *if_name, const pid_t pid)
+{
+	ASSERT(if_name);
+
+	DEBUG("Move %s interface to netns of pid %d", if_name, pid);
+
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+
+	int if_index = network_nl80211_get_index(if_name);
+	IF_TRUE_RETVAL_ERROR(if_index < 0, -1);
+
+	int nl80211_id = nl_genl_family_getid(NL80211_GENL_NAME);
+	IF_TRUE_RETVAL_ERROR(nl80211_id < GENL_MIN_ID, -1);
+
+	/* Open netlink socket */
+	nl_sock = nl_sock_default_new(NETLINK_GENERIC);
+	IF_NULL_RETVAL_ERROR(nl_sock, -1);
+
+	/* Create netlink message */
+	req = nl_msg_new();
+	IF_NULL_GOTO_ERROR(req, msg_err);
+
+	/* Prepare the generic netlink message header */
+	struct genlmsghdr hdr = {
+		.cmd = NL80211_CMD_SET_WIPHY_NETNS,
+		.version = 1,
+	};
+
+	/* Fill netlink message header */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, nl80211_id), msg_err);
+
+	/* Set appropriate flags for request, creating new object,
+	 * exclusive access and acknowledgment response */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK), msg_err);
+
+	/* Fill generic netlink message header */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_genl_hdr(req, &hdr), msg_err);
+
+	/* Set generic netlink attributes */
+	IF_TRUE_GOTO_ERROR(nl_msg_add_u32(req, NL80211_ATTR_WIPHY, if_index), msg_err);
+	IF_TRUE_GOTO_ERROR(nl_msg_add_u32(req, NL80211_ATTR_PID, pid), msg_err);
+
+	/* Send request message and wait for the response message */
+	IF_TRUE_GOTO_ERROR(nl_msg_send_kernel_verify(nl_sock, req), msg_err);
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+
+	return 0;
+
+msg_err:
+	ERROR("failed to create/send netlink message");
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return -1;
 }

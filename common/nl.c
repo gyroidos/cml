@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <asm/types.h>
 #include <linux/netlink.h>
+#include <linux/genetlink.h>
 #include <linux/xfrm.h>
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -46,7 +47,9 @@
 #define NL_DEFAULT_SOCK_SNDBUF_SIZE 32768
 #define NL_UEVENT_SOCK_RCVBUF_SIZE (256 * 1024)
 
-#define NLA_DATA(nla) (char *) nla + NLA_HDRLEN
+#define NLA_DATA(nla) (char *)nla + NLA_HDRLEN
+
+#define NL_HDR_OFFSET(len) len + NLMSG_ALIGN(len);
 
 // only trust udev messages from this pid
 static pid_t trusted_udevd_pid = -1;
@@ -264,6 +267,9 @@ nl_sock_new(int protocol)
 	} else if (protocol == NETLINK_XFRM) {
 		if (nl_sock_conf_xfrm_sock(ret))
 			goto err;
+	} else { // use rtnetlink config as default
+		if (nl_sock_conf_route_sock(ret))
+			goto err;
 	}
 
 	/* Bind on the local socket. Kernel sets address pid automatically. */
@@ -436,6 +442,18 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 	return sendmsg(nl->fd, &m, 0);
 }
 
+static uint16_t
+nl_msg_attr_get_u16(struct nlattr *nlattr)
+{
+	return *(uint16_t *)((char *)nlattr + NLA_HDRLEN);
+}
+
+static char *
+nl_msg_attr_get_str(struct nlattr *nlattr)
+{
+	return (char *)nlattr + NLA_HDRLEN;
+}
+
 static int
 nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 {
@@ -470,8 +488,8 @@ nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 	return 0;
 }
 
-int
-nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent)
+static int
+nl_msg_receive(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent, bool ucred)
 {
 	int received;
 	struct sockaddr_nl nladdr;
@@ -484,8 +502,8 @@ nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool rec
 			    .msg_namelen = sizeof(nladdr),
 			    .msg_iov = &iov,
 			    .msg_iovlen = 1,
-			    .msg_control = control,
-			    .msg_controllen = sizeof(control) };
+			    .msg_control = ucred ? control : NULL,
+			    .msg_controllen = ucred ? sizeof(control) : 0 };
 
 	while (1) {
 		errno = 0;
@@ -499,6 +517,8 @@ nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool rec
 		}
 		break;
 	}
+
+	TRACE("received: %d, buffer_size: %zu", received, len);
 
 	if (receive_uevent && nl_verify_uevent_source(&m, nladdr)) {
 		TRACE("Detected possibly malicious uevent");
@@ -516,14 +536,9 @@ nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool rec
 	      nl->local.nl_family, nl->local.nl_pad, nl->local.nl_pid, nl->local.nl_groups);
 
 	/* Check for truncated messages */
-	if (m.msg_flags & MSG_TRUNC) {
-		goto error;
-	}
-
+	IF_TRUE_GOTO_TRACE(m.msg_flags & MSG_TRUNC, error);
 	/* Check if protocol family fits */
-	if (nladdr.nl_family != AF_NETLINK) {
-		goto error;
-	}
+	IF_FALSE_GOTO_TRACE(nladdr.nl_family == AF_NETLINK, error);
 
 	return received;
 
@@ -532,6 +547,18 @@ error:
 	memset(buf, 0, len);
 	errno = EIO;
 	return -1;
+}
+
+int
+nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent)
+{
+	return nl_msg_receive(nl, buf, len, receive_uevent, true);
+}
+
+int
+nl_msg_receive_nocred(const nl_sock_t *nl, char *buf, const size_t len)
+{
+	return nl_msg_receive(nl, buf, len, false, false);
 }
 
 /**
@@ -759,6 +786,16 @@ nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size)
 }
 
 int
+nl_msg_set_genl_hdr(nl_msg_t *msg, const struct genlmsghdr *hdr)
+{
+	ASSERT(msg);
+
+	memcpy(NLMSG_DATA(&msg->nlmsghdr), hdr, GENL_HDRLEN);
+
+	return nl_msg_set_len(msg, GENL_HDRLEN);
+}
+
+int
 nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 {
 	ASSERT(nl);
@@ -785,4 +822,146 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 	}
 	mem_free(buf);
 	return ret;
+}
+
+static struct nlattr *
+nl_nla_next(const struct nlattr *nla, int *rem)
+{
+	struct nlattr *next = NULL;
+	if (nla->nla_len <= *rem && nla->nla_len >= sizeof(struct nlattr)) {
+		next = (struct nlattr *)((char *)nla + NLA_ALIGN(nla->nla_len));
+		*rem = *rem - NLA_ALIGN(nla->nla_len);
+	}
+	return next;
+}
+static bool
+nl_nla_ok(const struct nlattr *nla, int rem)
+{
+	return rem > 0 && nla->nla_len <= rem && nla->nla_len >= sizeof(struct nlattr) &&
+	       sizeof(struct nlattr) <= (unsigned int)rem;
+}
+
+uint16_t
+nl_genl_family_getid(const char *family_name)
+{
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+	uint16_t ret = 0;
+	char *buf = NULL;
+	bool nlmsg_done = false;
+	bool nlm_f_multi = false;
+	bool nl80211 = false;
+
+	struct genlmsghdr hdr = {
+		.cmd = CTRL_CMD_GETFAMILY,
+		.version = CTRL_ATTR_FAMILY_ID,
+	};
+
+	/* Open netlink socket */
+	if (!(nl_sock = nl_sock_new(NETLINK_GENERIC))) {
+		ERROR("failed to allocate gen_netlink socket");
+		return 0;
+	}
+
+	/* Create netlink message */
+	if (!(req = nl_msg_new())) {
+		ERROR("failed to allocate netlink message");
+		goto msg_err;
+	}
+
+	/* Fill netlink message header */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, GENL_ID_CTRL), msg_err);
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_genl_hdr(req, &hdr), msg_err);
+
+	IF_TRUE_GOTO_ERROR(nl_msg_add_string(req, CTRL_ATTR_FAMILY_NAME, family_name), msg_err);
+
+	/* Set appropriate flags for request triggering an DUMP response */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK | NLM_F_DUMP), msg_err);
+
+	/* Send request message */
+	IF_TRUE_GOTO_ERROR(nl_msg_send_kernel(nl_sock, req) < 0, msg_err);
+
+	buf = mem_new0(char, NL_DEFAULT_SOCK_RCVBUF_SIZE);
+	IF_NULL_GOTO_ERROR(buf, msg_err);
+
+	do {
+		struct nlmsghdr *msg;
+		int rcvd = nl_msg_receive_nocred(nl_sock, buf, NL_DEFAULT_SOCK_RCVBUF_SIZE);
+		if (rcvd < 0) {
+			ERROR("Could not receive netlink response!");
+			goto msg_err;
+		}
+
+		for (msg = (struct nlmsghdr *)buf; NLMSG_OK(msg, (unsigned int)rcvd);
+		     msg = NLMSG_NEXT(msg, rcvd)) {
+			IF_TRUE_GOTO_ERROR(msg->nlmsg_type == NLMSG_ERROR, msg_err);
+			IF_TRUE_GOTO_ERROR(msg->nlmsg_type == NLMSG_OVERRUN, msg_err);
+
+			nlmsg_done = msg->nlmsg_type == NLMSG_DONE;
+			nlm_f_multi = msg->nlmsg_flags & NLM_F_MULTI;
+
+			// End of DUMP, receiving complete
+			if (nlmsg_done)
+				break;
+			// already found id skip loop till NLMSG_DONE is received
+			if (nl80211)
+				continue;
+
+			struct genlmsghdr *hdr_resp = NLMSG_DATA(msg);
+			int nlattrs_len = msg->nlmsg_len - NLMSG_ALIGN(NLMSG_HDRLEN) -
+					  NLMSG_ALIGN(GENL_HDRLEN);
+
+			TRACE("nlattrs_len %d, genl_offset %u, nlattrs_offset: %zu", nlattrs_len,
+			      NLMSG_ALIGN(NLMSG_HDRLEN), NLMSG_ALIGN(GENL_HDRLEN));
+
+			struct nlattr *nla =
+				(struct nlattr *)((char *)hdr_resp + NLMSG_ALIGN(GENL_HDRLEN));
+			for (int len = nlattrs_len; nl_nla_ok(nla, len);
+			     nla = nl_nla_next(nla, &len)) {
+				TRACE("nla->nla_len %u, nla->nla_type %u, len %d", nla->nla_len,
+				      nla->nla_type, len);
+				switch (nla->nla_type & NLA_TYPE_MASK) {
+				case CTRL_ATTR_FAMILY_NAME:
+					if (!strcmp(family_name, nl_msg_attr_get_str(nla))) {
+						INFO("Found family name %s",
+						     nl_msg_attr_get_str(nla));
+						nl80211 = true;
+					} else {
+						TRACE("Skip wrong family with name %s",
+						      nl_msg_attr_get_str(nla));
+						nl80211 = false;
+					}
+					break;
+				case CTRL_ATTR_FAMILY_ID:
+					if (nl80211) {
+						ret = nl_msg_attr_get_u16(nla);
+						INFO("Found id %u for family '%s'", ret,
+						     family_name);
+					}
+					break;
+				default:
+					break;
+				}
+			}
+		}
+
+	} while (nlm_f_multi && !nlmsg_done);
+
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	if (buf)
+		mem_free(buf);
+	return ret;
+
+msg_err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	if (buf)
+		mem_free(buf);
+	return 0;
 }

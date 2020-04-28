@@ -34,7 +34,7 @@
 #include <grp.h>
 #include <libgen.h>
 
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "cmld.h"
 #include "container.h"
