@@ -168,4 +168,14 @@ network_interface_is_wifi(const char *if_name);
 int
 network_nl80211_move_ns(const char *if_name, const pid_t pid);
 
+/**
+ * This function moves a network interface to the netns of pid.
+ *
+ * This is acomplished by looking up the corresponding interface index.
+ * After that the request to move the interface to the netns is
+ * is handed over to the kernel using the rtnetlink interface.
+ */
+int
+network_rtnet_move_ns(const char *ifi_name, const pid_t pid);
+
 #endif /* NETWORK_H */

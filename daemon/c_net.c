@@ -348,77 +348,6 @@ msg_err:
 /**
  * This function moves the network interface to the corresponding namespace,
  * specified by the pid (from root namespace to container namespace).
- * It transmits a netlink message using the netlink socket
- */
-static int
-c_net_rtnet_move_ns(const char *ifi_name, const pid_t pid)
-{
-	ASSERT(ifi_name);
-
-	nl_sock_t *nl_sock = NULL;
-	unsigned int ifi_index;
-	nl_msg_t *req = NULL;
-
-	/* Get the interface index of the interface name */
-	if (!(ifi_index = if_nametoindex(ifi_name))) {
-		ERROR("eth interface name could not be resolved");
-		return -1;
-	}
-
-	/* Open netlink socket */
-	if (!(nl_sock = nl_sock_routing_new())) {
-		ERROR("failed to allocate netlink socket");
-		return -1;
-	}
-
-	/* Create netlink message */
-	if (!(req = nl_msg_new())) {
-		ERROR("failed to allocate netlink message");
-		nl_sock_free(nl_sock);
-		return -1;
-	}
-
-	/* Prepare the request message */
-	struct ifinfomsg link_req = {
-		.ifi_family = AF_INET, .ifi_index = ifi_index /* The index of the interface */
-	};
-
-	/* Fill netlink message header */
-	if (nl_msg_set_type(req, RTM_NEWLINK))
-		goto msg_err;
-
-	/* Set appropriate flags for request, creating new object,
-	 * exclusive access and acknowledgment response */
-	if (nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK))
-		goto msg_err;
-
-	/* Fill link request header of request message */
-	if (nl_msg_set_link_req(req, &link_req))
-		goto msg_err;
-
-	/* Set the PID in the netlink header */
-	if (nl_msg_add_u32(req, IFLA_NET_NS_PID, pid))
-		goto msg_err;
-
-	/* Send request message and wait for the response message */
-	if (nl_msg_send_kernel_verify(nl_sock, req))
-		goto msg_err;
-
-	nl_msg_free(req);
-	nl_sock_free(nl_sock);
-
-	return 0;
-
-msg_err:
-	ERROR("failed to create/send netlink message");
-	nl_msg_free(req);
-	nl_sock_free(nl_sock);
-	return -1;
-}
-
-/**
- * This function moves the network interface to the corresponding namespace,
- * specified by the pid (from root namespace to container namespace).
  */
 int
 c_net_move_ifi(const char *ifi_name, const pid_t pid)
@@ -426,7 +355,7 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid)
 	if (network_interface_is_wifi(ifi_name))
 		return network_nl80211_move_ns(ifi_name, pid);
 	else
-		return c_net_rtnet_move_ns(ifi_name, pid);
+		return network_rtnet_move_ns(ifi_name, pid);
 }
 
 /**
