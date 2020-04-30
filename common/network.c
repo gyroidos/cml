@@ -470,13 +470,6 @@ out:
 	return phy_index;
 }
 
-/**
- * This function moves a wifi interface too the netns of pid.
- *
- * This is acomplished by looking up the corresponding phy interface
- * index. After that the request to move the phy interface to the netns
- * is handed over to the kernel using the nl82011 generic netlink interface.
- */
 int
 network_nl80211_move_ns(const char *if_name, const pid_t pid)
 {
@@ -520,6 +513,59 @@ network_nl80211_move_ns(const char *if_name, const pid_t pid)
 	/* Set generic netlink attributes */
 	IF_TRUE_GOTO_ERROR(nl_msg_add_u32(req, NL80211_ATTR_WIPHY, if_index), msg_err);
 	IF_TRUE_GOTO_ERROR(nl_msg_add_u32(req, NL80211_ATTR_PID, pid), msg_err);
+
+	/* Send request message and wait for the response message */
+	IF_TRUE_GOTO_ERROR(nl_msg_send_kernel_verify(nl_sock, req), msg_err);
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+
+	return 0;
+
+msg_err:
+	ERROR("failed to create/send netlink message");
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_rtnet_move_ns(const char *ifi_name, const pid_t pid)
+{
+	ASSERT(ifi_name);
+
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+
+	/* Get the interface index of the interface name */
+	unsigned int ifi_index = if_nametoindex(ifi_name);
+	IF_FALSE_RETVAL_ERROR(ifi_index, -1);
+
+	/* Open netlink socket */
+	nl_sock = nl_sock_routing_new();
+	IF_NULL_RETVAL_ERROR(nl_sock, -1);
+
+	/* Create netlink message */
+	req = nl_msg_new();
+	IF_NULL_GOTO_ERROR(req, msg_err);
+
+	/* Prepare the request message */
+	struct ifinfomsg link_req = {
+		.ifi_family = AF_INET, .ifi_index = ifi_index /* The index of the interface */
+	};
+
+	/* Fill netlink message header */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_NEWLINK), msg_err);
+
+	/* Set appropriate flags for request, creating new object,
+	 * exclusive access and acknowledgment response */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK), msg_err);
+
+	/* Fill link request header of request message */
+	IF_TRUE_GOTO_ERROR(nl_msg_set_link_req(req, &link_req), msg_err);
+
+	/* Set the PID in the netlink header */
+	IF_TRUE_GOTO_ERROR(nl_msg_add_u32(req, IFLA_NET_NS_PID, pid), msg_err);
 
 	/* Send request message and wait for the response message */
 	IF_TRUE_GOTO_ERROR(nl_msg_send_kernel_verify(nl_sock, req), msg_err);
