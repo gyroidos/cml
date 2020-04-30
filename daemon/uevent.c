@@ -34,7 +34,7 @@
 #include <grp.h>
 #include <libgen.h>
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "cmld.h"
 #include "container.h"
@@ -432,6 +432,29 @@ err:
 }
 
 static void
+uevent_sysfs_timer_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+	char *interface = data;
+
+	char *phy_path = mem_printf("/sys/class/net/%s/phy80211", interface);
+	if (!file_exists(phy_path)) {
+		mem_free(phy_path);
+		return;
+	}
+
+	if (container_add_net_iface(cmld_containers_get_a0(), interface, false))
+		ERROR("Cannot move '%s' to c0!", interface);
+	else
+		INFO("Moved phys network interface '%s' to c0", interface);
+
+	mem_free(phy_path);
+	mem_free(interface);
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
+static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
 	uevent_parse(uevent, raw_p);
@@ -444,10 +467,18 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	/* move network ifaces to c0 */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
 	    !strstr(uevent->devpath, "virtual")) {
-		if (container_add_net_iface(cmld_containers_get_a0(), uevent->interface, false))
+		if (!strcmp(uevent->devtype, "wlan")) {
+			// give sysfs some time to settle if iface is wifi
+			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+							   uevent_sysfs_timer_cb,
+							   mem_strdup(uevent->interface));
+			event_add_timer(e);
+		} else if (container_add_net_iface(cmld_containers_get_a0(), uevent->interface,
+						   false)) {
 			ERROR("Cannot move '%s' to c0!", uevent->interface);
-		else
+		} else {
 			INFO("Moved phys network interface '%s' to c0", uevent->interface);
+		}
 	}
 
 	/* Iterate over containers */
