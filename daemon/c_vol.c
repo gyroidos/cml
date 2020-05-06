@@ -1040,6 +1040,32 @@ c_vol_populate_dev_filter_cb(const char *dev_node, void *data)
 	return true;
 }
 
+static int
+c_vol_mount_dev(c_vol_t *vol)
+{
+	ASSERT(vol);
+
+	int ret = -1;
+	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
+	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
+	int uid = container_get_uid(vol->container);
+	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
+					  mem_printf("uid=%d,gid=%d", uid, uid);
+	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /dev");
+		goto error;
+	}
+	if ((ret = mount("tmpfs", dev_mnt, "tmpfs", MS_RELATIME | MS_NOSUID, tmpfs_opts)) < 0) {
+		ERROR_ERRNO("Could not mount /dev");
+		goto error;
+	}
+	ret = 0;
+error:
+	mem_free(dev_mnt);
+	mem_free(tmpfs_opts);
+	return ret;
+}
+
 /******************************************************************************/
 
 c_vol_t *
@@ -1168,19 +1194,9 @@ c_vol_start_pre_clone(c_vol_t *vol)
 		ERROR("Could not do shared bind mounts for container start");
 		goto error;
 	}
-	DEBUG("Mounting /dev");
-	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
-	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
-	int uid = container_get_uid(vol->container);
-	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
-					  mem_printf("uid=%d,gid=%d", uid, uid);
-	if (mkdir(dev_mnt, 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir /dev");
-	if (mount("tmpfs", dev_mnt, "tmpfs", MS_RELATIME | MS_NOSUID, tmpfs_opts) < 0)
-		WARN_ERRNO("Could not mount /dev");
 
-	mem_free(dev_mnt);
-	mem_free(tmpfs_opts);
+	DEBUG("Mounting /dev");
+	IF_TRUE_GOTO_ERROR(c_vol_mount_dev(vol) < 0, error);
 
 	/*
 	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
