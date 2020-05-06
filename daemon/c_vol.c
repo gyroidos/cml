@@ -996,25 +996,6 @@ err:
 	return -1;
 }
 
-static void
-c_vol_fixup_logdev()
-{
-	char *log_buffers[4] = { "events", "main", "radio", "system" };
-	for (int i = 0; i < 4; ++i) {
-		char *log_buffer_src = mem_printf("/dev/log_%s", log_buffers[i]);
-		if (file_exists(log_buffer_src)) {
-			char *log_buffer_dest = mem_printf("/dev/log/%s", log_buffers[i]);
-			if (mkdir("/dev/log", 0755) < 0 && errno != EEXIST)
-				WARN_ERRNO("Could not mkdir /dev/log dir for container logging");
-			if (file_move(log_buffer_src, log_buffer_dest, 0))
-				WARN_ERRNO("Could not move %s log buffer to %s", log_buffer_src,
-					   log_buffer_dest);
-			mem_free(log_buffer_dest);
-		}
-		mem_free(log_buffer_src);
-	}
-}
-
 static bool
 c_vol_populate_dev_filter_cb(const char *dev_node, void *data)
 {
@@ -1327,22 +1308,6 @@ c_vol_start_child(c_vol_t *vol)
 		WARN_ERRNO("Could not mkdir /sys");
 	if (mount("sys", "/sys", "sysfs", sysopts, NULL) < 0)
 		WARN_ERRNO("Could not mount /sys");
-
-	/* Normally this would be done by the policy loading code in the android init process 
-	 * (system/core/init/init.c and external/libselinux/src/android.c) */
-	if (is_selinux_enabled()) {
-		DEBUG("Mounting /sys/fs/selinux");
-		if (mount("selinuxfs", "/sys/fs/selinux", "selinuxfs", MS_RELATIME | MS_NOSUID,
-			  NULL) < 0)
-			WARN_ERRNO("Could not mount /sys/fs/selinuxfs");
-	}
-
-	DEBUG("Mounting securityfs to /sys/kernel/security");
-	if (mount("securityfs", "/sys/kernel/security", "securityfs", MS_RELATIME | MS_NOSUID,
-		  NULL) < 0)
-		WARN_ERRNO("Could not mount securityfs to /sys/kernel/security");
-
-	c_vol_fixup_logdev();
 
 	if (mkdir("/dev/pts", 0755) < 0 && errno != EEXIST)
 		WARN_ERRNO("Could not mkdir /dev/pts");
