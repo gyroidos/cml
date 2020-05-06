@@ -227,6 +227,8 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 			ret = -1;
 			break;
 		}
+		target[ret] = 0;
+
 		if ((ret = symlink(target, file_dst)) < 0)
 			ERROR_ERRNO("Could not create symlink %s at %s", target, file_dst);
 		mem_free(target);
