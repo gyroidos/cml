@@ -58,7 +58,6 @@ c_cap_set_current_process(const container_t *container)
 	/* 19 */ C_CAP_DROP(CAP_SYS_PTRACE);
 #endif
 	/* 20 */ C_CAP_DROP(CAP_SYS_PACCT);
-	///* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
 	///* 22 */ C_CAP_DROP(CAP_SYS_BOOT);
 
 	///* 23 */ C_CAP_DROP(CAP_SYS_NICE); /* Is needed for some usecases*/
@@ -82,6 +81,9 @@ c_cap_set_current_process(const container_t *container)
 		/* 18 */ C_CAP_DROP(CAP_SYS_CHROOT);
 		/* 25 */ C_CAP_DROP(CAP_SYS_TIME);
 		/* 26 */ C_CAP_DROP(CAP_SYS_TTY_CONFIG);
+	}
+	if (!container_has_userns(container)) {
+		/* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
 	}
 
 	return 0;
