@@ -73,7 +73,7 @@ c_cap_set_current_process(const container_t *container)
 	/* 32 */ C_CAP_DROP(CAP_MAC_OVERRIDE);
 	/* 33 */ C_CAP_DROP(CAP_MAC_ADMIN);
 
-	///* 34 */ C_CAP_DROP(CAP_SYSLOG); /* needed by logd */
+	/* 34 */ C_CAP_DROP(CAP_SYSLOG);
 	///* 35 */ C_CAP_DROP(CAP_WAKE_ALARM); /* needed by alarm driver */
 
 	/* Use the following for dropping caps only in unprivileged containers */
