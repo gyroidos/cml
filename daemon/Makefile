@@ -102,6 +102,7 @@ SRC_FILES := main.c \
 	common/reboot.c \
 	power.c \
 	c_run.c \
+	c_fifo.c \
 	hw_$(TRUSTME_HARDWARE).c
 
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
