@@ -1302,6 +1302,17 @@ c_vol_start_child(c_vol_t *vol)
 		ERROR_ERRNO("Could not mount /proc");
 		goto error;
 	}
+	if (!container_has_userns(vol->container) && file_exists("/proc/sysrq-trigger")) {
+		if (mount("/proc/sysrq-trigger", "/proc/sysrq-trigger", NULL, MS_BIND, NULL) < 0) {
+			ERROR_ERRNO("Could not bind mount /proc/sysrq-trigger protection");
+			goto error;
+		}
+		if (mount(NULL, "/proc/sysrq-trigger", NULL, MS_BIND | MS_RDONLY | MS_REMOUNT,
+			  NULL) < 0) {
+			ERROR_ERRNO("Could not ro remount /proc/sysrq-trigger protection");
+			goto error;
+		}
+	}
 
 	DEBUG("Mounting /sys");
 	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
