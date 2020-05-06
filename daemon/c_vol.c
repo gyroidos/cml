@@ -1250,8 +1250,6 @@ c_vol_start_child(c_vol_t *vol)
 {
 	ASSERT(vol);
 
-	INFO("Switching to new rootfs in '%s'", vol->root);
-
 	if (!container_has_userns(vol->container)) {
 		// remount proc to reflect namespace change
 		if (umount("/proc") < 0 && errno != ENOENT) {
@@ -1267,6 +1265,8 @@ c_vol_start_child(c_vol_t *vol)
 	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM)
 		return 0;
 
+	INFO("Switching to new rootfs in '%s'", vol->root);
+
 	if (container_shift_mounts(vol->container) < 0) {
 		ERROR_ERRNO("Mounting of shifting user and gids failed!");
 		goto error;
@@ -1277,7 +1277,7 @@ c_vol_start_child(c_vol_t *vol)
 		goto error;
 	}
 
-	// mount namespcae handles chroot jail breaks
+	// mount namespace handles chroot jail breaks
 	if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
 		ERROR_ERRNO("Could not move mount for container start");
 		goto error;
@@ -1288,44 +1288,64 @@ c_vol_start_child(c_vol_t *vol)
 		goto error;
 	}
 
-	if (chdir("/") < 0)
+	if (chdir("/") < 0) {
 		ERROR_ERRNO("Could not chdir to / for container start");
-
-	/* TODO: do we want this mounting configurabel somewhere? */
+		goto error;
+	}
 
 	DEBUG("Mounting /proc");
-	if (mkdir("/proc", 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir /proc");
-	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0)
-		WARN_ERRNO("Could not mount /proc");
+	if (mkdir("/proc", 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /proc");
+		goto error;
+	}
+	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not mount /proc");
+		goto error;
+	}
 
 	DEBUG("Mounting /sys");
 	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
 	if (container_has_userns(vol->container) && !container_has_netns(vol->container)) {
 		sysopts |= MS_RDONLY;
 	}
-	if (mkdir("/sys", 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir /sys");
-	if (mount("sys", "/sys", "sysfs", sysopts, NULL) < 0)
-		WARN_ERRNO("Could not mount /sys");
-
-	if (mkdir("/dev/pts", 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir /dev/pts");
+	if (mkdir("/sys", 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /sys");
+		goto error;
+	}
+	if (mount("sys", "/sys", "sysfs", sysopts, NULL) < 0) {
+		ERROR_ERRNO("Could not mount /sys");
+		goto error;
+	}
 
 	DEBUG("Mounting /dev/pts");
-	if (mount("devpts", "/dev/pts", "devpts", MS_RELATIME | MS_NOSUID, NULL) < 0)
-		WARN_ERRNO("Could not mount /dev/pts");
+	if (mkdir("/dev/pts", 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /dev/pts");
+		goto error;
+	}
+	if (mount("devpts", "/dev/pts", "devpts", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not mount /dev/pts");
+		goto error;
+	}
 
 	DEBUG("Mounting /run");
-	if (mkdir("/run", 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir /run");
-	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, NULL) < 0)
-		WARN_ERRNO("Could not mount /run");
+	if (mkdir("/run", 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /run");
+		goto error;
+	}
+	if (mount("tmpfs", "/run", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, NULL) < 0) {
+		ERROR_ERRNO("Could not mount /run");
+		goto error;
+	}
 
-	if (mkdir(CMLD_SOCKET_DIR, 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir " CMLD_SOCKET_DIR);
-	if (mount("tmpfs", CMLD_SOCKET_DIR, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0)
-		WARN_ERRNO("Could not mount " CMLD_SOCKET_DIR);
+	DEBUG("Mounting " CMLD_SOCKET_DIR);
+	if (mkdir(CMLD_SOCKET_DIR, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir " CMLD_SOCKET_DIR);
+		goto error;
+	}
+	if (mount("tmpfs", CMLD_SOCKET_DIR, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not mount " CMLD_SOCKET_DIR);
+		goto error;
+	}
 
 	char *mount_output = file_read_new("/proc/self/mounts", 2048);
 	INFO("Mounted filesystems:");
