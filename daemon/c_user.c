@@ -38,6 +38,7 @@
 #include "common/mem.h"
 #include "common/file.h"
 #include "common/dir.h"
+#include "common/ns.h"
 #include "container.h"
 
 #define UID_RANGE 100000
@@ -308,21 +309,7 @@ c_user_setuid0(const c_user_t *user)
 	if (!user->ns_usr)
 		return 0;
 
-	TRACE("uid %d, euid %d", getuid(), geteuid());
-	if (setuid(0) < 0) {
-		ERROR_ERRNO("Could not become root 'setuid(0)' in new userns");
-		return -1;
-	}
-	if (setgid(0) < 0) {
-		ERROR_ERRNO("Could not set gid to '0' in new userns");
-		return -1;
-	}
-	if (setgroups(0, NULL) < 0) {
-		ERROR_ERRNO("Could not setgroups to '0' in new userns");
-		return -1;
-	}
-	TRACE("uid %d, euid %d", getuid(), geteuid());
-	return 0;
+	return namespace_setuid0();
 }
 
 int
