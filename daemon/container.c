@@ -45,6 +45,7 @@
 #include "c_net.h"
 #include "c_vol.h"
 #include "c_cap.h"
+#include "c_fifo.h"
 #include "c_service.h"
 #include "c_run.h"
 #include "container_config.h"
@@ -151,6 +152,7 @@ struct container {
 	c_user_t *user;
 	c_cgroups_t *cgroups;
 	c_net_t *net; /* encapsulates given network interfaces*/
+	c_fifo_t *fifo;
 
 	c_vol_t *vol;
 	c_service_t *service;
@@ -176,8 +178,6 @@ struct container {
 	char *dns_server;
 	time_t time_started;
 	time_t time_created;
-
-	list_t *fifo_list;
 
 	bool setup_mode;
 };
@@ -372,6 +372,13 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		goto error;
 	}
 
+	container->fifo = c_fifo_new(container, fifo_list);
+	if (!container->fifo) {
+		WARN("Could not initialize fifo subsystem for container %s (UUID: %s)",
+		     container->name, uuid_string(container->uuid));
+		goto error;
+	}
+
 	container->run = c_run_new(container);
 	if (!container->run) {
 		WARN("Could not initialize run subsystem for container %s (UUID: %s)",
@@ -413,8 +420,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->device_assigned_list = assigned_devices;
 	container->usbdev_list = usbdev_list;
 
-	container->fifo_list = fifo_list;
-
 	container->setup_mode = false;
 
 	return container;
@@ -422,135 +427,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 error:
 	container_free(container);
 	return NULL;
-}
-
-int
-create_fifos(void **data)
-{
-	if (!data) {
-		ERROR("Argument array was NULL, returning...");
-		return -1;
-	}
-
-	char *uuid = (char *)data[0];
-	container_t *container = (container_t *)data[1];
-
-	if (!container) {
-		ERROR("Container to create FIFOs was NULL, returning...");
-		return -1;
-	}
-
-	DEBUG("Creating fifos for container %s [%d], uuid: %p", container->name, container->pid,
-	      (uuid) ? uuid : "NULL");
-
-	// create pipe ends in c0 as listed in container config
-	char *fifo_dir;
-
-	if (uuid)
-		fifo_dir = mem_printf("/tmp/%s/data/fifos", uuid);
-	else
-		fifo_dir = mem_printf("/data/fifos");
-
-	DEBUG("FIFO dir: %p", fifo_dir);
-
-	IF_NULL_RETVAL(fifo_dir, -1);
-
-	DEBUG("FIFO dir %s", fifo_dir);
-
-	if (dir_mkdir_p(fifo_dir, 0700) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Could not mkdir %s dir for container start", fifo_dir);
-	}
-
-	DEBUG("Created FIFO dir: %s", fifo_dir);
-
-	for (list_t *elem = container->fifo_list; elem != NULL; elem = elem->next) {
-		char *fifo = elem->data;
-		DEBUG("Preparing FIFO \'%s\'", fifo);
-
-		char *fifo_path = mem_printf("%s/%s", fifo_dir, fifo);
-
-		if (!fifo_path) {
-			ERROR_ERRNO("Failed to mem_printf FIFO path");
-		}
-
-		if (0 != mkfifo(fifo_path, 666)) {
-			ERROR_ERRNO("Failed to create fifo at %s", fifo_path);
-		}
-
-		DEBUG("Created FIFO at %s", fifo_path);
-
-		free(fifo_dir);
-		free(fifo_path);
-	}
-
-	DEBUG("Sucessfully executed create_fifo()");
-	return 0;
-}
-
-static int
-fifo_loop(char *fifo_path_c0, char *fifo_path_container)
-{
-	int fromfd = -1, tofd = -1;
-
-	//keep repopening c0 pipe end when closed
-	while (1) {
-		if (fromfd != -1 && close(fromfd)) {
-			TRACE_ERRNO("Failed to close old reading fd");
-		}
-
-		if (tofd != -1 && close(tofd)) {
-			TRACE_ERRNO("Failed to close old reading fd");
-		}
-
-		fromfd = open(fifo_path_c0, O_RDONLY);
-
-		if (-1 == fromfd) {
-			ERROR("Failed to fromfd at %s, exiting...", fifo_path_c0);
-			exit(-1);
-		}
-
-		DEBUG("Opened reading end for %s", fifo_path_c0);
-
-		int tofd = open(fifo_path_container, O_WRONLY);
-		if (-1 == tofd) {
-			ERROR_ERRNO("Failed to open tofd at %s, exiting ...", fifo_path_container);
-			exit(-1);
-		}
-
-		DEBUG("Opened writing end for %s", fifo_path_container);
-
-		DEBUG("Entering readloop with fromfd %d and tofd %d", fromfd, tofd);
-
-		int count = 0;
-		char buf[1024];
-
-		//handle current pipe
-		while (1) {
-			if (0 < (count = read(fromfd, &buf, sizeof(buf) - 1))) {
-				TRACE("[READLOOP] Read returned %d, writing to target FIFO", count);
-
-				buf[count] = 0;
-				TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, fromfd,
-				      buf);
-
-				int current = 0, total = count;
-				while (current < total) {
-					if (0 > (count = write(tofd, buf, count))) {
-						TRACE_ERRNO(
-							"[READLOOP] an error ocurred during write, try to repopen pipes");
-						break;
-					}
-
-					current += count;
-
-					TRACE("[READLOOP] Wrote %d bytes to fd: %d: %s, current: %d, total: %d",
-					      count, tofd, buf, current, total);
-				}
-			} else {
-				TRACE("[READLOOP] Read returned %d, try to reopen fds", count);
-			}
-		}
-	}
 }
 
 bool
@@ -716,12 +592,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		DEBUG("Adding FIFO \'%s\' to container's FIFO list", fifos[i]);
 
 		fifo_list = list_append(fifo_list, mem_strdup(fifos[i]));
-
-		if (fifo_list == NULL) {
-			ERROR_ERRNO("Failed to append %s to container's FIFO list", fifos[i]);
-			break;
-			;
-		}
 	}
 
 	container_t *c =
@@ -1633,6 +1503,7 @@ container_start(container_t *container) //, const char *key)
 	/* POST CLONE HOOKS */
 	// execute all necessary c_<module>_start_post_clone hooks
 	// goto error_post_clone on an error
+
 	if (c_cgroups_start_post_clone(container->cgroups)) {
 		ret = CONTAINER_ERROR_CGROUPS;
 		goto error_post_clone;
@@ -1648,68 +1519,9 @@ container_start(container_t *container) //, const char *key)
 		goto error_post_clone;
 	}
 
-	container_t *c0 = cmld_containers_get_a0();
-	if (c0 && c0->pid != container->pid) {
-		DEBUG("Preparing container FIFOs");
-		const char *namespaces[1];
-		int ns_count = 0;
-
-		namespaces[ns_count] = "mnt";
-		ns_count++;
-
-		const void *args[2];
-		args[0] = NULL;
-		args[1] = container;
-
-		DEBUG("Creating FIFOs in c0, namespace[0]==%s, ns_pid=%d", namespaces[0], c0->pid);
-		if (-1 == namespace_exec(c0->pid, namespaces, ns_count, create_fifos, args)) {
-			WARN("Failed to prepare container FIFOs in c0");
-			goto error_post_clone;
-		}
-
-		args[0] = uuid_string(container->uuid);
-
-		DEBUG("Creating FIFOs in target container, namespace[0]==%s, ns_pid=%d",
-		      namespaces[0], container->pid);
-		if (-1 ==
-		    namespace_exec(container->pid, namespaces, ns_count, create_fifos, args)) {
-			WARN("Failed to prepare container FIFOs in c0");
-			goto error_post_clone;
-		}
-
-		//TODO replace by shared mount
-		//fork container forwarding child
-		for (list_t *elem = container->fifo_list; elem != NULL; elem = elem->next) {
-			char *fifo = elem->data;
-
-			int pid = fork();
-
-			if (-1 == pid) {
-				ERROR("Failed to clone forwarding child");
-				goto error_post_clone;
-			} else if (pid == 0) {
-				DEBUG("Preparing forwarding for FIFO \'%s\'", fifo);
-
-				char *fifo_path_c0 =
-					mem_printf("/tmp/%s/%s/%s", uuid_string(c0->uuid),
-						   "/data/fifos", fifo);
-				char *fifo_path_container =
-					mem_printf("/tmp/%s/%s/%s", uuid_string(container->uuid),
-						   "/data/fifos", fifo);
-
-				DEBUG("Forwarding from %s to %s", fifo_path_c0,
-				      fifo_path_container);
-
-				fifo_loop(fifo_path_c0, fifo_path_container);
-
-				exit(EXIT_FAILURE);
-			}
-
-			DEBUG("Forked FIFO forwarding child %d for %s", pid, fifo);
-		}
-
-	} else if (strcmp((char *)c0->uuid, (char *)container->uuid)) {
-		DEBUG("No c0 running, not preparing FIFOs for container %s", container->name);
+	if (c_fifo_start_post_clone(container->fifo)) {
+		ret = CONTAINER_ERROR_FIFO;
+		goto error_post_clone;
 	}
 
 	/*********************************************************/
