@@ -442,9 +442,9 @@ docker_download_manifest_list(const char *curl_token, const char *out_file, cons
 	char *acceptlist = "Accept: " MEDIA_TYPE_MANIFEST_LIST_V2;
 
 	const char *const argv_basic[] = { CURL_PATH,  "-fsSL", "-H", auth_basic, "-H",
-					   acceptlist, url,     "-o", out_file,   NULL };
-	const char *const argv_bearer[] = { CURL_PATH,  "-fsSL", "-H", auth_bearer, "-H",
-					    acceptlist, url,     "-o", out_file,    NULL };
+					   acceptlist, url,	"-o", out_file,	  NULL };
+	const char *const argv_bearer[] = { CURL_PATH,	"-fsSL", "-H", auth_bearer, "-H",
+					    acceptlist, url,	 "-o", out_file,    NULL };
 
 	int ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0) {
@@ -471,12 +471,12 @@ docker_download_manifest(const char *curl_token, const char *out_file, const cha
 	char *acceptv2 = "Accept: " MEDIA_TYPE_MANIFEST_V2;
 	char *acceptv1 = "Accept: " MEDIA_TYPE_MANIFEST_V1;
 
-	const char *const argv_basic[] = { CURL_PATH, "-fsSL",  "-H",     auth_basic,
-					   "-H",      acceptv2, "-H",     acceptv1,
-					   url,       "-o",     out_file, NULL };
-	const char *const argv_bearer[] = { CURL_PATH, "-fsSL",  "-H",     auth_bearer,
-					    "-H",      acceptv2, "-H",     acceptv1,
-					    url,       "-o",     out_file, NULL };
+	const char *const argv_basic[] = { CURL_PATH, "-fsSL",	"-H",	  auth_basic,
+					   "-H",      acceptv2, "-H",	  acceptv1,
+					   url,	      "-o",	out_file, NULL };
+	const char *const argv_bearer[] = { CURL_PATH, "-fsSL",	 "-H",	   auth_bearer,
+					    "-H",      acceptv2, "-H",	   acceptv1,
+					    url,       "-o",	 out_file, NULL };
 
 	int ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0) {
@@ -519,7 +519,7 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 	const char *const argv_bearer[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_bearer,
 					    url,       "-o",   out_file,     NULL };
 	const char *const argv_basic[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_basic,
-					   url,       "-o",   out_file,     NULL };
+					   url,	      "-o",   out_file,	    NULL };
 
 	ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0)

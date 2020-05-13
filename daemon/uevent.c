@@ -110,17 +110,17 @@ struct uevent {
 		struct udev_monitor_netlink_header nlh;
 		char raw[UEVENT_BUF_LEN]; //!< The raw string that we get from the kernel
 	} msg;
-	size_t msg_len;	//!< The length of the uevent
-	char *action;	  //!< The uevent ACTION, points inside of raw
+	size_t msg_len;	       //!< The length of the uevent
+	char *action;	       //!< The uevent ACTION, points inside of raw
 	char *subsystem;       //!< The uevent SUBSYSTEM, points inside of raw
-	char *devname;	 //!< The uevent DEVNAME, points inside of raw
-	char *devpath;	 //!< The uevent DEVPATH, points inside of raw
-	char *devtype;	 //!< The uevent DEVTYPE, points inside of raw
-	char *driver;	  //!< The uevent DRIVER, points inside of raw
-	int major;	     //!< The major number of the device
-	int minor;	     //!< The minor number of the device
-	char *type;	    //!< The uevent TYPE, points inside of raw
-	char *product;	 //!< The uevent PRODUCT, points inside of raw (usb relevant)
+	char *devname;	       //!< The uevent DEVNAME, points inside of raw
+	char *devpath;	       //!< The uevent DEVPATH, points inside of raw
+	char *devtype;	       //!< The uevent DEVTYPE, points inside of raw
+	char *driver;	       //!< The uevent DRIVER, points inside of raw
+	int major;	       //!< The major number of the device
+	int minor;	       //!< The minor number of the device
+	char *type;	       //!< The uevent TYPE, points inside of raw
+	char *product;	       //!< The uevent PRODUCT, points inside of raw (usb relevant)
 	uint16_t id_vendor_id; //!< The udev event ID_VENDOR_ID inside of raw (usb relevenat)
 	uint16_t id_model_id;  //!< The udev event ID_MODEL_ID of the device (usb relevant)
 	char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)

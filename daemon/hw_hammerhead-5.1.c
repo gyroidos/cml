@@ -95,9 +95,9 @@ static const char *hw_hammerhead_devices_whitelist_base[] = {
 #endif
 
 	/* qseecom,  kgsl-3d0 kernel graphics support layer. (Adreno stuff), diag */
-	"c 243:0 rwm",  // qseecom
-	"c 244:0 rwm",  // kgsl-3d0
-	"c 245:0 rwm",  // diag
+	"c 243:0 rwm",	// qseecom
+	"c 244:0 rwm",	// kgsl-3d0
+	"c 245:0 rwm",	// diag
 	"c 247:99 rwm", //ttyHS99 serial  Bluetooth
 
 	"c 250:* rwm", // smdcntl*

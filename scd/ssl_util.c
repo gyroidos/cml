@@ -155,9 +155,9 @@ void
 ssl_free(void)
 {
 	// free OpenSSL stuff
-	ERR_free_strings();	   // free error strings
+	ERR_free_strings();	      // free error strings
 	EVP_cleanup();		      // cleans loaded alogrithms, ciphers and digests
-	ENGINE_cleanup();	     // cleanup previsouly loaded ENGINEs
+	ENGINE_cleanup();	      // cleanup previsouly loaded ENGINEs
 	CRYPTO_cleanup_all_ex_data(); // cleans some more generally used memory
 	if (tpm_engine) {
 		ENGINE_free(tpm_engine);

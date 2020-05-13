@@ -69,8 +69,8 @@ struct control {
 	//char const *format;	// TBD control message encoding format
 	//uint32_t permissions; // TBD
 	int type;
-	char *hostip;   // remote host for inet (MDM) connection
-	int port;       // remote port
+	char *hostip;	// remote host for inet (MDM) connection
+	int port;	// remote port
 	bool connected; // FIXME: we should reconsider this...
 	event_timer_t *reconnect_timer;
 	bool privileged;

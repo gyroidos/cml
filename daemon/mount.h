@@ -44,7 +44,7 @@ typedef struct mount_entry mount_entry_t;
 enum mount_type {
 	MOUNT_TYPE_SHARED =
 		1, /**< image file is shared by all containers of the operating system type */
-	MOUNT_TYPE_DEVICE = 2,    /**< image file is copied from a device partition */
+	MOUNT_TYPE_DEVICE = 2,	  /**< image file is copied from a device partition */
 	MOUNT_TYPE_DEVICE_RW = 3, /**< image file is copied from a device partition */
 	MOUNT_TYPE_EMPTY = 4, /**< image file is generated on container start if not available */
 	MOUNT_TYPE_COPY = 5,  // TODO: remove
