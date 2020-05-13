@@ -42,7 +42,7 @@ struct mount_entry {
 	enum mount_type type; /**< type of the image file */
 	char *image_file;     /**< image name without suffix, e.g. "system" */
 	char *mount_point; /**< directory where to mount the image inside the container, e.g. /system */
-	char *fs_type;     /**< file system type of the mount, e.g. ext4 */
+	char *fs_type;	   /**< file system type of the mount, e.g. ext4 */
 	uint64_t default_size; /**< default size for EMPTY images */
 	uint64_t image_size;   /**< size overwriting default_size */
 	// TODO: add list of hash, min/max size for EMPTY images, etc.

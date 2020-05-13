@@ -79,8 +79,8 @@ network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface)
 	char *src_pid_str = mem_printf("%d", src_pid);
 	char *dest_pid_str = mem_printf("%d", dest_pid);
 	const char *const argv[] = { NSENTER_PATH, "-t",	 src_pid_str, "-n",
-				     IP_PATH,      "link",       "set",       interface,
-				     "netns",      dest_pid_str, NULL };
+				     IP_PATH,	   "link",	 "set",	      interface,
+				     "netns",	   dest_pid_str, NULL };
 	DEBUG("NSENTER:");
 	for (int i = 0; argv[i]; i++)
 		DEBUG("-- %s", argv[i]);
@@ -152,9 +152,9 @@ network_setup_default_route_table(const char *table_id, const char *gateway, boo
 	ASSERT(gateway);
 	DEBUG("%s default route via %s", add ? "Adding" : "Deleting", gateway);
 
-	const char *const argv[] = { IP_PATH,   "route",  add ? "replace" : "del",
-				     "default", "via",    gateway,
-				     "table",   table_id, NULL };
+	const char *const argv[] = { IP_PATH,	"route",  add ? "replace" : "del",
+				     "default", "via",	  gateway,
+				     "table",	table_id, NULL };
 	return proc_fork_and_execvp(argv);
 }
 
@@ -165,8 +165,8 @@ network_setup_route_table(const char *table_id, const char *net_dst, const char 
 	ASSERT(dev);
 	DEBUG("%s route to %s via %s", add ? "Adding" : "Deleting", net_dst, dev);
 
-	const char *const argv[] = { IP_PATH, "route",  add ? "replace" : "del",
-				     net_dst, "dev",    dev,
+	const char *const argv[] = { IP_PATH, "route",	add ? "replace" : "del",
+				     net_dst, "dev",	dev,
 				     "table", table_id, NULL };
 	return proc_fork_and_execvp(argv);
 }
@@ -193,7 +193,7 @@ network_iptables(const char *table, const char *chain, const char *net_src, cons
 	ASSERT(jmp_target);
 
 	const char *const argv[] = { IPTABLES_PATH, "-t",    table, add ? "-I" : "-D", chain,
-				     "-s",	  net_src, "-j",  jmp_target,	NULL };
+				     "-s",	    net_src, "-j",  jmp_target,	       NULL };
 	return proc_fork_and_execvp(argv);
 }
 
@@ -212,17 +212,17 @@ network_setup_port_forwarding(const char *srcip, uint16_t srcport, const char *d
 
 	// forward local port to destination:port
 	const char *const argv[] = { IPTABLES_PATH, "-t", "nat",       enable ? "-I" : "-D",
-				     "OUTPUT",      "-s", "127.0.0.1", "-d",
+				     "OUTPUT",	    "-s", "127.0.0.1", "-d",
 				     "127.0.0.1",   "-p", "tcp",       "--dport",
-				     src_port,      "-j", "DNAT",      "--to-destination",
-				     dst,	   NULL };
+				     src_port,	    "-j", "DNAT",      "--to-destination",
+				     dst,	    NULL };
 	int error = proc_fork_and_execvp(argv);
 	// change source address for forwarded packets
-	const char *const argv2[] = { IPTABLES_PATH, "-t", "nat",       enable ? "-I" : "-D",
+	const char *const argv2[] = { IPTABLES_PATH, "-t", "nat",	enable ? "-I" : "-D",
 				      "POSTROUTING", "-s", "127.0.0.1", "-d",
-				      dstip,	 "-p", "tcp",       "--dport",
-				      dst_port,      "-j", "SNAT",      "--to-source",
-				      srcip,	 NULL };
+				      dstip,	     "-p", "tcp",	"--dport",
+				      dst_port,	     "-j", "SNAT",	"--to-source",
+				      srcip,	     NULL };
 	error |= proc_fork_and_execvp(argv2);
 
 	mem_free(src_port);
@@ -411,7 +411,7 @@ network_routing_rules_set_all_main(bool flush)
 
 	DEBUG("Set rule to route all traffic through table %s", IP_ROUTING_TABLE);
 
-	const char *const argv2[] = { IP_PATH,  "rule",		  "add", "from", "all",
+	const char *const argv2[] = { IP_PATH,	"rule",		  "add", "from", "all",
 				      "lookup", IP_ROUTING_TABLE, NULL };
 	return proc_fork_and_execvp(argv2);
 }

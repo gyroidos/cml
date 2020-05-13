@@ -53,8 +53,8 @@ struct guestos {
 
 #define GUESTOS_MAX_DOWNLOAD_ATTEMPTS 3
 #define GUESTOS_FLASHED_FILE "flash_complete" // TODO check contents of partitions instead!
-#define GUESTOS_FLASH_BLOCKSIZE 512	   // blocksize in bytes for flashing partitions
-#define GUESTOS_VERIFY_BLOCKSIZE 4096	 // blocksize in bytes for verifying partitions
+#define GUESTOS_FLASH_BLOCKSIZE 512	      // blocksize in bytes for flashing partitions
+#define GUESTOS_VERIFY_BLOCKSIZE 4096	      // blocksize in bytes for verifying partitions
 
 /******************************************************************************/
 
@@ -325,8 +325,8 @@ guestos_images_are_complete(const guestos_t *os, bool thorough)
 	     guestos_get_version(os), thorough ? "thorough" : "quick");
 
 	bool res = true;
-	mount_t *mnt = mount_new();	// need to get "mounts" to get image URLs... feels wrong
-	guestos_fill_mount(os, mnt);       // append mounts to be checked
+	mount_t *mnt = mount_new();	   // need to get "mounts" to get image URLs... feels wrong
+	guestos_fill_mount(os, mnt);	   // append mounts to be checked
 	guestos_fill_mount_setup(os, mnt); // append setup mode mounts to be check
 	size_t n = mount_get_count(mnt);
 	for (size_t i = 0; i < n; i++) {

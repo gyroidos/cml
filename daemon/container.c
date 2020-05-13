@@ -132,7 +132,7 @@ struct container {
 
 	list_t *csock_list;  /* List of sockets bound inside the container */
 	const guestos_t *os; /* weak reference */
-	pid_t pid;	   /* PID of the corresponding /init */
+	pid_t pid;	     /* PID of the corresponding /init */
 	int exit_status;     /* if the container's init exited, here we store its exit status */
 
 	char **init_argv; /* command line parameters for init */

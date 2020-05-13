@@ -148,7 +148,7 @@ util_hash_sha256_image_file_new(const char *image_file)
 int
 util_squash_image(const char *dir, const char *image_file)
 {
-	const char *const argv[] = { MKSQUASHFS_PATH, dir,  image_file,       "-noappend", "-comp",
+	const char *const argv[] = { MKSQUASHFS_PATH, dir,  image_file,	      "-noappend", "-comp",
 				     MKSQUASHFS_COMP, "-b", MKSQUASHFS_BSIZE, NULL };
 	return proc_fork_and_execvp(argv);
 }
@@ -156,8 +156,8 @@ util_squash_image(const char *dir, const char *image_file)
 int
 util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
 {
-	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",   "-sha512", "-sign", key_file,
-				     "-out",	  sig_file, cfg_file,  NULL };
+	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",	"-sha512", "-sign", key_file,
+				     "-out",	      sig_file, cfg_file,  NULL };
 	return proc_fork_and_execvp(argv);
 }
 
