@@ -79,8 +79,8 @@ struct event_timer {
 	void (*func)(event_timer_t *timer,
 		     void *data); /**< the function to call when the event is triggered */
 	void *data;		  /**< a data pointer to pass to the callback function */
-	struct timespec diff;     /**< interval, relative value */
-	struct timespec next;     /**< next timeout, absolute value */
+	struct timespec diff;	  /**< interval, relative value */
+	struct timespec next;	  /**< next timeout, absolute value */
 	int repeat;		  /**< how often to repeat, -1 means repeat indefinitely */
 	int repeated;		  /**< how often the timer already expired */
 };

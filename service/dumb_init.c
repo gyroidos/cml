@@ -102,7 +102,7 @@ dumb_init_handle_signal(int signum)
 		}
 	} else if (signum == SIGTSTP || // tty: background yourself
 		   signum == SIGTTIN || // tty: stop reading
-		   signum == SIGTTOU    // tty: stop writing
+		   signum == SIGTTOU	// tty: stop writing
 	) {
 		if (use_setsid) {
 			DEBUG("Running in setsid mode, so forwarding SIGSTOP instead.\n");

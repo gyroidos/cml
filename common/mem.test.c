@@ -250,7 +250,7 @@ test_integer_overflow_in_mem_renew_is_detected(UNUSED const MunitParameter param
 
 static MunitTest tests[] = {
 	{
-		"/allocate primitives and structs",       /* name */
+		"/allocate primitives and structs",	  /* name */
 		test_can_allocate_primitives_and_structs, /* test */
 		setup,					  /* setup */
 		tear_down,				  /* tear_down */
@@ -258,7 +258,7 @@ static MunitTest tests[] = {
 		NULL					  /* parameters */
 	},
 	{
-		"/reallocate primitives and structs",    /* name */
+		"/reallocate primitives and structs",	 /* name */
 		test_can_realloc_primitives_and_structs, /* test */
 		setup,					 /* setup */
 		tear_down,				 /* tear_down */
@@ -298,8 +298,8 @@ static MunitTest tests[] = {
 		NULL								 /* parameters */
 	},
 	{
-		"/strdup and strndup",  /* name */
-		test_strdup_strndup,    /* test */
+		"/strdup and strndup",	/* name */
+		test_strdup_strndup,	/* test */
 		setup,			/* setup */
 		tear_down,		/* tear_down */
 		MUNIT_TEST_OPTION_NONE, /* options */

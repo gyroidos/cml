@@ -96,21 +96,21 @@
 typedef struct {
 	char *nw_name;		       //!< Name of the network device
 	bool configure;		       // do ip/routing configuration
-	char *veth_cmld_name;	  //!< associated veth name in root ns
-	char *veth_cont_name;	  //!< veth name in the container's ns
+	char *veth_cmld_name;	       //!< associated veth name in root ns
+	char *veth_cont_name;	       //!< veth name in the container's ns
 	char *subnet;		       //!< string with subnet (x.x.x.x/y)
 	struct in_addr ipv4_cmld_addr; //!< associated ipv4 address in root ns
 	struct in_addr ipv4_cont_addr; //!< ipv4 address of container
 	struct in_addr ipv4_bc_addr;   //!< ipv4 bcaddr of container/cmld subnet
 	int cont_offset;	       //!< gives information about the adresses to be set
-	uint8_t veth_mac[6];	   // generated or configured mac of nic in	container
+	uint8_t veth_mac[6];	       // generated or configured mac of nic in	container
 	pid_t dhcpd_pid;	       // pid of corresponding dhcpd if running for this ni
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
 struct c_net {
 	container_t *container; //!< container which the c_net struct is associated to
-	uint16_t adb_port;      //!< forwarded port for adb in container
+	uint16_t adb_port;	//!< forwarded port for adb in container
 	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container

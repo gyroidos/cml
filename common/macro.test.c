@@ -143,7 +143,7 @@ test_multiplication_macro_catches_overflow(UNUSED const MunitParameter params[],
 static MunitTest tests[] = {
 	{
 		"/integer overflow checking macros do correctly +,-.*", /* name */
-		test_integer_overflow_macros_perform_correct_ops,       /* test */
+		test_integer_overflow_macros_perform_correct_ops,	/* test */
 		setup,							/* setup */
 		tear_down,						/* tear_down */
 		MUNIT_TEST_OPTION_NONE,					/* options */
