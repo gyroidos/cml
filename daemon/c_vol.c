@@ -77,8 +77,8 @@
 #define SHARED_FILES_PATH "/data/cml/files_shared"
 #define SHARED_FILES_STORE_SIZE 100
 
-#define is_selinux_disabled() !file_exists("/sys/fs/selinux")
-#define is_selinux_enabled() file_exists("/sys/fs/selinux")
+#define is_selinux_disabled() !file_is_mountpoint("/sys/fs/selinux")
+#define is_selinux_enabled() file_is_mountpoint("/sys/fs/selinux")
 
 struct c_vol {
 	const container_t *container;
