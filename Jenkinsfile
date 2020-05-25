@@ -1,6 +1,7 @@
 pipeline {
    agent any
    options { checkoutToSubdirectory('trustme/cml') }
+
    stages {
       stage('Repo') {
 	 steps {
@@ -21,6 +22,7 @@ pipeline {
                   git branch -D ${BRANCH_NAME}
                fi
                git checkout -b ${BRANCH_NAME}
+               git clean -f
              '''
          }
       }
