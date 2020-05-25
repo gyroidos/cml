@@ -60,7 +60,6 @@ PROTO_SRC := \
 
 SRC_FILES := \
 	cJSON/cJSON.c \
-	gzopen.c \
 	util.c \
 	docker.c \
 	control.c \
@@ -70,8 +69,6 @@ LD_LIB_FLAGS := \
 	-Lcommon -lcommon_full \
 	-lprotobuf-c \
 	-lprotobuf-c-text \
-	-lz \
-	-ltar \
 	-lresolv \
 	-lcrypto
 
