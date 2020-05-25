@@ -4,7 +4,9 @@ FROM debian:stretch
 # Essentials
 RUN apt-get update && apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping libsdl1.2-dev xterm lsb-release libprotobuf-c1 libprotobuf-c-dev protobuf-compiler protobuf-c-compiler autoconf libtool libtool-bin re2c check
 
+
 # CI
+RUN apt-get install -y libssl-dev libcap-dev libselinux-dev apt-transport-https
 #
 # clang-9 toolchain for debian stretch
 # maybe even 11 would be good
@@ -31,7 +33,7 @@ RUN apt-get update && apt-get install -y qemu-kvm ovmf
 # Bootable medium
 RUN apt-get update && apt-get install -y util-linux btrfs-progs gdisk parted
 
-RUN apt-get update && apt-get install -y screen locales ca-certificates gosu locales
+RUN apt-get update && apt-get install -y libssl-dev libtar-dev screen locales ca-certificates gosu locales
 RUN dpkg-reconfigure locales
 RUN echo "LC_ALL=en_US.UTF-8" >> /etc/environment
 RUN echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
