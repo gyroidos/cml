@@ -25,11 +25,12 @@ for d in ${dirs[*]}; do
     make clean
 done
 
-# Execute the unit tests for libcommon with enabled sanitizers
+# Execute the unit tests for libcommon without sanitizers
+# TODO: Execute the unit tests for libcommon with enabled sanitizers
 # TODO: write more libcommon tests
 cd "${REPO_DIR}/common"
 make clean
-SANITIZERS=y make test
+SANITIZERS=n make test
 make clean
 
 #TODO: execute here other tests or other pre-yocto jobs
