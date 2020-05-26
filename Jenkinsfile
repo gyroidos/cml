@@ -112,6 +112,7 @@ pipeline {
                          echo "BB_GENERATE_MIRROR_TARBALLS = \\\"1\\\"" >> conf/local.conf
 
                          bitbake trustx-cml-initramfs multiconfig:container:trustx-core
+                         bitbake trustx-cml
                       '''
                    }
 
@@ -142,13 +143,13 @@ pipeline {
                          export LANG=en_US.UTF-8
                          export LANGUAGE=en_US.UTF-8
                          DEVELOPMENT_BUILD=n
-                         if [ -d out-yocto/conf ]; then
-                            rm -r out-yocto/conf
+                         if [ -d out-prod/conf ]; then
+                            rm -r out-prod/conf
                          fi
-                         . init_ws.sh out-yocto
+                         . init_ws.sh out-prod
 
                          echo Using branch name ${BRANCH_NAME} in bbappend files
-                         cd ${WORKSPACE}/out-yocto
+                         cd ${WORKSPACE}/out-prod
                          echo "BRANCH = \\\"${BRANCH_NAME}\\\"" > cmld_git.bbappend.jenkins
                          cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
                          rm cmld_git.bbappend
@@ -159,15 +160,16 @@ pipeline {
                          echo "BB_GENERATE_MIRROR_TARBALLS = \\\"1\\\"" >> conf/local.conf
 
                          bitbake trustx-cml-initramfs multiconfig:container:trustx-core
+                         bitbake trustx-cml
                       '''
                    }
                    post {
                       success {
                          sh '''
-                            xz -T 0 -f out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img
+                            xz -T 0 -f out-prod/tmp/deploy/images/**/trustme_image/trustmeimage.img
                          '''
 
-                         archiveArtifacts artifacts: 'out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img.xz', fingerprint: true
+                         archiveArtifacts artifacts: 'out-prod/tmp/deploy/images/**/trustme_image/trustmeimage.img.xz', fingerprint: true
                       }
                    }
               }
@@ -247,38 +249,6 @@ pipeline {
           steps {
               sh 'echo pass'
           }
-      }
-
-
-
-     stage('Deploy') {
-         agent { dockerfile {
-            dir 'trustme/build/yocto/docker'
-            args '--entrypoint=\'\' -v /tmp:/tmp'
-            reuseNode true
-         } }
-         steps {
-            sh '''
-               export LC_ALL=en_US.UTF-8
-               export LANG=en_US.UTF-8
-               export LANGUAGE=en_US.UTF-8
-               . init_ws.sh out-yocto
-               rm cmld_git.bbappend
-               cp cmld_git.bbappend.jenkins cmld_git.bbappend
-
-               bitbake trustx-cml
-            '''
-         }
-      }
-   }
-
-   post {
-      always {
-         sh '''
-            xz -T 0 -f out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img
-         '''
-
-         archiveArtifacts artifacts: 'out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img.xz', fingerprint: true
       }
    }
 }
