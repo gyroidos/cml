@@ -192,7 +192,7 @@ token_new(token_constr_data_t *constr_data)
 		ASSERT(constr_data->str.softtoken_dir);
 
 		token_file = mem_printf("%s/%s%s", constr_data->str.softtoken_dir,
-					      constr_data->uuid, STOKEN_DEFAULT_EXT);
+					constr_data->uuid, STOKEN_DEFAULT_EXT);
 		if (!file_exists(token_file)) {
 			if (softtoken_create_p12(token_file, STOKEN_DEFAULT_PASS,
 						 constr_data->uuid) != 0) {
@@ -247,7 +247,6 @@ token_new(token_constr_data_t *constr_data)
 	}
 
 	return new_token;
-
 
 err_st_new:
 	mem_free(token_file);

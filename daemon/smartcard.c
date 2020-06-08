@@ -73,6 +73,12 @@ typedef struct smartcard_startdata {
 	control_t *control;
 } smartcard_startdata_t;
 
+typedef struct smartcard_scdtoken_data {
+	smartcard_t *smartcard;
+	container_t *container;
+	char *token_uuid;
+} smartcard_scdtoken_data_t;
+
 static char *
 bytes_to_string_new(unsigned char *data, size_t len)
 {
@@ -166,16 +172,50 @@ error:
 	return -1;
 }
 
+static TokenToDaemon *
+smartcard_send_recv_block(const DaemonToToken *out)
+{
+	ASSERT(out);
+
+	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+	if (sock < 0) {
+		ERROR_ERRNO("Failed to connect to scd control socket %s", SCD_CONTROL_SOCKET);
+		return NULL;
+	}
+
+	DEBUG("smartcard_send_recv_block: connected to sock %d", sock);
+
+	/*
+	char *string = protobuf_c_text_to_string((ProtobufCMessage *) out, NULL);
+	if (!string)
+		string = mem_printf("%d", out->code);
+	DEBUG("smartcard_send_crypto: sending crypto command {%s}", string);
+	mem_free(string);
+	*/
+
+	if (protobuf_send_message(sock, (ProtobufCMessage *)out) <= 0) {
+		ERROR("Failed to send message to scd on sock %d", sock);
+		close(sock);
+		return NULL;
+	}
+
+	TokenToDaemon *msg = NULL;
+	msg = (TokenToDaemon *)protobuf_recv_message(sock, &token_to_daemon__descriptor);
+	close(sock);
+	return msg;
+}
+
 /**
  * checks whether the token associated to @param container has been provisioned
  * with a device bound authentication code yet.
+ * TODO: this should actually query the SCD. Functionality in SCD not yet implemented.
  */
-static int
-smartcard_container_token_is_provisioned(container_t *container)
+bool
+smartcard_container_token_is_provisioned(const container_t *container)
 {
 	ASSERT(container);
 
-	int ret = -1;
+	bool ret;
 
 	char *token_init_file =
 		mem_printf("%s/%s", container_get_images_dir(container), TOKEN_IS_INIT_FILE_NAME);
@@ -350,8 +390,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			out.code = DAEMON_TO_TOKEN__CODE__LOCK;
 
 			out.has_token_type = true;
-			out.token_type =
-				smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
+			out.token_type = smartcard_tokentype_to_proto(
+				container_get_token_type(startdata->container));
 			if (out.token_type == TOKEN_TYPE__USB)
 				out.usbtoken_serial =
 					container_get_usbtoken_serial(startdata->container);
@@ -378,8 +418,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			out.code = DAEMON_TO_TOKEN__CODE__LOCK;
 
 			out.has_token_type = true;
-			out.token_type =
-				smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
+			out.token_type = smartcard_tokentype_to_proto(
+				container_get_token_type(startdata->container));
 			if (out.token_type == TOKEN_TYPE__USB)
 				out.usbtoken_serial =
 					container_get_usbtoken_serial(startdata->container);
@@ -431,6 +471,10 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	ASSERT(container);
 
 	smartcard_startdata_t *startdata = mem_alloc(sizeof(smartcard_startdata_t));
+	if (!startdata) {
+		ERROR("Could not allocate memory for startdata");
+		return -1;
+	}
 	startdata->smartcard = smartcard;
 	startdata->container = container;
 	startdata->control = control;
@@ -440,9 +484,17 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	int pw_size = strlen(passwd);
 	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
 
-	if (!smartcard_container_token_is_provisioned(container)) {
-		ERROR("The token that is associated with this container must be paired to the device first");
+	if (!container_get_token_is_init(container)) {
+		ERROR("The token that is associated with the container has not been initialized! \
+				Aborting container start ...");
 		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, resp_fd);
+		mem_free(startdata);
+		return -1;
+	}
+
+	if (!container_get_token_is_linked_to_device(container)) {
+		ERROR("The token that is associated with this container must be paired to the device first");
+		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_NPAIRED, resp_fd);
 		mem_free(startdata);
 		return -1;
 	}
@@ -472,7 +524,8 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	out.pairing_secret.data = mem_memcpy(pair_sec, sizeof(pair_sec));
 
 	out.has_token_type = true;
-	out.token_type = smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
+	out.token_type =
+		smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
 	if (out.token_type == TOKEN_TYPE__USB)
 		out.usbtoken_serial = container_get_usbtoken_serial(startdata->container);
 
@@ -566,6 +619,13 @@ smartcard_cb_change_container_pin(int fd, unsigned events, event_io_t *io, void 
 		}
 		switch (msg->code) {
 		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL: {
+			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL,
+					     resp_fd);
+		} break;
+		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED: {
+			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+		} break;
+		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL: {
 			char *path =
 				mem_printf("%s/%s", container_get_images_dir(startdata->container),
 					   TOKEN_IS_INIT_FILE_NAME);
@@ -574,15 +634,18 @@ smartcard_cb_change_container_pin(int fd, unsigned events, event_io_t *io, void 
 				ERROR("Could not write file %s to flag that container %s's token has been initialized\n \
 						This may leave the system in an inconsistent state!",
 				      path, uuid_string(container_get_uuid(startdata->container)));
+				container_set_token_is_linked_to_device(startdata->container,
+									false);
 				control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
 						     resp_fd);
 			} else {
+				container_set_token_is_linked_to_device(startdata->container, true);
 				control_send_message(
 					CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL, resp_fd);
 			}
-			mem_free(path);
 		} break;
-		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED: {
+		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_FAILED: {
+			container_set_token_is_linked_to_device(startdata->container, false);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 		} break;
 		default:
@@ -615,6 +678,10 @@ smartcard_change_container_pin(smartcard_t *smartcard, control_t *control, conta
 	bool is_provisioning;
 
 	smartcard_startdata_t *startdata = mem_alloc(sizeof(smartcard_startdata_t));
+	if (!startdata) {
+		ERROR("Could not allocate memory for startdata");
+		return -1;
+	}
 	startdata->smartcard = smartcard;
 	startdata->container = container;
 	startdata->control = control;
@@ -643,7 +710,8 @@ smartcard_change_container_pin(smartcard_t *smartcard, control_t *control, conta
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(startdata->container)));
 
 	out.has_token_type = true;
-	out.token_type = smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
+	out.token_type =
+		smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
 	if (out.token_type == TOKEN_TYPE__USB)
 		out.usbtoken_serial = container_get_usbtoken_serial(startdata->container);
 
@@ -690,6 +758,53 @@ smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *pas
 	mem_free(out.token_newpin);
 
 	return (ret > 0) ? 0 : -1;
+}
+
+/**
+ * apparently we cannot queue several events with the same fd.
+ * therefore, we use a blocking method to query the scd to initialize a token.
+ */
+int
+smartcard_scd_token_block_new(smartcard_t *smartcard, container_t *container)
+{
+	TRACE("CML: smartcard_scd_token_block_new");
+	ASSERT(smartcard);
+	ASSERT(container);
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__TOKEN_NEW;
+
+	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(container)));
+
+	out.has_token_type = true;
+	out.token_type = smartcard_tokentype_to_proto(container_get_token_type(container));
+	if (out.token_type == TOKEN_TYPE__USB)
+		out.usbtoken_serial = container_get_usbtoken_serial(container);
+
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
+	if (!msg) {
+		ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard_scd_token_block_new.");
+		return -1;
+	}
+
+	switch (msg->code) {
+	case TOKEN_TO_DAEMON__CODE__TOKEN_NEW_SUCCESSFUL: {
+		TRACE("CMLD: smartcard_scd_token_block_new: token in scd created successfully");
+		container_set_token_uuid(container, out.token_uuid);
+		container_set_token_is_init(container, true);
+	} break;
+	case TOKEN_TO_DAEMON__CODE__TOKEN_NEW_FAILED: {
+		container_set_token_is_init(container, false);
+		ERROR("Creating scd token structure failed");
+	} break;
+	default:
+		container_set_token_is_init(container, false);
+		ERROR("TokenToDaemon command %d not expected as answer to change_pin", msg->code);
+	}
+
+	mem_free(out.token_uuid);
+	protobuf_free_message((ProtobufCMessage *)msg);
+	return 0;
 }
 
 smartcard_t *
@@ -1024,39 +1139,6 @@ smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsign
 		return -1;
 	}
 	return 0;
-}
-
-static TokenToDaemon *
-smartcard_send_recv_block(const DaemonToToken *out)
-{
-	ASSERT(out);
-
-	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
-	if (sock < 0) {
-		ERROR_ERRNO("Failed to connect to scd control socket %s", SCD_CONTROL_SOCKET);
-		return NULL;
-	}
-
-	DEBUG("smartcard_send_recv_block: connected to sock %d", sock);
-
-	/*
-	char *string = protobuf_c_text_to_string((ProtobufCMessage *) out, NULL);
-	if (!string)
-		string = mem_printf("%d", out->code);
-	DEBUG("smartcard_send_crypto: sending crypto command {%s}", string);
-	mem_free(string);
-	*/
-
-	if (protobuf_send_message(sock, (ProtobufCMessage *)out) <= 0) {
-		ERROR("Failed to send message to scd on sock %d", sock);
-		close(sock);
-		return NULL;
-	}
-
-	TokenToDaemon *msg = NULL;
-	msg = (TokenToDaemon *)protobuf_recv_message(sock, &token_to_daemon__descriptor);
-	close(sock);
-	return msg;
 }
 
 char *

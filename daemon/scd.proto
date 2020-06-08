@@ -64,6 +64,9 @@ message DaemonToToken {
 		CRYPTO_HASH_FILE = 50;		// compute hash for file [hash_file]
 		CRYPTO_VERIFY_FILE = 60;	// verify certificate and signature on data given in [verify_*_file]
 		CRYPTO_VERIFY_BUF = 61;	// verify certificate and signature on data given in [verify_*_buf]
+
+		TOKEN_NEW = 90;	// create a new scd token
+		TOKEN_FREE = 92;	// free a scd token
 	}
 
 
@@ -117,6 +120,8 @@ message TokenToDaemon {
 		LOCKED_TILL_REBOOT = 28;
 		CHANGE_PIN_FAILED = 29;		// pin change of the token failed
 		CHANGE_PIN_SUCCESSFUL = 30;	// pin change of the token was successful
+		PROVISION_PIN_FAILED = 31;		// provisioning of the token auth code failed
+		PROVISION_PIN_SUCCESSFUL = 32;	// provisioning of the token auth code was successful
 
 		DEVICE_CSR = 40; 	// -> [device_csr]
 		DEVICE_CSR_ERROR = 41;  // -> [device_csr]
@@ -132,6 +137,13 @@ message TokenToDaemon {
 		CRYPTO_VERIFY_BAD_SIGNATURE = 62;	// signature on data is invalid
 		CRYPTO_VERIFY_BAD_CERTIFICATE = 63;	// certificate is invalid
 		CRYPTO_VERIFY_LOCALLY_SIGNED = 64;	// sginature is valid for a local CA
+
+		TOKEN_QUERY_PAIR_STATE = 70;	// query if the token has been paired to the device
+
+		TOKEN_NEW_SUCCESSFUL = 90;	// creating a new scd token succeeded
+		TOKEN_NEW_FAILED	= 91;	// creating a new scd token failed
+		TOKEN_FREE_SUCCESSFUL = 92;	// freeing the token succeeded
+		TOKEN_FREE_FAILED	= 93;// freeing the token failed
 
 		CMD_UNKNOWN = 100;	// daemon has issued an unknown command
 	}

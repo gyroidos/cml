@@ -204,6 +204,26 @@ cmld_is_internet_active(void)
 	return container_connectivity_online(cmld_connectivity);
 }
 
+/**
+ * Requests the SCD to initialize a token assocaited to a container and queries whether that
+ * token has been provisioned with a platform-bound authentication code.
+ */
+static int
+cmld_container_token_init(container_t *container)
+{
+	ASSERT(container);
+
+	if (smartcard_scd_token_block_new(cmld_smartcard, container) != 0) {
+		ERROR("Requesting SCD to init token failed");
+		return -1;
+	}
+
+	container_set_token_is_linked_to_device(
+		container, smartcard_container_token_is_provisioned(container));
+
+	return 0;
+}
+
 static int
 cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 {
@@ -247,6 +267,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 		if (c) {
 			DEBUG("Loaded config for container %s from %s", container_get_name(c),
 			      name);
+			cmld_container_token_init(c);
 			cmld_containers_list = list_append(cmld_containers_list, c);
 			res = 1;
 			goto cleanup;
@@ -1111,6 +1132,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len)
 	if (c) {
 		DEBUG("Created container %s (uuid=%s).", container_get_name(c),
 		      uuid_string(container_get_uuid(c)));
+		cmld_container_token_init(c);
 		cmld_containers_list = list_append(cmld_containers_list, c);
 	} else {
 		WARN("Could not create new container object from config");
