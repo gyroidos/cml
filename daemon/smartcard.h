@@ -36,6 +36,19 @@ typedef struct smartcard smartcard_t;
 smartcard_t *
 smartcard_new(const char *path);
 
+/**
+ * Requests the SCD to initialize a new token.
+ */
+int
+smartcard_scd_token_new(smartcard_t *smartcard, container_t *container);
+
+/**
+ * apparently we cannot queue several requests to the scd to create new tokens with the same callback.
+ * therefore, we use a blocking method
+ */
+int
+smartcard_scd_token_block_new(smartcard_t *smartcard, container_t *container);
+
 int
 smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 				  container_t *container, const char *passwd);
@@ -72,6 +85,13 @@ smartcard_change_container_pin(smartcard_t *smartcard, control_t *control, conta
 int
 smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd,
 		     const char *newpasswd);
+
+/**
+ * checks whether the token associated to @param container has been provisioned
+ * with a device bound authentication code yet.
+ */
+bool
+smartcard_container_token_is_provisioned(const container_t *container);
 
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...

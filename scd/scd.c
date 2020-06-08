@@ -394,26 +394,32 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
 	return -1; // never reached
 }
 
-static scd_token_t *
-token_list_search(scd_tokentype_t type, const char *name)
+/**
+ * Gets an existing scd token.
+ */
+scd_token_t *
+scd_get_token(const DaemonToToken *msg)
 {
-	TRACE("SCD: token_list_search");
-	ASSERT(name);
+	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
+
+	ASSERT(msg);
+	ASSERT(msg->token_uuid);
 
 	scd_token_t *t;
+	scd_tokentype_t type;
+
+	type = scd_proto_to_tokentype(msg);
 
 	for (list_t *l = scd_token_list; l; l = l->next) {
 		t = (scd_token_t *)l->data;
 		ASSERT(t);
 
 		if (type != token_get_type(t)) {
-			TRACE("wrong type");
 			continue;
 		}
 
-		if (strncmp(name, uuid_string(token_get_uuid(t)), strlen(name)) == 0) {
-			TRACE("Token %s found in scd_token_list",
-			      uuid_string(token_get_uuid(t)));
+		if (strcmp(msg->token_uuid, uuid_string(token_get_uuid(t))) == 0) {
+			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
 			return t;
 		}
 	}
@@ -421,59 +427,54 @@ token_list_search(scd_tokentype_t type, const char *name)
 }
 
 /**
- * Get a generic scd token.
+ * Creates a new scd token structure and appends it to the global list.
  */
-scd_token_t *
-scd_get_token(const DaemonToToken *msg)
+int
+scd_token_new(const DaemonToToken *msg)
 {
-	ASSERT(msg);
-	ASSERT(msg->token_uuid);
+	TRACE("SCD: scd_token_new. proto_tokentype: %d", msg->token_type);
 
-	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
-
-	scd_token_t *token;
+	scd_token_t *ntoken;
 	scd_tokentype_t type;
+	token_constr_data_t create_data;
 
-	type = scd_proto_to_tokentype(msg);
-	token = token_list_search(type, msg->token_uuid);
-
-	if (!token) {
-		TRACE("Creating new token");
-
-		token_constr_data_t create_data;
-
-		create_data.type = type;
-
-		if (type == NONE) {
-			create_data.str.softtoken_dir = NULL;
-		} else if (type == DEVICE) {
-			create_data.str.softtoken_dir = SCD_TOKEN_DIR;
-		} else if (type == USB) {
-			ASSERT(msg->usbtoken_serial);
-			create_data.str.usbtoken_serial = msg->usbtoken_serial;
-		} else {
-			ERROR("Type of token not recognized");
-			return NULL;
-		}
-
-		create_data.uuid = msg->token_uuid;
-
-		token = token_new(&create_data);
-		if (!token) {
-			ERROR("Could not create new scd_token");
-			return NULL;
-		}
-		scd_token_list = list_append(scd_token_list, token);
+	if (NULL != (ntoken = scd_get_token(msg))) {
+		WARN("SCD: Token %s already exists. Aborting creation...", msg->token_uuid);
+		return 0; // TODO: is this the correct behaviour?
 	}
 
-	return token;
+	type = scd_proto_to_tokentype(msg);
+	create_data.type = type;
+
+	if (type == NONE) {
+		create_data.str.softtoken_dir = NULL;
+	} else if (type == DEVICE) {
+		create_data.str.softtoken_dir = SCD_TOKEN_DIR;
+	} else if (type == USB) {
+		ASSERT(msg->usbtoken_serial);
+		create_data.str.usbtoken_serial = msg->usbtoken_serial;
+	} else {
+		ERROR("Type of token not recognized");
+		return -1;
+	}
+
+	create_data.uuid = msg->token_uuid;
+
+	ntoken = token_new(&create_data);
+	if (!ntoken) {
+		ERROR("Could not create new scd_token");
+		return -1;
+	}
+	scd_token_list = list_append(scd_token_list, ntoken);
+
+	return 0;
 }
 
 /**
  * free a scd token and remove it from the global list of initialized tokens.
  */
 void
-scd_free_token(scd_token_t *token)
+scd_token_free(scd_token_t *token)
 {
 	IF_NULL_RETURN(token);
 

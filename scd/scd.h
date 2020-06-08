@@ -51,9 +51,13 @@ scd_tokentype_t
 scd_proto_to_tokentype(const DaemonToToken *msg);
 
 /**
- * Returns the generic token
- * TODO: needs to be refactored because it may break other code
- *      - in ealier versions this always returned a softtoken_t
+ * Creates a new scd token structure.
+ */
+int
+scd_token_new(const DaemonToToken *msg);
+
+/**
+ * Returns an existing scd token.
  */
 scd_token_t *
 scd_get_token(const DaemonToToken *msg);
@@ -62,10 +66,10 @@ scd_get_token(const DaemonToToken *msg);
  * Frees a generic token structure.
  */
 void
-scd_free_token(scd_token_t *token);
+scd_token_free(scd_token_t *token);
 
 /**
- * Checks provisioning mode
+ * Checks provisioning mode.
  */
 bool
 scd_in_provisioning_mode(void);

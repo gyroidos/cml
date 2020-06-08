@@ -198,6 +198,37 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	}
 
 	switch (msg->code) {
+	case DAEMON_TO_TOKEN__CODE__TOKEN_NEW: {
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_NEW_FAILED;
+
+		scd_token_t *token = scd_get_token(msg);
+
+		if (token != NULL) {
+			WARN("Token already exists. Aborting...");
+		} else if (scd_token_new(msg) == 0) {
+			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_NEW_SUCCESSFUL;
+		} else {
+			ERROR("Could not create new token");
+		}
+
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
+	case DAEMON_TO_TOKEN__CODE__TOKEN_FREE: {
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_FREE_FAILED;
+
+		scd_token_t *token = scd_get_token(msg);
+
+		if (token == NULL) {
+			ERROR("Token not found");
+		} else {
+			scd_token_free(token); // TODO: can there be any error here?
+			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_FREE_SUCCESSFUL;
+		}
+
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
 	case DAEMON_TO_TOKEN__CODE__UNLOCK: {
 		TRACE("SCD: Handle messsage UNLOCK");
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
@@ -339,10 +370,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 							   msg->pairing_secret.len, true);
 			if (ret == 0) {
 				TRACE("SCD: change_passphrase successful");
-				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
+				out.code = TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL;
 			} else {
 				TRACE("SCD: change_passphrase failed");
-				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
+				out.code = TOKEN_TO_DAEMON__CODE__PROVISION_PIN_FAILED;
 			}
 		}
 

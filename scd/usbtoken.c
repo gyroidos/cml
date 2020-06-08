@@ -58,7 +58,7 @@ static unsigned char algo_dskkey[] = { 0x91, 0x01, 0x99 };
 struct usbtoken {
 	char *serial;
 
-	unsigned short ctn;	     // card terminal number
+	unsigned short ctn;  // card terminal number
 	unsigned short port; // usb port of token reader
 
 	bool locked;			// whether the token is locked or not
@@ -240,7 +240,6 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 	idx = 0;
 
 	while (idx < lr) {
-
 		iport = *po << 8 | *(po + 1);
 		po += 2;
 		idx += 2;
@@ -251,8 +250,7 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 
 		size_t s_len = strlen((const char *)po);
 
-		if ((s_len > 0) &&
-				(strncmp((const char *)po, serial, s_len) == 0)) {
+		if ((s_len > 0) && (strncmp((const char *)po, serial, s_len) == 0)) {
 			TRACE("serial: %s\nfiltered: %s\ns_len: %zd", serial, po, s_len);
 			*port = iport;
 			TRACE("iport: 0x%04x", iport);
