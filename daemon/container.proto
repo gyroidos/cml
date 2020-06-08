@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -39,10 +39,16 @@ message ContainerVnetConfig {
 	// TODO Define configuration, for now just use hardcoded default config in c_net
 }
 
+enum ContainerUsbType {
+	GENERIC = 1;
+	TOKEN = 2;
+}
+
 message ContainerUsbConfig {
 	required string id = 1;
 	required string serial = 2;
 	required bool assign = 3 [default = false];
+	required ContainerUsbType type = 4 [default = GENERIC];
 }
 
 /**
@@ -51,6 +57,12 @@ message ContainerUsbConfig {
 enum ContainerType {
 	CONTAINER = 1;
 	KVM = 2	;
+}
+
+enum ContainerTokenType {
+	NONE = 1;
+	DEVICE = 2;
+	USB = 3;
 }
 
 message ContainerConfig {
@@ -97,13 +109,15 @@ message ContainerConfig {
 	// list of virtual network interface configuration
 	repeated ContainerVnetConfig vnet_configs = 27;
 
-	// list of virtual network interface configuration
+	// list of usb interface configuration
 	repeated ContainerUsbConfig usb_configs = 28;
 
 	// number of pipes from c0 to this container
 	// control erweitern: get container pipe fd
 	// use bindmount mechanism from c_vol
 	repeated string fifos = 29;
+
+	required ContainerTokenType token_type = 30 [ default = DEVICE ];
 }
 
 /**

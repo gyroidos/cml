@@ -660,6 +660,18 @@ cmld_container_start(container_t *container, const char *key)
 }
 
 int
+cmld_container_change_token_pin(control_t *control, container_t *container, const char *passwd,
+				const char *newpasswd)
+{
+	ASSERT(container);
+	ASSERT(passwd);
+	ASSERT(newpasswd);
+
+	return smartcard_change_container_pin(cmld_smartcard, control, container, passwd,
+					      newpasswd);
+}
+
+int
 cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd)
 {
 	ASSERT(container);
@@ -667,12 +679,6 @@ cmld_container_start_with_smartcard(control_t *control, container_t *container, 
 	ASSERT(passwd);
 
 	return smartcard_container_start_handler(cmld_smartcard, control, container, passwd);
-}
-
-int
-cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd)
-{
-	return smartcard_change_pin(cmld_smartcard, control, passwd, newpasswd);
 }
 
 void
@@ -1059,6 +1065,11 @@ cmld_init(const char *path)
 	char *tokens_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	cmld_smartcard = smartcard_new(tokens_path);
 	mem_free(tokens_path);
+
+	char *keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
+	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
+		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
+	mem_free(keys_path);
 
 	if (cmld_smartcard == NULL)
 		FATAL("Could not connect to smartcard daemon");

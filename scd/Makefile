@@ -68,6 +68,8 @@ SRC_FILES := \
 	scd.pb-c.c \
 	control.c \
 	softtoken.c \
+	usbtoken.c \
+	token.c \
 	scd.c \
 	ssl_util.c
 
@@ -86,7 +88,7 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 scd: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -o scd
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -lctccid -lcardservice -o scd
 
 
 .PHONY: clean

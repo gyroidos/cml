@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -87,6 +87,18 @@ mem_strdup(const char *str);
  */
 char *
 mem_strndup(const char *str, size_t len);
+
+/**
+ * Duplicates an array of unsigned char, but copies at most size bytes.
+ * Allocates sufficient memory.
+ * This is a wrapper for memcpy(3).
+ *
+ * @param mem The memory to duplicate.
+ * @param size The size of the memory.
+ * @return Pointer to the new array.
+ */
+unsigned char *
+mem_memcpy(const unsigned char *mem, size_t size);
 
 /**
  * Prints to a string allocated by this function.

@@ -70,6 +70,16 @@ typedef enum {
 } container_type_t;
 
 /**
+ * Represents the type of token which the container is associated with.
+ * The token is used to i.a. wrap the container's disk encryption key.
+ */
+typedef enum {
+	CONTAINER_TOKEN_TYPE_NONE = 1,
+	CONTAINER_TOKEN_TYPE_DEVICE,
+	CONTAINER_TOKEN_TYPE_USB,
+} container_token_type_t;
+
+/**
  * Structure to define the configuration for a virtual network
  * interface in a container. It defines the name and if cmld
  * should configure it in its c_net submodule.
@@ -790,5 +800,17 @@ container_get_rootdir(const container_t *container);
  */
 bool
 container_uuid_is_c0id(const uuid_t *uuid);
+
+/**
+ * Returns the type of the token that is used with the container
+ */
+container_token_type_t
+container_get_token_type(const container_t *container);
+
+/**
+ * Returns the i_serial number of the usb device that is the token reader
+ */
+char *
+container_get_usbtoken_serial(const container_t *container);
 
 #endif /* CONTAINER_H */

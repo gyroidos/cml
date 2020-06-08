@@ -463,16 +463,20 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_EINTERNAL;
 		break;
 
-	case CONTROL_RESPONSE_DEVICE_LOCKED_TILL_REBOOT:
-		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_LOCKED_TILL_REBOOT;
+	case CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_TOKEN_UNINIT;
 		break;
 
-	case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_FAILED:
-		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_FAILED;
+	case CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_CHANGE_PIN_FAILED;
 		break;
 
-	case CONTROL_RESPONSE_DEVICE_CHANGE_PIN_SUCCESSFUL:
-		out.response = DAEMON_TO_CONTROLLER__RESPONSE__DEVICE_CHANGE_PIN_SUCCESSFUL;
+	case CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_CHANGE_PIN_SUCCESSFUL;
+		break;
+
+	case CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_LOCKED_TILL_REBOOT;
 		break;
 
 	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED:
@@ -892,10 +896,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		cmld_push_device_cert(control, cert, cert_len);
 	} break;
 
-	case CONTROLLER_TO_DAEMON__COMMAND__CHANGE_DEVICE_PIN: {
-		res = cmld_change_device_pin(control, msg->device_pin, msg->device_newpin);
-	} break;
-
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
 		char **cuuid_str = NULL;
 		ContainerConfig **ccfg = NULL;
@@ -943,6 +943,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send container config as Response to CREATE");
 		}
+
 		mem_free(cuuid_str[0]);
 		mem_free(cuuid_str);
 		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
@@ -1037,6 +1038,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			}
 			// key is asserted to be the user entered passwd/pin
 			res = cmld_container_start_with_smartcard(control, container, key);
+			if (res != 0) {
+				DEBUG("Token has not been initialized yet");
+				res = control_send_message(
+					CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
+			}
 		} else if (container_is_encrypted(container)) {
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
 						   fd);
@@ -1182,6 +1188,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		break;
 	}
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN: {
+		res = cmld_container_change_token_pin(control, container, msg->device_pin,
+						      msg->device_newpin);
+	} break;
+
 	default:
 		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
 		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))

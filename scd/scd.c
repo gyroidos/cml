@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -32,6 +32,7 @@
 #include "device.pb-c.h"
 #endif
 
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/event.h"
@@ -42,13 +43,13 @@
 #include "common/uuid.h"
 #include "common/protobuf.h"
 #include "common/reboot.h"
+#include "common/list.h"
 #include "ssl_util.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <dirent.h>
 
 // clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
@@ -66,7 +67,8 @@
 #define TOKEN_DEFAULT_NAME "testuser"
 #define TOKEN_DEFAULT_EXT ".p12"
 
-static softtoken_t *scd_token = NULL;
+static list_t *scd_token_list = NULL;
+
 static scd_control_t *scd_control_cmld = NULL;
 static logf_handler_t *scd_logfile_handler = NULL;
 
@@ -74,7 +76,7 @@ static logf_handler_t *scd_logfile_handler = NULL;
  * returns 1 if a given file is a p12 token, otherwise 0
  */
 static int
-is_token(const char *path, const char *file, UNUSED void *data)
+is_softtoken(const char *path, const char *file, UNUSED void *data)
 {
 	char *location = mem_printf("%s/%s", path, file);
 	char *ext;
@@ -101,7 +103,7 @@ is_token(const char *path, const char *file, UNUSED void *data)
 static int
 token_file_exists()
 {
-	int ret = dir_foreach(SCD_TOKEN_DIR, &is_token, NULL);
+	int ret = dir_foreach(SCD_TOKEN_DIR, &is_softtoken, NULL);
 
 	if (ret < 0)
 		FATAL("Could not open token directory");
@@ -343,57 +345,139 @@ main(int argc, char **argv)
 	return 0;
 }
 
-static int
-scd_load_token_cb(const char *path, const char *name, UNUSED void *data)
+const char *
+scd_get_softtoken_dir(void)
 {
-	if (scd_token) {
-		DEBUG("Token already loaded, stopping scan.");
-		return -1;
-	}
-	/* Only do the rest of the callback if the file name ends with .p12 */
-	if (strlen(name) >= strlen(TOKEN_DEFAULT_EXT) &&
-	    !strcmp(name + strlen(name) - strlen(TOKEN_DEFAULT_EXT), TOKEN_DEFAULT_EXT)) {
-		char *token_file = mem_printf("%s/%s", path, name);
-		scd_token = softtoken_new_from_p12(token_file);
-		mem_free(token_file);
-		return 1;
-	}
-	return 0;
-}
-
-int
-scd_load_token()
-{
-	if (scd_token) {
-		softtoken_free(scd_token);
-		scd_token = NULL;
-	}
-	if (mkdir(scd_get_token_dir(), 0755) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Cound not mkdir token directory %s", scd_get_token_dir());
-		return -1;
-	}
-	int res = dir_foreach(scd_get_token_dir(), &scd_load_token_cb, NULL);
-	if (res < 0) {
-		WARN("Error scanning token directory %s.", scd_get_token_dir());
-		return -1;
-	}
-	if (res == 0) {
-		ERROR("No token found in %s.", scd_get_token_dir());
-		return -1;
-	}
-	return 0;
+	return SCD_TOKEN_DIR;
 }
 
 softtoken_t *
-scd_get_token(void)
+scd_load_softtoken(const char *path, const char *name)
 {
-	if (!scd_token)
-		scd_load_token();
-	return scd_token;
+	ASSERT(path);
+	ASSERT(name);
+
+	softtoken_t *ntoken;
+
+	TRACE("scd_load_softtoken path: %s", path);
+	TRACE("scd_load_softtoken name: %s", name);
+
+	if (strlen(name) >= strlen(TOKEN_DEFAULT_EXT) &&
+	    !strcmp(name + strlen(name) - strlen(TOKEN_DEFAULT_EXT), TOKEN_DEFAULT_EXT)) {
+		char *token_file = mem_printf("%s/%s", path, name);
+		TRACE("Softtoken filename: %s", token_file);
+
+		ntoken = softtoken_new_from_p12(token_file);
+		mem_free(token_file);
+		return ntoken;
+	}
+
+	ERROR("SCD: scd_load_softtoken failed");
+	return NULL;
 }
 
-const char *
-scd_get_token_dir(void)
+scd_tokentype_t
+scd_proto_to_tokentype(const DaemonToToken *msg)
 {
-	return SCD_TOKEN_DIR;
+	switch (msg->token_type) {
+	case TOKEN_TYPE__NONE:
+		return NONE;
+	case TOKEN_TYPE__DEVICE:
+		return DEVICE;
+	case TOKEN_TYPE__USB:
+		return USB;
+	default: {
+		ERROR("Invalid token type value");
+		return -1;
+	}
+	}
+	return -1; // never reached
+}
+
+static scd_token_t *
+token_list_search(scd_tokentype_t type, const char *name)
+{
+	TRACE("SCD: token_list_search");
+	ASSERT(name);
+
+	scd_token_t *t;
+
+	for (list_t *l = scd_token_list; l; l = l->next) {
+		t = (scd_token_t *)l->data;
+		ASSERT(t);
+
+		if (type != token_get_type(t)) {
+			TRACE("wrong type");
+			continue;
+		}
+
+		if (strncmp(name, uuid_string(token_get_uuid(t)), strlen(name)) == 0) {
+			TRACE("Token %s found in scd_token_list",
+			      uuid_string(token_get_uuid(t)));
+			return t;
+		}
+	}
+	return NULL;
+}
+
+/**
+ * Get a generic scd token.
+ */
+scd_token_t *
+scd_get_token(const DaemonToToken *msg)
+{
+	ASSERT(msg);
+	ASSERT(msg->token_uuid);
+
+	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
+
+	scd_token_t *token;
+	scd_tokentype_t type;
+
+	type = scd_proto_to_tokentype(msg);
+	token = token_list_search(type, msg->token_uuid);
+
+	if (!token) {
+		TRACE("Creating new token");
+
+		token_constr_data_t create_data;
+
+		create_data.type = type;
+
+		if (type == NONE) {
+			create_data.str.softtoken_dir = NULL;
+		} else if (type == DEVICE) {
+			create_data.str.softtoken_dir = SCD_TOKEN_DIR;
+		} else if (type == USB) {
+			ASSERT(msg->usbtoken_serial);
+			create_data.str.usbtoken_serial = msg->usbtoken_serial;
+		} else {
+			ERROR("Type of token not recognized");
+			return NULL;
+		}
+
+		create_data.uuid = msg->token_uuid;
+
+		token = token_new(&create_data);
+		if (!token) {
+			ERROR("Could not create new scd_token");
+			return NULL;
+		}
+		scd_token_list = list_append(scd_token_list, token);
+	}
+
+	return token;
+}
+
+/**
+ * free a scd token and remove it from the global list of initialized tokens.
+ */
+void
+scd_free_token(scd_token_t *token)
+{
+	IF_NULL_RETURN(token);
+
+	token_free(token);
+	scd_token_list = list_remove(scd_token_list, token);
+	token = NULL;
 }
