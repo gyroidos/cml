@@ -26,6 +26,7 @@
 
 #include "container.h"
 #include "control.h"
+#include "stdbool.h"
 
 typedef struct smartcard smartcard_t;
 
@@ -38,6 +39,26 @@ smartcard_new(const char *path);
 int
 smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 				  container_t *container, const char *passwd);
+
+/**
+ * Change the passphrase/pin of the token associated to the container.
+ * The function checks whether the token has previously been provisioned
+ * with a device bound authentication code.
+ * If it has not the function will interprete
+ * @param passwd as the transport pin of the token, generate a new
+ * authentication code from @newpasswd and the pairing_secret and initialize
+ * the token with it.
+ * Else, only the user part of the authentication code is changed.
+ *
+ * @param smartcard smartcard struct representing the connection to the scd
+ * @param control struct which should be used for responses
+ * @param passwd passphrase/pin of the token
+ * @param newpasswd the new passphrase/pin for the token to which will be changed
+ * return -1 on message transmission failure, 0 if message was sent to SCD
+ */
+int
+smartcard_change_container_pin(smartcard_t *smartcard, control_t *control, container_t *container,
+			       const char *passwd, const char *newpasswd);
 
 /**
  * Change the passphrase/pin of the associated device token smartcard

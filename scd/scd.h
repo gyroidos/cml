@@ -24,7 +24,12 @@
 #ifndef SCD_H
 #define SCD_H
 
-#include "softtoken.h"
+#include "token.h"
+
+#ifdef ANDROID
+#else
+#include "scd.pb-c.h"
+#endif
 
 #define PROVISIONING_MODE_FILE "/tmp/_provisioning_"
 
@@ -40,17 +45,24 @@
 #define DEVICE_KEY_FILE SCD_TOKEN_DIR "/device.key"
 
 /**
- * Returns the directory in which the token files are stored.
- * Currently, only softtokens in the form of .p12 files are supported.
+ * Returns the type of the token
  */
-const char *
-scd_get_token_dir(void);
+scd_tokentype_t
+scd_proto_to_tokentype(const DaemonToToken *msg);
 
 /**
- * Returns the token to use for crypto operations.
+ * Returns the generic token
+ * TODO: needs to be refactored because it may break other code
+ *      - in ealier versions this always returned a softtoken_t
  */
-softtoken_t *
-scd_get_token(void);
+scd_token_t *
+scd_get_token(const DaemonToToken *msg);
+
+/**
+ * Frees a generic token structure.
+ */
+void
+scd_free_token(scd_token_t *token);
 
 /**
  * Checks provisioning mode

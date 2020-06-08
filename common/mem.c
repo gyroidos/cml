@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -80,6 +80,16 @@ mem_strndup(const char *str, size_t len)
 	DEBUG_THRESHOLD(len);
 	char *p = strndup(str, len);
 	ASSERT(p);
+	return p;
+}
+
+unsigned char *
+mem_memcpy(const unsigned char *mem, size_t size)
+{
+	ASSERT(mem);
+	unsigned char *p = mem_alloc0(size);
+	ASSERT(p);
+	memcpy(p, mem, size);
 	return p;
 }
 

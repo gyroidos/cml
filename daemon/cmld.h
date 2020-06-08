@@ -200,16 +200,17 @@ const char *
 cmld_get_c0os(void);
 
 /**
- * Change the pin of the device token.
- * The request is sent asynchronously through lower communication layer.
+ * Change the pin of the token associated to a container.
  *
  * @parma control link to control for responses
+ * @param container container whose token's pin should be changed
  * @param passwd old passphrase/pin
  * @param newpasswd new passphrase/pin which is to be set
  * @return 0 on message delivered to lower levels, -1 message delivery failed
  */
 int
-cmld_change_device_pin(control_t *control, const char *passwd, const char *newpasswd);
+cmld_container_change_token_pin(control_t *control, container_t *container, const char *passwd,
+				const char *newpasswd);
 
 /**
  * Change the device cert during provisioning.

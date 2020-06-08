@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -66,6 +66,22 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 int
 ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_key_len,
 	       unsigned char **plain_key, int *plain_key_len);
+
+/**
+ * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
+ * of length wrapped_key_len using a symmetric key wr_key.
+ * @return returns 0 on succes, -1 in case of a failure. */
+int
+ssl_wrap_key_sym(const unsigned char *kek, const unsigned char *plain_key, size_t plain_key_len,
+		 unsigned char **wrapped_key, int *wrapped_key_len);
+
+/**
+ * This function unwraps a (symmetric) key wrapped_key of length wrapped_key_len into an unwrapped key
+ * plain_key of length plain_key_len using the symmetric wrapping key wr_key.
+ * @return returns 0 on succes, -1 in case of a failure. */
+int
+ssl_unwrap_key_sym(const unsigned char *kek, const unsigned char *wrapped_key,
+		   size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len);
 
 /**
  * this function verifies a certificate located in test_cert_file using

@@ -131,7 +131,7 @@ message ControllerToDaemon {
 		PULL_DEVICE_CSR = 40;
 		// Pushes bach the device certificate (provisioning)
 		PUSH_DEVICE_CERT = 41;
-		// change pin of for device token which is used for container key wrapping
+		// deprecated. Token are assigned per container.
 		CHANGE_DEVICE_PIN = 42;
 
 		///////////////////////////////////////////////////
@@ -181,6 +181,9 @@ message ControllerToDaemon {
 
 		// Starts a container. Also needs ontainer_config_file.
 		CONTAINER_UPDATE_CONFIG = 115;
+
+		// Change the PIN of the token taht is assigned to the token.
+		CONTAINER_CHANGE_TOKEN_PIN = 116;
 
 	}
 	required Command command = 1;
@@ -258,10 +261,11 @@ message DaemonToController {
 		CONTAINER_START_PASSWD_WRONG = 4;
 		CONTAINER_START_EEXIST = 6;
 		CONTAINER_START_EINTERNAL = 13;
+		CONTAINER_START_TOKEN_UNINIT = 18;
+		CONTAINER_CHANGE_PIN_FAILED = 8;
+		CONTAINER_CHANGE_PIN_SUCCESSFUL = 9;
 		CMD_UNSUPPORTED = 7;
-		DEVICE_LOCKED_TILL_REBOOT = 5;
-		DEVICE_CHANGE_PIN_FAILED = 8;
-		DEVICE_CHANGE_PIN_SUCCESSFUL = 9;
+		CONTAINER_LOCKED_TILL_REBOOT = 5;
 		DEVICE_PROVISIONING_ERROR = 10;
 		DEVICE_CERT_ERROR = 11;
 		DEVICE_CERT_OK = 12;

@@ -41,6 +41,29 @@ struct softtoken {
 	STACK_OF(X509) * ca;		// holds the token's certificate chain, if available
 };
 
+/**
+ * creates a new pkcs12 softtoken.
+ */
+int
+softtoken_create_p12(const char *filename, const char *passwd, const char *name)
+{
+	ASSERT(filename);
+	ASSERT(passwd);
+	ASSERT(name);
+
+	// TPM not used for soft token
+	if (ssl_init(false) == -1) {
+		FATAL("Failed to initialize OpenSSL stack for softtoken");
+	}
+
+	if (ssl_create_pkcs12_token(filename, NULL, passwd, name) != 0) {
+		FATAL("Unable to create initial user token");
+	}
+
+	ssl_free();
+	return 0;
+}
+
 softtoken_t *
 softtoken_new_from_p12(const char *filename)
 {

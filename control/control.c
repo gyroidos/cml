@@ -82,7 +82,7 @@ print_usage(const char *cmd)
 	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
 	printf("   pull_csr <device.csr>\n        Pulls the device csr and stores it in <device.csr>.\n");
 	printf("   push_cert <device.cert>\n        Pushes back the device certificate provided by <device.cert>.\n");
-	printf("   change_pin\n        Change device token's pin which is used for container key wrapping. Prompts for password entry.\n");
+	printf("   change_pin\n        Change token pin which is used for container key wrapping. Prompts for password entry.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
@@ -366,20 +366,6 @@ main(int argc, char *argv[])
 		msg.device_cert.data = dev_cert;
 		goto send_message;
 	}
-	if (!strcasecmp(command, "change_pin")) {
-		char *newpin_verify = NULL;
-		has_response = true;
-		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CHANGE_DEVICE_PIN;
-		msg.device_pin = get_password_new("Current Password: ");
-		msg.device_newpin = get_password_new("New Password: ");
-		newpin_verify = get_password_new("Re-enter New Password: ");
-
-		if (strcmp(msg.device_newpin, newpin_verify) != 0)
-			FATAL("Passwords don't match!");
-
-		mem_free(newpin_verify);
-		goto send_message;
-	}
 	if (!strcasecmp(command, "create")) {
 		has_response = true;
 		// need exactly one more argument (container config file)
@@ -571,6 +557,19 @@ main(int argc, char *argv[])
 		TRACE("[CLIENT] Done parsing arguments, got %d argsuments", argcount);
 		msg.n_exec_args = argcount;
 		TRACE("after set n_exec_args");
+
+	} else if (!strcasecmp(command, "change_pin")) {
+		char *newpin_verify = NULL;
+		has_response = true;
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN;
+		msg.device_pin = get_password_new("Current Password: ");
+		msg.device_newpin = get_password_new("New Password: ");
+		newpin_verify = get_password_new("Re-enter New Password: ");
+
+		if (strcmp(msg.device_newpin, newpin_verify) != 0)
+			FATAL("Passwords don't match!");
+
+		mem_free(newpin_verify);
 	} else
 		print_usage(argv[0]);
 

@@ -30,7 +30,15 @@
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
 
+#define STOKEN_DEFAULT_EXT ".p12"
+
 typedef struct softtoken softtoken_t;
+
+/**
+ * creates new p12 token file.
+ */
+int
+softtoken_create_p12(const char *filename, const char *passwd, const char *name);
 
 /**
  * instantiates a new softtoken structure

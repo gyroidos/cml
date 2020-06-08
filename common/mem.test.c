@@ -160,6 +160,38 @@ test_strdup_strndup(UNUSED const MunitParameter params[], UNUSED void *data)
 }
 
 static MunitResult
+test_mem_memcpy(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	unsigned char a[257];
+	munit_rand_memory(a, sizeof(a));
+
+	// memcpy duplicates memory
+	unsigned char *b = mem_memcpy(a, sizeof(a));
+	munit_assert_not_null(b);
+	munit_assert_memory_equal(sizeof(a), a, b);
+
+	// b is in a different memory chunk than a and can be modified
+	b[8] = ~b[8];
+	munit_assert_memory_not_equal(sizeof(a), a, b);
+	mem_free(b);
+
+	// memcpy copies entire memory
+	unsigned char *c = mem_memcpy(a, sizeof(a));
+	munit_assert_not_null(c);
+	munit_assert_memory_equal(sizeof(a), a, c);
+	mem_free(c);
+
+	// memcpy cuts
+	c = mem_memcpy(a, 129);
+	munit_assert_not_null(c);
+	munit_assert_memory_not_equal(129, a, c);
+	munit_assert_memory_equal(129, a, c);
+	mem_free(c);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
 test_printf_dynamic_buffer(UNUSED const MunitParameter params[], UNUSED void *data)
 {
 	struct complex_t *ptr = mem_new0(struct complex_t, 1);
@@ -300,6 +332,14 @@ static MunitTest tests[] = {
 	{
 		"/strdup and strndup",	/* name */
 		test_strdup_strndup,	/* test */
+		setup,			/* setup */
+		tear_down,		/* tear_down */
+		MUNIT_TEST_OPTION_NONE, /* options */
+		NULL			/* parameters */
+	},
+	{
+		"/memcpy",		/* name */
+		test_mem_memcpy,	/* test */
 		setup,			/* setup */
 		tear_down,		/* tear_down */
 		MUNIT_TEST_OPTION_NONE, /* options */
