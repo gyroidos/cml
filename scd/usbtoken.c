@@ -645,8 +645,11 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 }
 
 /**
- * locks the usb token
- * TODO: this should actually lock the HW token, not just set a flag
+ * locks the usb token.
+ * Does only set the flag. We need to be able to forward the unlocked token into
+ * a container so that it can operate on it.
+ * NOTE: leaves the authentication code in memory so that the container can request
+ * 		unlocking the token without requiring the user to re-enter the pin.
  */
 int
 usbtoken_lock(usbtoken_t *token)
@@ -660,7 +663,6 @@ usbtoken_lock(usbtoken_t *token)
 		return 0;
 	}
 
-	usbtoken_free_secrets(token);
 	token->locked = true;
 	return 0;
 }
