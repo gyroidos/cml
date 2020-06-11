@@ -1051,7 +1051,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
 						   fd);
 		} else {
-			res = cmld_container_start(container, NULL);
+			res = cmld_container_start(container);
 			if (res < 0) {
 				res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST,
 							   fd);

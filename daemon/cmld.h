@@ -90,13 +90,13 @@ cmld_containers_get_a0();
 
 /**
  * Start a container if it is not already started
+ * If the containers requires an encryption key it must be set before calling this method.
  *
  * @param container The container to be started.
- * @param key The key used to decrypt the containers images.
  * @return 0 if success, -1 otherwise.
  */
 int
-cmld_container_start(container_t *container, const char *key);
+cmld_container_start(container_t *container);
 
 int
 cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd);

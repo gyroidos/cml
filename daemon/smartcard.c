@@ -227,19 +227,16 @@ smartcard_container_token_is_provisioned(const container_t *container)
 }
 
 static void
-smartcard_start_container_internal(smartcard_startdata_t *startdata, unsigned char *key, int keylen)
+smartcard_start_container_internal(smartcard_startdata_t *startdata)
 {
-	ASSERT(keylen > 0);
+	ASSERT(container_get_key(startdata->container));
 	int resp_fd = control_get_client_sock(startdata->control);
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
-	char *ascii_key = bytes_to_string_new(key, keylen);
-	//DEBUG("SCD: Container key (len=%d): %s", keylen, ascii_key);
 	DEBUG("SCD:Container  %s: Starting...", container_get_name(startdata->container));
-	if (-1 == cmld_container_start(startdata->container, ascii_key))
+	if (-1 == cmld_container_start(startdata->container))
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
 	else
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
-	mem_free(ascii_key);
 }
 
 static void
@@ -279,6 +276,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
+			smartcard_start_container_internal(startdata);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
@@ -355,8 +353,10 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					ERROR("Failed to generate key for container, due to RNG Error!");
 					break;
 				}
-				// start container
-				smartcard_start_container_internal(startdata, key, keylen);
+				// set the key
+				char *ascii_key = bytes_to_string_new(key, keylen);
+				container_set_key(startdata->container, ascii_key);
+				mem_free(ascii_key);
 				// wrap key via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 				out.code = DAEMON_TO_TOKEN__CODE__WRAP_KEY;
@@ -409,8 +409,11 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				done = true;
 				break;
 			}
-			smartcard_start_container_internal(startdata, msg->unwrapped_key.data,
-							   msg->unwrapped_key.len);
+			// set the key
+			char *ascii_key = bytes_to_string_new(msg->unwrapped_key.data,
+							      msg->unwrapped_key.len);
+			container_set_key(startdata->container, ascii_key);
+			mem_free(ascii_key);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__WRAPPED_KEY: {
 			// lock token via scd
