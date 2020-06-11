@@ -587,7 +587,7 @@ cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSE
 {
 	if (container_get_state(container) == CONTAINER_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(container));
-		if (cmld_container_start(container, NULL))
+		if (cmld_container_start(container))
 			WARN("Reboot of '%s' failed", container_get_description(container));
 		container_unregister_observer(container, cb);
 	}
@@ -642,16 +642,11 @@ cmld_container_register_observers(container_t *container)
 }
 
 int
-cmld_container_start(container_t *container, const char *key)
+cmld_container_start(container_t *container)
 {
 	if (!container) {
 		WARN("Container does not exists!");
 		return -1;
-	}
-
-	if (key) {
-		DEBUG("Setting container key for startup");
-		container_set_key(container, key);
 	}
 
 	if ((container_get_state(container) == CONTAINER_STATE_STOPPED) ||
@@ -754,7 +749,7 @@ cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 			if (container_get_allow_autostart(container)) {
 				INFO("Autostarting container %s in background",
 				     container_get_name(container));
-				cmld_container_start(container, NULL);
+				cmld_container_start(container);
 			}
 		}
 	}
