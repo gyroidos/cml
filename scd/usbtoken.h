@@ -29,6 +29,8 @@
 
 typedef struct usbtoken usbtoken_t;
 
+#ifdef ENABLESCHSM
+
 /**
  * Initializes a usb token, iff the serial number of the usb token reader matches
  */
@@ -96,3 +98,5 @@ usbtoken_change_passphrase(usbtoken_t *token, const char *oldpass, const char *n
 			   bool is_provisioning);
 
 #endif
+
+#endif // ENABLESCHSM

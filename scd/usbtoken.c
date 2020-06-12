@@ -20,7 +20,6 @@
  * Contact Information:
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
-
 #include "usbtoken.h"
 #include "ssl_util.h"
 

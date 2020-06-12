@@ -46,8 +46,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sc-hsm-cardservice.h>
-#include <ctapi.h>
 
 // clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)

@@ -25,6 +25,7 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= n
 SANITIZERS ?= n
+TRUSTME_SCHSM ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
@@ -49,9 +50,14 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
 endif
+ifeq ($(TRUSTME_SCHSM), y)
+    # If requested, we build sc-hsm support into trustme
+    LOCAL_CFLAGS += -DENABLESCHSM -lctccid -lcardservice
+    SRC_FILES += usbtoken.c
+endif
 
 
-SRC_FILES := \
+SRC_FILES += \
 	common/list.c \
 	common/logf.c \
 	common/mem.c \
@@ -68,7 +74,6 @@ SRC_FILES := \
 	scd.pb-c.c \
 	control.c \
 	softtoken.c \
-	usbtoken.c \
 	token.c \
 	scd.c \
 	ssl_util.c
@@ -88,7 +93,7 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 scd: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -lctccid -lcardservice -o scd
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -o scd
 
 
 .PHONY: clean
