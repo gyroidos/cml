@@ -37,17 +37,16 @@ smartcard_t *
 smartcard_new(const char *path);
 
 /**
- * Requests the SCD to initialize a new token.
+ * Instruct the SCD to add the token associated to @param container.
  */
 int
-smartcard_scd_token_new(smartcard_t *smartcard, container_t *container);
+smartcard_scd_token_block_add(smartcard_t *smartcard, container_t *container);
 
 /**
- * apparently we cannot queue several requests to the scd to create new tokens with the same callback.
- * therefore, we use a blocking method
+ * Instruct the SCD to remove the token associated to @param container.
  */
 int
-smartcard_scd_token_block_new(smartcard_t *smartcard, container_t *container);
+smartcard_scd_token_block_remove(smartcard_t *smartcard, container_t *container);
 
 int
 smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,

@@ -198,25 +198,25 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	}
 
 	switch (msg->code) {
-	case DAEMON_TO_TOKEN__CODE__TOKEN_NEW: {
+	case DAEMON_TO_TOKEN__CODE__TOKEN_ADD: {
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
-		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_NEW_FAILED;
+		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_FAILED;
 
 		scd_token_t *token = scd_get_token(msg);
 
 		if (token != NULL) {
 			WARN("Token already exists. Aborting...");
 		} else if (scd_token_new(msg) == 0) {
-			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_NEW_SUCCESSFUL;
+			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL;
 		} else {
 			ERROR("Could not create new token");
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
-	case DAEMON_TO_TOKEN__CODE__TOKEN_FREE: {
+	case DAEMON_TO_TOKEN__CODE__TOKEN_REMOVE: {
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
-		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_FREE_FAILED;
+		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED;
 
 		scd_token_t *token = scd_get_token(msg);
 
@@ -224,7 +224,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("Token not found");
 		} else {
 			scd_token_free(token); // TODO: can there be any error here?
-			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_FREE_SUCCESSFUL;
+			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_SUCCESSFUL;
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);

@@ -768,14 +768,14 @@ smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *pas
  * therefore, we use a blocking method to query the scd to initialize a token.
  */
 int
-smartcard_scd_token_block_new(smartcard_t *smartcard, container_t *container)
+smartcard_scd_token_block_add(smartcard_t *smartcard, container_t *container)
 {
 	TRACE("CML: smartcard_scd_token_block_new");
 	ASSERT(smartcard);
 	ASSERT(container);
 
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__TOKEN_NEW;
+	out.code = DAEMON_TO_TOKEN__CODE__TOKEN_ADD;
 
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 
@@ -791,17 +791,55 @@ smartcard_scd_token_block_new(smartcard_t *smartcard, container_t *container)
 	}
 
 	switch (msg->code) {
-	case TOKEN_TO_DAEMON__CODE__TOKEN_NEW_SUCCESSFUL: {
+	case TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL: {
 		TRACE("CMLD: smartcard_scd_token_block_new: token in scd created successfully");
 		container_set_token_uuid(container, out.token_uuid);
 		container_set_token_is_init(container, true);
 	} break;
-	case TOKEN_TO_DAEMON__CODE__TOKEN_NEW_FAILED: {
+	case TOKEN_TO_DAEMON__CODE__TOKEN_ADD_FAILED: {
 		container_set_token_is_init(container, false);
 		ERROR("Creating scd token structure failed");
 	} break;
 	default:
 		container_set_token_is_init(container, false);
+		ERROR("TokenToDaemon command %d not expected as answer to change_pin", msg->code);
+	}
+
+	mem_free(out.token_uuid);
+	protobuf_free_message((ProtobufCMessage *)msg);
+	return 0;
+}
+
+int
+smartcard_scd_token_block_remove(smartcard_t *smartcard, container_t *container)
+{
+	TRACE("CML: smartcard_scd_token_block_remove");
+	ASSERT(smartcard);
+	ASSERT(container);
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__TOKEN_REMOVE;
+
+	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(container)));
+
+	out.has_token_type = true;
+	out.token_type = smartcard_tokentype_to_proto(container_get_token_type(container));
+
+	TokenToDaemon *msg = smartcard_send_recv_block(&out);
+	if (!msg) {
+		ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard_scd_token_block_new.");
+		return -1;
+	}
+
+	switch (msg->code) {
+	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_SUCCESSFUL: {
+		TRACE("CMLD: smartcard_scd_token_block_remove: token in scd removed successfully");
+		container_set_token_is_init(container, false);
+	} break;
+	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED: {
+		ERROR("Removing scd token structure failed");
+	} break;
+	default:
 		ERROR("TokenToDaemon command %d not expected as answer to change_pin", msg->code);
 	}
 
