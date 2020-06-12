@@ -1825,7 +1825,7 @@ container_destroy(container_t *container)
 	ASSERT(container);
 	int ret = -1;
 
-	INFO("Destroying conatiner %s with uuid=%s", container_get_name(container),
+	INFO("Destroying container %s with uuid=%s", container_get_name(container),
 	     uuid_string(container_get_uuid(container)));
 
 	/* wipe the container */
@@ -2489,7 +2489,6 @@ void
 container_set_token_uuid(container_t *container, const char *tuuid)
 {
 	ASSERT(container);
-	ASSERT(tuuid);
 
 	container->scd_token_uuid = uuid_new(tuuid);
 }

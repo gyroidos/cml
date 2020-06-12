@@ -65,8 +65,8 @@ message DaemonToToken {
 		CRYPTO_VERIFY_FILE = 60;	// verify certificate and signature on data given in [verify_*_file]
 		CRYPTO_VERIFY_BUF = 61;	// verify certificate and signature on data given in [verify_*_buf]
 
-		TOKEN_NEW = 90;	// create a new scd token
-		TOKEN_FREE = 92;	// free a scd token
+		TOKEN_ADD = 90;	// create a new scd token
+		TOKEN_REMOVE = 92;	// free a scd token
 	}
 
 
@@ -140,10 +140,10 @@ message TokenToDaemon {
 
 		TOKEN_QUERY_PAIR_STATE = 70;	// query if the token has been paired to the device
 
-		TOKEN_NEW_SUCCESSFUL = 90;	// creating a new scd token succeeded
-		TOKEN_NEW_FAILED	= 91;	// creating a new scd token failed
-		TOKEN_FREE_SUCCESSFUL = 92;	// freeing the token succeeded
-		TOKEN_FREE_FAILED	= 93;// freeing the token failed
+		TOKEN_ADD_SUCCESSFUL = 90;	// creating a new scd token succeeded
+		TOKEN_ADD_FAILED	= 91;	// creating a new scd token failed
+		TOKEN_REMOVE_SUCCESSFUL = 92;	// freeing the token succeeded
+		TOKEN_REMOVE_FAILED	= 93;// freeing the token failed
 
 		CMD_UNKNOWN = 100;	// daemon has issued an unknown command
 	}

@@ -213,7 +213,7 @@ cmld_container_token_init(container_t *container)
 {
 	ASSERT(container);
 
-	if (smartcard_scd_token_block_new(cmld_smartcard, container) != 0) {
+	if (smartcard_scd_token_block_add(cmld_smartcard, container) != 0) {
 		ERROR("Requesting SCD to init token failed");
 		return -1;
 	}
@@ -1148,6 +1148,15 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	if (cb)
 		container_unregister_observer(container, cb);
 
+	if (container_get_token_is_init(container)) {
+		smartcard_scd_token_block_remove(cmld_smartcard, container);
+	}
+
+	if (container_get_token_uuid(container)) {
+		uuid_free(container_get_token_uuid(container));
+		container_set_token_uuid(container, NULL);
+
+	}
 	/* detroy the container */
 	if (container_destroy(container) < 0) {
 		ERROR("Could not destroy container");
