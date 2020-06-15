@@ -322,10 +322,6 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				out.token_type = smartcard_tokentype_to_proto(
 					container_get_token_type(startdata->container));
 
-				if (out.token_type == TOKEN_TYPE__USB)
-					out.usbtoken_serial =
-						container_get_usbtoken_serial(startdata->container);
-
 				out.token_uuid = mem_strdup(
 					uuid_string(container_get_uuid(startdata->container)));
 
@@ -367,9 +363,6 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				out.has_token_type = true;
 				out.token_type = smartcard_tokentype_to_proto(
 					container_get_token_type(startdata->container));
-				if (out.token_type == TOKEN_TYPE__USB)
-					out.usbtoken_serial =
-						container_get_usbtoken_serial(startdata->container);
 
 				out.token_uuid = mem_strdup(
 					uuid_string(container_get_uuid(startdata->container)));
@@ -390,9 +383,6 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			out.has_token_type = true;
 			out.token_type = smartcard_tokentype_to_proto(
 				container_get_token_type(startdata->container));
-			if (out.token_type == TOKEN_TYPE__USB)
-				out.usbtoken_serial =
-					container_get_usbtoken_serial(startdata->container);
 
 			out.token_uuid =
 				mem_strdup(uuid_string(container_get_uuid(startdata->container)));
@@ -421,9 +411,6 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			out.has_token_type = true;
 			out.token_type = smartcard_tokentype_to_proto(
 				container_get_token_type(startdata->container));
-			if (out.token_type == TOKEN_TYPE__USB)
-				out.usbtoken_serial =
-					container_get_usbtoken_serial(startdata->container);
 
 			out.token_uuid =
 				mem_strdup(uuid_string(container_get_uuid(startdata->container)));
@@ -527,8 +514,6 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	out.has_token_type = true;
 	out.token_type =
 		smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
-	if (out.token_type == TOKEN_TYPE__USB)
-		out.usbtoken_serial = container_get_usbtoken_serial(startdata->container);
 
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(startdata->container)));
 
@@ -713,8 +698,6 @@ smartcard_change_container_pin(smartcard_t *smartcard, control_t *control, conta
 	out.has_token_type = true;
 	out.token_type =
 		smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
-	if (out.token_type == TOKEN_TYPE__USB)
-		out.usbtoken_serial = container_get_usbtoken_serial(startdata->container);
 
 	out.token_pin = mem_strdup(passwd);
 	out.token_newpin = mem_strdup(newpasswd);
@@ -779,8 +762,15 @@ smartcard_scd_token_block_add(smartcard_t *smartcard, container_t *container)
 
 	out.has_token_type = true;
 	out.token_type = smartcard_tokentype_to_proto(container_get_token_type(container));
-	if (out.token_type == TOKEN_TYPE__USB)
+
+	if (out.token_type == TOKEN_TYPE__USB) {
 		out.usbtoken_serial = container_get_usbtoken_serial(container);
+		if (NULL == out.usbtoken_serial) {
+			ERROR("Could not retrive serial os usbtoken reader. Abort token init...");
+			mem_free(out.token_uuid);
+			return -1;
+		}
+	}
 
 	TokenToDaemon *msg = smartcard_send_recv_block(&out);
 	if (!msg) {

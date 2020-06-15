@@ -64,6 +64,19 @@ softtoken_create_p12(const char *filename, const char *passwd, const char *name)
 	return 0;
 }
 
+/**
+ * removes a pkcs12 token file.
+ */
+void
+softtoken_remove_p12(softtoken_t *token)
+{
+	ASSERT(token);
+
+	int rc = remove(token->token_file);
+	if (rc != 0)
+		ERROR("Failed to remove %s. Return code: %d", token->token_file, rc);
+}
+
 softtoken_t *
 softtoken_new_from_p12(const char *filename)
 {

@@ -1155,7 +1155,6 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	if (container_get_token_uuid(container)) {
 		uuid_free(container_get_token_uuid(container));
 		container_set_token_uuid(container, NULL);
-
 	}
 	/* detroy the container */
 	if (container_destroy(container) < 0) {
