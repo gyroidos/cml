@@ -290,6 +290,8 @@ token_data_free(scd_token_data_t *token_data)
 	case (NONE):
 		break;
 	case (DEVICE):
+		TRACE("Removing softtoken %s", uuid_string(token_data->token_uuid));
+		softtoken_remove_p12(token_data->int_token.softtoken);
 		softtoken_free(token_data->int_token.softtoken);
 		break;
 #ifdef ENABLESCHSM

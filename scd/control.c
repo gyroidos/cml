@@ -223,7 +223,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		if (token == NULL) {
 			ERROR("Token not found");
 		} else {
-			scd_token_free(token); // TODO: can there be any error here?
+			scd_token_free(token);
 			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_SUCCESSFUL;
 		}
 
