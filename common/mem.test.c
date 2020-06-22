@@ -163,7 +163,7 @@ static MunitResult
 test_mem_memcpy(UNUSED const MunitParameter params[], UNUSED void *data)
 {
 	unsigned char a[257];
-	munit_rand_memory(a, sizeof(a));
+	munit_rand_memory(sizeof(a), a);
 
 	// memcpy duplicates memory
 	unsigned char *b = mem_memcpy(a, sizeof(a));

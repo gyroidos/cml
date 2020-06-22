@@ -188,8 +188,8 @@ token_new(token_constr_data_t *constr_data)
 		new_token->token_data->type = NONE;
 		break;
 	}
-	case (DEVICE): {
-		DEBUG("Create scd_token with internal type 'DEVICE'");
+	case (SOFT): {
+		DEBUG("Create scd_token with internal type 'SOFT'");
 
 		ASSERT(constr_data->uuid);
 		ASSERT(constr_data->str.softtoken_dir);
@@ -212,7 +212,7 @@ token_new(token_constr_data_t *constr_data)
 		}
 		mem_free(token_file);
 
-		new_token->token_data->type = DEVICE;
+		new_token->token_data->type = SOFT;
 		new_token->lock = int_lock_st;
 		new_token->unlock = int_unlock_st;
 		new_token->is_locked = int_is_locked_st;
@@ -289,7 +289,7 @@ token_data_free(scd_token_data_t *token_data)
 	switch (token_data->type) {
 	case (NONE):
 		break;
-	case (DEVICE):
+	case (SOFT):
 		TRACE("Removing softtoken %s", uuid_string(token_data->token_uuid));
 		softtoken_remove_p12(token_data->int_token.softtoken);
 		softtoken_free(token_data->int_token.softtoken);

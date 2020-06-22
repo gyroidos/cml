@@ -82,8 +82,8 @@ container_config_proto_to_token_type(ContainerTokenType type)
 	switch (type) {
 	case CONTAINER_TOKEN_TYPE__NONE:
 		return CONTAINER_TOKEN_TYPE_NONE;
-	case CONTAINER_TOKEN_TYPE__DEVICE:
-		return CONTAINER_TOKEN_TYPE_DEVICE;
+	case CONTAINER_TOKEN_TYPE__SOFT:
+		return CONTAINER_TOKEN_TYPE_SOFT;
 	case CONTAINER_TOKEN_TYPE__USB:
 		return CONTAINER_TOKEN_TYPE_USB;
 	default:

@@ -61,7 +61,7 @@ enum ContainerType {
 
 enum ContainerTokenType {
 	NONE = 1;
-	DEVICE = 2;
+	SOFT = 2;
 	USB = 3;
 }
 
@@ -117,7 +117,7 @@ message ContainerConfig {
 	// use bindmount mechanism from c_vol
 	repeated string fifos = 29;
 
-	required ContainerTokenType token_type = 30 [ default = DEVICE ];
+	required ContainerTokenType token_type = 30 [ default = SOFT ];
 }
 
 /**

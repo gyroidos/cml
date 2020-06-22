@@ -39,7 +39,7 @@ enum HashAlgo {
  */
 enum TokenType {
 	NONE = 1;
-	DEVICE = 2;
+	SOFT = 2;
 	USB = 3;
 }
 
@@ -66,7 +66,8 @@ message DaemonToToken {
 		CRYPTO_VERIFY_BUF = 61;	// verify certificate and signature on data given in [verify_*_buf]
 
 		TOKEN_ADD = 90;	// create a new scd token
-		TOKEN_REMOVE = 92;	// free a scd token
+		TOKEN_REMOVE = 91;	// free a scd token
+		TOKEN_QUERY_PAIR_STATE = 92;	// query if the token has been paired to the device
 	}
 
 
@@ -76,7 +77,7 @@ message DaemonToToken {
 	optional string token_newpin = 3;	// for changing pin of the token
 
 	// the type of the token
-	optional TokenType token_type = 4 [default = DEVICE];
+	optional TokenType token_type = 4 [default = SOFT];
 
 	// the uuid of the token
 	optional string token_uuid = 5 [default = "00000000-0000-0000-0000-000000000000"];
@@ -138,7 +139,6 @@ message TokenToDaemon {
 		CRYPTO_VERIFY_BAD_CERTIFICATE = 63;	// certificate is invalid
 		CRYPTO_VERIFY_LOCALLY_SIGNED = 64;	// sginature is valid for a local CA
 
-		TOKEN_QUERY_PAIR_STATE = 70;	// query if the token has been paired to the device
 
 		TOKEN_ADD_SUCCESSFUL = 90;	// creating a new scd token succeeded
 		TOKEN_ADD_FAILED	= 91;	// creating a new scd token failed

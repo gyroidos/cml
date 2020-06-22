@@ -37,16 +37,25 @@ smartcard_t *
 smartcard_new(const char *path);
 
 /**
- * Instruct the SCD to add the token associated to @param container.
+ * Instruct the SCD to add the token associated to 
+ * @param container
  */
 int
-smartcard_scd_token_block_add(smartcard_t *smartcard, container_t *container);
+smartcard_scd_token_add_block(container_t *container);
 
 /**
- * Instruct the SCD to remove the token associated to @param container.
+ * Instruct the SCD to remove the token associated to 
+ * @param container
  */
 int
-smartcard_scd_token_block_remove(smartcard_t *smartcard, container_t *container);
+smartcard_scd_token_remove_block(container_t *container);
+
+/**
+ * Update the state of the token associated to
+ * @param container
+ */
+int
+smartcard_update_token_state(container_t *container);
 
 int
 smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
@@ -69,7 +78,7 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
  * return -1 on message transmission failure, 0 if message was sent to SCD
  */
 int
-smartcard_change_container_pin(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, container_t *container,
 			       const char *passwd, const char *newpasswd);
 
 /**
