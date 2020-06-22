@@ -205,7 +205,7 @@ cmld_is_internet_active(void)
 }
 
 /**
- * Requests the SCD to initialize a token assocaited to a container and queries whether that
+ * Requests the SCD to initialize a token associated to a container and queries whether that
  * token has been provisioned with a platform-bound authentication code.
  */
 static int
@@ -213,13 +213,12 @@ cmld_container_token_init(container_t *container)
 {
 	ASSERT(container);
 
-	if (smartcard_scd_token_block_add(cmld_smartcard, container) != 0) {
+	if (smartcard_scd_token_add_block(container) != 0) {
 		ERROR("Requesting SCD to init token failed");
 		return -1;
 	}
 
-	container_set_token_is_linked_to_device(
-		container, smartcard_container_token_is_provisioned(container));
+	smartcard_update_token_state(container);
 
 	return 0;
 }
@@ -676,14 +675,15 @@ cmld_container_start(container_t *container)
 }
 
 int
-cmld_container_change_token_pin(control_t *control, container_t *container, const char *passwd,
-				const char *newpasswd)
+cmld_container_change_pin(control_t *control, container_t *container, const char *passwd,
+			  const char *newpasswd)
 {
 	ASSERT(container);
+	ASSERT(control);
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
-	return smartcard_change_container_pin(cmld_smartcard, control, container, passwd,
+	return smartcard_container_change_pin(cmld_smartcard, control, container, passwd,
 					      newpasswd);
 }
 
@@ -882,10 +882,12 @@ cmld_init_a0(const char *path, const char *c0os)
 	bool a0_ns_net = true;
 	bool privileged = true;
 
-	container_t *new_a0 = container_new_internal(
-		a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net, privileged, a0_os, NULL,
-		a0_images_folder, a0_mnt, a0_ram_limit, 0xffffff00, 0, false, NULL,
-		cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL);
+	container_t *new_a0 =
+		container_new_internal(a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net,
+				       privileged, a0_os, NULL, a0_images_folder, a0_mnt,
+				       a0_ram_limit, 0xffffff00, 0, false, NULL,
+				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL,
+				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE);
 
 	/* depending on the storage of the a0 pointer, do ONE of the following: */
 	/* store a0 as first element of the cmld_containers_list */
@@ -1149,13 +1151,9 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 		container_unregister_observer(container, cb);
 
 	if (container_get_token_is_init(container)) {
-		smartcard_scd_token_block_remove(cmld_smartcard, container);
+		smartcard_scd_token_remove_block(container);
 	}
 
-	if (container_get_token_uuid(container)) {
-		uuid_free(container_get_token_uuid(container));
-		container_set_token_uuid(container, NULL);
-	}
 	/* detroy the container */
 	if (container_destroy(container) < 0) {
 		ERROR("Could not destroy container");

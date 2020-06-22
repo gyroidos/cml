@@ -467,8 +467,8 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_TOKEN_UNINIT;
 		break;
 
-	case CONTROL_RESPONSE_CONTAINER_TOKEN_NPAIRED:
-		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_TOKEN_NPAIRED;
+	case CONTROL_RESPONSE_CONTAINER_TOKEN_UNPAIRED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_TOKEN_UNPAIRED;
 		break;
 
 	case CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED:
@@ -947,7 +947,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send container config as Response to CREATE");
 		}
-
 		mem_free(cuuid_str[0]);
 		mem_free(cuuid_str);
 		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
@@ -1194,8 +1193,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	}
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN: {
-		res = cmld_container_change_token_pin(control, container, msg->device_pin,
-						      msg->device_newpin);
+		res = cmld_container_change_pin(control, container, msg->device_pin,
+						msg->device_newpin);
 	} break;
 
 	default:

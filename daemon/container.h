@@ -75,7 +75,7 @@ typedef enum {
  */
 typedef enum {
 	CONTAINER_TOKEN_TYPE_NONE = 1,
-	CONTAINER_TOKEN_TYPE_DEVICE,
+	CONTAINER_TOKEN_TYPE_SOFT,
 	CONTAINER_TOKEN_TYPE_USB,
 } container_token_type_t;
 
@@ -90,6 +90,22 @@ typedef struct container_vnet_cfg {
 	uint8_t vnet_mac[6];
 	bool configure;
 } container_vnet_cfg_t;
+
+/**
+ * Structure to define the configuration of the token associated with the container.
+ */
+typedef struct container_token_config {
+	// the uuid of the token the container is associated with
+	uuid_t *uuid;
+	// the token's type
+	container_token_type_t type;
+	// the iSerial of the usbtoken reader
+	char *serial;
+	// indicates whether the scd has succesfully initialized the token structure
+	bool is_init;
+	// indicates whether the token has already been provisioned with a platform-bound authentication code
+	bool is_paired_with_device;
+} container_token_config_t;
 
 /**
  * Represents the current container state.
@@ -165,7 +181,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
 		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
-		       size_t init_env_len, list_t *fifo_list);
+		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype);
 
 /**
  * Creates a new container container object. There are three different cases

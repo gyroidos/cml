@@ -48,7 +48,7 @@ typedef struct scd_token_data scd_token_data_t;
  * Choice of supported token types.
  * Must be kept in sync with scd.proto
  */
-typedef enum scd_tokentype { NONE, DEVICE, USB } scd_tokentype_t;
+typedef enum scd_tokentype { NONE, SOFT, USB } scd_tokentype_t;
 
 /**
  * Data used by the constructor scd_token_new

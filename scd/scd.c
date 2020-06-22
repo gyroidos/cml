@@ -382,8 +382,8 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
 	switch (msg->token_type) {
 	case TOKEN_TYPE__NONE:
 		return NONE;
-	case TOKEN_TYPE__DEVICE:
-		return DEVICE;
+	case TOKEN_TYPE__SOFT:
+		return SOFT;
 	case TOKEN_TYPE__USB:
 		return USB;
 	default: {
@@ -448,7 +448,7 @@ scd_token_new(const DaemonToToken *msg)
 
 	if (type == NONE) {
 		create_data.str.softtoken_dir = NULL;
-	} else if (type == DEVICE) {
+	} else if (type == SOFT) {
 		create_data.str.softtoken_dir = SCD_TOKEN_DIR;
 	} else if (type == USB) {
 		ASSERT(msg->usbtoken_serial);

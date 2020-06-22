@@ -181,11 +181,7 @@ struct container {
 
 	bool setup_mode;
 
-	uuid_t *scd_token_uuid; // the uuid of the token the container is associated with
-	// indicates whether the scd has succesfull initialized the token structure
-	bool scd_token_is_init;
-	// indicates whether the token has already been provisioned with a platform bound authentication code
-	bool scd_token_is_paired_with_device;
+	container_token_config_t token;
 };
 
 struct container_callback {
@@ -257,7 +253,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
 		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
-		       size_t init_env_len, list_t *fifo_list)
+		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -300,7 +296,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->images_dir = mem_strdup(images_dir);
 
 	/* create image_dir already so we can store a pseudo file as a
-	 * marker that the token aossicated with the container has been initialized
+	 * marker that the token associated with the container has been initialized
 	 */
 	if (mkdir(images_dir, 0755) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Cound not mkdir container directory %s", images_dir);
@@ -434,6 +430,22 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->usbdev_list = usbdev_list;
 
 	container->setup_mode = false;
+
+	container->token.type = ttype;
+	if (ttype == CONTAINER_TOKEN_TYPE_USB) {
+		for (list_t *l = container->usbdev_list; l; l = l->next) {
+			uevent_usbdev_t *ud = (uevent_usbdev_t *)l->data;
+			if (uevent_usbdev_get_type(ud) == UEVENT_USBDEV_TYPE_TOKEN) {
+				container->token.serial =
+					mem_strdup(uevent_usbdev_get_i_serial(ud));
+				break; // TODO: handle misconfiguration with several usbtoken?
+			}
+		}
+		if (NULL == container->token.serial) {
+			ERROR("Usbtoken reader serial missing in container config. Abort creation of container");
+			goto error;
+		}
+	}
 
 	return container;
 
@@ -607,12 +619,14 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		fifo_list = list_append(fifo_list, mem_strdup(fifos[i]));
 	}
 
+	container_token_type_t ttype = container_config_get_token_type(conf);
+
 	container_t *c =
 		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
 				       images_dir, mnt, ram_limit, color, adb_port, allow_autostart,
 				       feature_enabled, dns_server, net_ifaces, allowed_devices,
 				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
-				       init_env_len, fifo_list);
+				       init_env_len, fifo_list, ttype);
 	if (c)
 		container_config_write(conf);
 
@@ -637,7 +651,6 @@ container_free(container_t *container)
 	ASSERT(container);
 
 	uuid_free(container->uuid);
-	uuid_free(container->scd_token_uuid);
 	mem_free(container->name);
 
 	for (list_t *l = container->csock_list; l; l = l->next) {
@@ -701,6 +714,13 @@ container_free(container_t *container)
 		mem_free(l->data);
 	}
 	list_delete(container->usbdev_list);
+
+	if (container->token.uuid)
+		uuid_free(container->uuid);
+
+	if (container->token.serial)
+		mem_free(container->token.serial);
+
 	mem_free(container);
 }
 
@@ -2449,86 +2469,54 @@ container_token_type_t
 container_get_token_type(const container_t *container)
 {
 	ASSERT(container);
-
-	container_token_type_t ret;
-	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
-	ret = container_config_get_token_type(conf);
-	container_config_free(conf);
-	return ret;
+	return container->token.type;
 }
 
 char *
 container_get_usbtoken_serial(const container_t *container)
 {
 	ASSERT(container);
-
-	container_token_type_t tt;
-
-	tt = container_get_token_type(container);
-
-	if (tt != CONTAINER_TOKEN_TYPE_USB) {
-		ERROR("The container is not configured to use a usb token");
-		return NULL;
-	}
-
-	if (container->usbdev_list == NULL)
-		ERROR("No usbdev_list in container config");
-
-	for (list_t *l = container->usbdev_list; l; l = l->next) {
-		uevent_usbdev_t *ud = (uevent_usbdev_t *)l->data;
-		if (uevent_usbdev_get_type(ud) == UEVENT_USBDEV_TYPE_TOKEN) {
-			return (uevent_usbdev_get_i_serial(ud));
-		}
-	}
-
-	ERROR("Could not find usbdev with type \"TOKEN\"");
-	return NULL;
+	return container->token.serial;
 }
 
 void
 container_set_token_uuid(container_t *container, const char *tuuid)
 {
 	ASSERT(container);
-
-	container->scd_token_uuid = uuid_new(tuuid);
+	container->token.uuid = uuid_new(tuuid);
 }
 
 uuid_t *
 container_get_token_uuid(const container_t *container)
 {
 	ASSERT(container);
-
-	return container->scd_token_uuid;
+	return container->token.uuid;
 }
 
 void
 container_set_token_is_init(container_t *container, const bool is_init)
 {
 	ASSERT(container);
-
-	container->scd_token_is_init = is_init;
+	container->token.is_init = is_init;
 }
 
 bool
 container_get_token_is_init(const container_t *container)
 {
 	ASSERT(container);
-
-	return container->scd_token_is_init;
+	return container->token.is_init;
 }
 
 void
 container_set_token_is_linked_to_device(container_t *container, const bool is_paired)
 {
 	ASSERT(container);
-
-	container->scd_token_is_paired_with_device = is_paired;
+	container->token.is_paired_with_device = is_paired;
 }
 
 bool
 container_get_token_is_linked_to_device(const container_t *container)
 {
 	ASSERT(container);
-
-	return container->scd_token_is_paired_with_device;
+	return container->token.is_paired_with_device;
 }
