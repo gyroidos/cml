@@ -93,7 +93,7 @@ softtoken_free(softtoken_t *token);
 
 /**
  * wraps a symmetric container key plain_key of length plain_key_len with a
- * user public key pubkey into a wrapped key wrapped_key of legnth wrapped_key_len
+ * user public key pubkey into a wrapped key wrapped_key of length wrapped_key_len
  */
 int
 softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
@@ -101,7 +101,7 @@ softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t pl
 
 /**
  * unwraps a symmetric container key wrapped_key of length wrapped_key_len with a
- * user's private key into the plain key plain_key of legnth plain_key_len
+ * user's private key into the plain key plain_key of length plain_key_len
  */
 int
 softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,

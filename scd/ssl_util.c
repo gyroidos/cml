@@ -57,7 +57,11 @@
 /* Cipher for device CSR private key encryption */
 #define CIPHER_PW_CSR SN_aes_256_cbc
 #define CIPHER_KEY_WRAP SN_aes_256_cbc
-/* Cipher for key wrapping with symmetric key */
+/* Cipher for key wrapping with symmetric key
+ * This algo determines the necessary length of the key used for key wrapping
+ * with symmetric keys. Ensure that the wrapping keys (e.g. generated in usbtoken.c)
+ * have a sufficient length when changing this!
+ */
 #define CIPHER_KEY_WRAP_SKEY SN_id_aes256_wrap
 /* RSA key size when keypair is created */
 #define RSA_KEY_SIZE_MKKEYP 4096
@@ -529,9 +533,10 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 
 	int res = -1;
 	const EVP_CIPHER *type;
+	const size_t max_out_len = plain_key_len + EVP_MAX_BLOCK_LENGTH;
 
 	if (!(type = EVP_get_cipherbyname(CIPHER_KEY_WRAP))) {
-		ERROR("Error setting up cipher for key wrap");
+		ERROR("Error setting up cipher for key wrapping");
 		return res;
 	}
 
@@ -546,8 +551,7 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	int iv_len = EVP_CIPHER_iv_length(type);
 	unsigned char *iv_buf = mem_alloc(iv_len);
 
-	unsigned char *out =
-		mem_alloc(ADD_WITH_OVERFLOW_CHECK(plain_key_len, EVP_CIPHER_block_size(type)));
+	unsigned char *out = mem_alloc(max_out_len);
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
 	if (!EVP_SealInit(ctx, type, &tmpkey, &tmpkeylen, iv_buf, &pkey, 1)) {
@@ -612,9 +616,10 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 
 	int res = -1;
 	const EVP_CIPHER *type;
+	const size_t max_out_len = wrapped_key_len + EVP_MAX_BLOCK_LENGTH;
 
 	if (!(type = EVP_get_cipherbyname(CIPHER_KEY_WRAP))) {
-		ERROR("Error setting up cipher for key unwrap");
+		ERROR("Error setting up cipher for key unwrapping");
 		return res;
 	}
 
@@ -643,8 +648,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 		return res;
 	}
 
-	unsigned char *out =
-		mem_alloc(ADD_WITH_OVERFLOW_CHECK(keylen, EVP_CIPHER_block_size(type)));
+	unsigned char *out = mem_alloc0(max_out_len);
 
 	// TODO: investigate what this barely documented OpenSSL homebrew EVP_Seal* stuff actually does...!
 	if (!EVP_OpenInit(ctx, type, tmpkey, tmpkeylen, iv_buf, pkey)) {
@@ -686,9 +690,10 @@ ssl_wrap_key_sym(const unsigned char *kek, const unsigned char *plain_key, size_
 	int tmplen = 0;
 	int outlen = 0;
 	const EVP_CIPHER *type;
+	const size_t max_out_len = plain_key_len + EVP_MAX_BLOCK_LENGTH;
 
 	if (!(type = EVP_get_cipherbyname(CIPHER_KEY_WRAP_SKEY))) {
-		ERROR("Error setting up cipher for key wrap");
+		ERROR("Error setting up cipher for key wrapping");
 		return res;
 	}
 
@@ -709,21 +714,29 @@ ssl_wrap_key_sym(const unsigned char *kek, const unsigned char *plain_key, size_
 	unsigned char iv[] = { 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6 };
 
 	/* TODO: investigate whether more space may be required */
-	unsigned char *out = mem_alloc(plain_key_len + EVP_CIPHER_block_size(type));
+	unsigned char *out = mem_alloc0(max_out_len);
+	if (!out) {
+		ERROR("Failed to allocate memory for wrapped key");
+		res = -1;
+		goto cleanup;
+	}
 
 	if (1 != EVP_EncryptInit_ex(ctx, type, NULL, kek, iv)) {
 		ERROR("EVP_EncryptInit_ex failed");
+		DEBUG("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
 		goto cleanup;
 	}
 
 	if (1 != EVP_EncryptUpdate(ctx, out, &tmplen, plain_key, plain_key_len)) {
 		ERROR("EVP_EncryptUpdate failed");
+		DEBUG("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
 		goto cleanup;
 	}
 	outlen = tmplen;
 
 	if (1 != EVP_EncryptFinal_ex(ctx, out + tmplen, &tmplen)) {
 		ERROR("EVP_EncryptFinal_ex failed");
+		DEBUG("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
 		goto cleanup;
 	}
 	outlen += tmplen;
@@ -744,15 +757,16 @@ ssl_unwrap_key_sym(const unsigned char *kek, const unsigned char *wrapped_key,
 	ASSERT(kek);
 	ASSERT(plain_key);
 	ASSERT(wrapped_key);
-	ASSERT(wrapped_key_len);
+	ASSERT(plain_key_len);
 
 	int res = -1;
 	int tmplen = 0;
 	int outlen = 0;
 	const EVP_CIPHER *type;
+	const size_t max_out_len = wrapped_key_len + EVP_MAX_BLOCK_LENGTH;
 
 	if (!(type = EVP_get_cipherbyname(CIPHER_KEY_WRAP_SKEY))) {
-		ERROR("Error setting up cipher for key wrap");
+		ERROR("Error setting up cipher for key wrapping");
 		return res;
 	}
 
@@ -773,21 +787,29 @@ ssl_unwrap_key_sym(const unsigned char *kek, const unsigned char *wrapped_key,
 	unsigned char iv[] = { 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6 };
 
 	/* TODO: investigate whether more space may be required */
-	unsigned char *out = mem_alloc(wrapped_key_len + EVP_CIPHER_block_size(type));
+	unsigned char *out = mem_alloc0(max_out_len);
+	if (!out) {
+		ERROR("Failed to allocate memory for unwrapped key");
+		res = -1;
+		goto cleanup;
+	}
 
 	if (1 != EVP_DecryptInit_ex(ctx, type, NULL, kek, iv)) {
 		ERROR("EVP_DecryptInit_ex failed");
+		DEBUG("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
 		goto cleanup;
 	}
 
 	if (1 != EVP_DecryptUpdate(ctx, out, &tmplen, wrapped_key, wrapped_key_len)) {
 		ERROR("EVP_DecryptUpdate failed");
+		DEBUG("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
 		goto cleanup;
 	}
 	outlen = tmplen;
 
 	if (1 != EVP_DecryptFinal_ex(ctx, out + tmplen, &tmplen)) {
 		ERROR("EVP_DecryptFinal_ex failed");
+		DEBUG("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
 		goto cleanup;
 	}
 	outlen += tmplen;
