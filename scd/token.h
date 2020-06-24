@@ -40,7 +40,7 @@
 typedef struct scd_token scd_token_t;
 
 /**
- * Internal data if the generic scd token.
+ * Internal data of the generic scd token.
  */
 typedef struct scd_token_data scd_token_data_t;
 
@@ -60,7 +60,7 @@ typedef struct token_constr_data {
 	union {
 		const char *softtoken_dir;
 		const char *usbtoken_serial;
-	} str;
+	} init_str;
 } token_constr_data_t;
 
 /**
@@ -89,19 +89,39 @@ struct scd_token {
 
 /**
  * returns the token's type.
+ * @param token the token to operate on
+ *
+ * @return the type of the scd token
  */
 scd_tokentype_t
 token_get_type(scd_token_t *token);
 
 /**
  * returns the token's uuid.
+ * @param token the token to operate on
+ *
+ * @return pointer to the uuid of the token on success or else NULL
  */
 uuid_t *
 token_get_uuid(scd_token_t *token);
 
+/**
+ * creates a new generic token
+ * calls the respective create function for the selected type of token and
+ * sets the function pointer appropriately
+ * @param constr_data data used by the constructor
+ *
+ * @return pointer to the newly created generic token on success or else NULL
+ */
 scd_token_t *
-token_new(token_constr_data_t *constr_data);
+token_new(const token_constr_data_t *constr_data);
 
+/**
+ * frees a generic scd token
+ * @param token the token to be freed
+ *
+ * @return void
+ */
 void
 token_free(scd_token_t *token);
 

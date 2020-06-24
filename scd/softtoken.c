@@ -51,13 +51,15 @@ softtoken_create_p12(const char *filename, const char *passwd, const char *name)
 	ASSERT(passwd);
 	ASSERT(name);
 
-	// TPM not used for soft token
+	// instruct openssl to initialize a context without using the tpm as an engine
 	if (ssl_init(false) == -1) {
-		FATAL("Failed to initialize OpenSSL stack for softtoken");
+		ERROR("Failed to initialize OpenSSL stack for softtoken");
+		return -1;
 	}
 
 	if (ssl_create_pkcs12_token(filename, NULL, passwd, name) != 0) {
-		FATAL("Unable to create initial user token");
+		ERROR("Unable to create pkcs12 token");
+		return -1;
 	}
 
 	ssl_free();

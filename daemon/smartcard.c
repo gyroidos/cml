@@ -122,12 +122,6 @@ smartcard_get_pairing_secret(smartcard_t *smartcard, unsigned char *buf, int buf
 
 	if (file_exists(pair_sec_file)) {
 		bytes_read = file_read(pair_sec_file, (char *)buf, buf_len);
-
-		if (bytes_read > buf_len) {
-			ERROR("Buffer too small to hold pairing secret read from file");
-			bytes_read = -1;
-		}
-
 	} else {
 		DEBUG("No pairing secret has been persisted yet. Creating new one");
 		bytes_read = hardware_get_random(buf, buf_len);
@@ -257,7 +251,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
-			smartcard_start_container_internal(startdata);
+			if (container_get_key(startdata->container))
+				smartcard_start_container_internal(startdata);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
@@ -372,15 +367,14 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 			protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
 			mem_free(out.token_uuid);
-			// start container
 			if (!msg->has_unwrapped_key) {
 				WARN("Expected derived key, but none was returned!");
 				control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
 						     resp_fd);
-				done = true;
 				break;
 			}
 			// set the key
+			TRACE("Successfully retrieved unwrapped key from SCD");
 			char *ascii_key = bytes_to_string_new(msg->unwrapped_key.data,
 							      msg->unwrapped_key.len);
 			container_set_key(startdata->container, ascii_key);
@@ -416,6 +410,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				ERROR("Failed to store key for container %s to %s!",
 				      container_get_name(startdata->container), keyfile);
 			}
+			TRACE("Stored wrapped key on disk successfully");
 			mem_free(keyfile);
 		} break;
 		default:
@@ -476,23 +471,19 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
 		goto err;
 	}
-	// register callback handler
 
 	// TODO register timer if socket does not respond
 	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
 					 smartcard_cb_start_container, startdata);
 	event_add_io(event);
 	DEBUG("SCD: Registered start container callback for key from scd");
-
 	// unlock token
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = DAEMON_TO_TOKEN__CODE__UNLOCK;
 	out.token_pin = mem_strdup(passwd);
-
 	out.has_pairing_secret = true;
 	out.pairing_secret.len = pair_sec_len;
 	out.pairing_secret.data = mem_memcpy(pair_sec, sizeof(pair_sec));
-
 	out.has_token_type = true;
 	out.token_type =
 		smartcard_tokentype_to_proto(container_get_token_type(startdata->container));
@@ -673,7 +664,7 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
 					 smartcard_cb_container_change_pin, startdata);
 	event_add_io(event);
-	DEBUG("SCD: Registered generic container callback for scd");
+	DEBUG("SCD: Registered smartcard_cb_container_change_pin container callback for scd");
 
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = is_provisioning ? DAEMON_TO_TOKEN__CODE__PROVISION_PIN :

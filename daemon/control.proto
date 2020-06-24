@@ -131,7 +131,7 @@ message ControllerToDaemon {
 		PULL_DEVICE_CSR = 40;
 		// Pushes bach the device certificate (provisioning)
 		PUSH_DEVICE_CERT = 41;
-		// deprecated. Token are assigned per container.
+		// deprecated. Tokens are assigned per container.
 		CHANGE_DEVICE_PIN = 42;
 
 		///////////////////////////////////////////////////

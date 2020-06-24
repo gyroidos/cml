@@ -32,7 +32,6 @@
 #include "device.pb-c.h"
 #endif
 
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/event.h"
@@ -305,7 +304,7 @@ main(int argc, char **argv)
 	logf_register(&logf_file_write, stdout);
 
 	scd_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-scd"));
-	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_WARN);
+	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 
 	event_timer_t *logfile_timer = event_timer_new(
 		HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, scd_logfile_rename_cb, NULL);
@@ -386,12 +385,10 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
 		return SOFT;
 	case TOKEN_TYPE__USB:
 		return USB;
-	default: {
+	default:
 		ERROR("Invalid token type value");
-		return -1;
-	}
-	}
-	return -1; // never reached
+	} // fallthrough
+	return -1;
 }
 
 /**
@@ -434,25 +431,25 @@ scd_token_new(const DaemonToToken *msg)
 {
 	TRACE("SCD: scd_token_new. proto_tokentype: %d", msg->token_type);
 
+	ASSERT(msg->token_uuid);
+
 	scd_token_t *ntoken;
-	scd_tokentype_t type;
 	token_constr_data_t create_data;
 
 	if (NULL != (ntoken = scd_get_token(msg))) {
 		WARN("SCD: Token %s already exists. Aborting creation...", msg->token_uuid);
-		return 0; // TODO: is this the correct behaviour?
+		return -1; // TODO: is this the correct behaviour?
 	}
 
-	type = scd_proto_to_tokentype(msg);
-	create_data.type = type;
+	create_data.type = scd_proto_to_tokentype(msg);
 
-	if (type == NONE) {
-		create_data.str.softtoken_dir = NULL;
-	} else if (type == SOFT) {
-		create_data.str.softtoken_dir = SCD_TOKEN_DIR;
-	} else if (type == USB) {
+	if (create_data.type == NONE) {
+		create_data.init_str.softtoken_dir = NULL;
+	} else if (create_data.type == SOFT) {
+		create_data.init_str.softtoken_dir = SCD_TOKEN_DIR;
+	} else if (create_data.type == USB) {
 		ASSERT(msg->usbtoken_serial);
-		create_data.str.usbtoken_serial = msg->usbtoken_serial;
+		create_data.init_str.usbtoken_serial = msg->usbtoken_serial;
 	} else {
 		ERROR("Type of token not recognized");
 		return -1;
@@ -477,8 +474,7 @@ void
 scd_token_free(scd_token_t *token)
 {
 	IF_NULL_RETURN(token);
-
-	token_free(token);
+	scd_token_t *t = token;
 	scd_token_list = list_remove(scd_token_list, token);
-	token = NULL;
+	token_free(t);
 }

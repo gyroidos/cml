@@ -32,7 +32,7 @@
 /**
  * reads a pkcs12 softtoken located in the file token_file, unlocked with the password passphrase,
  * whereas the private key is stored in pkey
- * @return returns -1 in case of an incorrect password, -2 for other failures and 0 for success
+ * @return returns -1 in case of an incorrect password, -2 for other failures and 0 for successs
  */
 int
 ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY **pkey, X509 **cert,
@@ -46,7 +46,7 @@ ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY *
  * that is going to be loaded into the TPM for creating the device key inside the tpm.
  * Setting tpmkey requires to initialize the OpenSSL stack with tpm use, see ssl_init
  * The common name (CN) is included in the certificate request.
- * @return returns 0 on succes, -1 in case of a failure. */
+ * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase,
 	       const char *common_name, const char *uid, bool tpmkey);
@@ -54,7 +54,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 /**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
  * of length wrapped_key_len using a public key pkey (unwrap works with the corresp. private key). 
- * @return returns 0 on succes, -1 in case of a failure. */
+ * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_len,
 	     unsigned char **wrapped_key, int *wrapped_key_len);
@@ -62,7 +62,7 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 /**
  * This function unwraps a (symmetric) key wrapped_key of length wrapped_key_len into an unwrapped key
  * plain_key of length plain_key_len using the (private) key pkey.
- * @return returns 0 on succes, -1 in case of a failure. */
+ * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_key_len,
 	       unsigned char **plain_key, int *plain_key_len);
@@ -70,7 +70,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 /**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
  * of length wrapped_key_len using a symmetric key wr_key.
- * @return returns 0 on succes, -1 in case of a failure. */
+ * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_wrap_key_sym(const unsigned char *kek, const unsigned char *plain_key, size_t plain_key_len,
 		 unsigned char **wrapped_key, int *wrapped_key_len);
@@ -78,7 +78,7 @@ ssl_wrap_key_sym(const unsigned char *kek, const unsigned char *plain_key, size_
 /**
  * This function unwraps a (symmetric) key wrapped_key of length wrapped_key_len into an unwrapped key
  * plain_key of length plain_key_len using the symmetric wrapping key wr_key.
- * @return returns 0 on succes, -1 in case of a failure. */
+ * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_unwrap_key_sym(const unsigned char *kek, const unsigned char *wrapped_key,
 		   size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len);

@@ -33,7 +33,6 @@
 #include "ssl_util.h"
 #include "scd.h"
 
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/sock.h"
@@ -297,8 +296,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-		if (out.has_wrapped_key)
+		if (out.has_wrapped_key) {
+			memset(wrapped_key, 0, wrapped_key_len);
 			mem_free(wrapped_key);
+		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
 		TRACE("SCD: Handle messsage UNWRAP_KEY");
@@ -325,8 +326,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-		if (out.has_unwrapped_key)
+		if (out.has_unwrapped_key) {
+			memset(unwrapped_key, 0, unwrapped_key_len);
 			mem_free(unwrapped_key);
+		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CHANGE_PIN: {
 		TRACE("SCD: Handle messsage CHANGE_PIN");

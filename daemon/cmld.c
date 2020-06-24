@@ -213,6 +213,14 @@ cmld_container_token_init(container_t *container)
 {
 	ASSERT(container);
 
+	// container is configured to not use a token at all
+	if (CONTAINER_TOKEN_TYPE_NONE == container_get_token_type(container)) {
+		container_set_token_is_init(container, false);
+		DEBUG("Container %s is configured to use no token to hold encryption keys",
+		      uuid_string(container_get_uuid(container)));
+		return 0;
+	}
+
 	if (smartcard_scd_token_add_block(container) != 0) {
 		ERROR("Requesting SCD to init token failed");
 		return -1;

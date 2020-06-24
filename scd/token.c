@@ -37,9 +37,7 @@ struct scd_token_data {
 	uuid_t *token_uuid;
 };
 
-/*****************************************************************************/
-/******************* internal helper functions *******************************/
-/*****************************************************************************/
+/*** internal helper functions ***/
 
 int
 int_lock_st(scd_token_t *token)
@@ -82,7 +80,6 @@ int_unwrap_st(scd_token_t *token, UNUSED char *label, unsigned char *wrapped_key
 				    wrapped_key_len, plain_key, plain_key_len);
 }
 
-/* TODO: add token provisioning for softtoken */
 int
 int_change_pw_st(scd_token_t *token, const char *oldpass, const char *newpass,
 		 UNUSED unsigned char *pairing_secret, UNUSED size_t pairing_sec_len,
@@ -92,7 +89,6 @@ int_change_pw_st(scd_token_t *token, const char *oldpass, const char *newpass,
 					   newpass);
 }
 
-/*  -----------------------------------------------------------------------  */
 #ifdef ENABLESCHSM
 
 int
@@ -149,20 +145,13 @@ int_change_pw_usb(scd_token_t *token, const char *oldpass, const char *newpass,
 }
 #endif // ENABLESCHSM
 
-/*  -----------------------------------------------------------------------  */
-
-/**
- * creates a new generic token
- * calls the respective create function for the selected type of token and
- * sets the function pointer appropriately
- */
 scd_token_t *
-token_new(token_constr_data_t *constr_data)
+token_new(const token_constr_data_t *constr_data)
 {
+	ASSERT(constr_data);
+
 	scd_token_t *new_token;
 	char *token_file = NULL;
-
-	TRACE("SCD: scd_token_new");
 
 	new_token = mem_new0(scd_token_t, 1);
 	if (!new_token) {
@@ -173,42 +162,41 @@ token_new(token_constr_data_t *constr_data)
 	new_token->token_data = mem_new(scd_token_data_t, 1);
 	if (!new_token->token_data) {
 		ERROR("Could not allocate memory for token_data_t");
-		goto err_token_data;
+		goto err;
 	}
 
 	new_token->token_data->token_uuid = uuid_new(constr_data->uuid);
 	if (!new_token->token_data->token_uuid) {
 		ERROR("Could not allocate memory for token_uuid");
-		goto err_token_uuid;
+		goto err;
 	}
 
 	switch (constr_data->type) {
 	case (NONE): {
-		WARN("Create scd_token with internal type 'NONE' selected");
-		new_token->token_data->type = NONE;
-		break;
+		WARN("Create scd_token with internal type 'NONE' selected. No token will be created.");
+		goto err;
 	}
 	case (SOFT): {
 		DEBUG("Create scd_token with internal type 'SOFT'");
 
 		ASSERT(constr_data->uuid);
-		ASSERT(constr_data->str.softtoken_dir);
+		ASSERT(constr_data->init_str.softtoken_dir);
 
-		token_file = mem_printf("%s/%s%s", constr_data->str.softtoken_dir,
+		token_file = mem_printf("%s/%s%s", constr_data->init_str.softtoken_dir,
 					constr_data->uuid, STOKEN_DEFAULT_EXT);
 		if (!file_exists(token_file)) {
 			if (softtoken_create_p12(token_file, STOKEN_DEFAULT_PASS,
 						 constr_data->uuid) != 0) {
-				ERROR("could not create new softtoken file");
+				ERROR("Could not create new softtoken file");
 				mem_free(token_file);
-				goto err_tk_new;
+				goto err;
 			}
 		}
 		new_token->token_data->int_token.softtoken = softtoken_new_from_p12(token_file);
 		if (!new_token->token_data->int_token.softtoken) {
 			ERROR("Creation of softtoken failed");
 			mem_free(token_file);
-			goto err_tk_new;
+			goto err;
 		}
 		mem_free(token_file);
 
@@ -227,13 +215,13 @@ token_new(token_constr_data_t *constr_data)
 		DEBUG("Create scd_token with internal type 'USB'");
 
 		ASSERT(constr_data->uuid);
-		ASSERT(constr_data->str.usbtoken_serial);
+		ASSERT(constr_data->init_str.usbtoken_serial);
 
 		new_token->token_data->int_token.usbtoken =
-			usbtoken_init(constr_data->str.usbtoken_serial);
-		if (NULL == new_token->token_data->int_token.usbtoken) {
+			usbtoken_new(constr_data->init_str.usbtoken_serial);
+		if (!new_token->token_data->int_token.usbtoken) {
 			ERROR("Creation of usbtoken failed");
-			goto err_tk_new;
+			goto err;
 		}
 		new_token->token_data->type = USB;
 		new_token->lock = int_lock_usb;
@@ -246,21 +234,20 @@ token_new(token_constr_data_t *constr_data)
 		break;
 	}
 #endif // ENABLESCHSM
-	default: {
+	default:
 		ERROR("Unrecognized token type");
-		mem_free(new_token);
-		return NULL;
-	}
+		goto err;
 	}
 
 	return new_token;
 
-err_tk_new:
-	uuid_free(new_token->token_data->token_uuid);
-err_token_uuid:
-	mem_free(new_token->token_data);
-err_token_data:
-	mem_free(new_token);
+err:
+	if (new_token->token_data->token_uuid)
+		uuid_free(new_token->token_data->token_uuid);
+	if (new_token->token_data)
+		mem_free(new_token->token_data);
+	if (new_token)
+		mem_free(new_token);
 
 	return NULL;
 }
@@ -268,45 +255,17 @@ err_token_data:
 scd_tokentype_t
 token_get_type(scd_token_t *token)
 {
-	TRACE("SCD TOKEN: scd_token_get_type");
-
-	ASSERT(token->token_data->type);
+	ASSERT(token);
+	ASSERT(token->token_data);
 	return token->token_data->type;
 }
 
 uuid_t *
 token_get_uuid(scd_token_t *token)
 {
-	TRACE("SCD TOKEN: scd_token_get_uuid");
-
-	ASSERT(token->token_data->token_uuid);
+	ASSERT(token);
+	ASSERT(token->token_data);
 	return token->token_data->token_uuid;
-}
-
-static void
-token_data_free(scd_token_data_t *token_data)
-{
-	switch (token_data->type) {
-	case (NONE):
-		break;
-	case (SOFT):
-		TRACE("Removing softtoken %s", uuid_string(token_data->token_uuid));
-		softtoken_remove_p12(token_data->int_token.softtoken);
-		softtoken_free(token_data->int_token.softtoken);
-		break;
-#ifdef ENABLESCHSM
-	case (USB):
-		usbtoken_free(token_data->int_token.usbtoken);
-		break;
-#endif // ENABLESCHSM
-	default:
-		ERROR("Failed to determine token type. Cannot clean up");
-		return;
-	}
-
-	if (token_data->token_uuid)
-		uuid_free(token_data->token_uuid);
-	mem_free(token_data);
 }
 
 void
@@ -314,8 +273,28 @@ token_free(scd_token_t *token)
 {
 	IF_NULL_RETURN(token);
 
-	if (token->token_data)
-		token_data_free(token->token_data);
+	if (token->token_data) {
+		switch (token->token_data->type) {
+		case (NONE):
+			break;
+		case (SOFT):
+			TRACE("Removing softtoken %s", uuid_string(token->token_data->token_uuid));
+			softtoken_remove_p12(token->token_data->int_token.softtoken);
+			softtoken_free(token->token_data->int_token.softtoken);
+			break;
+#ifdef ENABLESCHSM
+		case (USB):
+			usbtoken_free(token->token_data->int_token.usbtoken);
+			break;
+#endif // ENABLESCHSM
+		default:
+			ERROR("Failed to determine token type. Cannot clean up");
+			return;
+		}
 
+		if (token->token_data->token_uuid)
+			uuid_free(token->token_data->token_uuid);
+		mem_free(token->token_data);
+	}
 	mem_free(token);
 }
