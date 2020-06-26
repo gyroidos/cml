@@ -159,32 +159,33 @@ test_strdup_strndup(UNUSED const MunitParameter params[], UNUSED void *data)
 	return MUNIT_OK;
 }
 
+#define TEST_MEM_MEMCPY_BUF_SIZE 257
 static MunitResult
 test_mem_memcpy(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	unsigned char a[257];
-	munit_rand_memory(sizeof(a), a);
+	unsigned char *a = mem_alloc(TEST_MEM_MEMCPY_BUF_SIZE);
+	munit_rand_memory(TEST_MEM_MEMCPY_BUF_SIZE, a);
 
 	// memcpy duplicates memory
-	unsigned char *b = mem_memcpy(a, sizeof(a));
+	unsigned char *b = mem_memcpy(a, TEST_MEM_MEMCPY_BUF_SIZE);
 	munit_assert_not_null(b);
-	munit_assert_memory_equal(sizeof(a), a, b);
+	munit_assert_memory_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, b);
 
 	// b is in a different memory chunk than a and can be modified
 	b[8] = ~b[8];
-	munit_assert_memory_not_equal(sizeof(a), a, b);
+	munit_assert_memory_not_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, b);
 	mem_free(b);
 
 	// memcpy copies entire memory
-	unsigned char *c = mem_memcpy(a, sizeof(a));
+	unsigned char *c = mem_memcpy(a, TEST_MEM_MEMCPY_BUF_SIZE);
 	munit_assert_not_null(c);
-	munit_assert_memory_equal(sizeof(a), a, c);
+	munit_assert_memory_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, c);
 	mem_free(c);
 
 	// memcpy cuts
-	c = mem_memcpy(a, 129);
+	c = mem_memcpy(a, (TEST_MEM_MEMCPY_BUF_SIZE / 2) + 1);
 	munit_assert_not_null(c);
-	munit_assert_memory_not_equal(129, a, c);
+	munit_assert_memory_not_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, c);
 	munit_assert_memory_equal(129, a, c);
 	mem_free(c);
 
