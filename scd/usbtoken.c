@@ -256,9 +256,7 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 
 		po += 15;
 
-		po[lr - 15 - 1 - 1 - 1 - 1] = 0;
-
-		size_t s_len = strlen(po);
+		size_t s_len = strlen(po) - 1;
 
 		if ((s_len > 0) && (strncmp(po, serial, s_len) == 0)) {
 			TRACE("USBTOKEN: token_filter_by_serial() found reader with serial: %s at port 0x%04x",
