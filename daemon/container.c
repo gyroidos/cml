@@ -713,7 +713,7 @@ container_free(container_t *container)
 	list_delete(container->usbdev_list);
 
 	if (container->token.uuid)
-		uuid_free(container->uuid);
+		uuid_free(container->token.uuid);
 
 	if (container->token.serial)
 		mem_free(container->token.serial);
