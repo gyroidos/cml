@@ -1336,6 +1336,12 @@ smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, s
 		WARN("PUSH_DEVICE_CERT without certificate");
 		goto error;
 	}
+
+	if (cert_len < (strlen(begin_cert_str) + strlen(end_cert_str))) {
+		ERROR("Invalid certificate length: %zu", cert_len);
+		goto error;
+	}
+
 	// Sanity check file is a certificate
 	size_t end_offset = cert_len - strlen(end_cert_str) - 1;
 	if (strncmp((char *)cert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
