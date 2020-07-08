@@ -472,6 +472,11 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 	if (!file_is_dir(TRUSTED_CA_STORE))
 		IF_TRUE_RETVAL(dir_mkdir_p(TRUSTED_CA_STORE, 0600), ret);
 
+	if (cacertlen < (strlen(begin_cert_str) + strlen(end_cert_str))) {
+		ERROR("Invalid certificate length: %zu", cacertlen);
+		return ret;
+	}
+
 	// Sanity check file is a certificate
 	size_t end_offset = cacertlen - strlen(end_cert_str) - 1;
 	if (strncmp((char *)cacert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
