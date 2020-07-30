@@ -178,4 +178,14 @@ network_nl80211_move_ns(const char *if_name, const pid_t pid);
 int
 network_rtnet_move_ns(const char *ifi_name, const pid_t pid);
 
+/**
+ * This function renames a network interface from old_ifi_name to new_ifi_name
+ * with a netlink message using the netlink socket.
+ * @param old_ifi_name The old interface name.
+ * @param new_ifi_name The new interface name.
+ * @return 0 on success, -1 on error
+ */
+int
+network_rename_ifi(const char *old_ifi_name, const char *new_ifi_name);
+
 #endif /* NETWORK_H */

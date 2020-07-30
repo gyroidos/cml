@@ -34,7 +34,8 @@
 #include <grp.h>
 #include <libgen.h>
 
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+#undef LOGF_LOG_MIN_PRIO
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "cmld.h"
 #include "container.h"
@@ -46,6 +47,7 @@
 #include "common/mem.h"
 #include "common/nl.h"
 #include "common/proc.h"
+#include "common/str.h"
 
 #ifndef UEVENT_SEND
 #define UEVENT_SEND 16
@@ -304,6 +306,122 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 	      uevent->subsystem, uevent->devname, uevent->major, uevent->minor, uevent->interface);
 }
 
+static struct uevent *
+uevent_replace_member(const struct uevent *uevent, char *oldmember, char *newmember)
+{
+	ASSERT(uevent);
+	ASSERT(oldmember > uevent->msg.raw && oldmember < uevent->msg.raw + uevent->msg_len);
+
+	struct uevent *newevent = mem_new(struct uevent, 1);
+	//interface name is located in name and devpath members
+	int diff_len = strlen(newmember) - strlen(oldmember);
+
+	newevent->msg_len = uevent->msg_len + diff_len;
+
+	//copy netlink header to cloned uevent
+	if (!memcpy(&newevent->msg.nlh, &uevent->msg.nlh,
+		    sizeof(struct udev_monitor_netlink_header))) {
+		ERROR("Failed to clone netlink header");
+		goto error;
+	}
+	newevent->msg.nlh.properties_len = uevent->msg.nlh.properties_len + diff_len;
+
+	//copy uevent up to position of interface string
+	int off_member = oldmember - uevent->msg.raw;
+	if (!memcpy(newevent->msg.raw, uevent->msg.raw, off_member)) {
+		ERROR("Failed to copy beginning of uevent");
+		goto error;
+	}
+
+	//copy new member to uevent
+	if (!strcpy(newevent->msg.raw + off_member, newmember)) {
+		ERROR("Failed to new member to uevent");
+		goto error;
+	}
+
+	//copy uevent after interface string
+	size_t off_after_old = off_member + strlen(oldmember) + 1;
+	size_t off_after_new = off_member + strlen(newmember) + 1;
+
+	if (!memcpy(newevent->msg.raw + off_after_new, uevent->msg.raw + off_after_old,
+		    uevent->msg_len - off_after_old)) {
+		ERROR("Failed to copy remainder of uevent");
+		goto error;
+	}
+
+	uevent_parse(newevent, newevent->msg.raw);
+
+	return newevent;
+
+error:
+	if (newevent)
+		mem_free(newevent);
+
+	return NULL;
+}
+
+static char *
+uevent_replace_devpath_new(const char *str, const char *oldstr, const char *newstr)
+{
+	char *ptr_old = NULL;
+	int len_diff = strlen(newstr) - strlen(oldstr);
+
+	if (!(ptr_old = strstr(str, oldstr))) {
+		DEBUG("Could not find %s in %s", oldstr, str);
+		return NULL;
+	}
+
+	unsigned int off_old;
+	char *str_replaced = mem_alloc0(strlen(str) + len_diff);
+	unsigned int pos_new = 0;
+
+	off_old = ptr_old - str;
+
+	strncpy(str_replaced, str, off_old);
+	pos_new += off_old;
+
+	strcpy(str_replaced + pos_new, newstr);
+	pos_new += strlen(newstr);
+
+	strcpy(str_replaced + pos_new, ptr_old + strlen(oldstr));
+
+	return str_replaced;
+}
+
+static struct uevent *
+uevent_rename_interface(const struct uevent *uevent)
+{
+	char *new_ifname = cmld_rename_ifi_new(uevent->interface);
+	char *new_devpath =
+		uevent_replace_devpath_new(uevent->devpath, uevent->interface, new_ifname);
+
+	if (!(new_ifname && new_devpath)) {
+		DEBUG("Failed to prepare renamed uevent members");
+		return NULL;
+	}
+
+	struct uevent *uev_chname = uevent_replace_member(uevent, uevent->interface, new_ifname);
+
+	if (!uev_chname) {
+		ERROR("Failed to rename interface name %s in uevent", uevent->interface);
+		return NULL;
+	}
+	DEBUG("Injected renamed interface name %s into uevent", new_ifname);
+	uevent_parse(uev_chname, uev_chname->msg.raw);
+
+	struct uevent *uev_chdevpath = uevent_replace_member(uevent, uevent->devpath, new_devpath);
+
+	if (!uev_chdevpath) {
+		ERROR("Failed to rename devpath %s in uevent", uevent->devpath);
+		mem_free(uev_chname);
+		return NULL;
+	}
+	DEBUG("Injected renamed devpath %s into uevent", new_ifname);
+	uevent_parse(uev_chdevpath, uev_chdevpath->msg.raw);
+
+	return uev_chname;
+}
+
 static uint16_t
 uevent_get_usb_vendor(struct uevent *uevent)
 {
@@ -442,7 +560,7 @@ err:
 }
 
 static void
-uevent_sysfs_timer_cb(event_timer_t *timer, void *data)
+uevent_sysfs_wifi_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 	char *interface = data;
@@ -458,7 +576,28 @@ uevent_sysfs_timer_cb(event_timer_t *timer, void *data)
 	else
 		INFO("Moved phys network interface '%s' to c0", interface);
 
+	sleep(0.1);
+
 	mem_free(phy_path);
+	mem_free(interface);
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
+static void
+uevent_sysfs_eth_timer_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+	char *interface = data;
+
+	if (container_add_net_iface(cmld_containers_get_a0(), interface, false)) {
+		ERROR("Cannot move '%s' to c0!", interface);
+	} else {
+		INFO("Moved phys network interface '%s' to c0", interface);
+	}
+
+	sleep(0.1);
+
 	mem_free(interface);
 	event_remove_timer(timer);
 	event_timer_free(timer);
@@ -474,20 +613,40 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			     strncmp(uevent->action, "remove", 6) &&
 			     strncmp(uevent->action, "change", 6));
 
+	DEBUG("Got add/remove/change uevent");
+
 	/* move network ifaces to c0 */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
 	    !strstr(uevent->devpath, "virtual")) {
+		//rename network interface to avoid name clashes when moving to container
+		DEBUG("Renaming new interface we were notified about");
+		struct uevent *newevent = uevent_rename_interface(uevent);
+
+		//uevent pointer is not freed inside this function, therefore we can safely drop it
+		if (newevent) {
+			DEBUG("Using renamed uevent");
+			uevent = newevent;
+		} else {
+			ERROR("Failed to rename interface %s. Injecting uevent as it is",
+			      uevent->interface);
+		}
+
 		if (!strcmp(uevent->devtype, "wlan")) {
+			DEBUG("Got new wifi interface");
 			// give sysfs some time to settle if iface is wifi
 			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-							   uevent_sysfs_timer_cb,
+							   uevent_sysfs_wifi_timer_cb,
 							   mem_strdup(uevent->interface));
 			event_add_timer(e);
-		} else if (container_add_net_iface(cmld_containers_get_a0(), uevent->interface,
-						   false)) {
-			ERROR("Cannot move '%s' to c0!", uevent->interface);
 		} else {
-			INFO("Moved phys network interface '%s' to c0", uevent->interface);
+			//rename network interface to avoid name clashes when moving to container
+			DEBUG("Got new ethernet interface");
+
+			// give sysfs some time to settle
+			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+							   uevent_sysfs_eth_timer_cb,
+							   mem_strdup(uevent->interface));
+			event_add_timer(e);
 		}
 	}
 
