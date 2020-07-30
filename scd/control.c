@@ -201,7 +201,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_FAILED;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 
 		if (token != NULL) {
 			WARN("Token already exists. Aborting...");
@@ -217,7 +217,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 
 		if (token == NULL) {
 			ERROR("Token not found");
@@ -233,7 +233,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 
 		if (!token) {
 			ERROR("No token loaded, unlock failed");
@@ -262,7 +262,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__LOCK_FAILED;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, lock failed");
 		} else if (token->lock(token) == 0) {
@@ -278,7 +278,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__WRAPPED_KEY;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, wrap failed");
 		} else if (token->is_locked(token)) {
@@ -308,7 +308,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, unwrap failed");
 		} else if (token->is_locked(token)) {
@@ -336,7 +336,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, change pass failed");
 		} else if (!msg->token_pin) {
@@ -360,7 +360,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 
-		scd_token_t *token = scd_get_token(msg);
+		scd_token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, change pass failed");
 		} else if (!msg->token_pin) {

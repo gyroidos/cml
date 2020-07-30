@@ -1,0 +1,68 @@
+/*
+ * This file is part of trust|me
+ * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ */
+
+ syntax = "proto2";
+
+ option java_package = "de.fraunhofer.aisec.trustme";
+ option java_outer_classname = "TokenControl";
+ 
+ /**
+  * Control message sent to and processed by the cml-daemon on the device.
+  * Each sc-hsm assigned to the container is accessible via a separate unix domain socket
+  */
+ message ContainerToToken {
+     enum Command {
+         ////////////////////////////////////////
+         // Commands to control sc-hsm via cmld //
+         ////////////////////////////////////////
+ 
+         // Requests the current ATR from the cmld. Returns NULL if the Token is locked.
+         GET_ATR = 1;	// -> [ATR / NULL]
+ 
+         // Requests the cmld to unlock the sc-hsm assigned to the container.
+         UNLOCK_TOKEN = 2;	// -> [ATR / NULL]
+ 
+         // Requests cmld to send the given APDU to the sc-hsm.
+         SEND_APDU = 3;	// -> [response apdu / NULL]
+     }
+     required Command command = 3;
+     // only used in SEND_APDU
+     optional bytes apdu = 4;	// APDU to send to the sc-hsm
+ }
+ 
+ 
+ /**
+  * Response code and apdu/ATR. On error, the respective error code and NULL are returned.
+  */
+ message TokenToContainer {
+     enum Code {
+         OK = 1;
+         ERR_INVALID = 2;
+         ERR_TRANS = 3;
+         ERR_CT = 4;
+         CML_TIMEOUT = 5;
+     }
+ 
+     required Code return_code = 1;
+     optional bytes response = 2; // GET_ATR/UNLOCK_TOKEN return ATR, SEND_APDU returns response APDU
+ }

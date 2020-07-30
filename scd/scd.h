@@ -60,7 +60,13 @@ scd_token_new(const DaemonToToken *msg);
  * Returns an existing scd token.
  */
 scd_token_t *
-scd_get_token(const DaemonToToken *msg);
+scd_get_token(scd_token_t type, char *tuuid)
+
+	/**
+ * Returns an existing scd token.
+ * This is a convience wrapper for scd_get_token(scd_token_t type, char *tuuid).
+ */
+	scd_token_t *scd_get_token_from_msg(const DaemonToToken *msg);
 
 /**
  * Frees a generic token structure.

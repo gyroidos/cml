@@ -85,6 +85,9 @@ struct scd_token {
 	int (*change_passphrase)(scd_token_t *token, const char *oldpass, const char *newpass,
 				 unsigned char *pairing_secret, size_t pairing_sec_len,
 				 bool is_provisioning);
+	int (*send_apdu)(scd_token_t *token, unsigned char *apdu, size_t apdu_len,
+			 unsigned char *brsp, size_t brsp_len);
+	int (*reset_token_auth)(scd_token_t *token);
 };
 
 /**

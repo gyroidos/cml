@@ -331,6 +331,11 @@ main(int argc, char **argv)
 
 	INFO("created control socket.");
 
+	scd_control_cmld = scd_control_new(SCD_CONTROL_SOCKET);
+	if (!scd_control_cmld) {
+		FATAL("Could not init scd_control socket");
+	}
+
 #ifdef ANDROID
 	/* trigger start of cmld */
 	if (property_set("trustme.provisioning.mode", "no") != 0) {
@@ -395,18 +400,8 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
  * Gets an existing scd token.
  */
 scd_token_t *
-scd_get_token(const DaemonToToken *msg)
+scd_get_token(scd_token_t type, char *tuuid)
 {
-	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
-
-	ASSERT(msg);
-	ASSERT(msg->token_uuid);
-
-	scd_token_t *t;
-	scd_tokentype_t type;
-
-	type = scd_proto_to_tokentype(msg);
-
 	for (list_t *l = scd_token_list; l; l = l->next) {
 		t = (scd_token_t *)l->data;
 		ASSERT(t);
@@ -415,12 +410,33 @@ scd_get_token(const DaemonToToken *msg)
 			continue;
 		}
 
-		if (strcmp(msg->token_uuid, uuid_string(token_get_uuid(t))) == 0) {
+		if (strcmp(tuuid, uuid_string(token_get_uuid(t))) == 0) {
 			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
 			return t;
 		}
 	}
 	return NULL;
+}
+
+/**
+ * Gets an existing scd token from a DaemonToToken message.
+ */
+scd_token_t *
+scd_get_token_from_msg(const DaemonToToken *msg)
+{
+	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
+
+	ASSERT(msg);
+	ASSERT(msg->token_uuid);
+
+	scd_token_t *t = NULL;
+	scd_tokentype_t type = scd_proto_to_tokentype(msg);
+
+	if (!(t = scd_get_token(type, msg->token_uuid))) {
+		DEBUG("Token with UUID %s not found", msg->token_uuid)
+	}
+
+	return t;
 }
 
 /**

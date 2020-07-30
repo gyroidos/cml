@@ -739,6 +739,57 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 	return rc;
 }
 
+int
+usbtoken_reset(usbtoken_t *token)
+{
+	ASSERT(token);
+
+	if (usbtoken_is_locked_till_reboot(token)) {
+		WARN("Token is locked till reboot, returning");
+		return -1;
+	}
+
+	int auth_code_len = 0;
+	unsigned char code[TOKEN_MAX_AUTH_CODE_LEN];
+
+	auth_code_len = get_auth_code(passwd, pairing_secret, pairing_sec_len, code, sizeof(code));
+	if (auth_code_len < 0) {
+		ERROR("Could not derive authentication code");
+		return -1;
+	}
+
+	int rc = usbtoken_init_ctapi_int(token);
+	if (rc != 0) {
+		ERROR("Failed to initialize ctapi interface to usb token reader");
+		return -1;
+	}
+
+	rc = authenticateUser(token->ctn, code, auth_code_len);
+	if (rc == -1) { // wrong password
+		token->wrong_unlock_attempts++;
+		ERROR("Usbtoken unlock failed (wrong PW)");
+	} else if (rc == 0) {
+		token->locked = false;
+		token->wrong_unlock_attempts = 0;
+		token->auth_code_len = auth_code_len;
+		token->auth_code = mem_memcpy(code, token->auth_code_len);
+		DEBUG("Usbtoken unlock successful");
+	} else {
+		ERROR("Usbtoken unlock failed");
+	}
+	// TODO what to do with wrong_unlock_attempts if unlock failed for some other reason?
+
+	if (rc != 0)
+		usbtoken_free_secrets(token); // just to be sure
+
+	memset(code, 0, sizeof(code));
+
+	if (0 != CT_close(token->ctn)) {
+		ERROR("Closing CT interface to token failed.");
+	}
+	return rc;
+}
+
 /**
  * locks the usb token.
  * Does only set the flag. We need to be able to forward the unlocked token into
@@ -759,4 +810,41 @@ usbtoken_lock(usbtoken_t *token)
 		token->locked = true;
 
 	return 0;
+}
+
+int
+usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apu_len, unsigned char *brsp,
+		   size_t brsp_len)
+{
+	ASSERT(token);
+	ASSERT(apdu);
+	ASSERT(brsp);
+
+	unsigned short lr;
+	unsigned char dad, sad;
+	int rc = -1;
+
+	int rc = usbtoken_init_ctapi_int(token);
+	if (rc != 0) {
+		ERROR("Failed to initialize ctapi interface to usb token reader");
+		goto out;
+	}
+
+	dad = 1; /* destination: Reader */
+	sad = 2; /* source: Host */
+	lr = brsp_len;
+
+	rc = CT_data((unsigned short)ctn, &dad, &sad, apdu_len, apdu, &lr, Brsp);
+	if (rc != 0) {
+		ERROR("CT_data failed with code: %d", rc);
+		goto out;
+	}
+
+	if (0 != CT_close(token->ctn)) {
+		ERROR("Closing CT interface to token failed.");
+	}
+	return lr;
+
+err:
+	return rc;
 }

@@ -51,6 +51,15 @@ usbtoken_new(const char *serial);
 int
 usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 		size_t pairing_sec_len);
+
+/** 
+ * re-unlocks a previously unlocked usbtoken using the cached authentication code.
+ * @param token the usbtoken to reset
+ * @return 0 on success or < 0 on error
+ */
+int
+usbtoken_reset(usbtoken_t *token);
+
 /**
  * locks a usbtoken by freeing the private key
  * reference in the usbtoken
@@ -137,6 +146,27 @@ int
 usbtoken_change_passphrase(usbtoken_t *token, const char *oldpass, const char *newpass,
 			   unsigned char *pairing_secret, size_t pairing_sec_len,
 			   bool is_provisioning);
+
+/**
+ * Sends an APDU to the usbtoken and receive the response.
+ * @param token the usbtoken to communicate with
+ * @param apdu 
+ * @param apdu_len
+ * @param Brsp the buffer for the response
+ * @param lr the size of @param Brsp
+ * @return
+ */
+int
+usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsigned char *Brsp,
+		   size_t lr);
+
+/**
+ * Resets the authentication status of the usbtoken using the cached authentication code.
+ * @param
+ * @return
+ */
+int
+usbtoken_reset_auth(usbtoken_t *token);
 
 #endif
 
