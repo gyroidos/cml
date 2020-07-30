@@ -117,6 +117,30 @@ sock_unix_accept(int sock)
 }
 
 int
+sock_unix_close(int sock)
+{
+	int res = close(sock);
+	if (-1 == res)
+		WARN_ERRNO("Failed to listen on UNIX socket %d.", sock);
+	return res;
+}
+
+int
+sock_unix_close_and_unlink(int sock, const char *path)
+{
+	if (-1 != sock_unix_close(sock)) {
+		if (-1 != unlink(path)) {
+			return 0;
+		} else {
+			WARN_ERRNO("Failed to unlink socket file at path %s", path);
+		}
+	} else {
+		WARN_ERRNO("Failed to close on UNIX socket %d.", sock);
+	}
+	return -1;
+}
+
+int
 sock_inet_create(int type)
 {
 	int sock = socket(AF_INET, type, 0);

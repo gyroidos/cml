@@ -44,6 +44,7 @@
 #include "common/reboot.h"
 #include "common/list.h"
 #include "ssl_util.h"
+#include "token.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -331,6 +332,11 @@ main(int argc, char **argv)
 
 	INFO("created control socket.");
 
+	DEBUG("Try to create directory for tokencontrl sockets if not existing");
+	if (dir_mkdir_p(SCD_TOKENCONTROL_SOCKET, 0755) < 0) {
+		FATAL("Could not create directory for scd_control socket");
+	}
+
 #ifdef ANDROID
 	/* trigger start of cmld */
 	if (property_set("trustme.provisioning.mode", "no") != 0) {
@@ -395,32 +401,43 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
  * Gets an existing scd token.
  */
 scd_token_t *
-scd_get_token(const DaemonToToken *msg)
+scd_get_token(scd_tokentype_t type, char *tuuid)
 {
-	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
-
-	ASSERT(msg);
-	ASSERT(msg->token_uuid);
-
-	scd_token_t *t;
-	scd_tokentype_t type;
-
-	type = scd_proto_to_tokentype(msg);
-
 	for (list_t *l = scd_token_list; l; l = l->next) {
-		t = (scd_token_t *)l->data;
+		scd_token_t *t = (scd_token_t *)l->data;
 		ASSERT(t);
 
 		if (type != token_get_type(t)) {
 			continue;
 		}
 
-		if (strcmp(msg->token_uuid, uuid_string(token_get_uuid(t))) == 0) {
+		if (strcmp(tuuid, uuid_string(token_get_uuid(t))) == 0) {
 			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
 			return t;
 		}
 	}
 	return NULL;
+}
+
+/**
+ * Gets an existing scd token from a DaemonToToken message.
+ */
+scd_token_t *
+scd_get_token_from_msg(const DaemonToToken *msg)
+{
+	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
+
+	ASSERT(msg);
+	ASSERT(msg->token_uuid);
+
+	scd_token_t *t = NULL;
+	scd_tokentype_t type = scd_proto_to_tokentype(msg);
+
+	if (!(t = scd_get_token(type, msg->token_uuid))) {
+		DEBUG("Token with UUID %s not found", msg->token_uuid);
+	}
+
+	return t;
 }
 
 /**
@@ -436,7 +453,7 @@ scd_token_new(const DaemonToToken *msg)
 	scd_token_t *ntoken;
 	token_constr_data_t create_data;
 
-	if (NULL != (ntoken = scd_get_token(msg))) {
+	if (NULL != (ntoken = scd_get_token_from_msg(msg))) {
 		WARN("SCD: Token %s already exists. Aborting creation...", msg->token_uuid);
 		return -1; // TODO: is this the correct behaviour?
 	}

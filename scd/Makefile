@@ -76,16 +76,18 @@ SRC_FILES += \
 	softtoken.c \
 	token.c \
 	scd.c \
-	ssl_util.c
+	ssl_util.c \
+	tokencontrol.pb-c.c
 
 
 .PHONY: all
 all: scd
 
 
-protobuf: device.proto scd.proto
+protobuf: device.proto scd.proto tokencontrol.proto
 	protoc-c --c_out=. scd.proto
 	protoc-c --c_out=. device.proto
+	protoc-c --c_out=. tokencontrol.proto
 
 $(SRC_FILES): protobuf
 
