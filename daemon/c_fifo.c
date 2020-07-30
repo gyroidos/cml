@@ -111,7 +111,7 @@ c_fifo_create_fifos(c_fifo_t *fifo, container_t *container)
 			goto error;
 		}
 
-		DEBUG("Chowned FIFO at %s to %d", fifo_path, uid);
+		DEBUG("Chowned FIFO at %s to %d", fifo_path ? fifo_path : "NULL", uid);
 
 		mem_free(fifo_path);
 	}

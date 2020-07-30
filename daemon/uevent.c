@@ -784,7 +784,7 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		handle_udev_event(uev, raw_p);
 	} else if (strchr(raw_p, '@')) {
 		/* kernel message */
-		TRACE("kernel uevent: %s", raw_p);
+		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
 		raw_p += strlen(raw_p) + 1;
 		handle_kernel_event(uev, raw_p);
 	} else {
