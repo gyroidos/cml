@@ -67,6 +67,7 @@ print_usage(const char *cmd)
 	printf("   reboot\n        Reboots the whole device, shutting down any containers which are running.\n");
 	printf("   create <container.conf>\n        Creates a container from the given config file.\n");
 	printf("   remove <container-uuid>\n        Removes the specified container (completely).\n");
+	printf("   change_pin <container-uuid>\\n        Change token pin which is used for container key wrapping. Prompts for password entry.\n");
 	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
 	printf("   stop <container-uuid>\n        Stops the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
@@ -82,7 +83,6 @@ print_usage(const char *cmd)
 	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
 	printf("   pull_csr <device.csr>\n        Pulls the device csr and stores it in <device.csr>.\n");
 	printf("   push_cert <device.cert>\n        Pushes back the device certificate provided by <device.cert>.\n");
-	printf("   change_pin\n        Change token pin which is used for container key wrapping. Prompts for password entry.\n");
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
