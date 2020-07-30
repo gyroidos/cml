@@ -73,7 +73,28 @@ struct usbtoken {
 	// the authentication code is cached as long as the token remains unlocked
 	unsigned char *auth_code;
 	size_t auth_code_len;
+
+	unsigned char *latr; // ATR of last reset
+	size_t latr_len;
 };
+
+#ifdef DEBUG_BUILD
+/*
+ * Dump the memory pointed to by <mem>
+ *
+ */
+static void
+dump(unsigned char *mem, int len)
+{
+	while (len--) {
+		ASSERT(len >= 0);
+		printf("%02x", *mem);
+		mem++;
+	}
+
+	printf("\n");
+}
+#endif
 
 /**
  * Derive an authentication code from a parining secret and a user pin/passwd.
@@ -121,45 +142,39 @@ get_auth_code(const char *pin, const unsigned char *pair_sec, size_t pair_sec_le
 	return ofs;
 }
 
-#define CT_APDU_RESPONSE_BUF_SIZE 260
 /*
  * Request card
+ * @return the length of brsp on success or < 0 on failure
  */
 static int
-requestICC(int ctn)
+requestICC(int ctn, unsigned char *brsp, size_t brsp_len)
 {
 	unsigned short lr;
 	unsigned char dad, sad;
 	int rc = -1;
-	unsigned char *Brsp = mem_alloc0(CT_APDU_RESPONSE_BUF_SIZE);
-	if (!Brsp) {
-		ERROR("Could not allocate memory for APDU repsonse buffer");
-		goto out;
-	}
 
 	dad = 1; /* Reader */
 	sad = 2; /* Host */
-	lr = CT_APDU_RESPONSE_BUF_SIZE;
+	lr = brsp_len;
 
 	rc = CT_data((unsigned short)ctn, &dad, &sad, sizeof(requesticc),
-		     (unsigned char *)&requesticc, &lr, Brsp);
+		     (unsigned char *)&requesticc, &lr, brsp);
 	if (rc != 0) {
 		ERROR("CT_data failed with code: %d", rc);
-		goto out;
+		return rc;
 	}
 
-	if ((Brsp[0] == 0x64) || (Brsp[0] == 0x62)) {
+#ifdef DEBUG_BUILD
+	printf("ATR: ");
+	dump(brsp, lr);
+#endif
+
+	if ((brsp[0] == 0x64) || (brsp[0] == 0x62)) {
 		ERROR("No card present or card reset error");
-		rc = -1;
-		goto out;
+		return -1;
 	}
 
-	mem_free(Brsp);
-	return 0;
-
-out:
-	mem_free(Brsp);
-	return rc;
+	return lr;
 }
 
 /**
@@ -175,7 +190,7 @@ authenticateUser(int ctn, unsigned char *auth_code, size_t auth_code_len)
 
 	if (rc != USBTOKEN_SUCCESS) {
 		ERROR("Could not authenticate user to usb token, token rc: 0x%04x", rc);
-		return -1;
+		return rc;
 	}
 
 	return 0;
@@ -275,25 +290,54 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 	return -1;
 }
 
+static int
+usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
+{
+	ASSERT(token);
+	ASSERT(brsp);
+
+	int lr = requestICC(token->ctn, brsp, brsp_len);
+	if (lr < 0) {
+		ERROR("requestICC failed for token with ctn: %hu and port: %hu", token->ctn,
+		      token->port);
+		return -1;
+	}
+	if (NULL != token->latr)
+		mem_free(token->latr);
+	token->latr = mem_memcpy(brsp, brsp_len);
+	token->latr_len = brsp_len;
+
+	int rc = queryPIN(token->ctn);
+	if (rc != USBTOKEN_SUCCESS) {
+		rc = selectHSM(token->ctn);
+		if (rc != 0) {
+			ERROR("selectHSM failed for token with ctn: %hu and port: %hu", token->ctn,
+			      token->port);
+			return -1;
+		}
+		rc = queryPIN(token->ctn);
+		DEBUG("usbtoken_init queryPIN: 0x%04x", rc);
+	}
+	return lr;
+}
+
 /**
  * initializes the ctapi interface to the token reader.
  * If the reader is unplugged during runtime this will ensure it is either
  * reaquired using the correct usb port or not at all
  * @param token the usbtoken which the ctapi interface should be initilized to
+ * @param brsp the buffer to hold the response from the ICC
+ * @param brsp_len length of æparam brsp
  * @return 0 on success or -1 else
  */
 static int
-usbtoken_init_ctapi_int(usbtoken_t *token)
+usbtoken_init_ctapi_int(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 {
 	ASSERT(token);
 
 	int rc = -1;
 	unsigned short lr, port;
 	unsigned char *readers = mem_alloc0(MAX_CT_READERS_SIZE);
-	if (!readers) {
-		ERROR("Failed to allocate memory for ct_reader");
-		goto err;
-	}
 
 	lr = MAX_CT_READERS_SIZE;
 	CT_list(readers, &lr, 0);
@@ -308,6 +352,7 @@ usbtoken_init_ctapi_int(usbtoken_t *token)
 		ERROR("Could not find specified token reader with serial %s", token->serial);
 		goto err;
 	}
+	mem_free(readers);
 	token->port = port;
 
 	rc = CT_init(token->ctn, port);
@@ -316,26 +361,11 @@ usbtoken_init_ctapi_int(usbtoken_t *token)
 		goto err;
 	}
 
-	rc = requestICC(token->ctn);
-	if (rc != 0) {
-		ERROR("requestICC failed for token with ctn: %hu and port: %hu", token->ctn,
-		      token->port);
+	if (0 > usbtoken_reset_schsm_sess(token, brsp, brsp_len)) {
+		ERROR("Could not initiate schsm session");
 		goto err;
 	}
 
-	rc = queryPIN(token->ctn);
-	if (rc != USBTOKEN_SUCCESS) {
-		rc = selectHSM(token->ctn);
-		if (rc != 0) {
-			ERROR("selectHSM failed for token with ctn: %hu and port: %hu", token->ctn,
-			      token->port);
-			goto err;
-		}
-		rc = queryPIN(token->ctn);
-		DEBUG("usbtoken_init queryPIN: 0x%04x", rc);
-	}
-
-	mem_free(readers);
 	return 0;
 
 err:
@@ -353,30 +383,27 @@ usbtoken_new(const char *serial)
 
 	int rc;
 	usbtoken_t *token = NULL;
+	unsigned char *brsp = NULL;
+
+	brsp = mem_new0(unsigned char, ICC_ATR_BUF_LEN);
+	size_t brsp_len = ICC_ATR_BUF_LEN;
 
 	token = mem_new0(usbtoken_t, 1);
-	ASSERT(token);
+	IF_NULL_RETVAL_ERROR(token, NULL);
 
 	token->locked = true;
 	token->ctn = g_ctn++;
 	token->serial = mem_strdup(serial);
-	if (!token->serial) {
-		ERROR("USBTOKEN: Allocating meory for token uuid failed");
-		goto err;
-	}
+	IF_NULL_GOTO_ERROR(token->serial, err);
 
-	rc = usbtoken_init_ctapi_int(token);
+	rc = usbtoken_init_ctapi_int(token, brsp, brsp_len);
+	mem_free(brsp);
 	if (rc != 0) {
 		ERROR("Failed to initialize ctapi interface to usb token reader");
 		goto err;
 	}
 
 	token->locked = true;
-
-	/* close the usb connection to the reader so other components can communicate with it */
-	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
-	}
 
 	TRACE("Usbtoken initialized");
 	return token;
@@ -402,16 +429,9 @@ provision_auth_code(usbtoken_t *token, const char *tpin, const char *newpass,
 	int newcode_len;
 	unsigned char newcode[TOKEN_MAX_AUTH_CODE_LEN];
 
-	rc = usbtoken_init_ctapi_int(token);
-	if (rc != 0) {
-		ERROR("Failed to initialize ctapi interface to usb token reader");
-		rc = -1;
-		goto out;
-	}
-
 	rc = queryPIN(token->ctn);
 	if (rc != 0x6984) {
-		ERROR("USBTOKEN: Pin is not in tranport state. Aborting");
+		ERROR("USBTOKEN: Pin is not in tranport state, rc: 0x%04x. Aborting...", rc);
 		rc = -1;
 		goto out;
 	}
@@ -452,9 +472,6 @@ provision_auth_code(usbtoken_t *token, const char *tpin, const char *newpass,
 	}
 
 out:
-	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
-	}
 	return rc;
 }
 
@@ -473,13 +490,6 @@ change_user_pin(usbtoken_t *token, const char *oldpass, const char *newpass,
 	int oldcode_len, newcode_len;
 	unsigned char oldcode[TOKEN_MAX_AUTH_CODE_LEN];
 	unsigned char newcode[TOKEN_MAX_AUTH_CODE_LEN];
-
-	rc = usbtoken_init_ctapi_int(token);
-	if (rc != 0) {
-		ERROR("Failed to initialize ctapi interface to usb token reader");
-		rc = -1;
-		goto out;
-	}
 
 	newcode_len =
 		get_auth_code(newpass, pairing_secret, pairing_sec_len, newcode, sizeof(newcode));
@@ -509,9 +519,6 @@ change_user_pin(usbtoken_t *token, const char *oldpass, const char *newpass,
 		rc = 0;
 
 out:
-	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
-	}
 	return rc;
 }
 
@@ -543,6 +550,7 @@ usbtoken_free_secrets(usbtoken_t *token)
 	TRACE("USBTOKEN: usbtoken_free_secrets");
 
 	ASSERT(token);
+	IF_NULL_RETURN(token->auth_code);
 
 	memset(token->auth_code, 0, token->auth_code_len);
 	mem_free(token->auth_code);
@@ -554,6 +562,12 @@ usbtoken_free(usbtoken_t *token)
 	TRACE("USBTOKEN: usbtoken_free");
 
 	ASSERT(token);
+
+	if (0 != CT_close(token->ctn)) {
+		ERROR("Closing CT interface to token failed.");
+	}
+
+	mem_free(token->latr);
 
 	mem_free(token->serial);
 	usbtoken_free_secrets(token);
@@ -585,12 +599,6 @@ usbtoken_wrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 		return -1;
 	}
 
-	rc = usbtoken_init_ctapi_int(token);
-	if (rc != 0) {
-		ERROR("Failed to initialize ctapi interface to usb token reader");
-		goto out;
-	}
-
 	rc = produceKey(token, label, label_len, key, sizeof(key));
 	if (rc < 0) {
 		ERROR("Failed to get derived key from usbtoken");
@@ -608,9 +616,6 @@ usbtoken_wrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 	}
 
 out:
-	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
-	}
 	return rc;
 }
 
@@ -634,12 +639,6 @@ usbtoken_unwrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 		return -1;
 	}
 
-	rc = usbtoken_init_ctapi_int(token);
-	if (rc != 0) {
-		ERROR("Failed to initialize ctapi interface to usb token reader");
-		goto out;
-	}
-
 	rc = produceKey(token, label, label_len, key, sizeof(key));
 	if (rc < 0) {
 		ERROR("Failed to get derived key from usbtoken");
@@ -659,9 +658,6 @@ usbtoken_unwrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 	TRACE("USBTOKEN: key unwrap successful");
 
 out:
-	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
-	}
 	return rc;
 }
 
@@ -707,13 +703,7 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 		return -1;
 	}
 
-	int rc = usbtoken_init_ctapi_int(token);
-	if (rc != 0) {
-		ERROR("Failed to initialize ctapi interface to usb token reader");
-		return -1;
-	}
-
-	rc = authenticateUser(token->ctn, code, auth_code_len);
+	int rc = authenticateUser(token->ctn, code, auth_code_len);
 	if (rc == -1) { // wrong password
 		token->wrong_unlock_attempts++;
 		ERROR("Usbtoken unlock failed (wrong PW)");
@@ -733,10 +723,45 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 
 	memset(code, 0, sizeof(code));
 
-	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
-	}
 	return rc;
+}
+
+/* See sc-hsm-embedded/src/pkcs11/token-sc-hsm.c:sc_hsm_logout() as reference */
+int
+usbtoken_reset_auth(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
+{
+	ASSERT(token);
+	int rc = -1;
+	int lr = -1;
+
+	DEBUG("usbtoken_reset_auth");
+
+	if (usbtoken_is_locked_till_reboot(token)) {
+		WARN("Token is locked till reboot, returning");
+		return -1;
+	}
+
+	if ((!token->auth_code) || (token->auth_code_len <= 0)) {
+		ERROR("Authentication code not available to reset usbtoken");
+		return -1;
+	}
+
+	lr = usbtoken_reset_schsm_sess(token, brsp, brsp_len);
+	if (lr < 0) {
+		ERROR("usbtoken_reset_schsm rc code: 0x%04x", lr);
+		return lr;
+	}
+
+	rc = authenticateUser(token->ctn, token->auth_code, token->auth_code_len);
+	if (rc == -1) { // wrong password
+		ERROR("Usbtoken authenticatio reset failed (wrong PW). This should not happen");
+	} else if (rc == 0) {
+		DEBUG("Usbtoken authenticatio reset successful");
+	} else {
+		ERROR("Usbtoken reset failed");
+	}
+
+	return lr;
 }
 
 /**
@@ -759,4 +784,62 @@ usbtoken_lock(usbtoken_t *token)
 		token->locked = true;
 
 	return 0;
+}
+
+int
+usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsigned char *brsp,
+		   size_t brsp_len)
+{
+	ASSERT(token);
+	ASSERT(apdu);
+	ASSERT(brsp);
+
+	DEBUG("usbtoken_send_apdu");
+
+	unsigned short lr;
+	unsigned char dad, sad;
+
+	dad = 1; /* destination: Reader */
+	sad = 2; /* source: Host */
+	lr = brsp_len;
+
+#ifdef DEBUG_BUILD
+	DEBUG("USBTOKEN:sending apud:");
+	dump(apdu, apdu_len);
+#endif
+
+	int rc = CT_data(token->ctn, &dad, &sad, apdu_len, apdu, &lr, brsp);
+	if (rc != 0) {
+		ERROR("CT_data failed with code: %d", rc);
+		return -1;
+	}
+
+#ifdef DEBUG_BUILD
+	DEBUG("USBTOKEN: received apud:");
+	dump(brsp, lr);
+#endif
+
+	return lr;
+}
+
+int
+usbtoken_get_atr(usbtoken_t *token, unsigned char *buf, size_t buflen)
+{
+	ASSERT(token);
+	ASSERT(buf);
+
+	int rc = -1;
+
+	DEBUG("usbtoken_get_atr");
+
+	rc = usbtoken_reset_schsm_sess(token, buf, buflen);
+	if (rc < 0)
+		return rc;
+
+#ifdef DEBUG_BUILD
+	DEBUG("USBTOKEN: received apud:");
+	dump(buf, rc);
+#endif
+
+	return rc;
 }

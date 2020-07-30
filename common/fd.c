@@ -44,6 +44,7 @@ fd_write(int fd, const char *buf, size_t len)
 				TRACE_ERRNO("Writing to fd %d: Blocked, retrying...", fd);
 				continue;
 			}
+			ERROR_ERRNO("Failed to write to fd %d", fd);
 			return ret;
 		}
 

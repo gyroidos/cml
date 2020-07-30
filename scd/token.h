@@ -34,6 +34,10 @@
 
 #define STOKEN_DEFAULT_PASS "trustme"
 
+// clang-format off
+#define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
+// clang-format on
+
 /**
  *  Generic token type
  */
@@ -85,6 +89,10 @@ struct scd_token {
 	int (*change_passphrase)(scd_token_t *token, const char *oldpass, const char *newpass,
 				 unsigned char *pairing_secret, size_t pairing_sec_len,
 				 bool is_provisioning);
+	int (*send_apdu)(scd_token_t *token, unsigned char *apdu, size_t apdu_len,
+			 unsigned char *brsp, size_t brsp_len);
+	int (*reset_auth)(scd_token_t *token, unsigned char *brsp, size_t brsp_len);
+	int (*get_atr)(scd_token_t *token, unsigned char *brsp, size_t brsp_len);
 };
 
 /**

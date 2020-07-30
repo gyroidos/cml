@@ -132,6 +132,20 @@ int
 sock_unix_accept(int sock);
 
 /**
+ * æparam sock the file descriptor to the UNIX socket to close.
+ * @return 0 on success, -1 on error
+ */
+int
+sock_unix_close(int sock);
+
+/**
+ * æparam sock the file descriptor to the UNIX socket to close and unlink.
+ * @return 0 on success, -1 on error
+ */
+int
+sock_unix_close_and_unlink(int sock, const char *path);
+
+/**
  * Creates a new AF_INET socket of the given type.
  *
  * @param type  type of the socket (e.g. SOCK_STREAM, SOCK_SEQPACKET, ...);

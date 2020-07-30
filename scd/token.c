@@ -23,9 +23,27 @@
 
 #include "token.h"
 
+#include "tokencontrol.pb-c.h"
+
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/sock.h"
+#include "common/event.h"
+#include "common/uuid.h"
+#include "common/protobuf.h"
+#include "common/list.h"
+#include "common/fd.h"
 #include "file.h"
+#include "unistd.h"
+
+#define SCD_TOKENCONTROL_SOCK_LISTEN_BACKLOG 1
+
+typedef struct scd_tokencontrol {
+	int cfd;
+	int lsock;
+	char *lsock_path;
+	list_t *events;
+} tctrl_t;
 
 struct scd_token_data {
 	union {
@@ -35,7 +53,256 @@ struct scd_token_data {
 
 	scd_tokentype_t type;
 	uuid_t *token_uuid;
+	tctrl_t *tctrl;
 };
+
+#ifdef ENABLESCHSM // tokencontrol socket only relevant for usbtoken
+static void
+scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
+{
+	ASSERT(msg);
+	ASSERT(data);
+
+	DEBUG("scd_tokencontrol_handle_message");
+
+	scd_token_t *t = (scd_token_t *)(data);
+	tctrl_t *tctrl = t->token_data->tctrl;
+	int len = 0;
+	unsigned char *brsp = NULL;
+
+	IF_NULL_GOTO_WARN(msg, err);
+	IF_NULL_GOTO_ERROR(tctrl, err);
+
+	TokenToContainer out = TOKEN_TO_CONTAINER__INIT;
+	brsp = mem_alloc0(ICC_ATR_BUF_LEN);
+
+	switch (msg->command) {
+	case CONTAINER_TO_TOKEN__COMMAND__GET_ATR:
+		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__GET_ATR msg");
+		len = t->get_atr(t, brsp, ICC_ATR_BUF_LEN);
+		if (len < 0) {
+			WARN("GET_ATR failed wit code %d", len);
+			goto err;
+		}
+		goto out;
+		break;
+
+	case CONTAINER_TO_TOKEN__COMMAND__UNLOCK_TOKEN:
+		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__UNLOCK_TOKEN");
+		len = t->reset_auth(t, brsp, ICC_ATR_BUF_LEN);
+		if (len < 0) {
+			WARN("GET_ATR failed wit code %d", len);
+			goto err;
+		}
+		goto out;
+		break;
+
+	case CONTAINER_TO_TOKEN__COMMAND__SEND_APDU:
+		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__SEND_APDU msg");
+		len = t->send_apdu(t, msg->apdu.data, msg->apdu.len, brsp, ICC_ATR_BUF_LEN);
+		if (len < 0) {
+			WARN("GET_ATR failed wit code %d", len);
+			goto err;
+		}
+		goto out;
+		break;
+
+	default:
+		WARN("ContainerToToken command %d unknown or not implemented yet", msg->command);
+	}
+
+err:
+	/* TODO: distinguish error soruces and set return code accordingly */
+	out.return_code = TOKEN_TO_CONTAINER__CODE__ERR_INVALID;
+	if ((protobuf_send_message(fd, (ProtobufCMessage *)&out)) < 0) {
+		ERROR("Could not send protobuf response on socker %d", fd);
+	}
+	goto close_fd;
+
+out:
+	out.return_code = TOKEN_TO_CONTAINER__CODE__OK;
+	out.response.len = len;
+	out.response.data = brsp;
+	if ((protobuf_send_message(fd, (ProtobufCMessage *)&out)) < 0) {
+		ERROR("Could not send protobuf response on socket %d", fd);
+	}
+	mem_free(brsp);
+
+close_fd:
+	mem_free(brsp);
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected control socket");
+	return;
+}
+
+/**
+ * Event callback for incoming data that a ContainerToToken message.
+ *
+ * The handle_message function will be called to handle the received message.
+ *
+ * @param fd	    file descriptor of the client connection
+ *		    from which the incoming message is read
+ * @param events    event flags
+ * @param io	    pointer to associated event_io_t struct
+ * @param data	    pointer to this scd_control_t struct
+ */
+static void
+scd_tokencontrol_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
+{
+	scd_token_t *token = (scd_token_t *)(data);
+
+	DEBUG("scd_tokencontrol_cb_recv_message");
+
+	if (events & EVENT_IO_READ) {
+		ContainerToToken *msg = (ContainerToToken *)protobuf_recv_message(
+			fd, &container_to_token__descriptor);
+		// close connection if client EOF, or protocol parse error
+		IF_NULL_GOTO_TRACE(msg, connection_err);
+
+		scd_tokencontrol_handle_message(msg, fd, data);
+		protobuf_free_message((ProtobufCMessage *)msg);
+		DEBUG("Handled control connection %d", fd);
+	} else if (events & EVENT_IO_EXCEPT) {
+		INFO("TokenControl client closed connection; disconnecting socket.");
+		goto connection_err;
+	} else {
+		ERROR("Unexpected event");
+		goto connection_err;
+	}
+
+	return;
+
+connection_err:
+	token->token_data->tctrl->events = list_remove(token->token_data->tctrl->events, io);
+	event_remove_io(io);
+	event_io_free(io);
+
+	token->token_data->tctrl->cfd = -1;
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected control socket");
+	return;
+}
+
+/**
+ * Event callback for accepting incoming connections on the listening socket.
+ *
+ * @param fd	    file descriptor of the listening socket
+ *		    from which incoming connectionis should be accepted
+ * @param events    event flags
+ * @param io	    pointer to associated event_io_t struct
+ * @param data	    pointer to this scd_control_t struct
+  */
+static void
+scd_tokencontrol_cb_accept(int fd, unsigned events, UNUSED event_io_t *io, void *data)
+{
+	scd_token_t *token = (scd_token_t *)data;
+
+	if (events & EVENT_IO_READ) {
+		token->token_data->tctrl->cfd = accept(fd, NULL, 0);
+		if (-1 == token->token_data->tctrl->cfd) {
+			WARN("Could not accept tokencontrol connection");
+			return;
+		}
+		DEBUG("Accepted tokencontrol connection %d", token->token_data->tctrl->cfd);
+
+		fd_make_non_blocking(token->token_data->tctrl->cfd);
+
+		DEBUG("MADE tokenctrl_cfd non-blocking");
+
+		event_io_t *event = event_io_new(token->token_data->tctrl->cfd, EVENT_IO_READ,
+						 scd_tokencontrol_cb_recv_message, data);
+
+		DEBUG("2");
+
+		token->token_data->tctrl->events =
+			list_append(token->token_data->tctrl->events, event);
+
+		event_add_io(event);
+
+		DEBUG("3");
+
+	} else if (events & EVENT_IO_EXCEPT) {
+		TRACE("EVENT_IO_EXCEPT on socket %d, closing...", fd);
+	} else {
+		ERROR("Unexpected event");
+	}
+	return;
+}
+
+static int UNUSED
+scd_tokencontrol_new(scd_token_t *token)
+{
+	ASSERT(token && token->token_data);
+
+	TRACE("scd_tokencontrol_new");
+
+	token->token_data->tctrl = mem_new0(tctrl_t, 1);
+	IF_NULL_GOTO_ERROR(token->token_data->tctrl, err);
+
+	token->token_data->tctrl->lsock_path = mem_printf(
+		"%s/%s", SCD_TOKENCONTROL_SOCKET, uuid_string(token->token_data->token_uuid));
+	IF_NULL_GOTO_ERROR(token->token_data->tctrl->lsock_path, err);
+
+	token->token_data->tctrl->lsock = sock_unix_create_and_bind(
+		SOCK_STREAM | SOCK_NONBLOCK, token->token_data->tctrl->lsock_path);
+	if (token->token_data->tctrl->lsock < 0) {
+		WARN("Could not create and bind UNIX domain socket");
+		goto err;
+	}
+	if (listen(token->token_data->tctrl->lsock, SCD_TOKENCONTROL_SOCK_LISTEN_BACKLOG) < 0) {
+		WARN_ERRNO("Could not listen on new control sock");
+		close(token->token_data->tctrl->lsock);
+		goto err;
+	}
+
+	event_io_t *event = event_io_new(token->token_data->tctrl->lsock, EVENT_IO_READ,
+					 scd_tokencontrol_cb_accept, token);
+	token->token_data->tctrl->events = list_append(token->token_data->tctrl->events, event);
+	event_add_io(event);
+
+	return 0;
+
+err:
+	mem_free(token->token_data->tctrl);
+	mem_free(token->token_data->tctrl->lsock_path);
+	return -1;
+}
+
+static void
+wrapped_remove_event_io(void *elem)
+{
+	TRACE("Remove tokencontrol event from event_loop");
+	ASSERT(elem);
+	event_io_t *e = elem;
+	event_remove_io(e);
+	event_io_free(e);
+}
+
+static void
+scd_tokencontrol_free(scd_token_t *token)
+{
+	ASSERT(token);
+
+	list_foreach(token->token_data->tctrl->events, wrapped_remove_event_io);
+
+	TRACE("Closing accepted tokencontrol socket for token %s",
+	      uuid_string(token->token_data->token_uuid));
+	if (sock_unix_close(token->token_data->tctrl->cfd) != 0) {
+		WARN("Could not close accepted tokencontrol socket");
+	}
+	TRACE("Closing listening tokencontrol socket");
+	token->token_data->tctrl->cfd = -1;
+	if (sock_unix_close_and_unlink(token->token_data->tctrl->lsock,
+				       token->token_data->tctrl->lsock_path) != 0) {
+		WARN_ERRNO("Could not close listening tokencontrol socket for token %s",
+			   uuid_string(token->token_data->token_uuid));
+	};
+	token->token_data->tctrl->lsock = -1;
+	mem_free(token->token_data->tctrl->lsock_path);
+
+	mem_free(token->token_data->tctrl);
+}
+#endif // ENABLESCHSM
 
 /*** internal helper functions ***/
 
@@ -87,6 +354,28 @@ int_change_pw_st(scd_token_t *token, const char *oldpass, const char *newpass,
 {
 	return softtoken_change_passphrase(token->token_data->int_token.softtoken, oldpass,
 					   newpass);
+}
+
+int
+int_send_apdu_st(UNUSED scd_token_t *token, UNUSED unsigned char *apdu, UNUSED size_t apdu_len,
+		 UNUSED unsigned char *brsp, UNUSED size_t brsp_len)
+{
+	ERROR("send_apdu() not meaningful to softtoken. Aborting ...");
+	return -1;
+}
+
+int
+int_reset_auth_st(UNUSED scd_token_t *token, UNUSED unsigned char *brsp, UNUSED size_t brsp_len)
+{
+	ERROR("reset_auth() not meaningful to softtoken. Aborting ...");
+	return -1;
+}
+
+int
+int_get_atr_st(UNUSED scd_token_t *token, UNUSED unsigned char *brsp, UNUSED size_t brsp_len)
+{
+	ERROR("get_atr() not meaningful to softtoken. Aborting ...");
+	return -1;
 }
 
 #ifdef ENABLESCHSM
@@ -142,6 +431,26 @@ int_change_pw_usb(scd_token_t *token, const char *oldpass, const char *newpass,
 {
 	return usbtoken_change_passphrase(token->token_data->int_token.usbtoken, oldpass, newpass,
 					  pairing_secret, pairing_sec_len, is_provisioning);
+}
+
+int
+int_send_apdu_usb(scd_token_t *token, unsigned char *apdu, size_t apdu_len, unsigned char *brsp,
+		  size_t brsp_len)
+{
+	return usbtoken_send_apdu(token->token_data->int_token.usbtoken, apdu, apdu_len, brsp,
+				  brsp_len);
+}
+
+int
+int_reset_auth_usb(scd_token_t *token, unsigned char *brsp, size_t brsp_len)
+{
+	return usbtoken_reset_auth(token->token_data->int_token.usbtoken, brsp, brsp_len);
+}
+
+int
+int_get_atr_usb(scd_token_t *token, unsigned char *brsp, size_t brsp_len)
+{
+	return usbtoken_get_atr(token->token_data->int_token.usbtoken, brsp, brsp_len);
 }
 #endif // ENABLESCHSM
 
@@ -208,6 +517,9 @@ token_new(const token_constr_data_t *constr_data)
 		new_token->wrap_key = int_wrap_st;
 		new_token->unwrap_key = int_unwrap_st;
 		new_token->change_passphrase = int_change_pw_st;
+		new_token->reset_auth = int_reset_auth_st;
+		new_token->get_atr = int_get_atr_st;
+		new_token->send_apdu = int_send_apdu_st;
 		break;
 	}
 #ifdef ENABLESCHSM
@@ -223,6 +535,12 @@ token_new(const token_constr_data_t *constr_data)
 			ERROR("Creation of usbtoken failed");
 			goto err;
 		}
+
+		if (0 != scd_tokencontrol_new(new_token)) {
+			ERROR("Could not create tokencontrol socket for token %s",
+			      constr_data->uuid);
+		}
+
 		new_token->token_data->type = USB;
 		new_token->lock = int_lock_usb;
 		new_token->unlock = int_unlock_usb;
@@ -231,6 +549,9 @@ token_new(const token_constr_data_t *constr_data)
 		new_token->wrap_key = int_wrap_usb;
 		new_token->unwrap_key = int_unwrap_usb;
 		new_token->change_passphrase = int_change_pw_usb;
+		new_token->reset_auth = int_reset_auth_usb;
+		new_token->get_atr = int_get_atr_usb;
+		new_token->send_apdu = int_send_apdu_usb;
 		break;
 	}
 #endif // ENABLESCHSM
@@ -272,6 +593,10 @@ void
 token_free(scd_token_t *token)
 {
 	IF_NULL_RETURN(token);
+
+#ifdef ENABLESCHSM
+	scd_tokencontrol_free(token);
+#endif
 
 	if (token->token_data) {
 		switch (token->token_data->type) {

@@ -27,6 +27,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#define ICC_ATR_BUF_LEN 260
+
 typedef struct usbtoken usbtoken_t;
 
 #ifdef ENABLESCHSM
@@ -51,6 +53,7 @@ usbtoken_new(const char *serial);
 int
 usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 		size_t pairing_sec_len);
+
 /**
  * locks a usbtoken by freeing the private key
  * reference in the usbtoken
@@ -131,12 +134,44 @@ usbtoken_unwrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
  * 		it with a new authentication code derived from both the new user pin @param newpass
  * 		and the pairing secret @param pairing_sec.
  * 		If false, the function derives authentication codes both for the old and new user pin.
- * @param return  0 on success or < 0 on error
+ * @return  0 on success or < 0 on error
  */
 int
 usbtoken_change_passphrase(usbtoken_t *token, const char *oldpass, const char *newpass,
 			   unsigned char *pairing_secret, size_t pairing_sec_len,
 			   bool is_provisioning);
+
+/**
+ * Sends an APDU to the usbtoken and receive the response.
+ * @param token the usbtoken to communicate with
+ * @param apdu the apdu byte arry to send to the token
+ * @param apdu_len legnth of @param apdu
+ * @param brsp the buffer for the response
+ * @param brsp_len the size of @param Brsp
+ * @return  0 on success or < 0 on error
+ */
+int
+usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsigned char *brsp,
+		   size_t lr);
+
+/**
+ * Resets the authentication status of the usbtoken using the cached authentication code.
+ * @param brsp the buffer for the response
+ * @param brsp_len the size of @param Brsp
+ * @return  0 on success or < 0 on error
+
+ */
+int
+usbtoken_reset_auth(usbtoken_t *token, unsigned char *brsp, size_t brsp_len);
+
+/**
+ * Gets the ATR from the usbtoken.
+ * @param brsp the buffer for the response
+ * @param brsp_len the size of @param Brsp
+ * @return  0 on success or < 0 on error
+ */
+int
+usbtoken_get_atr(usbtoken_t *token, unsigned char *brsp, size_t brsp_len);
 
 #endif
 
