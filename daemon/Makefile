@@ -48,7 +48,7 @@ ifeq ($(SANITIZERS),y)
     # if requested, we enable sanitization for easier debugging 
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
-    LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
+    LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
 
 LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
