@@ -24,7 +24,7 @@
 
 CC ?= gcc
 DEVELOPMENT_BUILD ?= y
-AGGRESSIVE_WARNINGS ?= n
+AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 
 LOCAL_CFLAGS += -I../include -pedantic -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
@@ -35,7 +35,7 @@ ifeq ($(CC),gcc)
 endif
 ifeq ($(DEVELOPMENT_BUILD),y)
     # what are we building? development or production code?
-    LOCAL_CFLAGS += -DDEBUG_BUILD
+    LOCAL_CFLAGS += -ggdb -DDEBUG_BUILD
 endif
 ifeq ($(AGGRESSIVE_WARNINGS),y)
     # on CI (and also for well-behaved developers) warnings should be
