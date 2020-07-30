@@ -279,73 +279,6 @@ c_net_is_veth_used(const char *if_name)
 }
 
 /**
- * This function renames a (container namespace) veth name from old_ifi_name to new_ifi_name
- * with a netlink message using the netlink socket.
- */
-static int
-c_net_rename_ifi(const char *old_ifi_name, const char *new_ifi_name)
-{
-	ASSERT(old_ifi_name && new_ifi_name);
-
-	nl_sock_t *nl_sock = NULL;
-	unsigned int ifi_index_old;
-	nl_msg_t *req = NULL;
-
-	/* Get the interface index of the interface name */
-	if (!(ifi_index_old = if_nametoindex(old_ifi_name))) {
-		ERROR("veth interface name could not be resolved");
-		return -1;
-	}
-
-	/* Open netlink socket */
-	if (!(nl_sock = nl_sock_routing_new())) {
-		ERROR("failed to allocate netlink socket");
-		return -1;
-	}
-
-	/* Create netlink message */
-	if (!(req = nl_msg_new())) {
-		ERROR("failed to allocate netlink message");
-		nl_sock_free(nl_sock);
-		return -1;
-	}
-
-	struct ifinfomsg link_req = { .ifi_family = AF_INET, .ifi_index = ifi_index_old };
-
-	/* Fill netlink message header */
-	if (nl_msg_set_type(req, RTM_NEWLINK))
-		goto msg_err;
-
-	/* Set appropriate flags for request, creating new object,
-	 *  exclusive access and acknowledgment response */
-	if (nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK))
-		goto msg_err;
-
-	/* Fill link request header of request message */
-	if (nl_msg_set_link_req(req, &link_req))
-		goto msg_err;
-
-	/* Set the PID in the netlink header */
-	if (nl_msg_add_string(req, IFLA_IFNAME, new_ifi_name))
-		goto msg_err;
-
-	/* Send request message and wait for the response message */
-	if (nl_msg_send_kernel_verify(nl_sock, req))
-		goto msg_err;
-
-	nl_msg_free(req);
-	nl_sock_free(nl_sock);
-
-	return 0;
-
-msg_err:
-	ERROR("failed to create/send netlink message");
-	nl_msg_free(req);
-	nl_sock_free(nl_sock);
-	return -1;
-}
-
-/**
  * This function moves the network interface to the corresponding namespace,
  * specified by the pid (from root namespace to container namespace).
  */
@@ -929,7 +862,7 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 
 	if (ni->cont_offset == 0 && hardware_get_radio_ifname()) {
 		/* Rename the rootns first veth to the RADIO_IFACE_NAME name */
-		if (c_net_rename_ifi(ni->veth_cmld_name, hardware_get_radio_ifname()))
+		if (network_rename_ifi(ni->veth_cmld_name, hardware_get_radio_ifname()))
 			return -1;
 
 		mem_free(ni->veth_cmld_name);
@@ -1130,7 +1063,7 @@ c_net_start_child_interface(c_net_interface_t *ni)
 	DEBUG("rename ifi from %s to %s", ni->veth_cont_name, ni->nw_name);
 
 	/* Rename container veth to the given if name */
-	if (c_net_rename_ifi(ni->veth_cont_name, ni->nw_name))
+	if (network_rename_ifi(ni->veth_cont_name, ni->nw_name))
 		return -1;
 
 	/* Skip IPv4 setup if interface has no config */

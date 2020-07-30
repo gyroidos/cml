@@ -2285,7 +2285,6 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 			 state_a0 == CONTAINER_STATE_BOOTING || state_a0 == CONTAINER_STATE_SETUP);
 
 	if (cmld_containers_get_a0() == container) {
-		cmld_netif_phys_add_by_name(iface);
 		if (a0_is_up)
 			res = c_net_move_ifi(iface, pid);
 		return res;
