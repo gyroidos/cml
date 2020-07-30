@@ -111,14 +111,13 @@ nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t si
 	ASSERT((msg && !(size > 0 && !data)));
 
 	/* get length required for data of size bytes + header */
-	const int len = NLA_HDRLEN + size;
 	struct nlmsghdr *nlmsg;
 	struct nlattr *nla = NULL;
 
 	nlmsg = &msg->nlmsghdr;
 
 	/* Check for overflow in message buffer */
-	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(len) > msg->size) {
+	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(NLA_HDRLEN + size) > msg->size) {
 		errno = EOVERFLOW;
 		return -1;
 	}
@@ -126,14 +125,15 @@ nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t si
 	/* Set the attribute metadata */
 	nla = (struct nlattr *)nl_msg_top(nlmsg);
 	nla->nla_type = type;
-	nla->nla_len = len;
+	nla->nla_len = NLMSG_ALIGN(NLA_HDRLEN) + size;
 
 	/* Copy the attribute payload */
 	if (data != NULL)
-		memcpy(NLA_DATA(nla), data, len);
+		memcpy(NLA_DATA(nla), data, size);
 
 	/* Adjust message length */
-	nlmsg->nlmsg_len = NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(len);
+	nlmsg->nlmsg_len =
+		NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(NLMSG_ALIGN(NLA_HDRLEN) + size);
 
 	return 0;
 }
@@ -694,7 +694,8 @@ nl_msg_new()
 	/* Remember the size of the message */
 	ret->size = NLMSG_ALIGN(size);
 
-	TRACE("Netlink message allocated, size: %d", ret->nlmsghdr.nlmsg_len);
+	TRACE("Netlink message allocated, size: %d, location: %p", ret->nlmsghdr.nlmsg_len,
+	      (void *)&ret->nlmsghdr);
 
 	return ret;
 }
