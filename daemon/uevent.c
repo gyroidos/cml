@@ -34,9 +34,6 @@
 #include <grp.h>
 #include <libgen.h>
 
-#undef LOGF_LOG_MIN_PRIO
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
-
 #include "cmld.h"
 #include "container.h"
 #include "common/event.h"
