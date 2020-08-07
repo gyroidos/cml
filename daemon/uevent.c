@@ -610,7 +610,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			     strncmp(uevent->action, "remove", 6) &&
 			     strncmp(uevent->action, "change", 6));
 
-	DEBUG("Got add/remove/change uevent");
+	TRACE("Got add/remove/change uevent");
 
 	/* move network ifaces to c0 */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
