@@ -121,8 +121,10 @@ err:
 
 out:
 	out.return_code = TOKEN_TO_CONTAINER__CODE__OK;
+	out.has_response = true;
 	out.response.len = len;
 	out.response.data = brsp;
+
 	if ((protobuf_send_message(fd, (ProtobufCMessage *)&out)) < 0) {
 		ERROR("Could not send protobuf response on socket %d", fd);
 	}
