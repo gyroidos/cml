@@ -1040,6 +1040,13 @@ c_vol_mount_dev(c_vol_t *vol)
 		ERROR_ERRNO("Could not mount /dev");
 		goto error;
 	}
+
+	if ((ret = mount(NULL, dev_mnt, NULL, MS_SHARED, NULL)) < 0) {
+		ERROR_ERRNO("Could not apply MS_SHARED to %s", dev_mnt);
+	} else {
+		DEBUG("Applied MS_SHARED to %s", dev_mnt);
+	}
+
 	ret = 0;
 error:
 	mem_free(dev_mnt);
@@ -1141,6 +1148,71 @@ c_vol_get_rootdir(c_vol_t *vol)
 	return vol->root;
 }
 
+static int
+c_vol_bind_token(c_vol_t *vol)
+{
+	if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(vol->container)) {
+		DEBUG("Token type is not USB, not binding relay socket");
+		return 0;
+	}
+
+	int ret = -1;
+	uid_t uid = container_get_uid(vol->container);
+
+	char *src_path = mem_printf("%s/%s", SCD_TOKENCONTROL_SOCKET,
+				    uuid_string(container_get_uuid(vol->container)));
+	char *dest_dir = mem_printf("%s/dev/tokens", vol->root);
+	char *dest_path = mem_printf("%s/token", dest_dir);
+
+	DEBUG("Binding token socket to %s", dest_path);
+
+	if (!file_exists(dest_dir)) {
+		if (dir_mkdir_p(dest_dir, 0755)) {
+			ERROR_ERRNO("Failed to create containing directory for %s", dest_path);
+			goto err;
+		}
+
+		if (chown(dest_dir, uid, uid)) {
+			ERROR("Failed to chown token directory at %s to %d", dest_path, uid);
+			goto err;
+		} else {
+			DEBUG("Successfully chowned token directory at %s to %d", dest_path, uid);
+		}
+	} else if (!file_is_dir(dest_dir)) {
+		ERROR("Token path %s exists and is no directory", dest_dir);
+		goto err;
+	}
+
+	if (file_touch(dest_path)) {
+		ERROR_ERRNO("Failed to prepare target file for bind mount at %s", dest_path);
+		goto err;
+	}
+
+	DEBUG("Binding token socket from %s to %s", src_path, dest_path);
+	if (mount(src_path, dest_path, NULL, MS_BIND, NULL)) {
+		ERROR_ERRNO("Failed to bind socket from %s to %s", src_path, dest_path);
+		goto err;
+	} else {
+		DEBUG("Successfully bound token socket to %s", dest_path);
+	}
+
+	if (chown(dest_path, uid, uid)) {
+		ERROR("Failed to chown token socket at %s to %d", dest_path, uid);
+		goto err;
+	} else {
+		DEBUG("Successfully chowned token socket at %s to %d", dest_path, uid);
+	}
+
+	ret = 0;
+
+err:
+	mem_free(src_path);
+	mem_free(dest_dir);
+	mem_free(dest_path);
+
+	return ret;
+}
+
 int
 c_vol_start_pre_clone(c_vol_t *vol)
 {
@@ -1225,6 +1297,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 #endif
 	return 0;
 error:
+	ERROR("Failed to execute post clone hook for c_vol");
 	return -1;
 }
 
@@ -1240,6 +1313,13 @@ c_vol_start_pre_exec(c_vol_t *vol)
 	}
 	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
 		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
+
+	if (c_vol_bind_token(vol) < 0) {
+		ERROR_ERRNO("Failed to bind token to container");
+		return -1;
+	}
+
+	return 0;
 
 	mem_free(dev_mnt);
 	return 0;
