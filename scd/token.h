@@ -34,6 +34,7 @@
 
 #define STOKEN_DEFAULT_PASS "trustme"
 
+//has to be kept in sync with smartcard.h
 // clang-format off
 #define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
 // clang-format on
