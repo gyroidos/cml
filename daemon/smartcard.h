@@ -30,6 +30,11 @@
 
 typedef struct smartcard smartcard_t;
 
+//has to be kept in sync with token.h
+// clang-format off
+#define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
+// clang-format on
+
 /**
  * @param path The directory where smartcard-related data is stored.
  */
