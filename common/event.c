@@ -334,17 +334,21 @@ event_reset()
 	TRACE("Resetting event epoll fd");
 	event_reset_fd();
 
-	TRACE("Resetting event timers");
-	list_foreach(event_timer_list, wrapped_remove_timer);
-	event_timer_list = NULL;
-
-	TRACE("Resetting event signal handler list");
-	list_foreach(event_signal_list, wrapped_remove_signal);
-	event_signal_list = NULL;
-
-	TRACE("Resetting event inotify list");
-	list_foreach(event_inotify_list, wrapped_remove_inotify);
-	event_inotify_list = NULL;
+	if (event_timer_list) {
+		TRACE("Resetting event timers");
+		list_foreach(event_timer_list, wrapped_remove_timer);
+		event_timer_list = NULL;
+	}
+	if (event_signal_list) {
+		TRACE("Resetting event signal handler list");
+		list_foreach(event_signal_list, wrapped_remove_signal);
+		event_signal_list = NULL;
+	}
+	if (event_inotify_list) {
+		TRACE("Resetting event inotify list");
+		list_foreach(event_inotify_list, wrapped_remove_inotify);
+		event_inotify_list = NULL;
+	}
 }
 
 event_io_t *
