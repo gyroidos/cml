@@ -914,7 +914,7 @@ c_net_start_post_clone(c_net_t *net)
 
 	/* Get container's pid */
 	pid_t pid = container_get_pid(net->container);
-	pid_t pid_c0 = container_get_pid(cmld_containers_get_a0());
+	pid_t pid_c0 = cmld_containers_get_a0() ? container_get_pid(cmld_containers_get_a0()) : 0;
 
 	for (list_t *l = net->interface_mv_name_list; l; l = l->next) {
 		char *iff_name = l->data;
@@ -944,9 +944,11 @@ c_net_start_post_clone(c_net_t *net)
 			return -1;
 		if (pid == pid_c0) //skip moving interfaces defined for c0 (e.g. uplink iiff)
 			continue;
-		DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
-		if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
-			return -1;
+		if (cmld_containers_get_a0()) {
+			DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
+			if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
+				return -1;
+		}
 	}
 
 	// configure moved rootns veth endpoint in c0's network namespace
@@ -955,17 +957,21 @@ c_net_start_post_clone(c_net_t *net)
 		ERROR_ERRNO("Could not fork for switching to c0's netns");
 		return -1;
 	} else if (net->c0_netns_pid == 0) {
-		DEBUG("Configuring netifs in c0");
+		const char *hostns = cmld_containers_get_a0() ? "c0" : "CML";
+
+		DEBUG("Configuring netifs in %s", hostns);
 
 		event_reset(); // reset event_loop of cloned from parent
-		char *c0_netns =
-			mem_printf("/proc/%d/ns/net", container_get_pid(cmld_containers_get_a0()));
-		int netns_fd = open(c0_netns, O_RDONLY);
-		mem_free(c0_netns);
-		if (netns_fd == -1)
-			FATAL_ERRNO("Could not open netns file of c0");
-		if (setns(netns_fd, CLONE_NEWNET) == -1)
-			FATAL_ERRNO("Could not join network namespace of c0");
+		if (cmld_containers_get_a0()) {
+			char *c0_netns = mem_printf("/proc/%d/ns/net",
+						    container_get_pid(cmld_containers_get_a0()));
+			int netns_fd = open(c0_netns, O_RDONLY);
+			mem_free(c0_netns);
+			if (netns_fd == -1)
+				FATAL_ERRNO("Could not open netns file of c0");
+			if (setns(netns_fd, CLONE_NEWNET) == -1)
+				FATAL_ERRNO("Could not join network namespace of c0");
+		}
 
 		// register new cleanup callback when cmld stops a container
 		event_signal_t *sigkill =
@@ -994,11 +1000,13 @@ c_net_start_post_clone(c_net_t *net)
 			/* Set IPv4 address */
 			if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr,
 					   &ni->ipv4_bc_addr))
-				FATAL_ERRNO("Cannot set ip for '%s' in c0!", ni->veth_cmld_name);
+				FATAL_ERRNO("Cannot set ip for '%s' in %s!", ni->veth_cmld_name,
+					    hostns);
 
 			/* Bring veth up */
 			if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
-				FATAL_ERRNO("Could not configure %s in c0!", ni->veth_cmld_name);
+				FATAL_ERRNO("Could not configure %s in %s!", ni->veth_cmld_name,
+					    hostns);
 
 			/* Setup firewall for container connectivity */
 			if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
@@ -1022,11 +1030,11 @@ c_net_start_post_clone(c_net_t *net)
 			if (c_net_udhcpd_start(ni))
 				FATAL_ERRNO("Could not start udhcpd!");
 
-			DEBUG("Successfully configured %s in c0, wait for child to exit.",
-			      ni->veth_cmld_name);
+			DEBUG("Successfully configured %s in %s, wait for child to exit.",
+			      ni->veth_cmld_name, hostns);
 #endif
 		}
-		DEBUG("Setup of nis in netns of c0 done.");
+		DEBUG("Setup of nis in netns of %s done.", hostns);
 		event_loop();
 	} else {
 		DEBUG("Setup of nis should be done by pid=%d", net->c0_netns_pid);
