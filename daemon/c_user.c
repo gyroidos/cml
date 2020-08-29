@@ -21,9 +21,9 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
 #include "c_user.h"
 
-#define _GNU_SOURCE
 #include <fcntl.h>
 #include <grp.h>
 #include <limits.h>
@@ -119,6 +119,26 @@ c_user_set_next_offset(void)
 }
 
 /**
+ * determines first free slot and occupies it. Also responsible for allocating the offsets array.
+ * @return failure, return -1, else return the requested offest if its free
+ */
+static int
+c_user_set_offset(int offset)
+{
+	if (!uid_offsets)
+		uid_offsets = mem_new0(bool, MAX_UID_RANGES);
+
+	if (uid_offsets[offset]) {
+		ERROR("UID offset %d allready taken by a container", offset);
+		return -1;
+	}
+
+	TRACE("UID offset %d now occupied by a container", offset);
+	uid_offsets[offset] = true;
+	return offset;
+}
+
+/**
  * This function determines and sets the next available uid range, depending on the container offset.
  */
 static int
@@ -126,8 +146,23 @@ c_user_set_next_uid_range_start(c_user_t *user)
 {
 	ASSERT(user);
 
-	user->offset = c_user_set_next_offset();
-	IF_TRUE_RETVAL((user->offset < 0), -1);
+	char *file_name_uid = mem_printf("%s.uid", container_get_images_dir(user->container));
+	if (!file_exists(file_name_uid)) {
+		user->offset = c_user_set_next_offset();
+		IF_TRUE_RETVAL((user->offset < 0), -1);
+		if (file_write(file_name_uid, (char *)&user->offset, sizeof(user->offset)) < 0) {
+			WARN("Failed to store uid %d for container %s", user->offset,
+			     uuid_string(container_get_uuid(user->container)));
+		}
+	} else {
+		int offset;
+		if (file_read(file_name_uid, (char *)&offset, sizeof(offset)) < 0) {
+			WARN("Failed to get restore uid for container %s",
+			     uuid_string(container_get_uuid(user->container)));
+		}
+		user->offset = c_user_set_offset(offset);
+		IF_TRUE_RETVAL((user->offset != offset), -1);
+	}
 
 	user->uid_start = UID_RANGES_START + (user->offset * UID_RANGE);
 	DEBUG("Next free uid/gid map start is: %u", user->uid_start);
