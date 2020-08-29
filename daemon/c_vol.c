@@ -51,6 +51,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/sysmacros.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -388,7 +389,6 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 		    const char *overlayfs_mount_dir)
 {
 	char *lower_dir, *upper_dir, *work_dir;
-
 	lower_dir = upper_dir = work_dir = NULL;
 	upper_dev = (upper_dev) ? upper_dev : "tmpfs";
 
@@ -558,6 +558,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool shiftids = false;
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_has_setup_mode(vol->container);
+	int uid = container_get_uid(vol->container);
 
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
@@ -613,16 +614,22 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	}
 
 	// try to create mount point before mount, usually not necessary...
-	if (dir_mkdir_p(dir, 0755) < 0)
+	if (dir_mkdir_p(dir, 0777) < 0)
 		DEBUG_ERRNO("Could not mkdir %s", dir);
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
+		const char *mount_data = mount_entry_get_mount_data(mntent);
+		char *tmpfs_opts = mount_data ?
+					   mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
+					   mem_printf("uid=%d,gid=%d", uid, uid);
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags,
-			  mount_entry_get_mount_data(mntent)) >= 0) {
+			  tmpfs_opts) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
+			mem_free(tmpfs_opts);
 			goto final;
 		} else {
 			ERROR_ERRNO("Cannot mount %s to %s", mount_entry_get_fs(mntent), dir);
+			mem_free(tmpfs_opts);
 			goto error;
 		}
 	}
@@ -690,6 +697,9 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		const char *lower_fstype = NULL;
 		char *upper_dev = NULL;
 		char *lower_dev = NULL;
+		char *mount_data = mount_entry_get_mount_data(mntent) ?
+					   mem_strdup(mount_entry_get_mount_data(mntent)) :
+					   NULL;
 		switch (mount_entry_get_type(mntent)) {
 		case MOUNT_TYPE_OVERLAY_RW: {
 			upper_dev = dev;
@@ -729,6 +739,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			upper_fstype = "tmpfs";
 			lower_fstype = mount_entry_get_fs(mntent);
 			lower_dev = dev;
+			if (mount_data) {
+				char *_mount_data =
+					mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data);
+				mem_free(mount_data);
+				mount_data = _mount_data;
+			} else {
+				mount_data = mem_printf("uid=%d,gid=%d", uid, uid);
+			}
 		} break;
 
 		default:
@@ -740,15 +758,18 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			mem_printf("/tmp/overlayfs/%s/%d",
 				   uuid_string(container_get_uuid(vol->container)),
 				   ++vol->overlay_count);
-		if (c_vol_mount_overlay(dir, upper_fstype, lower_fstype, mountflags,
-					mount_entry_get_mount_data(mntent), upper_dev, lower_dev,
-					overlayfs_mount_dir) < 0) {
+		if (c_vol_mount_overlay(dir, upper_fstype, lower_fstype, mountflags, mount_data,
+					upper_dev, lower_dev, overlayfs_mount_dir) < 0) {
 			ERROR_ERRNO("Could not mount %s to %s", img, dir);
 			mem_free(overlayfs_mount_dir);
+			if (mount_data)
+				mem_free(mount_data);
 			goto error;
 		}
 		DEBUG("Successfully mounted %s using overlay to %s", img, dir);
 		mem_free(overlayfs_mount_dir);
+		if (mount_data)
+			mem_free(mount_data);
 		goto final;
 	}
 
@@ -805,6 +826,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
 
 final:
+	if (mount(NULL, dir, NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+		ERROR_ERRNO("Could not mount '%s' MS_PRIVATE", dir);
+		goto error;
+	}
+
 	if (shiftids)
 		if (container_shift_ids(vol->container, dir, is_root) < 0) {
 			ERROR_ERRNO("Shifting user and gids failed!");
@@ -1325,6 +1351,95 @@ c_vol_start_pre_exec(c_vol_t *vol)
 	return 0;
 }
 
+static int
+c_vol_move_root(const c_vol_t *vol)
+{
+	if (chdir(vol->root) < 0) {
+		ERROR_ERRNO("Could not chdir to root dir %s for container start", vol->root);
+		goto error;
+	}
+
+	// mount namespace handles chroot jail breaks
+	// skip as workarround for missing permission on super block of rootfs without shiftfs
+	if (cmld_is_shiftfs_supported()) {
+		if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
+			ERROR_ERRNO("Could not move mount for container start");
+			goto error;
+		}
+	}
+
+	if (chroot(".") < 0) {
+		ERROR_ERRNO("Could not chroot to . for container start");
+		goto error;
+	}
+
+	if (chdir("/") < 0) {
+		ERROR_ERRNO("Could not chdir to / for container start");
+		goto error;
+	}
+
+	return 0;
+error:
+	return -1;
+}
+
+static int
+pivot_root(const char *new_root, const char *put_old)
+{
+	return syscall(SYS_pivot_root, new_root, put_old);
+}
+
+static int
+c_vol_pivot_root(const c_vol_t *vol)
+{
+	int old_root = -1, new_root = -1;
+
+	if ((old_root = open("/", O_DIRECTORY | O_PATH)) < 0) {
+		ERROR_ERRNO("Could not open '/' directory of the old filesystem");
+		goto error;
+	}
+
+	if ((new_root = open(vol->root, O_DIRECTORY | O_PATH)) < 0) {
+		ERROR_ERRNO("Could not open the root dir '%s' for container start", vol->root);
+		goto error;
+	}
+
+	if (fchdir(new_root)) {
+		ERROR_ERRNO("Could not fchdir to new root dir %s for container start", vol->root);
+		goto error;
+	}
+
+	if (pivot_root(".", ".") == -1) {
+		ERROR_ERRNO("Could not pivot root for container start");
+		goto error;
+	}
+
+	if (fchdir(old_root) < 0) {
+		ERROR_ERRNO("Could not fchdir to the root directory of the old filesystem");
+		goto error;
+	}
+
+	if (umount2(".", MNT_DETACH) < 0) {
+		ERROR_ERRNO("Could not unmount the old root filesystem");
+		goto error;
+	}
+
+	if (fchdir(new_root) < 0) {
+		ERROR_ERRNO("Could not switch back to the root directory of the new filesystem");
+		goto error;
+	}
+
+	close(old_root);
+	close(new_root);
+	return 0;
+error:
+	if (old_root > 0)
+		close(old_root);
+	if (new_root > 0)
+		close(new_root);
+	return -1;
+}
+
 int
 c_vol_start_child(c_vol_t *vol)
 {
@@ -1333,8 +1448,10 @@ c_vol_start_child(c_vol_t *vol)
 	if (!container_has_userns(vol->container)) {
 		// remount proc to reflect namespace change
 		if (umount("/proc") < 0 && errno != ENOENT) {
-			ERROR_ERRNO("Could not umount /proc");
-			goto error;
+			if (umount2("/proc", MNT_DETACH) < 0) {
+				ERROR_ERRNO("Could not umount /proc");
+				goto error;
+			}
 		}
 		if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 			ERROR_ERRNO("Could not remount /proc");
@@ -1352,26 +1469,10 @@ c_vol_start_child(c_vol_t *vol)
 		goto error;
 	}
 
-	if (chdir(vol->root) < 0) {
-		ERROR_ERRNO("Could not chdir to root dir %s for container start", vol->root);
-		goto error;
-	}
-
-	// mount namespace handles chroot jail breaks
-	if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
-		ERROR_ERRNO("Could not move mount for container start");
-		goto error;
-	}
-
-	if (chroot(".") < 0) {
-		ERROR_ERRNO("Could not chroot to . for container start");
-		goto error;
-	}
-
-	if (chdir("/") < 0) {
-		ERROR_ERRNO("Could not chdir to / for container start");
-		goto error;
-	}
+	if (cmld_is_hostedmode_active() && !container_has_userns(vol->container))
+		IF_TRUE_GOTO(c_vol_pivot_root(vol) < 0, error);
+	else
+		IF_TRUE_GOTO(c_vol_move_root(vol) < 0, error);
 
 	DEBUG("Mounting /proc");
 	if (mkdir("/proc", 0755) < 0 && errno != EEXIST) {
