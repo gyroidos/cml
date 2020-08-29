@@ -40,6 +40,7 @@
 #include "common/dir.h"
 #include "common/ns.h"
 #include "container.h"
+#include "cmld.h"
 
 #define UID_RANGE 100000
 #define UID_RANGES_START 100000
@@ -370,6 +371,21 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 
+	// if kernel does not support shiftfs just chown the files
+	if (!cmld_is_shiftfs_supported()) {
+		if (chown(path, user->uid_start, user->uid_start) < 0) {
+			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", path,
+				    user->uid_start, user->uid_start);
+			goto error;
+		}
+		if (dir_foreach(path, &c_user_chown_dev_cb, user) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, user->uid_start,
+			      user->uid_start);
+			goto error;
+		}
+		goto success;
+	}
+
 	// if we just got a single file chown this and return
 	if (file_exists(path) && !file_is_dir(path)) {
 		if (lchown(path, user->uid_start, user->uid_start) < 0) {
@@ -465,6 +481,9 @@ c_user_shift_mounts(const c_user_t *user)
 
 	/* Skip this, if the container doesn't have a user namespace */
 	if (!user->ns_usr)
+		return 0;
+
+	if (!cmld_is_shiftfs_supported())
 		return 0;
 
 	char *target_dev, *saved_dev;
