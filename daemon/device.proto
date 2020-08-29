@@ -56,4 +56,7 @@ message DeviceConfig {
 
 	// enable locally signed images
 	optional bool locally_signed_images = 13 [default = false];
+
+	// hostmode
+	required bool hostedmode = 14 [default = false];
 }

@@ -103,6 +103,8 @@ static char *cmld_shared_data_dir = NULL;
 
 static list_t *cmld_netif_phys_list = NULL;
 
+static bool cmld_hostedmode = false;
+
 /******************************************************************************/
 
 static int
@@ -205,6 +207,12 @@ bool
 cmld_is_internet_active(void)
 {
 	return container_connectivity_online(cmld_connectivity);
+}
+
+bool
+cmld_is_hostedmode_active(void)
+{
+	return cmld_hostedmode;
 }
 
 /**
@@ -792,6 +800,8 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 		}
 	}
 
+	IF_TRUE_RETURN_TRACE(cmld_hostedmode);
+
 	/* all containers are down, so shut down */
 	DEBUG("Device shutdown: last container down; shutdown now");
 
@@ -846,7 +856,7 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 
 	container_unregister_observer(a0, cb);
 
-	if (shutdown_now) {
+	if (shutdown_now && !cmld_hostedmode) {
 		/* all containers are down, so shut down */
 		DEBUG("Device shutdown: all containers already down; shutdown now");
 #ifndef TRUSTME_DEBUG
@@ -874,6 +884,8 @@ cmld_reboot_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
 static int
 cmld_init_a0(const char *path, const char *c0os)
 {
+	IF_TRUE_RETVAL_TRACE(cmld_hostedmode, 0);
+
 	/* Get the a0 guestos */
 	guestos_t *a0_os = guestos_mgr_get_latest_by_name(c0os, true);
 
@@ -918,6 +930,8 @@ out:
 static int
 cmld_start_a0(container_t *new_a0)
 {
+	IF_TRUE_RETVAL_TRACE(cmld_hostedmode, 0);
+
 	INFO("Starting management container %s...", container_get_description(new_a0));
 
 	int *control_sock_p = mem_new0(int, 1);
@@ -992,6 +1006,8 @@ static void
 cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if,
 		  const char *host_gateway, const char *host_dns)
 {
+	IF_TRUE_RETURN_TRACE(cmld_hostedmode);
+
 	/*
 	 * Increase the max socket send buffer size which is used for all types of
 	 * connections. In particular, this is required by the TrustmeService in
@@ -1055,6 +1071,9 @@ cmld_init(const char *path)
 		WARN("Could not initialize device config");
 	mem_free(device_path);
 
+	// set hostedmode, which disables some configuration
+	cmld_hostedmode = device_config_get_hostedmode(device_config);
+
 	cmld_tune_network(device_config_get_host_addr(device_config),
 			  device_config_get_host_subnet(device_config),
 			  device_config_get_host_if(device_config),
@@ -1077,7 +1096,7 @@ cmld_init(const char *path)
 	const char *c0os_name = device_config_get_c0os(device_config);
 	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
-	if (mount_remount_root_ro() < 0)
+	if (mount_remount_root_ro() < 0 && !cmld_hostedmode)
 		FATAL("Could not remount rootfs read-only");
 
 	if (mount_debugfs() < 0)
@@ -1131,7 +1150,7 @@ cmld_init(const char *path)
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
-	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0)
+	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
 		FATAL("Could not load guest operating systems");
 	mem_free(guestos_path);
 	INFO("guestos initialized.");
@@ -1336,7 +1355,8 @@ cmld_wipe_device()
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	dir_delete_folder(cmld_path, CMLD_PATH_CONTAINER_TOKENS_DIR);
 	dir_delete_folder(LOGFILE_DIR, "");
-	reboot_reboot(POWER_OFF);
+	if (!cmld_hostedmode)
+		reboot_reboot(POWER_OFF);
 }
 
 const char *
