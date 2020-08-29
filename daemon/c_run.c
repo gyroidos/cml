@@ -21,6 +21,7 @@
 #include "hardware.h"
 #include "container.h"
 #include "c_run.h"
+#include "cmld.h"
 
 //TODO define in container.h?
 #define CLONE_STACK_SIZE 8192
@@ -371,6 +372,23 @@ do_exec(c_run_t *run)
 	if (NULL == exec_args) {
 		ERROR("No command was specified to execute. Exiting...");
 		exit(EXIT_FAILURE);
+	}
+
+	// workarround for missing permission on super block of rootfs without shiftfs
+	if (!cmld_is_shiftfs_supported() && container_has_userns(run->container)) {
+		if (chdir(container_get_rootdir(run->container)) < 0) {
+			ERROR_ERRNO("Could not chdir to root dir of container");
+			goto error;
+		}
+		if (chroot(".") < 0) {
+			ERROR_ERRNO("Could not chroot to . for execve");
+			goto error;
+		}
+
+		if (chdir("/") < 0) {
+			ERROR_ERRNO("Could not chdir to / for execve");
+			goto error;
+		}
 	}
 
 	int ret = execve(run->cmd, exec_args, NULL);
