@@ -29,6 +29,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/list.h"
+#include "common/file.h"
 
 #include <string.h>
 #include <sys/mount.h>
@@ -305,7 +306,7 @@ mount_remount_root_ro(void)
 	DEBUG("Remounting rootfs readonly");
 	int ret = mount("none", "/", "none", MS_REMOUNT | MS_RDONLY, NULL);
 	if (ret < 0)
-		FATAL_ERRNO("Could not remount rootfs as readonly");
+		ERROR_ERRNO("Could not remount rootfs as readonly");
 	return ret;
 }
 
@@ -326,12 +327,28 @@ mount_private_tmp(void)
 		ERROR_ERRNO("Could not unshare host mount ns!");
 		return -1;
 	}
-	if (umount("/tmp") < 0 && errno != ENOENT) {
-		ERROR_ERRNO("Could not umount /tmp");
+	if (file_is_mountpoint("/tmp")) {
+		if (umount("/tmp") < 0 && errno != ENOENT) {
+			ERROR_ERRNO("Could not umount /tmp");
+			return -1;
+		}
+	}
+	if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+		ERROR_ERRNO("Could not mount / MS_PRIVATE");
 		return -1;
 	}
-	if (mount("tmpfs", "/tmp", "tmpfs", MS_RELATIME | MS_NOSUID | MS_NODEV, NULL) < 0) {
+	if (file_is_mountpoint("/sys")) {
+		if (mount(NULL, "/sys", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+			ERROR_ERRNO("Could not mount /sys MS_PRIVATE");
+			return -1;
+		}
+	}
+	if (mount("tmpfs", "/tmp", "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 		ERROR_ERRNO("Could not mount /tmp");
+		return -1;
+	}
+	if (mount(NULL, "/tmp", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+		ERROR_ERRNO("Could not mount /tmp MS_PRIVATE");
 		return -1;
 	}
 	return 0;

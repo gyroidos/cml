@@ -188,6 +188,12 @@ bool
 cmld_is_internet_active(void);
 
 /**
+ * Checks if cmld is running in hosted mode (e.g. on debian)
+ */
+bool
+cmld_is_hostedmode_active(void);
+
+/**
  * Get the dns server set for the host interface in device config
  */
 const char *
