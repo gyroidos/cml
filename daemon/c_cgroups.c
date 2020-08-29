@@ -29,6 +29,7 @@
 
 #include "hardware.h"
 #include "uevent.h"
+#include "cmld.h"
 
 #include "common/mem.h"
 #include "common/macro.h"
@@ -364,9 +365,10 @@ c_cgroups_devices_deny(c_cgroups_t *cgroups, const char *rule)
 				uuid_string(container_get_uuid(cgroups->container)));
 
 	if (file_write(path, rule, -1) == -1) {
-		ERROR_ERRNO("Failed to write to %s", path);
+		ERROR_ERRNO("Failed to write '%s' to %s", rule, path);
 		goto error;
 	}
+	TRACE("Succeded to write '%s' to %s", rule, path);
 
 	mem_free(path);
 	return 0;
@@ -822,21 +824,23 @@ c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 static int
 c_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path)
 {
-	int ret;
-	if (mkdir(mount_path, 0755) && errno != EEXIST) {
-		ERROR_ERRNO("Could not create cgroup subsys directory %s", mount_path);
-		return -1;
-	}
-
-	INFO("Mounting cgroups subsystems %s", subsys);
-	ret = mount("cgroup", mount_path, "cgroup", MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME,
-		    subsys);
-	if (ret == -1) {
-		if (errno == EBUSY) {
-			INFO("cgroup %s already mounted", subsys);
-		} else {
-			ERROR_ERRNO("Error mounting cgroups subsystems %s", subsys);
+	int ret = 0;
+	if (!file_is_mountpoint(mount_path)) {
+		if (mkdir(mount_path, 0755) && errno != EEXIST) {
+			ERROR_ERRNO("Could not create cgroup subsys directory %s", mount_path);
 			return -1;
+		}
+
+		INFO("Mounting cgroups subsystems %s", subsys);
+		ret = mount("cgroup", mount_path, "cgroup",
+			    MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME, subsys);
+		if (ret == -1) {
+			if (errno == EBUSY) {
+				INFO("cgroup %s already mounted", subsys);
+			} else {
+				ERROR_ERRNO("Error mounting cgroups subsystems %s", subsys);
+				return -1;
+			}
 		}
 	}
 	if (!strcmp(subsys, "memory")) {
@@ -1018,27 +1022,20 @@ c_cgroups_start_pre_clone(c_cgroups_t *cgroups)
 	ASSERT(cgroups);
 
 	// mount cgroups control stuff if not already done (necessary globally once)
-
 	// tmpfs does not always result in EBUSY if already mounted
-	if (file_is_mountpoint(CGROUPS_FOLDER))
-		return 0;
-
-	if (mkdir(CGROUPS_FOLDER, 0755) && errno != EEXIST) {
-		ERROR_ERRNO("Could not create cgroup mount directory");
-		return -1;
+	if (!file_is_mountpoint(CGROUPS_FOLDER)) {
+		INFO("Mounting cgroups tmpfs");
+		if (mkdir(CGROUPS_FOLDER, 0755) && errno != EEXIST) {
+			ERROR_ERRNO("Could not create cgroup mount directory");
+			return -1;
+		}
+		if (mount("cgroup", CGROUPS_FOLDER, "tmpfs",
+			  MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME, "mode=755") == -1 &&
+		    errno != EBUSY) {
+			ERROR_ERRNO("Could not mount tmpfs for cgroups");
+			return -1;
+		}
 	}
-
-	INFO("Mounting cgroups tmpfs");
-	if (mount("cgroup", CGROUPS_FOLDER, "tmpfs", MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME,
-		  "mode=755") == -1 &&
-	    errno != EBUSY) {
-		ERROR_ERRNO("Could not mount tmpfs for cgroups");
-		return -1;
-	}
-
-	// skip if allready mount
-	if (errno == EBUSY)
-		return 0;
 
 	for (list_t *l = cgroups->active_cgroups; l; l = l->next) {
 		char *subsys = l->data;
