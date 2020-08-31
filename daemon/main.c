@@ -48,6 +48,7 @@
 #define DEFAULT_BASE_PATH "/data/cml"
 
 static logf_handler_t *cml_daemon_logfile_handler = NULL;
+static bool is_handling_sigint = false;
 
 /******************************************************************************/
 
@@ -64,9 +65,30 @@ main_core_dump_enable(void)
 }
 
 static void
+main_exit(void)
+{
+	exit(0);
+}
+
+static void
 main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
-	FATAL("Received SIGINT...");
+	if (is_handling_sigint)
+		FATAL("Received SIGINT twice..");
+	else
+		INFO("Received SIGINT..");
+
+	is_handling_sigint = true;
+	if (cmld_containers_stop(&main_exit) < 0)
+		ERROR("Could not stop all containers");
+}
+
+static void
+main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+{
+	INFO("Received SIGTERM..");
+	if (cmld_containers_stop(&main_exit) < 0)
+		ERROR("Could not stop all containers");
 }
 
 static void
@@ -110,8 +132,11 @@ main(int argc, char **argv)
 
 	event_init();
 	// TODO: remove for production builds?
-	event_signal_t *sig = event_signal_new(SIGINT, &main_sigint_cb, NULL);
-	event_add_signal(sig);
+	event_signal_t *sig_int = event_signal_new(SIGINT, &main_sigint_cb, NULL);
+	event_add_signal(sig_int);
+
+	event_signal_t *sig_term = event_signal_new(SIGTERM, &main_sigterm_cb, NULL);
+	event_add_signal(sig_term);
 
 	DEBUG("Initializing cmld...");
 	event_timer_t *logfile_timer =
