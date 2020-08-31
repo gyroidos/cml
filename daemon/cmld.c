@@ -155,6 +155,73 @@ cmld_container_get_by_uuid(uuid_t *uuid)
 	return NULL;
 }
 
+static bool
+cmld_containers_are_all_stopped(void)
+{
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *c = l->data;
+		if (container_get_state(c) != CONTAINER_STATE_STOPPED)
+			return false;
+		else
+			continue;
+	}
+	return true;
+}
+
+typedef struct cmld_container_stop_data {
+	void (*on_all_stopped)(void);
+} cmld_container_stop_data_t;
+
+static void
+cmld_container_stop_cb(container_t *container, container_callback_t *cb, void *data)
+{
+	cmld_container_stop_data_t *stop_data = data;
+
+	ASSERT(container);
+	ASSERT(cb);
+	ASSERT(stop_data);
+
+	/* skip if the container is not stopped */
+	IF_FALSE_RETURN_TRACE(container_get_state(container) == CONTAINER_STATE_STOPPED);
+
+	/* unregister observer */
+	container_unregister_observer(container, cb);
+
+	/* execute on_all_stopped, if all containers are stopped now */
+	if (cmld_containers_are_all_stopped()) {
+		INFO("all containers are stopped now, execution of on_all_stopped()");
+		stop_data->on_all_stopped();
+	}
+}
+
+int
+cmld_containers_stop(void (*on_all_stopped)(void))
+{
+	/* execute on_all_stopped, if all containers are stopped now */
+	if (cmld_containers_are_all_stopped()) {
+		INFO("all containers are stopped now, execution of on_all_stopped()");
+		on_all_stopped();
+		return 0;
+	}
+
+	cmld_container_stop_data_t *stop_data = mem_new0(cmld_container_stop_data_t, 1);
+	stop_data->on_all_stopped = on_all_stopped;
+
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *container = l->data;
+		if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
+			container_stop(container);
+			/* Register observer to wait for completed container_stop */
+			if (!container_register_observer(container, &cmld_container_stop_cb,
+							 stop_data)) {
+				DEBUG("Could not register stop callback");
+				return -1;
+			}
+		}
+	}
+	return 0;
+}
+
 int
 cmld_containers_get_count(void)
 {
