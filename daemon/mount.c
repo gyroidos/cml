@@ -327,19 +327,13 @@ mount_private_tmp(void)
 		ERROR_ERRNO("Could not unshare host mount ns!");
 		return -1;
 	}
-	if (file_is_mountpoint("/tmp")) {
-		if (umount("/tmp") < 0 && errno != ENOENT) {
-			ERROR_ERRNO("Could not umount /tmp");
-			return -1;
-		}
-	}
 	if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
 		ERROR_ERRNO("Could not mount / MS_PRIVATE");
 		return -1;
 	}
-	if (file_is_mountpoint("/sys")) {
-		if (mount(NULL, "/sys", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
-			ERROR_ERRNO("Could not mount /sys MS_PRIVATE");
+	if (file_is_mountpoint("/tmp")) {
+		if (umount("/tmp") < 0 && errno != ENOENT) {
+			ERROR_ERRNO("Could not umount /tmp");
 			return -1;
 		}
 	}
@@ -347,9 +341,25 @@ mount_private_tmp(void)
 		ERROR_ERRNO("Could not mount /tmp");
 		return -1;
 	}
-	if (mount(NULL, "/tmp", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
-		ERROR_ERRNO("Could not mount /tmp MS_PRIVATE");
-		return -1;
+
+	list_t *system_mnts = NULL;
+	system_mnts = list_append(system_mnts, "/sys");
+	system_mnts = list_append(system_mnts, "/proc");
+	system_mnts = list_append(system_mnts, "/dev");
+	system_mnts = list_append(system_mnts, "/tmp");
+
+	for (list_t *l = system_mnts; l; l = l->next) {
+		char *mnt = l->data;
+		if (file_is_mountpoint(mnt)) {
+			if (mount(NULL, mnt, NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+				ERROR_ERRNO("Could not mount %s MS_PRIVATE", mnt);
+				list_delete(system_mnts);
+				return -1;
+			}
+			TRACE("Succesfully set MS_PRIVATE on mount '%s'", mnt);
+		}
 	}
+	list_delete(system_mnts);
+
 	return 0;
 }

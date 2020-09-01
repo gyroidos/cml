@@ -158,7 +158,7 @@ c_user_set_next_uid_range_start(c_user_t *user)
 	} else {
 		int offset;
 		if (file_read(file_name_uid, (char *)&offset, sizeof(offset)) < 0) {
-			WARN("Failed to get restore uid for container %s",
+			WARN("Failed to restore uid for container %s",
 			     uuid_string(container_get_uuid(user->container)));
 		}
 		user->offset = c_user_set_offset(offset);
