@@ -1433,9 +1433,9 @@ c_vol_pivot_root(const c_vol_t *vol)
 	close(new_root);
 	return 0;
 error:
-	if (old_root > 0)
+	if (old_root >= 0)
 		close(old_root);
-	if (new_root > 0)
+	if (new_root >= 0)
 		close(new_root);
 	return -1;
 }
