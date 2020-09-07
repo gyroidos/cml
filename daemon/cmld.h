@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -37,6 +37,16 @@
 
 #include "container.h"
 #include "control.h"
+
+#ifndef DEFAULT_BASE_PATH
+#define DEFAULT_BASE_PATH "/data/cml"
+#endif
+#ifndef DEFAULT_CONF_BASE_PATH
+#define DEFAULT_CONF_BASE_PATH "/data/cml"
+#endif
+#ifndef LOGFILE_DIR
+#define LOGFILE_DIR "/data/logs"
+#endif
 
 /**
  * Initialize the CMLD module.
