@@ -33,7 +33,8 @@
 
 #include "attestation.h"
 
-#define LOGFILE_PATH "/data/logs/rattestation"
+#define LOGFILE_DIR "/data/logs"
+#define LOGFILE_PATH LOGFILE_DIR "/rattestation"
 
 static logf_handler_t *ipagent_logfile_handler = NULL;
 static logf_handler_t *ipagent_logfile_handler_stdout = NULL;
