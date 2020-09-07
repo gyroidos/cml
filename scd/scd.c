@@ -56,7 +56,7 @@
 // clang-format on
 
 // Do not edit! This path is also configured in cmld.c
-#define DEVICE_CONF "/data/cml/device.conf"
+#define DEVICE_CONF DEFAULT_CONF_BASE_PATH "/device.conf"
 
 #ifdef ANDROID
 #define PROP_SERIALNO "ro.boot.serialno"
@@ -139,7 +139,8 @@ provisioning_mode()
 	if (file_exists("/dev/tpm0")) {
 		// assumption: tpm2d is launched prior to scd, and creates a keypair on first boot
 		if (!file_exists(TPM2D_ATT_TSS_FILE)) {
-			WARN("TPM keypair not found, missing %s, TPM support disabled!", TPM2D_ATT_TSS_FILE);
+			WARN("TPM keypair not found, missing %s, TPM support disabled!",
+			     TPM2D_ATT_TSS_FILE);
 			use_tpm = false;
 		} else {
 			use_tpm = true;
@@ -290,7 +291,8 @@ scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(scd_logfile_handler);
-	scd_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-scd"));
+	scd_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-scd"));
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_WARN);
 }
 
@@ -305,7 +307,8 @@ main(int argc, char **argv)
 		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
-	scd_logfile_handler = logf_register(&logf_file_write, logf_file_new("/data/logs/cml-scd"));
+	scd_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-scd"));
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 
 	event_timer_t *logfile_timer = event_timer_new(

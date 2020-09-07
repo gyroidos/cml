@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -33,8 +33,18 @@
 
 #define PROVISIONING_MODE_FILE "/tmp/_provisioning_"
 
+#ifndef DEFAULT_BASE_PATH
+#define DEFAULT_BASE_PATH "/data/cml"
+#endif
+#ifndef DEFAULT_CONF_BASE_PATH
+#define DEFAULT_CONF_BASE_PATH "/data/cml"
+#endif
+#ifndef LOGFILE_DIR
+#define LOGFILE_DIR "/data/logs"
+#endif
+
 // Do not edit! The provisioning script requires this path (also trustme-main.mk and its dummy provsg folder)
-#define SCD_TOKEN_DIR "/data/cml/tokens"
+#define SCD_TOKEN_DIR DEFAULT_BASE_PATH "/tokens"
 #define SSIG_ROOT_CERT SCD_TOKEN_DIR "/ssig_rootca.cert"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
 #define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
