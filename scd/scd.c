@@ -41,7 +41,6 @@
 #include "common/file.h"
 #include "common/uuid.h"
 #include "common/protobuf.h"
-#include "common/reboot.h"
 #include "common/list.h"
 #include "ssl_util.h"
 #include "token.h"
@@ -128,22 +127,16 @@ provisioning_mode()
 	bool use_tpm = false;
 	char *dev_key_file = DEVICE_KEY_FILE;
 
-	// device needs a device certificate
-	if (!file_exists(DEVICE_CONF)) {
-		ERROR("Going back to bootloader mode, device config does not exist (Proper"
-		      "userdata image needs to be flashed first)");
-		reboot_reboot(REBOOT);
-	}
-
 	// if available, use tpm to create and store device key
 	if (file_exists("/dev/tpm0")) {
-		use_tpm = true;
 		// assumption: tpm2d is launched prior to scd, and creates a keypair on first boot
 		if (!file_exists(TPM2D_ATT_TSS_FILE)) {
-			ERROR("TPM keypair not found, missing %s", TPM2D_ATT_TSS_FILE);
-			reboot_reboot(REBOOT);
+			WARN("TPM keypair not found, missing %s, TPM support disabled!", TPM2D_ATT_TSS_FILE);
+			use_tpm = false;
+		} else {
+			use_tpm = true;
+			dev_key_file = TPM2D_ATT_TSS_FILE;
 		}
-		dev_key_file = TPM2D_ATT_TSS_FILE;
 	}
 
 	if (need_initialization) {
