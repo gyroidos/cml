@@ -69,7 +69,6 @@ SRC_FILES += \
 	common/fd.c \
 	common/uuid.c \
 	common/protobuf.c \
-	common/reboot.c \
 	device.pb-c.c \
 	scd.pb-c.c \
 	control.c \
