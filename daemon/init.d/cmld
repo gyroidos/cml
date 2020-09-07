@@ -1,0 +1,55 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          cmld
+# Required-Start:    $local_fs $remote_fs cml-scd
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: control cmld start at boot time
+# Description:       control Container Management daemon (cmld) start at
+### END INIT INFO
+
+DAEMON=/usr/sbin/cmld
+
+test -x $DAEMON || exit 0
+
+. /lib/lsb/init-functions
+
+start_cml_daemon() {
+	start-stop-daemon --start --quiet -b --exec $DAEMON
+}
+
+stop_cml_daemon() {
+	start-stop-daemon --stop --quiet --signal TERM --exec $DAEMON
+}
+
+case "$1" in
+  start)
+	log_daemon_msg "Starting CML daemon" "cmld"
+        start_cml_daemon
+        log_end_msg $?
+        ;;
+  stop)
+        log_daemon_msg "Stopping CML daemon" "cmld"
+        stop_cml_daemon
+        log_end_msg $?
+        ;;
+  restart|force-reload)
+        log_daemon_msg "Restarting CML daemon" "cmld"
+        stop_cmld_daemon
+        sleep 1
+        start_cml_daemon
+        log_end_msg $?
+        ;;
+  status)
+        status_of_proc "$DAEMON" "cmld" && exit 0 || exit $?
+        ;;
+  *)
+        N=/etc/init.d/cmld
+        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
+
