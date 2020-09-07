@@ -49,6 +49,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 
 // clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
@@ -70,6 +71,13 @@ static list_t *scd_token_list = NULL;
 
 static scd_control_t *scd_control_cmld = NULL;
 static logf_handler_t *scd_logfile_handler = NULL;
+
+static void
+scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
+{
+	INFO("Received SIGTERM..");
+	exit(0);
+}
 
 /**
  * returns 1 if a given file is a p12 token, otherwise 0
@@ -303,6 +311,9 @@ main(int argc, char **argv)
 	event_timer_t *logfile_timer = event_timer_new(
 		HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, scd_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
+
+	event_signal_t *sig_term = event_signal_new(SIGTERM, &scd_sigterm_cb, NULL);
+	event_add_signal(sig_term);
 
 	provisioning_mode();
 
