@@ -77,11 +77,9 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
-#define LOGFILE_DIR "/data/logs"
-
 // TODO think about using an own variable for a0
 //static container_t *cmld_a0 = NULL;
-static const char *cmld_path = "/data/cml";
+static const char *cmld_path = DEFAULT_BASE_PATH;
 
 static list_t *cmld_containers_list = NULL; // first element is a0
 
@@ -1132,11 +1130,10 @@ cmld_init(const char *path)
 		FATAL_ERRNO("Could not mkdir users directory %s", users_path);
 	mem_free(users_path);
 
-	char *device_path = mem_printf("%s/%s", path, CMLD_PATH_DEVICE_CONF);
+	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
 	device_config_t *device_config = device_config_new(device_path);
 	if (!device_config)
 		WARN("Could not initialize device config");
-	mem_free(device_path);
 
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);

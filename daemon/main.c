@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -44,8 +44,6 @@
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
-
-#define DEFAULT_BASE_PATH "/data/cml"
 
 static logf_handler_t *cml_daemon_logfile_handler = NULL;
 static bool is_handling_sigint = false;
@@ -97,7 +95,7 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	DEBUG("Logfile will be closed and a new file opened");
 	logf_unregister(cml_daemon_logfile_handler);
 	cml_daemon_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new("/data/logs/cml-daemon"));
+		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-daemon"));
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_WARN);
 }
 
@@ -117,7 +115,7 @@ main(int argc, char **argv)
 	// TODO: where should we store the log files?
 	// TODO: disable for non developer builds?
 	cml_daemon_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new("/data/logs/cml-daemon"));
+		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-daemon"));
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 
 	main_core_dump_enable();

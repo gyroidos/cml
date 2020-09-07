@@ -56,7 +56,7 @@
 
 #define GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME "kernel"
 
-#define SCD_TOKEN_DIR "/data/cml/tokens"
+#define SCD_TOKEN_DIR DEFAULT_BASE_PATH "/tokens"
 #define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
 #define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
 

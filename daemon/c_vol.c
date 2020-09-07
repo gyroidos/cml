@@ -75,7 +75,7 @@
 #endif
 
 #define CSERVICE_TARGET "/sbin/cservice"
-#define SHARED_FILES_PATH "/data/cml/files_shared"
+#define SHARED_FILES_PATH DEFAULT_BASE_PATH "/files_shared"
 #define SHARED_FILES_STORE_SIZE 100
 
 #define is_selinux_disabled() !file_is_mountpoint("/sys/fs/selinux")
@@ -1302,7 +1302,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 		if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
 			ERROR_ERRNO("Could not set selabel for dir %s to \"%s\"", com_mnt, ICC_SHARED_DATA_TYPE);
 	}
-	if (mount("/data/cml/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
+	if (mount(DEFAULT_BASE_PATH "/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
 		WARN_ERRNO("Could not mount %s", com_mnt);
 	mem_free(com_mnt);
 
@@ -1315,7 +1315,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 			if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
 				ERROR_ERRNO("Could not set selabel for dir %s to \"%s\"", com_mnt, ICC_SHARED_DATA_TYPE);
 		}
-		if (mount("/data/cml/tpm2d/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
+		if (mount(DEFAULT_BASE_PATH"/tpm2d/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
 			WARN_ERRNO("Could not mount %s", com_mnt);
 		mem_free(com_mnt);
 	}
