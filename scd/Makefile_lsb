@@ -31,3 +31,4 @@ SBINDIR := /usr/sbin
 install:
 	mkdir -p ${DESTDIR}${SBINDIR}
 	cp scd ${DESTDIR}${SBINDIR}/cml-scd
+	cp init.d/cml-scd ${DESTDIR}/etc/init.d/

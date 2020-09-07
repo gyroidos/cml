@@ -31,6 +31,7 @@ SBINDIR := /usr/sbin
 install:
 	mkdir -p ${DESTDIR}${SBINDIR}
 	cp cmld ${DESTDIR}${SBINDIR}/
+	cp init.d/cmld ${DESTDIR}/etc/init.d/
 	mkdir -p ${DESTDIR}/var/lib/cml
 	mkdir -p ${DESTDIR}/etc/cml
 	echo "uuid: \"$(shell cat /proc/sys/kernel/random/uuid)\"" > ${DESTDIR}/etc/cml/device.conf
