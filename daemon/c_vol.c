@@ -385,8 +385,8 @@ out:
 
 static int
 c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char *lowerfs_type,
-		    int mount_flags, char *mount_data, const char *upper_dev, const char *lower_dev,
-		    const char *overlayfs_mount_dir)
+		    int mount_flags, const char *mount_data, const char *upper_dev,
+		    const char *lower_dev, const char *overlayfs_mount_dir)
 {
 	char *lower_dir, *upper_dir, *work_dir;
 	lower_dir = upper_dir = work_dir = NULL;
@@ -697,9 +697,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		const char *lower_fstype = NULL;
 		char *upper_dev = NULL;
 		char *lower_dev = NULL;
-		char *mount_data = mount_entry_get_mount_data(mntent) ?
-					   mem_strdup(mount_entry_get_mount_data(mntent)) :
-					   NULL;
+		const char *mount_data = mount_entry_get_mount_data(mntent);
+
 		switch (mount_entry_get_type(mntent)) {
 		case MOUNT_TYPE_OVERLAY_RW: {
 			upper_dev = dev;
@@ -739,14 +738,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			upper_fstype = "tmpfs";
 			lower_fstype = mount_entry_get_fs(mntent);
 			lower_dev = dev;
-			if (mount_data) {
-				char *_mount_data =
-					mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data);
-				mem_free(mount_data);
-				mount_data = _mount_data;
-			} else {
-				mount_data = mem_printf("uid=%d,gid=%d", uid, uid);
-			}
 		} break;
 
 		default:
@@ -762,14 +753,10 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 					upper_dev, lower_dev, overlayfs_mount_dir) < 0) {
 			ERROR_ERRNO("Could not mount %s to %s", img, dir);
 			mem_free(overlayfs_mount_dir);
-			if (mount_data)
-				mem_free(mount_data);
 			goto error;
 		}
 		DEBUG("Successfully mounted %s using overlay to %s", img, dir);
 		mem_free(overlayfs_mount_dir);
-		if (mount_data)
-			mem_free(mount_data);
 		goto final;
 	}
 
