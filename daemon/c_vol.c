@@ -1269,10 +1269,19 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	 * Remeber, This will only succeed if /sbin exists on a writable fs
 	 */
 	char *cservice_bin = mem_printf("%s/%s", vol->root, CSERVICE_TARGET);
-	if (file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0))
+	if (file_exists("/sbin/cml-service-container")) {
+		file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0);
+		INFO("Copied %s to container", cservice_bin);
+	} else if (file_exists("/usr/sbin/cml-service-container")) {
+		file_copy("/usr/sbin/cml-service-container", cservice_bin, -1, 512, 0);
+		INFO("Copied %s to container", cservice_bin);
+	} else {
 		WARN_ERRNO("Could not copy %s to container", cservice_bin);
-	else if (chmod(cservice_bin, 0755))
+	}
+
+	if (chmod(cservice_bin, 0755))
 		WARN_ERRNO("Could not set %s executable", cservice_bin);
+
 	mem_free(cservice_bin);
 
 #if 0

@@ -389,6 +389,10 @@ static struct uevent *
 uevent_rename_interface(const struct uevent *uevent)
 {
 	char *new_ifname = cmld_rename_ifi_new(uevent->interface);
+
+	if (!new_ifname)
+		return NULL;
+
 	char *new_devpath =
 		uevent_replace_devpath_new(uevent->devpath, uevent->interface, new_ifname);
 
@@ -561,14 +565,18 @@ uevent_sysfs_wifi_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 	char *interface = data;
+	container_t *c0 = cmld_containers_get_a0();
+
+	if (!c0) {
+		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
+	}
 
 	char *phy_path = mem_printf("/sys/class/net/%s/phy80211", interface);
 	if (!file_exists(phy_path)) {
 		mem_free(phy_path);
 		return;
 	}
-
-	if (container_add_net_iface(cmld_containers_get_a0(), interface, false))
+	if (container_add_net_iface(c0, interface, false))
 		ERROR("Cannot move '%s' to c0!", interface);
 	else
 		INFO("Moved phys network interface '%s' to c0", interface);
@@ -586,8 +594,13 @@ uevent_sysfs_eth_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 	char *interface = data;
+	container_t *c0 = cmld_containers_get_a0();
 
-	if (container_add_net_iface(cmld_containers_get_a0(), interface, false)) {
+	if (!c0) {
+		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
+	}
+
+	if (container_add_net_iface(c0, interface, false)) {
 		ERROR("Cannot move '%s' to c0!", interface);
 	} else {
 		INFO("Moved phys network interface '%s' to c0", interface);
@@ -605,6 +618,14 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
 	uevent_parse(uevent, raw_p);
 
+	if (!uevent->interface) {
+		DEBUG("Got uevent with empty interface, subsystem: %s, devpath: %s",
+		      uevent->subsystem ? uevent->subsystem : NULL,
+		      uevent->devpath ? uevent->devpath : NULL);
+
+		return;
+	}
+
 	/* just handle add,remove or change events to containers */
 	IF_TRUE_RETURN_TRACE(strncmp(uevent->action, "add", 3) &&
 			     strncmp(uevent->action, "remove", 6) &&
@@ -614,7 +635,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 
 	/* move network ifaces to c0 */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
-	    !strstr(uevent->devpath, "virtual")) {
+	    !strstr(uevent->devpath, "virtual") && !cmld_is_hostedmode_active()) {
 		//rename network interface to avoid name clashes when moving to container
 		DEBUG("Renaming new interface we were notified about");
 		struct uevent *newevent = uevent_rename_interface(uevent);
