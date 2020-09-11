@@ -166,7 +166,7 @@ provisioning_mode()
 
 			if (file_exists(SCD_TOKEN_DIR) && file_is_dir(SCD_TOKEN_DIR)) {
 				DEBUG("CSR folder already exists");
-			} else if (mkdir(SCD_TOKEN_DIR, 00755) != 0) {
+			} else if (dir_mkdir_p(SCD_TOKEN_DIR, 00755) != 0) {
 				FATAL("Failed to create CSR directory");
 			}
 
