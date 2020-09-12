@@ -411,7 +411,7 @@ main(int argc, char *argv[])
 		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
 		msg.container_start_params = NULL;
-		bool set_start_params = false;
+		bool ask_for_password = true;
 		// parse specific options for start command
 		optind--;
 		char **start_argv = &argv[optind];
@@ -423,20 +423,20 @@ main(int argc, char *argv[])
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg;
-				set_start_params = true;
+				ask_for_password = false;
 				break;
 			case 's':
 				container_start_params.has_setup = true;
 				container_start_params.setup = true;
-				set_start_params = true;
 				break;
 			default:
 				print_usage(argv[0]);
 				ASSERT(false); // never reached
 			}
 		}
-		if (set_start_params)
-			msg.container_start_params = &container_start_params;
+		if (ask_for_password)
+			container_start_params.key = get_password_new("Password: ");
+		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
