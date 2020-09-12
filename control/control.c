@@ -235,6 +235,9 @@ main(int argc, char *argv[])
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
 
 	const char *command = argv[optind++];
+	/*
+	 * device global commands
+	 */
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 		has_response = true;
@@ -389,6 +392,17 @@ main(int argc, char *argv[])
 		msg.container_config_file.data = cfg;
 		goto send_message;
 	}
+
+	/*
+	 * container specific commands
+	 */
+
+	// need at least one more argument (container string)
+	if (optind >= argc)
+		print_usage(argv[0]);
+
+	sock = sock_connect(socket_file);
+	uuid = get_container_uuid_new(argv[optind], sock);
 
 	ContainerStartParams container_start_params = CONTAINER_START_PARAMS__INIT;
 	if (!strcasecmp(command, "remove")) {
@@ -573,12 +587,6 @@ main(int argc, char *argv[])
 	} else
 		print_usage(argv[0]);
 
-	// need exactly one more argument (i.e. container string)
-	if (optind != argc - 1)
-		print_usage(argv[0]);
-
-	sock = sock_connect(socket_file);
-	uuid = get_container_uuid_new(argv[optind], sock);
 	msg.n_container_uuids = 1;
 	msg.container_uuids = mem_new(char *, 1);
 	msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
