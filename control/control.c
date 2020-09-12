@@ -86,7 +86,7 @@ print_usage(const char *cmd)
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
-	printf("   run <command> [<arg_1> ... <arg_n>] <container-uuid>\n        Runs the specified command with the given arguments inside the specified container.\n");
+	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n        Runs the specified command with the given arguments inside the specified container.\n");
 	printf("\n");
 	exit(-1);
 }
@@ -530,7 +530,8 @@ main(int argc, char *argv[])
 		} else
 			ASSERT(false); // should never be reached
 	} else if (!strcasecmp(command, "run")) {
-		if (optind > argc - 2)
+		optind++;
+		if (optind > argc - 1)
 			print_usage(argv[0]);
 
 		has_response = true;
@@ -548,17 +549,17 @@ main(int argc, char *argv[])
 			msg.exec_pty = 1;
 		}
 
-		if (optind > argc - 2)
+		if (optind > argc - 1)
 			print_usage(argv[0]);
 
 		msg.exec_command = argv[optind];
 
-		if (optind < argc - 1) {
+		if (optind < argc) {
 			size_t len = MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(char *), argc);
 			TRACE("[CLIENT] Allocating %zu bytes for arguments", len);
 			msg.exec_args = mem_alloc(len);
 
-			while (optind < argc - 1) {
+			while (optind < argc) {
 				TRACE("[CLIENT] Parsing command arguments at index %d, optind: %d: %s",
 				      argcount, optind, argv[optind]);
 				msg.exec_args[argcount] = mem_strdup(argv[optind]);
