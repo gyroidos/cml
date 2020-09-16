@@ -341,8 +341,8 @@ main(UNUSED int argc, char **argv)
 		FATAL("Could not init tpm2d_control socket");
 	}
 	tpm2d_rcontrol_attest = tpm2d_rcontrol_new("0.0.0.0", TPM2D_RCONTROL_PORT);
-	if (!tpm2d_control_cmld) {
-		FATAL("Could not init tpm2d_control socket");
+	if (!tpm2d_rcontrol_attest) {
+		FATAL("Could not init tpm2d_rcontrol socket");
 	}
 
 	INFO("created control socket.");

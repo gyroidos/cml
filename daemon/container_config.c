@@ -642,5 +642,5 @@ container_config_get_token_type(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-	return config->cfg->token_type;
+	return container_config_proto_to_token_type(config->cfg->token_type);
 }

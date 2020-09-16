@@ -2276,6 +2276,7 @@ int
 container_add_net_iface(container_t *container, const char *iface, bool persistent)
 {
 	ASSERT(container);
+	IF_FALSE_RETVAL(iface, -1);
 
 	int res = 0;
 	pid_t pid = container_get_pid(container);
@@ -2400,10 +2401,12 @@ int
 container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
 {
 	ASSERT(container);
-	int ret;
+	int ret = -1;
 	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len);
-	ret = container_config_write(conf);
-	container_config_free(conf);
+	if (conf) {
+		ret = container_config_write(conf);
+		container_config_free(conf);
+	}
 	return ret;
 }
 
