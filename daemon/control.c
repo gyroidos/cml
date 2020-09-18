@@ -198,6 +198,7 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR("Could not sent last line info for %s", log_file_name);
 		}
+		mem_free(message.msg);
 	}
 	if (out.device_uuid != NULL) {
 		mem_free(out.device_uuid);
