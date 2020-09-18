@@ -2276,7 +2276,7 @@ int
 container_add_net_iface(container_t *container, const char *iface, bool persistent)
 {
 	ASSERT(container);
-	IF_FALSE_RETVAL(iface, -1);
+	IF_NULL_RETVAL(iface, -1);
 
 	int res = 0;
 	pid_t pid = container_get_pid(container);
