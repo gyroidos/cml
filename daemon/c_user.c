@@ -372,6 +372,7 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 
 	// if kernel does not support shiftfs just chown the files
+	// and do bind mounts (see jump mark shift)
 	if (!cmld_is_shiftfs_supported()) {
 		if (chown(path, user->uid_start, user->uid_start) < 0) {
 			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", path,
@@ -383,7 +384,7 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 			      user->uid_start);
 			goto error;
 		}
-		goto success;
+		goto shift;
 	}
 
 	// if we just got a single file chown this and return
@@ -407,6 +408,7 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 		goto success;
 	}
 
+shift:
 	// create mountpoints for lower and upper dev
 	if (dir_mkdir_p(SHIFTFS_DIR, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir %s", SHIFTFS_DIR);
@@ -427,7 +429,14 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 		ERROR_ERRNO("Could not mkdir shiftfs dir %s", shift_mark->mark);
 		goto error;
 	}
-	if (mount(path, shift_mark->mark, "shiftfs", 0, "mark") < 0) {
+	/*
+	 * In case shiftfs is not supported we use MS_BIND flag to just bind
+	 * mount the chowned directories to the new mount tree.
+	 * If MS_BIND flag is used, fs paramter and other options are ignored
+	 * by the mount system call.
+	 */
+	if (mount(path, shift_mark->mark, "shiftfs", cmld_is_shiftfs_supported() ? 0 : MS_BIND,
+		  "mark") < 0) {
 		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", path, shift_mark->mark);
 		goto error;
 	}
@@ -483,9 +492,6 @@ c_user_shift_mounts(const c_user_t *user)
 	if (!user->ns_usr)
 		return 0;
 
-	if (!cmld_is_shiftfs_supported())
-		return 0;
-
 	char *target_dev, *saved_dev;
 	target_dev = saved_dev = NULL;
 
@@ -509,7 +515,8 @@ c_user_shift_mounts(const c_user_t *user)
 		}
 
 		// mount the shifted user ids to new root
-		if (mount(shift_mark->mark, shift_mark->target, "shiftfs", 0, NULL) < 0) {
+		if (mount(shift_mark->mark, shift_mark->target, "shiftfs",
+			  cmld_is_shiftfs_supported() ? 0 : MS_BIND, NULL) < 0) {
 			ERROR_ERRNO("Could not remount shiftfs mark %s to %s", shift_mark->mark,
 				    shift_mark->target);
 			goto error;

@@ -1346,6 +1346,44 @@ c_vol_start_pre_exec(c_vol_t *vol)
 	mem_free(dev_mnt);
 	return 0;
 }
+static int
+c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
+{
+	char *mnt_proc = mem_printf("%s/proc", dir);
+	char *mnt_sys = mem_printf("%s/sys", dir);
+
+	DEBUG("Mounting /proc");
+	if (mkdir(mnt_proc, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir %s", mnt_proc);
+		goto error;
+	}
+	if (mount("proc", mnt_proc, "proc", 0, NULL) < 0) {
+		ERROR_ERRNO("Could not mount %s", mnt_proc);
+		goto error;
+	}
+
+	DEBUG("Mounting /sys");
+	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
+	if (container_has_userns(vol->container) && !container_has_netns(vol->container)) {
+		sysopts |= MS_RDONLY;
+	}
+	if (mkdir(mnt_sys, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir %s", mnt_sys);
+		goto error;
+	}
+	if (mount("sysfs", mnt_sys, "sysfs", sysopts, NULL) < 0) {
+		ERROR_ERRNO("Could not mount %s", mnt_sys);
+		goto error;
+	}
+
+	mem_free(mnt_proc);
+	mem_free(mnt_sys);
+	return 0;
+error:
+	mem_free(mnt_proc);
+	mem_free(mnt_sys);
+	return -1;
+}
 
 static int
 c_vol_move_root(const c_vol_t *vol)
@@ -1356,12 +1394,9 @@ c_vol_move_root(const c_vol_t *vol)
 	}
 
 	// mount namespace handles chroot jail breaks
-	// skip as workarround for missing permission on super block of rootfs without shiftfs
-	if (cmld_is_shiftfs_supported()) {
-		if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
-			ERROR_ERRNO("Could not move mount for container start");
-			goto error;
-		}
+	if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
+		ERROR_ERRNO("Could not move mount for container start");
+		goto error;
 	}
 
 	if (chroot(".") < 0) {
@@ -1374,6 +1409,12 @@ c_vol_move_root(const c_vol_t *vol)
 		goto error;
 	}
 
+	if (c_vol_mount_proc_and_sys(vol, ".") == -1) {
+		ERROR_ERRNO("Could not mount proc and sys");
+		goto error;
+	}
+
+	INFO("Sucessfully switched (move mount) to new root %s", vol->root);
 	return 0;
 error:
 	return -1;
@@ -1410,6 +1451,11 @@ c_vol_pivot_root(const c_vol_t *vol)
 		goto error;
 	}
 
+	if (c_vol_mount_proc_and_sys(vol, ".") == -1) {
+		ERROR_ERRNO("Could not mount proc and sys");
+		goto error;
+	}
+
 	if (fchdir(old_root) < 0) {
 		ERROR_ERRNO("Could not fchdir to the root directory of the old filesystem");
 		goto error;
@@ -1424,6 +1470,8 @@ c_vol_pivot_root(const c_vol_t *vol)
 		ERROR_ERRNO("Could not switch back to the root directory of the new filesystem");
 		goto error;
 	}
+
+	INFO("Sucessfully switched (pivot_root) to new root %s", vol->root);
 
 	close(old_root);
 	close(new_root);
@@ -1465,20 +1513,11 @@ c_vol_start_child(c_vol_t *vol)
 		goto error;
 	}
 
-	if (cmld_is_hostedmode_active() && !container_has_userns(vol->container))
+	if (cmld_is_hostedmode_active())
 		IF_TRUE_GOTO(c_vol_pivot_root(vol) < 0, error);
 	else
 		IF_TRUE_GOTO(c_vol_move_root(vol) < 0, error);
 
-	DEBUG("Mounting /proc");
-	if (mkdir("/proc", 0755) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Could not mkdir /proc");
-		goto error;
-	}
-	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
-		ERROR_ERRNO("Could not mount /proc");
-		goto error;
-	}
 	if (!container_has_userns(vol->container) && file_exists("/proc/sysrq-trigger")) {
 		if (mount("/proc/sysrq-trigger", "/proc/sysrq-trigger", NULL, MS_BIND, NULL) < 0) {
 			ERROR_ERRNO("Could not bind mount /proc/sysrq-trigger protection");
@@ -1489,20 +1528,6 @@ c_vol_start_child(c_vol_t *vol)
 			ERROR_ERRNO("Could not ro remount /proc/sysrq-trigger protection");
 			goto error;
 		}
-	}
-
-	DEBUG("Mounting /sys");
-	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
-	if (container_has_userns(vol->container) && !container_has_netns(vol->container)) {
-		sysopts |= MS_RDONLY;
-	}
-	if (mkdir("/sys", 0755) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Could not mkdir /sys");
-		goto error;
-	}
-	if (mount("sys", "/sys", "sysfs", sysopts, NULL) < 0) {
-		ERROR_ERRNO("Could not mount /sys");
-		goto error;
 	}
 
 	DEBUG("Mounting /dev/pts");
