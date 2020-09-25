@@ -83,6 +83,9 @@ int
 c_cgroups_start_pre_exec(c_cgroups_t *cgroups);
 
 int
+c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups);
+
+int
 c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid);
 
 int

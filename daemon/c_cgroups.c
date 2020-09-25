@@ -51,6 +51,10 @@
 
 #include <sched.h>
 
+#ifndef CLONE_NEWCGROUP
+#define CLONE_NEWCGROUP 0x02000000
+#endif
+
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
 
 // FIXME: currently replaced by hardware_get_active_cgroups_subsystems() to
@@ -84,6 +88,7 @@ struct c_cgroups {
 				  wildcard '*' is mapped to -1 */
 	list_t *allowed_devs; /* list of 2 element int arrays, representing maj:min of devices allowed to be accessed.
 				  wildcard '*' is mapped to -1 */
+	bool ns_cgroup;
 };
 
 c_cgroups_t *
@@ -98,6 +103,7 @@ c_cgroups_new(container_t *container)
 	cgroups->freeze_timer = NULL;
 	cgroups->assigned_devs = NULL;
 	cgroups->allowed_devs = NULL;
+	cgroups->ns_cgroup = file_exists("/proc/self/ns/cgroup");
 	return cgroups;
 }
 
@@ -1217,6 +1223,24 @@ error:
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
 	return -1;
+}
+
+int
+c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups)
+{
+	ASSERT(cgroups);
+
+	/* check if timens is supported else do nothing */
+	IF_FALSE_RETVAL_TRACE(cgroups->ns_cgroup, 0);
+
+	if (unshare(CLONE_NEWCGROUP) == -1) {
+		WARN_ERRNO("Could not unshare cgroup namespace!");
+		return -1;
+	}
+
+	INFO("Successfully created new cgroup namespace for container %s",
+	     container_get_name(cgroups->container));
+	return 0;
 }
 
 int
