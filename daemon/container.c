@@ -1157,13 +1157,10 @@ container_start_child(void *data)
 		return 0;
 	}
 
-#ifdef CLONE_NEWCGROUP
-	// Try to span a new cgroup namspace, ignor if kernel does not support it
-	if (unshare(CLONE_NEWCGROUP) == -1)
-		WARN_ERRNO("Could not unshare cgroup namespace, not supported by kernel.");
-	else
-		INFO("Successfully created new cgroup namespace");
-#endif
+	if (c_cgroups_start_pre_exec_child(container->cgroups) < 0) {
+		ret = CONTAINER_ERROR_CGROUPS;
+		goto error;
+	}
 
 	if (c_time_start_pre_exec_child(container->time) < 0) {
 		ret = CONTAINER_ERROR_TIME;
