@@ -42,7 +42,38 @@
 struct c_time {
 	const container_t *container;
 	bool ns_time;
+	time_t time_started;
+	time_t time_created;
 };
+
+/*
+ * if we create the container for the first time, we store its creation time
+ * in a file, otherwise this functions reads the creation time from that file
+ */
+static time_t
+c_time_get_creation_time_from_file(c_time_t *_time)
+{
+	time_t ret = -1;
+	char *file_name_created =
+		mem_printf("%s.created", container_get_images_dir(_time->container));
+	if (!file_exists(file_name_created)) {
+		ret = time(NULL);
+		if (file_write(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
+			WARN("Failed to store creation time of container %s",
+			     uuid_string(container_get_uuid(_time->container)));
+		}
+	} else {
+		if (file_read(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
+			WARN("Failed to get creation time for container %s",
+			     uuid_string(container_get_uuid(_time->container)));
+		}
+	}
+	INFO("container %s was created at %s", uuid_string(container_get_uuid(_time->container)),
+	     ctime(&ret));
+
+	mem_free(file_name_created);
+	return ret;
+}
 
 static long
 c_time_get_clock_secs(clockid_t clock)
@@ -58,6 +89,8 @@ c_time_new(container_t *container)
 	c_time_t *time = mem_new0(c_time_t, 1);
 	time->container = container;
 	time->ns_time = file_exists("/proc/self/ns/time");
+	time->time_started = -1;
+	time->time_created = c_time_get_creation_time_from_file(time);
 	return time;
 }
 
@@ -119,6 +152,14 @@ error:
 }
 
 int
+c_time_start_post_exec(c_time_t *_time)
+{
+	ASSERT(_time);
+	_time->time_started = time(NULL);
+	return 0;
+}
+
+int
 c_time_start_pre_exec_child(const c_time_t *time)
 {
 	ASSERT(time);
@@ -142,4 +183,31 @@ c_time_start_pre_exec_child(const c_time_t *time)
 error:
 	close(nsfd);
 	return -1;
+}
+
+time_t
+c_time_get_creation_time(const c_time_t *time)
+{
+	ASSERT(time);
+	if (time->time_created < 0)
+		return 0;
+	return time->time_created;
+}
+
+time_t
+c_time_get_uptime(const c_time_t *_time)
+{
+	ASSERT(_time);
+	if (_time->time_started < 0)
+		return 0;
+
+	time_t uptime = time(NULL) - _time->time_started;
+	return (uptime < 0) ? 0 : uptime;
+}
+
+void
+c_time_cleanup(c_time_t *time)
+{
+	ASSERT(time);
+	time->time_started = -1;
 }

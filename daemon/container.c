@@ -65,7 +65,6 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <pty.h>
 
 #include <selinux/selinux.h>
@@ -178,9 +177,6 @@ struct container {
 	list_t *usbdev_list;
 
 	char *dns_server;
-	time_t time_started;
-	time_t time_created;
-
 	bool setup_mode;
 
 	container_token_config_t token;
@@ -217,34 +213,6 @@ container_get_next_adb_port(void)
 #else
 	return 0;
 #endif
-}
-
-/*
- * if we create the container for the first time, we store its creation time
- * in a file, otherwise this functions reads the creation time from that file
- */
-static time_t
-container_get_creation_time_from_file(container_t *container)
-{
-	time_t ret = -1;
-	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
-	if (!file_exists(file_name_created)) {
-		ret = time(NULL);
-		if (file_write(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
-			WARN("Failed to store creation time of container %s",
-			     uuid_string(container_get_uuid(container)));
-		}
-	} else {
-		if (file_read(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
-			WARN("Failed to get creation time of container %s",
-			     uuid_string(container_get_uuid(container)));
-		}
-	}
-	INFO("container %s was created at %s", uuid_string(container_get_uuid(container)),
-	     ctime(&ret));
-
-	mem_free(file_name_created);
-	return ret;
 }
 
 container_t *
@@ -428,9 +396,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	}
 
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
-
-	container->time_started = -1;
-	container->time_created = container_get_creation_time_from_file(container);
 	container->device_allowed_list = allowed_devices;
 	container->device_assigned_list = assigned_devices;
 	container->usbdev_list = usbdev_list;
@@ -964,6 +929,7 @@ container_cleanup(container_t *container)
 	c_net_cleanup(container->net);
 	c_run_cleanup(container->run);
 	c_user_cleanup(container->user);
+	c_time_cleanup(container->time);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol);
 
@@ -982,7 +948,6 @@ container_cleanup(container_t *container)
 		event_timer_free(container->start_timer);
 		container->start_timer = NULL;
 	}
-	container->time_started = -1;
 }
 
 void
@@ -1381,14 +1346,11 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		goto error;
 	}
 
-	container->time_started = time(NULL);
-
 	/* Call all c_<module>_start_post_exec hooks */
-	/* Currently, there are none.. */
-	//if (c_cgroups_start_post_exec(container->cgroups) < 0) {
-	//	WARN("c_cgroups_start_post_exec failed");
-	//	goto error;
-	//}
+	if (c_time_start_post_exec(container->time) < 0) {
+		WARN("c_time_start_post_exec failed");
+		goto error;
+	}
 
 	event_remove_io(io);
 	event_io_free(io);
@@ -2281,20 +2243,14 @@ time_t
 container_get_uptime(const container_t *container)
 {
 	ASSERT(container);
-	if (container->time_started < 0)
-		return 0;
-
-	time_t uptime = time(NULL) - container->time_started;
-	return (uptime < 0) ? 0 : uptime;
+	return c_time_get_uptime(container->time);
 }
 
 time_t
 container_get_creation_time(const container_t *container)
 {
 	ASSERT(container);
-	if (container->time_created < 0)
-		return 0;
-	return container->time_created;
+	return c_time_get_creation_time(container->time);
 }
 
 int

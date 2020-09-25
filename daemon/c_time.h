@@ -58,6 +58,18 @@ int
 c_time_start_pre_exec(const c_time_t *time);
 
 int
+c_time_start_post_exec(c_time_t *time);
+
+int
 c_time_start_pre_exec_child(const c_time_t *time);
+
+void
+c_time_cleanup(c_time_t *time);
+
+time_t
+c_time_get_uptime(const c_time_t *time);
+
+time_t
+c_time_get_creation_time(const c_time_t *time);
 
 #endif /* C_TIME_H */
