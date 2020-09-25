@@ -47,6 +47,7 @@
 #include "c_cap.h"
 #include "c_fifo.h"
 #include "c_service.h"
+#include "c_time.h"
 #include "c_run.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
@@ -157,6 +158,7 @@ struct container {
 	c_vol_t *vol;
 	c_service_t *service;
 	c_run_t *run;
+	c_time_t *time;
 	// Wifi module?
 
 	char *imei;
@@ -388,6 +390,13 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->run = c_run_new(container);
 	if (!container->run) {
 		WARN("Could not initialize run subsystem for container %s (UUID: %s)",
+		     container->name, uuid_string(container->uuid));
+		goto error;
+	}
+
+	container->time = c_time_new(container);
+	if (!container->time) {
+		WARN("Could not initialize time subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
@@ -694,6 +703,8 @@ container_free(container_t *container)
 		c_vol_free(container->vol);
 	if (container->run)
 		c_run_free(container->run);
+	if (container->time)
+		c_time_free(container->time);
 	if (container->service)
 		c_service_free(container->service);
 	if (container->imei)
@@ -1131,6 +1142,11 @@ container_start_child(void *data)
 		goto error;
 	}
 
+	if (c_time_start_child(container->time) < 0) {
+		ret = CONTAINER_ERROR_TIME;
+		goto error;
+	}
+
 	if (c_service_start_child(container->service) < 0) {
 		ret = CONTAINER_ERROR_SERVICE;
 		goto error;
@@ -1183,6 +1199,11 @@ container_start_child(void *data)
 	else
 		INFO("Successfully created new cgroup namespace");
 #endif
+
+	if (c_time_start_pre_exec_child(container->time) < 0) {
+		ret = CONTAINER_ERROR_TIME;
+		goto error;
+	}
 
 	DEBUG("Will start %s after closing filedescriptors of %s", guestos_get_init(container->os),
 	      container_get_description(container));
@@ -1325,6 +1346,10 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 
 	/********************************************************/
 	/* on success call all c_<module>_start_pre_exec hooks */
+	if (c_time_start_pre_exec(container->time) < 0) {
+		WARN("c_time_start_pre_exec failed");
+		goto error_pre_exec;
+	}
 	if (c_cgroups_start_pre_exec(container->cgroups) < 0) {
 		WARN("c_cgroups_start_pre_exec failed");
 		goto error_pre_exec;
