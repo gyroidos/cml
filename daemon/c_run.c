@@ -7,10 +7,11 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 #include <sys/socket.h>
+#include <linux/limits.h>
 #include <linux/sockios.h>
 #include <sched.h>
 
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include <macro.h>
 
 #include "common/mem.h"
@@ -18,6 +19,7 @@
 #include "common/file.h"
 #include "common/fd.h"
 #include "common/event.h"
+#include "common/proc.h"
 #include "hardware.h"
 #include "container.h"
 #include "c_run.h"
@@ -297,13 +299,13 @@ c_run_set_namespaces(pid_t pid)
 
 	int i = 0;
 	if (dir_foreach(folder, &setns_cb, &i)) {
-		FATAL("Could not traverse PID dir in procfs, wrong PID?");
+		ERROR("Could not traverse PID dir in procfs, wrong PID?");
 		goto error;
 	}
 
 	for (int j = 0; j < i; j++) {
 		if (setns(fd[j], 0) == -1) { /* Join that namespace */
-			FATAL_ERRNO("Could not join namespace");
+			ERROR_ERRNO("Could not join namespace");
 			goto error;
 		}
 	}
@@ -318,7 +320,7 @@ error:
 	TRACE("An error occurred. Exiting...");
 	mem_free(pid_string);
 	mem_free(folder);
-	exit(EXIT_FAILURE);
+	return -1;
 }
 
 static int
@@ -344,7 +346,10 @@ do_exec(c_run_t *run)
 
 	container_add_pid_to_cgroups(run->container, getpid());
 
-	c_run_set_namespaces(container_get_pid(run->container));
+	if (c_run_set_namespaces(container_get_pid(run->container)) < 0) {
+		ERROR("Could not set namespaces!");
+		goto error;
+	}
 	if (container_setuid0(run->container)) {
 		ERROR("Could not become root in userns!");
 		goto error;
@@ -374,10 +379,14 @@ do_exec(c_run_t *run)
 		exit(EXIT_FAILURE);
 	}
 
-	int ret = execve(run->cmd, exec_args, NULL);
-
+	/*
+	 * fork again to also join the pidns, since setns does not switch
+	 * the current process into the pidns but sets the childs to be created
+	 * in the new ns.
+	 */
+	IF_TRUE_GOTO(proc_fork_and_execvp((const char *const *)exec_args) < 0, error);
 	mem_free_array((void *)exec_args, run->argc);
-	ERROR_ERRNO("Failed to execve: %d. Exiting...", ret);
+	exit(EXIT_SUCCESS);
 
 error:
 	ERROR_ERRNO("An error occured while trying to execute command. Giving up...");
@@ -458,16 +467,6 @@ do_read_pty(void *data)
 
 	TRACE("Entering PTY master reading loop");
 	readloop(run->pty_master, run->console_sock_container);
-
-	TRACE("[READLOOP] Closing fd currently reading from: %d", run->pty_master);
-	close(run->pty_master);
-	TRACE("[READLOOP] Closed fd currently reading from: %d", run->pty_master);
-
-	TRACE("Shutting down console_sock_container: %d", run->console_sock_container);
-	shutdown(run->console_sock_container, SHUT_RDWR);
-	TRACE("Shutting down console_sock_cmld: %d", run->console_sock_cmld);
-	shutdown(run->console_sock_cmld, SHUT_RDWR);
-	TRACE("Finished socket shutdown. Exiting cleanup.");
 
 	return 0;
 }
@@ -596,19 +595,17 @@ c_run_prepare_loop(void *data)
 	// close the cmld end of the console task sockets
 	close(run->console_sock_cmld);
 
-	int ret = c_run_prepare_exec(run);
+	IF_TRUE_GOTO(c_run_prepare_exec(run) < 0, error);
 
-	if (ret < 0)
-		goto error;
-	else
-		event_loop();
+
+	event_loop();
 
 	// should not happen
 	exit(EXIT_FAILURE);
 error:
 	ERROR_ERRNO("An error occured trying to execute command. Giving up...");
 	c_run_internal_cleanup(run);
-	return -1;
+	exit(EXIT_FAILURE);
 }
 
 int
@@ -627,8 +624,8 @@ c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char *
 	int cfd[2];
 
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, cfd)) {
-		ERROR("Could not create socketpair for communication with console task!");
-		exit(EXIT_FAILURE);
+		ERROR_ERRNO("Could not create socketpair for communication with console task!");
+		return -1;
 	}
 
 	run->console_sock_cmld = cfd[0];
@@ -654,11 +651,10 @@ c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char *
 
 	TRACE("Storing PID of active command: %d", exec_pid);
 	run->exec_loop_pid = exec_pid;
-
 	return 0;
 
 error:
-	TRACE("An error occurred. Exiting...");
+	TRACE("An error occurred.");
 	c_run_internal_cleanup(run);
-	exit(EXIT_FAILURE);
+	return -1;
 }
