@@ -33,10 +33,9 @@ struct c_run {
 	int console_sock_cmld;
 	int console_sock_container;
 	int pty_master;
-	pid_t exec_loop_pid;
 	pid_t active_exec_pid;
-	pid_t pty_master_read_pid;
-	pid_t pty_master_write_pid;
+	event_io_t *pty_master_read_io;
+	event_io_t *pty_master_write_io;
 	char *pty_slave_name;
 	int pty_slave_fd;
 	int create_pty;
@@ -53,10 +52,9 @@ c_run_new(container_t *container)
 	run->console_sock_cmld = -1;
 	run->console_sock_container = -1;
 	run->pty_master = -1;
-	run->exec_loop_pid = -1;
 	run->active_exec_pid = -1;
-	run->pty_master_read_pid = -1;
-	run->pty_master_write_pid = -1;
+	run->pty_master_read_io = NULL;
+	run->pty_master_write_io = NULL;
 	run->pty_slave_name = NULL;
 	run->pty_slave_fd = -1;
 	run->create_pty = -1;
@@ -71,16 +69,6 @@ c_run_free(c_run_t *run)
 {
 	ASSERT(run);
 	mem_free(run);
-}
-
-void
-c_run_cleanup(c_run_t *run)
-{
-	if (run->exec_loop_pid > 0) {
-		kill(run->exec_loop_pid, SIGTERM);
-
-		run->exec_loop_pid = -1;
-	}
 }
 
 // to be called from exec event loop
@@ -100,45 +88,31 @@ c_run_internal_cleanup(c_run_t *run)
 		} else {
 			TRACE("Failed to kill process inside container");
 		}
-
-		if (run->pty_master != -1) {
-			TRACE("Shutting down PTY master: %d", run->pty_master);
-			shutdown(run->pty_master, SHUT_WR);
-			TRACE("Shuttind down read direction of console container socket: %d",
-			      run->console_sock_container);
-			shutdown(run->console_sock_container, SHUT_RD);
-
-			TRACE("Waiting for readloops to exit");
-			if (run->pty_master_read_pid != -1)
-				waitpid(run->pty_master_read_pid, NULL, 0);
-			else
-				ERROR("PID of pty master reading process is -1");
-
-			if (run->pty_master_write_pid != -1)
-				waitpid(run->pty_master_write_pid, NULL, 0);
-			else
-				ERROR("PID of pty master reading process is -1");
-
-			//TODO fixme give control time to read remaining data
-			//sleep(2);
-
-			TRACE("Shutting down console_sock_container: %d",
-			      run->console_sock_container);
-			shutdown(run->console_sock_container, SHUT_RDWR);
-			TRACE("Shutting down console_sock_cmld: %d", run->console_sock_cmld);
-			shutdown(run->console_sock_cmld, SHUT_RDWR);
-			TRACE("Finished socket shutdown. Exiting cleanup.");
-		} else {
-			TRACE("Shutting down console sockets");
-			shutdown(run->console_sock_container, SHUT_RDWR);
-			shutdown(run->console_sock_cmld, SHUT_RDWR);
-		}
-	} else {
-		TRACE("Currently no process executing. Doing nothing.");
+		run->active_exec_pid = -1;
 	}
+	if (run->pty_master != -1) {
+		TRACE("Shutting down PTY master: %d", run->pty_master);
+		shutdown(run->pty_master, SHUT_WR);
+		TRACE("Shuttind down read direction of console container socket: %d",
+		      run->console_sock_container);
+		shutdown(run->console_sock_container, SHUT_RD);
 
-	TRACE("Setting exec loop PID to -1");
-	run->exec_loop_pid = -1;
+		TRACE("Shutting down console_sock_container: %d", run->console_sock_container);
+		shutdown(run->console_sock_container, SHUT_RDWR);
+		TRACE("Shutting down console_sock_cmld: %d", run->console_sock_cmld);
+		shutdown(run->console_sock_cmld, SHUT_RDWR);
+		TRACE("Finished socket shutdown. Exiting cleanup.");
+	} else {
+		TRACE("Shutting down console sockets");
+		shutdown(run->console_sock_container, SHUT_RDWR);
+		shutdown(run->console_sock_cmld, SHUT_RDWR);
+	}
+}
+
+void
+c_run_cleanup(c_run_t *run)
+{
+	c_run_internal_cleanup(run);
 }
 
 static int
@@ -164,16 +138,9 @@ c_run_get_console_sock_cmld(const c_run_t *run)
 }
 
 int
-c_run_get_exec_loop_pid(const c_run_t *run)
-{
-	ASSERT(run);
-	return run->exec_loop_pid;
-}
-
-int
 c_run_write_exec_input(c_run_t *run, char *exec_input)
 {
-	if (run->exec_loop_pid != -1) {
+	if (run->active_exec_pid != -1) {
 		TRACE("Write message \"%s\" to fd: %d", exec_input, run->console_sock_cmld);
 		return write(run->console_sock_cmld, exec_input, strlen(exec_input));
 	} else {
@@ -222,7 +189,7 @@ c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			/* Close sockets */
 			c_run_internal_cleanup(run);
 
-			exit(EXIT_SUCCESS);
+			return;
 		} else {
 			DEBUG("Reaped a descendant process with PID %d of injected process in container %s",
 			      pid, container_get_description(run->container));
@@ -344,8 +311,10 @@ do_exec(c_run_t *run)
 		exec_args[i] = NULL;
 	}
 
-	container_add_pid_to_cgroups(run->container, getpid());
-
+	if (container_add_pid_to_cgroups(run->container, getpid()) < 0) {
+		ERROR("Could not join container cgroups!");
+		goto error;
+	}
 	if (c_run_set_namespaces(container_get_pid(run->container)) < 0) {
 		ERROR("Could not set namespaces!");
 		goto error;
@@ -354,7 +323,10 @@ do_exec(c_run_t *run)
 		ERROR("Could not become root in userns!");
 		goto error;
 	}
-	container_set_cap_current_process(run->container);
+	if (container_set_cap_current_process(run->container) < 0) {
+		ERROR("Could set container caps!");
+		goto error;
+	}
 
 	TRACE("[EXEC]: Executing command %s in process with PID: %d, PGID: %d, PPID: %d", run->cmd,
 	      getpid(), getpgid(getpid()), getppid());
@@ -435,7 +407,7 @@ error:
 	exit(EXIT_FAILURE);
 }
 
-static void
+static int
 readloop(int from_fd, int to_fd)
 {
 	TRACE("[EXEC] Starting read loop in process %d; from fd %d, to fd %d, PPID: %d", getpid(),
@@ -444,43 +416,63 @@ readloop(int from_fd, int to_fd)
 	int count = 0;
 	char buf[1024];
 
-	while (1) {
-		if (0 < (count = read(from_fd, &buf, sizeof(buf) - 1))) {
-			buf[count] = 0;
-			TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, from_fd, buf);
-			if (write(to_fd, buf, count + 1))
-				TRACE_ERRNO("[READLOOP] write");
-		} else {
-			TRACE("[READLOOP] Read returned %d, exiting...", count);
-			break;
+	while (0 < (count = read(from_fd, &buf, sizeof(buf) - 1))) {
+		buf[count] = 0;
+		TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, from_fd, buf);
+		if (write(to_fd, buf, count + 1) < 0) {
+			TRACE_ERRNO("[READLOOP] write failed.");
+			return -1;
 		}
 	}
-
-	exit(EXIT_SUCCESS);
+	if (count < 0 && errno != EAGAIN) {
+		TRACE_ERRNO("[READLOOP] read failed.");
+		return -1;
+	}
+	return 0;
 }
 
-int
-do_read_pty(void *data)
+static void
+c_run_cb_read_pty(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
 	c_run_t *run = (c_run_t *)data;
+
+	if (events & EVENT_IO_EXCEPT) {
+		TRACE("Exception on reading pty fd %d", fd);
+		event_remove_io(io);
+		event_io_free(io);
+		run->pty_master_read_io = NULL;
+		close(fd);
+		return;
+	}
 
 	TRACE("Entering PTY master reading loop");
-	readloop(run->pty_master, run->console_sock_container);
-
-	return 0;
+	if (-1 == readloop(run->pty_master, run->console_sock_container)) {
+		ERROR("Readloop returned an error, cleanup!");
+		c_run_internal_cleanup(run);
+	}
 }
 
-int
-do_write_pty(void *data)
+static void
+c_run_cb_write_pty(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
 	c_run_t *run = (c_run_t *)data;
 
-	TRACE("Entering console sock reading loop");
-	readloop(run->console_sock_container, run->pty_master);
+	if (events & EVENT_IO_EXCEPT) {
+		TRACE("Exception on console socket fd %d", fd);
+		event_remove_io(io);
+		event_io_free(io);
+		run->pty_master_write_io = NULL;
+		close(fd);
+		return;
+	}
 
-	return 0;
+	TRACE("Entering console sock reading loop");
+	if (-1 == readloop(run->console_sock_container, run->pty_master)) {
+		ERROR("Readloop returned an error, cleanup!");
+		c_run_internal_cleanup(run);
+	}
 }
 
 static int
@@ -505,7 +497,6 @@ c_run_prepare_exec(c_run_t *run)
 		if (0 != unlockpt(pty_master)) {
 			ERROR("Failed to unlockpt()\n");
 			goto error;
-			;
 		}
 
 		//TODO get name to alloc sufficient memory?
@@ -518,30 +509,25 @@ c_run_prepare_exec(c_run_t *run)
 		TRACE("Storing PTY master fd to c_run_t: %d", pty_master);
 		run->pty_master = pty_master;
 
-		// clone child for writing pty master
-		TRACE("Cloning child process to execute PTY master writing loop");
-		run->pty_master_write_pid = do_clone(do_write_pty, SIGCHLD, (void *)run);
+		fd_make_non_blocking(run->pty_master);
 
-		if (run->pty_master_write_pid < 0) {
-			ERROR("[EXEC] Failed to fork child to excute command.");
-			goto error;
-		}
+		DEBUG("Registering read callback for PTY master fd");
+		run->pty_master_write_io =
+			event_io_new(run->console_sock_container, EVENT_IO_READ | EVENT_IO_EXCEPT,
+				     c_run_cb_write_pty, run);
+		event_add_io(run->pty_master_write_io);
 
-		//clone child for reading PTY master fd
-		TRACE("clone child process to execute PTY master reading loop");
-		run->pty_master_read_pid = do_clone(do_read_pty, SIGCHLD, (void *)run);
-
-		if (run->pty_master_read_pid == -1) {
-			TRACE("Failed to fork(), exiting...\n");
-			goto error;
-		}
+		DEBUG("Registering read callback for console socket");
+		run->pty_master_read_io = event_io_new(
+			run->pty_master, EVENT_IO_READ | EVENT_IO_EXCEPT, c_run_cb_read_pty, run);
+		event_add_io(run->pty_master_read_io);
 
 		//clone child to execute command
 		TRACE("clone child process to execute command with PTY");
 		run->active_exec_pid = do_clone(do_pty_exec, SIGCHLD, (void *)run);
 
 		if (run->active_exec_pid == -1) {
-			TRACE("Failed to fork(), exiting...\n");
+			TRACE("Failed to fork() ...\n");
 			goto error;
 		}
 
@@ -555,7 +541,7 @@ c_run_prepare_exec(c_run_t *run)
 		run->active_exec_pid = do_clone(do_pty_exec, SIGCHLD, (void *)run);
 
 		if (run->active_exec_pid == -1) {
-			TRACE("Failed to fork(), exiting...\n");
+			TRACE("Failed to fork() ...\n");
 			goto error;
 		}
 
@@ -568,53 +554,12 @@ error:
 }
 
 int
-c_run_prepare_loop(void *data)
-{
-	ASSERT(data);
-
-	c_run_t *run = (c_run_t *)data;
-
-	// update c_run_t in cloned process
-	run->exec_loop_pid = getpid();
-
-	// avoid triggering events cloned from parent process
-	TRACE("Reset events");
-	event_reset();
-
-	TRACE("Registering SIGCHLD handler for injected processes");
-	event_signal_t *sig = event_signal_new(SIGCHLD, c_run_sigchld_cb, run);
-	event_add_signal(sig);
-
-	if (setsid() < 1) {
-		ERROR_ERRNO("Failed to enter new session");
-		exit(EXIT_FAILURE);
-	} else {
-		TRACE("Entered new session: %d", getsid(getpid()));
-	}
-
-	// close the cmld end of the console task sockets
-	close(run->console_sock_cmld);
-
-	IF_TRUE_GOTO(c_run_prepare_exec(run) < 0, error);
-
-
-	event_loop();
-
-	// should not happen
-	exit(EXIT_FAILURE);
-error:
-	ERROR_ERRNO("An error occured trying to execute command. Giving up...");
-	c_run_internal_cleanup(run);
-	exit(EXIT_FAILURE);
-}
-
-int
 c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv)
 {
 	TRACE("Trying to excute command \"%s\" inside container", cmd);
 	ASSERT(cmd);
 
-	if (run->exec_loop_pid != -1) {
+	if (run->active_exec_pid != -1) {
 		TRACE("Already executing command. Aborting request.");
 		return -1;
 	}
@@ -633,6 +578,7 @@ c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char *
 
 	TRACE("Making cmld console socket nonblocking");
 	fd_make_non_blocking(run->console_sock_cmld);
+	fd_make_non_blocking(run->console_sock_container);
 
 	// prepare c_run_t
 	run->create_pty = create_pty;
@@ -640,17 +586,12 @@ c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char *
 	run->argc = argc;
 	run->argv = argv;
 
-	/* TODO find out if stack is only necessary with CLONE_VM */
-	// clone process to allow function in current process to return
-	// (avoid blocking of main event loop)
-	pid_t exec_pid = do_clone(c_run_prepare_loop, SIGCHLD, (void *)run);
-	if (exec_pid < 0) {
-		WARN_ERRNO("Clone container failed");
-		goto error;
-	}
+	IF_TRUE_GOTO(c_run_prepare_exec(run) < 0, error);
 
-	TRACE("Storing PID of active command: %d", exec_pid);
-	run->exec_loop_pid = exec_pid;
+	TRACE("Registering SIGCHLD handler for injected processes");
+	event_signal_t *sig = event_signal_new(SIGCHLD, c_run_sigchld_cb, run);
+	event_add_signal(sig);
+
 	return 0;
 
 error:
