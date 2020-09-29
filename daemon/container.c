@@ -1006,21 +1006,6 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		}
 	}
 
-	pid_t loop_pid = c_run_get_exec_loop_pid(container->run);
-
-	if (loop_pid != -1) {
-		// if event loop, injected into container using control run, exited reap it here
-		TRACE("Waiting for exec loop PID: %d", loop_pid);
-		if ((pid = waitpid(loop_pid, &status, WNOHANG)) > 0) {
-			INFO("Reaped exec loop process: %d", pid);
-			c_run_free(container->run);
-			container->run = c_run_new(container);
-			TRACE("container->run was reset.");
-		} else {
-			TRACE("Failed to reap exec loop");
-		}
-	}
-
 	TRACE("No more childs to reap. Callback exiting...");
 }
 
