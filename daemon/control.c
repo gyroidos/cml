@@ -319,7 +319,7 @@ control_container_status_free(ContainerStatus *c_status)
 }
 
 static ssize_t
-control_read_send(control_t *control, int fd)
+control_read_send(int cfd, int fd)
 {
 	uint8_t buf[1024];
 	ssize_t count = -1;
@@ -337,7 +337,7 @@ control_read_send(control_t *control, int fd)
 
 		TRACE("[CONTROL] Read %zd bytes: %s. Sending to control client...", count, buf);
 
-		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
+		if (protobuf_send_message(cfd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
 		}
 	}
@@ -348,7 +348,7 @@ control_read_send(control_t *control, int fd)
 static void
 control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 {
-	control_t *control = data;
+	int *cfd = data;
 
 	TRACE("Console callback called, events: read: %u, write: %u, except: %u",
 	      (events & EVENT_IO_READ), (events & EVENT_IO_WRITE), (events & EVENT_IO_EXCEPT));
@@ -361,7 +361,7 @@ control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 		// necessary to get all output from interactive commands
 		do {
 			TRACE("Trying to read all available data from socket");
-			count = control_read_send(control, fd);
+			count = control_read_send(*cfd, fd);
 
 			TRACE("Response from read was %d", count);
 		} while (i < 100 && count > 0);
@@ -377,11 +377,12 @@ control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
 
-		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
+		if (protobuf_send_message(*cfd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
 		}
 
 		TRACE("Sent notification of command termination to client");
+		mem_free(cfd);
 	}
 }
 
@@ -1174,8 +1175,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 			out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
 
-			if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) <
-			    0) {
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 				WARN("Could not send exec output to MDM");
 			}
 
@@ -1184,9 +1184,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 		} else {
 			DEBUG("Registering read callback for cmld console socket");
+			int *cfd = mem_new(int, 1);
+			*cfd = fd;
 			event_io_t *event = event_io_new(container_get_console_sock_cmld(container),
 							 EVENT_IO_READ | EVENT_IO_EXCEPT,
-							 control_cb_read_console, control);
+							 control_cb_read_console, cfd);
 			event_add_io(event);
 		}
 	} break;
