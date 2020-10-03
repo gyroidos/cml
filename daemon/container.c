@@ -826,10 +826,10 @@ container_set_cap_current_process(const container_t *container)
 }
 
 int
-container_get_console_sock_cmld(const container_t *container)
+container_get_console_sock_cmld(const container_t *container, int session_fd)
 {
 	ASSERT(container);
-	return c_run_get_console_sock_cmld(container->run);
+	return c_run_get_console_sock_cmld(container->run, session_fd);
 }
 
 int
@@ -1359,7 +1359,8 @@ error:
 }
 
 int
-container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv)
+container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv,
+	      int session_fd)
 {
 	ASSERT(container);
 	ASSERT(cmd);
@@ -1376,14 +1377,14 @@ container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, c
 	}
 
 	TRACE("Forwarding request to c_run subsystem");
-	return c_run_exec_process(container->run, create_pty, cmd, argc, argv);
+	return c_run_exec_process(container->run, create_pty, cmd, argc, argv, session_fd);
 }
 
 int
-container_write_exec_input(container_t *container, char *exec_input)
+container_write_exec_input(container_t *container, char *exec_input, int session_fd)
 {
 	TRACE("Forwarding write request to c_run subsystem");
-	return c_run_write_exec_input(container->run, exec_input);
+	return c_run_write_exec_input(container->run, exec_input, session_fd);
 }
 
 int
