@@ -340,6 +340,8 @@ control_read_send(int cfd, int fd)
 		if (protobuf_send_message(cfd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
 		}
+	} else {
+		TRACE_ERRNO("[CONTROL] Read from console socket returned %zd", count);
 	}
 
 	return count;
@@ -356,15 +358,15 @@ control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 	if ((events & EVENT_IO_READ)) {
 		TRACE("Got output from exec'ed command, trying to read from console socket");
 
-		int i = 0, count = 0;
+		int count = 0;
 
 		// necessary to get all output from interactive commands
 		do {
 			TRACE("Trying to read all available data from socket");
 			count = control_read_send(*cfd, fd);
 
-			TRACE("Response from read was %d", count);
-		} while (i < 100 && count > 0);
+			TRACE_ERRNO("Response from read was %d", count);
+		} while (count > 0);
 	}
 
 	if ((events & EVENT_IO_EXCEPT)) {
@@ -1168,8 +1170,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			ERROR("Missing command or exec_pty info");
 			break;
 		}
-		if ((!container) || container_run(container, msg->exec_pty, msg->exec_command,
-						  msg->n_exec_args, msg->exec_args) < 0) {
+		if (container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args,
+				  msg->exec_args, fd) < 0) {
 			ERROR("Failed to exec");
 
 			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
@@ -1186,9 +1188,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			DEBUG("Registering read callback for cmld console socket");
 			int *cfd = mem_new(int, 1);
 			*cfd = fd;
-			event_io_t *event = event_io_new(container_get_console_sock_cmld(container),
-							 EVENT_IO_READ | EVENT_IO_EXCEPT,
-							 control_cb_read_console, cfd);
+			event_io_t *event =
+				event_io_new(container_get_console_sock_cmld(container, fd),
+					     EVENT_IO_READ | EVENT_IO_EXCEPT,
+					     control_cb_read_console, cfd);
 			event_add_io(event);
 		}
 	} break;
@@ -1197,7 +1200,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		IF_NULL_RETURN(container);
 		TRACE("Got input for exec'ed process. Sending message on fd");
 
-		int ret = container_write_exec_input(container, msg->exec_input);
+		int ret = container_write_exec_input(container, msg->exec_input, fd);
 		if (ret < 0) {
 			ERROR_ERRNO("Failed to write input to exec'ed process");
 		}

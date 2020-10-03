@@ -15,14 +15,13 @@ void
 c_run_cleanup(c_run_t *run);
 
 int
-c_run_write_exec_input(c_run_t *run, char *exec_input);
+c_run_write_exec_input(const c_run_t *run, char *exec_input, int session_fd);
 
 int
-c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv);
+c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv,
+		   int session_fd);
 
 int
-c_run_get_console_sock_cmld(const c_run_t *run);
+c_run_get_console_sock_cmld(const c_run_t *run, int session_fd);
 
-int
-c_run_get_exec_loop_pid(const c_run_t *run);
 #endif //end C_RUN_H

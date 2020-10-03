@@ -322,7 +322,7 @@ container_get_color_rgb_string(const container_t *container);
  * by using the control run interface
  */
 int
-container_get_console_sock_cmld(const container_t *container);
+container_get_console_sock_cmld(const container_t *container, int session_fd);
 
 /**
  * Remove a container persistently from disk, i.e. remove its configuration and
@@ -380,12 +380,15 @@ container_resume(container_t *container);
 
 /**
  * Run a given command inside a container
+ *
+ * @return session id of the running session in the container, -1 on error
  */
 int
-container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv);
+container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv,
+	      int session_fd);
 
 int
-container_write_exec_input(container_t *container, char *exec_input);
+container_write_exec_input(container_t *container, char *exec_input, int session_fd);
 
 /**
  * Start the given container using the given key to decrypt its filesystem
