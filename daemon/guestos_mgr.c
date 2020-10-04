@@ -297,7 +297,11 @@ guestos_mgr_update_images(void)
 static char *
 write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 {
-	char *file = mem_strdup("/tmp/tmpXXXXXXXX");
+	/* this fixes the problem that /tmp is unshared between cmld and scd which is why
+	 * it cannot be used to share files to be hashed (e.g. newca_certs)
+	 * FIXME: move SCD in own container and introduce shared mount
+	 */
+	char *file = mem_printf("%s/shared/tmpXXXXXXXX", DEFAULT_BASE_PATH);
 	int fd = mkstemp(file);
 	if (fd != -1) {
 		int len = fd_write(fd, (char *)buf, buflen);

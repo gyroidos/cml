@@ -86,7 +86,7 @@ print_usage(const char *cmd)
 	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
 	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
-	printf("   run <command> [<arg_1> ... <arg_n>] <container-uuid>\n        Runs the specified command with the given arguments inside the specified container.\n");
+	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n        Runs the specified command with the given arguments inside the specified container.\n");
 	printf("\n");
 	exit(-1);
 }
@@ -235,6 +235,9 @@ main(int argc, char *argv[])
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
 
 	const char *command = argv[optind++];
+	/*
+	 * device global commands
+	 */
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 		has_response = true;
@@ -390,6 +393,17 @@ main(int argc, char *argv[])
 		goto send_message;
 	}
 
+	/*
+	 * container specific commands
+	 */
+
+	// need at least one more argument (container string)
+	if (optind >= argc)
+		print_usage(argv[0]);
+
+	sock = sock_connect(socket_file);
+	uuid = get_container_uuid_new(argv[optind], sock);
+
 	ContainerStartParams container_start_params = CONTAINER_START_PARAMS__INIT;
 	if (!strcasecmp(command, "remove")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER;
@@ -397,7 +411,7 @@ main(int argc, char *argv[])
 		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
 		msg.container_start_params = NULL;
-		bool set_start_params = false;
+		bool ask_for_password = true;
 		// parse specific options for start command
 		optind--;
 		char **start_argv = &argv[optind];
@@ -409,20 +423,20 @@ main(int argc, char *argv[])
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg;
-				set_start_params = true;
+				ask_for_password = false;
 				break;
 			case 's':
 				container_start_params.has_setup = true;
 				container_start_params.setup = true;
-				set_start_params = true;
 				break;
 			default:
 				print_usage(argv[0]);
 				ASSERT(false); // never reached
 			}
 		}
-		if (set_start_params)
-			msg.container_start_params = &container_start_params;
+		if (ask_for_password)
+			container_start_params.key = get_password_new("Password: ");
+		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
@@ -516,7 +530,8 @@ main(int argc, char *argv[])
 		} else
 			ASSERT(false); // should never be reached
 	} else if (!strcasecmp(command, "run")) {
-		if (optind > argc - 2)
+		optind++;
+		if (optind > argc - 1)
 			print_usage(argv[0]);
 
 		has_response = true;
@@ -534,17 +549,17 @@ main(int argc, char *argv[])
 			msg.exec_pty = 1;
 		}
 
-		if (optind > argc - 2)
+		if (optind > argc - 1)
 			print_usage(argv[0]);
 
 		msg.exec_command = argv[optind];
 
-		if (optind < argc - 1) {
+		if (optind < argc) {
 			size_t len = MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(char *), argc);
 			TRACE("[CLIENT] Allocating %zu bytes for arguments", len);
 			msg.exec_args = mem_alloc(len);
 
-			while (optind < argc - 1) {
+			while (optind < argc) {
 				TRACE("[CLIENT] Parsing command arguments at index %d, optind: %d: %s",
 				      argcount, optind, argv[optind]);
 				msg.exec_args[argcount] = mem_strdup(argv[optind]);
@@ -573,12 +588,6 @@ main(int argc, char *argv[])
 	} else
 		print_usage(argv[0]);
 
-	// need exactly one more argument (i.e. container string)
-	if (optind != argc - 1)
-		print_usage(argv[0]);
-
-	sock = sock_connect(socket_file);
-	uuid = get_container_uuid_new(argv[optind], sock);
 	msg.n_container_uuids = 1;
 	msg.container_uuids = mem_new(char *, 1);
 	msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
