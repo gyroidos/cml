@@ -193,11 +193,12 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
 		mem_free(message.msg);
 	}
 	if (send_last_line_info) {
-		message.msg = "Last line of log";
+		message.msg = mem_printf("Last line of log");
 		out.log_message = &message;
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR("Could not sent last line info for %s", log_file_name);
 		}
+		mem_free(message.msg);
 	}
 	if (out.device_uuid != NULL) {
 		mem_free(out.device_uuid);
@@ -611,7 +612,7 @@ control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
 	} break;
 	default:
 		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
-		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))
+		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd) < 0)
 			WARN("Could not send response to fd=%d", fd);
 	}
 }
@@ -910,7 +911,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		out.n_container_configs = 0;
 		out.n_container_uuids = 0;
 
-		if (!msg->has_container_config_file) {
+		if (!msg->has_container_config_file || msg->container_config_file.data == NULL) {
 			WARN("CREATE_CONTAINER without config file does not work, doing nothing...");
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to CREATE");
@@ -1094,6 +1095,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE: {
 		IF_NULL_RETURN(container);
+		if (!msg->assign_iface_params || !msg->assign_iface_params->has_persistent ||
+		    !msg->assign_iface_params->iface_name) {
+			ERROR("Missing net iface information");
+			break;
+		}
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
 		container_add_net_iface(container, net_iface, persistent);
@@ -1101,6 +1107,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE: {
 		IF_NULL_RETURN(container);
+		if (!msg->assign_iface_params || !msg->assign_iface_params->has_persistent ||
+		    !msg->assign_iface_params->iface_name) {
+			ERROR("Missing net iface information");
+			break;
+		}
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
 		container_remove_net_iface(container, net_iface, persistent);
@@ -1152,7 +1163,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD: {
 		IF_NULL_RETURN(container);
 		TRACE("Got exec command: %s, attach PTY: %d", msg->exec_command, msg->exec_pty);
-
+		if (!msg->exec_command || !msg->has_exec_pty) {
+			ERROR("Missing command or exec_pty info");
+			break;
+		}
 		if ((!container) || container_run(container, msg->exec_pty, msg->exec_command,
 						  msg->n_exec_args, msg->exec_args) < 0) {
 			ERROR("Failed to exec");
@@ -1181,18 +1195,18 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		IF_NULL_RETURN(container);
 		TRACE("Got input for exec'ed process. Sending message on fd");
 
-		if (container != NULL) {
-			int ret = container_write_exec_input(container, msg->exec_input);
-			if (ret < 0) {
-				ERROR_ERRNO("Failed to write input to exec'ed process");
-			}
-		} else {
-			ERROR("No container UUID given");
+		int ret = container_write_exec_input(container, msg->exec_input);
+		if (ret < 0) {
+			ERROR_ERRNO("Failed to write input to exec'ed process");
 		}
-		break;
-	}
+	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN: {
+		IF_NULL_RETURN(container);
+		if (msg->device_pin == NULL || msg->device_newpin == NULL) {
+			ERROR("Current PIN or new PIN not specified");
+			break;
+		}
 		res = cmld_container_change_pin(control, container, msg->device_pin,
 						msg->device_newpin);
 	} break;

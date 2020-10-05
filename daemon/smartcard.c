@@ -698,6 +698,8 @@ smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *pas
 {
 	ASSERT(smartcard);
 	ASSERT(control);
+	ASSERT(passwd);
+	ASSERT(newpasswd);
 
 	int ret = -1;
 	int pw_size = strlen(passwd);

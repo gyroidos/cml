@@ -1445,6 +1445,8 @@ cmld_guestos_delete(const char *guestos_name)
 bool
 cmld_netif_phys_remove_by_name(const char *if_name)
 {
+	IF_NULL_RETVAL(if_name, false);
+
 	list_t *found = NULL;
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
 		char *cmld_if_name = l->data;
@@ -1465,6 +1467,7 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 void
 cmld_netif_phys_add_by_name(const char *if_name)
 {
+	IF_NULL_RETURN(if_name);
 	DEBUG("Adding network interface %s to cmld", if_name);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {

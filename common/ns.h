@@ -50,7 +50,7 @@ namespace_setuid0();
  * @returns 0 if the forked child exited cleanly, -1 otherwise.
  */
 int
-namespace_exec(pid_t ns_pid, const int namespaces, bool become_root, int (*func)(void **),
+namespace_exec(pid_t ns_pid, const int namespaces, bool become_root, int (*func)(const void **),
 	       const void **data);
 
 #endif //NS_H
