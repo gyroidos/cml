@@ -84,7 +84,7 @@ c_run_session_t *
 c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv,
 		  int session_fd)
 {
-	if (argv == NULL) {
+	if (argv == NULL || argc < 1) {
 		ERROR("No command was specified to execute.");
 		return NULL;
 	}
@@ -113,23 +113,17 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 	fd_make_non_blocking(session->console_sock_cmld);
 	fd_make_non_blocking(session->console_sock_container);
 
-	//Add NULL pointer to end of argv
-	session->argv = NULL;
+	ssize_t i = 0;
+	size_t total_len = ADD_WITH_OVERFLOW_CHECK(session->argc, (size_t)1);
+	total_len = MUL_WITH_OVERFLOW_CHECK(sizeof(char *), total_len);
+	session->argv = mem_alloc0(total_len);
 
-	if (argc > 0 && argv != NULL) {
-		ssize_t i = 0;
-		size_t total_len = ADD_WITH_OVERFLOW_CHECK(session->argc, (size_t)1);
-		total_len = MUL_WITH_OVERFLOW_CHECK(sizeof(char *), total_len);
-		session->argv = mem_alloc(total_len);
-
-		while (i < argc) {
-			TRACE("Got argument: %s", argv[i]);
-			session->argv[i] = mem_strdup(argv[i]);
-			i++;
-		}
-
-		session->argv[i] = NULL;
+	while (i < argc) {
+		TRACE("Got argument: %s", argv[i]);
+		session->argv[i] = mem_strdup(argv[i]);
+		i++;
 	}
+	session->argv[i] = NULL;
 
 	session->cmd = mem_strdup(cmd);
 	session->argc = argc;
