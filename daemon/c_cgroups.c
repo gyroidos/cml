@@ -1230,7 +1230,7 @@ c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
-	/* check if timens is supported else do nothing */
+	/* check if cgroupns is supported else do nothing */
 	IF_FALSE_RETVAL_TRACE(cgroups->ns_cgroup, 0);
 
 	if (unshare(CLONE_NEWCGROUP) == -1) {
