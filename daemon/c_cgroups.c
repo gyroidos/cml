@@ -1100,11 +1100,12 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
 
-	///* initialize memory subsystem to limit ram to cgroups->ram_limit */
-	//if (c_cgroups_set_ram_limit(cgroups) < 0) {
-	//	ERROR("Could not configure cgroup maximum ram for container %s", container_get_description(cgroups->container));
-	//	goto error;
-	//}
+	/* initialize memory subsystem to limit ram to cgroups->ram_limit */
+	if (c_cgroups_set_ram_limit(cgroups) < 0) {
+		ERROR("Could not configure cgroup maximum ram for container %s",
+		      container_get_description(cgroups->container));
+		goto error;
+	}
 
 	/* initialize freezer subsystem */
 	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
