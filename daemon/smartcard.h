@@ -265,4 +265,14 @@ smartcard_pull_csr_new(size_t *csr_len);
 void
 smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len);
 
+/**
+ * Checks whether the certificate is not null, of sufficient length and
+ * of correct PEM format.
+ *
+ * @param cert_buf buffer which holds the certificate
+ * @param cert_buf_len the size of the cert
+ */
+bool
+smartcard_cert_has_valid_format(unsigned char *cert_buf, size_t cert_buf_len);
+
 #endif /* SMARTCARD_H */
