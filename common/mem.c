@@ -132,3 +132,33 @@ mem_free_array(void **array, size_t size)
 		mem_free(array);
 	}
 }
+
+bool
+mem_ends_with(const void *buf, size_t buf_len, const void *end, size_t end_len)
+{
+	IF_NULL_RETVAL(buf, false);
+	IF_NULL_RETVAL(end, false);
+
+	if (buf_len < end_len)
+		return false;
+
+	if (memcmp((const char *)buf + (buf_len - end_len), end, end_len))
+		return false;
+
+	return true;
+}
+
+bool
+mem_starts_with(const void *buf, size_t buf_len, const void *start, size_t start_len)
+{
+	IF_NULL_RETVAL(buf, false);
+	IF_NULL_RETVAL(start, false);
+
+	if (buf_len < start_len)
+		return false;
+
+	if (memcmp(buf, start, start_len)) {
+		return false;
+	}
+	return true;
+}
