@@ -469,22 +469,11 @@ guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
 int
 guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 {
-	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
-	const char *end_cert_str = "-----END CERTIFICATE-----";
-
 	int ret = -1;
 	if (!file_is_dir(TRUSTED_CA_STORE))
 		IF_TRUE_RETVAL(dir_mkdir_p(TRUSTED_CA_STORE, 0600), ret);
 
-	if (cacertlen < (strlen(begin_cert_str) + strlen(end_cert_str))) {
-		ERROR("Invalid certificate length: %zu", cacertlen);
-		return ret;
-	}
-
-	// Sanity check file is a certificate
-	size_t end_offset = cacertlen - strlen(end_cert_str) - 1;
-	if (strncmp((char *)cacert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
-	    strncmp((char *)cacert + end_offset, end_cert_str, strlen(end_cert_str)) != 0) {
+	if (!smartcard_cert_has_valid_format(cacert, cacertlen)) {
 		ERROR("Sanity check failed. provided data is not an encoded certificate");
 		return ret;
 	}
