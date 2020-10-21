@@ -177,6 +177,33 @@ smartcard_send_recv_block(const DaemonToToken *out)
 	return msg;
 }
 
+bool
+smartcard_cert_has_valid_format(unsigned char *cert_buf, size_t cert_buf_len)
+{
+	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----\n";
+	const char *end_cert_str = "-----END CERTIFICATE-----\n";
+	size_t begin_cert_str_len = strlen(begin_cert_str);
+	size_t end_cert_str_len = strlen(end_cert_str);
+
+	if (cert_buf == NULL || cert_buf_len == 0) {
+		ERROR("Certificate not provided.");
+		return false;
+	}
+	if (cert_buf_len < end_cert_str_len + begin_cert_str_len) {
+		ERROR("Invalid certificate length %zu.", cert_buf_len);
+		return false;
+	}
+	if (!mem_starts_with(cert_buf, cert_buf_len, begin_cert_str, begin_cert_str_len)) {
+		ERROR("Invalid certificate: begin string not found.");
+		return false;
+	}
+	if (!mem_ends_with(cert_buf, cert_buf_len, end_cert_str, end_cert_str_len)) {
+		ERROR("Invalid certificate: end string not found.");
+		return false;
+	}
+	return true;
+}
+
 /**
  * checks whether the token associated to @param container has been provisioned
  * with a device bound authentication code yet.
@@ -1331,26 +1358,14 @@ smartcard_pull_csr_new(size_t *csr_len)
 void
 smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len)
 {
-	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----";
-	const char *end_cert_str = "-----END CERTIFICATE-----";
+	ASSERT(smartcard);
+	ASSERT(control);
 
-	if (cert == NULL || cert_len == 0) {
-		WARN("PUSH_DEVICE_CERT without certificate");
+	if (!smartcard_cert_has_valid_format(cert, cert_len)) {
+		WARN("PUSH_DEVICE_CERT with invalid certificate");
 		goto error;
 	}
 
-	if (cert_len < (strlen(begin_cert_str) + strlen(end_cert_str))) {
-		ERROR("Invalid certificate length: %zu", cert_len);
-		goto error;
-	}
-
-	// Sanity check file is a certificate
-	size_t end_offset = cert_len - strlen(end_cert_str) - 1;
-	if (strncmp((char *)cert, begin_cert_str, strlen(begin_cert_str)) != 0 ||
-	    strncmp((char *)cert + end_offset, end_cert_str, strlen(end_cert_str)) != 0) {
-		ERROR("Sanity check failed. provided data is not an encoded certificate");
-		goto error;
-	}
 	event_io_t *event =
 		event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, control);
 	event_add_io(event);
