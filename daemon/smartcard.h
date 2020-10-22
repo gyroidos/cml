@@ -42,6 +42,12 @@ smartcard_t *
 smartcard_new(const char *path);
 
 /**
+ * @param smartcard The smartcard instance to be deleted.
+ */
+void
+smartcard_free(smartcard_t *smartcard);
+
+/**
  * Instruct the SCD to add the token associated to 
  * @param container
  */
