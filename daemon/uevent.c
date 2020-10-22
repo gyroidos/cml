@@ -866,6 +866,15 @@ err:
 int
 uevent_init()
 {
+	if (uevent_netlink_sock != NULL) {
+		ERROR("Uevent netlink_socket already exists.");
+		return -1;
+	}
+	if (uevent_io_event != NULL) {
+		ERROR("Uevent io_event already exists.");
+		return -1;
+	}
+
 	/* find the udevd started by cml's init */
 	pid_t udevd_pid = proc_find(1, "systemd-udevd");
 	pid_t eudevd_pid = proc_find(1, "udevd");
