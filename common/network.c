@@ -99,6 +99,7 @@ network_list_link_ns(pid_t pid, list_t **link_list)
 	char *line = mem_new0(char, line_size);
 
 	fp = popen(command, "r");
+	mem_free(command);
 	if (fp == NULL) {
 		mem_free(line);
 		return -1;
@@ -451,7 +452,7 @@ network_get_physical_interfaces_new()
 		}
 		mem_free(dev_drv_path);
 	}
-
+	if_freenameindex(if_ni);
 	return if_name_list;
 }
 

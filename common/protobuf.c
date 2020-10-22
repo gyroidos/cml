@@ -215,16 +215,20 @@ protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor 
 		ERROR("Failed to parse text protobuf message (%s) from string. Reason: %s.",
 		      descriptor->name ? descriptor->name : "UNKNOWN",
 		      res.error_txt ? res.error_txt : "UNKNOWN");
+		protobuf_c_text_free_ProtobufCTextError_data(&res);
 		return NULL;
 	}
 	if (!res.complete) {
 		ERROR("Incomplete text protobuf message (%s).",
 		      descriptor->name ? descriptor->name : "UNKNOWN");
 		protobuf_free_message(msg);
+		protobuf_c_text_free_ProtobufCTextError_data(&res);
 		return NULL;
 	}
-	if (res.complete < 0)
+	if (res.complete < 0) {
 		WARN("Required field check wasn't performed -- libprotobuf-c is too old.");
+		protobuf_c_text_free_ProtobufCTextError_data(&res);
+	}
 	return msg;
 }
 

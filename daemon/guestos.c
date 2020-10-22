@@ -949,6 +949,7 @@ guestos_purge(guestos_t *os)
 		if (file_exists(img_path) && unlink(img_path) < 0) {
 			WARN_ERRNO("Failed to erase file %s", img_path);
 		}
+		mem_free(img_path);
 	}
 	// remove config and signature file
 	const char *file = guestos_get_cfg_file(os);
