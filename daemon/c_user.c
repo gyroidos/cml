@@ -177,6 +177,15 @@ c_user_set_next_uid_range_start(c_user_t *user)
 	return 0;
 }
 
+static void
+c_user_shift_free(struct c_user_shift *s)
+{
+	IF_NULL_RETURN_ERROR(s);
+	mem_free(s->target);
+	mem_free(s->mark);
+	mem_free(s);
+}
+
 /**
  * This function allocates a new c_user_t instance, associated to a specific container object.
  * @return the c_user_t user structure which holds user namespace information for a container.
@@ -264,9 +273,7 @@ c_user_cleanup(c_user_t *user)
 		}
 		if (umount(shift->mark) < 0)
 			WARN_ERRNO("Could not umount shift mark on %s", shift->mark);
-		mem_free(shift->mark);
-		mem_free(shift->target);
-		mem_free(shift);
+		c_user_shift_free(shift);
 	}
 	list_delete(user->marks);
 	user->marks = NULL;
@@ -427,6 +434,7 @@ shift:
 	shift_mark->is_root = is_root;
 	if (dir_mkdir_p(shift_mark->mark, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir shiftfs dir %s", shift_mark->mark);
+		c_user_shift_free(shift_mark);
 		goto error;
 	}
 	/*
@@ -438,6 +446,7 @@ shift:
 	if (mount(path, shift_mark->mark, "shiftfs", cmld_is_shiftfs_supported() ? 0 : MS_BIND,
 		  "mark") < 0) {
 		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", path, shift_mark->mark);
+		c_user_shift_free(shift_mark);
 		goto error;
 	}
 

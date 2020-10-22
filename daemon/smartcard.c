@@ -658,6 +658,11 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 		event_remove_io(io);
 		event_io_free(io);
 		mem_free(startdata);
+	} else {
+		ERROR("Failed to receive message: EVENT_IO_EXCEPT. Aborting smartcard change_pin.");
+		event_remove_io(io);
+		event_io_free(io);
+		mem_free(startdata);
 	}
 }
 

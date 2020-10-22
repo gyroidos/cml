@@ -99,6 +99,7 @@ mount_free(mount_t *mnt)
 			mem_free(mntent->sha256);
 		if (mntent->mount_data)
 			mem_free(mntent->mount_data);
+		mem_free(mntent);
 		mnt->list = list_unlink(mnt->list, mnt->list);
 	}
 
