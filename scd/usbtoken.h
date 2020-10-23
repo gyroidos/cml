@@ -27,7 +27,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define ICC_ATR_BUF_LEN 260
+#define MAX_APDU_BUF_LEN 4096
 
 typedef struct usbtoken usbtoken_t;
 
