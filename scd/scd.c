@@ -318,6 +318,11 @@ main(int argc, char **argv)
 	event_signal_t *sig_term = event_signal_new(SIGTERM, &scd_sigterm_cb, NULL);
 	event_add_signal(sig_term);
 
+#if defined ENABLESCHSM && defined DEBUG_BUILD
+	DEBUG("Creating libctccid log directory at /var/tmp/sc-hsm-embedded");
+	dir_mkdir_p("/var/tmp/sc-hsm-embedded", 0755);
+#endif
+
 	provisioning_mode();
 
 	INFO("Starting scd ...");

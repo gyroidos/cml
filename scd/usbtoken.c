@@ -20,6 +20,7 @@
  * Contact Information:
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
+#include "token.h"
 #include "usbtoken.h"
 #include "ssl_util.h"
 
@@ -29,6 +30,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"
+#include "common/str.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -44,6 +46,9 @@
 #define USBTOKEN_MAX_WRONG_UNLOCK_ATTEMPTS 3
 
 #define USBTOKEN_SUCCESS 0x9000
+
+#undef LOGF_LOG_MIN_PRIO
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 static unsigned short g_ctn = 0;
 
@@ -77,24 +82,6 @@ struct usbtoken {
 	unsigned char *latr; // ATR of last reset
 	size_t latr_len;
 };
-
-#ifdef DEBUG_BUILD
-/*
- * Dump the memory pointed to by <mem>
- *
- */
-static void
-dump(unsigned char *mem, int len)
-{
-	while (len--) {
-		ASSERT(len >= 0);
-		printf("%02x", *mem);
-		mem++;
-	}
-
-	printf("\n");
-}
-#endif
 
 /**
  * Derive an authentication code from a parining secret and a user pin/passwd.
@@ -165,8 +152,9 @@ requestICC(int ctn, unsigned char *brsp, size_t brsp_len)
 	}
 
 #ifdef DEBUG_BUILD
-	printf("ATR: ");
-	dump(brsp, lr);
+	str_t *dump = str_hexdump_new(brsp, lr);
+	TRACE("Returning ICC: len: %d, icc: %s", lr, str_buffer(dump));
+	str_free(dump, true);
 #endif
 
 	if ((brsp[0] == 0x64) || (brsp[0] == 0x62)) {
@@ -304,8 +292,8 @@ usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_le
 	}
 	if (NULL != token->latr)
 		mem_free(token->latr);
-	token->latr = mem_memcpy(brsp, brsp_len);
-	token->latr_len = brsp_len;
+	token->latr = mem_memcpy(brsp, lr);
+	token->latr_len = lr;
 
 	int rc = queryPIN(token->ctn);
 	if (rc != USBTOKEN_SUCCESS) {
@@ -804,8 +792,9 @@ usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsi
 	lr = brsp_len;
 
 #ifdef DEBUG_BUILD
-	DEBUG("USBTOKEN:sending apud:");
-	dump(apdu, apdu_len);
+	str_t *dump = str_hexdump_new(apdu, apdu_len);
+	TRACE("Sending APDU to USB token: len: %zu, apdu: %s", apdu_len, str_buffer(dump));
+	str_free(dump, true);
 #endif
 
 	int rc = CT_data(token->ctn, &dad, &sad, apdu_len, apdu, &lr, brsp);
@@ -815,8 +804,9 @@ usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsi
 	}
 
 #ifdef DEBUG_BUILD
-	DEBUG("USBTOKEN: received apud:");
-	dump(brsp, lr);
+	dump = str_hexdump_new(brsp, lr);
+	DEBUG("Received APDU from USB token: len: %d, apdu: %s", lr, str_buffer(dump));
+	str_free(dump, true);
 #endif
 
 	return lr;
@@ -828,18 +818,12 @@ usbtoken_get_atr(usbtoken_t *token, unsigned char *buf, size_t buflen)
 	ASSERT(token);
 	ASSERT(buf);
 
-	int rc = -1;
+	if (buflen < token->latr_len) {
+		ERROR("Given buffer to small to hold last ATR");
+		return -1;
+	}
 
-	DEBUG("usbtoken_get_atr");
+	memcpy(buf, token->latr, token->latr_len);
 
-	rc = usbtoken_reset_schsm_sess(token, buf, buflen);
-	if (rc < 0)
-		return rc;
-
-#ifdef DEBUG_BUILD
-	DEBUG("USBTOKEN: received apud:");
-	dump(buf, rc);
-#endif
-
-	return rc;
+	return token->latr_len;
 }

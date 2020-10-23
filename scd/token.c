@@ -32,6 +32,7 @@
 #include "common/uuid.h"
 #include "common/protobuf.h"
 #include "common/list.h"
+#include "common/str.h"
 #include "common/fd.h"
 #include "file.h"
 #include "unistd.h"
@@ -57,6 +58,19 @@ struct scd_token_data {
 };
 
 #ifdef ENABLESCHSM // tokencontrol socket only relevant for usbtoken
+static void
+wrapped_remove_event_io(void *elem)
+{
+	TRACE("Remove tokencontrol event from event_loop");
+	ASSERT(elem);
+	event_io_t *e = elem;
+	event_remove_io(e);
+	event_io_free(e);
+}
+
+static void
+scd_tokencontrol_cb_accept(int fd, unsigned events, UNUSED event_io_t *io, void *data);
+
 static void
 scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 {
@@ -99,9 +113,14 @@ scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 
 	case CONTAINER_TO_TOKEN__COMMAND__SEND_APDU:
 		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__SEND_APDU msg");
+#ifdef DEBUG_BUILD
+		str_t *dump = str_hexdump_new(msg->apdu.data, msg->apdu.len);
+		DEBUG("Got APDU with with len: %zu, data: %s", msg->apdu.len, str_buffer(dump));
+		str_free(dump, true);
+#endif
 		len = t->send_apdu(t, msg->apdu.data, msg->apdu.len, brsp, MAX_APDU_BUF_LEN);
 		if (len < 0) {
-			WARN("GET_ATR failed wit code %d", len);
+			WARN("SEND_APDU failed wit code %d", len);
 			goto err;
 		}
 		goto out;
@@ -119,22 +138,28 @@ err:
 	}
 	goto close_fd;
 
+close_fd:
+	mem_free(brsp);
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected control socket");
+	return;
+
 out:
 	out.return_code = TOKEN_TO_CONTAINER__CODE__OK;
 	out.has_response = true;
 	out.response.len = len;
 	out.response.data = brsp;
 
+#ifdef DEBUG_BUILD
+	str_t *dump = str_hexdump_new(brsp, len);
+	DEBUG("Returning apdu with len: %zu, data: %s", out.response.len, str_buffer(dump));
+	str_free(dump, true);
+#endif
+
 	if ((protobuf_send_message(fd, (ProtobufCMessage *)&out)) < 0) {
 		ERROR("Could not send protobuf response on socket %d", fd);
 	}
 	mem_free(brsp);
-
-close_fd:
-	mem_free(brsp);
-	if (close(fd) < 0)
-		WARN_ERRNO("Failed to close connected control socket");
-	return;
 }
 
 /**
@@ -182,6 +207,13 @@ connection_err:
 	token->token_data->tctrl->cfd = -1;
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected control socket");
+
+	// accept new connection for respective token
+	event_io_t *event = event_io_new(token->token_data->tctrl->lsock, EVENT_IO_READ,
+					 scd_tokencontrol_cb_accept, token);
+	token->token_data->tctrl->events = list_append(token->token_data->tctrl->events, event);
+	event_add_io(event);
+
 	return;
 }
 
@@ -209,19 +241,18 @@ scd_tokencontrol_cb_accept(int fd, unsigned events, UNUSED event_io_t *io, void 
 
 		fd_make_non_blocking(token->token_data->tctrl->cfd);
 
-		DEBUG("MADE tokenctrl_cfd non-blocking");
+		DEBUG("Made tokenctrl_cfd non-blocking");
+
+		// only accept one connection per socket at a time
+		wrapped_remove_event_io(io);
 
 		event_io_t *event = event_io_new(token->token_data->tctrl->cfd, EVENT_IO_READ,
 						 scd_tokencontrol_cb_recv_message, data);
-
-		DEBUG("2");
 
 		token->token_data->tctrl->events =
 			list_append(token->token_data->tctrl->events, event);
 
 		event_add_io(event);
-
-		DEBUG("3");
 
 	} else if (events & EVENT_IO_EXCEPT) {
 		TRACE("EVENT_IO_EXCEPT on socket %d, closing...", fd);
@@ -242,7 +273,7 @@ scd_tokencontrol_new(scd_token_t *token)
 	IF_NULL_GOTO_ERROR(token->token_data->tctrl, err);
 
 	token->token_data->tctrl->lsock_path = mem_printf(
-		"%s/%s", SCD_TOKENCONTROL_SOCKET, uuid_string(token->token_data->token_uuid));
+		"%s/%s.sock", SCD_TOKENCONTROL_SOCKET, uuid_string(token->token_data->token_uuid));
 	IF_NULL_GOTO_ERROR(token->token_data->tctrl->lsock_path, err);
 
 	token->token_data->tctrl->lsock = sock_unix_create_and_bind(
@@ -268,16 +299,6 @@ err:
 	mem_free(token->token_data->tctrl);
 	mem_free(token->token_data->tctrl->lsock_path);
 	return -1;
-}
-
-static void
-wrapped_remove_event_io(void *elem)
-{
-	TRACE("Remove tokencontrol event from event_loop");
-	ASSERT(elem);
-	event_io_t *e = elem;
-	event_remove_io(e);
-	event_io_free(e);
 }
 
 static void
