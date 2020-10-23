@@ -197,6 +197,16 @@ str_buffer(str_t *str);
 size_t
 str_length(str_t *str);
 
+/*
+ * Dumps the memory pointed to by <mem> as hex string
+ *
+ * @param mem The memory to be dumped
+ * @param len The length of the memory area to be dumped
+ * @return The resulting hex dump
+ */
+str_t *
+str_hexdump_new(unsigned char *mem, int len);
+
 /**
  * Frees the allocated string memory.
  *
@@ -206,5 +216,4 @@ str_length(str_t *str);
  */
 char *
 str_free(str_t *str, bool free_buf);
-
 #endif /* STR_H */
