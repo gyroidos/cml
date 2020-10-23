@@ -1172,10 +1172,10 @@ c_vol_bind_token(c_vol_t *vol)
 	int ret = -1;
 	uid_t uid = container_get_uid(vol->container);
 
-	char *src_path = mem_printf("%s/%s", SCD_TOKENCONTROL_SOCKET,
+	char *src_path = mem_printf("%s/%s.sock", SCD_TOKENCONTROL_SOCKET,
 				    uuid_string(container_get_uuid(vol->container)));
 	char *dest_dir = mem_printf("%s/dev/tokens", vol->root);
-	char *dest_path = mem_printf("%s/token", dest_dir);
+	char *dest_path = mem_printf("%s/token.sock", dest_dir);
 
 	DEBUG("Binding token socket to %s", dest_path);
 
