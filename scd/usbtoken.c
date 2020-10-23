@@ -385,8 +385,8 @@ usbtoken_new(const char *serial)
 	usbtoken_t *token = NULL;
 	unsigned char *brsp = NULL;
 
-	brsp = mem_new0(unsigned char, ICC_ATR_BUF_LEN);
-	size_t brsp_len = ICC_ATR_BUF_LEN;
+	brsp = mem_new0(unsigned char, MAX_APDU_BUF_LEN);
+	size_t brsp_len = MAX_APDU_BUF_LEN;
 
 	token = mem_new0(usbtoken_t, 1);
 	IF_NULL_RETVAL_ERROR(token, NULL);
@@ -799,7 +799,7 @@ usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsi
 	unsigned short lr;
 	unsigned char dad, sad;
 
-	dad = 1; /* destination: Reader */
+	dad = 0; /* destination: Card */
 	sad = 2; /* source: Host */
 	lr = brsp_len;
 

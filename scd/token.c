@@ -74,12 +74,12 @@ scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 	IF_NULL_GOTO_ERROR(tctrl, err);
 
 	TokenToContainer out = TOKEN_TO_CONTAINER__INIT;
-	brsp = mem_alloc0(ICC_ATR_BUF_LEN);
+	brsp = mem_alloc0(APDU_MAX_BUF_LEN);
 
 	switch (msg->command) {
 	case CONTAINER_TO_TOKEN__COMMAND__GET_ATR:
 		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__GET_ATR msg");
-		len = t->get_atr(t, brsp, ICC_ATR_BUF_LEN);
+		len = t->get_atr(t, brsp, MAX_APDU_BUF_LEN);
 		if (len < 0) {
 			WARN("GET_ATR failed wit code %d", len);
 			goto err;
@@ -89,7 +89,7 @@ scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 
 	case CONTAINER_TO_TOKEN__COMMAND__UNLOCK_TOKEN:
 		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__UNLOCK_TOKEN");
-		len = t->reset_auth(t, brsp, ICC_ATR_BUF_LEN);
+		len = t->reset_auth(t, brsp, MAX_APDU_BUF_LEN);
 		if (len < 0) {
 			WARN("GET_ATR failed wit code %d", len);
 			goto err;
@@ -99,7 +99,7 @@ scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 
 	case CONTAINER_TO_TOKEN__COMMAND__SEND_APDU:
 		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__SEND_APDU msg");
-		len = t->send_apdu(t, msg->apdu.data, msg->apdu.len, brsp, ICC_ATR_BUF_LEN);
+		len = t->send_apdu(t, msg->apdu.data, msg->apdu.len, brsp, MAX_APDU_BUF_LEN);
 		if (len < 0) {
 			WARN("GET_ATR failed wit code %d", len);
 			goto err;
