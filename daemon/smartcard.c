@@ -186,18 +186,19 @@ smartcard_cert_has_valid_format(unsigned char *cert_buf, size_t cert_buf_len)
 	size_t end_cert_str_len = strlen(end_cert_str);
 
 	if (cert_buf == NULL || cert_buf_len == 0) {
-		ERROR("Certificate not provided.");
+		ERROR("Given certificate is empty.");
 		return false;
 	}
 	if (cert_buf_len < end_cert_str_len + begin_cert_str_len) {
 		ERROR("Invalid certificate length %zu.", cert_buf_len);
 		return false;
 	}
-	if (!mem_starts_with(cert_buf, cert_buf_len, begin_cert_str, begin_cert_str_len)) {
+	if (memcmp(cert_buf, begin_cert_str, begin_cert_str_len)) {
 		ERROR("Invalid certificate: begin string not found.");
 		return false;
 	}
-	if (!mem_ends_with(cert_buf, cert_buf_len, end_cert_str, end_cert_str_len)) {
+	if (memcmp(cert_buf + sizeof(char) * (cert_buf_len - end_cert_str_len), end_cert_str,
+		   end_cert_str_len)) {
 		ERROR("Invalid certificate: end string not found.");
 		return false;
 	}
