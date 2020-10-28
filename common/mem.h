@@ -35,7 +35,6 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
-#include <stdbool.h>
 
 /**
  * Allocates memory. The memory is not initialized.
@@ -149,30 +148,6 @@ mem_printf(const char *fmt, ...)
  */
 void
 mem_free_array(void **array, size_t size);
-
-/**
- * Compares beginning of buffer buf with buffer start.
- *
- * @param buf The buffer in question.
- * @param buf_len Its length.
- * @param start The buffer to search for.
- * @param start_len Length of the the buffer to search for.
- * @return True if buf begins with start.
- */
-bool
-mem_starts_with(const void *buf, size_t buf_len, const void *start, size_t start_len);
-
-/**
- * Compares end of buffer buf with buffer end.
- *
- * @param buf The buffer in question.
- * @param buf_len Its length.
- * @param end End sequence to search for
- * @param end_len Length of the end.
- * @return True if buf ends with end.
- */
-bool
-mem_ends_with(const void *buf, size_t buf_len, const void *end, size_t end_len);
 
 /**
  * Convenience wrapper macro for mem_alloc which calculates
