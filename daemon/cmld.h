@@ -289,4 +289,16 @@ cmld_rename_ifi_new(const char *oldname);
 bool
 cmld_is_shiftfs_supported(void);
 
+/*
+ * Reacts to insertion of token
+ */
+void
+cmld_add_token(char *usb_serial_short);
+
+/*
+ * Reacts to removal of token
+ */
+void 
+cmld_remove_token(uuid_t *uuid);
+
 #endif /* CMLD_H */

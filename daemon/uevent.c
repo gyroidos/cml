@@ -22,6 +22,9 @@
  */
 
 #define _GNU_SOURCE
+
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include "uevent.h"
 #include <arpa/inet.h>
 #include <sched.h>
@@ -666,7 +669,8 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 							   mem_strdup(uevent->interface));
 			event_add_timer(e);
 		}
-	}
+	}	
+	
 
 	/* Iterate over containers */
 	for (int i = 0; i < cmld_containers_get_count(); i++) {
@@ -707,6 +711,53 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 	IF_TRUE_RETURN_TRACE(strncmp(uevent->subsystem, "usb", 3) ||
 			     strncmp(uevent->devtype, "usb_device", 10));
 
+	uint16_t short_id_length = 14;
+	//TODO: move reference id to global config file?
+	//TODO: replace check short_id with ID.contain("VendorString/TokenName")
+	const char token_short_id[] = "0000000000013E";
+		
+	if (!strncmp(uevent->id_serial_short,token_short_id,short_id_length))
+	{
+		if(!strncmp(uevent->action, "add",3))
+		{
+			DEBUG("################################");
+			DEBUG("[+] Secure Token with ID '%s' was added!\n", uevent->id_serial_short);
+			DEBUG("################################");
+			
+			cmld_add_token(uevent->id_serial_short);
+		}else
+		{
+			if(!strncmp(uevent->action, "remove",6))
+			{
+				DEBUG("################################");
+				DEBUG("[+] Secure Token with ID '%s' was removed!\n", uevent->id_serial_short);
+				DEBUG("################################");
+			}else{
+				DEBUG("################################");
+				DEBUG("[+] New Secure Token with id_serial_short '%s' and event %s!\n", uevent->id_serial_short, uevent->action);
+				DEBUG("################################");
+			}
+		}
+
+
+				
+	}else
+	{
+		if((!strncmp(uevent->action, "add",3) || !strncmp(uevent->action, "remove",6) || !strncmp(uevent->action, "bind",4) || !strncmp(uevent->action, "unbind",6) ) && strstr(uevent->devname, "bus/usb/") != NULL)
+		{
+			/*uint16_t id_vendor_id; //!< The udev event ID_VENDOR_ID inside of raw (usb relevenat)
+				uint16_t id_model_id;  //!< The udev event ID_MODEL_ID of the device (usb relevant)
+				char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)*/
+			DEBUG("################################");
+			DEBUG("[+] New Secure Token with id_serial_short '%s'!\n", uevent->id_serial_short);
+			DEBUG("[+] New Secure Token with id_vendor_id '%d' was added!\n", uevent->id_vendor_id);
+			DEBUG("[+] New Secure Token with id_model_id '%d'  was added!\n\n\n", uevent->id_model_id);
+			DEBUG("[+] New Secure Token with dev_name '%s'  was added!\n\n\n", uevent->devname);
+			DEBUG("################################");
+		}
+	}
+	
+	
 	if (0 == strncmp(uevent->action, "unbind", 6)) {
 		TRACE("unbind");
 		list_t *found = NULL;
@@ -900,3 +951,5 @@ uevent_udev_trigger_coldboot(void)
 	if (-1 == proc_fork_and_execvp(argv))
 		WARN("Could not trigger coldboot uevents!");
 }
+
+
