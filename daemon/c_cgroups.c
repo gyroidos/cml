@@ -697,6 +697,12 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
+	if (container_get_ram_limit(cgroups->container) == 0) {
+		INFO("Setting no RAM limit for container %s",
+		     container_get_description(cgroups->container));
+		return 0;
+	}
+
 	INFO("Trying to set RAM limit of container %s to %d MBytes",
 	     container_get_description(cgroups->container),
 	     container_get_ram_limit(cgroups->container));
