@@ -77,11 +77,6 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
-
-
-// length of the short usb serial ID
-#define SERIAL_SHORT_LENGTH 14
-
 // TODO think about using an own variable for a0
 //static container_t *cmld_a0 = NULL;
 static const char *cmld_path = DEFAULT_BASE_PATH;
@@ -146,9 +141,6 @@ cmld_container_get_c_root_netns()
 	return ((found) ? found : found_a0);
 }
 
-
-
-
 container_t *
 cmld_container_get_by_uuid(uuid_t *uuid)
 {
@@ -161,29 +153,20 @@ cmld_container_get_by_uuid(uuid_t *uuid)
 	return NULL;
 }
 
-
-
 // TODO: check where to insert usb_serial_short into list
 container_t *
 cmld_container_get_by_usb_serial_short(char *usb_serial_short)
 {
 	ASSERT(usb_serial_short);
 
-	for (list_t *l = cmld_containers_list; l; l = l->next)
-	{
-		for (list_t *dev = container_get_usbdev_list(l->data); dev; dev = dev->next)
-		{
-			if (strncmp(uevent_usbdev_get_i_serial(dev->data),usb_serial_short,SERIAL_SHORT_LENGTH))
-			{
-				DEBUG("[+] Found container for usb serial: '%s'. Checking for USBDEV_TYPE ('%p)'", usb_serial_short, dev->data);
- 
-				if(uevent_usbdev_get_type(dev->data) == UEVENT_USBDEV_TYPE_TOKEN)
-				{
-				return l->data;
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		for (list_t *dev = container_get_usbdev_list(l->data); dev; dev = dev->next) {
+			if (strncmp(uevent_usbdev_get_i_serial(dev->data), usb_serial_short,
+				    strnlen(usb_serial_short))) {
+				if (uevent_usbdev_get_type(dev->data) == UEVENT_USBDEV_TYPE_TOKEN) {
+					return l->data;
 				}
 			}
-			
-			
 		}
 	}
 
@@ -1525,64 +1508,59 @@ cmld_is_shiftfs_supported(void)
 	return ret;
 }
 
-
 /*These functions are used to react to add/remove of
 the security token*/
 
 void
-cmld_add_token(char *usb_serial_short){
+cmld_add_token(char *usb_serial_short)
+{
 	//ensure that no container is currently available
-	DEBUG("[+] cmld_add_token");
-	DEBUG("[+] Searching for container");
+	DEBUG("cmld_add_token");
+	DEBUG("Searching for container");
 	container_t *container = cmld_container_get_by_usb_serial_short(usb_serial_short);
 
 	IF_NULL_RETURN(container);
 
 	// initialize the USB token
-	DEBUG("[+] Smartcard_scd_token_add_block");
+	DEBUG("Smartcard_scd_token_add_block");
 	int block_return = smartcard_scd_token_add_block(container);
 	IF_FALSE_RETURN(block_return);
 
-
 	// start container
-	DEBUG("[+] Starting Container");
+	DEBUG(" Starting Container");
 	int container_start = cmld_container_start(container);
-	
-	if(container_start == -1)
-	{
+
+	if (container_start == -1) {
 		ERROR("Could not start container after token insert!");
 		return;
 	}
-	
 
 	return;
 }
 
-void 
-cmld_remove_token(char *usb_serial_short){
+void
+cmld_remove_token(char *usb_serial_short)
+{
 	// call smartcard_scd_token_add_block(container_t *container)
-	DEBUG("[+] cmld_remove_token");
-	DEBUG("[+] Searching for container");
+	DEBUG("cmld_remove_token");
+	DEBUG("Searching for container");
 	container_t *container = cmld_container_get_by_usb_serial_short(usb_serial_short);
 
 	IF_NULL_RETURN(container);
 
 	// initialize the USB token
-	DEBUG("[+] Smartcard_scd_token_add_block");
+	DEBUG(" Smartcard_scd_token_add_block");
 	int block_return = smartcard_scd_token_remove_block(container);
 	IF_FALSE_RETURN(block_return);
 
-
 	// start container
-	DEBUG("[+] Starting Container");
+	DEBUG("Starting Container");
 	int container_stop = cmld_container_stop(container);
-	
-	if(container_stop == -1)
-	{
+
+	if (container_stop == -1) {
 		ERROR("Could not start container after token insert!");
 		return;
 	}
-	
 
 	return;
 }
