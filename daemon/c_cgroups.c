@@ -1322,6 +1322,8 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 			    0) {
 				WARN_ERRNO("Could not remove cgroup %s for container %s", subsys,
 					   container_get_description(cgroups->container));
+			} else if (rmdir(subsys_path) < 0) {
+				WARN_ERRNO("Could not delete cgroup subsys %s", subsys_path);
 			} else {
 				INFO("Removed cgroup subsys %s for container %s", subsys,
 				     container_get_description(cgroups->container));
