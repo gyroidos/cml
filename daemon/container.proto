@@ -76,7 +76,8 @@ message ContainerConfig {
 	// complete image sizes from GuestOS for user partitions
 	repeated ContainerImageSize image_sizes = 4;
 
-	optional uint32 ram_limit = 5 [ default = 1024 ];      // unit = MBytes
+	// ram limit of container, set ram_limit to 0 for unlimited ram
+	optional uint32 ram_limit = 5 [ default = 0 ];      // unit = MBytes
 
 	required fixed32 color = 6;
 
