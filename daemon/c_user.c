@@ -371,6 +371,17 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 
+	// if dev or a cgroup subsys just chown the files
+	if ((strlen(path) >= 4 && !strcmp(strrchr(path, '\0') - 4, "/dev")) ||
+	    (strstr(path, "/cgroup") != NULL)) {
+		if (dir_foreach(path, &c_user_chown_dev_cb, user) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, user->uid_start,
+			      user->uid_start);
+			goto error;
+		}
+		goto success;
+	}
+
 	// if kernel does not support shiftfs just chown the files
 	// and do bind mounts (see jump mark shift)
 	if (!cmld_is_shiftfs_supported()) {
@@ -392,17 +403,6 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 		if (lchown(path, user->uid_start, user->uid_start) < 0) {
 			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", path, user->uid_start,
 				    user->uid_start);
-			goto error;
-		}
-		goto success;
-	}
-
-	// if dev or a cgroup subsys just chown the files
-	if ((strlen(path) >= 4 && !strcmp(strrchr(path, '\0') - 4, "/dev")) ||
-	    (strstr(path, "/cgroup") != NULL)) {
-		if (dir_foreach(path, &c_user_chown_dev_cb, user) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, user->uid_start,
-			      user->uid_start);
 			goto error;
 		}
 		goto success;
