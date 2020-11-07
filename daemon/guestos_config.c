@@ -173,6 +173,10 @@ guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
 {
 	ASSERT(cfg);
 	guestos_config_fill_mount_internal(cfg->mounts_setup, cfg->n_mounts_setup, mount);
+
+	// add a default empty root tmpfs to allow setup mode without proper config
+	if (cfg->n_mounts_setup == 0)
+		mount_add_entry(mount, MOUNT_TYPE_EMPTY, "tmpfs", "/", "tmpfs", 16);
 }
 
 /******************************************************************************/

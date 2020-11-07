@@ -47,6 +47,11 @@
 #include <errno.h>
 
 /**
+ * Path for mapped service binary
+ */
+#define CSERVICE_TARGET "/sbin/cservice"
+
+/**
  * Opaque container type.
  * (only used as pointer outside of the container module)
  */
