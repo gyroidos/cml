@@ -74,7 +74,6 @@
 #define ICC_SHARED_DATA_TYPE "u:object_r:trustme-com:s0"
 #endif
 
-#define CSERVICE_TARGET "/sbin/cservice"
 #define SHARED_FILES_PATH DEFAULT_BASE_PATH "/files_shared"
 #define SHARED_FILES_STORE_SIZE 100
 
@@ -1272,10 +1271,14 @@ c_vol_start_pre_clone(c_vol_t *vol)
 
 	/*
 	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
-	 * Remeber, This will only succeed if /sbin exists on a writable fs
+	 * Remeber, This will only succeed if targetfs is writable
 	 */
 	char *cservice_bin = mem_printf("%s/%s", vol->root, CSERVICE_TARGET);
-	if (file_exists("/sbin/cml-service-container")) {
+	char *cservice_dir = mem_strdup(cservice_bin);
+	cservice_dir = dirname(cservice_dir);
+	if (dir_mkdir_p(cservice_dir, 0755) < 0) {
+		WARN_ERRNO("Could not mkdir '%s' dir", cservice_dir);
+	} else if (file_exists("/sbin/cml-service-container")) {
 		file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0);
 		INFO("Copied %s to container", cservice_bin);
 	} else if (file_exists("/usr/sbin/cml-service-container")) {
@@ -1289,6 +1292,7 @@ c_vol_start_pre_clone(c_vol_t *vol)
 		WARN_ERRNO("Could not set %s executable", cservice_bin);
 
 	mem_free(cservice_bin);
+	mem_free(cservice_dir);
 
 #if 0
 	/* Bind-mount shared mount for communication */

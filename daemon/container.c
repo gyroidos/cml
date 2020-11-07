@@ -1213,7 +1213,21 @@ container_start_child(void *data)
 		}
 	}
 
-	execve(guestos_get_init(container->os), container->init_argv, container->init_env);
+	// if init provided by guestos does not exists use mapped c_service as init
+	const char *container_init = file_exists(guestos_get_init(container->os)) ?
+					     guestos_get_init(container->os) :
+					     CSERVICE_TARGET;
+	execve(container_init, container->init_argv, container->init_env);
+
+	/* handle possibly empty rootfs in setup_mode */
+	if (container_get_state(container) == CONTAINER_STATE_SETUP) {
+		// fallback: if there is still no init, just idle to keep namespaces open
+		event_reset();
+		WARN("No init found for container '%s', just loop forever!",
+		     uuid_string(container->uuid));
+		event_loop();
+	}
+
 	WARN_ERRNO("Could not run exec for container %s", uuid_string(container->uuid));
 
 	return CONTAINER_ERROR;
