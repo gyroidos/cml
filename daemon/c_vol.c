@@ -1015,6 +1015,12 @@ c_vol_populate_dev_filter_cb(const char *dev_node, void *data)
 	c_vol_t *vol = data;
 	ASSERT(vol);
 
+	// filter out mount points, to avoid copying private stuff, e.g, /dev/pts
+	if (file_is_mountpoint(dev_node)) {
+		TRACE("filter mountpoint '%s'", dev_node);
+		return false;
+	}
+
 	struct stat s;
 	IF_TRUE_RETVAL(stat(dev_node, &s), true);
 
