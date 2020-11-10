@@ -148,22 +148,28 @@ c_user_set_next_uid_range_start(c_user_t *user)
 	ASSERT(user);
 
 	char *file_name_uid = mem_printf("%s.uid", container_get_images_dir(user->container));
-	if (!file_exists(file_name_uid)) {
-		user->offset = c_user_set_next_offset();
-		IF_TRUE_RETVAL((user->offset < 0), -1);
-		if (file_write(file_name_uid, (char *)&user->offset, sizeof(user->offset)) < 0) {
-			WARN("Failed to store uid %d for container %s", user->offset,
-			     uuid_string(container_get_uuid(user->container)));
-		}
-	} else {
-		int offset;
+	int offset = -1;
+	if (file_exists(file_name_uid)) {
 		if (file_read(file_name_uid, (char *)&offset, sizeof(offset)) < 0) {
 			WARN("Failed to restore uid for container %s",
 			     uuid_string(container_get_uuid(user->container)));
 		}
-		user->offset = c_user_set_offset(offset);
-		IF_TRUE_RETVAL((user->offset != offset), -1);
 	}
+
+	// try to use stored uid
+	if (offset > -1)
+		offset = c_user_set_offset(offset);
+
+	if (offset == -1) {
+		INFO("Restored uid allready taken, genertaing new one");
+		offset = c_user_set_next_offset();
+		IF_TRUE_RETVAL(offset < 0, -1);
+		if (file_write(file_name_uid, (char *)&offset, sizeof(offset)) < 0) {
+			WARN("Failed to store uid %d for container %s", offset,
+			     uuid_string(container_get_uuid(user->container)));
+		}
+	}
+	user->offset = offset;
 
 	user->uid_start = UID_RANGES_START + (user->offset * UID_RANGE);
 	DEBUG("Next free uid/gid map start is: %u", user->uid_start);
@@ -297,15 +303,9 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 		return -1;
 	}
 
-	uid_t uid = s.st_uid + user->uid_start;
-	gid_t gid = s.st_gid + user->uid_start;
-
-	// avoid shifting twice
-	uid_t uid_overflow = user->uid_start + UID_MAX;
-	if (uid > uid_overflow) {
-		mem_free(file_to_chown);
-		return 0;
-	}
+	// modulo operation avoids shifting twice
+	uid_t uid = s.st_uid % UID_RANGE + user->uid_start;
+	gid_t gid = s.st_gid % UID_RANGE + user->uid_start;
 
 	if (file_is_dir(file_to_chown)) {
 		TRACE("Path %s is dir", file_to_chown);
