@@ -434,6 +434,8 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 		DEBUG("Successfully mounted %s to %s", lower_dev, lower_dir);
 	} else {
 		// try to hide absolute paths (if just overmounting existing lower dir)
+		if (file_is_link(lower_dir))
+			unlink(lower_dir);
 		if (symlink(target_dir, lower_dir) < 0) {
 			ERROR_ERRNO("link lowerdir failed");
 			mem_free(lower_dir);
