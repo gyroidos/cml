@@ -205,15 +205,18 @@ main(int argc, char **argv)
 	// closing socket to cmld
 	close(sock);
 
-	if (do_init) {
-		if (!strcmp(argv[1], "init")) {
-			argv[1] = "/sbin/init";
-			execvp(argv[1], &argv[1]);
-			WARN("Error starting container init!");
-		} else if (service_fork_execvp(argv[1], &argv[1]))
-			WARN("Error starting child!");
-	} else
+	if (!do_init)
 		return 0;
+
+	if (argc < 2) {
+		INFO("Running as init, not starting any child!");
+	} else if (!strcmp(argv[1], "init")) {
+		argv[1] = "/sbin/init";
+		execvp(argv[1], &argv[1]);
+		WARN("Error starting container init!");
+	} else if (service_fork_execvp(argv[1], &argv[1])) {
+		WARN("Error starting child!");
+	}
 
 	INFO("Going to handle signals ...");
 	dumb_init_signal_handler();
