@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <pty.h>
 #include <sys/wait.h>
-#include <sys/syscall.h>
 #include <sys/socket.h>
 #include <linux/limits.h>
 #include <linux/sockios.h>
@@ -43,6 +42,7 @@
 #include "common/fd.h"
 #include "common/event.h"
 #include "common/proc.h"
+#include "common/ns.h"
 #include "hardware.h"
 #include "container.h"
 #include "c_run.h"
@@ -311,97 +311,6 @@ c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	TRACE("No more childs to reap. Exiting handler.");
 }
 
-int
-setns(int fd, int nstype)
-{
-	return syscall(__NR_setns, fd, nstype);
-}
-
-#define MAX_NS 10
-int fd[MAX_NS] = { 0 };
-
-static bool
-is_self_userns_file(char *file)
-{
-	struct stat s, userns_s;
-	IF_TRUE_RETVAL_TRACE(stat(file, &s) == -1, false);
-	IF_TRUE_RETVAL_TRACE(stat("/proc/self/ns/user", &userns_s) == -1, false);
-
-	return (s.st_dev == userns_s.st_dev) && (s.st_ino == userns_s.st_ino) ? true : false;
-}
-
-static int
-setns_cb(const char *path, const char *file, void *data)
-{
-	int *i = data;
-
-	char *ns_file = mem_printf("%s%s", path, file);
-	TRACE("Opening namespace file %s", ns_file);
-
-	if (is_self_userns_file(ns_file)) {
-		TRACE("Joining same user namespace, not allowed and also not necessary -> skip.");
-		mem_free(ns_file);
-		return EXIT_SUCCESS;
-	}
-
-	if (*i >= MAX_NS) {
-		ERROR("Too many namespace files found in %s", path);
-		goto error;
-	}
-
-	fd[*i] = open(ns_file, O_RDONLY);
-	if (fd[*i] == -1) {
-		ERROR_ERRNO("Could not open namespace file %s", ns_file);
-		goto error;
-	}
-
-	*i = *i + 1;
-
-	mem_free(ns_file);
-	return EXIT_SUCCESS;
-
-error:
-	TRACE("An error occurred. Exiting...");
-	mem_free(ns_file);
-	exit(EXIT_FAILURE);
-}
-
-static int
-c_run_set_namespaces(pid_t pid)
-{
-	char *pid_string = mem_printf("%d", pid);
-
-	TRACE("Setting namespaces to match namespaces of pid %s", pid_string);
-
-	// set namespaces
-	char *folder = mem_printf("/proc/%d/ns/", pid);
-
-	int i = 0;
-	if (dir_foreach(folder, &setns_cb, &i)) {
-		ERROR("Could not traverse PID dir in procfs, wrong PID?");
-		goto error;
-	}
-
-	for (int j = 0; j < i; j++) {
-		if (setns(fd[j], 0) == -1) { /* Join that namespace */
-			ERROR_ERRNO("Could not join namespace");
-			goto error;
-		}
-	}
-
-	TRACE("Successfully joined all namespaces");
-
-	mem_free(pid_string);
-	mem_free(folder);
-	return 0;
-
-error:
-	TRACE("An error occurred. Exiting...");
-	mem_free(pid_string);
-	mem_free(folder);
-	return -1;
-}
-
 static int
 c_run_join_container(c_run_t *run)
 {
@@ -411,7 +320,7 @@ c_run_join_container(c_run_t *run)
 		ERROR("Could not join container cgroups!");
 		goto error;
 	}
-	if (c_run_set_namespaces(container_get_pid(run->container)) < 0) {
+	if (ns_join_all(container_get_pid(run->container)) < 0) {
 		ERROR("Could not set namespaces!");
 		goto error;
 	}

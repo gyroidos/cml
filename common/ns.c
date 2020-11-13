@@ -3,13 +3,14 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 #include <stdbool.h>
-#include <sched.h>
 
 #include <grp.h>
 
 #include "macro.h"
 #include "mem.h"
+#include "dir.h"
 
 int
 namespace_setuid0()
@@ -29,6 +30,12 @@ namespace_setuid0()
 	}
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 	return 0;
+}
+
+int
+setns(int fd, int nstype)
+{
+	return syscall(__NR_setns, fd, nstype);
 }
 
 int
@@ -170,5 +177,90 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 	}
 
 	TRACE("An error occured in namespace_exec, returning -1");
+	return -1;
+}
+
+#define MAX_NS 16
+static int fd[MAX_NS] = { 0 };
+
+static bool
+ns_is_self_userns_file(char *file)
+{
+	struct stat s, userns_s;
+	IF_TRUE_RETVAL_TRACE(stat(file, &s) == -1, false);
+	IF_TRUE_RETVAL_TRACE(stat("/proc/self/ns/user", &userns_s) == -1, false);
+
+	return (s.st_dev == userns_s.st_dev) && (s.st_ino == userns_s.st_ino) ? true : false;
+}
+
+static int
+ns_setns_cb(const char *path, const char *file, void *data)
+{
+	int *i = data;
+
+	char *ns_file = mem_printf("%s%s", path, file);
+	TRACE("Opening namespace file %s", ns_file);
+
+	if (ns_is_self_userns_file(ns_file)) {
+		TRACE("Joining same user namespace, not allowed and also not necessary -> skip.");
+		mem_free(ns_file);
+		return EXIT_SUCCESS;
+	}
+
+	if (*i >= MAX_NS) {
+		ERROR("Too many namespace files found in %s", path);
+		goto error;
+	}
+
+	fd[*i] = open(ns_file, O_RDONLY);
+	if (fd[*i] == -1) {
+		ERROR_ERRNO("Could not open namespace file %s", ns_file);
+		goto error;
+	}
+
+	*i = *i + 1;
+
+	mem_free(ns_file);
+	return EXIT_SUCCESS;
+
+error:
+	TRACE("An error occurred. Exiting...");
+	mem_free(ns_file);
+	exit(EXIT_FAILURE);
+}
+
+int
+ns_join_all(pid_t pid)
+{
+	char *pid_string = mem_printf("%d", pid);
+
+	TRACE("Setting namespaces to match namespaces of pid %s", pid_string);
+
+	// set namespaces
+	char *folder = mem_printf("/proc/%d/ns/", pid);
+
+	int i = 0;
+	if (dir_foreach(folder, &ns_setns_cb, &i)) {
+		ERROR("Could not traverse PID dir in procfs, wrong PID?");
+		goto error;
+	}
+
+	for (int j = 0; j < i; j++) {
+		if (setns(fd[j], 0) == -1) { /* Join that namespace */
+			ERROR_ERRNO("Could not join namespace");
+			goto error;
+		}
+	}
+
+	TRACE("Successfully joined all namespaces");
+
+	mem_free(pid_string);
+	mem_free(folder);
+	return 0;
+
+error:
+	TRACE("An error occurred. Exiting...");
+	mem_free(pid_string);
+	mem_free(folder);
 	return -1;
 }
