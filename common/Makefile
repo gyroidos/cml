@@ -62,6 +62,9 @@ OBJS_COMMON := \
 	logf.o \
 	mem.o \
 	str.o \
+	fd.o \
+	file.o \
+	dir.o \
 	ns.o \
 	nl.o
 
@@ -69,9 +72,6 @@ OBJS_COMMON_FULL := \
 	$(OBJS_COMMON) \
 	protobuf.o \
 	logf.pb-c.o \
-	file.o \
-	dir.o \
-	fd.o \
 	sock.o \
 	network.o \
 	proc.o \

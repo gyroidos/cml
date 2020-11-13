@@ -75,9 +75,6 @@ SRC_FILES := main.c \
 	control.c \
 	container_config.c \
 	device_config.c \
-	common/file.c \
-	common/dir.c \
-	common/fd.c \
 	mount.c \
 	guestos.c \
 	guestos_mgr.c \
