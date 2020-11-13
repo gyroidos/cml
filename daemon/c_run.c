@@ -320,7 +320,7 @@ c_run_join_container(c_run_t *run)
 		ERROR("Could not join container cgroups!");
 		goto error;
 	}
-	if (ns_join_all(container_get_pid(run->container)) < 0) {
+	if (ns_join_all(container_get_pid(run->container), true) < 0) {
 		ERROR("Could not set namespaces!");
 		goto error;
 	}

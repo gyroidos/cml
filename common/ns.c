@@ -216,10 +216,21 @@ ns_is_self_userns_file(char *file)
 	return (s.st_dev == userns_s.st_dev) && (s.st_ino == userns_s.st_ino) ? true : false;
 }
 
+struct ns_setns_cbdata {
+	int *fd;
+	bool join_userns;
+};
+
 static int
 ns_setns_cb(const char *path, const char *file, void *data)
 {
-	int *i = data;
+	struct ns_setns_cbdata *cbdata = data;
+	ASSERT(cbdata);
+
+	int *i = cbdata->fd;
+	bool join_userns = cbdata->join_userns;
+
+	IF_TRUE_RETVAL_TRACE(!join_userns && !strcmp(file, "user"), EXIT_SUCCESS);
 
 	char *ns_file = mem_printf("%s%s", path, file);
 	TRACE("Opening namespace file %s", ns_file);
@@ -253,7 +264,7 @@ error:
 }
 
 int
-ns_join_all(pid_t pid)
+ns_join_all(pid_t pid, bool userns)
 {
 	char *pid_string = mem_printf("%d", pid);
 
@@ -263,7 +274,9 @@ ns_join_all(pid_t pid)
 	char *folder = mem_printf("/proc/%d/ns/", pid);
 
 	int i = 0;
-	if (dir_foreach(folder, &ns_setns_cb, &i)) {
+	struct ns_setns_cbdata cbdata = { .fd = &i, .join_userns = userns };
+
+	if (dir_foreach(folder, &ns_setns_cb, &cbdata)) {
 		ERROR("Could not traverse PID dir in procfs, wrong PID?");
 		goto error;
 	}

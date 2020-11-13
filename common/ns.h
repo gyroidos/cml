@@ -54,14 +54,16 @@ namespace_exec(pid_t ns_pid, const int namespaces, bool become_root, int (*func)
 	       const void **data);
 
 /**
- * This function joins the current process to all namespaces of process give
- * by its pid. Do not use this function in main process of cmld directly!
+ * This function joins the current process to all namespaces of a process given
+ * by its pid. The userns is joined only if switch userns is true.
+ * Do not use this function in main process of cmld directly!
  * Fork or clone a child beforehand and execute this in the child.
  *
- * @param ns_pid pid of the namespace to join
+ * @param pid pid of the namespace to join
+ * @param userns switch for joining userns
  * @returns 0 if all namespaces are changed succesfully, -1 otherwise.
  */
 int
-ns_join_all(pid_t ns_pid);
+ns_join_all(pid_t pid, bool userns);
 
 #endif //NS_H
