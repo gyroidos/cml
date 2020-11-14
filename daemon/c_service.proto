@@ -82,6 +82,8 @@ message ServiceToCmldMessage {
 
 		CONTAINER_CFG_NAME_REQ = 18;
 		CONTAINER_CFG_DNS_REQ = 19;
+
+		EXEC_CAP_SYSTIME_PRIV = 20;
 	}
 	required Code code = 1;
 
@@ -93,4 +95,6 @@ message ServiceToCmldMessage {
 	optional bool airplane_mode = 11;
 	optional string target_container = 13;
 	optional bool wifi_user_enabled = 14;
+	optional string captime_exec_path = 15;
+	repeated string captime_exec_param = 16;
 }
