@@ -878,4 +878,10 @@ container_set_token_is_linked_to_device(container_t *container, const bool is_pa
 bool
 container_get_token_is_linked_to_device(const container_t *container);
 
+/**
+ * Executes a binary of a priviliegd container with cap_sys_time in root userns.
+ */
+int
+container_exec_cap_systime(const container_t *container, char *const *argv);
+
 #endif /* CONTAINER_H */
