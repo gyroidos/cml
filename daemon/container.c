@@ -2497,3 +2497,10 @@ container_get_token_is_linked_to_device(const container_t *container)
 	ASSERT(container);
 	return container->token.is_paired_with_device;
 }
+
+int
+container_exec_cap_systime(const container_t *container, char *const *argv)
+{
+	ASSERT(container);
+	return c_cap_exec_cap_systime(container, argv);
+}
