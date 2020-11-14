@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -28,6 +28,9 @@
 
 int
 c_cap_set_current_process(const container_t *container);
+
+int
+c_cap_exec_cap_systime(const container_t *container, char *const *argv);
 
 int
 c_cap_start_child(const container_t *container);
