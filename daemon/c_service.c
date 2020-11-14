@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -207,6 +207,20 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 		if (c_service_send_container_cfg_dns_proto(service))
 			INFO("sent reply to conatiner");
 		break;
+
+	case SERVICE_TO_CMLD_MESSAGE__CODE__EXEC_CAP_SYSTIME_PRIV: {
+		// construct an NULL terminated argv buffer for execve
+		size_t argv_len = ADD_WITH_OVERFLOW_CHECK(message->n_captime_exec_param, (size_t)2);
+		char **argv = mem_new0(char *, argv_len);
+		argv[0] = message->captime_exec_path;
+		for (size_t i = 0; i < message->n_captime_exec_param; ++i) {
+			argv[i + 1] = message->captime_exec_param[i];
+			TRACE("argv[%zu]: %s", i, argv[i + 1]);
+		}
+		if (container_exec_cap_systime(service->container, argv))
+			WARN("Exec of '%s' failed/permission denied!", message->captime_exec_path);
+		break;
+	}
 
 	default:
 		WARN("Received unknown message code from Trustme Service: %d", message->code);
