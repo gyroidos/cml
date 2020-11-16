@@ -249,3 +249,19 @@ proc_fork_and_execvp(const char *const *argv)
 	}
 	return -1;
 }
+
+int
+proc_cap_last_cap(void)
+{
+	int cap;
+	const char *file_cap_last_cap = "/proc/sys/kernel/cap_last_cap";
+
+	char *str_cap_last_cap = file_read_new(file_cap_last_cap, 24);
+	if (sscanf(str_cap_last_cap, "%d", &cap) <= 0) {
+		ERROR_ERRNO("Can't read cap from '%s'", file_cap_last_cap);
+		cap = -1;
+	}
+
+	mem_free(str_cap_last_cap);
+	return cap;
+}

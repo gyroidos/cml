@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -61,5 +61,12 @@ proc_find(pid_t ppid, const char *name);
 
 int
 proc_fork_and_execvp(const char *const *argv);
+
+/**
+ * Returns the last cap from the running kernel
+ * @return last cap of running kernel, -1 on error;
+ */
+int
+proc_cap_last_cap(void);
 
 #endif /* PROC_H */
