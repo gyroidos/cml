@@ -27,6 +27,7 @@
 #include "common/mem.h"
 #include "common/ns.h"
 #include "common/event.h"
+#include "common/proc.h"
 
 #include <sys/capability.h>
 #include <sys/prctl.h>
@@ -101,7 +102,9 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 {
 	int uid = container_get_uid(container);
 
-	for (int cap = 0; cap < CAP_LAST_CAP; cap++) {
+	int last_cap = proc_cap_last_cap() < 0 ? CAP_LAST_CAP : proc_cap_last_cap();
+	TRACE("Last CAP %d", last_cap);
+	for (int cap = 0; cap < last_cap; cap++) {
 		// ntpd needs to bind a socket to
 		if (cap == CAP_SYS_TIME || cap == CAP_NET_BIND_SERVICE || cap == CAP_SETUID)
 			continue;
