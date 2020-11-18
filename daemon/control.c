@@ -620,6 +620,52 @@ control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
 	}
 }
 
+static int
+control_start_container(control_t *control, container_t *container,
+			ContainerStartParams *start_params, char *key)
+{
+	int res = -1;
+	if (start_params->has_setup) {
+		INFO("Setting Setup mode for Container!");
+		container_set_setup_mode(container, start_params->setup);
+	}
+
+	// Key is asserted to be the user entered passwd/pin
+	res = cmld_container_start_with_smartcard(control, container, key);
+	if (res != 0) {
+		DEBUG("Token has not been initialized yet");
+	}
+	return res;
+}
+
+/**
+ * Starts a container with pre-specified keys or user supplied keys
+ */
+static int
+control_handle_container_start(control_t *control, container_t *container,
+			       ContainerStartParams *start_params, int fd)
+{
+	int res = -1;
+	if (start_params) {
+		char *key = start_params->key;
+		res = control_start_container(control, container, start_params, key);
+		if (res != 0) {
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED,
+						   fd);
+		}
+	} else if (container_is_encrypted(container)) {
+		res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG, fd);
+	} else {
+		res = cmld_container_start(container);
+		if (res < 0) {
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
+		} else {
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
+		}
+	}
+	return res;
+}
+
 /**
  * Handles a single decoded ControllerToDaemon message.
  *
@@ -1030,38 +1076,19 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		mem_free(ccfg);
 	} break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
-		char *key = NULL;
 		if (NULL == container) {
 			WARN("Container does not exist!");
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
-		ContainerStartParams *start_params = msg->container_start_params;
-		if (start_params) {
-			key = start_params->key;
-			if (start_params->has_setup) {
-				INFO("Setting Setup mode for Container!");
-				container_set_setup_mode(container, start_params->setup);
-			}
-			// key is asserted to be the user entered passwd/pin
-			res = cmld_container_start_with_smartcard(control, container, key);
-			if (res != 0) {
-				DEBUG("Token has not been initialized yet");
-				res = control_send_message(
-					CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
-			}
-		} else if (container_is_encrypted(container)) {
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
+		if (container_get_state(container) == CONTAINER_STATE_RUNNING) {
+			WARN("Container is already running!");
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED,
 						   fd);
-		} else {
-			res = cmld_container_start(container);
-			if (res < 0) {
-				res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST,
-							   fd);
-			} else {
-				res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
-			}
+			break;
 		}
+		ContainerStartParams *start_params = msg->container_start_params;
+		res = control_handle_container_start(control, container, start_params, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
