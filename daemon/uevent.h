@@ -39,7 +39,8 @@
 
 typedef enum uevent_usbdev_type {
 	UEVENT_USBDEV_TYPE_GENERIC = 1,
-	UEVENT_USBDEV_TYPE_TOKEN
+	UEVENT_USBDEV_TYPE_TOKEN,
+	UEVENT_USBDEV_TYPE_PIN_ENTRY
 } uevent_usbdev_type_t;
 
 /**

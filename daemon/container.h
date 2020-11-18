@@ -190,7 +190,8 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
 		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
-		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype);
+		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
+		       bool usb_pin_entry);
 
 /**
  * Creates a new container container object. There are three different cases
@@ -904,5 +905,12 @@ container_get_token_is_linked_to_device(const container_t *container);
  */
 int
 container_exec_cap_systime(const container_t *container, char *const *argv);
+
+/**
+ * Returns whether the pin should be requested interactively via a usb pin reader during
+ * container start
+ */
+bool
+container_get_usb_pin_entry(const container_t *container);
 
 #endif /* CONTAINER_H */

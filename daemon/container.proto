@@ -42,6 +42,7 @@ message ContainerVnetConfig {
 enum ContainerUsbType {
 	GENERIC = 1;
 	TOKEN = 2;
+	PIN_ENTRY = 3;
 }
 
 message ContainerUsbConfig {
@@ -119,6 +120,8 @@ message ContainerConfig {
 	repeated string fifos = 29;
 
 	required ContainerTokenType token_type = 30 [ default = SOFT ];
+
+	optional bool usb_pin_entry = 31 [ default = false ];
 }
 
 /**
