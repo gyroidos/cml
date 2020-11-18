@@ -216,6 +216,12 @@ container_new_clone(container_t *container);
 */
 
 /**
+ * Free the container's key
+*/
+void
+container_free_key(container_t *container);
+
+/**
  * Free a container data structure. Does not remove the persistent parts of the container,
  * i.e. the configuration and the images.
  */

@@ -334,6 +334,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				protobuf_send_message(startdata->smartcard->sock,
 						      (ProtobufCMessage *)&out);
 
+				//delete wrapped key from RAM
+				memset(key, 0, sizeof(key));
 				mem_free(out.container_uuid);
 				mem_free(out.token_uuid);
 			} else {
@@ -356,6 +358,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				// set the key
 				char *ascii_key = bytes_to_string_new(key, keylen);
 				container_set_key(startdata->container, ascii_key);
+				// delete key from RAM
+				memset(ascii_key, 0, strlen(ascii_key));
 				mem_free(ascii_key);
 				// wrap key via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
@@ -376,6 +380,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				protobuf_send_message(startdata->smartcard->sock,
 						      (ProtobufCMessage *)&out);
 
+				// delete key from RAM
+				memset(key, 0, sizeof(key));
 				mem_free(out.container_uuid);
 				mem_free(out.token_uuid);
 			}
@@ -406,6 +412,9 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			char *ascii_key = bytes_to_string_new(msg->unwrapped_key.data,
 							      msg->unwrapped_key.len);
 			container_set_key(startdata->container, ascii_key);
+			//delete key from RAM
+			memset(ascii_key, 0, strlen(ascii_key));
+			memset(msg->unwrapped_key.data, 0, msg->unwrapped_key.len);
 			mem_free(ascii_key);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__WRAPPED_KEY: {
@@ -439,6 +448,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				      container_get_name(startdata->container), keyfile);
 			}
 			TRACE("Stored wrapped key on disk successfully");
+			// delete wrapped key from RAM
+			memset(msg->wrapped_key.data, 0, msg->wrapped_key.len);
 			mem_free(keyfile);
 		} break;
 		default:
