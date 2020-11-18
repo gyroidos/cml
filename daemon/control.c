@@ -36,6 +36,8 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "smartcard.h"
+#include "input.h"
+#include "uevent.h"
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
@@ -487,6 +489,10 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_LOCKED_TILL_REBOOT;
 		break;
 
+	case CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_USB_PIN_ENTRY_FAIL;
+		break;
+
 	case CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED:
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_STARTED;
 		break;
@@ -633,9 +639,46 @@ control_start_container(control_t *control, container_t *container,
 	// Key is asserted to be the user entered passwd/pin
 	res = cmld_container_start_with_smartcard(control, container, key);
 	if (res != 0) {
-		DEBUG("Token has not been initialized yet");
+		ERROR("Failed to start container %s", container_get_name(container));
 	}
 	return res;
+}
+
+typedef struct {
+	control_t *control;
+	container_t *container;
+	ContainerStartParams *start_params;
+} container_start_cb_data_t;
+
+static void
+control_cb_request_pin_start_container(int fd, UNUSED unsigned events, UNUSED event_io_t *io,
+				       void *data)
+{
+	ASSERT(data);
+
+	char *key = NULL;
+	container_start_cb_data_t *cb_data = data;
+	if (!cb_data->control || !cb_data->container || !cb_data->start_params) {
+		WARN("Invalid parameters for container start callback");
+		goto exit;
+	}
+
+	key = input_read_usb_input_event_file_pin(fd);
+	if (!key) {
+		WARN("Failed to read in pin from pin reader");
+		goto exit;
+	}
+
+	DEBUG("Starting container from Callback, fd");
+	control_start_container(cb_data->control, cb_data->container, cb_data->start_params, key);
+	memset(key, 0x0, strlen(key));
+	mem_free(key);
+
+exit:
+	event_remove_io(io);
+	event_io_free(io);
+	close_usb_input_event_file(fd);
+	mem_free(data);
 }
 
 /**
@@ -645,24 +688,87 @@ static int
 control_handle_container_start(control_t *control, container_t *container,
 			       ContainerStartParams *start_params, int fd)
 {
+	TRACE("Starting container");
 	int res = -1;
-	if (start_params) {
+	char *input_file = NULL;
+
+	// Check if pin should be interactively requested via pin pad reader
+	if (container_get_usb_pin_entry(container)) {
+		TRACE("Searching for USB pin reader for interactive pin entry");
+
+		// Iterate through usb-dev list and look for USB_PIN_ENTRY device
+		uevent_usbdev_t *usbdev_pinreader = NULL;
+		for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
+			uevent_usbdev_t *usbdev = (uevent_usbdev_t *)l->data;
+			if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
+				usbdev_pinreader = usbdev;
+				break;
+			}
+		}
+
+		if (!usbdev_pinreader) {
+			ERROR("Failed to find USB pin reader");
+			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
+			res = -1;
+			goto exit;
+		}
+
+		TRACE("Found USB pin reader. Device Serial: %s. Vendor:Product: %x:%x",
+		      uevent_usbdev_get_i_serial(usbdev_pinreader),
+		      uevent_usbdev_get_id_vendor(usbdev_pinreader),
+		      uevent_usbdev_get_id_product(usbdev_pinreader));
+
+		input_file = input_get_usb_input_event_file(
+			uevent_usbdev_get_id_vendor(usbdev_pinreader),
+			uevent_usbdev_get_id_product(usbdev_pinreader));
+		if (!input_file) {
+			ERROR("Failed to find USB pin reader input file");
+			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
+			res = -1;
+			goto exit;
+		}
+
+		TRACE("Found USB pin reader input file: %s", input_file);
+
+		int fd_pin = input_open_usb_input_event_file(input_file);
+		if (fd_pin == -1) {
+			ERROR("Failed to open USB pin reader input file");
+			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
+			res = -1;
+			goto exit;
+		}
+
+		// Read in pin in asynchronous callback
+		container_start_cb_data_t *cb_data = mem_new0(container_start_cb_data_t, 1);
+		cb_data->control = control;
+		cb_data->container = container;
+		cb_data->start_params = start_params;
+		event_io_t *event = event_io_new(fd_pin, EVENT_IO_READ,
+						 control_cb_request_pin_start_container, cb_data);
+
+		TRACE("Registering callback for pin entry");
+		event_add_io(event);
+
+	} else if (start_params) {
 		char *key = start_params->key;
+		TRACE("Default container start without pin entry chosen. Starting");
 		res = control_start_container(control, container, start_params, key);
 		if (res != 0) {
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED,
-						   fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
 		}
 	} else if (container_is_encrypted(container)) {
-		res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG, fd);
+		res = -1;
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG, fd);
 	} else {
 		res = cmld_container_start(container);
 		if (res < 0) {
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 		} else {
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
 		}
 	}
+exit:
+	mem_free(input_file);
 	return res;
 }
 
@@ -1081,10 +1187,14 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
-		if (container_get_state(container) == CONTAINER_STATE_RUNNING) {
-			WARN("Container is already running!");
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED,
-						   fd);
+		container_state_t container_state = container_get_state(container);
+		if ((container_state == CONTAINER_STATE_RUNNING) ||
+		    (container_state == CONTAINER_STATE_BOOTING) ||
+		    (container_state == CONTAINER_STATE_SETUP) ||
+		    (container_state == CONTAINER_STATE_REBOOTING) ||
+		    (container_state == CONTAINER_STATE_STARTING)) {
+			WARN("Container is already running or in the process of starting up!");
+			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
 		ContainerStartParams *start_params = msg->container_start_params;
