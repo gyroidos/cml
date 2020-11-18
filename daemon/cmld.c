@@ -24,6 +24,8 @@
 // uncomment to prevent reboot
 #define TRUSTME_DEBUG
 
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #define _GNU_SOURCE
 
 #include "cmld.h"
@@ -149,6 +151,46 @@ cmld_container_get_by_uuid(uuid_t *uuid)
 	for (list_t *l = cmld_containers_list; l; l = l->next)
 		if (uuid_equals(container_get_uuid(l->data), uuid))
 			return l->data;
+
+	return NULL;
+}
+
+container_t *
+cmld_container_get_by_token_serial(const char *serial)
+{
+	IF_NULL_RETVAL_TRACE(serial, NULL);
+
+	TRACE("Looking for container with token serial %s", serial);
+
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(l->data))
+			continue;
+
+		char *s = container_get_usbtoken_serial(l->data);
+
+		if (s && !strcmp(s, serial))
+			return l->data;
+	}
+
+	return NULL;
+}
+
+container_t *
+cmld_container_get_by_devpath(const char *devpath)
+{
+	ASSERT(devpath);
+
+	TRACE("Looking for container with token devpath %s", devpath);
+
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(l->data))
+			continue;
+
+		char *p = container_get_usbtoken_devpath(l->data);
+
+		if (p && !strcmp(p, devpath))
+			return l->data;
+	}
 
 	return NULL;
 }
@@ -301,6 +343,8 @@ cmld_container_token_init(container_t *container)
 		ERROR("Requesting SCD to init token failed");
 		return -1;
 	}
+
+	DEBUG("Initialized token for container %s", container_get_name(container));
 
 	smartcard_update_token_state(container);
 
@@ -1489,4 +1533,53 @@ cmld_is_shiftfs_supported(void)
 	bool ret = strstr(fses, "shiftfs") ? true : false;
 	mem_free(fses);
 	return ret;
+}
+
+int
+cmld_token_attach(const char *serial, char *devpath)
+{
+	IF_NULL_RETVAL_TRACE(serial, -1);
+	IF_NULL_RETVAL_TRACE(devpath, -1);
+
+	container_t *container = cmld_container_get_by_token_serial(serial);
+
+	IF_NULL_RETVAL_TRACE(container, -1);
+
+	TRACE("Handling attachment of token with serial %s at %s", serial, devpath);
+
+	container_set_usbtoken_devpath(container, mem_strdup(devpath));
+
+	// initialize the USB token
+	int block_return = cmld_container_token_init(container);
+
+	if (block_return) {
+		DEBUG("Failed to initialize token, already initialized?");
+	}
+
+	return 0;
+}
+
+int
+cmld_token_detach(char *devpath)
+{
+	IF_NULL_RETVAL_TRACE(devpath, -1);
+
+	container_t *container = cmld_container_get_by_devpath(devpath);
+
+	IF_NULL_RETVAL_TRACE(container, -1);
+
+	DEBUG("Handling detachment of token at %s", devpath);
+
+	container_set_usbtoken_devpath(container, NULL);
+
+	if (smartcard_scd_token_remove_block(container)) {
+		ERROR("Failed to notify scd about token detachment");
+	}
+
+	DEBUG("Stopping Container");
+	if (cmld_container_stop(container)) {
+		ERROR("Could not stop container after token detachment.");
+	}
+
+	return 0;
 }

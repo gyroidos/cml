@@ -264,12 +264,11 @@ str_free(str_t *str, bool free_buf)
 }
 
 str_t *
-str_hexdump_new(unsigned char *mem, int len)
+str_hexdump_new(unsigned char *mem, size_t len)
 {
 	str_t *ret = str_new_len(len * 2 + 1);
 
 	while (len--) {
-		ASSERT(len >= 0);
 		str_append_printf(ret, "%02x ", *mem);
 		mem++;
 	}

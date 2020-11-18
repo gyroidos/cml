@@ -147,6 +147,9 @@ cmld_wipe_device();
 container_t *
 cmld_container_get_by_uuid(uuid_t *uuid);
 
+container_t *
+cmld_container_get_by_token_serial(const char *serial);
+
 int
 cmld_containers_stop(void (*on_all_stopped)(void));
 
@@ -288,5 +291,19 @@ cmld_rename_ifi_new(const char *oldname);
  */
 bool
 cmld_is_shiftfs_supported(void);
+
+/**
+ * Handles attachment of a container token.
+ * @return 0 if the given USB serial belongs to a container token and the attachment procedure could be performed properly, -1 otherwise
+*/
+int
+cmld_token_attach(const char *serial, char *devpath);
+
+/**
+ * Handles detachment of a container token.
+ * @return 0 if the given USB serial belongs to a container token and the detachment procedure could be performed properly, -1 otherwise
+*/
+int
+cmld_token_detach(char *usb_serial_short);
 
 #endif /* CMLD_H */
