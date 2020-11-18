@@ -180,6 +180,8 @@ struct container {
 	bool setup_mode;
 
 	container_token_config_t token;
+
+	bool usb_pin_entry;
 };
 
 struct container_callback {
@@ -236,7 +238,8 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
 		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
-		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype)
+		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
+		       bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -431,6 +434,8 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		}
 	}
 
+	container->usb_pin_entry = usb_pin_entry;
+
 	return container;
 
 error:
@@ -605,12 +610,14 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_token_type_t ttype = container_config_get_token_type(conf);
 
+	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
+
 	container_t *c =
 		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
 				       images_dir, mnt, ram_limit, color, adb_port, allow_autostart,
 				       feature_enabled, dns_server, net_ifaces, allowed_devices,
 				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
-				       init_env_len, fifo_list, ttype);
+				       init_env_len, fifo_list, ttype, usb_pin_entry);
 	if (c)
 		container_config_write(conf);
 
@@ -2553,4 +2560,11 @@ container_exec_cap_systime(const container_t *container, char *const *argv)
 {
 	ASSERT(container);
 	return c_cap_exec_cap_systime(container, argv);
+}
+
+bool
+container_get_usb_pin_entry(const container_t *container)
+{
+	ASSERT(container);
+	return container->usb_pin_entry;
 }

@@ -99,6 +99,8 @@ container_config_proto_to_usb_type(ContainerUsbType type)
 		return UEVENT_USBDEV_TYPE_GENERIC;
 	case CONTAINER_USB_TYPE__TOKEN:
 		return UEVENT_USBDEV_TYPE_TOKEN;
+	case CONTAINER_USB_TYPE__PIN_ENTRY:
+		return UEVENT_USBDEV_TYPE_PIN_ENTRY;
 	default:
 		FATAL("Unhandled value for ContainerTokenType: %d", type);
 	}
@@ -643,4 +645,12 @@ container_config_get_token_type(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return container_config_proto_to_token_type(config->cfg->token_type);
+}
+
+bool
+container_config_get_usb_pin_entry(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->usb_pin_entry;
 }

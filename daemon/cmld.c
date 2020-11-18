@@ -1022,7 +1022,7 @@ cmld_init_a0(const char *path, const char *c0os)
 				       privileged, a0_os, NULL, a0_images_folder, a0_mnt,
 				       a0_ram_limit, 0xffffff00, 0, false, NULL,
 				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL,
-				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE);
+				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
 
 	/* depending on the storage of the a0 pointer, do ONE of the following: */
 	/* store a0 as first element of the cmld_containers_list */
