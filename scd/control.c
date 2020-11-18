@@ -204,7 +204,8 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		scd_token_t *token = scd_get_token_from_msg(msg);
 
 		if (token != NULL) {
-			WARN("Token already exists. Aborting...");
+			INFO("Token already exists.");
+			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL;
 		} else if (scd_token_new(msg) == 0) {
 			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL;
 		} else {

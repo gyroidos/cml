@@ -205,7 +205,7 @@ str_length(str_t *str);
  * @return The resulting hex dump
  */
 str_t *
-str_hexdump_new(unsigned char *mem, int len);
+str_hexdump_new(unsigned char *mem, size_t len);
 
 /**
  * Frees the allocated string memory.

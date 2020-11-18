@@ -88,7 +88,7 @@ scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 	IF_NULL_GOTO_ERROR(tctrl, err);
 
 	TokenToContainer out = TOKEN_TO_CONTAINER__INIT;
-	brsp = mem_alloc0(APDU_MAX_BUF_LEN);
+	brsp = mem_alloc0(MAX_APDU_BUF_LEN);
 
 	switch (msg->command) {
 	case CONTAINER_TO_TOKEN__COMMAND__GET_ATR:

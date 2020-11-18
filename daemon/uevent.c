@@ -22,6 +22,9 @@
  */
 
 #define _GNU_SOURCE
+
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include "uevent.h"
 #include <arpa/inet.h>
 #include <sched.h>
@@ -616,6 +619,7 @@ uevent_sysfs_eth_timer_cb(event_timer_t *timer, void *data)
 static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
+	TRACE("handle_kernel_event");
 	uevent_parse(uevent, raw_p);
 
 	if (!uevent->interface) {
@@ -624,6 +628,43 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		      uevent->devpath ? uevent->devpath : NULL);
 
 		return;
+	}
+
+	char *serial_path = mem_printf("/sys/%s/serial", uevent->devpath);
+	char *serial = NULL;
+
+	if (file_exists(serial_path))
+		serial = file_read_new(serial_path, 255);
+
+	mem_free(serial_path);
+
+	if (!serial || strlen(serial) < 1) {
+		TRACE("Failed to read serial of usb device");
+	} else {
+		if ('\n' == serial[strlen(serial) - 1]) {
+			serial[strlen(serial) - 1] = 0;
+		}
+	}
+
+	if (serial && uevent->devpath &&
+	    (0 == strncmp(uevent->action, "bind", 4) || 0 == strncmp(uevent->action, "add", 3))) {
+		TRACE("Checking possible token attachment with serial %s and devpath %s", serial,
+		      uevent->devpath);
+
+		if (!cmld_token_attach(serial, uevent->devpath)) {
+			TRACE("Uevent was triggered by container token, finished handling kernel uevent");
+			goto out;
+		}
+	}
+
+	if (uevent->devpath && (0 == strncmp(uevent->action, "unbind", 6) ||
+				0 == strncmp(uevent->action, "remove", 6))) {
+		TRACE("Checking possible token detachment with devpath %s", uevent->devpath);
+
+		if (!cmld_token_detach(uevent->devpath)) {
+			TRACE("uevent was triggered by container token, finished handling kernel uevent");
+			goto out;
+		}
 	}
 
 	/* just handle add,remove or change events to containers */
@@ -697,11 +738,17 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			}
 		}
 	}
+
+out:
+	if (serial)
+		mem_free(serial);
 }
 
 static void
 handle_udev_event(struct uevent *uevent, char *raw_p)
 {
+	TRACE("handle_udev_event");
+
 	uevent_parse(uevent, raw_p);
 
 	IF_TRUE_RETURN_TRACE(strncmp(uevent->subsystem, "usb", 3) ||
