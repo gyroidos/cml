@@ -519,6 +519,9 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 			uevent_udev_trigger_coldboot();
 		container_unregister_observer(container, cb);
 
+		DEBUG("Freeing key of container %s", container_get_name(container));
+		container_free_key(container);
+
 		/* Make KSM aggressive to immmediately share as many pages as
 		 * possible */
 		ksm_set_aggressive_for(CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT);

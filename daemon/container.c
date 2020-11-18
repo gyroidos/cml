@@ -215,6 +215,19 @@ container_get_next_adb_port(void)
 #endif
 }
 
+void
+container_free_key(container_t *container)
+{
+	ASSERT(container);
+
+	IF_NULL_RETURN(container->key);
+
+	memset(container->key, 0, strlen(container->key));
+	mem_free(container->key);
+
+	INFO("Key of container %s was freed", container->name);
+}
+
 container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
 		       bool ns_net, bool privileged, const guestos_t *os,
@@ -1963,8 +1976,7 @@ container_set_key(container_t *container, const char *key)
 	if (container->key && !strcmp(container->key, key))
 		return;
 
-	if (container->key)
-		mem_free(container->key);
+	container_free_key(container);
 
 	container->key = strdup(key);
 
