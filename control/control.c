@@ -118,6 +118,31 @@ recv_message(int sock)
 	return resp;
 }
 
+static bool
+get_container_usb_pin_entry(uuid_t *uuid, int sock)
+{
+	bool pin_entry = false;
+	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
+	msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
+	msg.n_container_uuids = 1;
+	msg.container_uuids = mem_new(char *, 1);
+	msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
+	send_message(sock, &msg);
+
+	DaemonToController *resp = recv_message(sock);
+
+	if (resp->n_container_configs == 1) {
+		pin_entry = resp->container_configs[0]->usb_pin_entry;
+	}
+
+	// TODO check this
+	mem_free(msg.container_uuids[0]);
+	mem_free(msg.container_uuids);
+	protobuf_free_message((ProtobufCMessage *)resp);
+
+	return pin_entry;
+}
+
 static uuid_t *
 get_container_uuid_new(const char *identifier, int sock)
 {
@@ -412,6 +437,7 @@ main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
 		msg.container_start_params = NULL;
 		bool ask_for_password = true;
+		bool usb_pin_entry = get_container_usb_pin_entry(uuid, sock);
 		// parse specific options for start command
 		optind--;
 		char **start_argv = &argv[optind];
@@ -434,7 +460,9 @@ main(int argc, char *argv[])
 				ASSERT(false); // never reached
 			}
 		}
-		if (ask_for_password)
+		if (usb_pin_entry)
+			printf("Please Enter your password via pin reader\n");
+		else if (ask_for_password)
 			container_start_params.key = get_password_new("Password: ");
 		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
