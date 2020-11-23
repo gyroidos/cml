@@ -371,6 +371,16 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 
+	// if we just got a single file chown this and return
+	if (file_exists(path) && !file_is_dir(path)) {
+		if (lchown(path, user->uid_start, user->uid_start) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", path, user->uid_start,
+				    user->uid_start);
+			goto error;
+		}
+		goto success;
+	}
+
 	// if dev or a cgroup subsys just chown the files
 	if ((strlen(path) >= 4 && !strcmp(strrchr(path, '\0') - 4, "/dev")) ||
 	    (strstr(path, "/cgroup") != NULL)) {
@@ -396,16 +406,6 @@ c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
 			goto error;
 		}
 		goto shift;
-	}
-
-	// if we just got a single file chown this and return
-	if (file_exists(path) && !file_is_dir(path)) {
-		if (lchown(path, user->uid_start, user->uid_start) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", path, user->uid_start,
-				    user->uid_start);
-			goto error;
-		}
-		goto success;
 	}
 
 shift:
