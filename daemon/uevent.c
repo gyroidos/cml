@@ -528,7 +528,10 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 static int
 uevent_create_device_node(struct uevent *uevent, container_t *container)
 {
-	char *path = mem_printf("%s/dev/%s", container_get_rootdir(container), uevent->devname);
+	// newer versions of udev prepends '/dev/' in DEVNAME
+	char *path =
+		mem_printf("%s%s%s", container_get_rootdir(container),
+			   strncmp("/dev/", uevent->devname, 4) ? "/dev/" : "", uevent->devname);
 
 	if (file_exists(path)) {
 		mem_free(path);
@@ -833,7 +836,7 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 
 	char *raw_p = uev->msg.raw;
 
-	if (memcmp(raw_p, "libudev", 8) == 0) {
+	if (strncmp(uev->msg.nlh.prefix, "libudev", uev->msg_len) == 0) {
 		/* udev message needs proper version magic */
 		if (uev->msg.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
 			WARN("unrecognized message signature (%x != %x)", uev->msg.nlh.magic,
@@ -864,7 +867,11 @@ int
 uevent_init()
 {
 	/* find the udevd started by cml's init */
-	pid_t udevd_pid = proc_find(1, "udevd");
+	pid_t udevd_pid = proc_find(1, "systemd-udevd");
+	pid_t eudevd_pid = proc_find(1, "udevd");
+
+	if (eudevd_pid < udevd_pid && eudevd_pid > 0)
+		udevd_pid = eudevd_pid;
 
 	if (!(uevent_netlink_sock = nl_sock_uevent_new(udevd_pid))) {
 		ERROR("Could not open netlink socket");
