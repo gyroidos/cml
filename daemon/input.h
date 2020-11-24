@@ -32,41 +32,16 @@
 #define DAEMON_INPUT_H_
 
 /**
- * Parses /proc/bus/input/devices to find the /dev/input/eventx input file for the 
- * usb devices specified by vendor_id and product_id
+ * Register callback to interactively read in container pin from USB 
+ * pin entry device and start container afterwards
  * 
- * @param vendor_id     The vendor ID of the usb device to get the input file for
- * @param product_id    The product ID of the usb device to get the input file for
- * @return              The /dev/input/eventx file of the usb device
- */
-char *
-input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id);
-
-/**
- * Opens the /dev/input/eventx file to enable reading the keystrokes of the usb device
- * 
- * @param char* input_file  The /dev/input/eventx file to be opened
- * return                   The file descriptor or -1 if an error occurred
+ * @param container_start_ptr_t container_start_ptr Function pointer
+ *          to the container start function
+ * @param control_t *control
+ * @param container_t *container
+ * @param ContainerStartParams *start_params
  */
 int
-input_open_usb_input_event_file(char *input_file);
-
-/**
- * Read a pin from an external usb pin reader device fd points to
- * 
- * @param fd    The file descriptor that represents the input file
- * @return      The read in pin
- */
-char *
-input_read_usb_input_event_file_pin(int fd);
-
-/**
- * Closes the usb input file
- * 
- * @param int fd    The file descriptor of the file to be closed
- * @return          0 on success, otherwise -1
- */
-int
-close_usb_input_event_file(int fd);
+input_register_container_start_cb(control_t *control, container_t *container);
 
 #endif // DAEMON_INPUT_H_

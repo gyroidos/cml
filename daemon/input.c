@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -30,15 +32,25 @@
 #include <unistd.h>
 #include "fcntl.h"
 
+#include "control.h"
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/event.h"
 #include "container.h"
+#include "uevent.h"
+#include "input.h"
+#include "cmld.h"
 
 // The following defines represent parts of the syntax of /proc/bus/input/devices
 #define IFACE_PREFIX "I:"
 #define HANDLER_PREFIX "H: Handlers="
 #define EVENT "event"
 #define SYSRQ_EVENT "sysrq"
+
+typedef struct {
+	control_t *control;
+	container_t *container;
+} container_start_cb_data_t;
 
 /**
  * Converts a keyboard scan code value into its ASCII digit representation
@@ -85,7 +97,15 @@ input_event_code_to_ascii_num(int in, char *out)
 	}
 }
 
-char *
+/**
+ * Parses /proc/bus/input/devices to find the /dev/input/eventx input file for the 
+ * usb devices specified by vendor_id and product_id
+ * 
+ * @param vendor_id     The vendor ID of the usb device to get the input file for
+ * @param product_id    The product ID of the usb device to get the input file for
+ * @return              The /dev/input/eventx file of the usb device
+ */
+static char *
 input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 {
 	FILE *fp;
@@ -122,76 +142,141 @@ input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 	return event_path;
 }
 
-int
-input_open_usb_input_event_file(char *input_file)
+static void
+input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, void *data)
 {
-	int fd = open(input_file, O_RDONLY | O_NONBLOCK);
-	if (fd == -1) {
-		WARN("Failed to open usb input event file for pin reader");
-	}
-	return fd;
-}
-
-char *
-input_read_usb_input_event_file_pin(int fd)
-{
-	char *key = NULL;
+	ASSERT(data);
+	char c;
+	static char *key = NULL;
+	static int index = 0;
 	char *tmp_key = NULL;
+	container_start_cb_data_t *cb_data = data;
 
-	int ret = ioctl(fd, EVIOCGRAB, (void *)1);
-	if (ret != 0) {
-		WARN("Failed to get exclusive access to pin reader");
-		return key;
+	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit);
+
+	IF_FALSE_RETURN(events & EVENT_IO_READ);
+
+	if (!cb_data->control || !cb_data->container) {
+		WARN("Invalid parameters for container start callback");
+		goto exit;
 	}
-	struct input_event keyboard_event;
 
+	struct input_event keyboard_event;
 	TRACE("Reading pin from pin reader");
-	int index = 0;
-	while (1) {
-		if (read(fd, &keyboard_event, sizeof(keyboard_event)) != -1) {
-			if ((keyboard_event.type == 0x1) &&
-			    (keyboard_event.code == KEY_BACKSPACE) &&
-			    (keyboard_event.value == 0x1)) {
-				// Backspace was pressed, remove last entered digit
-				if (index > 0) {
-					index--;
-				}
-			} else if ((keyboard_event.type == 0x1) &&
-				   ((keyboard_event.code == KEY_ENTER) ||
-				    (keyboard_event.code == KEY_KPENTER)) &&
-				   (keyboard_event.value == 0x1)) {
-				// Enter was pressed, finish
-				break;
-			} else if ((keyboard_event.type == 0x1) && (keyboard_event.value == 0x1)) {
-				// Another key was pressed..
-				char c;
-				// ..Check if pressed key is a digit and store it
-				if (input_event_code_to_ascii_num(keyboard_event.code, &c) == 0) {
-					index++;
-					tmp_key = (char *)mem_realloc(key, index * sizeof(char));
-					if (tmp_key) {
-						key = tmp_key;
-						key[index - 1] = c;
-					} else {
-						WARN("Failed to allocate memory for pin");
-						free(key);
-						return key;
-					}
+	while (read(fd, &keyboard_event, sizeof(keyboard_event)) > 0) {
+		if ((keyboard_event.type != 0x1) || (keyboard_event.value != 0x1)) {
+			continue;
+		}
+
+		switch (keyboard_event.code) {
+		case KEY_BACKSPACE:
+			// Backspace was pressed, remove last entered digit
+			if (index > 0) {
+				index--;
+			}
+			break;
+
+		case KEY_ENTER:
+		case KEY_KPENTER:
+			// Enter was pressed, finish
+			if (!key) {
+				key = (char *)mem_alloc(sizeof(char));
+				*key = '\0';
+			}
+			index = 0;
+			DEBUG("Starting container with smartcard from callback");
+			if (cmld_container_start_with_smartcard(cb_data->control,
+								cb_data->container, key) != 0) {
+				ERROR("Failed to start container %s",
+				      container_get_name(cb_data->container));
+			}
+			goto exit;
+
+		default:
+			// Another key was pressed, check if pressed key is a digit and store it
+			if (input_event_code_to_ascii_num(keyboard_event.code, &c) == 0) {
+				index++;
+				tmp_key = (char *)mem_realloc(key, index * sizeof(char));
+				if (tmp_key) {
+					key = tmp_key;
+					key[index - 1] = c;
+				} else {
+					WARN("Failed to allocate memory for pin");
+					index = 0;
+					goto exit;
 				}
 			}
 		}
 	}
 
-	ret = ioctl(fd, EVIOCGRAB, NULL);
-	if (ret != 0) {
+	// Pin entry is not yet finished, just return to wait for more keystrokes
+	return;
+
+exit:
+	if (ioctl(fd, EVIOCGRAB, NULL) != 0) {
 		WARN("Failed to release exclusive access to pin reader");
 	}
-
-	return key;
+	event_remove_io(io);
+	event_io_free(io);
+	close(fd);
+	mem_free(cb_data);
+	if (key) {
+		memset(key, 0x0, strlen(key));
+		mem_free(key);
+	}
 }
 
 int
-close_usb_input_event_file(int fd)
+input_register_container_start_cb(control_t *control, container_t *container)
 {
-	return close(fd);
+	char *input_file = NULL;
+
+	TRACE("Searching for USB pin reader for interactive pin entry");
+
+	// Iterate through usb-dev list and look for USB_PIN_ENTRY device
+	uevent_usbdev_t *usbdev_pinreader = NULL;
+	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
+		uevent_usbdev_t *usbdev = (uevent_usbdev_t *)l->data;
+		if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
+			usbdev_pinreader = usbdev;
+			break;
+		}
+	}
+	IF_FALSE_GOTO(usbdev_pinreader, err);
+
+	TRACE("Found USB pin reader. Device Serial: %s. Vendor:Product: %x:%x",
+	      uevent_usbdev_get_i_serial(usbdev_pinreader),
+	      uevent_usbdev_get_id_vendor(usbdev_pinreader),
+	      uevent_usbdev_get_id_product(usbdev_pinreader));
+
+	input_file = input_get_usb_input_event_file(uevent_usbdev_get_id_vendor(usbdev_pinreader),
+						    uevent_usbdev_get_id_product(usbdev_pinreader));
+	IF_FALSE_GOTO(input_file, err);
+
+	TRACE("Found USB pin reader input file: %s", input_file);
+
+	int fd = open(input_file, O_RDONLY | O_NONBLOCK);
+	IF_TRUE_GOTO(fd == -1, err);
+
+	if (ioctl(fd, EVIOCGRAB, (void *)1) != 0) {
+		WARN("Failed to get exclusive access to pin reader");
+		close(fd);
+		goto err;
+	}
+
+	// Read in pin in asynchronous callback
+	container_start_cb_data_t *cb_data = mem_new0(container_start_cb_data_t, 1);
+	cb_data->control = control;
+	cb_data->container = container;
+	event_io_t *event = event_io_new(fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
+					 input_cb_request_pin_start_container, cb_data);
+
+	TRACE("Registering callback for pin entry");
+	event_add_io(event);
+	mem_free(input_file);
+	return 0;
+
+err:
+	mem_free(input_file);
+	return -1;
 }
