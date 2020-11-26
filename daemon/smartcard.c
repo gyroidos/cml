@@ -879,6 +879,29 @@ smartcard_scd_token_remove_block(container_t *container)
 	return 0;
 }
 
+int
+smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container)
+{
+	ASSERT(smartcard);
+	ASSERT(container);
+
+	int rc = -1;
+
+	char *keyfile = mem_printf("%s/%s.key", smartcard->path,
+				   uuid_string(container_get_uuid(container)));
+
+	if (0 != remove(keyfile)) {
+		ERROR("Failed to remove keyfile");
+		goto out;
+	}
+
+	rc = 0;
+
+out:
+	mem_free(keyfile);
+	return rc;
+}
+
 smartcard_t *
 smartcard_new(const char *path)
 {
