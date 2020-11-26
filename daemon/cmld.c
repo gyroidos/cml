@@ -1345,7 +1345,12 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 		smartcard_scd_token_remove_block(container);
 	}
 
-	/* detroy the container */
+	/* remove keyfile */
+	if (0 != smartcard_remove_keyfile(cmld_smartcard, container)) {
+		ERROR("Failed to remove keyfile. Continuing to remove container anyway.");
+	}
+
+	/* destroy the container */
 	if (container_destroy(container) < 0) {
 		ERROR("Could not destroy container");
 		return;

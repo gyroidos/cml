@@ -112,6 +112,15 @@ smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *pas
 bool
 smartcard_container_token_is_provisioned(const container_t *container);
 
+/**
+ * removes the keyfile of a container from the fs
+ *
+ * @param smartcard smartcard struct representing the device token
+ * @param container
+ */
+int
+smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container);
+
 /// *** CRYPTO *** ///
 // FIXME stop the "smartcard" abuse for doing non-smartcard crypto ...
 
