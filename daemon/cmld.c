@@ -1353,6 +1353,7 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	/* destroy the container */
 	if (container_destroy(container) < 0) {
 		ERROR("Could not destroy container");
+		container_set_state(container, CONTAINER_STATE_ZOMBIE);
 		return;
 	}
 
