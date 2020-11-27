@@ -865,6 +865,10 @@ smartcard_scd_token_remove_block(container_t *container)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_SUCCESSFUL: {
 		TRACE("CMLD: smartcard_scd_token_block_remove: token in scd removed successfully");
+		char *path = mem_printf("%s/%s", container_get_images_dir(container),
+					TOKEN_IS_INIT_FILE_NAME);
+		unlink(path);
+		mem_free(path);
 		container_set_token_is_init(container, false);
 	} break;
 	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED: {
