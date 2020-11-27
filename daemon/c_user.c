@@ -161,7 +161,7 @@ c_user_set_next_uid_range_start(c_user_t *user)
 		offset = c_user_set_offset(offset);
 
 	if (offset == -1) {
-		INFO("Restored uid allready taken, genertaing new one");
+		INFO("Restored uid already taken, generating new one");
 		offset = c_user_set_next_offset();
 		IF_TRUE_RETVAL(offset < 0, -1);
 		if (file_write(file_name_uid, (char *)&offset, sizeof(offset)) < 0) {
