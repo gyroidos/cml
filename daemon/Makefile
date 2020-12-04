@@ -101,6 +101,7 @@ SRC_FILES := main.c \
 	c_run.c \
 	c_fifo.c \
 	c_time.c \
+	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	input.c
 
