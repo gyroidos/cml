@@ -29,6 +29,7 @@
 #include "file.h"
 #include "dir.h"
 
+#include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -264,4 +265,29 @@ proc_cap_last_cap(void)
 
 	mem_free(str_cap_last_cap);
 	return cap;
+}
+
+int
+proc_stat_btime(unsigned long long *boottime_sec)
+{
+	FILE *proc;
+	char line_buf[2048];
+
+	proc = fopen("/proc/stat", "r");
+	IF_NULL_RETVAL((proc = fopen("/proc/stat", "r")), -1);
+
+	while (fgets(line_buf, 2048, proc)) {
+		if (sscanf(line_buf, "btime %llu", boottime_sec) != 1)
+			continue;
+		fclose(proc);
+		return 0;
+	}
+	if (errno) {
+		ERROR_ERRNO("fscanf");
+		fclose(proc);
+		return -errno;
+	}
+	ERROR_ERRNO("failed to parse /proc/stat");
+	fclose(proc);
+	return -1;
 }
