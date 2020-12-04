@@ -52,6 +52,7 @@
 #include "tss.h"
 #include "ksm.h"
 #include "uevent.h"
+#include "time.h"
 
 #include <stdio.h>
 #include <dirent.h>
@@ -798,6 +799,7 @@ cmld_container_start(container_t *container)
 			     container_get_description(container));
 			return -1;
 		}
+		time_register_clock_check();
 	} else {
 		DEBUG("Container %s has been already started",
 		      container_get_description(container));
@@ -1220,6 +1222,10 @@ cmld_init(const char *path)
 		FATAL("Could not init power module");
 	INFO("power initialized.");
 #endif
+	if (time_init() < 0)
+		FATAL("Could not init time module");
+	INFO("time initialized.");
+
 	if (uevent_init() < 0)
 		FATAL("Could not init uevent module");
 	INFO("uevent initialized.");
