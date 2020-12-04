@@ -69,4 +69,12 @@ proc_fork_and_execvp(const char *const *argv);
 int
 proc_cap_last_cap(void);
 
+/**
+ * Returns the btime field from /proc/stat in buffer boottime_sec
+ * @param boottime_sec pointer to buffer for result
+ * @return 0 on success, -1 on error
+ */
+int
+proc_stat_btime(unsigned long long *boottime_sec);
+
 #endif /* PROC_H */
