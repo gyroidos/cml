@@ -652,3 +652,56 @@ msg_err:
 	nl_sock_free(nl_sock);
 	return -1;
 }
+
+int
+network_str_to_mac_addr(const char *mac_str, uint8_t mac[6])
+{
+	int ret = sscanf(mac_str, "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
+	       ":%02" SCNx8 ":%02" SCNx8,
+	       &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+
+	IF_TRUE_RETVAL((ret == EOF || ret < 6), -1);
+
+	return 0;
+}
+
+char *
+network_mac_addr_to_str_new(uint8_t mac[6])
+{
+	return mem_printf("%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
+	       ":%02" SCNx8 ":%02" SCNx8,
+	       mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+char *
+network_get_ifname_by_addr_new(uint8_t mac[6])
+{
+	IF_NULL_RETVAL(mac, NULL);
+
+	struct if_nameindex *if_ni, *i;
+	if_ni = if_nameindex();
+
+	IF_NULL_RETVAL(if_ni, NULL);
+
+	uint8_t mac_i[6];
+
+	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
+		char *dev_addr_path = mem_printf("/sys/class/net/%s/address", i->if_name);
+		char *mac_str = file_read_new(dev_addr_path, 128);
+		mem_free(dev_addr_path);
+		if (mac_str == NULL)
+			continue;
+
+		memset(mac_i, 0, 6);
+
+		if ((0 == network_str_to_mac_addr(mac_str, mac_i)) &&
+		    (0 == memcmp(mac, mac_i, 6))) {
+			mem_free(mac_str);
+			return mem_strdup(i->if_name);
+		}
+
+		mem_free(mac_str);
+	}
+
+	return NULL;
+}
