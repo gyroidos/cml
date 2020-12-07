@@ -404,10 +404,14 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 
+	uint8_t mac[6];
 	list_t *net_ifaces_list = NULL;
 	for (size_t i = 0; i < config->cfg->n_net_ifaces; i++) {
-		net_ifaces_list =
-			list_append(net_ifaces_list, mem_strdup(config->cfg->net_ifaces[i]));
+		char *ifname = config->cfg->net_ifaces[i];
+		memset(&mac, 0, 6);
+		net_ifaces_list = (0 == network_str_to_mac_addr(ifname, mac)) ?
+			list_append(net_ifaces_list, network_get_ifname_by_addr_new(mac)):
+			list_append(net_ifaces_list, mem_strdup(ifname));
 	}
 	return net_ifaces_list;
 }
