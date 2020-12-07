@@ -40,6 +40,7 @@
 #include "guestos.h"
 #include "guestos_mgr.h"
 #include "hardware.h"
+#include "network.h"
 #include "uevent.h"
 
 struct container_config {
@@ -547,16 +548,12 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 				WARN_ERRNO("Failed to read from /dev/urandom");
 			}
 			config->cfg->vnet_configs[i]->if_mac =
-				mem_printf("%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
-					   ":%02" PRIx8 ":%02" PRIx8,
-					   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+				network_mac_addr_to_str_new(mac);
 		} else {
 			INFO("Using mac %s for if %s", config->cfg->vnet_configs[i]->if_mac,
 			     config->cfg->vnet_configs[i]->if_name);
-			sscanf(config->cfg->vnet_configs[i]->if_mac,
-			       "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
-			       ":%02" SCNx8,
-			       &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+			if (network_str_to_mac_addr(config->cfg->vnet_configs[i]->if_mac, mac) == -1)
+				WARN_ERRNO("Failed to parse mac from config!");
 		}
 		// sanitize mac veth otherwise kernel may reject the mac
 		mac[0] &= 0xfe; /* clear multicast bit */
