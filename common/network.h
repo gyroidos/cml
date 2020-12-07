@@ -188,4 +188,40 @@ network_rtnet_move_ns(const char *ifi_name, const pid_t pid);
 int
 network_rename_ifi(const char *old_ifi_name, const char *new_ifi_name);
 
+/**
+ * Convert a String representing a mac address ,e.g., "00:11:22:33:44:55"
+ * to the corresponding byte array.
+ * @param mac_str String representing the mac
+ * @param mac buffer for the resulting byte array
+ * @return 0 on success, -1 on error
+ */
+int
+network_str_to_mac_addr(const char *mac_str, uint8_t mac[6]);
+
+/**
+ * Constructs a String representation for a mac address.
+ * @param mac array to be converted
+ * @return The string representing the mac, NULL on error
+ */
+char *
+network_mac_addr_to_str_new(uint8_t mac[6]);
+
+/**
+ * Walk through sysfs to find the if name, e.g., shown by ip addr, to the corresponding
+ * hardware (mac) address.
+ * @param mac array containing the mac address
+ * @return The name of the interface
+ */
+char *
+network_get_ifname_by_addr_new(uint8_t mac[6]);
+
+/**
+ * Get mac address for network interface given by name.
+ * @param ifname network interface name
+ * @param mac buffer for the resulting byte array
+ * @return 0 on success, -1 on error
+ */
+int
+network_get_mac_by_ifname(const char *ifname, uint8_t mac[6]);
+
 #endif /* NETWORK_H */
