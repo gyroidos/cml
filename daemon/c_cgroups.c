@@ -1145,6 +1145,14 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 	/* append usb devices to devices_subsystem */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
 		uevent_usbdev_t *usbdev = l->data;
+		// USB devices of type PIN_READER are only required outside the container to enter the pin
+		// before the container starts and should not be mapped into the container, as they can
+		// be used for multiple containers and a container should not be able to log the pin of
+		// another container
+		if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
+			TRACE("Device of type pin reader is not mapped into the container");
+			continue;
+		}
 		c_cgroups_devices_usbdev_allow(cgroups, usbdev);
 	}
 
