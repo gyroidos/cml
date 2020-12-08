@@ -1517,7 +1517,7 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 	}
 	if (found) {
 		INFO("Removing '%s' from global available physical netifs", if_name);
-		cmld_netif_phys_list = list_remove(cmld_netif_phys_list, found);
+		cmld_netif_phys_list = list_unlink(cmld_netif_phys_list, found);
 		return true;
 	}
 	return false;
