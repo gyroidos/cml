@@ -21,8 +21,6 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
