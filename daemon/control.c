@@ -51,6 +51,7 @@
 #include "common/list.h"
 #include "common/network.h"
 #include "common/reboot.h"
+#include "common/file.h"
 
 #include <unistd.h>
 #include <inttypes.h>
@@ -670,6 +671,28 @@ control_handle_container_start(control_t *control, container_t *container,
 	return res;
 }
 
+static bool
+control_check_command(const ControllerToDaemon *msg)
+{
+	if (!cmld_is_device_provisioned() || cmld_is_hostedmode_active()) {
+		DEBUG("Device is not provisioned or in hosted mode, all commands are accepted");
+		return true;
+	}
+
+	if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP)) {
+		TRACE("Received command %d is valid in provisioned mode", msg->command);
+		return true;
+	}
+	return false;
+}
+
 /**
  * Handles a single decoded ControllerToDaemon message.
  *
@@ -693,6 +716,14 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		TRACE("Handling ControllerToDaemon message:\n%s", msg_text ? msg_text : "NULL");
 		if (msg_text)
 			free(msg_text);
+	}
+
+	// Check if this is a valid mode depending on the current mode
+	if (!control_check_command(msg)) {
+		WARN("Illegal ControllerToDaemon command: %d received. Command is only valid in non-provisioned or hosted mode",
+		     msg->command);
+		control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd);
+		return;
 	}
 
 	// get container for container-specific commands in advance
@@ -952,6 +983,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			cert_len = msg->device_cert.len;
 		}
 		cmld_push_device_cert(control, cert, cert_len);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED: {
+		cmld_set_device_provisioned();
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
@@ -1249,6 +1284,17 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		res = cmld_container_change_pin(control, container, msg->device_pin,
 						msg->device_newpin);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN: {
+		IF_NULL_RETURN(container);
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_CMLD_HANDLES_PIN;
+		out.has_container_cmld_handles_pin = true;
+		out.container_cmld_handles_pin = container_get_usb_pin_entry(container);
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			WARN("Could not send container cmld handles pin info");
+		}
 	} break;
 
 	default:

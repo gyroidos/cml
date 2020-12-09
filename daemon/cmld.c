@@ -58,6 +58,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <stdbool.h>
 
@@ -105,6 +106,8 @@ static char *cmld_shared_data_dir = NULL;
 static list_t *cmld_netif_phys_list = NULL;
 
 static bool cmld_hostedmode = false;
+
+static bool cmld_device_provisioned = false;
 
 /******************************************************************************/
 
@@ -321,6 +324,30 @@ bool
 cmld_is_hostedmode_active(void)
 {
 	return cmld_hostedmode;
+}
+
+bool
+cmld_is_device_provisioned(void)
+{
+	return cmld_device_provisioned;
+}
+
+void
+cmld_set_device_provisioned(void)
+{
+	cmld_device_provisioned = true;
+
+	char *provisioned_file = mem_printf("%s/%s", DEFAULT_BASE_PATH, PROVISIONED_FILE_NAME);
+	if (!file_exists(provisioned_file)) {
+		if (file_touch(provisioned_file) != 0) {
+			FATAL("Failed to create provisioned file");
+			// TODO does this fulfill the required access rights??
+			uid_t uid = getuid();
+			if (chown(provisioned_file, uid, uid)) {
+				FATAL("Failed to chown provision-status-file to %d", uid);
+			}
+		}
+	}
 }
 
 /**
@@ -1189,6 +1216,15 @@ cmld_init(const char *path)
 		WARN("Plattform does not support TSS / TPM 2.0");
 	else
 		INFO("tss initialized.");
+
+	// Read the provision-status-file to set provisioned flag of control structs accordingly
+	char *provisioned_file = mem_printf("%s/%s", DEFAULT_BASE_PATH, PROVISIONED_FILE_NAME);
+	if (file_exists(provisioned_file)) {
+		DEBUG("Device is already provisioned");
+		cmld_device_provisioned = true;
+	} else {
+		DEBUG("Device is not yet provisioned and provision-status-file does not yet exist");
+	}
 
 	/* the control module sets up a local or remote socket, registers a
 	 * callback (via event_) and parses incoming commands

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -127,6 +127,9 @@ message ControllerToDaemon {
 		// reboot the device
 		REBOOT_DEVICE = 31;
 
+		// Set the device to provisioned state
+		SET_PROVISIONED = 32;
+
 		// Pulls the device csr (provisioning)
 		PULL_DEVICE_CSR = 40;
 		// Pushes bach the device certificate (provisioning)
@@ -168,7 +171,7 @@ message ControllerToDaemon {
 		CONTAINER_ASSIGNIFACE = 110;
 
 		// Unassigns a network interface from a container. Also needs [assign_iface_params]
-                CONTAINER_UNASSIGNIFACE = 111;
+		CONTAINER_UNASSIGNIFACE = 111;
 
 		// List network interfaces assigned to a container
 		CONTAINER_LIST_IFACES = 112;
@@ -184,6 +187,9 @@ message ControllerToDaemon {
 
 		// Change the PIN of the token taht is assigned to the token.
 		CONTAINER_CHANGE_TOKEN_PIN = 116;
+
+		// Request if CMLD handles pin input
+		CONTAINER_CMLD_HANDLES_PIN = 117;
 
 	}
 	required Command command = 1;
@@ -237,6 +243,8 @@ message DaemonToController {
 		CONTAINER_IFACES = 5;		// -> [container_ifaces]
 		CONTAINER_PID = 6;		// -> [container_pid]
 
+		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
+
 		STATUS_CHANGED = 10;		// -> [log_message]
 		NOTIFICATION = 11;		// -> [log_message]
 		LOG_MESSAGE = 12;		// -> [log_message]
@@ -286,6 +294,7 @@ message DaemonToController {
 	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
 	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
 	optional uint32 container_pid = 10;			// PID of the container's namespace
+	optional bool container_cmld_handles_pin = 11; 		// Indicate that CMLD handles pin input for container start and stop
 
 	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
 
