@@ -48,6 +48,8 @@
 #define LOGFILE_DIR "/data/logs"
 #endif
 
+#define PROVISIONED_FILE_NAME "_cml_provisioned_"
+
 /**
  * Initialize the CMLD module.
  *
@@ -205,6 +207,12 @@ cmld_is_internet_active(void);
  */
 bool
 cmld_is_hostedmode_active(void);
+
+bool
+cmld_is_device_provisioned(void);
+
+void
+cmld_set_device_provisioned(void);
 
 /**
  * Get the dns server set for the host interface in device config
