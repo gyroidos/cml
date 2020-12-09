@@ -44,15 +44,28 @@
 #define HANDLER_PREFIX "H: Handlers="
 #define EVENT "event"
 #define SYSRQ_EVENT "sysrq"
+#define PIN_ENTRY_TIMEOUT_MS 60000
 
 typedef struct {
 	control_t *control;
 	container_t *container;
+	event_timer_t *pin_entry_timer;
 } container_start_cb_data_t;
+
+typedef struct {
+	control_t *control;
+	event_io_t *io;
+	int fd;
+} pin_entry_timer_cb_data_t;
+
+// TODO required global static because it needs to be freed in the
+// in the timer callback in case of pin entry timeout
+// Better solution?
+static char *key = NULL;
 
 /**
  * Converts a keyboard scan code value into its ASCII digit representation
- * 
+ *
  * @param int in    The input keyboard scan code value
  * @param char* out Its ASCII digit representation
  * @return          0 in case of success, -1 if the scan code value was not a digit code
@@ -96,9 +109,9 @@ input_event_code_to_ascii_num(int in, char *out)
 }
 
 /**
- * Parses /proc/bus/input/devices to find the /dev/input/eventx input file for the 
+ * Parses /proc/bus/input/devices to find the /dev/input/eventx input file for the
  * usb devices specified by vendor_id and product_id
- * 
+ *
  * @param vendor_id     The vendor ID of the usb device to get the input file for
  * @param product_id    The product ID of the usb device to get the input file for
  * @return              The /dev/input/eventx file of the usb device
@@ -140,12 +153,39 @@ input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 	return event_path;
 }
 
+void
+pin_entry_timeout_cb(event_timer_t *timer, UNUSED void *data)
+{
+	ASSERT(data);
+
+	pin_entry_timer_cb_data_t *timer_data = data;
+
+	WARN("Pin entry failed: Timeout");
+	int resp_fd = control_get_client_sock(timer_data->control);
+	control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, resp_fd);
+
+	if (ioctl(timer_data->fd, EVIOCGRAB, NULL) != 0) {
+		WARN("Failed to release exclusive access to pin reader");
+	}
+
+	event_remove_io(timer_data->io);
+	event_io_free(timer_data->io);
+
+	if (key) {
+		memset(key, 0x0, strlen(key));
+		mem_free(key);
+	}
+	event_remove_timer(timer);
+	event_timer_free(timer);
+	timer = NULL;
+	close(timer_data->fd);
+}
+
 static void
 input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
 	char c;
-	static char *key = NULL;
 	static int index = 0;
 	char *tmp_key = NULL;
 	container_start_cb_data_t *cb_data = data;
@@ -182,7 +222,8 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 				*key = '\0';
 			}
 			index = 0;
-			DEBUG("Starting container with smartcard from callback");
+			DEBUG("Starting container %s with smartcard from callback",
+			      container_get_name(cb_data->container));
 			if (cmld_container_start_with_smartcard(cb_data->control,
 								cb_data->container, key) != 0) {
 				ERROR("Failed to start container %s",
@@ -211,12 +252,18 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 	return;
 
 exit:
+	DEBUG("Remove container pin entry timer for %s", container_get_name(cb_data->container));
+	event_remove_timer(cb_data->pin_entry_timer);
+	event_timer_free(cb_data->pin_entry_timer);
+	cb_data->pin_entry_timer = NULL;
+
 	if (ioctl(fd, EVIOCGRAB, NULL) != 0) {
 		WARN("Failed to release exclusive access to pin reader");
 	}
 	event_remove_io(io);
 	event_io_free(io);
 	close(fd);
+
 	mem_free(cb_data);
 	if (key) {
 		memset(key, 0x0, strlen(key));
@@ -268,6 +315,15 @@ input_register_container_start_cb(control_t *control, container_t *container)
 	cb_data->container = container;
 	event_io_t *event = event_io_new(fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
 					 input_cb_request_pin_start_container, cb_data);
+
+	// Start pin entry timeout timer
+	pin_entry_timer_cb_data_t *timer_data = mem_new0(pin_entry_timer_cb_data_t, 1);
+	timer_data->control = control;
+	timer_data->fd = fd;
+	timer_data->io = event;
+	cb_data->pin_entry_timer =
+		event_timer_new(PIN_ENTRY_TIMEOUT_MS, 1, &pin_entry_timeout_cb, timer_data);
+	event_add_timer(cb_data->pin_entry_timer);
 
 	TRACE("Registering callback for pin entry");
 	event_add_io(event);
