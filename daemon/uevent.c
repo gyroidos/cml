@@ -45,6 +45,7 @@
 #include "common/dir.h"
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/network.h"
 #include "common/nl.h"
 #include "common/proc.h"
 #include "common/str.h"
@@ -388,10 +389,48 @@ uevent_replace_devpath_new(const char *str, const char *oldstr, const char *news
 	return str_replaced;
 }
 
+char *
+uevent_rename_ifi_new(const char *oldname)
+{
+	static unsigned int cmld_wlan_idx = 0;
+	static unsigned int cmld_eth_idx = 0;
+
+	//generate interface name that is unique
+	//in the root network namespace
+	const char *infix;
+	unsigned int *ifi_idx;
+	char *newname = NULL;
+
+	if (network_interface_is_wifi(oldname)) {
+		infix = "wlan";
+		ifi_idx = &cmld_wlan_idx;
+	} else {
+		infix = "eth";
+		ifi_idx = &cmld_eth_idx;
+	}
+
+	if (-1 == asprintf(&newname, "%s%s%d", "cml", infix, *ifi_idx)) {
+		ERROR("Failed to generate new interface name");
+		return NULL;
+	}
+
+	*ifi_idx += 1;
+
+	INFO("Renaming %s to %s", oldname, newname);
+
+	if (network_rename_ifi(oldname, newname)) {
+		ERROR("Failed to rename interface %s", oldname);
+		mem_free(newname);
+		return NULL;
+	}
+
+	return newname;
+}
+
 static struct uevent *
 uevent_rename_interface(const struct uevent *uevent)
 {
-	char *new_ifname = cmld_rename_ifi_new(uevent->interface);
+	char *new_ifname = uevent_rename_ifi_new(uevent->interface);
 
 	if (!new_ifname)
 		return NULL;

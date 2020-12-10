@@ -283,9 +283,6 @@ cmld_netif_phys_remove_by_name(const char *if_name);
 void
 cmld_netif_phys_add_by_name(const char *if_name);
 
-char *
-cmld_rename_ifi_new(const char *oldname);
-
 /**
  * Checks if kernel supports shiftfs
  */

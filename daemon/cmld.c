@@ -1078,44 +1078,6 @@ cmld_start_a0(container_t *new_a0)
 	return 0;
 }
 
-char *
-cmld_rename_ifi_new(const char *oldname)
-{
-	static unsigned int cmld_wlan_idx = 0;
-	static unsigned int cmld_eth_idx = 0;
-
-	//generate interface name that is unique
-	//in the root network namespace
-	const char *infix;
-	unsigned int *ifi_idx;
-	char *newname = NULL;
-
-	if (network_interface_is_wifi(oldname)) {
-		infix = "wlan";
-		ifi_idx = &cmld_wlan_idx;
-	} else {
-		infix = "eth";
-		ifi_idx = &cmld_eth_idx;
-	}
-
-	if (-1 == asprintf(&newname, "%s%s%d", "cml", infix, *ifi_idx)) {
-		ERROR("Failed to generate new interface name");
-		return NULL;
-	}
-
-	*ifi_idx += 1;
-
-	INFO("Renaming %s to %s", oldname, newname);
-
-	if (network_rename_ifi(oldname, newname)) {
-		ERROR("Failed to rename interface %s", oldname);
-		mem_free(newname);
-		return NULL;
-	}
-
-	return newname;
-}
-
 static void
 cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if,
 		  const char *host_gateway, const char *host_dns)
@@ -1134,19 +1096,7 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	/* configure loopback interface of root network namespace */
 	network_setup_loopback();
 
-	list_t *ifis = network_get_physical_interfaces_new();
-
-	for (list_t *l = ifis; l; l = l->next) {
-		char *ifi_new = cmld_rename_ifi_new(l->data);
-
-		if (ifi_new) {
-			DEBUG("Got physical network interface %s", ifi_new);
-			cmld_netif_phys_list = list_append(cmld_netif_phys_list, ifi_new);
-		} else {
-			ERROR("Failed to rename ifi, using as %s", (char *)l->data);
-			cmld_netif_phys_list = list_append(cmld_netif_phys_list, l->data);
-		}
-	}
+	cmld_netif_phys_list = network_get_physical_interfaces_new();
 
 	/* configure resolver of root network namespace */
 	if (-1 == file_printf("/etc/resolv.conf", "nameserver %s", host_dns))
