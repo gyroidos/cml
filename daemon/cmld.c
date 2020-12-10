@@ -1477,7 +1477,7 @@ void
 cmld_netif_phys_add_by_name(const char *if_name)
 {
 	IF_NULL_RETURN(if_name);
-	DEBUG("Adding network interface %s to cmld", if_name);
+	INFO("Adding '%s' to global available physical netifs", if_name);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
 		char *cmld_if_name = l->data;
@@ -1485,6 +1485,7 @@ cmld_netif_phys_add_by_name(const char *if_name)
 			return;
 		}
 	}
+	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
 }
 
 #define PROC_FSES "/proc/filesystems"
