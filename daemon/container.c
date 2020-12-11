@@ -333,12 +333,10 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	}
 
 	// network interfaces from container config
-	//TODO if_name == NULL => segfault
 	for (list_t *elem = net_ifaces; elem != NULL; elem = elem->next) {
-		char *if_name = elem->data;
-		DEBUG("List element in net_ifaces: %s", if_name);
-		if (cmld_netif_phys_remove_by_name(if_name))
-			nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(if_name));
+		char *if_name_macstr = elem->data;
+		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(if_name_macstr));
+		DEBUG("List element in net_ifaces: %s", if_name_macstr);
 	}
 
 	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list, adb_port);
