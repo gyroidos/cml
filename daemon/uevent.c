@@ -59,6 +59,9 @@ static event_io_t *uevent_io_event = NULL;
 
 // track usb devices mapped to containers
 static list_t *uevent_container_dev_mapping_list = NULL;
+//
+// track net devices mapped to containers
+static list_t *uevent_container_netdev_mapping_list = NULL;
 
 #define UDEV_MONITOR_TAG "libudev"
 #define UDEV_MONITOR_MAGIC 0xfeedcafe
@@ -139,6 +142,11 @@ typedef struct uevent_container_dev_mapping {
 	bool assign;
 } uevent_container_dev_mapping_t;
 
+typedef struct uevent_net_dev_mapping {
+	container_t *container;
+	uint8_t mac[6];
+} uevent_container_netdev_mapping_t;
+
 uint16_t
 uevent_usbdev_get_id_vendor(uevent_usbdev_t *usbdev)
 {
@@ -212,6 +220,22 @@ uevent_container_dev_mapping_free(uevent_container_dev_mapping_t *mapping)
 			mem_free(mapping->usbdev->i_serial);
 		mem_free(mapping->usbdev);
 	}
+	mem_free(mapping);
+}
+
+static uevent_container_netdev_mapping_t *
+uevent_container_netdev_mapping_new(container_t *container, uint8_t mac[6])
+{
+	uevent_container_netdev_mapping_t *mapping = mem_new0(uevent_container_netdev_mapping_t, 1);
+	mapping->container = container;
+	memcpy(mapping->mac, mac, 6);
+
+	return mapping;
+}
+
+static void
+uevent_container_netdev_mapping_free(uevent_container_netdev_mapping_t *mapping)
+{
 	mem_free(mapping);
 }
 
@@ -606,27 +630,54 @@ err:
 }
 
 static void
+uevent_netdev_move(const char *interface)
+{
+	uint8_t iface_mac[6];
+	if (network_get_mac_by_ifname(interface, iface_mac)) {
+		ERROR("Iface '%s' with no mac, skipping!", interface);
+		return;
+	}
+
+	container_t *container = NULL;
+	for (list_t *l = uevent_container_netdev_mapping_list; l; l = l->next) {
+		uevent_container_netdev_mapping_t *mapping = l->data;
+		if (0 == memcmp(iface_mac, mapping->mac, 6)) {
+			container = mapping->container;
+			break;
+		}
+	}
+
+	if (!container)
+		container = cmld_containers_get_a0();
+
+	if (!container) {
+		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
+		return;
+	}
+
+	char *macstr = network_mac_addr_to_str_new(iface_mac);
+	if (container_add_net_iface(container, interface, false)) {
+		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
+	} else {
+		INFO("Moved phys network interface '%s' (mac: %s) to %s", interface, macstr,
+		     container_get_name(container));
+	}
+	mem_free(macstr);
+}
+
+static void
 uevent_sysfs_wifi_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 	char *interface = data;
-	container_t *c0 = cmld_containers_get_a0();
-
-	if (!c0) {
-		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
-	}
 
 	char *phy_path = mem_printf("/sys/class/net/%s/phy80211", interface);
 	if (!file_exists(phy_path)) {
 		mem_free(phy_path);
 		return;
 	}
-	if (container_add_net_iface(c0, interface, false))
-		ERROR("Cannot move '%s' to c0!", interface);
-	else
-		INFO("Moved phys network interface '%s' to c0", interface);
 
-	sleep(0.1);
+	uevent_netdev_move(interface);
 
 	mem_free(phy_path);
 	mem_free(interface);
@@ -639,19 +690,8 @@ uevent_sysfs_eth_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 	char *interface = data;
-	container_t *c0 = cmld_containers_get_a0();
 
-	if (!c0) {
-		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
-	}
-
-	if (container_add_net_iface(c0, interface, false)) {
-		ERROR("Cannot move '%s' to c0!", interface);
-	} else {
-		INFO("Moved phys network interface '%s' to c0", interface);
-	}
-
-	sleep(0.1);
+	uevent_netdev_move(interface);
 
 	mem_free(interface);
 	event_remove_timer(timer);
@@ -716,7 +756,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 
 	TRACE("Got add/remove/change uevent");
 
-	/* move network ifaces to c0 */
+	/* move network ifaces to containers */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
 	    !strstr(uevent->devpath, "virtual") && !cmld_is_hostedmode_active()) {
 		//rename network interface to avoid name clashes when moving to container
@@ -991,6 +1031,50 @@ uevent_unregister_usbdevice(container_t *container, uevent_usbdev_t *usbdev)
 	     mapping_to_remove->usbdev->i_serial, container_get_name(mapping_to_remove->container));
 
 	uevent_container_dev_mapping_free(mapping_to_remove);
+
+	return 0;
+}
+
+int
+uevent_register_netdev(container_t *container, uint8_t mac[6])
+{
+	uevent_container_netdev_mapping_t *mapping =
+		uevent_container_netdev_mapping_new(container, mac);
+	uevent_container_netdev_mapping_list =
+		list_append(uevent_container_netdev_mapping_list, mapping);
+	char *macstr = network_mac_addr_to_str_new(mapping->mac);
+
+	INFO("Registered netdev '%s' for container %s", macstr,
+	     container_get_name(mapping->container));
+
+	mem_free(macstr);
+	return 0;
+}
+
+int
+uevent_unregister_netdev(container_t *container, uint8_t mac[6])
+{
+	uevent_container_netdev_mapping_t *mapping_to_remove = NULL;
+
+	for (list_t *l = uevent_container_netdev_mapping_list; l; l = l->next) {
+		uevent_container_netdev_mapping_t *mapping = l->data;
+		if ((mapping->container == container) && (0 == memcmp(mapping->mac, mac, 6))) {
+			mapping_to_remove = mapping;
+		}
+	}
+
+	IF_NULL_RETVAL(mapping_to_remove, -1);
+
+	uevent_container_netdev_mapping_list =
+		list_remove(uevent_container_netdev_mapping_list, mapping_to_remove);
+
+	char *macstr = network_mac_addr_to_str_new(mapping_to_remove->mac);
+
+	INFO("Unregistered netdev '%s' for container %s", macstr,
+	     container_get_name(mapping_to_remove->container));
+
+	uevent_container_netdev_mapping_free(mapping_to_remove);
+	mem_free(macstr);
 
 	return 0;
 }
