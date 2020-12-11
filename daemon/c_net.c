@@ -56,6 +56,7 @@
 #include "container.h"
 #include "cmld.h"
 #include "hardware.h"
+#include "uevent.h"
 
 /* Offset for ipv4/mac address allocation, e.g. 127.1.(IPV4_SUBNET_OFFS+x).2
  * Defines the start value for address allocation */
@@ -549,11 +550,33 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 		TRACE("new c_net_interface_t struct %s was allocated", ni->nw_name);
 	}
 
+	uint8_t mac[6];
 	for (list_t *l = nw_mv_name_list; l; l = l->next) {
-		char *if_name = l->data;
+		char *if_name_macstr = l->data;
+		char *if_name = NULL;
+		TRACE("mv_name_list add ifname %s", if_name_macstr);
+		memset(&mac, 0, 6);
+		// check if string is mac address
+		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
+			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
+			if_name = network_get_ifname_by_addr_new(mac);
+			// if interface is not yet connected register at uevent subsys
+			if (NULL == if_name) {
+				INFO("Interface for mac '%s' is not yet connected register at uevent subsys",
+				     if_name_macstr);
+				uevent_register_netdev(net->container, mac);
+				continue;
+			}
+		}
 
-		net->interface_mv_name_list =
-			list_append(net->interface_mv_name_list, strdup(if_name));
+		if (NULL == if_name)
+			if_name = mem_strdup(if_name_macstr);
+
+		TRACE("mv_name_list add ifname %s", if_name);
+
+		if (cmld_netif_phys_remove_by_name(if_name))
+			net->interface_mv_name_list =
+				list_append(net->interface_mv_name_list, if_name);
 	}
 
 	if (adb_port > 0) {
