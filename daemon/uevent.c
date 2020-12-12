@@ -459,6 +459,10 @@ uevent_rename_interface(const struct uevent *uevent)
 	if (!new_ifname)
 		return NULL;
 
+	// replace ifname in cmld's available netifs
+	if (cmld_netif_phys_remove_by_name(uevent->interface))
+		cmld_netif_phys_add_by_name(new_ifname);
+
 	char *new_devpath =
 		uevent_replace_devpath_new(uevent->devpath, uevent->interface, new_ifname);
 
