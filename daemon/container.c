@@ -2293,13 +2293,15 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 	bool a0_is_up = (state_a0 == CONTAINER_STATE_RUNNING ||
 			 state_a0 == CONTAINER_STATE_BOOTING || state_a0 == CONTAINER_STATE_SETUP);
 
+	IF_FALSE_RETVAL(cmld_netif_phys_remove_by_name(iface), -1);
+
 	if (cmld_containers_get_a0() == container) {
 		if (a0_is_up)
 			res = c_net_move_ifi(iface, pid);
+		// re-add iface to list of available network interfaces
+		cmld_netif_phys_add_by_name(iface);
 		return res;
 	}
-
-	IF_FALSE_RETVAL(cmld_netif_phys_remove_by_name(iface), -1);
 
 	pid_t pid_a0 = container_get_pid(cmld_containers_get_a0());
 
