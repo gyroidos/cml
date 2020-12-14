@@ -414,24 +414,17 @@ uevent_replace_devpath_new(const char *str, const char *oldstr, const char *news
 }
 
 char *
-uevent_rename_ifi_new(const char *oldname)
+uevent_rename_ifi_new(const char *oldname, const char *infix)
 {
 	static unsigned int cmld_wlan_idx = 0;
 	static unsigned int cmld_eth_idx = 0;
 
 	//generate interface name that is unique
 	//in the root network namespace
-	const char *infix;
 	unsigned int *ifi_idx;
 	char *newname = NULL;
 
-	if (network_interface_is_wifi(oldname)) {
-		infix = "wlan";
-		ifi_idx = &cmld_wlan_idx;
-	} else {
-		infix = "eth";
-		ifi_idx = &cmld_eth_idx;
-	}
+	ifi_idx = !strcmp(infix, "wlan") ? &cmld_wlan_idx : &cmld_eth_idx;
 
 	if (-1 == asprintf(&newname, "%s%s%d", "cml", infix, *ifi_idx)) {
 		ERROR("Failed to generate new interface name");
@@ -454,7 +447,7 @@ uevent_rename_ifi_new(const char *oldname)
 static struct uevent *
 uevent_rename_interface(const struct uevent *uevent)
 {
-	char *new_ifname = uevent_rename_ifi_new(uevent->interface);
+	char *new_ifname = uevent_rename_ifi_new(uevent->interface, uevent->devtype);
 
 	if (!new_ifname)
 		return NULL;
