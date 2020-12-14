@@ -663,30 +663,13 @@ uevent_netdev_move(const char *interface)
 }
 
 static void
-uevent_sysfs_wifi_timer_cb(event_timer_t *timer, void *data)
+uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 	char *interface = data;
 
-	char *phy_path = mem_printf("/sys/class/net/%s/phy80211", interface);
-	if (!file_exists(phy_path)) {
-		mem_free(phy_path);
-		return;
-	}
-
-	uevent_netdev_move(interface);
-
-	mem_free(phy_path);
-	mem_free(interface);
-	event_remove_timer(timer);
-	event_timer_free(timer);
-}
-
-static void
-uevent_sysfs_eth_timer_cb(event_timer_t *timer, void *data)
-{
-	ASSERT(data);
-	char *interface = data;
+	// if sysfs is not ready in case of wifi just return and retry.
+	IF_TRUE_RETURN(!strncmp(interface, "wlan", 4) && !network_interface_is_wifi(interface));
 
 	uevent_netdev_move(interface);
 
@@ -769,23 +752,11 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			      uevent->interface);
 		}
 
-		if (!strcmp(uevent->devtype, "wlan")) {
-			DEBUG("Got new wifi interface");
-			// give sysfs some time to settle if iface is wifi
-			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-							   uevent_sysfs_wifi_timer_cb,
-							   mem_strdup(uevent->interface));
-			event_add_timer(e);
-		} else {
-			//rename network interface to avoid name clashes when moving to container
-			DEBUG("Got new ethernet interface");
-
-			// give sysfs some time to settle
-			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-							   uevent_sysfs_eth_timer_cb,
-							   mem_strdup(uevent->interface));
-			event_add_timer(e);
-		}
+		// give sysfs some time to settle if iface is wifi
+		event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+						   uevent_sysfs_netif_timer_cb,
+						   mem_strdup(uevent->interface));
+		event_add_timer(e);
 	}
 
 	/* Iterate over containers */
