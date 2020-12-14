@@ -951,6 +951,17 @@ uevent_init()
 		return -1;
 	}
 
+	// Initially rename all physical interfaces before starting uevent handling.
+	for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
+		const char *ifname = l->data;
+		const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
+		char *if_name_new = uevent_rename_ifi_new(ifname, prefix);
+		if (if_name_new) {
+			mem_free(l->data);
+			l->data = if_name_new;
+		}
+	}
+
 	/* find the udevd started by cml's init */
 	pid_t udevd_pid = proc_find(1, "systemd-udevd");
 	pid_t eudevd_pid = proc_find(1, "udevd");
