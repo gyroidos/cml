@@ -433,6 +433,7 @@ uevent_rename_ifi_new(const char *oldname, const char *infix)
 
 	*ifi_idx += 1;
 
+
 	INFO("Renaming %s to %s", oldname, newname);
 
 	if (network_rename_ifi(oldname, newname)) {
@@ -449,8 +450,7 @@ uevent_rename_interface(const struct uevent *uevent)
 {
 	char *new_ifname = uevent_rename_ifi_new(uevent->interface, uevent->devtype);
 
-	if (!new_ifname)
-		return NULL;
+	IF_NULL_RETVAL(new_ifname, NULL);
 
 	// replace ifname in cmld's available netifs
 	if (cmld_netif_phys_remove_by_name(uevent->interface))
@@ -626,13 +626,15 @@ err:
 	return -1;
 }
 
-static void
-uevent_netdev_move(const char *interface)
+static int
+uevent_netdev_move(struct uevent *uevent)
 {
 	uint8_t iface_mac[6];
-	if (network_get_mac_by_ifname(interface, iface_mac)) {
-		ERROR("Iface '%s' with no mac, skipping!", interface);
-		return;
+	char *macstr = NULL;
+
+	if (network_get_mac_by_ifname(uevent->interface, iface_mac)) {
+		ERROR("Iface '%s' with no mac, skipping!", uevent->interface);
+		goto error;
 	}
 
 	container_t *container = NULL;
@@ -648,32 +650,67 @@ uevent_netdev_move(const char *interface)
 		container = cmld_containers_get_a0();
 
 	if (!container) {
-		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
-		return;
+		ERROR("No c0 is running, skip moving %s", uevent->interface);
+		goto error;
 	}
 
-	char *macstr = network_mac_addr_to_str_new(iface_mac);
-	if (container_add_net_iface(container, interface, false)) {
-		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
+	// rename network interface to avoid name clashes when moving to container
+	DEBUG("Renaming new interface we were notified about");
+	struct uevent *newevent = uevent_rename_interface(uevent);
+
+	// uevent pointer is not freed inside this function, therefore we can safely drop it
+	if (newevent) {
+		DEBUG("Using renamed uevent");
+		uevent = newevent;
 	} else {
-		INFO("Moved phys network interface '%s' (mac: %s) to %s", interface, macstr,
+		ERROR("Failed to rename interface %s. Injecting uevent as it is",
+		      uevent->interface);
+	}
+
+	macstr = network_mac_addr_to_str_new(iface_mac);
+	if (container_add_net_iface(container, uevent->interface, false)) {
+		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
+		goto error;
+	} else {
+		INFO("Moved phys network interface '%s' (mac: %s) to %s", uevent->interface, macstr,
 		     container_get_name(container));
 	}
+
+	// if moving was successful also inject uevent
+	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len,
+				     container_get_pid(container),
+				     container_has_userns(container)) < 0) {
+		WARN("Could not inject uevent into netns of container %s!",
+		     container_get_name(container));
+	} else {
+		TRACE("Successfully injected uevent into netns of container %s!",
+		      container_get_name(container));
+	}
+
 	mem_free(macstr);
+	return 0;
+error:
+	mem_free(macstr);
+	return -1;
 }
 
 static void
 uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
-	char *interface = data;
+	struct uevent *uevent_cb = data;
+	uevent_parse(uevent_cb, uevent_cb->msg.raw);
 
 	// if sysfs is not ready in case of wifi just return and retry.
-	IF_TRUE_RETURN(!strncmp(interface, "wlan", 4) && !network_interface_is_wifi(interface));
+	IF_TRUE_RETURN(!strcmp(uevent_cb->devtype, "wlan") &&
+		       !network_interface_is_wifi(uevent_cb->interface));
 
-	uevent_netdev_move(interface);
+	if (uevent_netdev_move(uevent_cb) == -1)
+		WARN("Did not move net interface!");
+	else
+		INFO("Moved net interface to target.");
 
-	mem_free(interface);
+	mem_free(uevent_cb);
 	event_remove_timer(timer);
 	event_timer_free(timer);
 }
@@ -739,24 +776,14 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	/* move network ifaces to containers */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
 	    !strstr(uevent->devpath, "virtual") && !cmld_is_hostedmode_active()) {
-		//rename network interface to avoid name clashes when moving to container
-		DEBUG("Renaming new interface we were notified about");
-		struct uevent *newevent = uevent_rename_interface(uevent);
-
-		//uevent pointer is not freed inside this function, therefore we can safely drop it
-		if (newevent) {
-			DEBUG("Using renamed uevent");
-			uevent = newevent;
-		} else {
-			ERROR("Failed to rename interface %s. Injecting uevent as it is",
-			      uevent->interface);
-		}
+		struct uevent *uevent_cb = mem_new0(struct uevent, 1);
+		memcpy(uevent_cb, uevent, sizeof(struct uevent));
 
 		// give sysfs some time to settle if iface is wifi
 		event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-						   uevent_sysfs_netif_timer_cb,
-						   mem_strdup(uevent->interface));
+						   uevent_sysfs_netif_timer_cb, uevent_cb);
 		event_add_timer(e);
+		goto out;
 	}
 
 	/* Iterate over containers */
