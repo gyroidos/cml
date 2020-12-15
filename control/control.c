@@ -65,6 +65,7 @@ print_usage(const char *cmd)
 	printf("   reload\n        Reloads containers from config files.\n");
 	printf("   wipe_device\n        Wipes all containers on the device.\n");
 	printf("   reboot\n        Reboots the whole device, shutting down any containers which are running.\n");
+	printf("   set_provisioned\n        Sets the device to provisioned state which limits certain commands\n");
 	printf("   create <container.conf>\n        Creates a container from the given config file.\n");
 	printf("   remove <container-uuid>\n        Removes the specified container (completely).\n");
 	printf("   change_pin <container-uuid>\\n        Change token pin which is used for container key wrapping. Prompts for password entry.\n");
@@ -123,7 +124,7 @@ get_container_usb_pin_entry(uuid_t *uuid, int sock)
 {
 	bool pin_entry = false;
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
-	msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
+	msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN;
 	msg.n_container_uuids = 1;
 	msg.container_uuids = mem_new(char *, 1);
 	msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
@@ -131,11 +132,15 @@ get_container_usb_pin_entry(uuid_t *uuid, int sock)
 
 	DaemonToController *resp = recv_message(sock);
 
-	if (resp->n_container_configs == 1) {
-		pin_entry = resp->container_configs[0]->usb_pin_entry;
+	if ((resp->code != DAEMON_TO_CONTROLLER__CODE__CONTAINER_CMLD_HANDLES_PIN) ||
+	    (resp->response == DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED) ||
+	    (!resp->has_container_cmld_handles_pin)) {
+		printf("ERROR: Failed to retrieve pin handle info. Assuming control handles pin entry\n");
+		return false;
 	}
 
-	// TODO check this
+	pin_entry = resp->container_cmld_handles_pin;
+
 	mem_free(msg.container_uuids[0]);
 	mem_free(msg.container_uuids);
 	protobuf_free_message((ProtobufCMessage *)resp);
@@ -283,6 +288,11 @@ main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "reboot")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "set_provisioned")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED;
+		// TODO has response necessary?
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_guestos_config")) {
