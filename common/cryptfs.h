@@ -39,6 +39,9 @@ char *
 cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key);
 
 int
+cryptfs_format_volume(const char *dev);
+
+int
 cryptfs_delete_blk_dev(const char *name);
 
 #endif /* CRYPTFS_H */

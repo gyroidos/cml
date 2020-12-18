@@ -753,11 +753,25 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
 				mem_free(label);
 				goto error;
+			}else
+			{
+				DEBUG("Cryptfs_setup_volume_new returned: '%s'",crypt);
 			}
+<<<<<<< HEAD
 			audit_log_event(container_get_uuid(vol->container), SSA, CMLD,
 					CONTAINER_MGMT, "setup-crypted-volume",
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
 					label);
+					
+=======
+>>>>>>> dd8f80b... Merge and add features for integrity protection
+			if (new_image) {
+				if (cryptfs_format_volume(crypt) < 0) {
+					ERROR("Formatting volume %s failed", crypt);
+					mem_free(label);
+					goto error;
+				}
+			}
 		}
 
 		mem_free(label);

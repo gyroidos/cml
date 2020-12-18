@@ -66,6 +66,7 @@ OBJS_COMMON := \
 	file.o \
 	dir.o \
 	ns.o \
+	proc.o \
 	nl.o
 
 OBJS_COMMON_FULL := \
