@@ -45,6 +45,7 @@
 #define EVENT "event"
 #define SYSRQ_EVENT "sysrq"
 #define PIN_ENTRY_TIMEOUT_MS 60000
+#define MAX_PIN_LEN 64
 
 typedef struct {
 	control_t *control;
@@ -62,6 +63,7 @@ typedef struct {
 // in the timer callback in case of pin entry timeout
 // Better solution?
 static char *key = NULL;
+static int key_index = 0;
 
 /**
  * Converts a keyboard scan code value into its ASCII digit representation
@@ -171,6 +173,7 @@ pin_entry_timeout_cb(event_timer_t *timer, UNUSED void *data)
 	event_remove_io(timer_data->io);
 	event_io_free(timer_data->io);
 
+	key_index = 0;
 	if (key) {
 		memset(key, 0x0, strlen(key));
 		mem_free(key);
@@ -186,7 +189,6 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 {
 	ASSERT(data);
 	char c;
-	static int index = 0;
 	char *tmp_key = NULL;
 	container_start_cb_data_t *cb_data = data;
 
@@ -196,7 +198,7 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 
 	if (!cb_data->control || !cb_data->container) {
 		WARN("Invalid parameters for container start callback");
-		goto exit;
+		goto exit_fail;
 	}
 
 	struct input_event keyboard_event;
@@ -209,8 +211,8 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 		switch (keyboard_event.code) {
 		case KEY_BACKSPACE:
 			// Backspace was pressed, remove last entered digit
-			if (index > 0) {
-				index--;
+			if (key_index > 0) {
+				key_index--;
 			}
 			break;
 
@@ -221,11 +223,13 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 				key = (char *)mem_alloc(sizeof(char));
 				*key = '\0';
 			}
-			index = 0;
+			key_index = 0;
 			DEBUG("Starting container %s with smartcard from callback",
 			      container_get_name(cb_data->container));
 			if (cmld_container_start_with_smartcard(cb_data->control,
 								cb_data->container, key) != 0) {
+				// the container start function will send a control message
+				// so we do not need to go to exit fail and send a message here
 				ERROR("Failed to start container %s",
 				      container_get_name(cb_data->container));
 			}
@@ -234,15 +238,18 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 		default:
 			// Another key was pressed, check if pressed key is a digit and store it
 			if (input_event_code_to_ascii_num(keyboard_event.code, &c) == 0) {
-				index++;
-				tmp_key = (char *)mem_realloc(key, index * sizeof(char));
+				key_index++;
+				if (key_index > MAX_PIN_LEN) {
+					ERROR("Pin exceeds maximum pin length of %d", MAX_PIN_LEN);
+					goto exit_fail;
+				}
+				tmp_key = (char *)mem_realloc(key, key_index * sizeof(char));
 				if (tmp_key) {
 					key = tmp_key;
-					key[index - 1] = c;
+					key[key_index - 1] = c;
 				} else {
 					WARN("Failed to allocate memory for pin");
-					index = 0;
-					goto exit;
+					goto exit_fail;
 				}
 			}
 		}
@@ -251,8 +258,12 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 	// Pin entry is not yet finished, just return to wait for more keystrokes
 	return;
 
+exit_fail:
+	control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL,
+			     control_get_client_sock(cb_data->control));
+
 exit:
-	DEBUG("Remove container pin entry timer for %s", container_get_name(cb_data->container));
+	TRACE("Remove container pin entry timer for %s", container_get_name(cb_data->container));
 	event_remove_timer(cb_data->pin_entry_timer);
 	event_timer_free(cb_data->pin_entry_timer);
 	cb_data->pin_entry_timer = NULL;
@@ -265,6 +276,7 @@ exit:
 	close(fd);
 
 	mem_free(cb_data);
+	key_index = 0;
 	if (key) {
 		memset(key, 0x0, strlen(key));
 		mem_free(key);
