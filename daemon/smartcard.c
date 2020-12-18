@@ -487,8 +487,6 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 
 	int pair_sec_len;
 	int resp_fd = control_get_client_sock(startdata->control);
-	int pw_size = strlen(passwd);
-	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
 
 	if (!container_get_token_is_init(container)) {
 		ERROR("The token that is associated with the container has not been initialized! \
@@ -677,8 +675,6 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	ASSERT(newpasswd);
 
 	int ret = -1;
-	int pw_size = strlen(passwd);
-	int newpw_size = strlen(newpasswd);
 	unsigned char pair_sec[MAX_PAIR_SEC_LEN];
 	int resp_fd = control_get_client_sock(control);
 	bool is_provisioning;
@@ -692,8 +688,7 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	startdata->container = container;
 	startdata->control = control;
 
-	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
-	DEBUG("SCD: New Passwd from UI: %s, size: %d", newpasswd, newpw_size);
+	DEBUG("SCD: Received new password from UI");
 
 	ret = smartcard_get_pairing_secret(smartcard, pair_sec, sizeof(pair_sec));
 	if (ret < 0) {
@@ -746,10 +741,7 @@ smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *pas
 	ASSERT(newpasswd);
 
 	int ret = -1;
-	int pw_size = strlen(passwd);
-	int newpw_size = strlen(newpasswd);
-	DEBUG("SCD: Passwd form UI: %s, size: %d", passwd, pw_size);
-	DEBUG("SCD: New Passwd form UI: %s, size: %d", newpasswd, newpw_size);
+	DEBUG("SCD: Received new password from UI");
 
 	event_io_t *event =
 		event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, control);
