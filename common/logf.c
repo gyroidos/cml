@@ -231,29 +231,45 @@ logf_file_new(const char *name)
 	return f;
 }
 
-static void
-logf_file_write_timestamp(FILE *stream)
+char *
+logf_get_timestamp_new()
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
 	struct tm *tm;
 
-	IF_TRUE_RETURN_ERROR_ERRNO((gettimeofday(&tv, NULL) < 0));
+	if (-1 == gettimeofday(&tv, NULL)) {
+		ERROR_ERRNO("Failed to get current time");
+		return NULL;
+	}
 
-	tm = localtime(&tv.tv_sec);
-	IF_NULL_RETURN_ERROR_ERRNO(tm);
-
-	if (!stream)
-		return;
+	if (!(tm = localtime(&tv.tv_sec))) {
+		ERROR_ERRNO("Failed to get current time");
+		return NULL;
+	}
 
 	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", tm))
-		return;
+		return NULL;
 
 	if (!strftime(buf2, sizeof(buf2) - 1, "%z", tm))
-		return;
+		return NULL;
 
 	// rfc3339 format: 2014-05-23T21:29:11.150495+02:00
-	fprintf(stream, "%s.%06u%s ", buf1, (unsigned)tv.tv_usec, buf2);
+	return mem_printf("%s.%06u%s ", buf1, (unsigned)tv.tv_usec, buf2);
+}
+
+static void
+logf_file_write_timestamp(FILE *stream)
+{
+	char *ts = logf_get_timestamp_new();
+
+	if (ts) {
+		// rfc3339 format: 2014-05-23T21:29:11.150495+02:00
+		fwrite(ts, sizeof(ts), 1, stream);
+		mem_free(ts);
+	} else {
+		ERROR("Failed to generate timestamp");
+	}
 }
 
 static const char *

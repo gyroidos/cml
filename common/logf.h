@@ -297,4 +297,12 @@ logf_klog_new(const char *name);
 void
 logf_klog_write(logf_prio_t prio, const char *msg, void *data);
 
+/**
+ * Create timestamp
+ *
+ * @return Timestamp as ascii string.
+ */
+char *
+logf_get_timestamp_new();
+
 #endif /* LOGF_H */
