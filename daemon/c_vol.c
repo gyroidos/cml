@@ -744,6 +744,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 				mem_free(label);
 				goto error;
 			}
+			if (new_image) {
+				if (cryptfs_format_volume(crypt) < 0) {
+					ERROR("Formatting volume %s failed", crypt);
+					mem_free(label);
+					goto error;
+				}
+
+			}
 		}
 
 		mem_free(label);
