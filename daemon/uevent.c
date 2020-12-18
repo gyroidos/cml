@@ -134,6 +134,7 @@ struct uevent {
 	uint16_t id_model_id;  //!< The udev event ID_MODEL_ID of the device (usb relevant)
 	char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)
 	char *interface;       //!< The uevent INTERFACE, points inside of raw
+	char *synth_uuid;      //!< The uevent SYNTH_UUID, points inside of raw (coldboot relevant)
 };
 
 typedef struct uevent_container_dev_mapping {
@@ -270,6 +271,7 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 	uevent->id_vendor_id = 0;
 	uevent->id_serial_short = "";
 	uevent->interface = "";
+	uevent->synth_uuid = "";
 
 	uevent_trace(uevent, raw_p);
 
@@ -316,6 +318,9 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 		} else if (!strncmp(raw_p, "INTERFACE=", 10)) {
 			raw_p += 10;
 			uevent->interface = raw_p;
+		} else if (!strncmp(raw_p, "SYNTH_UUID=", 11)) {
+			raw_p += 11;
+			uevent->synth_uuid = raw_p;
 		}
 
 		/* advance to after the next \0 */
@@ -432,7 +437,6 @@ uevent_rename_ifi_new(const char *oldname, const char *infix)
 	}
 
 	*ifi_idx += 1;
-
 
 	INFO("Renaming %s to %s", oldname, newname);
 
@@ -677,8 +681,7 @@ uevent_netdev_move(struct uevent *uevent)
 	}
 
 	// if moving was successful also inject uevent
-	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len,
-				     container_get_pid(container),
+	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
 				     container_has_userns(container)) < 0) {
 		WARN("Could not inject uevent into netns of container %s!",
 		     container_get_name(container));
@@ -716,6 +719,33 @@ uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 }
 
 static void
+uevent_device_create_and_forward(struct uevent *uevent, container_t *container)
+{
+	IF_NULL_RETURN(uevent);
+	IF_NULL_RETURN(container);
+
+	IF_FALSE_RETURN_TRACE(((container_get_state(container) == CONTAINER_STATE_BOOTING) ||
+			       (container_get_state(container) == CONTAINER_STATE_RUNNING) ||
+			       (container_get_state(container) == CONTAINER_STATE_SETUP)));
+
+	IF_FALSE_RETURN(container_is_device_allowed(container, uevent->major, uevent->minor));
+
+	if (uevent_create_device_node(uevent, container) < 0) {
+		ERROR("Could not create device node");
+		return;
+	}
+
+	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
+				     container_has_userns(container)) < 0) {
+		WARN("Could not inject uevent into netns of container %s!",
+		     container_get_name(container));
+	} else {
+		TRACE("Sucessfully injected uevent into netns of container %s!",
+		      container_get_name(container));
+	}
+}
+
+static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
 	TRACE("handle_kernel_event");
@@ -729,6 +759,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		return;
 	}
 
+	uuid_t *uevent_uuid = NULL;
 	char *serial_path = mem_printf("/sys/%s/serial", uevent->devpath);
 	char *serial = NULL;
 
@@ -786,39 +817,31 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		goto out;
 	}
 
-	/* Iterate over containers */
+	/* handle coldboot events just for target container */
+	uevent_uuid = uuid_new(uevent->synth_uuid);
+	container_t *container = (uevent_uuid) ? cmld_container_get_by_uuid(uevent_uuid) : NULL;
+	if (container) {
+		struct uevent *uev_fwd = uevent_replace_member(uevent, uevent->synth_uuid, "0");
+		if (!uev_fwd) {
+			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
+			goto out;
+		}
+		uevent_device_create_and_forward(uevent, container);
+		mem_free(uev_fwd);
+		goto out;
+	}
+
+	/* handle new events targetting all containers */
 	for (int i = 0; i < cmld_containers_get_count(); i++) {
-		container_t *c = cmld_container_get_by_index(i);
-		if (!c) {
-			WARN("Could not get container with index %d", i);
-			continue;
-		}
-		if ((container_get_state(c) == CONTAINER_STATE_BOOTING) ||
-		    (container_get_state(c) == CONTAINER_STATE_RUNNING) ||
-		    (container_get_state(c) == CONTAINER_STATE_SETUP)) {
-			if (!container_is_device_allowed(c, uevent->major, uevent->minor))
-				continue;
-
-			if (uevent_create_device_node(uevent, c) < 0) {
-				ERROR("Could not create device node");
-				continue;
-			}
-
-			if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len,
-						     container_get_pid(c),
-						     container_has_userns(c)) < 0) {
-				WARN("Could not inject uevent into netns of container %s!",
-				     container_get_name(c));
-			} else {
-				TRACE("Sucessfully injected uevent into netns of container %s!",
-				      container_get_name(c));
-			}
-		}
+		container_t *container = cmld_container_get_by_index(i);
+		uevent_device_create_and_forward(uevent, container);
 	}
 
 out:
 	if (serial)
 		mem_free(serial);
+	if (uevent_uuid)
+		uuid_free(uevent_uuid);
 }
 
 static void
@@ -1085,10 +1108,58 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6])
 	return 0;
 }
 
-void
-uevent_udev_trigger_coldboot(void)
+static int
+uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *data)
 {
-	const char *const argv[] = { "udevadm", "trigger", "--action=add", NULL };
-	if (-1 == proc_fork_and_execvp(argv))
-		WARN("Could not trigger coldboot uevents!");
+	int ret = 0;
+	char buf[256];
+	int major, minor;
+
+	container_t *container = data;
+	IF_NULL_RETVAL(container, -1);
+
+	char *full_path = mem_printf("%s/%s", path, name);
+	char *dev_file = NULL;
+
+	if (file_is_dir(full_path)) {
+		if (0 > dir_foreach(full_path, &uevent_trigger_coldboot_foreach_cb, container)) {
+			WARN("Could not trigger coldboot uevents! No '%s'!", full_path);
+			ret--;
+		}
+	} else if (!strcmp(name, "uevent")) {
+		dev_file = mem_printf("%s/dev", path);
+
+		IF_FALSE_GOTO_TRACE(file_exists(dev_file), out);
+
+		major = minor = -1;
+		IF_TRUE_GOTO(-1 == file_read(dev_file, buf, sizeof(buf)), out);
+		IF_TRUE_GOTO((sscanf(buf, "%d:%d", &major, &minor) < 0), out);
+		IF_FALSE_GOTO((major > -1 && minor > -1), out);
+
+		// only trigger for allowed devices
+		IF_FALSE_GOTO_TRACE(container_is_device_allowed(container, major, minor), out);
+
+		char *trigger = mem_printf("add %s", uuid_string(container_get_uuid(container)));
+		if (-1 == file_printf(full_path, trigger)) {
+			WARN("Could not trigger event %s <- %s", full_path, trigger);
+			ret--;
+		} else {
+			DEBUG("Trigger event %s <- %s", full_path, trigger);
+		}
+		mem_free(trigger);
+	}
+out:
+	mem_free(full_path);
+	mem_free(dev_file);
+	return ret;
+}
+
+void
+uevent_udev_trigger_coldboot(container_t *container)
+{
+	const char *sysfs_devices = "/sys/devices";
+	// for the first time iterate through sysfs to find device
+	if (0 > dir_foreach(sysfs_devices, &uevent_trigger_coldboot_foreach_cb, container)) {
+		WARN("Could not trigger coldboot uevents! No '%s'!", sysfs_devices);
+	}
 }

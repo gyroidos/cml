@@ -34,6 +34,7 @@
 #include <stdint.h>
 
 #include "container.h"
+#include "uuid.h"
 
 #define UEVENT_BUF_LEN 64 * 1024
 
@@ -115,10 +116,14 @@ int
 uevent_unregister_netdev(container_t *container, uint8_t mac[6]);
 
 /**
-  * Trigger cold boot events to allow user namespaced containers to fixup
-  * their device nodes by udevd in container
-  */
+ * Trigger cold boot events to allow user namespaced containers to fixup
+ * their device nodes by udevd in container.
+ * Internally the uuid of the container is used for synthetic events
+ * to allow directing events to corresponding container only.
+ *
+ * @param container container for which the cold boot is triggered.
+ */
 void
-uevent_udev_trigger_coldboot(void);
+uevent_udev_trigger_coldboot(container_t *container);
 
 #endif /* UEVENT_H */
