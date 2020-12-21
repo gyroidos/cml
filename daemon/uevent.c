@@ -806,25 +806,11 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			     strncmp(uevent->action, "remove", 6) &&
 			     strncmp(uevent->action, "change", 6));
 
-	TRACE("Got add/remove/change uevent");
-
-	/* move network ifaces to containers */
-	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
-	    !strstr(uevent->devpath, "virtual") && !cmld_is_hostedmode_active()) {
-		struct uevent *uevent_cb = mem_new0(struct uevent, 1);
-		memcpy(uevent_cb, uevent, sizeof(struct uevent));
-
-		// give sysfs some time to settle if iface is wifi
-		event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-						   uevent_sysfs_netif_timer_cb, uevent_cb);
-		event_add_timer(e);
-		goto out;
-	}
-
 	/* handle coldboot events just for target container */
 	uevent_uuid = uuid_new(uevent->synth_uuid);
 	container_t *container = (uevent_uuid) ? cmld_container_get_by_uuid(uevent_uuid) : NULL;
 	if (container) {
+		TRACE("Got synth add/remove/change uevent SYNTH_UUID=%s", uevent->synth_uuid);
 		struct uevent *uev_fwd = uevent_replace_member(uevent, uevent->synth_uuid, "0");
 		if (!uev_fwd) {
 			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
@@ -832,6 +818,24 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		}
 		uevent_device_create_and_forward(uevent, container);
 		mem_free(uev_fwd);
+		goto out;
+	}
+
+	TRACE("Got new add/remove/change uevent");
+
+	/* move network ifaces to containers */
+	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
+	    !strstr(uevent->devpath, "virtual") && !cmld_is_hostedmode_active()) {
+		// got new physical interface, initially add to cmld tracking list
+		cmld_netif_phys_add_by_name(uevent->interface);
+
+		struct uevent *uevent_cb = mem_new0(struct uevent, 1);
+		memcpy(uevent_cb, uevent, sizeof(struct uevent));
+
+		// give sysfs some time to settle if iface is wifi
+		event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+						   uevent_sysfs_netif_timer_cb, uevent_cb);
+		event_add_timer(e);
 		goto out;
 	}
 
