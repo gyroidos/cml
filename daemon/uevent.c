@@ -134,6 +134,7 @@ struct uevent {
 	uint16_t id_model_id;  //!< The udev event ID_MODEL_ID of the device (usb relevant)
 	char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)
 	char *interface;       //!< The uevent INTERFACE, points inside of raw
+	char *synth_uuid;      //!< The uevent SYNTH_UUID, points inside of raw (coldboot relevant)
 };
 
 typedef struct uevent_container_dev_mapping {
@@ -270,6 +271,7 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 	uevent->id_vendor_id = 0;
 	uevent->id_serial_short = "";
 	uevent->interface = "";
+	uevent->synth_uuid = "";
 
 	uevent_trace(uevent, raw_p);
 
@@ -316,6 +318,9 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 		} else if (!strncmp(raw_p, "INTERFACE=", 10)) {
 			raw_p += 10;
 			uevent->interface = raw_p;
+		} else if (!strncmp(raw_p, "SYNTH_UUID=", 11)) {
+			raw_p += 11;
+			uevent->synth_uuid = raw_p;
 		}
 
 		/* advance to after the next \0 */
@@ -449,8 +454,7 @@ uevent_rename_interface(const struct uevent *uevent)
 {
 	char *new_ifname = uevent_rename_ifi_new(uevent->interface, uevent->devtype);
 
-	if (!new_ifname)
-		return NULL;
+	IF_NULL_RETVAL(new_ifname, NULL);
 
 	// replace ifname in cmld's available netifs
 	if (cmld_netif_phys_remove_by_name(uevent->interface))
@@ -626,13 +630,15 @@ err:
 	return -1;
 }
 
-static void
-uevent_netdev_move(const char *interface)
+static int
+uevent_netdev_move(struct uevent *uevent)
 {
 	uint8_t iface_mac[6];
-	if (network_get_mac_by_ifname(interface, iface_mac)) {
-		ERROR("Iface '%s' with no mac, skipping!", interface);
-		return;
+	char *macstr = NULL;
+
+	if (network_get_mac_by_ifname(uevent->interface, iface_mac)) {
+		ERROR("Iface '%s' with no mac, skipping!", uevent->interface);
+		goto error;
 	}
 
 	container_t *container = NULL;
@@ -648,51 +654,95 @@ uevent_netdev_move(const char *interface)
 		container = cmld_containers_get_a0();
 
 	if (!container) {
-		ERROR("No c0 is running, skip moving %s", interface ? interface : NULL);
-		return;
+		ERROR("No c0 is running, skip moving %s", uevent->interface);
+		goto error;
 	}
 
-	char *macstr = network_mac_addr_to_str_new(iface_mac);
-	if (container_add_net_iface(container, interface, false)) {
-		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
+	// rename network interface to avoid name clashes when moving to container
+	DEBUG("Renaming new interface we were notified about");
+	struct uevent *newevent = uevent_rename_interface(uevent);
+
+	// uevent pointer is not freed inside this function, therefore we can safely drop it
+	if (newevent) {
+		DEBUG("Using renamed uevent");
+		uevent = newevent;
 	} else {
-		INFO("Moved phys network interface '%s' (mac: %s) to %s", interface, macstr,
+		ERROR("Failed to rename interface %s. Injecting uevent as it is",
+		      uevent->interface);
+	}
+
+	macstr = network_mac_addr_to_str_new(iface_mac);
+	if (container_add_net_iface(container, uevent->interface, false)) {
+		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
+		goto error;
+	} else {
+		INFO("Moved phys network interface '%s' (mac: %s) to %s", uevent->interface, macstr,
 		     container_get_name(container));
 	}
+
+	// if moving was successful also inject uevent
+	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
+				     container_has_userns(container)) < 0) {
+		WARN("Could not inject uevent into netns of container %s!",
+		     container_get_name(container));
+	} else {
+		TRACE("Successfully injected uevent into netns of container %s!",
+		      container_get_name(container));
+	}
+
 	mem_free(macstr);
+	return 0;
+error:
+	mem_free(macstr);
+	return -1;
 }
 
 static void
-uevent_sysfs_wifi_timer_cb(event_timer_t *timer, void *data)
+uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
-	char *interface = data;
+	struct uevent *uevent_cb = data;
+	uevent_parse(uevent_cb, uevent_cb->msg.raw);
 
-	char *phy_path = mem_printf("/sys/class/net/%s/phy80211", interface);
-	if (!file_exists(phy_path)) {
-		mem_free(phy_path);
+	// if sysfs is not ready in case of wifi just return and retry.
+	IF_TRUE_RETURN(!strcmp(uevent_cb->devtype, "wlan") &&
+		       !network_interface_is_wifi(uevent_cb->interface));
+
+	if (uevent_netdev_move(uevent_cb) == -1)
+		WARN("Did not move net interface!");
+	else
+		INFO("Moved net interface to target.");
+
+	mem_free(uevent_cb);
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
+static void
+uevent_device_create_and_forward(struct uevent *uevent, container_t *container)
+{
+	IF_NULL_RETURN(uevent);
+	IF_NULL_RETURN(container);
+
+	IF_FALSE_RETURN_TRACE(((container_get_state(container) == CONTAINER_STATE_BOOTING) ||
+			       (container_get_state(container) == CONTAINER_STATE_RUNNING) ||
+			       (container_get_state(container) == CONTAINER_STATE_SETUP)));
+
+	IF_FALSE_RETURN(container_is_device_allowed(container, uevent->major, uevent->minor));
+
+	if (uevent_create_device_node(uevent, container) < 0) {
+		ERROR("Could not create device node");
 		return;
 	}
 
-	uevent_netdev_move(interface);
-
-	mem_free(phy_path);
-	mem_free(interface);
-	event_remove_timer(timer);
-	event_timer_free(timer);
-}
-
-static void
-uevent_sysfs_eth_timer_cb(event_timer_t *timer, void *data)
-{
-	ASSERT(data);
-	char *interface = data;
-
-	uevent_netdev_move(interface);
-
-	mem_free(interface);
-	event_remove_timer(timer);
-	event_timer_free(timer);
+	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
+				     container_has_userns(container)) < 0) {
+		WARN("Could not inject uevent into netns of container %s!",
+		     container_get_name(container));
+	} else {
+		TRACE("Sucessfully injected uevent into netns of container %s!",
+		      container_get_name(container));
+	}
 }
 
 static void
@@ -709,6 +759,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		return;
 	}
 
+	uuid_t *uevent_uuid = NULL;
 	char *serial_path = mem_printf("/sys/%s/serial", uevent->devpath);
 	char *serial = NULL;
 
@@ -756,71 +807,41 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	/* move network ifaces to containers */
 	if (!strncmp(uevent->action, "add", 3) && !strcmp(uevent->subsystem, "net") &&
 	    !strstr(uevent->devpath, "virtual") && !cmld_is_hostedmode_active()) {
-		//rename network interface to avoid name clashes when moving to container
-		DEBUG("Renaming new interface we were notified about");
-		struct uevent *newevent = uevent_rename_interface(uevent);
+		struct uevent *uevent_cb = mem_new0(struct uevent, 1);
+		memcpy(uevent_cb, uevent, sizeof(struct uevent));
 
-		//uevent pointer is not freed inside this function, therefore we can safely drop it
-		if (newevent) {
-			DEBUG("Using renamed uevent");
-			uevent = newevent;
-		} else {
-			ERROR("Failed to rename interface %s. Injecting uevent as it is",
-			      uevent->interface);
-		}
-
-		if (!strcmp(uevent->devtype, "wlan")) {
-			DEBUG("Got new wifi interface");
-			// give sysfs some time to settle if iface is wifi
-			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-							   uevent_sysfs_wifi_timer_cb,
-							   mem_strdup(uevent->interface));
-			event_add_timer(e);
-		} else {
-			//rename network interface to avoid name clashes when moving to container
-			DEBUG("Got new ethernet interface");
-
-			// give sysfs some time to settle
-			event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
-							   uevent_sysfs_eth_timer_cb,
-							   mem_strdup(uevent->interface));
-			event_add_timer(e);
-		}
+		// give sysfs some time to settle if iface is wifi
+		event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+						   uevent_sysfs_netif_timer_cb, uevent_cb);
+		event_add_timer(e);
+		goto out;
 	}
 
-	/* Iterate over containers */
+	/* handle coldboot events just for target container */
+	uevent_uuid = uuid_new(uevent->synth_uuid);
+	container_t *container = (uevent_uuid) ? cmld_container_get_by_uuid(uevent_uuid) : NULL;
+	if (container) {
+		struct uevent *uev_fwd = uevent_replace_member(uevent, uevent->synth_uuid, "0");
+		if (!uev_fwd) {
+			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
+			goto out;
+		}
+		uevent_device_create_and_forward(uevent, container);
+		mem_free(uev_fwd);
+		goto out;
+	}
+
+	/* handle new events targetting all containers */
 	for (int i = 0; i < cmld_containers_get_count(); i++) {
-		container_t *c = cmld_container_get_by_index(i);
-		if (!c) {
-			WARN("Could not get container with index %d", i);
-			continue;
-		}
-		if ((container_get_state(c) == CONTAINER_STATE_BOOTING) ||
-		    (container_get_state(c) == CONTAINER_STATE_RUNNING) ||
-		    (container_get_state(c) == CONTAINER_STATE_SETUP)) {
-			if (!container_is_device_allowed(c, uevent->major, uevent->minor))
-				continue;
-
-			if (uevent_create_device_node(uevent, c) < 0) {
-				ERROR("Could not create device node");
-				continue;
-			}
-
-			if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len,
-						     container_get_pid(c),
-						     container_has_userns(c)) < 0) {
-				WARN("Could not inject uevent into netns of container %s!",
-				     container_get_name(c));
-			} else {
-				TRACE("Sucessfully injected uevent into netns of container %s!",
-				      container_get_name(c));
-			}
-		}
+		container_t *container = cmld_container_get_by_index(i);
+		uevent_device_create_and_forward(uevent, container);
 	}
 
 out:
 	if (serial)
 		mem_free(serial);
+	if (uevent_uuid)
+		uuid_free(uevent_uuid);
 }
 
 static void
@@ -951,6 +972,17 @@ uevent_init()
 		return -1;
 	}
 
+	// Initially rename all physical interfaces before starting uevent handling.
+	for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
+		const char *ifname = l->data;
+		const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
+		char *if_name_new = uevent_rename_ifi_new(ifname, prefix);
+		if (if_name_new) {
+			mem_free(l->data);
+			l->data = if_name_new;
+		}
+	}
+
 	/* find the udevd started by cml's init */
 	pid_t udevd_pid = proc_find(1, "systemd-udevd");
 	pid_t eudevd_pid = proc_find(1, "udevd");
@@ -1076,10 +1108,58 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6])
 	return 0;
 }
 
-void
-uevent_udev_trigger_coldboot(void)
+static int
+uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *data)
 {
-	const char *const argv[] = { "udevadm", "trigger", "--action=add", NULL };
-	if (-1 == proc_fork_and_execvp(argv))
-		WARN("Could not trigger coldboot uevents!");
+	int ret = 0;
+	char buf[256];
+	int major, minor;
+
+	container_t *container = data;
+	IF_NULL_RETVAL(container, -1);
+
+	char *full_path = mem_printf("%s/%s", path, name);
+	char *dev_file = NULL;
+
+	if (file_is_dir(full_path)) {
+		if (0 > dir_foreach(full_path, &uevent_trigger_coldboot_foreach_cb, container)) {
+			WARN("Could not trigger coldboot uevents! No '%s'!", full_path);
+			ret--;
+		}
+	} else if (!strcmp(name, "uevent")) {
+		dev_file = mem_printf("%s/dev", path);
+
+		IF_FALSE_GOTO_TRACE(file_exists(dev_file), out);
+
+		major = minor = -1;
+		IF_TRUE_GOTO(-1 == file_read(dev_file, buf, sizeof(buf)), out);
+		IF_TRUE_GOTO((sscanf(buf, "%d:%d", &major, &minor) < 0), out);
+		IF_FALSE_GOTO((major > -1 && minor > -1), out);
+
+		// only trigger for allowed devices
+		IF_FALSE_GOTO_TRACE(container_is_device_allowed(container, major, minor), out);
+
+		char *trigger = mem_printf("add %s", uuid_string(container_get_uuid(container)));
+		if (-1 == file_printf(full_path, trigger)) {
+			WARN("Could not trigger event %s <- %s", full_path, trigger);
+			ret--;
+		} else {
+			DEBUG("Trigger event %s <- %s", full_path, trigger);
+		}
+		mem_free(trigger);
+	}
+out:
+	mem_free(full_path);
+	mem_free(dev_file);
+	return ret;
+}
+
+void
+uevent_udev_trigger_coldboot(container_t *container)
+{
+	const char *sysfs_devices = "/sys/devices";
+	// for the first time iterate through sysfs to find device
+	if (0 > dir_foreach(sysfs_devices, &uevent_trigger_coldboot_foreach_cb, container)) {
+		WARN("Could not trigger coldboot uevents! No '%s'!", sysfs_devices);
+	}
 }
