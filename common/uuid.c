@@ -72,7 +72,7 @@ uuid_fill_from_string(uuid_t *uuid, const char *string)
 	return 0;
 
 error:
-	WARN("Could not parse UUID from string (not a valid UUID string?)");
+	TRACE("Could not parse UUID from string (not a valid UUID string?)");
 	return -1;
 }
 
