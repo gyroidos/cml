@@ -728,7 +728,11 @@ uevent_device_create_and_forward(struct uevent *uevent, container_t *container)
 			       (container_get_state(container) == CONTAINER_STATE_RUNNING) ||
 			       (container_get_state(container) == CONTAINER_STATE_SETUP)));
 
-	IF_FALSE_RETURN(container_is_device_allowed(container, uevent->major, uevent->minor));
+	if (!container_is_device_allowed(container, uevent->major, uevent->minor)) {
+		TRACE("Skipping device '%s' (%d,%d) which is forbidden by cgroup", uevent->devname,
+		      uevent->major, uevent->minor);
+		return;
+	}
 
 	if (uevent_create_device_node(uevent, container) < 0) {
 		ERROR("Could not create device node");
