@@ -590,20 +590,17 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 }
 
 static int
-uevent_create_device_node(struct uevent *uevent, container_t *container)
+uevent_create_device_node(struct uevent *uevent, char *path, container_t *container)
 {
-	// newer versions of udev prepends '/dev/' in DEVNAME
-	char *path =
-		mem_printf("%s%s%s", container_get_rootdir(container),
-			   strncmp("/dev/", uevent->devname, 4) ? "/dev/" : "", uevent->devname);
+	char *path_dirname = NULL;
 
 	if (file_exists(path)) {
-		mem_free(path);
-		return 0;
+		TRACE("Node '%s' exits, just fixup uids", path);
+		goto shift;
 	}
 
 	// dirname may modify original string, thus strdup
-	char *path_dirname = mem_strdup(path);
+	path_dirname = mem_strdup(path);
 	if (dir_mkdir_p(dirname(path_dirname), 0755) < 0) {
 		ERROR("Could not create path for device node");
 		goto err;
@@ -616,17 +613,16 @@ uevent_create_device_node(struct uevent *uevent, container_t *container)
 		ERROR_ERRNO("Could not create device node");
 		goto err;
 	}
+shift:
 	if (container_shift_ids(container, path, false) < 0) {
 		ERROR("Failed to fixup uids for '%s' in usernamspace of container %s", path,
 		      container_get_name(container));
 		goto err;
 	}
 	mem_free(path_dirname);
-	mem_free(path);
 	return 0;
 err:
 	mem_free(path_dirname);
-	mem_free(path);
 	return -1;
 }
 
@@ -719,7 +715,7 @@ uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 }
 
 static void
-uevent_device_create_and_forward(struct uevent *uevent, container_t *container)
+uevent_device_node_and_forward(struct uevent *uevent, container_t *container)
 {
 	IF_NULL_RETURN(uevent);
 	IF_NULL_RETURN(container);
@@ -734,9 +730,21 @@ uevent_device_create_and_forward(struct uevent *uevent, container_t *container)
 		return;
 	}
 
-	if (uevent_create_device_node(uevent, container) < 0) {
-		ERROR("Could not create device node");
-		return;
+	// newer versions of udev prepends '/dev/' in DEVNAME
+	char *devname =
+		mem_printf("%s%s%s", container_get_rootdir(container),
+			   strncmp("/dev/", uevent->devname, 4) ? "/dev/" : "", uevent->devname);
+
+	if (!strncmp(uevent->action, "add", 3)) {
+		if (uevent_create_device_node(uevent, devname, container) < 0) {
+			ERROR("Could not create device node");
+			mem_free(devname);
+			return;
+		}
+	} else if (!strncmp(uevent->action, "remove", 6)) {
+		if (unlink(devname) < 0 && errno != ENOENT) {
+			WARN_ERRNO("Could not remove device node");
+		}
 	}
 
 	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
@@ -747,6 +755,102 @@ uevent_device_create_and_forward(struct uevent *uevent, container_t *container)
 		TRACE("Sucessfully injected uevent into netns of container %s!",
 		      container_get_name(container));
 	}
+	mem_free(devname);
+}
+
+/*
+ * return true if uevent is handled completely, false if uevent should process further
+ * in calling funtion
+ */
+static bool
+uevent_handle_usb_device(struct uevent *uevent)
+{
+	IF_TRUE_RETVAL_TRACE(strncmp(uevent->subsystem, "usb", 3) ||
+				     strncmp(uevent->devtype, "usb_device", 10),
+			     false);
+
+	if (0 == strncmp(uevent->action, "remove", 6)) {
+		TRACE("remove");
+		if (uevent->devpath) {
+			TRACE("Checking possible token detachment with devpath %s",
+			      uevent->devpath);
+
+			if (!cmld_token_detach(uevent->devpath)) {
+				TRACE("uevent was triggered by container token, finished handling kernel uevent");
+				return true;
+			}
+		}
+
+		for (list_t *l = uevent_container_dev_mapping_list; l; l = l->next) {
+			uevent_container_dev_mapping_t *mapping = l->data;
+			if ((uevent->major == mapping->usbdev->major) &&
+			    (uevent->minor == mapping->usbdev->minor)) {
+				container_device_deny(mapping->container, mapping->usbdev->major,
+						      mapping->usbdev->minor);
+				INFO("Denied access to unbound device node %d:%d mapped in container %s",
+				     mapping->usbdev->major, mapping->usbdev->minor,
+				     container_get_name(mapping->container));
+			}
+		}
+	}
+
+	if (0 == strncmp(uevent->action, "add", 3)) {
+		TRACE("add");
+
+		char *serial_path = mem_printf("/sys/%s/serial", uevent->devpath);
+		char *serial = NULL;
+
+		if (file_exists(serial_path))
+			serial = file_read_new(serial_path, 255);
+
+		mem_free(serial_path);
+
+		if (!serial || strlen(serial) < 1) {
+			TRACE("Failed to read serial of usb device");
+			return false;
+		}
+
+		if ('\n' == serial[strlen(serial) - 1]) {
+			serial[strlen(serial) - 1] = 0;
+		}
+
+		TRACE("Checking possible token attachment with serial %s and devpath %s", serial,
+		      uevent->devpath);
+
+		if (uevent->devpath) {
+			if (!cmld_token_attach(serial, uevent->devpath)) {
+				TRACE("Uevent was triggered by container token, finished handling kernel uevent");
+				mem_free(serial);
+				return true;
+			}
+		}
+
+		for (list_t *l = uevent_container_dev_mapping_list; l; l = l->next) {
+			uevent_container_dev_mapping_t *mapping = l->data;
+			uint16_t vendor_id = uevent_get_usb_vendor(uevent);
+			uint16_t product_id = uevent_get_usb_product(uevent);
+
+			INFO("check mapping: %04x:%04x '%s' for %s bound device node %d:%d -> container %s",
+			     vendor_id, product_id, serial, (mapping->assign) ? "assign" : "allow",
+			     uevent->major, uevent->minor, container_get_name(mapping->container));
+
+			if ((mapping->usbdev->id_vendor == vendor_id) &&
+			    (mapping->usbdev->id_product == product_id) &&
+			    (0 == strcmp(mapping->usbdev->i_serial, serial))) {
+				mapping->usbdev->major = uevent->major;
+				mapping->usbdev->minor = uevent->minor;
+				INFO("%s bound device node %d:%d -> container %s",
+				     (mapping->assign) ? "assign" : "allow", mapping->usbdev->major,
+				     mapping->usbdev->minor,
+				     container_get_name(mapping->container));
+
+				container_device_allow(mapping->container, mapping->usbdev->major,
+						       mapping->usbdev->minor, mapping->assign);
+			}
+		}
+		mem_free(serial);
+	}
+	return false;
 }
 
 static void
@@ -755,59 +859,19 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	TRACE("handle_kernel_event");
 	uevent_parse(uevent, raw_p);
 
-	if (!uevent->interface) {
-		DEBUG("Got uevent with empty interface, subsystem: %s, devpath: %s",
-		      uevent->subsystem ? uevent->subsystem : NULL,
-		      uevent->devpath ? uevent->devpath : NULL);
-
-		return;
-	}
-
-	uuid_t *uevent_uuid = NULL;
-	char *serial_path = mem_printf("/sys/%s/serial", uevent->devpath);
-	char *serial = NULL;
-
-	if (file_exists(serial_path))
-		serial = file_read_new(serial_path, 255);
-
-	mem_free(serial_path);
-
-	if (!serial || strlen(serial) < 1) {
-		TRACE("Failed to read serial of usb device");
-	} else {
-		if ('\n' == serial[strlen(serial) - 1]) {
-			serial[strlen(serial) - 1] = 0;
-		}
-	}
-
-	if (serial && uevent->devpath &&
-	    (0 == strncmp(uevent->action, "bind", 4) || 0 == strncmp(uevent->action, "add", 3))) {
-		TRACE("Checking possible token attachment with serial %s and devpath %s", serial,
-		      uevent->devpath);
-
-		if (!cmld_token_attach(serial, uevent->devpath)) {
-			TRACE("Uevent was triggered by container token, finished handling kernel uevent");
-			goto out;
-		}
-	}
-
-	if (uevent->devpath && (0 == strncmp(uevent->action, "unbind", 6) ||
-				0 == strncmp(uevent->action, "remove", 6))) {
-		TRACE("Checking possible token detachment with devpath %s", uevent->devpath);
-
-		if (!cmld_token_detach(uevent->devpath)) {
-			TRACE("uevent was triggered by container token, finished handling kernel uevent");
-			goto out;
-		}
-	}
-
 	/* just handle add,remove or change events to containers */
 	IF_TRUE_RETURN_TRACE(strncmp(uevent->action, "add", 3) &&
 			     strncmp(uevent->action, "remove", 6) &&
 			     strncmp(uevent->action, "change", 6));
 
+	/*
+	 * if handler returns true the event is completely handled
+	 * otherwise event should be checked for possible forwarding
+	 */
+	IF_TRUE_RETURN_TRACE(uevent_handle_usb_device(uevent));
+
 	/* handle coldboot events just for target container */
-	uevent_uuid = uuid_new(uevent->synth_uuid);
+	uuid_t *uevent_uuid = uuid_new(uevent->synth_uuid);
 	container_t *container = (uevent_uuid) ? cmld_container_get_by_uuid(uevent_uuid) : NULL;
 	if (container) {
 		TRACE("Got synth add/remove/change uevent SYNTH_UUID=%s", uevent->synth_uuid);
@@ -816,7 +880,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
 			goto out;
 		}
-		uevent_device_create_and_forward(uevent, container);
+		uevent_device_node_and_forward(uevent, container);
 		mem_free(uev_fwd);
 		goto out;
 	}
@@ -842,12 +906,10 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	/* handle new events targetting all containers */
 	for (int i = 0; i < cmld_containers_get_count(); i++) {
 		container_t *container = cmld_container_get_by_index(i);
-		uevent_device_create_and_forward(uevent, container);
+		uevent_device_node_and_forward(uevent, container);
 	}
 
 out:
-	if (serial)
-		mem_free(serial);
 	if (uevent_uuid)
 		uuid_free(uevent_uuid);
 }
@@ -858,73 +920,7 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 	TRACE("handle_udev_event");
 
 	uevent_parse(uevent, raw_p);
-
-	IF_TRUE_RETURN_TRACE(strncmp(uevent->subsystem, "usb", 3) ||
-			     strncmp(uevent->devtype, "usb_device", 10));
-
-	if (0 == strncmp(uevent->action, "unbind", 6)) {
-		TRACE("unbind");
-		list_t *found = NULL;
-		for (list_t *l = uevent_container_dev_mapping_list; l; l = l->next) {
-			uevent_container_dev_mapping_t *mapping = l->data;
-			if ((uevent->major == mapping->usbdev->major) &&
-			    (uevent->minor == mapping->usbdev->minor)) {
-				found = list_append(found, mapping);
-				container_device_deny(mapping->container, mapping->usbdev->major,
-						      mapping->usbdev->minor);
-				INFO("Denied access to unbound device node %d:%d mapped in container %s",
-				     mapping->usbdev->major, mapping->usbdev->minor,
-				     container_get_name(mapping->container));
-			}
-		}
-		return;
-	}
-
-	if (0 == strncmp(uevent->action, "bind", 4)) {
-		TRACE("bind");
-		for (list_t *l = uevent_container_dev_mapping_list; l; l = l->next) {
-			uevent_container_dev_mapping_t *mapping = l->data;
-			uint16_t vendor_id = uevent_get_usb_vendor(uevent);
-			uint16_t product_id = uevent_get_usb_product(uevent);
-			char *serial = uevent->id_serial_short;
-
-			INFO("check mapping: %04x:%04x '%s' for %s bound device node %d:%d -> container %s",
-			     vendor_id, product_id, serial, (mapping->assign) ? "assign" : "allow",
-			     uevent->major, uevent->minor, container_get_name(mapping->container));
-
-			if ((mapping->usbdev->id_vendor == vendor_id) &&
-			    (mapping->usbdev->id_product == product_id) &&
-			    (0 == strcmp(mapping->usbdev->i_serial, serial))) {
-				mapping->usbdev->major = uevent->major;
-				mapping->usbdev->minor = uevent->minor;
-				INFO("%s bound device node %d:%d -> container %s",
-				     (mapping->assign) ? "assign" : "allow", mapping->usbdev->major,
-				     mapping->usbdev->minor,
-				     container_get_name(mapping->container));
-
-				container_device_allow(mapping->container, mapping->usbdev->major,
-						       mapping->usbdev->minor, mapping->assign);
-
-				if (uevent_create_device_node(uevent, mapping->container) < 0)
-					WARN("Could not create device node");
-			}
-		}
-		for (int i = 0; i < cmld_containers_get_count(); ++i) {
-			container_t *c = cmld_container_get_by_index(i);
-			// newer versions of udev prepends '/dev/' in DEVNAME
-			char *devname =
-				mem_printf("%s%s%s", container_get_rootdir(c),
-					   strncmp("/dev/", uevent->devname, 4) ? "/dev/" : "",
-					   uevent->devname);
-			if (container_shift_ids(c, devname, false) < 0)
-				ERROR("Failed to fixup uids for '%s' in usernamspace of container %s",
-				      devname, container_get_name(c));
-			else
-				DEBUG("Fixup uids for '%s'", devname);
-			mem_free(devname);
-		}
-		return;
-	}
+	return;
 }
 
 static void
