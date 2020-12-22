@@ -115,7 +115,6 @@ struct c_net {
 	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container
-	pid_t c0_netns_pid;		// pid of corresponding configuration child in c0's netns
 };
 
 /**
@@ -516,7 +515,6 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	net->container = container;
 	net->ns_net = net_ns;
 	net->adb_port = adb_port;
-	net->c0_netns_pid = -1;
 
 	/* if the container does not have a network namespace, we don't execute any of this,
 	 * i.e. we always return at the start of the functions  */
@@ -896,28 +894,25 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 }
 
 void
-c_net_cleanup_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
+c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
-	c_net_t *net = data;
+	pid_t *c0_netns_pid = data;
 	pid_t pid;
 	int status = 0;
 
-	ASSERT(net);
+	ASSERT(c0_netns_pid);
 
-	TRACE("cmld's c0 netns helper SIGCHLD handler called for PID %d", net->c0_netns_pid);
-	if ((pid = waitpid(net->c0_netns_pid, &status, WNOHANG)) > 0) {
+	TRACE("cmld's c0 netns helper SIGCHLD handler called for PID %d", *c0_netns_pid);
+	if ((pid = waitpid(*c0_netns_pid, &status, WNOHANG)) > 0) {
 		TRACE("Reaped c0 netns helper process: %d", pid);
 		/* remove the sigchld callback for this container from the event loop */
 		event_remove_signal(sig);
 		event_signal_free(sig);
-		net->c0_netns_pid = -1;
+		mem_free(c0_netns_pid);
 	} else {
 		TRACE("Failed to reap c0 netns helper process");
 	}
 }
-
-static void
-c_net_cleanup_c0_cb(int signum, event_signal_t *sig, void *data);
 
 /**
  * This function is responisble for moving the container interface to its corresponding namespace.
@@ -975,11 +970,13 @@ c_net_start_post_clone(c_net_t *net)
 	}
 
 	// configure moved rootns veth endpoint in c0's network namespace
-	net->c0_netns_pid = fork();
-	if (net->c0_netns_pid == -1) {
+	pid_t *c0_netns_pid = mem_new0(pid_t, 1);
+	*c0_netns_pid = fork();
+	if (*c0_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to c0's netns");
+		mem_free(c0_netns_pid);
 		return -1;
-	} else if (net->c0_netns_pid == 0) {
+	} else if (*c0_netns_pid == 0) {
 		const char *hostns = cmld_containers_get_a0() ? "c0" : "CML";
 
 		DEBUG("Configuring netifs in %s", hostns);
@@ -995,11 +992,6 @@ c_net_start_post_clone(c_net_t *net)
 			if (setns(netns_fd, CLONE_NEWNET) == -1)
 				FATAL_ERRNO("Could not join network namespace of c0");
 		}
-
-		// register new cleanup callback when cmld stops a container
-		event_signal_t *sigkill =
-			event_signal_new(SIGKILL | SIGTERM, c_net_cleanup_c0_cb, net);
-		event_add_signal(sigkill);
 
 		// enable forwarding for container conectivity
 		network_enable_ip_forwarding();
@@ -1057,12 +1049,13 @@ c_net_start_post_clone(c_net_t *net)
 			      ni->veth_cmld_name, hostns);
 #endif
 		}
-		DEBUG("Setup of nis in netns of %s done.", hostns);
-		event_loop();
+		DEBUG("Setup of net ifs in netns of %s done, exiting netns child!", hostns);
+		exit(0);
 	} else {
-		DEBUG("Setup of nis should be done by pid=%d", net->c0_netns_pid);
-		// register new cleanup callback when cmld stops a container
-		event_signal_t *sig = event_signal_new(SIGCHLD, c_net_cleanup_sigchild_cb, net);
+		DEBUG("Setup of nis should be done by pid=%d", *c0_netns_pid);
+		// register new sigchild handler for helper clone in netns of c0
+		event_signal_t *sig =
+			event_signal_new(SIGCHLD, c_net_helper_sigchild_cb, c0_netns_pid);
 		event_add_signal(sig);
 
 		/* setup uplink of cml */
@@ -1071,12 +1064,12 @@ c_net_start_post_clone(c_net_t *net)
 			/* Set IPv4 address */
 			if (c_net_set_ipv4(ni->veth_cmld_name, &ni->ipv4_cmld_addr,
 					   &ni->ipv4_bc_addr))
-				FATAL_ERRNO("Cannot set ip for uplink iff '%s'!",
+				ERROR_ERRNO("Cannot set ip for uplink iff '%s'!",
 					    ni->veth_cmld_name);
 
 			/* Bring veth up */
 			if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
-				FATAL_ERRNO("Could not configure uplink %s!", ni->veth_cmld_name);
+				ERROR_ERRNO("Could not configure uplink %s!", ni->veth_cmld_name);
 
 			if (network_setup_default_route(inet_ntoa(ni->ipv4_cont_addr), true))
 				ERROR("Failed to setup gateway for CML's uplink");
@@ -1195,44 +1188,67 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 
 /**
  * Cleans up the c_net_t struct and shuts down the network interface (in c0's netns).
- *
- * This callback is registered in the configuration clone of cmld with c0 netns joind by setns
- * (see c_net_start_post_clone() method). The cleanup method below is running in main process of cmld
- * can trigger this by sending sigkill.
  */
-static void
-c_net_cleanup_c0_cb(int signum, event_signal_t *sig, void *data)
+static int
+c_net_cleanup_c0(c_net_t *net)
 {
-	c_net_t *net = data;
 	ASSERT(net);
 
-	IF_FALSE_RETURN(signum == SIGTERM || signum == SIGKILL);
+	// cleanup moved rootns veth endpoint in c0's network namespace
+	pid_t *c0_netns_pid = mem_new0(pid_t, 1);
+	*c0_netns_pid = fork();
+	if (*c0_netns_pid == -1) {
+		ERROR_ERRNO("Could not fork for switching to c0's netns");
+		mem_free(c0_netns_pid);
+		return -1;
+	} else if (*c0_netns_pid == 0) {
+		const char *hostns = cmld_containers_get_a0() ? "c0" : "CML";
 
-	DEBUG("Triggered Cleanup of net ifs in c0!");
-	for (list_t *l = net->interface_list; l; l = l->next) {
-		c_net_interface_t *ni = l->data;
+		DEBUG("Cleaning up netifs in %s", hostns);
 
-		if (!ni->configure) {
+		event_reset(); // reset event_loop of cloned from parent
+		if (cmld_containers_get_a0()) {
+			char *c0_netns = mem_printf("/proc/%d/ns/net",
+						    container_get_pid(cmld_containers_get_a0()));
+			int netns_fd = open(c0_netns, O_RDONLY);
+			mem_free(c0_netns);
+			if (netns_fd == -1)
+				FATAL_ERRNO("Could not open netns file of c0");
+			if (setns(netns_fd, CLONE_NEWNET) == -1)
+				FATAL_ERRNO("Could not join network namespace of c0");
+		}
+
+		for (list_t *l = net->interface_list; l; l = l->next) {
+			c_net_interface_t *ni = l->data;
+
+			if (!ni->configure) {
+				c_net_cleanup_interface(ni);
+				continue;
+			}
+			if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
+				if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT,
+								false))
+					WARN("Failed to remove port forwarding from %" PRIu16
+					     " to %s:%" PRIu16,
+					     net->adb_port, inet_ntoa(ni->ipv4_cont_addr),
+					     ADB_DAEMON_PORT);
+			} else {
+				if (network_setup_masquerading(ni->subnet, false))
+					WARN("Failed to remove masquerading from %s", ni->subnet);
+			}
+
 			c_net_cleanup_interface(ni);
-			continue;
 		}
-		if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
-			if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT, false))
-				WARN("Failed to remove port forwarding from %" PRIu16
-				     " to %s:%" PRIu16,
-				     net->adb_port, inet_ntoa(ni->ipv4_cont_addr), ADB_DAEMON_PORT);
-		} else {
-			if (network_setup_masquerading(ni->subnet, false))
-				WARN("Failed to remove masquerading from %s", ni->subnet);
-		}
-
-		c_net_cleanup_interface(ni);
+		DEBUG("Cleanup of net ifs in netns of %s done, exiting netns child!", hostns);
+		exit(0);
+	} else {
+		DEBUG("Cleanup of ni ifs should be done by pid=%d", *c0_netns_pid);
+		// register new sigchild handler for helper clone in netns of c0
+		event_signal_t *sig =
+			event_signal_new(SIGCHLD, c_net_helper_sigchild_cb, c0_netns_pid);
+		event_add_signal(sig);
 	}
-	event_remove_signal(sig);
-	event_signal_free(sig);
-
-	DEBUG("Cleanup of net ifs in c0 done, exiting netns child!");
-	exit(0);
+	return 0;
 }
 
 /**
@@ -1247,14 +1263,12 @@ c_net_cleanup(c_net_t *net)
 	if (!net->ns_net || !(list_length(net->interface_list)))
 		return;
 
+	if (c_net_cleanup_c0(net) == -1)
+		WARN("Failed to create helper child for cleanup in c0's netns");
+
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 		c_net_cleanup_interface(ni);
-	}
-	if (net->c0_netns_pid > 0) {
-		DEBUG("notify our c0's netns config child (pid=%d) to do cleanup in c0",
-		      net->c0_netns_pid);
-		kill(net->c0_netns_pid, SIGTERM);
 	}
 }
 
