@@ -36,6 +36,7 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "power.h"
+#include "lxcfs.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -65,6 +66,7 @@ main_core_dump_enable(void)
 static void
 main_exit(void)
 {
+	lxcfs_cleanup();
 	exit(0);
 }
 
