@@ -44,6 +44,7 @@
 #include "hardware.h"
 #include "guestos.h"
 #include "smartcard.h"
+#include "lxcfs.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -1373,6 +1374,10 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		ERROR_ERRNO("Could not mount %s", mnt_proc);
 		goto error;
 	}
+	if (lxcfs_mount_proc_overlay(mnt_proc)) {
+		ERROR_ERRNO("Could not apply lxcfs overlay on mount %s", mnt_proc);
+		goto error;
+	}
 
 	DEBUG("Mounting /sys");
 	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
@@ -1421,11 +1426,6 @@ c_vol_move_root(const c_vol_t *vol)
 		goto error;
 	}
 
-	if (c_vol_mount_proc_and_sys(vol, ".") == -1) {
-		ERROR_ERRNO("Could not mount proc and sys");
-		goto error;
-	}
-
 	INFO("Sucessfully switched (move mount) to new root %s", vol->root);
 	return 0;
 error:
@@ -1463,11 +1463,6 @@ c_vol_pivot_root(const c_vol_t *vol)
 		goto error;
 	}
 
-	if (c_vol_mount_proc_and_sys(vol, ".") == -1) {
-		ERROR_ERRNO("Could not mount proc and sys");
-		goto error;
-	}
-
 	if (fchdir(old_root) < 0) {
 		ERROR_ERRNO("Could not fchdir to the root directory of the old filesystem");
 		goto error;
@@ -1501,18 +1496,18 @@ c_vol_start_child(c_vol_t *vol)
 {
 	ASSERT(vol);
 
+	// remount proc to reflect namespace change
 	if (!container_has_userns(vol->container)) {
-		// remount proc to reflect namespace change
 		if (umount("/proc") < 0 && errno != ENOENT) {
 			if (umount2("/proc", MNT_DETACH) < 0) {
 				ERROR_ERRNO("Could not umount /proc");
 				goto error;
 			}
 		}
-		if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
-			ERROR_ERRNO("Could not remount /proc");
-			goto error;
-		}
+	}
+	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not remount /proc");
+		goto error;
 	}
 
 	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM)
@@ -1522,6 +1517,11 @@ c_vol_start_child(c_vol_t *vol)
 
 	if (container_shift_mounts(vol->container) < 0) {
 		ERROR_ERRNO("Mounting of shifting user and gids failed!");
+		goto error;
+	}
+
+	if (c_vol_mount_proc_and_sys(vol, vol->root) == -1) {
+		ERROR_ERRNO("Could not mount proc and sys");
 		goto error;
 	}
 
