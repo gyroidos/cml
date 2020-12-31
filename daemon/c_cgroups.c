@@ -157,13 +157,13 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 	//"c 10:237 rwm", // loop-control
 
 	/* Input Core */
-	"c 13:* rwm",
+	//"c 13:* rwm",
 
 	/* Universal frame buffer */
-	"c 29:* rwm",
+	//"c 29:* rwm",
 
 	/* camera v4l */
-	"c 81:* rwm", // video*, v4l-subdev*
+	//"c 81:* rwm", // video*, v4l-subdev*
 
 	/* i2c */
 	//"c 89:* rwm",
@@ -172,7 +172,7 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 	//"c 108:* rwm",
 
 	/* Unix98 PTY Slaves (majors 136-143) */
-	"c 136:* rwm", // seems to be necessary for android logwrapper
+	"c 136:* rwm", // e.g. used for ssh sessions
 
 	/* USB */
 	//"c 180:* rwm", // USB
