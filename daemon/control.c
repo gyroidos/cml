@@ -589,45 +589,6 @@ control_handle_cmd_register_localca(const ControllerToDaemon *msg, UNUSED int fd
 }
 
 /**
- * Handles a single decoded ControllerToDaemon message received on unriv socket
- *
- * @param msg	the ControllerToDaemon message to be handled
- * @param fd	file descriptor of the unprivileged client connection
- *		(for sending a response, if necessary)
- */
-static void
-control_handle_message_unpriv(const ControllerToDaemon *msg, int fd)
-{
-	IF_NULL_RETURN(msg);
-
-	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
-		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
-		TRACE("Handling unpriv ControllerToDaemon message:\n%s",
-		      msg_text ? msg_text : "NULL");
-		if (msg_text)
-			free(msg_text);
-	}
-
-	switch (msg->command) {
-		// Global commands:
-
-	case CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS: {
-		control_handle_cmd_list_guestos_configs(msg, fd);
-	} break;
-	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG: {
-		control_handle_cmd_push_guestos_configs(msg, fd);
-	} break;
-	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_LOCALCA: {
-		control_handle_cmd_register_localca(msg, fd);
-	} break;
-	default:
-		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
-		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd) < 0)
-			WARN("Could not send response to fd=%d", fd);
-	}
-}
-
-/**
  * Starts a container with pre-specified keys or user supplied keys
  */
 static int
@@ -672,13 +633,28 @@ control_handle_container_start(control_t *control, container_t *container,
 }
 
 static bool
-control_check_command(const ControllerToDaemon *msg)
+control_check_command(control_t *control, const ControllerToDaemon *msg)
 {
+	if (!control->privileged) {
+		// Device is in unprivileged mode, only allow subset of commands
+		if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS) ||
+		    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG) ||
+		    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REGISTER_LOCALCA)) {
+			TRACE("Received command %d is valid in unprivileged mode", msg->command);
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	// Device is in privileged mode and not yet provisioned or in hosted mode,
+	// allow all commands
 	if (!cmld_is_device_provisioned() || cmld_is_hostedmode_active()) {
-		DEBUG("Device is not provisioned or in hosted mode, all commands are accepted");
+		TRACE("Device is not provisioned or in hosted mode, all commands are accepted");
 		return true;
 	}
 
+	// Device is in privileged provisioned mode, only allow subset of commands
 	if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
@@ -690,6 +666,9 @@ control_check_command(const ControllerToDaemon *msg)
 		TRACE("Received command %d is valid in provisioned mode", msg->command);
 		return true;
 	}
+
+	TRACE("Received command %d is not allowed in provisioned %s mode", msg->command,
+	      control->privileged ? "privileged" : "unprivileged");
 	return false;
 }
 
@@ -719,7 +698,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	}
 
 	// Check if this is a valid mode depending on the current mode
-	if (!control_check_command(msg)) {
+	if (!control_check_command(control, msg)) {
 		WARN("Illegal ControllerToDaemon command: %d received. Command is only valid in non-provisioned or hosted mode",
 		     msg->command);
 		control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd);
@@ -1392,13 +1371,8 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 		ControllerToDaemon *msg = (ControllerToDaemon *)protobuf_recv_message(
 			fd, &controller_to_daemon__descriptor);
 		if (msg != NULL) {
-			if (control->privileged) {
-				control_handle_message(control, msg, fd);
-				TRACE("Handled control connection %d", fd);
-			} else { // unprivileged control interface (e.g. installer)
-				control_handle_message_unpriv(msg, fd);
-				TRACE("Handled unprivileged control connection %d", fd);
-			}
+			control_handle_message(control, msg, fd);
+			TRACE("Handled control connection %d", fd);
 			protobuf_free_message((ProtobufCMessage *)msg);
 			return;
 		}
@@ -1445,14 +1419,8 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 			fd, &controller_to_daemon__descriptor);
 		// close connection if client EOF, or protocol parse error
 		IF_NULL_GOTO_TRACE(msg, connection_err);
-
-		if (control->privileged) {
-			control_handle_message(control, msg, fd);
-			TRACE("Handled control connection %d", fd);
-		} else { // unprivileged control interface (e.g. installer)
-			control_handle_message_unpriv(msg, fd);
-			TRACE("Handled unprivileged control connection %d", fd);
-		}
+		control_handle_message(control, msg, fd);
+		TRACE("Handled control connection %d", fd);
 		protobuf_free_message((ProtobufCMessage *)msg);
 	}
 	// also check EXCEPT flag
