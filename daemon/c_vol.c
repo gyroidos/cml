@@ -82,6 +82,8 @@
 #define is_selinux_disabled() !file_is_mountpoint("/sys/fs/selinux")
 #define is_selinux_enabled() file_is_mountpoint("/sys/fs/selinux")
 
+#define BUSYBOX_PATH "/bin/busybox"
+
 struct c_vol {
 	const container_t *container;
 	char *root;
@@ -558,6 +560,49 @@ c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
 	return str_free(opts, false);
 }
 
+/*
+ * Copy busybox binary to target_base directory.
+ * Remeber, this will only succeed if targetfs is writable.
+ */
+static int
+c_vol_setup_busybox_copy(const char *target_base)
+{
+	int ret = 0;
+	char *target_bin = mem_printf("%s%s", target_base, BUSYBOX_PATH);
+	char *target_dir = mem_strdup(target_bin);
+	char *target_dir_p = dirname(target_dir);
+	if ((ret = dir_mkdir_p(target_dir_p, 0755)) < 0) {
+		WARN_ERRNO("Could not mkdir '%s' dir", target_dir_p);
+	} else if (file_exists("/bin/busybox")) {
+		file_copy("/bin/busybox", target_bin, -1, 512, 0);
+		INFO("Copied %s to container", target_bin);
+		if (chmod(target_bin, 0755)) {
+			WARN_ERRNO("Could not set %s executable", target_bin);
+			ret = -1;
+		}
+	} else {
+		WARN_ERRNO("Could not copy %s to container", target_bin);
+		ret = -1;
+	}
+
+	mem_free(target_bin);
+	mem_free(target_dir);
+	return ret;
+}
+
+static int
+c_vol_setup_busybox_install(void)
+{
+	// skip if busybox was not coppied
+	IF_FALSE_RETVAL_TRACE(file_exists("/bin/busybox"), 0);
+
+	IF_TRUE_RETVAL(dir_mkdir_p("/bin", 0755) < 0, -1);
+	IF_TRUE_RETVAL(dir_mkdir_p("/sbin", 0755) < 0, -1);
+
+	const char *const argv[] = { "busybox", "--install", "-s", NULL };
+	return proc_fork_and_execvp(argv);
+}
+
 /**
  * Mount an image file. This function will take some time. So call it in a
  * thread or child process.
@@ -643,6 +688,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			  tmpfs_opts) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
 			mem_free(tmpfs_opts);
+			if (is_root && setup_mode && c_vol_setup_busybox_copy(dir) < 0)
+				WARN("Cannot copy busybox for setup mode!");
 			goto final;
 		} else {
 			ERROR_ERRNO("Cannot mount %s to %s", mount_entry_get_fs(mntent), dir);
@@ -1585,6 +1632,9 @@ c_vol_start_child(c_vol_t *vol)
 		ERROR_ERRNO("Could not mount " CMLD_SOCKET_DIR);
 		goto error;
 	}
+
+	if (container_has_setup_mode(vol->container) && c_vol_setup_busybox_install() < 0)
+		WARN("Cannot install busybox symlinks for setup mode!");
 
 	char *mount_output = file_read_new("/proc/self/mounts", 2048);
 	INFO("Mounted filesystems:");
