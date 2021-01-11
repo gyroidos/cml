@@ -39,6 +39,7 @@
 #include "common/dir.h"
 #include "common/proc.h"
 #include "common/sock.h"
+#include "common/str.h"
 
 #include "cmld.h"
 #include "hardware.h"
@@ -541,6 +542,22 @@ err:
 	return -1;
 }
 
+static char *
+c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
+{
+	str_t *opts = str_new(NULL);
+
+	// Only mount tmpfs with uid, gid options if shiftfs is not supported
+	// since later one it would be shifted by shiftfs twice.
+	if (!cmld_is_shiftfs_supported())
+		str_append_printf(opts, "uid=%d,gid=%d", uid, gid);
+
+	if (mount_data)
+		str_append_printf(opts, ",%s", mount_data);
+
+	return str_free(opts, false);
+}
+
 /**
  * Mount an image file. This function will take some time. So call it in a
  * thread or child process.
@@ -621,9 +638,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
 		const char *mount_data = mount_entry_get_mount_data(mntent);
-		char *tmpfs_opts = mount_data ?
-					   mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
-					   mem_printf("uid=%d,gid=%d", uid, uid);
+		char *tmpfs_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags,
 			  tmpfs_opts) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
@@ -1051,8 +1066,7 @@ c_vol_mount_dev(c_vol_t *vol)
 	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
 	int uid = container_get_uid(vol->container);
-	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
-					  mem_printf("uid=%d,gid=%d", uid, uid);
+	char *tmpfs_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
 	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir /dev");
 		goto error;
@@ -1365,7 +1379,7 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 	char *mnt_proc = mem_printf("%s/proc", dir);
 	char *mnt_sys = mem_printf("%s/sys", dir);
 
-	DEBUG("Mounting /proc");
+	DEBUG("Mounting proc on %s", mnt_proc);
 	if (mkdir(mnt_proc, 0755) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir %s", mnt_proc);
 		goto error;
@@ -1379,7 +1393,7 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		goto error;
 	}
 
-	DEBUG("Mounting /sys");
+	DEBUG("Mounting sys on %s", mnt_sys);
 	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
 	if (container_has_userns(vol->container) && !container_has_netns(vol->container)) {
 		sysopts |= MS_RDONLY;
