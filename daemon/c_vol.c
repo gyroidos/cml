@@ -452,10 +452,11 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 	char *cwd = get_current_dir_name();
 	char *overlayfs_options;
 	if (chdir(overlayfs_mount_dir)) {
-		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s", lower_dir,
-					       upper_dir, work_dir);
+		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s,metacopy=on",
+					       lower_dir, upper_dir, work_dir);
 	} else {
-		overlayfs_options = mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
+		overlayfs_options =
+			mem_strdup("lowerdir=lower,upperdir=upper,workdir=work,metacopy=on");
 		TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd, overlayfs_mount_dir,
 		      overlayfs_options);
 	}
