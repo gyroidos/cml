@@ -236,7 +236,7 @@ proc_fork_and_execvp(const char *const *argv)
 		return -1;
 	case 0:
 		execvp(argv[0], (char *const *)argv);
-		ERROR_ERRNO("Could not execvp %s", argv[0]);
+		FATAL_ERRNO("Could not execvp %s", argv[0]);
 		return -1;
 	default:
 		if (waitpid(pid, &status, 0) != pid) {

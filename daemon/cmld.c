@@ -53,6 +53,7 @@
 #include "ksm.h"
 #include "uevent.h"
 #include "time.h"
+#include "lxcfs.h"
 
 #include <stdio.h>
 #include <dirent.h>
@@ -1216,6 +1217,11 @@ cmld_init(const char *path)
 		WARN("Plattform does not support TSS / TPM 2.0");
 	else
 		INFO("tss initialized.");
+
+	if (lxcfs_init() < 0)
+		WARN("Plattform does not support LXCFS");
+	else
+		INFO("lxcfs initialized.");
 
 	// Read the provision-status-file to set provisioned flag of control structs accordingly
 	char *provisioned_file = mem_printf("%s/%s", DEFAULT_BASE_PATH, PROVISIONED_FILE_NAME);

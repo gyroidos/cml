@@ -39,11 +39,13 @@
 #include "common/dir.h"
 #include "common/proc.h"
 #include "common/sock.h"
+#include "common/str.h"
 
 #include "cmld.h"
 #include "hardware.h"
 #include "guestos.h"
 #include "smartcard.h"
+#include "lxcfs.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -79,6 +81,8 @@
 
 #define is_selinux_disabled() !file_is_mountpoint("/sys/fs/selinux")
 #define is_selinux_enabled() file_is_mountpoint("/sys/fs/selinux")
+
+#define BUSYBOX_PATH "/bin/busybox"
 
 struct c_vol {
 	const container_t *container;
@@ -448,10 +452,11 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 	char *cwd = get_current_dir_name();
 	char *overlayfs_options;
 	if (chdir(overlayfs_mount_dir)) {
-		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s", lower_dir,
-					       upper_dir, work_dir);
+		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s,metacopy=on",
+					       lower_dir, upper_dir, work_dir);
 	} else {
-		overlayfs_options = mem_strdup("lowerdir=lower,upperdir=upper,workdir=work");
+		overlayfs_options =
+			mem_strdup("lowerdir=lower,upperdir=upper,workdir=work,metacopy=on");
 		TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd, overlayfs_mount_dir,
 		      overlayfs_options);
 	}
@@ -540,6 +545,65 @@ err:
 	return -1;
 }
 
+static char *
+c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
+{
+	str_t *opts = str_new(NULL);
+
+	// Only mount tmpfs with uid, gid options if shiftfs is not supported
+	// since later one it would be shifted by shiftfs twice.
+	if (!cmld_is_shiftfs_supported())
+		str_append_printf(opts, "uid=%d,gid=%d", uid, gid);
+
+	if (mount_data)
+		str_append_printf(opts, ",%s", mount_data);
+
+	return str_free(opts, false);
+}
+
+/*
+ * Copy busybox binary to target_base directory.
+ * Remeber, this will only succeed if targetfs is writable.
+ */
+static int
+c_vol_setup_busybox_copy(const char *target_base)
+{
+	int ret = 0;
+	char *target_bin = mem_printf("%s%s", target_base, BUSYBOX_PATH);
+	char *target_dir = mem_strdup(target_bin);
+	char *target_dir_p = dirname(target_dir);
+	if ((ret = dir_mkdir_p(target_dir_p, 0755)) < 0) {
+		WARN_ERRNO("Could not mkdir '%s' dir", target_dir_p);
+	} else if (file_exists("/bin/busybox")) {
+		file_copy("/bin/busybox", target_bin, -1, 512, 0);
+		INFO("Copied %s to container", target_bin);
+		if (chmod(target_bin, 0755)) {
+			WARN_ERRNO("Could not set %s executable", target_bin);
+			ret = -1;
+		}
+	} else {
+		WARN_ERRNO("Could not copy %s to container", target_bin);
+		ret = -1;
+	}
+
+	mem_free(target_bin);
+	mem_free(target_dir);
+	return ret;
+}
+
+static int
+c_vol_setup_busybox_install(void)
+{
+	// skip if busybox was not coppied
+	IF_FALSE_RETVAL_TRACE(file_exists("/bin/busybox"), 0);
+
+	IF_TRUE_RETVAL(dir_mkdir_p("/bin", 0755) < 0, -1);
+	IF_TRUE_RETVAL(dir_mkdir_p("/sbin", 0755) < 0, -1);
+
+	const char *const argv[] = { "busybox", "--install", "-s", NULL };
+	return proc_fork_and_execvp(argv);
+}
+
 /**
  * Mount an image file. This function will take some time. So call it in a
  * thread or child process.
@@ -620,13 +684,13 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
 		const char *mount_data = mount_entry_get_mount_data(mntent);
-		char *tmpfs_opts = mount_data ?
-					   mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
-					   mem_printf("uid=%d,gid=%d", uid, uid);
+		char *tmpfs_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags,
 			  tmpfs_opts) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
 			mem_free(tmpfs_opts);
+			if (is_root && setup_mode && c_vol_setup_busybox_copy(dir) < 0)
+				WARN("Cannot copy busybox for setup mode!");
 			goto final;
 		} else {
 			ERROR_ERRNO("Cannot mount %s to %s", mount_entry_get_fs(mntent), dir);
@@ -1050,8 +1114,7 @@ c_vol_mount_dev(c_vol_t *vol)
 	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
 	int uid = container_get_uid(vol->container);
-	char *tmpfs_opts = (mount_data) ? mem_printf("uid=%d,gid=%d,%s", uid, uid, mount_data) :
-					  mem_printf("uid=%d,gid=%d", uid, uid);
+	char *tmpfs_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
 	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir /dev");
 		goto error;
@@ -1277,9 +1340,9 @@ c_vol_start_pre_clone(c_vol_t *vol)
 	 */
 	char *cservice_bin = mem_printf("%s/%s", vol->root, CSERVICE_TARGET);
 	char *cservice_dir = mem_strdup(cservice_bin);
-	cservice_dir = dirname(cservice_dir);
-	if (dir_mkdir_p(cservice_dir, 0755) < 0) {
-		WARN_ERRNO("Could not mkdir '%s' dir", cservice_dir);
+	char *cservice_dir_p = dirname(cservice_dir);
+	if (dir_mkdir_p(cservice_dir_p, 0755) < 0) {
+		WARN_ERRNO("Could not mkdir '%s' dir", cservice_dir_p);
 	} else if (file_exists("/sbin/cml-service-container")) {
 		file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0);
 		INFO("Copied %s to container", cservice_bin);
@@ -1364,7 +1427,7 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 	char *mnt_proc = mem_printf("%s/proc", dir);
 	char *mnt_sys = mem_printf("%s/sys", dir);
 
-	DEBUG("Mounting /proc");
+	DEBUG("Mounting proc on %s", mnt_proc);
 	if (mkdir(mnt_proc, 0755) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir %s", mnt_proc);
 		goto error;
@@ -1373,8 +1436,12 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		ERROR_ERRNO("Could not mount %s", mnt_proc);
 		goto error;
 	}
+	if (lxcfs_mount_proc_overlay(mnt_proc)) {
+		ERROR_ERRNO("Could not apply lxcfs overlay on mount %s", mnt_proc);
+		goto error;
+	}
 
-	DEBUG("Mounting /sys");
+	DEBUG("Mounting sys on %s", mnt_sys);
 	unsigned long sysopts = MS_RELATIME | MS_NOSUID;
 	if (container_has_userns(vol->container) && !container_has_netns(vol->container)) {
 		sysopts |= MS_RDONLY;
@@ -1421,11 +1488,6 @@ c_vol_move_root(const c_vol_t *vol)
 		goto error;
 	}
 
-	if (c_vol_mount_proc_and_sys(vol, ".") == -1) {
-		ERROR_ERRNO("Could not mount proc and sys");
-		goto error;
-	}
-
 	INFO("Sucessfully switched (move mount) to new root %s", vol->root);
 	return 0;
 error:
@@ -1463,11 +1525,6 @@ c_vol_pivot_root(const c_vol_t *vol)
 		goto error;
 	}
 
-	if (c_vol_mount_proc_and_sys(vol, ".") == -1) {
-		ERROR_ERRNO("Could not mount proc and sys");
-		goto error;
-	}
-
 	if (fchdir(old_root) < 0) {
 		ERROR_ERRNO("Could not fchdir to the root directory of the old filesystem");
 		goto error;
@@ -1501,18 +1558,18 @@ c_vol_start_child(c_vol_t *vol)
 {
 	ASSERT(vol);
 
+	// remount proc to reflect namespace change
 	if (!container_has_userns(vol->container)) {
-		// remount proc to reflect namespace change
 		if (umount("/proc") < 0 && errno != ENOENT) {
 			if (umount2("/proc", MNT_DETACH) < 0) {
 				ERROR_ERRNO("Could not umount /proc");
 				goto error;
 			}
 		}
-		if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
-			ERROR_ERRNO("Could not remount /proc");
-			goto error;
-		}
+	}
+	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not remount /proc");
+		goto error;
 	}
 
 	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM)
@@ -1522,6 +1579,11 @@ c_vol_start_child(c_vol_t *vol)
 
 	if (container_shift_mounts(vol->container) < 0) {
 		ERROR_ERRNO("Mounting of shifting user and gids failed!");
+		goto error;
+	}
+
+	if (c_vol_mount_proc_and_sys(vol, vol->root) == -1) {
+		ERROR_ERRNO("Could not mount proc and sys");
 		goto error;
 	}
 
@@ -1571,6 +1633,9 @@ c_vol_start_child(c_vol_t *vol)
 		ERROR_ERRNO("Could not mount " CMLD_SOCKET_DIR);
 		goto error;
 	}
+
+	if (container_has_setup_mode(vol->container) && c_vol_setup_busybox_install() < 0)
+		WARN("Cannot install busybox symlinks for setup mode!");
 
 	char *mount_output = file_read_new("/proc/self/mounts", 2048);
 	INFO("Mounted filesystems:");

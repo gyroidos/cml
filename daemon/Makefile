@@ -103,6 +103,7 @@ SRC_FILES := main.c \
 	c_time.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
+	lxcfs.c \
 	input.c
 
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
