@@ -32,9 +32,9 @@
 #define DAEMON_INPUT_H_
 
 /**
- * Register callback to interactively read in container pin from USB 
+ * Register callback to interactively read in container pin from USB
  * pin entry device and start container afterwards
- * 
+ *
  * @param container_start_ptr_t container_start_ptr Function pointer
  *          to the container start function
  * @param control_t *control
@@ -43,5 +43,8 @@
  */
 int
 input_register_container_start_cb(control_t *control, container_t *container);
+
+void
+input_clean_pin_entry(void);
 
 #endif // DAEMON_INPUT_H_
