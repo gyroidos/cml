@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include "container_config.h"
 #ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/container.pb-c.h"
@@ -37,17 +39,21 @@
 #include <stdint.h>
 #include <inttypes.h>
 
+#include "cmld.h"
 #include "guestos.h"
 #include "guestos_mgr.h"
 #include "hardware.h"
 #include "network.h"
 #include "uevent.h"
+#include "smartcard.h"
 
 struct container_config {
 	char *file;
 
 	ContainerConfig *cfg;
 };
+
+#define C_CONFIG_VERIFY_HASH_ALGO SHA512
 
 #define C_CONFIG_MAX_RAM_LIMIT (1 << 30) // TODO 1GB? (< 4GB due to uint32)
 #define C_CONFIG_MAX_STORAGE (4LL << 30) // TODO 4GB?
@@ -148,33 +154,140 @@ container_config_storage_size(container_config_t *config)
 #endif
 /******************************************************************************/
 
+static bool
+container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, uint8_t *sig_buf,
+			size_t sig_len, uint8_t *cert_buf, size_t cert_len)
+{
+	ASSERT(conf_buf);
+	bool ret = false;
+
+	uint8_t *sig = NULL;
+	uint8_t *cert = NULL;
+
+	off_t sig_size = sig_len;
+	off_t cert_size = cert_len;
+
+	if (!cmld_uses_signed_configs()) {
+		TRACE("Signed configuration is disabled, skipping!");
+		return true;
+	}
+
+	if (sig_buf && cert_buf) {
+		TRACE("Copy buffers for sig and cert!");
+		sig = mem_new0(uint8_t, sig_len);
+		memcpy(sig, sig_buf, sig_len);
+		cert = mem_new0(uint8_t, cert_len);
+		memcpy(cert, cert_buf, cert_len);
+	} else {
+		TRACE("Read sig and cert from files!");
+		char *sig_file = mem_printf("%s.sig", prefix);
+		char *cert_file = mem_printf("%s.cert", prefix);
+		sig_size = file_size(sig_file);
+		if (sig_size > 0) {
+			sig = mem_alloc(sig_size);
+			if (-1 == file_read(sig_file, (char *)sig, sig_size)) {
+				ERROR("Failed to read sig file '%s'!", sig_file);
+				mem_free(sig);
+				sig = NULL;
+			}
+		}
+		cert_size = file_size(cert_file);
+		if (cert_size > 0) {
+			cert = mem_alloc(cert_size);
+			if (-1 == file_read(cert_file, (char *)cert, cert_size)) {
+				ERROR("Failed to read cert file '%s'!", cert_file);
+				mem_free(cert);
+				cert = NULL;
+			}
+		}
+		mem_free(sig_file);
+		mem_free(cert_file);
+	}
+
+	// check cert and signature buffers
+	IF_TRUE_GOTO(cert_size <= 0 || sig_size <= 0 || cert == NULL || sig == NULL, out);
+
+	smartcard_crypto_verify_result_t verify_result = smartcard_crypto_verify_buf_block(
+		conf_buf, conf_len, sig, sig_size, cert, cert_size, C_CONFIG_VERIFY_HASH_ALGO);
+
+	ret = (verify_result == VERIFY_GOOD) ? true : false;
+out:
+	INFO("Verify Result of target with prefix '%s': %s", prefix, ret ? "GOOD" : "UNSIGNED");
+
+	mem_free(sig);
+	mem_free(cert);
+	return ret;
+}
+
 container_config_t *
-container_config_new(const char *file, const uint8_t *buf, size_t len)
+container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *sig_buf,
+		     size_t sig_len, uint8_t *cert_buf, size_t cert_len)
 {
 	ContainerConfig *ccfg = NULL;
+	uint8_t *buf_internal = NULL;
+	container_config_t *config = NULL;
 
 	ASSERT(file);
+	off_t conf_len = len;
 
-	if (buf) {
-		DEBUG("Loading container config from buf storing to file \"%s\".", file);
-		ccfg = (ContainerConfig *)protobuf_message_new_from_buf(
-			buf, len, &container_config__descriptor);
-		if (!ccfg)
-			WARN("Failed loading container config from buf");
-	}
-	if (!ccfg) {
+	char *prefix = mem_strdup(file);
+	size_t file_len = strlen(file);
+
+	IF_TRUE_GOTO(file_len < 5 || strcmp(file + file_len - 5, ".conf"), out);
+
+	prefix[file_len - 5] = '\0';
+
+	// check if config comes from buffer or needs to be read from file
+	if (buf == NULL) {
 		DEBUG("Loading container config from file \"%s\".", file);
-		ccfg = (ContainerConfig *)protobuf_message_new_from_textfile(
-			file, &container_config__descriptor);
-		if (!ccfg) {
-			WARN("Failed loading container config from file \"%s\".", file);
-			return NULL;
+		conf_len = file_size(file);
+		if (conf_len > 0) {
+			buf_internal = mem_alloc(conf_len);
+			if (-1 == file_read(file, (char *)buf_internal, conf_len)) {
+				mem_free(buf_internal);
+				buf_internal = NULL;
+			}
+		}
+	} else {
+		DEBUG("Loading container config from buf storing to file \"%s\".", file);
+		buf_internal = mem_new0(uint8_t, conf_len);
+		memcpy(buf_internal, buf, conf_len);
+	}
+
+	if (!container_config_verify(prefix, buf_internal, conf_len, sig_buf, sig_len, cert_buf,
+				     cert_len)) {
+		ERROR("Failed verify signature of container config for file \"%s\".", file);
+		goto out;
+	}
+
+	ccfg = (ContainerConfig *)protobuf_message_new_from_buf(buf_internal, conf_len,
+								&container_config__descriptor);
+	if (!ccfg) {
+		WARN("Failed loading container config from buf");
+		goto out;
+	}
+
+	// if config was provided by buf, update all files according to buffers
+	if (buf) {
+		if (-1 == file_write(file, (char *)buf, conf_len)) {
+			WARN("Could not store configuration in file \"%s\".", file);
+		} else if (cmld_uses_signed_configs()) {
+			char *sig_file = mem_printf("%s.sig", prefix);
+			char *cert_file = mem_printf("%s.cert", prefix);
+
+			if (-1 == file_write(sig_file, (char *)sig_buf, sig_len))
+				WARN("Could not update sig_file '%s'", sig_file);
+			if (-1 == file_write(cert_file, (char *)cert_buf, cert_len))
+				WARN("Could not update cert_file '%s'", cert_file);
 		}
 	}
 
-	container_config_t *config = mem_new0(container_config_t, 1);
+	config = mem_new0(container_config_t, 1);
 	config->file = mem_strdup(file);
 	config->cfg = ccfg;
+out:
+	mem_free(buf_internal);
+	mem_free(prefix);
 	return config;
 }
 
@@ -193,6 +306,11 @@ container_config_write(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	ASSERT(config->file);
+
+	if (cmld_uses_signed_configs()) {
+		INFO("Signed configuration is enabled, skip writing in memory structure to disk!");
+		return 0;
+	}
 
 	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *)config->cfg) < 0) {
 		WARN("Could not write container config to \"%s\"", config->file);
