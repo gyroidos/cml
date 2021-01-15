@@ -984,8 +984,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				WARN("Could not send empty Response to CREATE");
 			break;
 		}
+		// TODO retreive sig and cert from protobuf
 		container_t *c = cmld_container_create_from_config(msg->container_config_file.data,
-								   msg->container_config_file.len);
+								   msg->container_config_file.len,
+								   NULL, 0, NULL, 0);
 		if (NULL == c) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to CREATE");
@@ -1052,8 +1054,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				WARN("Could not send empty Response to UPDATE_CONFIG");
 			break;
 		}
+		// TODO retreive sig and cert from protobuf
 		int res = container_update_config(container, msg->container_config_file.data,
-						  msg->container_config_file.len);
+						  msg->container_config_file.len, NULL, 0, NULL, 0);
 		if (res) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to UPDATE_CONFIG");
