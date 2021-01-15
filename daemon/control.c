@@ -1452,6 +1452,7 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 	return;
 
 connection_err:
+	input_clean_pin_entry();
 	event_remove_io(io);
 	event_io_free(io);
 	if (close(fd) < 0)
