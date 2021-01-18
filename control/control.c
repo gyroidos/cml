@@ -70,7 +70,7 @@ print_usage(const char *cmd)
 	printf("   remove <container-uuid>\n        Removes the specified container (completely).\n");
 	printf("   change_pin <container-uuid>\\n        Change token pin which is used for container key wrapping. Prompts for password entry.\n");
 	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
-	printf("   stop <container-uuid>\n        Stops the specified container.\n");
+	printf("   stop <container-uuid> [--key=<key>]\n        Stops the specified container.\n");
 	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
 	printf("   update_config <container-uuid> --file=<container.conf>\n        Updates a container's config with the given config file.\n");
 	printf("   state <container-uuid>\n        Prints the state of the specified container.\n");
@@ -470,6 +470,8 @@ main(int argc, char *argv[])
 				ASSERT(false); // never reached
 			}
 		}
+		if (usb_pin_entry && !ask_for_password)
+			printf("WARN: argument --key will be ignored for containers configured with USB pin reader\n");
 		if (usb_pin_entry)
 			printf("Please Enter your password via pin reader\n");
 		else if (ask_for_password)
@@ -477,7 +479,37 @@ main(int argc, char *argv[])
 		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
+		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
+		msg.container_start_params = NULL;
+		bool ask_for_password = true;
+		bool usb_pin_entry = get_container_usb_pin_entry(uuid, sock);
+		// parse specific options for start command
+		optind--;
+		char **start_argv = &argv[optind];
+		int start_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     - 1 != (c = getopt_long(start_argc, start_argv, "k", start_options,
+					     &option_index));) {
+			switch (c) {
+			case 'k':
+				container_start_params.key = optarg;
+				ask_for_password = false;
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
+		if (usb_pin_entry && !ask_for_password)
+			printf("WARN: argument --key will be ignored for containers configured with USB pin reader\n");
+		if (usb_pin_entry)
+			printf("Please Enter your password via pin reader\n");
+		else if (ask_for_password)
+			container_start_params.key = get_password_new("Password: ");
+		msg.container_start_params = &container_start_params;
+		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "freeze")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE;
 	} else if (!strcasecmp(command, "unfreeze")) {
