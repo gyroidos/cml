@@ -42,8 +42,8 @@
  * @param ContainerStartParams *start_params
  */
 int
-input_register_container_start_cb(control_t *control, container_t *container);
-
+input_register_container_ctrl_cb(control_t *control, container_t *container,
+				 cmld_container_ctrl_t container_ctrl);
 void
 input_clean_pin_entry(void);
 

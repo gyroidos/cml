@@ -26,9 +26,9 @@
 
 #include "hardware.h"
 #include "download.h"
+#include "cmld.h"
 #include "smartcard.h"
 #include "tss.h"
-#include "cmld.h"
 
 #include "common/macro.h"
 #include "common/mem.h"

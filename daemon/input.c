@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include "fcntl.h"
 
+#include "cmld.h"
 #include "control.h"
 #include "common/macro.h"
 #include "common/mem.h"
@@ -37,7 +38,6 @@
 #include "container.h"
 #include "uevent.h"
 #include "input.h"
-#include "cmld.h"
 
 // The following defines represent parts of the syntax of /proc/bus/input/devices
 #define IFACE_PREFIX "I:"
@@ -50,7 +50,8 @@
 typedef struct {
 	control_t *control;
 	container_t *container;
-} container_start_cb_data_t;
+	cmld_container_ctrl_t container_ctrl;
+} container_ctrl_cb_data_t;
 
 typedef struct {
 	control_t *control;
@@ -218,12 +219,12 @@ input_clean_pin_entry(void)
 }
 
 static void
-input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, void *data)
+input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
 	char c;
 	char *tmp_key = NULL;
-	container_start_cb_data_t *cb_data = data;
+	container_ctrl_cb_data_t *cb_data = data;
 
 	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit_fail);
 
@@ -258,13 +259,19 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 			input_key = tmp_key;
 			input_key[input_key_index - 1] = '\0';
 
-			DEBUG("Starting container %s with smartcard from callback",
+			DEBUG("%s container %s with smartcard from callback",
+			      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ? "STARTING" :
+										       "STOPPING",
 			      container_get_name(cb_data->container));
-			if (cmld_container_start_with_smartcard(
-				    cb_data->control, cb_data->container, input_key) != 0) {
+			if (cmld_container_ctrl_with_smartcard(cb_data->control, cb_data->container,
+							       input_key,
+							       cb_data->container_ctrl) != 0) {
 				// the container start function will send a control message
 				// so we do not need to go to exit fail and send a message here
-				ERROR("Failed to start container %s",
+				ERROR("Failed to %s container %s",
+				      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ?
+					      "START" :
+					      "STOP",
 				      container_get_name(cb_data->container));
 			}
 			goto exit;
@@ -321,7 +328,8 @@ exit:
 }
 
 int
-input_register_container_start_cb(control_t *control, container_t *container)
+input_register_container_ctrl_cb(control_t *control, container_t *container,
+				 cmld_container_ctrl_t container_ctrl)
 {
 	char *input_file = NULL;
 
@@ -359,11 +367,12 @@ input_register_container_start_cb(control_t *control, container_t *container)
 	}
 
 	// Read in pin in asynchronous callback
-	container_start_cb_data_t *cb_data = mem_new0(container_start_cb_data_t, 1);
+	container_ctrl_cb_data_t *cb_data = mem_new0(container_ctrl_cb_data_t, 1);
 	cb_data->control = control;
 	cb_data->container = container;
+	cb_data->container_ctrl = container_ctrl;
 	input_event_io = event_io_new(input_fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
-				      input_cb_request_pin_start_container, cb_data);
+				      input_cb_request_pin_ctrl_container, cb_data);
 
 	// Start pin entry timeout timer
 	pin_entry_timer_cb_data_t *timer_data = mem_new0(pin_entry_timer_cb_data_t, 1);
