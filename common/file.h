@@ -81,7 +81,7 @@ file_move(const char *src, const char *dst, size_t bs);
  * @param file The file name.
  * @param buf The buffer to be written.
  * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
- * @return -1 on error else 0.
+ * @return -1 on error else the number of bytes written.
  */
 int
 file_write(const char *file, const char *buf, ssize_t len);
@@ -91,7 +91,7 @@ file_write(const char *file, const char *buf, ssize_t len);
  * @param file The file name.
  * @param buf The buffer to be written.
  * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
- * @return -1 on error else 0.
+ * @return -1 on error else the number of bytes written.
  */
 int
 file_write_append(const char *file, const char *buf, ssize_t len);
@@ -100,7 +100,7 @@ file_write_append(const char *file, const char *buf, ssize_t len);
  * Write a string to a file using printf.
  * @param file The file name.
  * @param fmt The format string.
- * @return -1 on error else 0.
+ * @return -1 on error else the number of bytes written.
  */
 int
 file_printf(const char *file, const char *fmt, ...);
@@ -109,7 +109,7 @@ file_printf(const char *file, const char *fmt, ...);
  * Append a string to the end of a file using printf.
  * @param file The file name.
  * @param fmt The format string.
- * @return -1 on error else 0.
+ * @return -1 on error else the number of bytes written.
  */
 int
 file_printf_append(const char *file, const char *fmt, ...);
@@ -119,7 +119,7 @@ file_printf_append(const char *file, const char *fmt, ...);
  * @param file The file name.
  * @param buf A buffer to read the file data into.
  * @param len The length of buffer.
- * @return -1 on error else 0.
+ * @return -1 on error else the number of bytes read.
  */
 int
 file_read(const char *file, char *buf, size_t len);
@@ -152,6 +152,7 @@ file_get_extension(const char *file);
 /**
  * creates an empty file
  * @param file The file name
+ * @return -1 on error else 0
  */
 int
 file_touch(const char *file);
