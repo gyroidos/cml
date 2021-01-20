@@ -211,7 +211,8 @@ cryptfs_configure_and_execute_integrity(const char *real_blk_name, const char *n
 	struct dm_target_spec *tgt;
 	struct dm_ioctl *mapping_io;
 	char *integrity_params;
-	char *extra_params = "internal_hash:sha256";
+	//char *extra_params = "internal_hash:sha256";
+	char *extra_params = "0";
 	int mapping_counter;
 
 	DEBUG("[+] Configuring integrity block device");
