@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -28,7 +28,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <sys/ioctl.h>
+#include <linux/ioctl.h>
+#include <linux/unistd.h>
 #include <linux/dm-ioctl.h>
 #include <libgen.h>
 #include <stdlib.h>
@@ -62,6 +63,29 @@
 
 /******************************************************************************/
 
+#ifdef __GNU_LIBRARY__
+#define dm_ioctl(...) ioctl(__VA_ARGS__)
+#else
+/*
+ * non glibc std libraries such as musl provide ioctl (int, int, ...)
+ * wrapper. However, dm integrity requests are 'unsigned long int' and
+ * would overflow on a cast to int. Thus, we directly provide a wrapper
+ * here instead of using the ioctl wrapper of the std library.
+ */
+static int
+dm_ioctl(int fd, unsigned long int request, ...)
+{
+	void *args;
+	va_list ap;
+	int result;
+	va_start(ap, request);
+	args = va_arg(ap, void *);
+	result = syscall(__NR_ioctl, fd, request, args);
+	va_end(ap);
+	return result;
+}
+#endif
+
 static void
 ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
 {
@@ -82,7 +106,7 @@ get_blkdev_size(int fd)
 {
 	unsigned long nr_sec;
 
-	if ((ioctl(fd, BLKGETSIZE, &nr_sec)) == -1) {
+	if ((dm_ioctl(fd, BLKGETSIZE, &nr_sec)) == -1) {
 		nr_sec = 0;
 	}
 	return nr_sec;
@@ -156,7 +180,7 @@ load_crypto_mapping_table(const char *real_blk_name, const char *master_key_asci
 	tgt->next = crypt_params - buffer;
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		if (!ioctl(fd, (int)DM_TABLE_LOAD, io)) {
+		if (!dm_ioctl(fd, DM_TABLE_LOAD, io)) {
 			break;
 		}
 		usleep(500000);
@@ -202,7 +226,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		if (!ioctl(fd, (int)DM_DEV_CREATE, io)) {
+		if (!dm_ioctl(fd, DM_DEV_CREATE, io)) {
 			break;
 		}
 		usleep(500000);
@@ -225,7 +249,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	/* Resume this device to activate it */
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
-	if (ioctl(fd, (int)DM_DEV_SUSPEND, io)) {
+	if (dm_ioctl(fd, DM_DEV_SUSPEND, io)) {
 		ERROR_ERRNO("Cannot resume the dm-crypt device\n");
 		goto errout;
 	}
@@ -257,7 +281,7 @@ create_device_node(const char *name)
 	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
 
 	ioctl_init(io, DEVMAPPER_BUFFER_SIZE, name, 0);
-	if (ioctl(fd, (int)DM_DEV_STATUS, io)) {
+	if (dm_ioctl(fd, DM_DEV_STATUS, io)) {
 		if (errno != ENXIO) {
 			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
 		}
@@ -310,7 +334,7 @@ cryptfs_delete_blk_dev(const char *name)
 	io = (struct dm_ioctl *)buffer;
 
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
-	if (ioctl(fd, (int)DM_DEV_REMOVE, io) < 0) {
+	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		if (errno != ENXIO)
 			ERROR_ERRNO("Cannot remove dm-crypt device");
