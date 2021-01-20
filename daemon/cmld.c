@@ -1328,10 +1328,16 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	container_t *c =
 		container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
-		DEBUG("Created container %s (uuid=%s).", container_get_name(c),
-		      uuid_string(container_get_uuid(c)));
-		cmld_container_token_init(c);
-		cmld_containers_list = list_append(cmld_containers_list, c);
+		if (0 != cmld_container_token_init(c)) {
+			ERROR("Could not initialize token associated with container %s (uuid=%s). Aborting creation",
+			      container_get_name(c), uuid_string(container_get_uuid(c)));
+			cmld_container_destroy(c);
+			c = NULL;
+		} else {
+			cmld_containers_list = list_append(cmld_containers_list, c);
+			INFO("Created container %s (uuid=%s).", container_get_name(c),
+			     uuid_string(container_get_uuid(c)));
+		}
 	} else {
 		WARN("Could not create new container object from config");
 	}
