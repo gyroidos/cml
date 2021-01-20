@@ -231,7 +231,7 @@ cryptfs_configure_and_execute_integrity(const char *real_blk_name, const char *n
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
 
 	for (create_counter = 0; create_counter < TABLE_LOAD_RETRIES; create_counter++) {
-		ioctl_ret = ioctl(fd_mapper, DM_DEV_CREATE, create_io);
+		ioctl_ret = dm_ioctl(fd_mapper, DM_DEV_CREATE, create_io);
 		if (ioctl_ret != 0) {
 			ERROR("[+]    Could not create block device: ioctl(DM_DEV_CREATE) ret: %d, errno: %d",
 			      ioctl_ret, errno);
@@ -291,7 +291,7 @@ cryptfs_configure_and_execute_integrity(const char *real_blk_name, const char *n
 		DEBUG("[+]   Executing: ioctl(fd_mapper: %d, DM_TABLE_LOAD: %d, mapping_io:%p)",
 		      fd_mapper, (int)DM_TABLE_LOAD, (void *)mapping_io);
 
-		ioctl_ret = ioctl(fd_mapper, (int)DM_TABLE_LOAD, mapping_io);
+		ioctl_ret = dm_ioctl(fd_mapper, DM_TABLE_LOAD, mapping_io);
 
 		switch (errno) {
 		case 0:
@@ -327,7 +327,7 @@ cryptfs_configure_and_execute_integrity(const char *real_blk_name, const char *n
 	DEBUG("[+] Resuming the blk device");
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
 
-	ioctl_ret = ioctl(fd_mapper, DM_DEV_SUSPEND, create_io);
+	ioctl_ret = dm_ioctl(fd_mapper, DM_DEV_SUSPEND, create_io);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("[+]  Cannot resume the dm-integrity device (ioctl ret: %d, errno:%d)",
 			    ioctl_ret, errno);
@@ -436,7 +436,7 @@ load_crypto_mapping_table(const char *real_blk_name, const char *master_key_asci
 	tgt->next = crypt_params - buffer;
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		ioctl_ret = ioctl(fd, DM_TABLE_LOAD, io);
+		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, io);
 		if (!ioctl_ret) {
 			DEBUG("[+]   LOADING ENCRYPTION MAP WORKED FLAWLESS!");
 			break;
@@ -549,7 +549,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
-		ioctl_ret = ioctl(fd, DM_DEV_CREATE, io);
+		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, io);
 
 		if (!ioctl_ret) {
 			DEBUG("[+]  Cryptp DM_DEV_CREATE WORKED!");
@@ -651,7 +651,7 @@ delete_integrity_blk_dev(const char *name)
 	io = (struct dm_ioctl *)buffer;
 
 	ioctl_init(io, DM_INTEGRITY_BUF_SIZE, name, 0);
-	if (ioctl(fd, (int)DM_DEV_REMOVE, io) < 0) {
+	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		if (errno != ENXIO)
 			ERROR_ERRNO("Cannot remove dm-integrity device");
@@ -802,7 +802,7 @@ cryptfs_format_volume(const char *dev)
 	}
 
 	/* Set direct io for dm-crypt device to ignore invalid integrity tags */
-	int ioctl_return = ioctl(fd, __O_DIRECT, 1);
+	int ioctl_return = ioctl(fd, O_DIRECT, 1);
 
 	if (ioctl_return < 0) {
 		ERROR("IOCTL coult not be opened!");
@@ -817,7 +817,7 @@ cryptfs_format_volume(const char *dev)
 
 	ret = proc_fork_and_execvp(argv_dd);
 	DEBUG("[+] cryptfs_format_volume returnes: %d, errno: %d", ret, errno);
-	ioctl(fd, __O_DIRECT, 0);
+	ioctl(fd, O_DIRECT, 0);
 	close(fd);
 	mem_free(of);
 	mem_free(count);
