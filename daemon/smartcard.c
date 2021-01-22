@@ -786,6 +786,8 @@ smartcard_scd_token_add_block(container_t *container)
 	      uuid_string(container_get_uuid(container)));
 	ASSERT(container);
 
+	int rc = -1;
+
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = DAEMON_TO_TOKEN__CODE__TOKEN_ADD;
 
@@ -813,6 +815,7 @@ smartcard_scd_token_add_block(container_t *container)
 		TRACE("CMLD: smartcard_scd_token_block_new: token in scd created successfully");
 		container_set_token_uuid(container, out.token_uuid);
 		container_set_token_is_init(container, true);
+		rc = 0;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__TOKEN_ADD_FAILED: {
 		container_set_token_is_init(container, false);
@@ -823,13 +826,11 @@ smartcard_scd_token_add_block(container_t *container)
 		ERROR("TokenToDaemon command %d not expected as answer to change_pin", msg->code);
 	}
 
-	mem_free(out.token_uuid);
 	protobuf_free_message((ProtobufCMessage *)msg);
-	return 0;
 
 err:
 	mem_free(out.token_uuid);
-	return -1;
+	return rc;
 }
 
 int
@@ -885,6 +886,13 @@ smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container)
 
 	char *keyfile = mem_printf("%s/%s.key", smartcard->path,
 				   uuid_string(container_get_uuid(container)));
+
+	if (!file_exists(keyfile)) {
+		DEBUG("No keyfile found for container %s (uuid=%s).", container_get_name(container),
+		      uuid_string(container_get_uuid(container)));
+		rc = 0;
+		goto out;
+	}
 
 	if (0 != remove(keyfile)) {
 		ERROR("Failed to remove keyfile");
