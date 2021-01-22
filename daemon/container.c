@@ -530,7 +530,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	current_guestos_version = container_config_get_guestos_version(conf);
 	new_guestos_version = guestos_get_version(os);
-	if (current_guestos_version < new_guestos_version) {
+	if ((current_guestos_version < new_guestos_version) && !cmld_uses_signed_configs()) {
 		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
 		     current_guestos_version, new_guestos_version, name);
 		container_config_set_guestos_version(conf, new_guestos_version);
