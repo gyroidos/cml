@@ -107,6 +107,7 @@ static char *cmld_shared_data_dir = NULL;
 static list_t *cmld_netif_phys_list = NULL;
 
 static bool cmld_hostedmode = false;
+static bool cmld_signed_configs = false;
 
 static bool cmld_device_provisioned = false;
 
@@ -328,6 +329,12 @@ cmld_is_hostedmode_active(void)
 }
 
 bool
+cmld_uses_signed_configs(void)
+{
+	return cmld_signed_configs;
+}
+
+bool
 cmld_is_device_provisioned(void)
 {
 	return cmld_device_provisioned;
@@ -419,7 +426,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 			cmld_containers_list = list_remove(cmld_containers_list, c);
 			container_free(c);
 		}
-		c = container_new(path, uuid, NULL, 0);
+		c = container_new(path, uuid, NULL, 0, NULL, 0, NULL, 0);
 		if (c) {
 			DEBUG("Loaded config for container %s from %s", container_get_name(c),
 			      name);
@@ -1165,6 +1172,9 @@ cmld_init(const char *path)
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);
 
+	// activate signature checking of container configs if enabled
+	cmld_signed_configs = device_config_get_signed_configs(device_config);
+
 	cmld_tune_network(device_config_get_host_addr(device_config),
 			  device_config_get_host_subnet(device_config),
 			  device_config_get_host_if(device_config),
@@ -1307,14 +1317,16 @@ cmld_container_create_clone(container_t *container)
 }
 
 container_t *
-cmld_container_create_from_config(const uint8_t *config, size_t config_len)
+cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint8_t *sig,
+				  size_t sig_len, uint8_t *cert, size_t cert_len)
 {
 	ASSERT(config);
 	ASSERT(config_len);
 	char *path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
 	IF_NULL_RETVAL(path, NULL);
 
-	container_t *c = container_new(path, NULL, config, config_len);
+	container_t *c =
+		container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
 		if (0 != cmld_container_token_init(c)) {
 			ERROR("Could not initialize token associated with container %s (uuid=%s). Aborting creation",
