@@ -451,28 +451,10 @@ container_uuid_is_c0id(const uuid_t *uuid)
 	return ret;
 }
 
-/**
- * Creates a new container object. There are three different cases
- * depending on the combination of the given parameters:
- *
- * uuid && !config: In this case, a container with the given UUID must be already
- * present in the given store_path and is loaded from there.
- *
- * !uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config buffer and a random
- * UUID.
- *
- * uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config buffer and the given
- * UUID.
- *
- * @return The new container object or NULL if something went wrong.
- *
- */
 /* TODO Error handling */
 container_t *
 container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
-	      size_t config_len)
+	      size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len)
 {
 	ASSERT(store_path);
 	ASSERT(existing_uuid || config);
@@ -510,7 +492,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	/********************************
 	 * Translate High Level Config into low-level parameters for internal
 	 * constructor */
-	container_config_t *conf = container_config_new(config_filename, config, config_len);
+	container_config_t *conf = container_config_new(config_filename, config, config_len, sig,
+							sig_len, cert, cert_len);
 
 	if (!conf) {
 		WARN("Could not read config file %s", config_filename);
@@ -547,7 +530,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	current_guestos_version = container_config_get_guestos_version(conf);
 	new_guestos_version = guestos_get_version(os);
-	if (current_guestos_version < new_guestos_version) {
+	if ((current_guestos_version < new_guestos_version) && !cmld_uses_signed_configs()) {
 		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
 		     current_guestos_version, new_guestos_version, name);
 		container_config_set_guestos_version(conf, new_guestos_version);
@@ -2314,7 +2297,9 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 	res |= c_net_move_ifi(iface, pid);
 	if (res || !persistent)
 		return res;
-	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
+
+	container_config_t *conf =
+		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
 	container_config_append_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
@@ -2332,7 +2317,8 @@ container_remove_net_iface(container_t *container, const char *iface, bool persi
 
 	cmld_netif_phys_add_by_name(iface);
 
-	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
+	container_config_t *conf =
+		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
@@ -2408,11 +2394,13 @@ container_get_vnet_runtime_cfg_new(container_t *container)
 }
 
 int
-container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
+container_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
+			size_t sig_len, uint8_t *cert_buf, size_t cert_len)
 {
 	ASSERT(container);
 	int ret = -1;
-	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len);
+	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len,
+							sig_buf, sig_len, cert_buf, cert_len);
 	if (conf) {
 		ret = container_config_write(conf);
 		container_config_free(conf);

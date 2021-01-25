@@ -46,17 +46,24 @@ typedef struct container_config container_config_t;
 /**
  * Create a new container_config object which can be used to parse or write a
  * configuration to a given filename.
+ * Signature/Certificate buffers and corresponding lenght are optional and may
+ * set to zero/NULL if configuration should not be integrity protected.
  *
  * @param filename Representation of the config on disk. Must NOT be NULL. If
- * the file exists it is used to initially fill the container_config object. 
+ * the file exists it is used to initially fill the container_config object.
  * @param buf Config buffer to initialize the config object. If the config
  * file at filename already exists, the config buffer supersedes the content
  * of the config file.
  * @param len Length of the given buf.
+ * @param sig_buf buffer containing the signature of the configuration
+ * @param sig_len length of the given sig_buf
+ * @param cert_buf buffer containing the certificate of the configuration
+ * @param cert_len length of the given cert_buf
  * @return The new container_config_t object or NULL on an error.
  */
 container_config_t *
-container_config_new(const char *file, const uint8_t *buf, size_t len);
+container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *sig_buf,
+		     size_t sig_len, uint8_t *cert_buf, size_t cert_len);
 
 /**
  * Release the container_config_t object.

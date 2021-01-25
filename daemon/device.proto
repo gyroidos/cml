@@ -59,4 +59,6 @@ message DeviceConfig {
 
 	// hostmode
 	required bool hostedmode = 14 [default = false];
+
+	optional bool signed_configs = 15 [default = false];
 }

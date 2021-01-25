@@ -209,10 +209,16 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
  * created in the given store_path using the given config buffer and the given
  * UUID.
  *
+ * Optionally sig, cert buffers and length paramters could be set to non zero/NULL
+ * values for signature verification of the corresponding configuration contained
+ * in config buffer.
+ *
+ *
  * @return The new container object or NULL if something went wrong.
  */
 container_t *
-container_new(const char *store_path, const uuid_t *uuid, const uint8_t *config, size_t config_len);
+container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
+	      size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len);
 
 /*
 container_t *
@@ -767,7 +773,8 @@ container_get_vnet_runtime_cfg_new(container_t *container);
  * reload is necessary.
  */
 int
-container_update_config(container_t *container, uint8_t *buf, size_t buf_len);
+container_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
+			size_t sig_len, uint8_t *cert_buf, size_t cert_len);
 
 /**
  * Get the list of usb devices which are set in container config.
