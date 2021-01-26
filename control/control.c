@@ -199,9 +199,6 @@ static const struct option assign_iface_options[] = { { "iface", required_argume
 						      { "persistent", no_argument, 0, 'p' },
 						      { 0, 0, 0, 0 } };
 
-static const struct option update_cfg_options[] = { { "file", required_argument, 0, 'f' },
-						    { 0, 0, 0, 0 } };
-
 static char *
 get_password_new(const char *prompt)
 {
@@ -406,8 +403,8 @@ main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "create")) {
 		has_response = true;
-		// need exactly one more argument (container config file)
-		if (optind != argc - 1)
+		// need at least one more argument (container config)
+		if (optind >= argc)
 			print_usage(argv[0]);
 
 		const char *cfgfile = argv[optind++];
@@ -419,12 +416,39 @@ main(int argc, char *argv[])
 		if (file_read(cfgfile, (char *)cfg, cfglen) < 0)
 			FATAL("Error reading %s. Aborting.", cfgfile);
 
-		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
-
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER;
 		msg.has_container_config_file = true;
 		msg.container_config_file.len = cfglen;
 		msg.container_config_file.data = cfg;
+
+		const char *sigfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile) {
+			off_t siglen = file_size(sigfile);
+			if (siglen < 0)
+				FATAL("Error accessing container signature file %s.", sigfile);
+			unsigned char *sig = mem_alloc(siglen);
+			if (file_read(sigfile, (char *)sig, siglen) < 0)
+				FATAL("Error reading %s. Aborting.", sigfile);
+			msg.has_container_config_signature = true;
+			msg.container_config_signature.len = siglen;
+			msg.container_config_signature.data = sig;
+		}
+
+		const char *certfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile && certfile) {
+			off_t certlen = file_size(certfile);
+			if (certlen < 0)
+				FATAL("Error accessing cotainer certificate file %s.", certfile);
+			unsigned char *cert = mem_alloc(certlen);
+			if (file_read(certfile, (char *)cert, certlen) < 0)
+				FATAL("Error reading %s. Aborting.", certfile);
+
+			msg.has_container_config_certificate = true;
+			msg.container_config_certificate.len = certlen;
+			msg.container_config_certificate.data = cert;
+		}
+
+		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
 		goto send_message;
 	}
 
@@ -529,27 +553,13 @@ main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 		has_response = true;
 	} else if (!strcasecmp(command, "update_config")) {
-		const char *cfgfile = NULL;
 		has_response = true;
-		optind--;
-		char **update_argv = &argv[optind];
-		int update_argc = argc - optind;
-		optind = 0; // reset optind to scan command-specific options
-		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(update_argc, update_argv, "f:", update_cfg_options,
-					     &option_index));) {
-			switch (c) {
-			case 'f':
-				cfgfile = optarg ? optarg : NULL;
-				break;
-			default:
-				print_usage(argv[0]);
-				ASSERT(false); // never reached
-			}
-		}
-		optind += argc - update_argc; // adjust optind to be used with argv
+		optind++;
+		// need at least one more argument (container config)
+		if (optind >= argc)
+			print_usage(argv[0]);
 
-		//const char* cfgfile = argv[optind++];
+		const char *cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
 		if (cfglen < 0)
 			FATAL("Error accessing container config file %s.", cfgfile);
@@ -564,6 +574,33 @@ main(int argc, char *argv[])
 		msg.has_container_config_file = true;
 		msg.container_config_file.len = cfglen;
 		msg.container_config_file.data = cfg;
+
+		const char *sigfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile) {
+			off_t siglen = file_size(sigfile);
+			if (siglen < 0)
+				FATAL("Error accessing container signature file %s.", sigfile);
+			unsigned char *sig = mem_alloc(siglen);
+			if (file_read(sigfile, (char *)sig, siglen) < 0)
+				FATAL("Error reading %s. Aborting.", sigfile);
+			msg.has_container_config_signature = true;
+			msg.container_config_signature.len = siglen;
+			msg.container_config_signature.data = sig;
+		}
+
+		const char *certfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile && certfile) {
+			off_t certlen = file_size(certfile);
+			if (certlen < 0)
+				FATAL("Error accessing cotainer certificate file %s.", certfile);
+			unsigned char *cert = mem_alloc(certlen);
+			if (file_read(certfile, (char *)cert, certlen) < 0)
+				FATAL("Error reading %s. Aborting.", certfile);
+
+			msg.has_container_config_certificate = true;
+			msg.container_config_certificate.len = certlen;
+			msg.container_config_certificate.data = cert;
+		}
 	} else if (!strcasecmp(command, "ifaces")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
 		has_response = true;
