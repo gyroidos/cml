@@ -46,6 +46,7 @@
 #define TPM2D_RCONTROL_PORT 9505
 
 static bool use_simulator = false;
+static bool no_setup_keys = false;
 
 static tpm2d_control_t *tpm2d_control_cmld = NULL;
 static tpm2d_rcontrol_t *tpm2d_rcontrol_attest = NULL;
@@ -198,7 +199,7 @@ tpm2d_init(void)
 	char *session_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_SESSION_DIR);
 
 	if (!file_is_dir(TPM2D_BASE_DIR)) {
-		if (mkdir(TPM2D_BASE_DIR, 0700) < 0) {
+		if (dir_mkdir_p(TPM2D_BASE_DIR, 0700) < 0) {
 			FATAL_ERRNO("Could not mkdir tpm2d's working dir: %s", TPM2D_BASE_DIR);
 		}
 	}
@@ -233,8 +234,8 @@ tpm2d_init(void)
 #ifndef TPM2D_NVMCRYPT_ONLY
 	// initialize nvm_crypt_submodule
 	nvmcrypt_init(true);
-
-	tpm2d_setup_keys();
+	if (!no_setup_keys)
+		tpm2d_setup_keys();
 #else
 	// initialize nvm_crypt_submodule
 	nvmcrypt_init(false);
@@ -283,11 +284,13 @@ print_usage(const char *cmd)
 	printf("Usage: %s [-s] \n", cmd);
 	printf("\n");
 	printf("\t use -s option to connect to simulator, otherwise /dev/tpm0 ist used");
+	printf("\t use -n option to disable setup keys for attestation");
 	printf("\n");
 	exit(-1);
 }
 
 static const struct option global_options[] = { { "sim", no_argument, 0, 's' },
+						{ "nokeys", no_argument, 0, 'n' },
 						{ "help", no_argument, 0, 'h' },
 						{ 0, 0, 0, 0 } };
 
@@ -301,10 +304,13 @@ main(UNUSED int argc, char **argv)
 	logf_register(&logf_file_write, stdout);
 
 	for (int c, option_index = 0;
-	     - 1 != (c = getopt_long(argc, argv, ":sh", global_options, &option_index));) {
+	     - 1 != (c = getopt_long(argc, argv, ":snh", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			use_simulator = true;
+			break;
+		case 'n':
+			no_setup_keys = true;
 			break;
 		default: // includes cases 'h' and '?'
 			print_usage(argv[0]);
@@ -340,9 +346,11 @@ main(UNUSED int argc, char **argv)
 	if (!tpm2d_control_cmld) {
 		FATAL("Could not init tpm2d_control socket");
 	}
-	tpm2d_rcontrol_attest = tpm2d_rcontrol_new("0.0.0.0", TPM2D_RCONTROL_PORT);
-	if (!tpm2d_rcontrol_attest) {
-		FATAL("Could not init tpm2d_rcontrol socket");
+	if (!no_setup_keys) {
+		tpm2d_rcontrol_attest = tpm2d_rcontrol_new("0.0.0.0", TPM2D_RCONTROL_PORT);
+		if (!tpm2d_rcontrol_attest) {
+			FATAL("Could not init tpm2d_rcontrol socket");
+		}
 	}
 
 	INFO("created control socket.");
