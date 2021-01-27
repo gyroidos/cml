@@ -107,6 +107,7 @@
 
 struct container {
 	container_state_t state;
+	container_state_t prev_state;
 	uuid_t *uuid;
 	char *name;
 	container_type_t type;
@@ -244,6 +245,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container_t *container = mem_new0(container_t, 1);
 
 	container->state = CONTAINER_STATE_STOPPED;
+	container->prev_state = CONTAINER_STATE_STOPPED;
 
 	container->uuid = uuid_new(uuid_string(uuid));
 	container->name = mem_strdup(name);
@@ -451,28 +453,10 @@ container_uuid_is_c0id(const uuid_t *uuid)
 	return ret;
 }
 
-/**
- * Creates a new container object. There are three different cases
- * depending on the combination of the given parameters:
- *
- * uuid && !config: In this case, a container with the given UUID must be already
- * present in the given store_path and is loaded from there.
- *
- * !uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config buffer and a random
- * UUID.
- *
- * uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config buffer and the given
- * UUID.
- *
- * @return The new container object or NULL if something went wrong.
- *
- */
 /* TODO Error handling */
 container_t *
 container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
-	      size_t config_len)
+	      size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len)
 {
 	ASSERT(store_path);
 	ASSERT(existing_uuid || config);
@@ -510,7 +494,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	/********************************
 	 * Translate High Level Config into low-level parameters for internal
 	 * constructor */
-	container_config_t *conf = container_config_new(config_filename, config, config_len);
+	container_config_t *conf = container_config_new(config_filename, config, config_len, sig,
+							sig_len, cert, cert_len);
 
 	if (!conf) {
 		WARN("Could not read config file %s", config_filename);
@@ -547,7 +532,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	current_guestos_version = container_config_get_guestos_version(conf);
 	new_guestos_version = guestos_get_version(os);
-	if (current_guestos_version < new_guestos_version) {
+	if ((current_guestos_version < new_guestos_version) && !cmld_uses_signed_configs()) {
 		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
 		     current_guestos_version, new_guestos_version, name);
 		container_config_set_guestos_version(conf, new_guestos_version);
@@ -941,19 +926,28 @@ container_resume(container_t *container)
  * should make sure that the container and all its submodules are in the same
  * state they had immediately after their creation with _new().
  * Return values are not gathered, as the cleanup should just work as the system allows.
- * Remember to set container state correctly after the call to cleanup.
+ * It also sets container state to rebooting if 'is_rebooting' is set and
+ * stopped otherwise.
  */
 static void
-container_cleanup(container_t *container)
+container_cleanup(container_t *container, bool is_rebooting)
 {
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
 	c_net_cleanup(container->net);
 	c_run_cleanup(container->run);
-	c_user_cleanup(container->user);
 	c_time_cleanup(container->time);
-	/* cleanup c_vol last, as it removes partitions */
-	c_vol_cleanup(container->vol);
+
+	/*
+	 * maintain some state concerning mounts and corresponding shifted uid
+	 * states in case of rebooting. We need this, since the volume key for
+	 * encrypted volumes is cleared from cmld's memory after initial use.
+	 */
+	if (!is_rebooting) {
+		c_user_cleanup(container->user);
+		/* cleanup c_vol last, as it removes partitions */
+		c_vol_cleanup(container->vol);
+	}
 
 	container->pid = -1;
 
@@ -970,6 +964,10 @@ container_cleanup(container_t *container)
 		event_timer_free(container->start_timer);
 		container->start_timer = NULL;
 	}
+
+	container_state_t state =
+		is_rebooting ? CONTAINER_STATE_REBOOTING : CONTAINER_STATE_STOPPED;
+	container_set_state(container, state);
 }
 
 void
@@ -1009,11 +1007,7 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			event_remove_signal(sig);
 			event_signal_free(sig);
 			/* cleanup and set states accordingly to notify observers */
-			container_cleanup(container);
-			if (rebooting)
-				container_set_state(container, CONTAINER_STATE_REBOOTING);
-			else
-				container_set_state(container, CONTAINER_STATE_STOPPED);
+			container_cleanup(container, rebooting);
 		} else if (pid == -1) {
 			if (errno == ECHILD)
 				DEBUG("Process group of container %s terminated completely",
@@ -1327,6 +1321,8 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		return; // the child exits on its own and we cleanup in the sigchld handler
 	}
 
+	bool is_rebooting = container->prev_state == CONTAINER_STATE_REBOOTING;
+
 	/********************************************************/
 	/* on success call all c_<module>_start_pre_exec hooks */
 	if (c_time_start_pre_exec(container->time) < 0) {
@@ -1337,7 +1333,8 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		WARN("c_cgroups_start_pre_exec failed");
 		goto error_pre_exec;
 	}
-	if (c_vol_start_pre_exec(container->vol) < 0) {
+	// during reboot c_vol state is not cleared, thus skip pre_exec here
+	if (!is_rebooting && c_vol_start_pre_exec(container->vol) < 0) {
 		WARN("c_vol_start_pre_exec failed");
 		goto error_pre_exec;
 	}
@@ -1441,7 +1438,14 @@ container_start(container_t *container) //, const char *key)
 
 	/*********************************************************/
 	/* PRE CLONE HOOKS */
-	if (c_user_start_pre_clone(container->user) < 0) {
+	/*
+	 * We do explictitly clear out the vol key from cmld's memory
+	 * thus, on reboot we have to use allready mounted volumes which are
+	 * also kept during container_cleanup().
+	 */
+	bool is_rebooting = container->prev_state == CONTAINER_STATE_REBOOTING;
+
+	if (!is_rebooting && c_user_start_pre_clone(container->user) < 0) {
 		ret = CONTAINER_ERROR_USER;
 		goto error_pre_clone;
 	}
@@ -1461,7 +1465,7 @@ container_start(container_t *container) //, const char *key)
 		goto error_pre_clone;
 	}
 
-	if (c_vol_start_pre_clone(container->vol) < 0) {
+	if (!is_rebooting && c_vol_start_pre_clone(container->vol) < 0) {
 		ret = CONTAINER_ERROR_VOL;
 		goto error_pre_clone;
 	}
@@ -1582,8 +1586,7 @@ error_post_clone:
 	return ret;
 
 error_pre_clone:
-	container_cleanup(container);
-	container_set_state(container, CONTAINER_STATE_STOPPED);
+	container_cleanup(container, false);
 	return ret;
 }
 
@@ -1924,6 +1927,9 @@ container_set_state(container_t *container, container_state_t state)
 			break;
 		}
 	}
+
+	// save previous state
+	container->prev_state = container->state;
 
 	DEBUG("Setting container state: %d", state);
 	container->state = state;
@@ -2314,7 +2320,9 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 	res |= c_net_move_ifi(iface, pid);
 	if (res || !persistent)
 		return res;
-	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
+
+	container_config_t *conf =
+		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
 	container_config_append_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
@@ -2332,7 +2340,8 @@ container_remove_net_iface(container_t *container, const char *iface, bool persi
 
 	cmld_netif_phys_add_by_name(iface);
 
-	container_config_t *conf = container_config_new(container->config_filename, NULL, 0);
+	container_config_t *conf =
+		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
@@ -2408,11 +2417,13 @@ container_get_vnet_runtime_cfg_new(container_t *container)
 }
 
 int
-container_update_config(container_t *container, uint8_t *buf, size_t buf_len)
+container_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
+			size_t sig_len, uint8_t *cert_buf, size_t cert_len)
 {
 	ASSERT(container);
 	int ret = -1;
-	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len);
+	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len,
+							sig_buf, sig_len, cert_buf, cert_len);
 	if (conf) {
 		ret = container_config_write(conf);
 		container_config_free(conf);

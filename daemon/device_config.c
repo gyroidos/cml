@@ -226,3 +226,12 @@ device_config_get_hostedmode(const device_config_t *config)
 
 	return config->cfg->hostedmode;
 }
+
+bool
+device_config_get_signed_configs(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->signed_configs;
+}
