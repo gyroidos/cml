@@ -204,6 +204,8 @@ message ControllerToDaemon {
 	optional ContainerStartParams container_start_params = 11;	// start parameters for CONTAINER_START
 	optional AssignInterfaceParams assign_iface_params = 12;	// parameter for CONTAINER_ASSIGNIFACE / CONTAINER_UNASSIGNIFACE
 	optional bytes container_config_file = 13;		// new container config for CREATE_CNTAINER
+	optional bytes container_config_signature = 18;		// signature of the container config file
+	optional bytes container_config_certificate = 19;	// sw signing certificate to verify the signature on the container config file
 	optional string exec_command = 14; // command to execute in container context
 	repeated string exec_args = 15; // arguments for command to be executed
 	optional bool exec_pty = 16 [ default = false ]; // assign pty to command
@@ -271,6 +273,12 @@ message DaemonToController {
 		CONTAINER_START_EINTERNAL = 13;
 		CONTAINER_START_TOKEN_UNINIT = 18;
 		CONTAINER_START_TOKEN_UNPAIRED = 19;
+		CONTAINER_STOP_OK = 21;
+		CONTAINER_STOP_LOCK_FAILED = 22;
+		CONTAINER_STOP_UNLOCK_FAILED = 23;
+		CONTAINER_STOP_PASSWD_WRONG = 24;
+		CONTAINER_STOP_FAILED_NOT_RUNNING = 25;
+		CONTAINER_CTRL_EINTERNAL = 26;
 		CONTAINER_CHANGE_PIN_FAILED = 8;
 		CONTAINER_CHANGE_PIN_SUCCESSFUL = 9;
 		CONTAINER_LOCKED_TILL_REBOOT = 5;

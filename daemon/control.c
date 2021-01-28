@@ -470,6 +470,30 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_EINTERNAL;
 		break;
 
+	case CONTROL_RESPONSE_CONTAINER_STOP_OK:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_STOP_OK;
+		break;
+
+	case CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_STOP_LOCK_FAILED;
+		break;
+
+	case CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_STOP_UNLOCK_FAILED;
+		break;
+
+	case CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_STOP_PASSWD_WRONG;
+		break;
+
+	case CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_STOP_FAILED_NOT_RUNNING;
+		break;
+
+	case CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_CTRL_EINTERNAL;
+		break;
+
 	case CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED:
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CONTAINER_START_TOKEN_UNINIT;
 		break;
@@ -606,14 +630,16 @@ control_handle_container_start(control_t *control, container_t *container,
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container start with pin entry chosen. Starting");
-		res = input_register_container_start_cb(control, container);
+		res = input_register_container_ctrl_cb(control, container,
+						       CMLD_CONTAINER_CTRL_START);
 		if (res != 0) {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
 		}
 	} else if (start_params) {
 		char *key = start_params->key;
 		TRACE("Default container start without pin entry chosen. Starting");
-		res = cmld_container_start_with_smartcard(control, container, key);
+		res = cmld_container_ctrl_with_smartcard(control, container, key,
+							 CMLD_CONTAINER_CTRL_START);
 		if (res != 0) {
 			ERROR("Failed to start container %s", container_get_name(container));
 			control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
@@ -627,6 +653,47 @@ control_handle_container_start(control_t *control, container_t *container,
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 		} else {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
+		}
+	}
+	return res;
+}
+
+static int
+control_handle_container_stop(control_t *control, container_t *container,
+			      ContainerStartParams *start_params, int fd)
+{
+	int res = -1;
+
+	// Check if pin should be interactively requested via pin pad reader
+	if (container_get_usb_pin_entry(container)) {
+		TRACE("Container stop with pin entry chosen. Stopping");
+		res = input_register_container_ctrl_cb(control, container,
+						       CMLD_CONTAINER_CTRL_STOP);
+		if (res != 0) {
+			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
+		}
+	} else if (start_params) {
+		char *key = start_params->key;
+		TRACE("Default container stop without pin entry chosen. Stopping");
+		res = cmld_container_ctrl_with_smartcard(control, container, key,
+							 CMLD_CONTAINER_CTRL_STOP);
+		if (res != 0) {
+			ERROR("Failed to stop container %s", container_get_name(container));
+			// TODO control_send_message required here? also check in start function
+		}
+	} else if (container_is_encrypted(container)) {
+		res = -1;
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, fd);
+	} else {
+		// TODO if the modules cannot be stopped successfully, the container is killed. The return
+		// value in this case is CONTAINER_ERROR, even if the container was killed. This is
+		// ignored atm and just STOP_OK is returned. How should we treat this?
+		res = cmld_container_stop(container);
+		if (res == -1) {
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING,
+					     fd);
+		} else {
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, fd);
 		}
 	}
 	return res;
@@ -984,8 +1051,19 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				WARN("Could not send empty Response to CREATE");
 			break;
 		}
-		container_t *c = cmld_container_create_from_config(msg->container_config_file.data,
-								   msg->container_config_file.len);
+		container_t *c = NULL;
+		if (msg->has_container_config_signature && msg->has_container_config_certificate) {
+			c = cmld_container_create_from_config(
+				msg->container_config_file.data, msg->container_config_file.len,
+				msg->container_config_signature.data,
+				msg->container_config_signature.len,
+				msg->container_config_certificate.data,
+				msg->container_config_certificate.len);
+		} else {
+			c = cmld_container_create_from_config(msg->container_config_file.data,
+							      msg->container_config_file.len, NULL,
+							      0, NULL, 0);
+		}
 		if (NULL == c) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to CREATE");
@@ -1052,8 +1130,18 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				WARN("Could not send empty Response to UPDATE_CONFIG");
 			break;
 		}
-		int res = container_update_config(container, msg->container_config_file.data,
-						  msg->container_config_file.len);
+		if (msg->has_container_config_signature && msg->has_container_config_certificate) {
+			res = container_update_config(container, msg->container_config_file.data,
+						      msg->container_config_file.len,
+						      msg->container_config_signature.data,
+						      msg->container_config_signature.len,
+						      msg->container_config_certificate.data,
+						      msg->container_config_certificate.len);
+		} else {
+			res = container_update_config(container, msg->container_config_file.data,
+						      msg->container_config_file.len, NULL, 0, NULL,
+						      0);
+		}
 		if (res) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to UPDATE_CONFIG");
@@ -1115,7 +1203,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
 		IF_NULL_RETURN(container);
-		res = cmld_container_stop(container);
+		ContainerStartParams *start_params = msg->container_start_params;
+		res = control_handle_container_stop(control, container, start_params, fd);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE:
@@ -1431,6 +1520,7 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 	return;
 
 connection_err:
+	input_clean_pin_entry();
 	event_remove_io(io);
 	event_io_free(io);
 	if (close(fd) < 0)

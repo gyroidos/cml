@@ -51,6 +51,11 @@
 #define PROVISIONED_FILE_NAME "_cml_provisioned_"
 
 /**
+ * Enum represents different commands to control a container
+ */
+typedef enum { CMLD_CONTAINER_CTRL_START, CMLD_CONTAINER_CTRL_STOP } cmld_container_ctrl_t;
+
+/**
  * Initialize the CMLD module.
  *
  * @param path The path of the CMLD configuration file.
@@ -80,10 +85,16 @@ cmld_container_create_clone(container_t *container);
  * Create a container by providing a config buffer.
  *
  * @param config The config for the new container in form of a buffer.
+ * @param config_len Length of the given buf.
+ * @param sig buffer containing the signature of the configuration
+ * @param sig_len length of the given sig_buf
+ * @param cert buffer containing the certificate of the configuration
+ * @param cert_len length of the given cert_buf
  * @return The container of the newly created container.
  */
 container_t *
-cmld_container_create_from_config(const uint8_t *config, size_t config_len);
+cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint8_t *sig,
+				  size_t sig_len, uint8_t *cert, size_t cert_len);
 
 /**
  * Create a container from a config file.
@@ -111,7 +122,8 @@ int
 cmld_container_start(container_t *container);
 
 int
-cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd);
+cmld_container_ctrl_with_smartcard(control_t *control, container_t *container, const char *passwd,
+				   cmld_container_ctrl_t container_ctrl);
 
 int
 cmld_get_control_gui_sock(void);
@@ -207,6 +219,12 @@ cmld_is_internet_active(void);
  */
 bool
 cmld_is_hostedmode_active(void);
+
+/**
+ * Checks if signed container configs are enabled.
+ */
+bool
+cmld_uses_signed_configs(void);
 
 bool
 cmld_is_device_provisioned(void);

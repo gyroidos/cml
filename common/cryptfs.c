@@ -437,6 +437,7 @@ load_crypto_mapping_table(const char *real_blk_name, const char *master_key_asci
 	tgt->next = crypt_params - buffer;
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
+
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, io);
 		if (!ioctl_ret) {
 			DEBUG("[+]   LOADING ENCRYPTION MAP WORKED FLAWLESS!");
@@ -550,6 +551,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
+
 		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, io);
 
 		if (!ioctl_ret) {
