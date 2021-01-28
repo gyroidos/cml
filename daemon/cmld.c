@@ -856,13 +856,15 @@ cmld_container_change_pin(control_t *control, container_t *container, const char
 }
 
 int
-cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd)
+cmld_container_ctrl_with_smartcard(control_t *control, container_t *container, const char *passwd,
+				   cmld_container_ctrl_t container_ctrl)
 {
 	ASSERT(container);
 	ASSERT(control);
 	ASSERT(passwd);
 
-	return smartcard_container_start_handler(cmld_smartcard, control, container, passwd);
+	return smartcard_container_ctrl_handler(cmld_smartcard, control, container, passwd,
+						container_ctrl);
 }
 
 void

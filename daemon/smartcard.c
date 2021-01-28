@@ -21,7 +21,6 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "smartcard.h"
 #ifdef ANDROID
 #include "device/fraunhofer/common/cml/daemon/scd.pb-c.h"
 #else
@@ -29,6 +28,7 @@
 #endif
 
 #include "cmld.h"
+#include "smartcard.h"
 #include "hardware.h"
 #include "control.h"
 
@@ -242,6 +242,25 @@ smartcard_start_container_internal(smartcard_startdata_t *startdata)
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
 	else
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
+}
+
+static void
+smartcard_stop_container_internal(smartcard_startdata_t *startdata)
+{
+	ASSERT(startdata);
+
+	int resp_fd = control_get_client_sock(startdata->control);
+
+	int res = cmld_container_stop(startdata->container);
+
+	// TODO if the modules cannot be stopped successfully, the container is killed. The return
+	// value in this case is CONTAINER_ERROR, even if the container was killed. This is
+	// ignored atm and just STOP_OK is returned. How should we treat this?
+	if (res == -1) {
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING, resp_fd);
+	} else {
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, resp_fd);
+	}
 }
 
 static void
@@ -467,9 +486,81 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 	}
 }
 
+static void
+smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
+{
+	smartcard_startdata_t *startdata = data;
+	int resp_fd = control_get_client_sock(startdata->control);
+
+	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit);
+
+	IF_FALSE_RETURN(events & EVENT_IO_READ);
+
+	// use protobuf for communication with scd
+	TokenToDaemon *msg =
+		(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+
+	if (!msg) {
+		ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting container stop.");
+		goto exit;
+	}
+
+	switch (msg->code) {
+	case TOKEN_TO_DAEMON__CODE__LOCK_FAILED: {
+		WARN("Locking the token failed.");
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED, resp_fd);
+		goto exit;
+	} break;
+	case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
+		smartcard_stop_container_internal(startdata);
+		goto exit;
+	} break;
+	case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
+		WARN("Unlocking the token failed.");
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED, resp_fd);
+		goto exit;
+	} break;
+	case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
+		WARN("Unlocking the token failed (wrong PIN/passphrase).");
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, resp_fd);
+		goto exit;
+	} break;
+	case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
+		WARN("Unlocking the token failed (locked till reboot).");
+		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT, resp_fd);
+		goto exit;
+	} break;
+	case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
+		// lock token via scd
+		DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+		out.code = DAEMON_TO_TOKEN__CODE__LOCK;
+
+		out.has_token_type = true;
+		out.token_type = smartcard_tokentype_to_proto(
+			container_get_token_type(startdata->container));
+
+		out.token_uuid = mem_strdup(uuid_string(container_get_uuid(startdata->container)));
+
+		protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
+		mem_free(out.token_uuid);
+	} break;
+	default:
+		ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
+		goto exit;
+	}
+	protobuf_free_message((ProtobufCMessage *)msg);
+	return;
+
+exit:
+	event_remove_io(io);
+	event_io_free(io);
+	mem_free(startdata);
+	return;
+}
+
 int
-smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
-				  container_t *container, const char *passwd)
+smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+				 const char *passwd, cmld_container_ctrl_t container_ctrl)
 {
 	ASSERT(smartcard);
 	ASSERT(control);
@@ -489,8 +580,7 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	int resp_fd = control_get_client_sock(startdata->control);
 
 	if (!container_get_token_is_init(container)) {
-		ERROR("The token that is associated with the container has not been initialized! \
-				Aborting container start ...");
+		ERROR("The token that is associated with the container has not been initialized!");
 		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, resp_fd);
 		goto err;
 	}
@@ -510,10 +600,20 @@ smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
 	}
 
 	// TODO register timer if socket does not respond
-	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
-					 smartcard_cb_start_container, startdata);
+	event_io_t *event = NULL;
+	if (container_ctrl == CMLD_CONTAINER_CTRL_START) {
+		event = event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_start_container,
+				     startdata);
+	} else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP) {
+		event = event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_stop_container,
+				     startdata);
+	} else {
+		ERROR("Unknown container control command %u", container_ctrl);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL, resp_fd);
+		goto err;
+	}
 	event_add_io(event);
-	DEBUG("SCD: Registered start container callback for key from scd");
+	DEBUG("SCD: Registered control container callback for key from scd");
 	// unlock token
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = DAEMON_TO_TOKEN__CODE__UNLOCK;

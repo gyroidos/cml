@@ -48,14 +48,14 @@ void
 smartcard_free(smartcard_t *smartcard);
 
 /**
- * Instruct the SCD to add the token associated to 
+ * Instruct the SCD to add the token associated to
  * @param container
  */
 int
 smartcard_scd_token_add_block(container_t *container);
 
 /**
- * Instruct the SCD to remove the token associated to 
+ * Instruct the SCD to remove the token associated to
  * @param container
  */
 int
@@ -68,9 +68,19 @@ smartcard_scd_token_remove_block(container_t *container);
 int
 smartcard_update_token_state(container_t *container);
 
+/**
+ * Control a container, e.g. start or stop it with the specified token pin
+ *
+ * @param smartcard smartcard struct representing the connection to the scd
+ * @param control struct which should be used for responses
+ * @param container the container to be controlled (started or stopped)
+ * @param passwd passphrase/pin of the token
+ * @param container_ctrl enum indicating the action (start, stop) to be carried out
+ * @return 0 on success else -1
+ */
 int
-smartcard_container_start_handler(smartcard_t *smartcard, control_t *control,
-				  container_t *container, const char *passwd);
+smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+				 const char *passwd, cmld_container_ctrl_t container_ctrl);
 
 /**
  * Change the passphrase/pin of the token associated to the container.

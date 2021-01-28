@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include "fcntl.h"
 
+#include "cmld.h"
 #include "control.h"
 #include "common/macro.h"
 #include "common/mem.h"
@@ -37,7 +38,6 @@
 #include "container.h"
 #include "uevent.h"
 #include "input.h"
-#include "cmld.h"
 
 // The following defines represent parts of the syntax of /proc/bus/input/devices
 #define IFACE_PREFIX "I:"
@@ -50,20 +50,23 @@
 typedef struct {
 	control_t *control;
 	container_t *container;
-	event_timer_t *pin_entry_timer;
-} container_start_cb_data_t;
+	cmld_container_ctrl_t container_ctrl;
+} container_ctrl_cb_data_t;
 
 typedef struct {
 	control_t *control;
-	event_io_t *io;
-	int fd;
 } pin_entry_timer_cb_data_t;
 
 // TODO required global static because it needs to be freed in the
 // in the timer callback in case of pin entry timeout
 // Better solution?
-static char *key = NULL;
-static int key_index = 0;
+static char *input_key = NULL;
+static int input_key_index = 0;
+
+static int input_fd = 0;
+static event_io_t *input_event_io = NULL;
+static event_timer_t *input_timer = NULL;
+static bool input_pin_entry_active = false;
 
 /**
  * Converts a keyboard scan code value into its ASCII digit representation
@@ -156,7 +159,7 @@ input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 }
 
 void
-pin_entry_timeout_cb(event_timer_t *timer, UNUSED void *data)
+pin_entry_timeout_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 
@@ -166,33 +169,64 @@ pin_entry_timeout_cb(event_timer_t *timer, UNUSED void *data)
 	int resp_fd = control_get_client_sock(timer_data->control);
 	control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, resp_fd);
 
-	if (ioctl(timer_data->fd, EVIOCGRAB, NULL) != 0) {
+	if (ioctl(input_fd, EVIOCGRAB, NULL) != 0) {
 		WARN("Failed to release exclusive access to pin reader");
 	}
 
-	event_remove_io(timer_data->io);
-	event_io_free(timer_data->io);
+	event_remove_io(input_event_io);
+	event_io_free(input_event_io);
 
-	key_index = 0;
-	if (key) {
-		memset(key, 0x0, strlen(key));
-		mem_free(key);
+	input_key_index = 0;
+	if (input_key) {
+		memset(input_key, 0x0, strlen(input_key));
+		mem_free(input_key);
 	}
 	event_remove_timer(timer);
 	event_timer_free(timer);
 	timer = NULL;
-	close(timer_data->fd);
+	close(input_fd);
+
+	input_pin_entry_active = false;
+}
+
+void
+input_clean_pin_entry(void)
+{
+	if (!input_pin_entry_active) {
+		return;
+	}
+
+	WARN("The pin entry was aborted by the user");
+
+	if (ioctl(input_fd, EVIOCGRAB, NULL) != 0) {
+		WARN("Failed to release exclusive access to pin reader");
+	}
+
+	event_remove_io(input_event_io);
+	event_io_free(input_event_io);
+
+	input_key_index = 0;
+	if (input_key) {
+		memset(input_key, 0x0, strlen(input_key));
+		mem_free(input_key);
+	}
+	event_remove_timer(input_timer);
+	event_timer_free(input_timer);
+	input_timer = NULL;
+	close(input_fd);
+
+	input_pin_entry_active = false;
 }
 
 static void
-input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, void *data)
+input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
 	char c;
 	char *tmp_key = NULL;
-	container_start_cb_data_t *cb_data = data;
+	container_ctrl_cb_data_t *cb_data = data;
 
-	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit);
+	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit_fail);
 
 	IF_FALSE_RETURN(events & EVENT_IO_READ);
 
@@ -211,46 +245,55 @@ input_cb_request_pin_start_container(int fd, unsigned events, event_io_t *io, vo
 		switch (keyboard_event.code) {
 		case KEY_BACKSPACE:
 			// Backspace was pressed, remove last entered digit
-			if (key_index > 0) {
-				key_index--;
+			if (input_key_index > 0) {
+				input_key_index--;
 			}
 			break;
 
 		case KEY_ENTER:
 		case KEY_KPENTER:
-			// Enter was pressed, finish
-			if (!key) {
-				key = (char *)mem_alloc(sizeof(char));
-				*key = '\0';
-			}
-			key_index = 0;
-			DEBUG("Starting container %s with smartcard from callback",
+			// Enter was pressed, add trailing zero to pin and start container with pin
+			input_key_index++;
+			tmp_key = (char *)mem_realloc(input_key, input_key_index * sizeof(char));
+			IF_NULL_GOTO(tmp_key, exit_fail);
+			input_key = tmp_key;
+			input_key[input_key_index - 1] = '\0';
+
+			DEBUG("%s container %s with smartcard from callback",
+			      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ? "STARTING" :
+										       "STOPPING",
 			      container_get_name(cb_data->container));
-			if (cmld_container_start_with_smartcard(cb_data->control,
-								cb_data->container, key) != 0) {
+			if (cmld_container_ctrl_with_smartcard(cb_data->control, cb_data->container,
+							       input_key,
+							       cb_data->container_ctrl) != 0) {
 				// the container start function will send a control message
 				// so we do not need to go to exit fail and send a message here
-				ERROR("Failed to start container %s",
+				ERROR("Failed to %s container %s",
+				      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ?
+					      "START" :
+					      "STOP",
 				      container_get_name(cb_data->container));
 			}
 			goto exit;
 
+		case KEY_ESC:
+			// Escape was pressed, abort
+			WARN("The pin entry was aborted by the user (ESC)");
+			goto exit_fail;
+
 		default:
 			// Another key was pressed, check if pressed key is a digit and store it
 			if (input_event_code_to_ascii_num(keyboard_event.code, &c) == 0) {
-				key_index++;
-				if (key_index > MAX_PIN_LEN) {
+				input_key_index++;
+				if (input_key_index > MAX_PIN_LEN) {
 					ERROR("Pin exceeds maximum pin length of %d", MAX_PIN_LEN);
 					goto exit_fail;
 				}
-				tmp_key = (char *)mem_realloc(key, key_index * sizeof(char));
-				if (tmp_key) {
-					key = tmp_key;
-					key[key_index - 1] = c;
-				} else {
-					WARN("Failed to allocate memory for pin");
-					goto exit_fail;
-				}
+				tmp_key = (char *)mem_realloc(input_key,
+							      input_key_index * sizeof(char));
+				IF_NULL_GOTO(tmp_key, exit_fail);
+				input_key = tmp_key;
+				input_key[input_key_index - 1] = c;
 			}
 		}
 	}
@@ -264,9 +307,9 @@ exit_fail:
 
 exit:
 	TRACE("Remove container pin entry timer for %s", container_get_name(cb_data->container));
-	event_remove_timer(cb_data->pin_entry_timer);
-	event_timer_free(cb_data->pin_entry_timer);
-	cb_data->pin_entry_timer = NULL;
+	event_remove_timer(input_timer);
+	event_timer_free(input_timer);
+	input_timer = NULL;
 
 	if (ioctl(fd, EVIOCGRAB, NULL) != 0) {
 		WARN("Failed to release exclusive access to pin reader");
@@ -276,15 +319,17 @@ exit:
 	close(fd);
 
 	mem_free(cb_data);
-	key_index = 0;
-	if (key) {
-		memset(key, 0x0, strlen(key));
-		mem_free(key);
+	if (input_key) {
+		memset(input_key, 0x0, input_key_index);
+		mem_free(input_key);
 	}
+	input_key_index = 0;
+	input_pin_entry_active = false;
 }
 
 int
-input_register_container_start_cb(control_t *control, container_t *container)
+input_register_container_ctrl_cb(control_t *control, container_t *container,
+				 cmld_container_ctrl_t container_ctrl)
 {
 	char *input_file = NULL;
 
@@ -312,34 +357,35 @@ input_register_container_start_cb(control_t *control, container_t *container)
 
 	TRACE("Found USB pin reader input file: %s", input_file);
 
-	int fd = open(input_file, O_RDONLY | O_NONBLOCK);
-	IF_TRUE_GOTO(fd == -1, err);
+	input_fd = open(input_file, O_RDONLY | O_NONBLOCK);
+	IF_TRUE_GOTO(input_fd == -1, err);
 
-	if (ioctl(fd, EVIOCGRAB, (void *)1) != 0) {
+	if (ioctl(input_fd, EVIOCGRAB, (void *)1) != 0) {
 		WARN("Failed to get exclusive access to pin reader");
-		close(fd);
+		close(input_fd);
 		goto err;
 	}
 
 	// Read in pin in asynchronous callback
-	container_start_cb_data_t *cb_data = mem_new0(container_start_cb_data_t, 1);
+	container_ctrl_cb_data_t *cb_data = mem_new0(container_ctrl_cb_data_t, 1);
 	cb_data->control = control;
 	cb_data->container = container;
-	event_io_t *event = event_io_new(fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
-					 input_cb_request_pin_start_container, cb_data);
+	cb_data->container_ctrl = container_ctrl;
+	input_event_io = event_io_new(input_fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
+				      input_cb_request_pin_ctrl_container, cb_data);
 
 	// Start pin entry timeout timer
 	pin_entry_timer_cb_data_t *timer_data = mem_new0(pin_entry_timer_cb_data_t, 1);
 	timer_data->control = control;
-	timer_data->fd = fd;
-	timer_data->io = event;
-	cb_data->pin_entry_timer =
-		event_timer_new(PIN_ENTRY_TIMEOUT_MS, 1, &pin_entry_timeout_cb, timer_data);
-	event_add_timer(cb_data->pin_entry_timer);
+	input_timer = event_timer_new(PIN_ENTRY_TIMEOUT_MS, 1, &pin_entry_timeout_cb, timer_data);
+	event_add_timer(input_timer);
 
 	TRACE("Registering callback for pin entry");
-	event_add_io(event);
+	event_add_io(input_event_io);
 	mem_free(input_file);
+
+	input_pin_entry_active = true;
+
 	return 0;
 
 err:

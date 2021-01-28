@@ -51,6 +51,11 @@
 #define PROVISIONED_FILE_NAME "_cml_provisioned_"
 
 /**
+ * Enum represents different commands to control a container
+ */
+typedef enum { CMLD_CONTAINER_CTRL_START, CMLD_CONTAINER_CTRL_STOP } cmld_container_ctrl_t;
+
+/**
  * Initialize the CMLD module.
  *
  * @param path The path of the CMLD configuration file.
@@ -117,7 +122,8 @@ int
 cmld_container_start(container_t *container);
 
 int
-cmld_container_start_with_smartcard(control_t *control, container_t *container, const char *passwd);
+cmld_container_ctrl_with_smartcard(control_t *control, container_t *container, const char *passwd,
+				   cmld_container_ctrl_t container_ctrl);
 
 int
 cmld_get_control_gui_sock(void);
