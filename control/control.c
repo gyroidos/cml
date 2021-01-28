@@ -60,34 +60,70 @@ print_usage(const char *cmd)
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("   list\n        Lists all containers.\n");
-	printf("   list_guestos\n        Lists all installed guestos configs.\n");
-	printf("   reload\n        Reloads containers from config files.\n");
-	printf("   wipe_device\n        Wipes all containers on the device.\n");
-	printf("   reboot\n        Reboots the whole device, shutting down any containers which are running.\n");
-	printf("   set_provisioned\n        Sets the device to provisioned state which limits certain commands\n");
-	printf("   create <container.conf>\n        Creates a container from the given config file.\n");
-	printf("   remove <container-uuid>\n        Removes the specified container (completely).\n");
-	printf("   change_pin <container-uuid>\\n        Change token pin which is used for container key wrapping. Prompts for password entry.\n");
-	printf("   start <container-uuid> [--key=<key>] [--setup] \n        Starts the container with the given key (default: all '0') .\n");
-	printf("   stop <container-uuid> [--key=<key>]\n        Stops the specified container.\n");
-	printf("   config <container-uuid>\n        Prints the config of the specified container.\n");
-	printf("   update_config <container-uuid> --file=<container.conf>\n        Updates a container's config with the given config file.\n");
-	printf("   state <container-uuid>\n        Prints the state of the specified container.\n");
-	printf("   freeze <container-uuid>\n        Freeze the specified container.\n");
-	printf("   unfreeze <container-uuid>\n        Unfreeze the specified container.\n");
-	printf("   allow_audio <container-uuid>\n        Grant audio access to the specified container (cgroups).\n");
-	printf("   deny_audio <container-uuid>\n        Deny audio access to the specified container (cgroups).\n");
-	printf("   wipe <container-uuid>\n        Wipes the specified container.\n");
-	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n        (testing) Pushes the specified GuestOS config, signature, and certificate files.\n");
-	printf("   remove_guestos <guestos name>\n        Remove a GuestOS by the specified name. It will only remove the OS if no container is using it anymore.\n");
-	printf("   ca_register <ca.cert>\n        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n");
-	printf("   pull_csr <device.csr>\n        Pulls the device csr and stores it in <device.csr>.\n");
-	printf("   push_cert <device.cert>\n        Pushes back the device certificate provided by <device.cert>.\n");
-	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Assign the specified network interface to the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
-	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n        Unassign the specified network interface from the specified container. If the 'persistent' option is set, the container config file will be modified accordingly.\n");
-	printf("   ifaces <container-uuid>\n        Prints the list of network interfaces assigned to the specified container.\n");
-	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n        Runs the specified command with the given arguments inside the specified container.\n");
+	printf("   list\n"
+	       "        Lists all containers.\n\n");
+	printf("   list_guestos\n"
+	       "        Lists all installed guestos configs.\n\n");
+	printf("   reload\n"
+	       "        Reloads containers from config files.\n\n");
+	printf("   wipe_device\n"
+	       "        Wipes all containers on the device.\n\n");
+	printf("   reboot\n"
+	       "        Reboots the whole device, shutting down any containers which are running.\n\n");
+	printf("   set_provisioned\n"
+	       "        Sets the device to provisioned state which limits certain commands\n\n");
+	printf("   create <container.conf> [<container.sig> <container.cert>]\n"
+	       "        Creates a container from the given config file,\n"
+	       "        and optionally signature and certificate files\n\n");
+	printf("   remove <container-uuid>\n"
+	       "        Removes the specified container (completely).\n\n");
+	printf("   change_pin <container-uuid>\n"
+	       "        Change token pin which is used for container key wrapping.\n"
+	       "        Prompts for password entry.\n\n");
+	printf("   start <container-uuid> [--key=<key>] [--setup]\n"
+	       "        Starts the container with the given key (default: all '0') .\n\n");
+	printf("   stop <container-uuid> [--key=<key>]\n"
+	       "        Stops the specified container.\n\n");
+	printf("   config <container-uuid>\n"
+	       "        Prints the config of the specified container.\n\n");
+	printf("   update_config <container-uuid> <container.conf> [<container.sig> <container.cert>]\n"
+	       "        Updates a container's config with the given config file,\n"
+	       "        and optionally signature and certificate files\n\n");
+	printf("   state <container-uuid>\n"
+	       "        Prints the state of the specified container.\n\n");
+	printf("   freeze <container-uuid>\n"
+	       "        Freeze the specified container.\n\n");
+	printf("   unfreeze <container-uuid>\n"
+	       "        Unfreeze the specified container.\n\n");
+	printf("   allow_audio <container-uuid>\n"
+	       "        Grant audio access to the specified container (cgroups).\n\n");
+	printf("   deny_audio <container-uuid>\n"
+	       "        Deny audio access to the specified container (cgroups).\n\n");
+	printf("   wipe <container-uuid>\n"
+	       "        Wipes the specified container.\n\n");
+	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n"
+	       "        Pushes the specified GuestOS config, signature, and certificate files.\n\n");
+	printf("   remove_guestos <guestos name>\n"
+	       "        Remove a GuestOS by the specified name.\n"
+	       "        It will only remove the OS if no container is using it anymore.\n\n");
+	printf("   ca_register <ca.cert>\n"
+	       "        Registers a new certificate in trusted CA store for allowed GuestOS signatures.\n\n");
+	printf("   pull_csr <device.csr>\n"
+	       "        Pulls the device csr and stores it in <device.csr>.\n\n");
+	printf("   push_cert <device.cert>\n"
+	       "        Pushes back the device certificate provided by <device.cert>.\n\n");
+	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n"
+	       "        Assign the specified network interface to the specified container.\n"
+	       "        If the 'persistent' option is set, the container config file will\n"
+	       "        be modified accordingly.\n\n");
+	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n"
+	       "        Unassign the specified network interface from the specified container.\n"
+	       "        If the 'persistent' option is set, the container config file will\n"
+	       "        be modified accordingly.\n\n");
+	printf("   ifaces <container-uuid>\n"
+	       "        Prints the list of network interfaces assigned to the specified container.\n\n");
+	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
+	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
 	printf("\n");
 	exit(-1);
 }
@@ -198,9 +234,6 @@ static const struct option start_options[] = { { "key", optional_argument, 0, 'k
 static const struct option assign_iface_options[] = { { "iface", required_argument, 0, 'i' },
 						      { "persistent", no_argument, 0, 'p' },
 						      { 0, 0, 0, 0 } };
-
-static const struct option update_cfg_options[] = { { "file", required_argument, 0, 'f' },
-						    { 0, 0, 0, 0 } };
 
 static char *
 get_password_new(const char *prompt)
@@ -406,8 +439,8 @@ main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "create")) {
 		has_response = true;
-		// need exactly one more argument (container config file)
-		if (optind != argc - 1)
+		// need at least one more argument (container config)
+		if (optind >= argc)
 			print_usage(argv[0]);
 
 		const char *cfgfile = argv[optind++];
@@ -419,12 +452,39 @@ main(int argc, char *argv[])
 		if (file_read(cfgfile, (char *)cfg, cfglen) < 0)
 			FATAL("Error reading %s. Aborting.", cfgfile);
 
-		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
-
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER;
 		msg.has_container_config_file = true;
 		msg.container_config_file.len = cfglen;
 		msg.container_config_file.data = cfg;
+
+		const char *sigfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile) {
+			off_t siglen = file_size(sigfile);
+			if (siglen < 0)
+				FATAL("Error accessing container signature file %s.", sigfile);
+			unsigned char *sig = mem_alloc(siglen);
+			if (file_read(sigfile, (char *)sig, siglen) < 0)
+				FATAL("Error reading %s. Aborting.", sigfile);
+			msg.has_container_config_signature = true;
+			msg.container_config_signature.len = siglen;
+			msg.container_config_signature.data = sig;
+		}
+
+		const char *certfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile && certfile) {
+			off_t certlen = file_size(certfile);
+			if (certlen < 0)
+				FATAL("Error accessing cotainer certificate file %s.", certfile);
+			unsigned char *cert = mem_alloc(certlen);
+			if (file_read(certfile, (char *)cert, certlen) < 0)
+				FATAL("Error reading %s. Aborting.", certfile);
+
+			msg.has_container_config_certificate = true;
+			msg.container_config_certificate.len = certlen;
+			msg.container_config_certificate.data = cert;
+		}
+
+		INFO("Creating container with cfg %s (len %zu).", cfgfile, (size_t)cfglen);
 		goto send_message;
 	}
 
@@ -529,27 +589,13 @@ main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 		has_response = true;
 	} else if (!strcasecmp(command, "update_config")) {
-		const char *cfgfile = NULL;
 		has_response = true;
-		optind--;
-		char **update_argv = &argv[optind];
-		int update_argc = argc - optind;
-		optind = 0; // reset optind to scan command-specific options
-		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(update_argc, update_argv, "f:", update_cfg_options,
-					     &option_index));) {
-			switch (c) {
-			case 'f':
-				cfgfile = optarg ? optarg : NULL;
-				break;
-			default:
-				print_usage(argv[0]);
-				ASSERT(false); // never reached
-			}
-		}
-		optind += argc - update_argc; // adjust optind to be used with argv
+		optind++;
+		// need at least one more argument (container config)
+		if (optind >= argc)
+			print_usage(argv[0]);
 
-		//const char* cfgfile = argv[optind++];
+		const char *cfgfile = argv[optind++];
 		off_t cfglen = file_size(cfgfile);
 		if (cfglen < 0)
 			FATAL("Error accessing container config file %s.", cfgfile);
@@ -564,6 +610,33 @@ main(int argc, char *argv[])
 		msg.has_container_config_file = true;
 		msg.container_config_file.len = cfglen;
 		msg.container_config_file.data = cfg;
+
+		const char *sigfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile) {
+			off_t siglen = file_size(sigfile);
+			if (siglen < 0)
+				FATAL("Error accessing container signature file %s.", sigfile);
+			unsigned char *sig = mem_alloc(siglen);
+			if (file_read(sigfile, (char *)sig, siglen) < 0)
+				FATAL("Error reading %s. Aborting.", sigfile);
+			msg.has_container_config_signature = true;
+			msg.container_config_signature.len = siglen;
+			msg.container_config_signature.data = sig;
+		}
+
+		const char *certfile = (optind > argc - 1) ? NULL : argv[optind++];
+		if (sigfile && certfile) {
+			off_t certlen = file_size(certfile);
+			if (certlen < 0)
+				FATAL("Error accessing cotainer certificate file %s.", certfile);
+			unsigned char *cert = mem_alloc(certlen);
+			if (file_read(certfile, (char *)cert, certlen) < 0)
+				FATAL("Error reading %s. Aborting.", certfile);
+
+			msg.has_container_config_certificate = true;
+			msg.container_config_certificate.len = certlen;
+			msg.container_config_certificate.data = cert;
+		}
 	} else if (!strcasecmp(command, "ifaces")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
 		has_response = true;
