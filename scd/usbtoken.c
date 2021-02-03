@@ -782,7 +782,7 @@ usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsi
 	ASSERT(apdu);
 	ASSERT(brsp);
 
-	DEBUG("usbtoken_send_apdu");
+	TRACE("usbtoken_send_apdu");
 
 	unsigned short lr;
 	unsigned char dad, sad;
@@ -805,7 +805,7 @@ usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsi
 
 #ifdef DEBUG_BUILD
 	dump = str_hexdump_new(brsp, lr);
-	DEBUG("Received APDU from USB token: len: %d, apdu: %s", lr, str_buffer(dump));
+	TRACE("Received APDU from USB token: len: %d, apdu: %s", lr, str_buffer(dump));
 	str_free(dump, true);
 #endif
 
