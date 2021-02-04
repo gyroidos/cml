@@ -112,11 +112,11 @@ print_usage(const char *cmd)
 	       "        Pulls the device csr and stores it in <device.csr>.\n\n");
 	printf("   push_cert <device.cert>\n"
 	       "        Pushes back the device certificate provided by <device.cert>.\n\n");
-	printf("   assign_iface --iface <iface_name> <container-uuid> [--persistent]\n"
+	printf("   assign_iface <container-uuid> --iface <iface_name> [--persistent]\n"
 	       "        Assign the specified network interface to the specified container.\n"
 	       "        If the 'persistent' option is set, the container config file will\n"
 	       "        be modified accordingly.\n\n");
-	printf("   unassign_iface --iface <iface_name> <container-uuid> [--persistent]\n"
+	printf("   unassign_iface <container-uuid> --iface <iface_name> [--persistent]\n"
 	       "        Unassign the specified network interface from the specified container.\n"
 	       "        If the 'persistent' option is set, the container config file will\n"
 	       "        be modified accordingly.\n\n");
