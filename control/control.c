@@ -272,6 +272,7 @@ main(int argc, char *argv[])
 	const char *socket_file = CONTROL_SOCKET;
 	uuid_t *uuid = NULL;
 	int sock = 0;
+	bool has_container_start_params_key = false;
 
 	struct termios termios_before;
 	tcgetattr(STDIN_FILENO, &termios_before);
@@ -532,10 +533,12 @@ main(int argc, char *argv[])
 		}
 		if (usb_pin_entry && !ask_for_password)
 			printf("WARN: argument --key will be ignored for containers configured with USB pin reader\n");
-		if (usb_pin_entry)
+		if (usb_pin_entry) {
 			printf("Please Enter your password via pin reader\n");
-		else if (ask_for_password)
+		} else if (ask_for_password) {
 			container_start_params.key = get_password_new("Password: ");
+			has_container_start_params_key = true;
+		}
 		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
@@ -564,10 +567,12 @@ main(int argc, char *argv[])
 		}
 		if (usb_pin_entry && !ask_for_password)
 			printf("WARN: argument --key will be ignored for containers configured with USB pin reader\n");
-		if (usb_pin_entry)
+		if (usb_pin_entry) {
 			printf("Please Enter your password via pin reader\n");
-		else if (ask_for_password)
+		} else if (ask_for_password) {
 			container_start_params.key = get_password_new("Password: ");
+			has_container_start_params_key = true;
+		}
 		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "freeze")) {
@@ -699,7 +704,7 @@ main(int argc, char *argv[])
 
 		if (optind < argc) {
 			size_t len = MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(char *), argc);
-			TRACE("[CLIENT] Allocating %zu bytes for arguments", len);
+			TRACE("[CLIENT] Allocating %zu bytes for arguments (argc = %d)", len, argc);
 			msg.exec_args = mem_alloc(len);
 
 			while (optind < argc) {
@@ -712,7 +717,7 @@ main(int argc, char *argv[])
 			}
 		}
 
-		TRACE("[CLIENT] Done parsing arguments, got %d argsuments", argcount);
+		TRACE("[CLIENT] Done parsing arguments, got %d arguments", argcount);
 		msg.n_exec_args = argcount;
 		TRACE("after set n_exec_args");
 
@@ -754,7 +759,7 @@ send_message:
 
 		//free exec arguments
 		TRACE("[CLIENT] Freeing %zu args at %p", msg.n_exec_args, (void *)msg.exec_args);
-		mem_free_array((void *)msg.exec_args, msg.n_exec_args);
+		mem_free_array((void **)msg.exec_args, msg.n_exec_args);
 		TRACE("[CLIENT] after free ");
 
 		int pid = fork();
@@ -875,11 +880,32 @@ handle_resp:
 exit:
 	close(sock);
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
+
+	if (msg.has_container_config_file)
+		mem_free(msg.container_config_file.data);
+	if (msg.has_guestos_rootcert)
+		mem_free(msg.guestos_rootcert.data);
+	if (msg.has_guestos_config_file)
+		mem_free(msg.guestos_config_file.data);
+	if (msg.has_guestos_config_signature)
+		mem_free(msg.guestos_config_signature.data);
+	if (msg.has_guestos_config_certificate)
+		mem_free(msg.guestos_config_certificate.data);
+	if (msg.has_device_cert)
+		mem_free(msg.device_cert.data);
+
+	if (has_container_start_params_key)
+		mem_free(container_start_params.key);
+	if (msg.device_pin)
+		mem_free(msg.device_pin);
+	if (msg.device_newpin)
+		mem_free(msg.device_newpin);
+
 	for (size_t i = 0; i < msg.n_container_uuids; ++i)
 		mem_free(msg.container_uuids[i]);
 	mem_free(msg.container_uuids);
 	if (uuid)
-		mem_free(uuid);
+		uuid_free(uuid);
 
 	return 0;
 }
