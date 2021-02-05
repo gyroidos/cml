@@ -22,6 +22,8 @@
  */
 
 #include "lxcfs.h"
+#include "hardware.h"
+#include "mount.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -183,7 +185,12 @@ lxcfs_init(void)
 	lxcfs_bin_path = lxcfs_get_bin_path_if_supported();
 
 	if (lxcfs_bin_path) {
-		return (lxcfs_daemon_start(lxcfs_rt_path));
+		int ret = mount_cgroups(hardware_get_active_cgroups_subsystems());
+		if (ret) {
+			WARN("Cannont mount CGroups, thus no need to start lxcfs!");
+			return -1;
+		}
+		return lxcfs_daemon_start(lxcfs_rt_path);
 	}
 	return -1;
 }
