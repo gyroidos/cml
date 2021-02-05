@@ -115,7 +115,7 @@ scd_tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__SEND_APDU msg");
 #ifdef DEBUG_BUILD
 		str_t *dump = str_hexdump_new(msg->apdu.data, msg->apdu.len);
-		DEBUG("Got APDU with with len: %zu, data: %s", msg->apdu.len, str_buffer(dump));
+		TRACE("Got APDU with with len: %zu, data: %s", msg->apdu.len, str_buffer(dump));
 		str_free(dump, true);
 #endif
 		len = t->send_apdu(t, msg->apdu.data, msg->apdu.len, brsp, MAX_APDU_BUF_LEN);
@@ -152,7 +152,7 @@ out:
 
 #ifdef DEBUG_BUILD
 	str_t *dump = str_hexdump_new(brsp, len);
-	DEBUG("Returning apdu with len: %zu, data: %s", out.response.len, str_buffer(dump));
+	TRACE("Returning apdu with len: %zu, data: %s", out.response.len, str_buffer(dump));
 	str_free(dump, true);
 #endif
 
