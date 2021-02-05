@@ -28,6 +28,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include "common/list.h"
+
+#define MOUNT_CGROUPS_FOLDER "/sys/fs/cgroup"
+
 /**
  * A structure to present an operating system partition table for a container.
  */
@@ -219,5 +223,15 @@ mount_debugfs(void);
  */
 int
 mount_private_tmp(void);
+
+/**
+ * Mount cgroups fs and subsystem controllers if not already done
+ *
+ * This is necessary globally once, and also before lxcfs_init()
+ * @param cgroups_subsystems a list of subsystems to be mounted/created
+ * @return 0 on success, -1 on error
+ */
+int
+mount_cgroups(list_t *cgroups_subsystems);
 
 #endif /* MOUNT_H */
