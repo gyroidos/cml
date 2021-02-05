@@ -31,9 +31,11 @@
 #include "common/list.h"
 #include "common/file.h"
 
+#include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
-#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 struct mount {
 	list_t *list; /**< list of mount entries */
@@ -363,4 +365,91 @@ mount_private_tmp(void)
 	list_delete(system_mnts);
 
 	return 0;
+}
+
+static int
+mount_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path)
+{
+	int ret = 0;
+	if (!file_is_mountpoint(mount_path)) {
+		if (mkdir(mount_path, 0755) && errno != EEXIST) {
+			ERROR_ERRNO("Could not create cgroup subsys directory %s", mount_path);
+			return -1;
+		}
+
+		INFO("Mounting cgroups subsystems %s", subsys);
+		ret = mount("cgroup", mount_path, "cgroup",
+			    MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME, subsys);
+		if (ret == -1) {
+			if (errno == EBUSY) {
+				INFO("cgroup %s already mounted", subsys);
+			} else {
+				ERROR_ERRNO("Error mounting cgroups subsystems %s", subsys);
+				return -1;
+			}
+		}
+	}
+	if (!strcmp(subsys, "memory")) {
+		char *use_hierarchy = mem_printf("%s/memory.use_hierarchy", mount_path);
+		if (file_printf(use_hierarchy, "1") < 0)
+			WARN_ERRNO("Cloning default setting to child cgroups failes!");
+		mem_free(use_hierarchy);
+	}
+	if (strcmp(subsys, "devices")) {
+		char *cgroup_clone_children = mem_printf("%s/cgroup.clone_children", mount_path);
+		if (file_printf(cgroup_clone_children, "1") < 0)
+			WARN_ERRNO("Cloning default setting to child cgroups failes!");
+		mem_free(cgroup_clone_children);
+	}
+	return ret;
+}
+
+int
+mount_cgroups(list_t *cgroups_subsystems)
+{
+	// mount cgroups control stuff if not already done (necessary globally once)
+	// tmpfs does not always result in EBUSY if already mounted
+	if (!file_is_mountpoint(MOUNT_CGROUPS_FOLDER)) {
+		INFO("Mounting cgroups tmpfs");
+		if (mkdir(MOUNT_CGROUPS_FOLDER, 0755) && errno != EEXIST) {
+			ERROR_ERRNO("Could not create cgroup mount directory");
+			return -1;
+		}
+		if (mount("cgroup", MOUNT_CGROUPS_FOLDER, "tmpfs",
+			  MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME, "mode=755") == -1 &&
+		    errno != EBUSY) {
+			ERROR_ERRNO("Could not mount tmpfs for cgroups");
+			return -1;
+		}
+	}
+
+	for (list_t *l = cgroups_subsystems; l; l = l->next) {
+		char *subsys = l->data;
+		char *mount_path = mem_printf("%s/%s", MOUNT_CGROUPS_FOLDER, subsys);
+		if (mount_cgroups_create_and_mount_subsys(subsys, mount_path) < 0) {
+			mem_free(mount_path);
+			goto error;
+		}
+		mem_free(mount_path);
+	}
+
+	// create a named hierarchy for systemd containers
+	if (mount_cgroups_create_and_mount_subsys("none,name=systemd",
+						  MOUNT_CGROUPS_FOLDER "/systemd") < 0) {
+		goto error;
+	}
+
+	INFO("cgroups created successfully");
+	return 0;
+
+error:
+	for (list_t *l = cgroups_subsystems; l; l = l->next) {
+		char *subsys = l->data;
+		char *subsys_path = mem_printf("%s/%s", MOUNT_CGROUPS_FOLDER, subsys);
+		umount(subsys_path);
+		mem_free(subsys_path);
+	}
+	umount(MOUNT_CGROUPS_FOLDER "/systemd");
+	umount(MOUNT_CGROUPS_FOLDER);
+	return -1;
 }
