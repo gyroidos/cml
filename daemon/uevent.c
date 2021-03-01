@@ -395,6 +395,7 @@ uevent_replace_devpath_new(const char *str, const char *oldstr, const char *news
 {
 	char *ptr_old = NULL;
 	int len_diff = strlen(newstr) - strlen(oldstr);
+	//sleep(60);
 
 	if (!(ptr_old = strstr(str, oldstr))) {
 		DEBUG("Could not find %s in %s", oldstr, str);
@@ -402,7 +403,7 @@ uevent_replace_devpath_new(const char *str, const char *oldstr, const char *news
 	}
 
 	unsigned int off_old;
-	char *str_replaced = mem_alloc0(strlen(str) + len_diff);
+	char *str_replaced = mem_alloc0((strlen(str) + 1) + len_diff);
 	unsigned int pos_new = 0;
 
 	off_old = ptr_old - str;

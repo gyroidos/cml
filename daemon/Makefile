@@ -29,7 +29,7 @@ SANITIZERS ?= n
 TRUSTME_HARDWARE := x86
 
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -pedantic -O2
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie -O0
 ifeq ($(CC),gcc)
     # clang does not support stack clash protection yet
     LOCAL_CFLAGS += -fstack-clash-protection
@@ -104,7 +104,9 @@ SRC_FILES := main.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
-	input.c
+	input.c \
+	audit.c \
+	c_audit.c
 
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
 	protoc-c --c_out=. container.proto

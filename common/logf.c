@@ -299,6 +299,9 @@ logf_file_write(logf_prio_t prio, const char *msg, void *data)
 	if (!data)
 		return;
 
+	int fd = fileno(data);
+	printf("%d", fd);
+
 	logf_file_write_timestamp(data);
 	fprintf(data, "[%u] %s %s\n", getpid(), prio_str(prio), msg);
 	fflush(data);

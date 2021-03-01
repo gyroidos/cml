@@ -159,7 +159,7 @@ void
 cmld_wipe_device();
 
 container_t *
-cmld_container_get_by_uuid(uuid_t *uuid);
+cmld_container_get_by_uuid(const uuid_t *uuid);
 
 container_t *
 cmld_container_get_by_token_serial(const char *serial);

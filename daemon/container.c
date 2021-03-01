@@ -49,11 +49,14 @@
 #include "c_service.h"
 #include "c_time.h"
 #include "c_run.h"
+#include "c_run.h"
+#include "c_audit.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "hardware.h"
 #include "uevent.h"
+#include "audit.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -158,6 +161,7 @@ struct container {
 	c_vol_t *vol;
 	c_service_t *service;
 	c_run_t *run;
+	c_audit_t *audit;
 	c_time_t *time;
 	// Wifi module?
 
@@ -381,6 +385,13 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->time = c_time_new(container);
 	if (!container->time) {
 		WARN("Could not initialize time subsystem for container %s (UUID: %s)",
+		     container->name, uuid_string(container->uuid));
+		goto error;
+	}
+
+	container->audit = c_audit_new(container);
+	if (!container->time) {
+		WARN("Could not initialize audit subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
@@ -912,13 +923,68 @@ container_is_encrypted(const container_t *container)
 int
 container_suspend(container_t *container)
 {
-	return c_service_send_message(container->service, C_SERVICE_MESSAGE_SUSPEND);
+	return c_service_send_message(container->service, C_SERVICE_MESSAGE_SUSPEND, NULL);
 }
 
 int
 container_resume(container_t *container)
 {
-	return c_service_send_message(container->service, C_SERVICE_MESSAGE_RESUME);
+	return c_service_send_message(container->service, C_SERVICE_MESSAGE_RESUME, NULL);
+}
+
+const char *
+container_audit_get_last_ack(const container_t *container)
+{
+	ASSERT(container);
+	return c_audit_get_last_ack(container->audit);
+}
+
+void
+container_audit_set_last_ack(const container_t *container, char *last_ack)
+{
+	ASSERT(container);
+	c_audit_set_last_ack(container->audit, last_ack);
+}
+
+int
+container_audit_get_processing_ack(const container_t *container)
+{
+	ASSERT(container);
+	return c_audit_get_processing_ack(container->audit);
+}
+
+void
+container_audit_set_processing_ack(const container_t *container, bool processing_ack)
+{
+	ASSERT(container);
+	c_audit_set_processing_ack(container->audit, processing_ack);
+}
+
+int
+container_audit_record_notify(const container_t *container, uint64_t remaining_storage)
+{
+	ASSERT(container);
+	return c_service_audit_notify(container->service, remaining_storage);
+}
+
+int
+container_audit_record_send(const container_t *container, const uint8_t *buf, uint32_t buflen)
+{
+	ASSERT(container);
+	return c_service_audit_send_record(container->service, buf, buflen);
+}
+
+int
+container_audit_notify_complete(const container_t *container)
+{
+	ASSERT(container);
+	return c_service_send_message(container->service, C_SERVICE_MESSAGE_AUDIT_COMPLETE, NULL);
+}
+
+int
+container_audit_process_ack(const container_t *container, const char *ack)
+{
+	return audit_process_ack(container, ack);
 }
 
 /**
@@ -1008,13 +1074,29 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			event_signal_free(sig);
 			/* cleanup and set states accordingly to notify observers */
 			container_cleanup(container, rebooting);
+
+			if (rebooting) {
+				audit_log_event(container_get_uuid(container), SSA, CMLD,
+						CONTAINER_MGMT, "reboot",
+						uuid_string(container_get_uuid(container)), 0);
+				container_set_state(container, CONTAINER_STATE_REBOOTING);
+			} else {
+				audit_log_event(container_get_uuid(container), SSA, CMLD,
+						CONTAINER_MGMT, "stop",
+						uuid_string(container_get_uuid(container)), 0);
+				container_set_state(container, CONTAINER_STATE_STOPPED);
+			}
 		} else if (pid == -1) {
-			if (errno == ECHILD)
+			if (errno == ECHILD) {
 				DEBUG("Process group of container %s terminated completely",
 				      container_get_description(container));
-			else
+			} else {
+				audit_log_event(container_get_uuid(container), FSA, CMLD,
+						CONTAINER_MGMT, "container-observer-error",
+						uuid_string(container_get_uuid(container)), 0);
 				WARN_ERRNO("waitpid failed for container %s",
 					   container_get_description(container));
+			}
 			break;
 		} else {
 			DEBUG("Reaped a child with PID %d for container %s", pid,
@@ -1085,6 +1167,11 @@ container_start_child(void *data)
 	/* Make sure /init in node doesn`t kill CMLD daemon */
 	if (setpgid(0, 0) < 0) {
 		WARN("Could not move process group of container %s", container->name);
+		goto error;
+	}
+
+	if (c_audit_start_child(container->audit) < 0) {
+		ret = CONTAINER_ERROR_AUDIT;
 		goto error;
 	}
 
@@ -1224,9 +1311,9 @@ container_start_child(void *data)
 
 	if (container_get_state(container) != CONTAINER_STATE_SETUP) {
 		DEBUG("After closing all file descriptors no further debugging info can be printed");
-		if (container_close_all_fds()) {
-			WARN("Closing all file descriptors failed, continuing anyway...");
-		}
+		//		if (container_close_all_fds()) {
+		//			WARN("Closing all file descriptors failed, continuing anyway...");
+		//		}
 	}
 
 	// if init provided by guestos does not exists use mapped c_service as init
@@ -1587,6 +1674,8 @@ error_post_clone:
 
 error_pre_clone:
 	container_cleanup(container, false);
+	audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+			"error-preparing-container", uuid_string(container_get_uuid(container)), 0);
 	return ret;
 }
 
@@ -1647,6 +1736,8 @@ container_stop(container_t *container)
 		container_set_setup_mode(container, false);
 
 	/* set state to shutting down (notifies observers) */
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "shutting-down",
+			uuid_string(container_get_uuid(container)), 0);
 	container_set_state(container, CONTAINER_STATE_SHUTTING_DOWN);
 
 	/* call stop hooks for c_* modules */
@@ -1654,8 +1745,14 @@ container_stop(container_t *container)
 
 	if (c_service_stop(container->service) < 0) {
 		ret = CONTAINER_ERROR;
+
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"request-clean-shutdown",
+				uuid_string(container_get_uuid(container)), 0);
 		goto error_stop;
 	}
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+			"request-clean-shutdown", uuid_string(container_get_uuid(container)), 0);
 
 	// When the stop command was emitted, the TrustmeService tries to shut down the container
 	// i.g. to terminate the container's init process.
@@ -1668,6 +1765,8 @@ container_stop(container_t *container)
 error_stop:
 	DEBUG("Modules could not be stopped successfully, killing container.");
 	container_kill(container);
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "force-stop",
+			uuid_string(container_get_uuid(container)), 0);
 	return ret;
 }
 

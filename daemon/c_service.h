@@ -47,6 +47,9 @@ typedef enum {
 	//C_SERVICE_MESSAGE_WALLPAPER,     // explicit request for current wallpaper
 	C_SERVICE_MESSAGE_AUDIO_SUSPEND,
 	C_SERVICE_MESSAGE_AUDIO_RESUME,
+	C_SERVICE_MESSAGE_AUDIT_NOTIFY,
+	C_SERVICE_MESSAGE_AUDIT_RECORD,
+	C_SERVICE_MESSAGE_AUDIT_COMPLETE,
 	C_SERVICE_MESSAGE_NOTIFICATION
 } c_service_message_t;
 
@@ -113,6 +116,21 @@ int
 c_service_start_pre_exec(c_service_t *service);
 
 /**
+ * Send packed audit record to service.
+*/
+int
+c_service_audit_send_record(c_service_t *service, const uint8_t *buf, const uint32_t buflen);
+
+/**
+ * Notify container about stored audit events.
+ * @param service The service object of the associated container.
+ * @param 	remaining_audit storage capacity
+ * @return  the length of the serialized message (without length prefix)
+*/
+int
+c_service_audit_notify(c_service_t *service, uint64_t remaining_storage);
+
+/**
  * Sends a message to the Trustme Service. If the message induces a response
  * from the Trustme Service (e.g., wallpaper), the response will be delivered
  * asynchronously as a separate message. In this case, this module should invoke
@@ -127,6 +145,6 @@ c_service_start_pre_exec(c_service_t *service);
  *         On error, -1 is returned.
  */
 int
-c_service_send_message(c_service_t *service, c_service_message_t message);
+c_service_send_message(c_service_t *service, c_service_message_t message, const char *msg);
 
 #endif /* C_SERVICE_H */

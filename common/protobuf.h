@@ -35,6 +35,33 @@
 #include <protobuf-c/protobuf-c.h>
 
 #include <sys/types.h>
+#include <stdbool.h>
+
+/**
+ * Packs the given protobuf message struct
+ * and returns it's binary serialized form.
+ *
+ * The serialized message is prefixed with the length of the actual data.
+ *
+ * @param message   the protobuf message struct to serialize and write
+ * @param ptr       the location to store a pointer to the serialized representation
+ * @return          the length of the serialized message (without length prefix) or -1 on error
+ */
+uint32_t
+protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr);
+
+/**
+ * Writes the given, serialized protobuf message struct to the given file descriptor
+ * (e.g. a file or socket).
+ *
+ * The serialized message is prefixed with the length of the actual data.
+ *
+ * @param fd        the file descriptor that the serialized message is written to
+ * @param message   the serialized protobuf message to write
+ * @return          the length of the given message (without length prefix)
+ */
+ssize_t
+protobuf_send_message_packed(int fd, const uint8_t *buf, uint32_t buflen);
 
 /**
  * Writes the given protobuf message struct to the given file descriptor
@@ -63,6 +90,31 @@ protobuf_send_message(int fd, const ProtobufCMessage *message);
  */
 ProtobufCMessage *
 protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor);
+
+/**
+ * Reads a serialized protobuf message from the given file descriptor
+ * and returns it's packed representation
+ *
+ * The serialized message must be prefixed with the length of the actual data.
+ *
+ * @param fd        the file descriptor that the serialized message is read from
+ * @param buf_len   a pointer where the length of the returned buffer should be stored, -1 on error
+ * @return          a pointer to the received, packed  protobuf message
+ */
+uint8_t *
+protobuf_recv_message_packed_new(int fd, ssize_t *msg_len);
+
+/**
+ * Unpacks the given, packed protobuf message
+ *
+ * @param descriptor    the protobuf message descriptor that defines the message structure
+ * @param buf Buffer containing the packed protobuf message
+ * @param buf_len length of the packed protobuf message
+ * @return the unpacked protobuf message message message to free
+ */
+ProtobufCMessage *
+protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor, uint8_t *buf,
+			uint32_t buflen);
 
 /**
  * Frees an unpacked protobuf message struct (e.g. created by protobuf_recv_message()).
@@ -94,7 +146,7 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message);
  */
 ProtobufCMessage *
 protobuf_message_new_from_textfile(const char *filename,
-				   const ProtobufCMessageDescriptor *descriptor);
+				   const ProtobufCMessageDescriptor *descriptor, bool purge);
 
 /**
  * Parses a protobuf message as defined by the given descriptor

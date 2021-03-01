@@ -26,6 +26,8 @@
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <unistd.h>
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -172,4 +174,25 @@ uuid_string(const uuid_t *uuid)
 {
 	IF_NULL_RETVAL(uuid, NULL);
 	return uuid->string;
+}
+
+uint64_t
+uuid_get_node(const uuid_t *uuid)
+{
+	ASSERT(uuid);
+
+	uint64_t node = 0;
+
+	sleep(30);
+
+	// 48-bit correspond to 12 hex characters
+	int ret = sscanf(uuid->string - (strlen(uuid->string) - 12), "%12lx", &node);
+	if (1 < ret) {
+		ERROR_ERRNO("Failed to read node ID");
+		DEBUG("Failed to return id");
+		return ULLONG_MAX;
+	}
+
+	DEBUG("Read id: %lx", node);
+	return node;
 }

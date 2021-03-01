@@ -26,6 +26,7 @@
 #else
 #include "c_service.pb-c.h"
 #endif
+#include <google/protobuf-c/protobuf-c-text.h>
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -34,6 +35,9 @@
 #include "common/protobuf.h"
 #include "common/sock.h"
 #include "common/event.h"
+#include "common/fd.h"
+#include "common/dir.h"
+#include "common/str.h"
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -46,7 +50,14 @@
 // clang-format off
 #define SERVICE_SOCKET SOCK_PATH(service)
 // clang-format on
-#define LOGFILE_PATH "/var/log/container.log"
+
+#define LOGFILE_DIR "/tmp/log/"
+#define AUDIT_LOGDIR "/var/log/cmld_audit/"
+
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
+char *LAST_AUDIT_HASH;
 
 static logf_handler_t *service_logfile_handler = NULL;
 
@@ -157,26 +168,286 @@ service_fork_execvp(char *prog, char **argv)
 	return 0;
 }
 
-int
-main(int argc, char **argv)
+static int
+process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 {
-	logf_register(&logf_file_write, stdout);
-	bool do_init = getpid() == 1;
+	ASSERT(msg);
 
-	if (!do_init && argc > 1) {
-		FATAL("Not running as init, so we do not accept parameters for child process!");
+	int ret = -1;
+
+	char tmpfile[17] = "/tmp/audit_XXXXXX";
+
+	if (!strcmp("", mktemp(tmpfile))) {
+		ERROR_ERRNO("Failed to generate temporary filename");
+		return -1;
 	}
 
-	service_logfile_handler = logf_register(&logf_file_write, logf_file_new(LOGFILE_PATH));
-	logf_handler_set_prio(service_logfile_handler, LOGF_PRIO_TRACE);
+	//TODO find reason why received buffer contains trailing null byte
+	if (0 > file_write(tmpfile, (char *)buf, buf_len)) {
+		ERROR("Failed to write file");
 
+		if (unlink(tmpfile))
+			ERROR_ERRNO("Failed to unlink %s", tmpfile);
+
+		return ret;
+	}
+
+	char *cmd = mem_printf("sha512sum /%s", tmpfile);
+	FILE *hash_file = popen(cmd, "r");
+	char *hash_buf = mem_alloc0(129);
+
+	if (!fgets(hash_buf, 129, hash_file)) {
+		ERROR("Hash length was smaller than 64 bytes");
+		fclose(hash_file);
+		mem_free(hash_buf);
+		goto out;
+	}
+	fclose(hash_file);
+
+	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
+		ERROR("Failed to create audit log directory");
+	} else if (msg->audit_record) {
+		char *record =
+			protobuf_c_text_to_string((ProtobufCMessage *)msg->audit_record, NULL);
+		TRACE("Storing audit record %s", record);
+		file_write_append(AUDIT_LOGDIR "/audit.log", record, strlen(record));
+
+		mem_free(LAST_AUDIT_HASH);
+		LAST_AUDIT_HASH = hash_buf;
+		ret = 0;
+	} else {
+		WARN("Got empty audit message from cmld");
+	}
+
+out:
+	if (unlink(tmpfile))
+		ERROR_ERRNO("Failed to unlink %s", tmpfile);
+
+	return ret;
+}
+
+static int
+audit_send_ack(int sock, const char *hash)
+{
+	ServiceToCmldMessage auditmsg = SERVICE_TO_CMLD_MESSAGE__INIT;
+	auditmsg.code = SERVICE_TO_CMLD_MESSAGE__CODE__AUDIT_ACK;
+
+	if (hash) {
+		auditmsg.audit_ack = mem_strdup((char *)hash);
+	}
+
+	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)&auditmsg);
+	if (msg_size < 0)
+		WARN("Could not request audit event delivery, error: %zd\n", msg_size);
+
+	mem_free(auditmsg.audit_ack);
+
+	//TODO free msg
+
+	return 0;
+}
+
+static void
+service_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *data)
+{
+	DEBUG("Received message from cmld");
+	static bool awaiting_record = false;
+
+	uint8_t *buf = NULL;
+	CmldToServiceMessage *msg = NULL;
+
+	if (events & EVENT_IO_READ) {
+		ssize_t buf_len = 0;
+		buf = protobuf_recv_message_packed_new(fd, &buf_len);
+
+		if (!buf) {
+			ERROR("Failed to receive message from cmld");
+			return;
+		}
+
+		msg = (CmldToServiceMessage *)protobuf_unpack_message(
+			&cmld_to_service_message__descriptor, buf, buf_len);
+
+		if (!msg) {
+			ERROR("Failed to decode protobuf message");
+			goto out;
+		}
+
+		if (CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_NOTIFY == msg->code) {
+			if (awaiting_record) {
+				TRACE("Got AUDIT_NOTIFY but already awaiting a record, ignoring...");
+			} else {
+				TRACE("New audit records available, remaining storage: %ld, start fetching...",
+				      msg->audit_remaining_storage);
+
+				if (0 != audit_send_ack(fd, LAST_AUDIT_HASH)) {
+					ERROR("Failed to send ack to cmld");
+				} else {
+					awaiting_record = true;
+				}
+			}
+		} else if (CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_RECORD == msg->code) {
+			TRACE("Got audit record from cmld");
+
+			awaiting_record = false;
+			if (0 != process_audit_record(msg, buf, buf_len)) {
+				ERROR("Failed to process audit record");
+			}
+
+			// if processing of the last record failed,
+			// send ACK with old hash to trigger delivery again
+			if (0 != audit_send_ack(fd, LAST_AUDIT_HASH)) {
+				ERROR("Failed to send ack to cmld");
+			} else {
+				awaiting_record = true;
+			}
+
+			goto out;
+		} else if (CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_COMPLETE == msg->code) {
+			TRACE("Fetched all available audit records");
+			awaiting_record = false;
+
+			goto out;
+		} else {
+			ERROR_ERRNO("Received message with unknown code from cmld");
+		}
+	}
+
+	if (events & EVENT_IO_EXCEPT) {
+		WARN("CML connection Error");
+		event_remove_io(io);
+		event_io_free(io);
+		close(fd);
+
+		return;
+	}
+
+out:
+	if (buf)
+		mem_free(buf);
+	if (msg)
+		protobuf_free_message((ProtobufCMessage *)msg);
+
+	return;
+}
+
+static int
+open_service_socket()
+{
 	const char *socket_file = SERVICE_SOCKET;
-	if (!file_exists(socket_file))
-		FATAL("Could not find socket file %s. Aborting.", socket_file);
+	if (!file_exists(socket_file)) {
+		ERROR("Could not find socket file %s.", socket_file);
+		return -1;
+	}
 
 	int sock = sock_unix_create_and_connect(SOCK_STREAM, socket_file);
 	if (sock < 0) {
-		FATAL("Could not connect to service on socket file %s. Aborting.", socket_file);
+		ERROR("Could not connect to service on socket file %s.", socket_file);
+		return -1;
+	}
+
+	return sock;
+}
+
+static int
+container_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED void *data)
+{
+	int fd = atoi(file);
+
+	DEBUG("Closing file descriptor %d", fd);
+
+	if (close(fd) < 0)
+		WARN_ERRNO("Could not close file descriptor %d", fd);
+
+	return 0;
+}
+
+static int
+service_close_all_fds()
+{
+	if (dir_foreach("/proc/self/fd", &container_close_all_fds_cb, NULL) < 0) {
+		WARN("Could not open /proc/self/fd directory, /proc not mounted?");
+		return -1;
+	}
+
+	return 0;
+}
+
+static void
+fork_service_message_handler()
+{
+	int pid = fork();
+
+	if (-1 == pid) {
+		ERROR("Failed to fork service handler");
+	} else if (0 == pid) {
+		if (service_close_all_fds()) {
+			ERROR("Failed to close parent fds.");
+		}
+
+		FILE *stream = logf_file_new(LOGFILE_DIR "service-handler");
+		service_logfile_handler = logf_register(&logf_file_write, stream);
+		logf_handler_set_prio(service_logfile_handler, LOGF_PRIO_TRACE);
+
+		int sock;
+		if (-1 == (sock = open_service_socket())) {
+			FATAL("Failed to open service socket. Aborting.");
+		}
+
+		LAST_AUDIT_HASH = mem_strdup(
+			"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+
+		int *sock_ptr = mem_alloc(sizeof(int));
+		*sock_ptr = sock;
+
+		WARN("Registering logf handler");
+
+		/* register socket for receiving data */
+		fd_make_non_blocking(sock);
+
+		if (0 != audit_send_ack(*sock_ptr, LAST_AUDIT_HASH)) {
+			ERROR("Failed to send ack to cmld");
+		}
+
+		event_io_t *event =
+			event_io_new(*sock_ptr, EVENT_IO_READ, service_cb_recv_message, NULL);
+		event_add_io(event);
+
+		event_loop();
+
+		// this should never be reached
+		ERROR("Failed to enter event loop");
+		exit(EXIT_FAILURE);
+	}
+}
+
+int
+main(int argc, char **argv)
+{
+	bool do_init;
+	int sock;
+
+	if (dir_mkdir_p(LOGFILE_DIR, 0755)) {
+		ERROR("Failed to create logging directoy");
+	}
+
+	event_init();
+
+	// if we are not running as init, just open the cml-service socket and handle messages
+	if (!(do_init = (getpid() == 1))) {
+		DEBUG("Not running as init, launching service message handler");
+		fork_service_message_handler();
+
+		exit(EXIT_SUCCESS);
+	}
+
+	DEBUG("Registering file logger");
+	service_logfile_handler =
+		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "service-init"));
+	logf_handler_set_prio(service_logfile_handler, LOGF_PRIO_TRACE);
+
+	if (-1 == (sock = open_service_socket())) {
+		FATAL("Failed to open service socket. Aborting...");
 	}
 
 #ifndef BOOT_COMPLETE_ONLY
@@ -203,10 +474,9 @@ main(int argc, char **argv)
 		WARN("Could not send boot complete msg!, error: %zd\n", msg_size);
 
 	// closing socket to cmld
-	close(sock);
-
-	if (!do_init)
-		return 0;
+	if (-1 == close(sock)) {
+		ERROR_ERRNO("Failed to close service socket");
+	}
 
 	if (argc < 2) {
 		INFO("Running as init, not starting any child!");
@@ -217,6 +487,8 @@ main(int argc, char **argv)
 	} else if (service_fork_execvp(argv[1], &argv[1])) {
 		WARN("Error starting child!");
 	}
+
+	fork_service_message_handler();
 
 	INFO("Going to handle signals ...");
 	dumb_init_signal_handler();

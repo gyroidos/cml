@@ -38,6 +38,7 @@
 #include "smartcard.h"
 #include "input.h"
 #include "uevent.h"
+#include "audit.h"
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
@@ -879,7 +880,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 				      container_get_name(container));
 				results[number_of_configs] =
 					(ContainerConfig *)protobuf_message_new_from_textfile(
-						config_filename, &container_config__descriptor);
+						config_filename, &container_config__descriptor,
+						false);
 				if (results[number_of_configs] == NULL) {
 					WARN("The config file of container %s is missing. Skipping.",
 					     container_get_name(container));
@@ -1084,7 +1086,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 		ccfg = mem_new(ContainerConfig *, 1);
 		ccfg[0] = (ContainerConfig *)protobuf_message_new_from_textfile(
-			container_get_config_filename(c), &container_config__descriptor);
+			container_get_config_filename(c), &container_config__descriptor, false);
 		cuuid_str = mem_new(char *, 1);
 		cuuid_str[0] = mem_strdup(uuid_string(container_get_uuid(c)));
 
@@ -1162,7 +1164,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 		ccfg = mem_new(ContainerConfig *, 1);
 		ccfg[0] = (ContainerConfig *)protobuf_message_new_from_textfile(
-			container_get_config_filename(container), &container_config__descriptor);
+			container_get_config_filename(container), &container_config__descriptor,
+			false);
 		cuuid_str = mem_new(char *, 1);
 		cuuid_str[0] = mem_strdup(uuid_string(container_get_uuid(container)));
 
@@ -1195,6 +1198,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		if (NULL == container) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"container-start-not-existing",
+					uuid_string(container_get_uuid(container)), 0);
 			WARN("Container does not exist!");
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;

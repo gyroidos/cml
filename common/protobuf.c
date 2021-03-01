@@ -39,12 +39,30 @@
 
 // TODO update naming scheme
 
-ssize_t
-protobuf_send_message(int fd, const ProtobufCMessage *message)
+uint32_t
+protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr)
 {
 	ASSERT(message);
+	ASSERT(ptr);
 
-	uint32_t buflen = protobuf_c_message_get_packed_size(message);
+	uint32_t packed_len = protobuf_c_message_get_packed_size(message);
+	uint8_t *packed = mem_alloc(packed_len);
+
+	TRACE("Packed size: %d", packed_len);
+
+	uint32_t actual_len = protobuf_c_message_pack(message, packed);
+	ASSERT(actual_len == packed_len);
+
+	*ptr = packed;
+
+	return actual_len;
+}
+
+ssize_t
+protobuf_send_message_packed(int fd, const uint8_t *buf, uint32_t buflen)
+{
+	ASSERT(buf);
+
 	IF_FALSE_RETVAL(buflen < PROTOBUF_MAX_MESSAGE_SIZE, -1);
 
 	ssize_t bytes_sent = fd_write(fd, (char *)&(uint32_t){ htonl(buflen) }, sizeof(uint32_t));
@@ -59,14 +77,9 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 	if (buflen == 0)
 		return 0;
 
-	uint8_t *buf = mem_alloc(buflen);
-	uint32_t actual_len = protobuf_c_message_pack(message, buf);
-	ASSERT(actual_len == buflen);
-
 	// TODO sending large messages: might have to send multiple chunks
 	// need good (generic?!) solution that interacts nicely with event handling!
 	bytes_sent = fd_write(fd, (char *)buf, buflen);
-	mem_free(buf);
 	if (-1 == bytes_sent)
 		goto error_write;
 	fsync(fd); // make sure all data is written so that receiving client unblocks
@@ -80,20 +93,44 @@ error_write:
 	return -1;
 }
 
-ProtobufCMessage *
-protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
+ssize_t
+protobuf_send_message(int fd, const ProtobufCMessage *message)
 {
-	ASSERT(descriptor);
+	ASSERT(message);
 
+	uint8_t *buf = NULL;
+	uint32_t buflen = protobuf_pack_message_new(message, &buf);
+
+	if (!(buflen < PROTOBUF_MAX_MESSAGE_SIZE)) {
+		ERROR("Packed message exceeds PROTOBUF_MAX_MESSAGE_SIZE");
+		if (buf)
+			mem_free(buf);
+
+		return -1;
+	}
+
+	if (-1 == protobuf_send_message_packed(fd, buf, buflen)) {
+		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
+		return -1;
+	}
+
+	return buflen;
+}
+
+uint8_t *
+protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
+{
+	ASSERT(ret_len);
 	uint32_t buflen = 0;
 	ssize_t bytes_read;
 	do {
-		bytes_read = fd_read(fd, (char *)&buflen, sizeof(buflen));
+		bytes_read = fd_read(fd, (char *)&buflen, sizeof(uint32_t));
 	} while (-1 == bytes_read && errno == EINTR);
 	if (-1 == bytes_read)
 		goto error_read;
 	if (0 == bytes_read) { // EOF / remote end closed the connection
 		DEBUG("client on fd %d closed connection.", fd);
+		*ret_len = -1;
 		return NULL;
 	}
 	buflen = ntohl(buflen);
@@ -101,14 +138,15 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	      bytes_read, sizeof(buflen), buflen);
 	if (((size_t)bytes_read != sizeof(buflen))) {
 		ERROR("Protocol violation!");
+		*ret_len = -1;
 		return NULL;
 	}
 	IF_FALSE_RETVAL(buflen < PROTOBUF_MAX_MESSAGE_SIZE, NULL);
 
-	// zero length data represents a message with all default values
-	// => use unpack to construct it (and initialize it with these defaults)
-	if (buflen == 0)
-		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
+	if (0 == buflen) {
+		*ret_len = 0;
+		return NULL;
+	}
 
 	uint8_t *buf = mem_alloc(buflen);
 	do {
@@ -129,13 +167,47 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	// TODO: what if only part of a message could be read?
 	// need good (generic?!) solution that interacts nicely with event handling!
 
-	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
-	mem_free(buf);
-	return msg;
+	*ret_len = bytes_read;
+
+	return buf;
 
 error_read:
 	DEBUG_ERRNO("Failed to read binary protobuf message from fd %d.", fd);
+	*ret_len = -1;
 	return NULL;
+}
+
+ProtobufCMessage *
+protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
+{
+	ASSERT(descriptor);
+
+	ssize_t buflen = 0;
+	uint8_t *buf = protobuf_recv_message_packed_new(fd, &buflen);
+
+	// zero length data represents a message with all default values
+	// => use unpack to construct it (and initialize it with these defaults)
+	if (0 == buflen)
+		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
+
+	if (!buf) {
+		ERROR("Failed to receive packed protobuf message");
+		return NULL;
+	}
+
+	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
+	mem_free(buf);
+	return msg;
+}
+
+ProtobufCMessage *
+protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor, uint8_t *buf, uint32_t buflen)
+{
+	ASSERT(descriptor);
+
+	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
+
+	return msg;
 }
 
 void
@@ -167,7 +239,7 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message)
 
 ProtobufCMessage *
 protobuf_message_new_from_textfile(const char *filename,
-				   const ProtobufCMessageDescriptor *descriptor)
+				   const ProtobufCMessageDescriptor *descriptor, bool purge)
 {
 	ASSERT(filename);
 	ASSERT(descriptor);
@@ -182,6 +254,10 @@ protobuf_message_new_from_textfile(const char *filename,
 		return NULL;
 	}
 	ProtobufCMessage *msg = protobuf_c_text_from_file(descriptor, file, &res, NULL);
+
+	long fp = ftell(file);
+	TRACE("Current message ends at at %ld", fp);
+
 	fclose(file);
 	if (!msg) {
 		ERROR("Failed to parse text protobuf message (%s) from file \"%s\". Reason: %s.",
@@ -197,6 +273,23 @@ protobuf_message_new_from_textfile(const char *filename,
 	}
 	if (res.complete < 0) // TODO investigate why this seems to be the case...
 		WARN("Required field check wasn't performed -- libprotobuf-c is too old.");
+
+	//if requested, remove read message from file
+	if (purge) {
+		char *buf = file_read_new(filename, 10000);
+
+		//TODO implement w.r.t. available RAM in common/file.c
+		if (!file) {
+			ERROR_ERRNO("Failed to remove message from file");
+			goto out;
+		}
+
+		if (file_write(filename, buf + fp, strlen(buf + fp))) {
+			ERROR_ERRNO("Failed to remove message from file");
+		}
+	}
+
+out:
 	return msg;
 }
 

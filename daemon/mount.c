@@ -25,6 +25,7 @@
 #include <sched.h>
 
 #include "mount.h"
+#include "smartcard.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -238,36 +239,6 @@ mount_entry_get_mount_data(const mount_entry_t *mntent)
 	return mntent->mount_data;
 }
 
-static bool
-match_hash(const char *hash_name, size_t hash_len, const char *img_name, const char *expected_hash,
-	   const char *hash)
-{
-	ASSERT(hash_name);
-	ASSERT(img_name);
-
-	if (!hash) {
-		ERROR("Checking image %s.img with %s: empty hash value", img_name, hash_name);
-		return false;
-	}
-	if (!expected_hash) {
-		ERROR("Checking image %s.img with %s: reference hash value for image is missing",
-		      img_name, hash_name);
-		return false;
-	}
-	size_t len = strlen(expected_hash);
-	if (len != 2 * hash_len) {
-		ERROR("Checking image %s.img with %s: invalid hash length %zu/2, expected %zu/2 bytes",
-		      img_name, hash_name, len, 2 * hash_len);
-		return false;
-	}
-	if (strncasecmp(expected_hash, hash, len + 1)) {
-		DEBUG("Checking image %s.img with %s: hash mismatch", img_name, hash_name);
-		return false;
-	}
-	DEBUG("Checking image %s.img with %s: hashes match", img_name, hash_name);
-	return true;
-}
-
 bool
 mount_entry_match_sha1(const mount_entry_t *e, const char *hash)
 {
@@ -275,7 +246,10 @@ mount_entry_match_sha1(const mount_entry_t *e, const char *hash)
 
 	const char *img_name = mount_entry_get_img(e);
 	const char *expected = mount_entry_get_sha1(e);
-	return match_hash("SHA1", 20, img_name, expected, hash);
+
+	DEBUG("Checking image %s.img with expected SHA1 hash %s, actual hash: %s", img_name,
+	      expected, hash);
+	return match_hash(20, expected, hash);
 }
 
 bool
@@ -285,7 +259,9 @@ mount_entry_match_sha256(const mount_entry_t *e, const char *hash)
 
 	const char *img_name = mount_entry_get_img(e);
 	const char *expected = mount_entry_get_sha256(e);
-	return match_hash("SHA256", 32, img_name, expected, hash);
+	DEBUG("Checking image %s.img with expected SHA256 hash %s, actual hash: %s", img_name,
+	      expected, hash);
+	return match_hash(32, expected, hash);
 }
 
 bool

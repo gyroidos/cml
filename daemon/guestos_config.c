@@ -42,7 +42,7 @@ guestos_config_new_from_file(const char *file)
 	DEBUG("Loading GuestOS config from \"%s\".", file);
 
 	GuestOSConfig *cfg = (GuestOSConfig *)protobuf_message_new_from_textfile(
-		file, &guest_osconfig__descriptor);
+		file, &guest_osconfig__descriptor, false);
 	if (!cfg) {
 		ERROR("Failed loading GuestOS config from file \"%s\".", file);
 	}

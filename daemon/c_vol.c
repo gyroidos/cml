@@ -46,6 +46,7 @@
 #include "guestos.h"
 #include "smartcard.h"
 #include "lxcfs.h"
+#include "audit.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -721,13 +722,18 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (encrypted) {
 		char *label, *crypt;
 
-		if (!container_get_key(vol->container)) {
-			ERROR("Trying to mount encrypted volume without key...");
-			goto error;
-		}
-
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				   mount_entry_get_img(mntent));
+
+		if (!container_get_key(vol->container)) {
+			audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
+					CONTAINER_MGMT, "setup-crypted-volume-no-key",
+					uuid_string(container_get_uuid(vol->container)), 2, "label",
+					label);
+			ERROR("Trying to mount encrypted volume without key...");
+			mem_free(label);
+			goto error;
+		}
 
 		crypt = cryptfs_get_device_path_new(label);
 		if (file_is_blk(crypt)) {
@@ -740,10 +746,18 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 							 container_get_key(vol->container));
 
 			if (!crypt) {
+				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
+						CONTAINER_MGMT, "setup-crypted-volume",
+						uuid_string(container_get_uuid(vol->container)), 2,
+						"label", label);
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
 				mem_free(label);
 				goto error;
 			}
+			audit_log_event(container_get_uuid(vol->container), SSA, CMLD,
+					CONTAINER_MGMT, "setup-crypted-volume",
+					uuid_string(container_get_uuid(vol->container)), 2, "label",
+					label);
 		}
 
 		mem_free(label);

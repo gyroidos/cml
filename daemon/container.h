@@ -145,7 +145,8 @@ enum container_error {
 	CONTAINER_ERROR_DEVNS,
 	CONTAINER_ERROR_USER,
 	CONTAINER_ERROR_FIFO,
-	CONTAINER_ERROR_TIME
+	CONTAINER_ERROR_TIME,
+	CONTAINER_ERROR_AUDIT
 };
 
 typedef enum {
@@ -920,4 +921,55 @@ container_exec_cap_systime(const container_t *container, char *const *argv);
 bool
 container_get_usb_pin_entry(const container_t *container);
 
+/**
+ * Send audit record to container
+ */
+int
+container_audit_record_notify(const container_t *container, uint64_t remaining_storage);
+
+/**
+ * Returns the last ACK hash that has been received from this container
+ */
+const char *
+container_audit_get_last_ack(const container_t *container);
+
+/**
+ * Stores the last ACKi hash that has been received for this container.
+ */
+void
+container_audit_set_last_ack(const container_t *container, char *last_ack);
+
+/**
+ * Returns wether an ACK is currently being processed for this container
+ */
+int
+container_audit_get_processing_ack(const container_t *container);
+
+/**
+ * Stores if an ACK hash is currently being processed for this container
+ */
+
+void
+container_audit_set_processing_ack(const container_t *container, bool processing_ack);
+
+/**
+ * Send audit record to container
+ */
+int
+container_audit_record_notify(const container_t *container, uint64_t remaining_storage);
+
+/**
+ * Send audit event to container
+ */
+int
+container_audit_record_send(const container_t *container, const uint8_t *buf, uint32_t buflen);
+
+/**
+ * Process audit record ACK received from a container
+ */
+int
+container_audit_process_ack(const container_t *container, const char *ack);
+
+int
+container_audit_notify_complete(const container_t *container);
 #endif /* CONTAINER_H */

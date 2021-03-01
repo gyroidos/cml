@@ -24,6 +24,7 @@
 #ifndef SMARTCARD_H
 #define SMARTCARD_H
 
+#include "cmld.h"
 #include "container.h"
 #include "control.h"
 #include "stdbool.h"
@@ -140,33 +141,10 @@ smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container);
 typedef enum smartcard_crypto_hashalgo { SHA1, SHA256, SHA512 } smartcard_crypto_hashalgo_t;
 
 /**
- * Callback function for receiving the result of a hash operation.
+ * Callback function for receiving the result of a file hash operation.
  */
 typedef void (*smartcard_crypto_hash_callback_t)(const char *hash_string, const char *hash_file,
 						 smartcard_crypto_hashalgo_t hash_algo, void *data);
-
-/**
- * Requests the scd to hash the given file and report the hash to the given callback.
- *
- * @param file the file to hash
- * @param hashalgo the hash algorithm to use
- * @param cb the callback to receive the result
- * @param data custom data parameter to pass to the callback
- * @return 0 if the hash request was sent and the callback is expected to be called, -1 otherwise
- */
-int
-smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo,
-			   smartcard_crypto_hash_callback_t cb, void *data);
-
-/**
- * Requests the scd to hash the given file, wait for the result and directly return it.
- *
- * @param file the file to hash
- * @param hashalgo the hash algorithm to use
- * @return pointer to a newly allocated string with the hash value, or NULL on error
- */
-char *
-smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo);
 
 /**
  * Result of a signature verification.
@@ -194,6 +172,43 @@ typedef void (*smartcard_crypto_verify_buf_callback_t)(
 	smartcard_crypto_verify_result_t verify_result, unsigned char *data_buf,
 	size_t data_buf_len, unsigned char *sig_buf, size_t sig_buf_len, unsigned char *cert_buf,
 	size_t cert_buf_len, smartcard_crypto_hashalgo_t hash_algo, void *data);
+
+/**
+ * Requests the scd to hash the given file and report the hash to the given callback.
+ *
+ * @param file the file to hash
+ * @param hashalgo the hash algorithm to use
+ * @param cb the callback to receive the result
+ * @param data custom data parameter to pass to the callback
+ * @return 0 if the hash request was sent and the callback is expected to be called, -1 otherwise
+ */
+int
+smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo,
+			   smartcard_crypto_hash_callback_t cb, void *data);
+
+/**
+ * Requests the scd to hash the given buffer and report the hash to the given callback.
+ *
+ * @param verify_buf the buffer to hash
+ * @param verify_buf_len the length of the buffer to hash
+ * @param hashalgo the hash algorithm to use
+ * @param cb the callback to receive the result
+ * @param data custom data parameter to pass to the callback
+ * @return 0 if the hash request was sent and the callback is expected to be called, -1 otherwise
+ */
+int
+smartcard_crypto_hash_buf(unsigned char *data_buf, size_t data_buf_len,
+			  smartcard_crypto_hashalgo_t hashalgo, smartcard_crypto_hash_callback_t cb,
+			  void *data);
+/**
+ * Requests the scd to hash the given file, wait for the result and directly return it.
+ *
+ * @param file the file to hash
+ * @param hashalgo the hash algorithm to use
+ * @return pointer to a newly allocated string with the hash value, or NULL on error
+ */
+char *
+smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo);
 
 /**
  * Requests the scd to verify the signature on the given datafile using the given certificate
@@ -299,5 +314,17 @@ smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, s
  */
 bool
 smartcard_cert_has_valid_format(unsigned char *cert_buf, size_t cert_buf_len);
+
+/**
+ * Checks whether two given hashes match and returns the result
+ *
+ * @param hash_name The name of the hash algorithm used
+ * @param hash_len The length if the given hashes
+ * @param expected_hash The expected hash
+ * @param hash The hash to verify
+ */
+
+bool
+match_hash(size_t hash_len, const char *expected_hash, const char *hash);
 
 #endif /* SMARTCARD_H */

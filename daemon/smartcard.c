@@ -27,10 +27,10 @@
 #include "scd.pb-c.h"
 #endif
 
-#include "cmld.h"
 #include "smartcard.h"
 #include "hardware.h"
 #include "control.h"
+#include "audit.h"
 
 #include "common/macro.h"
 #include "common/event.h"
@@ -293,6 +293,9 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 		switch (msg->code) {
 		case TOKEN_TO_DAEMON__CODE__LOCK_FAILED: {
+			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "lock",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			WARN("Locking the token failed.");
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED, resp_fd);
 			done = true;
@@ -303,6 +306,9 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
+			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "unlock",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			WARN("Unlocking the token failed.");
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED,
 					     resp_fd);
@@ -310,17 +316,26 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
 			WARN("Unlocking the token failed (wrong PIN/passphrase).");
+			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "unlock-wrong-pin",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
 					     resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
 			WARN("Unlocking the token failed (locked till reboot).");
+			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "locked-until-reboot",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
 					     resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
+			audit_log_event(container_get_uuid(startdata->container), SSA, CMLD,
+					TOKEN_MGMT, "unlock-successful",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			char *keyfile =
 				mem_printf("%s/%s.key", startdata->smartcard->path,
 					   uuid_string(container_get_uuid(startdata->container)));
@@ -331,9 +346,19 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				int keylen = file_read(keyfile, (char *)key, sizeof(key));
 				DEBUG("Length of existing key: %d", keylen);
 				if (keylen < 0) {
+					audit_log_event(container_get_uuid(startdata->container),
+							FSA, CMLD, TOKEN_MGMT, "read-wrapped-key",
+							uuid_string(container_get_uuid(
+								startdata->container)),
+							0);
 					ERROR("Failed to read key from file for container!");
 					break;
 				}
+
+				audit_log_event(
+					container_get_uuid(startdata->container), SSA, CMLD,
+					TOKEN_MGMT, "read-wrapped-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 				// unwrap via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 				out.code = DAEMON_TO_TOKEN__CODE__UNWRAP_KEY;
@@ -371,9 +396,19 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				int keylen = hardware_get_random(key, sizeof(key));
 				DEBUG("SCD: keylen=%d, sizeof(key)=%zu", keylen, sizeof(key));
 				if (keylen != sizeof(key)) {
+					audit_log_event(container_get_uuid(startdata->container),
+							FSA, CMLD, TOKEN_MGMT,
+							"gen-container-key-rng-error",
+							uuid_string(container_get_uuid(
+								startdata->container)),
+							0);
 					ERROR("Failed to generate key for container, due to RNG Error!");
 					break;
 				}
+				audit_log_event(
+					container_get_uuid(startdata->container), SSA, CMLD,
+					TOKEN_MGMT, "gen-container-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 				// set the key
 				char *ascii_key = bytes_to_string_new(key, keylen);
 				container_set_key(startdata->container, ascii_key);
@@ -422,11 +457,18 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			mem_free(out.token_uuid);
 			if (!msg->has_unwrapped_key) {
 				WARN("Expected derived key, but none was returned!");
+				audit_log_event(
+					container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "unwrap-container-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 				control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
 						     resp_fd);
 				break;
 			}
 			// set the key
+			audit_log_event(container_get_uuid(startdata->container), SSA, CMLD,
+					TOKEN_MGMT, "unwrap-container-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			TRACE("Successfully retrieved unwrapped key from SCD");
 			char *ascii_key = bytes_to_string_new(msg->unwrapped_key.data,
 							      msg->unwrapped_key.len);
@@ -452,10 +494,17 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			mem_free(out.token_uuid);
 			// save wrapped key
 			if (!msg->has_wrapped_key) {
+				audit_log_event(
+					container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "wrap-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 				WARN("Expected wrapped key, but none was returned!");
 				break;
 			}
 			ASSERT(msg->wrapped_key.len < TOKEN_MAX_WRAPPED_KEY_LEN);
+			audit_log_event(container_get_uuid(startdata->container), SSA, CMLD,
+					TOKEN_MGMT, "wrap-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			char *keyfile =
 				mem_printf("%s/%s.key", startdata->smartcard->path,
 					   uuid_string(container_get_uuid(startdata->container)));
@@ -463,9 +512,16 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			int bytes_written = file_write(keyfile, (char *)msg->wrapped_key.data,
 						       msg->wrapped_key.len);
 			if (bytes_written != (int)msg->wrapped_key.len) {
+				audit_log_event(
+					container_get_uuid(startdata->container), FSA, CMLD,
+					TOKEN_MGMT, "store-wrapped-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 				ERROR("Failed to store key for container %s to %s!",
 				      container_get_name(startdata->container), keyfile);
 			}
+			audit_log_event(container_get_uuid(startdata->container), SSA, CMLD,
+					TOKEN_MGMT, "store-wrapped-key",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			TRACE("Stored wrapped key on disk successfully");
 			// delete wrapped key from RAM
 			memset(msg->wrapped_key.data, 0, msg->wrapped_key.len);
@@ -580,6 +636,9 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	int resp_fd = control_get_client_sock(startdata->control);
 
 	if (!container_get_token_is_init(container)) {
+		audit_log_event(container_get_uuid(startdata->container), FSA, CMLD, TOKEN_MGMT,
+				"token-uninitialized",
+				uuid_string(container_get_uuid(startdata->container)), 0);
 		ERROR("The token that is associated with the container has not been initialized!");
 		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, resp_fd);
 		goto err;
@@ -587,6 +646,9 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 
 	if (!container_get_token_is_linked_to_device(container)) {
 		ERROR("The token that is associated with this container must be paired to the device first");
+		audit_log_event(container_get_uuid(startdata->container), FSA, CMLD, TOKEN_MGMT,
+				"token-not-paired",
+				uuid_string(container_get_uuid(startdata->container)), 0);
 		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNPAIRED, resp_fd);
 		goto err;
 	}
@@ -594,10 +656,16 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	unsigned char pair_sec[MAX_PAIR_SEC_LEN];
 	pair_sec_len = smartcard_get_pairing_secret(smartcard, pair_sec, sizeof(pair_sec));
 	if (pair_sec_len < 0) {
+		audit_log_event(container_get_uuid(startdata->container), FSA, CMLD, TOKEN_MGMT,
+				"read-pairing-secret",
+				uuid_string(container_get_uuid(startdata->container)), 0);
 		ERROR("Could not retrieve pairing secret");
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
 		goto err;
 	}
+	audit_log_event(container_get_uuid(startdata->container), SSA, CMLD, TOKEN_MGMT,
+			"read-pairing-secret",
+			uuid_string(container_get_uuid(startdata->container)), 0);
 
 	// TODO register timer if socket does not respond
 	event_io_t *event = NULL;
@@ -703,7 +771,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 {
 	smartcard_startdata_t *startdata = data;
 	int resp_fd = control_get_client_sock(startdata->control);
-	int rc;
+	int rc = -1;
 
 	if (events & EVENT_IO_READ) {
 		TokenToDaemon *msg =
@@ -995,7 +1063,7 @@ smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container)
 	}
 
 	if (0 != remove(keyfile)) {
-		ERROR("Failed to remove keyfile");
+		ERROR_ERRNO("Failed to remove keyfile");
 		goto out;
 	}
 
@@ -1156,6 +1224,8 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 	crypto_callback_task_t *task = data;
 	ASSERT(task);
 
+	TRACE("Received message from SCD");
+
 	// TODO outsource socket/fd/events handling
 	if (events & EVENT_IO_READ) {
 		// use protobuf for communication with scd
@@ -1168,9 +1238,13 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 		switch (msg->code) {
 		// deal with CRYPTO_HASH_* cases
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK:
+			TRACE("Received HASH_OK message, ");
 			if (msg->has_hash_value) {
 				char *hash = bytes_to_string_new(msg->hash_value.data,
 								 msg->hash_value.len);
+
+				TRACE("Received hash for file %s: %s",
+				      task->hash_file ? task->hash_file : "<empty>", hash);
 				task->hash_complete(hash, task->hash_file, task->hash_algo,
 						    task->data);
 				if (hash != NULL) {
@@ -1179,6 +1253,7 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 				break;
 			}
 			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
+
 			ERROR("Missing hash_value in CRYPTO_HASH_OK response!"); // fallthrough
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR:
 			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
@@ -1285,6 +1360,9 @@ smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalg
 	out.has_hash_algo = true;
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
 	out.hash_file = task->hash_file;
+
+	TRACE("Requesting scd to hash file at %s", task->hash_file);
+
 	if (smartcard_send_crypto(&out, task) < 0) {
 		crypto_callback_task_free(task);
 		return -1;
@@ -1335,16 +1413,10 @@ smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsign
 						    sig_buf_len, cert_buf, cert_buf_len, hashalgo);
 
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF;
+	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_BUF;
 	out.has_verify_data_buf = true;
 	out.verify_data_buf.data = data_buf;
 	out.verify_data_buf.len = data_buf_len;
-	out.has_verify_sig_buf = true;
-	out.verify_sig_buf.data = sig_buf;
-	out.verify_sig_buf.len = sig_buf_len;
-	out.has_verify_cert_buf = true;
-	out.verify_cert_buf.data = cert_buf;
-	out.verify_cert_buf.len = cert_buf_len;
 	out.has_hash_algo = true;
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
 
@@ -1543,4 +1615,30 @@ smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, s
 		return;
 error:
 	control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, control_get_client_sock(control));
+}
+
+bool
+match_hash(size_t hash_len, const char *expected_hash, const char *hash)
+{
+	if (!hash) {
+		ERROR("Empty hash value");
+		return false;
+	}
+	if (!expected_hash) {
+		ERROR("Reference hash value for image is missing");
+		return false;
+	}
+
+	//TODO harden against hash algorithms with NULL bytes in digest
+	size_t len = strlen(expected_hash);
+	if (len != 2 * hash_len) {
+		ERROR("Invalid hash length %zu/2, expected %zu/2 bytes", len, 2 * hash_len);
+		return false;
+	}
+	if (strncasecmp(expected_hash, hash, len + 1)) {
+		DEBUG("Hash mismatch");
+		return false;
+	}
+	DEBUG("Hashes match");
+	return true;
 }

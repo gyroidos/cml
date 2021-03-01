@@ -28,7 +28,7 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -O2 -pedantic
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie -O0
 # set for sending boot complete protobuf message only
 #LOCAL_CFLAGS += -DBOOT_COMPLETE_ONLY
 ifeq ($(CC),gcc)
@@ -73,7 +73,8 @@ SRC_FILES_EXEC_CAP_SYSTIME := \
 LD_LIB_FLAGS := \
 	-Lcommon -lcommon_full \
 	-lprotobuf-c \
-	-lprotobuf-c-text
+	-lprotobuf-c-text \
+	-pthread
 
 .PHONY: all
 all: service exec_cap_systime

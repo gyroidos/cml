@@ -202,7 +202,7 @@ provisioning_mode()
 			}
 
 			DeviceConfig *dev_cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
-				DEVICE_CONF, &device_config__descriptor);
+				DEVICE_CONF, &device_config__descriptor, false);
 
 			if (!dev_cfg) {
 				FATAL("Failed load device config from file \"%s\"!", DEVICE_CONF);

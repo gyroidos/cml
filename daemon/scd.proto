@@ -62,6 +62,7 @@ message DaemonToToken {
 
 		// crypto commands unrelated to actual secure element (FIXME move elsewhere?!)
 		CRYPTO_HASH_FILE = 50;		// compute hash for file [hash_file]
+		CRYPTO_HASH_BUF = 51;		// compute hash for given buffer [hash_buf
 		CRYPTO_VERIFY_FILE = 60;	// verify certificate and signature on data given in [verify_*_file]
 		CRYPTO_VERIFY_BUF = 61;	// verify certificate and signature on data given in [verify_*_buf]
 
