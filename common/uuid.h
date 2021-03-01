@@ -32,6 +32,7 @@
 #define UUID_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct uuid uuid_t;
 
@@ -72,5 +73,14 @@ uuid_free(uuid_t *uuid);
  */
 const char *
 uuid_string(const uuid_t *uuid);
+
+/**
+ * Get 48 bit node ID in last Part of uuid
+ *
+ * @param uuid UUID for which the string representation is returned.
+ * @return The node ID as 64 bit unsigned integer
+ */
+uint64_t
+uuid_get_node(const uuid_t *uuid);
 
 #endif /* UUID_H */
