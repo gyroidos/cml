@@ -24,6 +24,7 @@
 #ifndef SMARTCARD_H
 #define SMARTCARD_H
 
+#include "cmld.h"
 #include "container.h"
 #include "control.h"
 #include "stdbool.h"
@@ -299,5 +300,17 @@ smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, s
  */
 bool
 smartcard_cert_has_valid_format(unsigned char *cert_buf, size_t cert_buf_len);
+
+/**
+ * Checks whether two given hashes match and returns the result
+ *
+ * @param hash_name The name of the hash algorithm used
+ * @param hash_len The length if the given hashes
+ * @param expected_hash The expected hash
+ * @param hash The hash to verify
+ */
+
+bool
+match_hash(size_t hash_len, const char *expected_hash, const char *hash);
 
 #endif /* SMARTCARD_H */
