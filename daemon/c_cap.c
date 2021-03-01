@@ -71,7 +71,7 @@ c_cap_set_current_process(const container_t *container)
 	/* 28 */ C_CAP_DROP(CAP_LEASE);
 
 	///* 29 */ C_CAP_DROP(CAP_AUDIT_WRITE); /* needed for console/X11 login */
-	///* 30 */ C_CAP_DROP(CAP_AUDIT_CONTROL); /* needed by logd */
+	/* 30 */ C_CAP_DROP(CAP_AUDIT_CONTROL);
 
 	/* 31 */ C_CAP_DROP(CAP_SETFCAP);
 
