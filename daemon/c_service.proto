@@ -27,6 +27,19 @@ option java_package = "de.fraunhofer.aisec.trustme.service";
 
 import "container.proto";
 
+message AuditRecord {
+	message Meta {
+		required string key = 1;
+		required string value = 2;
+	};
+
+	required int64 timestamp = 1;
+	required string type = 2;
+	optional string subject_id = 3;
+
+	repeated Meta meta = 4;
+}
+
 message CmldToServiceMessage {
 	enum Code {
 		SHUTDOWN = 1;
@@ -44,6 +57,10 @@ message CmldToServiceMessage {
 
 		CONTAINER_CFG_NAME = 17;
 		CONTAINER_CFG_DNS = 18;
+
+		AUDIT_NOTIFY = 19;
+		AUDIT_RECORD = 20;
+		AUDIT_COMPLETE = 21;
 	}
 	required Code code = 1;
 
@@ -54,6 +71,9 @@ message CmldToServiceMessage {
 	optional bool wifi_user_enabled = 12;
 	optional string container_cfg_name = 13;
 	optional string container_cfg_dns = 14;
+	optional string msg = 15;
+	optional AuditRecord audit_record = 16;
+	optional uint64 audit_remaining_storage = 17;
 }
 
 message ServiceToCmldMessage {
@@ -84,6 +104,8 @@ message ServiceToCmldMessage {
 		CONTAINER_CFG_DNS_REQ = 19;
 
 		EXEC_CAP_SYSTIME_PRIV = 20;
+
+		AUDIT_ACK = 21;
 	}
 	required Code code = 1;
 
@@ -97,4 +119,5 @@ message ServiceToCmldMessage {
 	optional bool wifi_user_enabled = 14;
 	optional string captime_exec_path = 15;
 	repeated string captime_exec_param = 16;
+	optional string audit_ack = 17;
 }

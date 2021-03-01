@@ -104,7 +104,9 @@ SRC_FILES := main.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
-	input.c
+	input.c \
+	audit.c \
+	c_audit.c
 
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
 	protoc-c --c_out=. container.proto

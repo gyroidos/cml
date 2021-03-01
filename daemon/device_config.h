@@ -106,4 +106,7 @@ device_config_get_hostedmode(const device_config_t *config);
 
 bool
 device_config_get_signed_configs(const device_config_t *config);
+
+bool
+device_config_get_audit_size(const device_config_t *config);
 #endif /* DEVICE_H */

@@ -61,4 +61,7 @@ message DeviceConfig {
 	required bool hostedmode = 14 [default = false];
 
 	optional bool signed_configs = 15 [default = false];
+
+	// max size of audit log per logging sink in MB
+	optional uint64 audit_size = 16 [default = 0];
 }

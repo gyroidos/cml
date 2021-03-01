@@ -55,7 +55,7 @@ device_config_new(const char *path)
 		DEBUG("Loading device config from \"%s\".", file);
 
 		cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
-			file, &device_config__descriptor);
+			file, &device_config__descriptor, false);
 		if (!cfg) {
 			WARN("Failed loading device config from file \"%s\". Reverting to default values.",
 			     file);
@@ -234,4 +234,13 @@ device_config_get_signed_configs(const device_config_t *config)
 	ASSERT(config->cfg);
 
 	return config->cfg->signed_configs;
+}
+
+bool
+device_config_get_audit_size(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->audit_size;
 }

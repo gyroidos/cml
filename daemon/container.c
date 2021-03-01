@@ -49,11 +49,14 @@
 #include "c_service.h"
 #include "c_time.h"
 #include "c_run.h"
+#include "c_run.h"
+#include "c_audit.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "hardware.h"
 #include "uevent.h"
+#include "audit.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -158,6 +161,7 @@ struct container {
 	c_vol_t *vol;
 	c_service_t *service;
 	c_run_t *run;
+	c_audit_t *audit;
 	c_time_t *time;
 	// Wifi module?
 
@@ -381,6 +385,13 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->time = c_time_new(container);
 	if (!container->time) {
 		WARN("Could not initialize time subsystem for container %s (UUID: %s)",
+		     container->name, uuid_string(container->uuid));
+		goto error;
+	}
+
+	container->audit = c_audit_new(container);
+	if (!container->audit) {
+		WARN("Could not initialize audit subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
@@ -921,6 +932,61 @@ container_resume(container_t *container)
 	return c_service_send_message(container->service, C_SERVICE_MESSAGE_RESUME);
 }
 
+const char *
+container_audit_get_last_ack(const container_t *container)
+{
+	ASSERT(container);
+	return c_audit_get_last_ack(container->audit);
+}
+
+void
+container_audit_set_last_ack(const container_t *container, char *last_ack)
+{
+	ASSERT(container);
+	c_audit_set_last_ack(container->audit, last_ack);
+}
+
+int
+container_audit_get_processing_ack(const container_t *container)
+{
+	ASSERT(container);
+	return c_audit_get_processing_ack(container->audit);
+}
+
+void
+container_audit_set_processing_ack(const container_t *container, bool processing_ack)
+{
+	ASSERT(container);
+	c_audit_set_processing_ack(container->audit, processing_ack);
+}
+
+int
+container_audit_record_notify(const container_t *container, uint64_t remaining_storage)
+{
+	ASSERT(container);
+	return c_service_audit_notify(container->service, remaining_storage);
+}
+
+int
+container_audit_record_send(const container_t *container, const uint8_t *buf, uint32_t buflen)
+{
+	ASSERT(container);
+	return c_service_audit_send_record(container->service, buf, buflen);
+}
+
+int
+container_audit_notify_complete(const container_t *container)
+{
+	ASSERT(container);
+	return c_service_send_message(container->service, C_SERVICE_MESSAGE_AUDIT_COMPLETE);
+}
+
+int
+container_audit_process_ack(const container_t *container, const char *ack)
+{
+	return audit_process_ack(container, ack);
+}
+
 /**
  * This function should be called only on a (physically) not-running container and
  * should make sure that the container and all its submodules are in the same
@@ -1085,6 +1151,11 @@ container_start_child(void *data)
 	/* Make sure /init in node doesn`t kill CMLD daemon */
 	if (setpgid(0, 0) < 0) {
 		WARN("Could not move process group of container %s", container->name);
+		goto error;
+	}
+
+	if (c_audit_start_child(container->audit) < 0) {
+		ret = CONTAINER_ERROR_AUDIT;
 		goto error;
 	}
 
