@@ -25,6 +25,7 @@
 #include "c_fifo.h"
 #include "cmld.h"
 #include "container.h"
+#include "audit.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -100,17 +101,32 @@ c_fifo_create_fifos(c_fifo_t *fifo, container_t *container)
 		if (0 != mkfifo(fifo_path, 666)) {
 			ERROR_ERRNO("Failed to create fifo at %s", fifo_path);
 			mem_free(fifo_path);
+			audit_log_event(container_get_uuid(fifo->container), FSA, CMLD,
+					CONTAINER_ISOLATION, "create-fifo",
+					uuid_string(container_get_uuid(fifo->container)), 2, "name",
+					current_fifo, 0);
 			goto error;
 		}
 
+		audit_log_event(container_get_uuid(fifo->container), SSA, CMLD, CONTAINER_ISOLATION,
+				"create-fifo", uuid_string(container_get_uuid(fifo->container)), 2,
+				"name", current_fifo);
 		TRACE("Created FIFO at %s", fifo_path);
 
 		if (chown(fifo_path, uid, uid)) {
+			audit_log_event(container_get_uuid(fifo->container), FSA, CMLD,
+					CONTAINER_ISOLATION, "prepare-fifo-directory",
+					uuid_string(container_get_uuid(fifo->container)), 2, "path",
+					fifo_path);
 			ERROR("Failed to chown fifo dir to %d", uid);
 			mem_free(fifo_path);
 			goto error;
 		}
 
+		audit_log_event(container_get_uuid(fifo->container), SSA, CMLD, CONTAINER_ISOLATION,
+				"prepare-fifo-directory",
+				uuid_string(container_get_uuid(fifo->container)), 2, "path",
+				fifo_path);
 		DEBUG("Chowned FIFO at %s to %d", fifo_path ? fifo_path : "NULL", uid);
 
 		mem_free(fifo_path);

@@ -54,6 +54,7 @@
 #include "uevent.h"
 #include "time.h"
 #include "lxcfs.h"
+#include "audit.h"
 
 #include <stdio.h>
 #include <dirent.h>
@@ -150,7 +151,7 @@ cmld_container_get_c_root_netns()
 }
 
 container_t *
-cmld_container_get_by_uuid(uuid_t *uuid)
+cmld_container_get_by_uuid(const uuid_t *uuid)
 {
 	ASSERT(uuid);
 
@@ -232,6 +233,9 @@ cmld_container_stop_cb(container_t *container, container_callback_t *cb, void *d
 
 	/* unregister observer */
 	container_unregister_observer(container, cb);
+
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+			"container-stopped", uuid_string(container_get_uuid(container)), 0);
 
 	/* execute on_all_stopped, if all containers are stopped now */
 	if (cmld_containers_are_all_stopped()) {
@@ -811,6 +815,9 @@ int
 cmld_container_start(container_t *container)
 {
 	if (!container) {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-start-not-existing",
+				uuid_string(container_get_uuid(container)), 0);
 		WARN("Container does not exists!");
 		return -1;
 	}
@@ -825,20 +832,32 @@ cmld_container_start(container_t *container)
 
 		// We only support "background-start"...
 		if (!guestos_get_feature_bg_booting(container_get_guestos(container))) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"container-start",
+					uuid_string(container_get_uuid(container)), 0);
 			WARN("Guest OS of the container %s does not support background booting",
 			     container_get_description(container));
 			return -1;
 		}
 		if (container_start(container)) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"container-start",
+					uuid_string(container_get_uuid(container)), 0);
 			WARN("Start of background container %s failed",
 			     container_get_description(container));
 			return -1;
 		}
 		time_register_clock_check();
 	} else {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-start-already-running",
+				uuid_string(container_get_uuid(container)), 0);
 		DEBUG("Container %s has been already started",
 		      container_get_description(container));
 	}
+
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "container-start",
+			uuid_string(container_get_uuid(container)), 0);
 	return 0;
 }
 
@@ -851,8 +870,19 @@ cmld_container_change_pin(control_t *control, container_t *container, const char
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
-	return smartcard_container_change_pin(cmld_smartcard, control, container, passwd,
-					      newpasswd);
+	int rc = smartcard_container_change_pin(cmld_smartcard, control, container, passwd,
+						newpasswd);
+
+	if (!rc)
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+				"container-change-pin", uuid_string(container_get_uuid(container)),
+				0);
+	else
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-change-pin", uuid_string(container_get_uuid(container)),
+				0);
+
+	return rc;
 }
 
 int
@@ -956,6 +986,9 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	/* all containers are down, so shut down */
 	DEBUG("Device shutdown: last container down; shutdown now");
 
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "shutdown",
+			uuid_string(container_get_uuid(container)), 0);
+
 #ifndef TRUSTME_DEBUG
 	reboot_reboot(POWER_OFF);
 	// should never arrive here, but in case the shutdown fails somehow, we exit
@@ -978,6 +1011,8 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 	      a0_state == CONTAINER_STATE_ZOMBIE)) {
 		return;
 	}
+	audit_log_event(container_get_uuid(a0), SSA, CMLD, CONTAINER_MGMT, "shutdown-c0-start",
+			uuid_string(container_get_uuid(a0)), 0);
 
 	DEBUG("Device shutdown: a0 went down or shutting down, checking others before shutdown");
 
@@ -1010,6 +1045,8 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 	if (shutdown_now && !cmld_hostedmode) {
 		/* all containers are down, so shut down */
 		DEBUG("Device shutdown: all containers already down; shutdown now");
+		audit_log_event(container_get_uuid(a0), SSA, CMLD, CONTAINER_MGMT, "shutdown",
+				uuid_string(container_get_uuid(a0)), 0);
 #ifndef TRUSTME_DEBUG
 		reboot_reboot(POWER_OFF);
 		// should never arrive here, but in case the shutdown fails somehow, we exit
@@ -1098,20 +1135,30 @@ cmld_start_a0(container_t *new_a0)
 	}
 
 	container_set_key(new_a0, A0_KEY);
-	if (container_start(new_a0))
+	if (container_start(new_a0)) {
+		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_a0)), 0);
 		FATAL("Could not start management container");
+	}
 
 	/* register an observer to capture the shutdown command for the special container a0 */
 	if (!container_register_observer(new_a0, &cmld_shutdown_a0_cb, NULL)) {
 		WARN("Could not register observer shutdown callback for a0");
+
+		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_a0)), 0);
 		return -1;
 	}
 	/* register an observer to capture the reboot command for the special container a0 */
 	if (!container_register_observer(new_a0, &cmld_reboot_a0_cb, NULL)) {
 		WARN("Could not register observer reboot callback for a0");
+		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_a0)), 0);
 		return -1;
 	}
 
+	audit_log_event(container_get_uuid(new_a0), SSA, CMLD, CONTAINER_MGMT, "c0-start",
+			uuid_string(container_get_uuid(new_a0)), 0);
 	return 0;
 }
 
@@ -1168,8 +1215,9 @@ cmld_init(const char *path)
 
 	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
 	device_config_t *device_config = device_config_new(device_path);
-	if (!device_config)
-		WARN("Could not initialize device config");
+
+	// set max audit log file size
+	audit_set_size(device_config_get_audit_size(device_config));
 
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);
@@ -1331,16 +1379,23 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 		container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
 		if (0 != cmld_container_token_init(c)) {
+			audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
+					"container-create-token-uninit",
+					uuid_string(container_get_uuid(c)), 0);
 			ERROR("Could not initialize token associated with container %s (uuid=%s). Aborting creation",
 			      container_get_name(c), uuid_string(container_get_uuid(c)));
 			cmld_container_destroy(c);
 			c = NULL;
 		} else {
 			cmld_containers_list = list_append(cmld_containers_list, c);
+			audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
+					"container-create", uuid_string(container_get_uuid(c)), 0);
 			INFO("Created container %s (uuid=%s).", container_get_name(c),
 			     uuid_string(container_get_uuid(c)));
 		}
 	} else {
+		audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
+				"container-create", uuid_string(container_get_uuid(c)), 0);
 		WARN("Could not create new container object from config");
 	}
 	mem_free(path);
@@ -1366,10 +1421,19 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	/* remove keyfile */
 	if (0 != smartcard_remove_keyfile(cmld_smartcard, container)) {
 		ERROR("Failed to remove keyfile. Continuing to remove container anyway.");
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-remove-keyfile",
+				uuid_string(container_get_uuid(container)), 0);
+	} else {
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+				"container-remove-keyfile",
+				uuid_string(container_get_uuid(container)), 0);
 	}
 
 	/* destroy the container */
 	if (container_destroy(container) < 0) {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-remove", uuid_string(container_get_uuid(container)), 0);
 		ERROR("Could not destroy container");
 		container_set_state(container, CONTAINER_STATE_ZOMBIE);
 		return;
@@ -1377,6 +1441,8 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 
 	/* cleanup container */
 	cmld_containers_list = list_remove(cmld_containers_list, container);
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+			"container-remove", uuid_string(container_get_uuid(container)), 0);
 	container_free(container);
 }
 
@@ -1394,6 +1460,9 @@ cmld_container_destroy(container_t *container)
 
 		/* Register observer to wait for completed container_stop */
 		if (!container_register_observer(container, &cmld_container_destroy_cb, NULL)) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"container-remove",
+					uuid_string(container_get_uuid(container)), 0);
 			DEBUG("Could not register destroy callback");
 			return -1;
 		}
@@ -1416,6 +1485,10 @@ cmld_container_stop(container_t *container)
 	      (container_get_state(container) == CONTAINER_STATE_SETUP))) {
 		ERROR("Container %s not running, unable to stop",
 		      container_get_description(container));
+
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-stop-failed", uuid_string(container_get_uuid(container)),
+				0);
 		return -1;
 	}
 
