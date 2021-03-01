@@ -1544,3 +1544,29 @@ smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, s
 error:
 	control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, control_get_client_sock(control));
 }
+
+bool
+match_hash(size_t hash_len, const char *expected_hash, const char *hash)
+{
+	if (!hash) {
+		ERROR("Empty hash value");
+		return false;
+	}
+	if (!expected_hash) {
+		ERROR("Reference hash value for image is missing");
+		return false;
+	}
+
+	//TODO harden against hash algorithms with NULL bytes in digest
+	size_t len = strlen(expected_hash);
+	if (len != 2 * hash_len) {
+		ERROR("Invalid hash length %zu/2, expected %zu/2 bytes", len, 2 * hash_len);
+		return false;
+	}
+	if (strncasecmp(expected_hash, hash, len + 1)) {
+		DEBUG("Hash mismatch");
+		return false;
+	}
+	DEBUG("Hashes match");
+	return true;
+}
