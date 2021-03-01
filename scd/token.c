@@ -617,10 +617,6 @@ token_free(scd_token_t *token)
 {
 	IF_NULL_RETURN(token);
 
-#ifdef ENABLESCHSM
-	scd_tokencontrol_free(token);
-#endif
-
 	if (token->token_data) {
 		switch (token->token_data->type) {
 		case (NONE):
@@ -632,6 +628,7 @@ token_free(scd_token_t *token)
 			break;
 #ifdef ENABLESCHSM
 		case (USB):
+			scd_tokencontrol_free(token);
 			usbtoken_free(token->token_data->int_token.usbtoken);
 			break;
 #endif // ENABLESCHSM
