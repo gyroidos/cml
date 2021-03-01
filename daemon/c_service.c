@@ -122,7 +122,6 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 	switch (message->code) {
 	case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
 		container_set_state(service->container, CONTAINER_STATE_RUNNING);
-
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_SUSPEND_COMPLETED:
