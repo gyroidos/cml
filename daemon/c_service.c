@@ -29,6 +29,7 @@
 #endif
 
 #include "container.h"
+#include "audit.h"
 
 #include "common/event.h"
 #include "common/fd.h"
@@ -44,6 +45,9 @@
 // clang-format off
 #define C_SERVICE_SOCKET SOCK_PATH(service)
 // clang-format on
+
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 struct c_service {
 	container_t *container; // weak reference
@@ -118,6 +122,7 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 	switch (message->code) {
 	case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
 		container_set_state(service->container, CONTAINER_STATE_RUNNING);
+
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_SUSPEND_COMPLETED:
@@ -219,6 +224,17 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 		}
 		if (container_exec_cap_systime(service->container, argv))
 			WARN("Exec of '%s' failed/permission denied!", message->captime_exec_path);
+		break;
+	}
+
+	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIT_ACK: {
+		INFO("Got ACK from Container %s",
+		     uuid_string(container_get_uuid(service->container)));
+
+		if (0 > container_audit_process_ack(service->container, message->audit_ack)) {
+			ERROR("Failed to process audit ACK from container %s",
+			      uuid_string(container_get_uuid(service->container)));
+		}
 		break;
 	}
 
@@ -518,6 +534,39 @@ c_service_send_message_proto(c_service_t *service, unsigned int code)
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
 	message_proto.code = code;
 
+	int ret =
+		protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
+
+	return ret;
+}
+
+int
+c_service_audit_send_record(c_service_t *service, const uint8_t *buf, uint32_t buf_len)
+{
+	ASSERT(service);
+
+	TRACE("Trying to send packed audit record to container %s",
+	      uuid_string(container_get_uuid(service->container)));
+
+	if (-1 == protobuf_send_message_packed(service->sock_connected, buf, buf_len)) {
+		ERROR("Failed to send packed audit record to container %s",
+		      uuid_string(container_get_uuid(service->container)));
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+c_service_audit_notify(c_service_t *service, uint64_t remaining_storage)
+{
+	TRACE("Notifying container %s about stored audit events, remaining storage: %ld",
+	      uuid_string(container_get_uuid(service->container)), remaining_storage);
+	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
+	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_NOTIFY;
+
+	message_proto.audit_remaining_storage = remaining_storage;
+
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
@@ -573,6 +622,14 @@ c_service_send_message(c_service_t *service, c_service_message_t message)
 
 	case C_SERVICE_MESSAGE_AUDIO_RESUME:
 		//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
+		break;
+
+	case C_SERVICE_MESSAGE_AUDIT_COMPLETE:
+
+		TRACE("Notifying container %s that all stored audit events were delivered",
+		      uuid_string(container_get_uuid(service->container)));
+		ret = c_service_send_message_proto(service,
+						   CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_COMPLETE);
 		break;
 
 	default:
