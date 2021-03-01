@@ -28,6 +28,7 @@
 #include "cmld.h"
 #include "download.h"
 #include "smartcard.h"
+#include "audit.h"
 
 #include "common/macro.h"
 #include "common/list.h"
@@ -91,8 +92,9 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	guestos_verify_result_t guestos_verified = GUESTOS_UNSIGNED;
 
 	char *dir = mem_printf("%s/%s", path, name);
-	if (!file_is_dir(dir))
+	if (!file_is_dir(dir)) {
 		goto cleanup;
+	}
 
 	char *cfg_file = guestos_get_cfg_file_new(dir);
 	char *sig_file = guestos_get_sig_file_new(dir);
@@ -104,17 +106,24 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	switch (verify_result) {
 	case VERIFY_GOOD:
 		guestos_verified = GUESTOS_SIGNED;
+		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "verify-good", name, 0);
 		INFO("Signature of GuestOS OK (GOOD)");
 		break;
 	case VERIFY_LOCALLY_SIGNED:
 		guestos_verified = GUESTOS_LOCALLY_SIGNED;
 		if (guestos_mgr_allow_locally_signed) {
+			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "verify-locally-signed",
+					name, 0);
 			INFO("Signature of GuestOS OK (locally signed)");
 			break;
 		}
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-locally-signed", name, 0);
 		// fallthrough
 	default:
 		guestos_verified = GUESTOS_UNSIGNED;
+
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-failed", name, 0);
+
 		ERROR("Signature verification failed (%d) while loading GuestOS config %s, skipping.",
 		      verify_result, cfg_file);
 		res = 1;
@@ -122,8 +131,11 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	}
 
 	if (guestos_mgr_add_from_file(cfg_file, guestos_verified) < 0) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "load-os-failed-to-add", cfg_file,
+				0);
 		WARN("Could not add guest operating system from file %s.", cfg_file);
 	} else {
+		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "load-os", cfg_file, 0);
 		res = 1;
 	}
 
@@ -231,16 +243,25 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 
 	control_message_t resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED;
 
-	IF_NULL_GOTO_ERROR(os, out);
+	if (!os) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-failed", NULL, 0);
+		goto out;
+	}
 
 	if (complete && count > 0) {
 		if (guestos_images_flash(os) < 0) {
+			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash-failed",
+					guestos_get_name(os), 0);
 			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
 		} else {
+			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash-success",
+					guestos_get_name(os), 0);
 			INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
 			resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED;
 		}
 	} else {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-failed",
+				guestos_get_name(os), 0);
 		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FAILED);
 	}
 out:
@@ -264,14 +285,21 @@ guestos_mgr_download_latest(const char *name, int resp_fd)
 	if (!guestos_images_are_complete(os, false)) {
 		int *cb_resp_fd = mem_new(int, 1);
 		*cb_resp_fd = resp_fd;
-		if (!guestos_images_download(os, download_complete_cb, cb_resp_fd))
+		if (!guestos_images_download(os, download_complete_cb, cb_resp_fd)) {
 			resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_WAITING;
-		else
+			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-start", name,
+					0);
+		} else {
+			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-start", name,
+					0);
 			return;
+		}
 	}
 	if (guestos_images_flash(os) < 0) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "flash-os", name, 0);
 		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
 	} else {
+		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "flash-os", name, 0);
 		INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
 		resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED;
 	}
@@ -326,29 +354,37 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	int *resp_fd = data;
 	ASSERT(resp_fd);
 
+	guestos_t *os = guestos_new_from_buffer(cfg_buf, cfg_buf_len, guestos_basepath);
+	const char *os_name = NULL;
+	if (!os) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-invalid", guestos_basepath,
+				0);
+		ERROR("Could not instantiate GuestOS from buffer");
+		goto err;
+	}
+	os_name = guestos_get_name(os);
+
 	switch (verify_result) {
 	case VERIFY_GOOD:
+		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "verify-good", os_name, 0);
 		INFO("Signature of GuestOS OK (GOOD)");
 		break;
 	case VERIFY_LOCALLY_SIGNED:
 		if (guestos_mgr_allow_locally_signed) {
+			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "verify-locally-signed",
+					os_name, 0);
 			INFO("Signature of GuestOS OK (locally signed)");
 			break;
 		}
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-locally-signed", os_name, 0);
 		// fallthrough
 	default:
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-failed", os_name, 0);
 		ERROR("Signature verification failed (%d) for pushed GuestOS config buffer, skipping.",
 		      verify_result);
 		goto err;
 	}
 
-	guestos_t *os = guestos_new_from_buffer(cfg_buf, cfg_buf_len, guestos_basepath);
-	if (!os) {
-		ERROR("Could not instantiate GuestOS from buffer");
-		goto err;
-	}
-
-	const char *os_name = guestos_get_name(os);
 	uint64_t os_ver = guestos_get_version(os);
 	bool cml_update = !strcmp(os_name, GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME);
 	const guestos_t *old_os = guestos_mgr_get_latest_by_name(os_name, false);
@@ -356,6 +392,16 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 		// existing os of same name => verify and update
 		uint64_t old_ver = guestos_get_version(old_os);
 		if (os_ver <= old_ver) {
+			char *installed_str = mem_printf(PRIu64, old_ver);
+			char *update_str = mem_printf(PRIu64, os_ver);
+
+			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-old-version",
+					os_name, 4, "installed_version", installed_str,
+					"update_version", update_str);
+
+			mem_free(installed_str);
+			mem_free(update_str);
+
 			WARN("Skipping update of GuestOS %s version %" PRIu64
 			     " to older/same version %" PRIu64 ".",
 			     os_name, old_ver, os_ver);
@@ -371,22 +417,30 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	// 1. create new guestos folder
 	const char *dir = guestos_get_dir(os);
 	if (mkdir(dir, 00755) < 0 && errno != EEXIST) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-prepare-dir",
+				guestos_basepath, 0);
 		ERROR_ERRNO("Could not mkdir GuestOS directory %s", dir);
 		goto cleanup_purge;
 	}
 
 	// 2. save pushed config, signature and cert
 	if (file_write(guestos_get_cfg_file(os), (char *)cfg_buf, cfg_buf_len) < 0) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-store-config",
+				guestos_basepath, 0);
 		ERROR_ERRNO("Failed to write GuestOS config from buffer to %s",
 			    guestos_get_cfg_file(os));
 		goto cleanup_purge;
 	}
 	if (file_write(guestos_get_sig_file(os), (char *)sig_buf, sig_buf_len) < 0) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-store-signature",
+				guestos_basepath, 0);
 		ERROR_ERRNO("Failed to write GuestOS config signature from buffer to %s",
 			    guestos_get_sig_file(os));
 		goto cleanup_purge;
 	}
 	if (file_write(guestos_get_cert_file(os), (char *)cert_buf, cert_buf_len) < 0) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-store-certificate",
+				guestos_basepath, 0);
 		ERROR_ERRNO("Failed to write GuestOS config certificate from buffer to %s",
 			    guestos_get_cert_file(os));
 		goto cleanup_purge;
@@ -394,6 +448,8 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 
 	// 3. register new os instance
 	guestos_list = list_append(guestos_list, os);
+
+	audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "push-os", guestos_basepath, 0);
 
 	//INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
 	//     cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD :
@@ -416,6 +472,8 @@ cleanup_purge:
 cleanup_os:
 	guestos_free(os);
 err:
+	audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "update-start", os_name, 0);
+
 	if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, *resp_fd) < 0)
 		WARN("Could not send response to fd=%d", *resp_fd);
 	mem_free(resp_fd);
@@ -431,7 +489,16 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 	int *cb_resp_fd = mem_new0(int, 1);
 	*cb_resp_fd = resp_fd;
 
-	if (cfg && sig && cert) {
+	if (!cfg) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-missing-config",
+				guestos_basepath, 0);
+	} else if (!sig) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-missing-signature",
+				guestos_basepath, 0);
+	} else if (!cert) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-missing-certificate",
+				guestos_basepath, 0);
+	} else {
 		res = smartcard_crypto_verify_buf(cfg, cfglen, sig, siglen, cert, certlen,
 						  GUESTOS_MGR_VERIFY_HASH_ALGO,
 						  push_config_verify_buf_cb, cb_resp_fd);
@@ -520,6 +587,8 @@ guestos_mgr_get_latest_by_name(const char *name, bool complete)
 			uint64_t version = guestos_get_version(os);
 			// TODO cache image complete result in guestos instance and get rid of check here?
 			if (complete && !guestos_images_are_complete(os, false)) {
+				audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "broken-update",
+						guestos_get_name(os), 0);
 				DEBUG("GuestOS %s v%" PRIu64
 				      " is incomplete (missing images) or broken, skipping.",
 				      guestos_get_name(os), version);

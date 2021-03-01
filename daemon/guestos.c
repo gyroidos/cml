@@ -29,6 +29,7 @@
 #include "cmld.h"
 #include "smartcard.h"
 #include "tss.h"
+#include "audit.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -687,6 +688,8 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 					      guestos_config_get_update_base_url(os->cfg) :
 					      cmld_get_device_update_base_url();
 	if (!update_base_url) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-no-base-url",
+				guestos_get_name(os), 0);
 		WARN("Cannot download images for GuestOS %s since no device update base URL"
 		     " was configured!",
 		     guestos_get_name(os));
@@ -695,12 +698,16 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 
 	if (strncmp(update_base_url, "file://", 7) && (!cmld_is_wifi_active()) &&
 	    (!guestos_config_get_update_base_url(os->cfg))) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-no-wifi",
+				guestos_get_name(os), 0);
 		INFO("Wifi is not active => not downloading images for guestos %s",
 		     guestos_get_name(os));
 		return os->downloading;
 	}
 	// prevent bad things from happening when calling this function while already downloading
 	if (os->downloading) {
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-already-in-progress",
+				guestos_get_name(os), 0);
 		DEBUG("Download for GuestOS %s v%" PRIu64 " already in progress, returning...",
 		      guestos_get_name(os), guestos_get_version(os));
 		return os->downloading;
@@ -710,6 +717,8 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 	if (!iterate_images_start(os, iterate_images_cb_download_check,
 				  (iterate_images_on_complete_cb_t){ .download_complete = cb },
 				  data)) {
+		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-nothing-to-download",
+				guestos_get_name(os), 0);
 		DEBUG("No images to download for GuestOS %s v%" PRIu64, guestos_get_name(os),
 		      guestos_get_version(os));
 		// notify caller

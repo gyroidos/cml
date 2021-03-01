@@ -1074,13 +1074,29 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			event_signal_free(sig);
 			/* cleanup and set states accordingly to notify observers */
 			container_cleanup(container, rebooting);
+
+			if (rebooting) {
+				audit_log_event(container_get_uuid(container), SSA, CMLD,
+						CONTAINER_MGMT, "reboot",
+						uuid_string(container_get_uuid(container)), 0);
+				container_set_state(container, CONTAINER_STATE_REBOOTING);
+			} else {
+				audit_log_event(container_get_uuid(container), SSA, CMLD,
+						CONTAINER_MGMT, "stop",
+						uuid_string(container_get_uuid(container)), 0);
+				container_set_state(container, CONTAINER_STATE_STOPPED);
+			}
 		} else if (pid == -1) {
-			if (errno == ECHILD)
+			if (errno == ECHILD) {
 				DEBUG("Process group of container %s terminated completely",
 				      container_get_description(container));
-			else
+			} else {
+				audit_log_event(container_get_uuid(container), FSA, CMLD,
+						CONTAINER_MGMT, "container-observer-error",
+						uuid_string(container_get_uuid(container)), 0);
 				WARN_ERRNO("waitpid failed for container %s",
 					   container_get_description(container));
+			}
 			break;
 		} else {
 			DEBUG("Reaped a child with PID %d for container %s", pid,
@@ -1658,6 +1674,8 @@ error_post_clone:
 
 error_pre_clone:
 	container_cleanup(container, false);
+	audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+			"error-preparing-container", uuid_string(container_get_uuid(container)), 0);
 	return ret;
 }
 
@@ -1718,6 +1736,8 @@ container_stop(container_t *container)
 		container_set_setup_mode(container, false);
 
 	/* set state to shutting down (notifies observers) */
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "shutting-down",
+			uuid_string(container_get_uuid(container)), 0);
 	container_set_state(container, CONTAINER_STATE_SHUTTING_DOWN);
 
 	/* call stop hooks for c_* modules */
@@ -1725,8 +1745,14 @@ container_stop(container_t *container)
 
 	if (c_service_stop(container->service) < 0) {
 		ret = CONTAINER_ERROR;
+
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"request-clean-shutdown",
+				uuid_string(container_get_uuid(container)), 0);
 		goto error_stop;
 	}
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+			"request-clean-shutdown", uuid_string(container_get_uuid(container)), 0);
 
 	// When the stop command was emitted, the TrustmeService tries to shut down the container
 	// i.g. to terminate the container's init process.
@@ -1739,6 +1765,8 @@ container_stop(container_t *container)
 error_stop:
 	DEBUG("Modules could not be stopped successfully, killing container.");
 	container_kill(container);
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "force-stop",
+			uuid_string(container_get_uuid(container)), 0);
 	return ret;
 }
 

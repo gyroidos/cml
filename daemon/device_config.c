@@ -55,7 +55,7 @@ device_config_new(const char *path)
 		DEBUG("Loading device config from \"%s\".", file);
 
 		cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
-			file, &device_config__descriptor, false);
+			file, &device_config__descriptor);
 		if (!cfg) {
 			WARN("Failed loading device config from file \"%s\". Reverting to default values.",
 			     file);
