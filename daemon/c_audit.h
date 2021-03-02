@@ -33,7 +33,7 @@ c_audit_t *
 c_audit_new(const container_t *container);
 
 int
-c_audit_start_child(c_audit_t *audit);
+c_audit_start_post_clone(c_audit_t *audit);
 
 const char *
 c_audit_get_last_ack(const c_audit_t *audit);

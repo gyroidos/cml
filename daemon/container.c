@@ -1170,11 +1170,6 @@ container_start_child(void *data)
 		goto error;
 	}
 
-	if (c_audit_start_child(container->audit) < 0) {
-		ret = CONTAINER_ERROR_AUDIT;
-		goto error;
-	}
-
 	if (c_user_start_child(container->user) < 0) {
 		ret = CONTAINER_ERROR_USER;
 		goto error;
@@ -1631,6 +1626,11 @@ container_start(container_t *container) //, const char *key)
 	/* POST CLONE HOOKS */
 	// execute all necessary c_<module>_start_post_clone hooks
 	// goto error_post_clone on an error
+
+	if (c_audit_start_post_clone(container->audit)) {
+		ret = CONTAINER_ERROR_AUDIT;
+		goto error_post_clone;
+	}
 
 	if (c_cgroups_start_post_clone(container->cgroups)) {
 		ret = CONTAINER_ERROR_CGROUPS;
