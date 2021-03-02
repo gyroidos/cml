@@ -51,19 +51,24 @@ struct c_audit {
 };
 
 int
-c_audit_start_child(c_audit_t *audit)
+c_audit_start_post_clone(c_audit_t *audit)
 {
-	if (!file_exists("/proc/self/audit_containerid"))
-		return 0;
+	char *aucontid_file =
+		mem_printf("/proc/%d/audit_containerid", container_get_pid(audit->container));
 
-	if (0 < file_printf("/proc/self/audit_containerid", "%llu",
-			    uuid_get_node(container_get_uuid(audit->container)))) {
-		ERROR("Failed to set audit container ID");
-		//TODO FIXME
-		//return -1;
+	int ret = 0;
+	if (!file_exists(aucontid_file)) {
+		goto out;
 	}
 
-	return 0;
+	if (0 > file_printf(aucontid_file, "%llu",
+			    uuid_get_node(container_get_uuid(audit->container)))) {
+		ERROR("Failed to set audit container ID");
+		ret = -1;
+	}
+out:
+	mem_free(aucontid_file);
+	return ret;
 }
 
 c_audit_t *
