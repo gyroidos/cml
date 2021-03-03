@@ -1255,6 +1255,11 @@ cmld_init(const char *path)
 	else
 		INFO("mounted debugfs");
 
+	if (audit_init() < 0)
+		WARN("Could not init audit module");
+	else
+		INFO("audit initialized.");
+
 #ifdef ANDROID
 	if (power_init() < 0)
 		FATAL("Could not init power module");
