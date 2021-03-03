@@ -36,9 +36,13 @@
 #include "common/dir.h"
 #include "common/file.h"
 #include "common/protobuf.h"
+#include "common/event.h"
+#include "common/fd.h"
+#include "common/nl.h"
 
 #include <string.h>
 #include <time.h>
+#include <linux/audit.h>
 #include <google/protobuf-c/protobuf-c-text.h>
 
 //TODO implement ACK mechanism fpr all service messages inside c-service.c?
@@ -655,5 +659,92 @@ audit_set_size(uint32_t size)
 {
 	AUDIT_STORAGE = size * 1024 * 1024;
 
+	return 0;
+}
+
+#ifndef NETLINK_AUDIT
+#define NETLINK_AUDIT 9
+#endif
+
+#define MAX_AUDIT_MESSAGE_LENGTH 8970
+#define AUDIT_FIRST_EVENT 1300
+#define AUDIT_INTEGRITY_LAST_MSG 1899
+
+static void
+audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, void *data)
+{
+	nl_sock_t *audit_sock = data;
+	ASSERT(audit_sock);
+	ASSERT(fd == nl_sock_get_fd(audit_sock));
+
+	char *buf = mem_new0(char, MAX_AUDIT_MESSAGE_LENGTH);
+	char *log_record = NULL;
+
+	int msg_len;
+	if ((msg_len = nl_msg_receive_kernel(audit_sock, buf, MAX_AUDIT_MESSAGE_LENGTH, false)) <=
+	    0) {
+		WARN("could not read audit meassge.");
+		goto err;
+	}
+
+	struct nlmsghdr *nlmsg = (struct nlmsghdr *)buf;
+	uint16_t type = nlmsg->nlmsg_type;
+
+	if (type == AUDIT_USER || type == AUDIT_LOGIN || type == AUDIT_KERNEL ||
+	    (type >= AUDIT_FIRST_USER_MSG && type <= AUDIT_LAST_USER_MSG) ||
+	    (type >= AUDIT_FIRST_USER_MSG2 && type <= AUDIT_LAST_USER_MSG2) ||
+	    (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
+		log_record = NLMSG_DATA(nlmsg);
+		INFO("audit: type=%d %s", type, log_record);
+	}
+err:
+	mem_free(buf);
+}
+
+static int
+audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len)
+{
+	int ret;
+	nl_msg_t *audit_msg = nl_msg_new();
+
+	IF_NULL_RETVAL(audit_msg, -1);
+
+	nl_msg_set_type(audit_msg, type);
+	nl_msg_set_flags(audit_msg, NLM_F_REQUEST | NLM_F_ACK);
+	nl_msg_set_buf_unaligned(audit_msg, (char *)data, len);
+
+	ret = nl_msg_send_kernel_verify(audit_sock, audit_msg);
+
+	nl_msg_free(audit_msg);
+	return ret;
+}
+
+int
+audit_init()
+{
+	/* Open audit netlink socket */
+	nl_sock_t *audit_sock;
+	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
+		ERROR("Failed to allocate audit netlink socket");
+		return -1;
+	}
+	/* Register cmld as auditd in kernel framwork */
+	struct audit_status s_pid = { .mask = AUDIT_STATUS_PID, .pid = getpid() };
+	if (-1 == audit_kernel_send(audit_sock, AUDIT_SET, &s_pid, sizeof(struct audit_status))) {
+		ERROR("Failed to set cmld as auditd in kernel!");
+		nl_sock_free(audit_sock);
+		return -1;
+	}
+
+	/* Register message handler for audit logs */
+	if (fd_make_non_blocking(nl_sock_get_fd(audit_sock))) {
+		ERROR("Could not set fd of audit netlink socket to non blocking!");
+		nl_sock_free(audit_sock);
+		return -1;
+	}
+
+	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
+						  &audit_kernel_handle_log, audit_sock);
+	event_add_io(audit_io_event);
 	return 0;
 }

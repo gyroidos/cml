@@ -53,4 +53,7 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 int
 audit_process_ack(const container_t *audit, const char *ack);
 
+int
+audit_init();
+
 #endif /* AUDIT_H */
