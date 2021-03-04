@@ -111,8 +111,11 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 
 	if (-1 == protobuf_send_message_packed(fd, buf, buflen)) {
 		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
+		mem_free(buf);
 		return -1;
 	}
+
+	mem_free(buf);
 
 	return buflen;
 }
