@@ -28,11 +28,15 @@
 #include "common/ns.h"
 #include "common/event.h"
 #include "common/proc.h"
+#include "common/file.h"
 
 #include <sys/capability.h>
 #include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/utsname.h>
+#include <unistd.h>
 
 #define C_CAP_DROP(cap)                                                                            \
 	do {                                                                                       \
@@ -152,8 +156,28 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 		exit(EXIT_FAILURE);
 	}
 
-	execvp(argv[0], argv);
-	ERROR_ERRNO("exec '%s' failed!", argv[0]);
+	if (strstr(argv[0], "ntpd")) {
+		char *env_ntp[] = { "LD_PRELOAD=/usr/lib/libuid_wrapper.so", "UID_WRAPPER=1",
+				    "UID_WRAPPER_ROOT=1", NULL };
+		if (!file_exists("/usr/lib/libc.so")) {
+			struct utsname uts_name;
+			if (uname(&uts_name))
+				WARN_ERRNO("Can't get utsname!");
+			char *multiarch_lib = mem_printf("/lib/%s-linux-gnu", uts_name.machine);
+			if (file_exists(multiarch_lib) &&
+			    symlink(multiarch_lib, "/usr/lib/libc.so"))
+				WARN_ERRNO("symlink of %s to libc.so failed!", multiarch_lib);
+			else if (file_exists("/lib/libc.so.6") &&
+				 symlink("/lib/libc.so.6", "/usr/lib/libc.so"))
+				WARN_ERRNO("symlink to libc.so failed!");
+			mem_free(multiarch_lib);
+		}
+		execve(argv[0], argv, env_ntp);
+		ERROR_ERRNO("exec with uid_wrapper of '%s' failed!", argv[0]);
+	} else {
+		execvp(argv[0], argv);
+		ERROR_ERRNO("exec '%s' failed!", argv[0]);
+	}
 	return -1;
 }
 
@@ -190,6 +214,17 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 
 	int pid = fork();
 	if (pid == 0) {
+		if (strstr(argv[0], "ntpd")) {
+			char *uid_wrapper_lib = mem_printf("%s/usr/lib/libuid_wrapper.so",
+							   container_get_rootdir(container));
+			if (-1 ==
+			    file_copy("/usr/lib/libuid_wrapper.so.0", uid_wrapper_lib, -1, 512, 0))
+				ERROR("Could not copy LD_PRELOAD lib '%s' for ntpd",
+				      uid_wrapper_lib);
+			if (chmod(uid_wrapper_lib, 0755))
+				WARN_ERRNO("Could not set %s executeable", uid_wrapper_lib);
+			mem_free(uid_wrapper_lib);
+		}
 		// join container namespace but maintain root user ns
 		if (ns_join_all(container_get_pid(container), false) < 0) {
 			ERROR("Could not join namesapces");
