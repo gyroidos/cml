@@ -1,0 +1,47 @@
+/*
+ * This file is part of trust|me
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ */
+
+syntax = "proto2";
+
+option java_package = "de.fraunhofer.aisec.trustme";
+
+message DeviceConfig {
+	reserved 2 to 4, 6, 7, 13 to 15, 17; // legacy or only available in non-CC Mode
+	// unique uuid. may change due to user change.
+	// may be generated if no uuid is available.
+	required string uuid = 1;
+
+	// base url for fetching updates (image files, etc.)
+	optional string update_base_url = 5;
+	// e.g. http://server:port/trustme/operatingsystems/<device>/<name>-<version>/<filename.img>
+
+	// configure network
+	optional string host_addr = 8 [default = ""];
+	optional uint32 host_subnet = 9 [default = 0];
+	optional string host_if = 10 [default = "wlan0"];
+	optional string host_gateway = 11 [default = ""];
+	optional string host_dns = 12 [default = ""];
+
+	// max size of audit log per logging sink in MB
+	optional uint64 audit_size = 16 [default = 0];
+}
