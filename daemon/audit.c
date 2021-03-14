@@ -381,6 +381,7 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 
 out:
 	mem_free(file);
+	mem_free(msg_text);
 
 	return ret;
 }
