@@ -202,6 +202,18 @@ cmld_container_get_by_devpath(const char *devpath)
 	return NULL;
 }
 
+#define UID_MAX 65535
+container_t *
+cmld_container_get_by_uid(int uid)
+{
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *c = l->data;
+		if ((uid >= container_get_uid(c)) && (uid < container_get_uid(c) + UID_MAX))
+			return c;
+	}
+	return NULL;
+}
+
 static bool
 cmld_containers_are_all_stopped(void)
 {
