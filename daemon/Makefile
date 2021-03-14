@@ -106,6 +106,7 @@ SRC_FILES := main.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
 	input.c \
+	common/audit.c \
 	audit.c \
 	c_audit.c
 
