@@ -67,8 +67,8 @@
 uint64_t AUDIT_STORAGE = 0;
 
 const char *evcategory[] = { "SUA", "FUA", "SSA", "FSA", "RLE" };
-const char *evclass[] = { "GUESTOS_MGMT", "TOKEN_MGMT", "CONTAINER_MGMT", "CONTAINER_ISOLATION",
-			  "TPM_COMM" };
+const char *evclass[] = { "GUESTOS_MGMT",	 "TOKEN_MGMT", "CONTAINER_MGMT",
+			  "CONTAINER_ISOLATION", "TPM_COMM",   "KAUDIT" };
 const char *component[] = { "CMLD", "SCD", "TPM2D" };
 const char *result[] = { "SUCCESS", "FAIL" };
 
@@ -560,12 +560,53 @@ audit_process_ack(const container_t *c, const char *ack)
 	return audit_send_next_stored(c);
 }
 
+static int
+audit_record_log(container_t *c, AuditRecord *record)
+{
+	int ret = 0;
+
+	IF_NULL_RETVAL(record, -1);
+
+	if (c) {
+		if (0 != (ret = audit_write_file(container_get_uuid(c), record))) {
+			ERROR("Failed to store audit log for container %s to file",
+			      uuid_string(container_get_uuid(c)));
+			goto out;
+		}
+	} else {
+		ERROR("No audit logging container available, will log to file %s",
+		      AUDIT_DEFAULT_CONTAINER);
+		uuid_t *default_uuid = uuid_new(AUDIT_DEFAULT_CONTAINER);
+		if (0 != (ret = audit_write_file(default_uuid, record))) {
+			ERROR("Failed to store audit log to file");
+			uuid_free(default_uuid);
+			goto out;
+		}
+		uuid_free(default_uuid);
+	}
+
+	if (c && (container_audit_get_processing_ack(c))) {
+		TRACE("Already processing ACK, do not notify container again");
+		goto out;
+	}
+
+	if (c && (CONTAINER_STATE_RUNNING == container_get_state(c))) {
+		bool processing_ack = container_audit_get_processing_ack(c);
+		if (!processing_ack &&
+		    (-1 == container_audit_record_notify(c, audit_remaining_storage(uuid_string(
+								    container_get_uuid(c)))))) {
+			ERROR("Failed to notify container about new audit record");
+		}
+	}
+out:
+	return ret;
+}
+
 int
 audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT component,
 		AUDIT_EVENTCLASS evclass, const char *evtype, const char *subject_id,
 		int meta_count, ...)
 {
-	container_t *c = NULL;
 	AuditRecord *record = NULL;
 	AuditRecord__Meta **metas = NULL;
 	int ret = 0;
@@ -608,44 +649,11 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		goto out;
 	}
 
-	DEBUG("Logging audit message %s",
-	      protobuf_c_text_to_string((ProtobufCMessage *)record, NULL) ?
-		      protobuf_c_text_to_string((ProtobufCMessage *)record, NULL) :
-		      "");
+	char *record_text = protobuf_c_text_to_string((ProtobufCMessage *)record, NULL);
+	DEBUG("Logging audit message %s", record_text ? record_text : "");
+	mem_free(record_text);
 
-	c = audit_get_log_container(uuid);
-
-	if (c) {
-		if (0 != (ret = audit_write_file(container_get_uuid(c), record))) {
-			ERROR("Failed to store audit log for container %s to file",
-			      uuid_string(container_get_uuid(c)));
-			goto out;
-		}
-	} else {
-		ERROR("No audit logging container available, will log to file %s",
-		      AUDIT_DEFAULT_CONTAINER);
-		uuid_t *default_uuid = uuid_new(AUDIT_DEFAULT_CONTAINER);
-		if (0 != (ret = audit_write_file(default_uuid, record))) {
-			ERROR("Failed to store audit log to file");
-			uuid_free(default_uuid);
-			goto out;
-		}
-		uuid_free(default_uuid);
-	}
-
-	if (c && (container_audit_get_processing_ack(c))) {
-		TRACE("Already processing ACK, do not notify container again");
-		goto out;
-	}
-
-	if (c && (CONTAINER_STATE_RUNNING == container_get_state(c))) {
-		bool processing_ack = container_audit_get_processing_ack(c);
-		if (!processing_ack &&
-		    (-1 == container_audit_record_notify(c, audit_remaining_storage(uuid_string(
-								    container_get_uuid(c)))))) {
-			ERROR("Failed to notify container about new audit record");
-		}
-	}
+	ret = audit_record_log(audit_get_log_container(uuid), record);
 
 out:
 	//if (record)
@@ -670,6 +678,7 @@ audit_set_size(uint32_t size)
 #define MAX_AUDIT_MESSAGE_LENGTH 8970
 #define AUDIT_FIRST_EVENT 1300
 #define AUDIT_INTEGRITY_LAST_MSG 1899
+#define AUDIT_TRUSTED_APP 1121 /* Trusted app msg - freestyle text */
 
 static void
 audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, void *data)
@@ -691,10 +700,41 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 	struct nlmsghdr *nlmsg = (struct nlmsghdr *)buf;
 	uint16_t type = nlmsg->nlmsg_type;
 
-	if (type == AUDIT_USER || type == AUDIT_LOGIN || type == AUDIT_KERNEL ||
-	    (type >= AUDIT_FIRST_USER_MSG && type <= AUDIT_LAST_USER_MSG) ||
-	    (type >= AUDIT_FIRST_USER_MSG2 && type <= AUDIT_LAST_USER_MSG2) ||
-	    (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
+	if (type == AUDIT_TRUSTED_APP) {
+		log_record = NLMSG_DATA(nlmsg);
+		int uid = -1;
+		int pid = -1;
+		sscanf(log_record, "%*s pid=%d uid=%d %*8970c", &pid, &uid);
+		TRACE("scanned pid=%d, uid=%d", pid, uid);
+		char *record_text = strstr(log_record, "msg='") + 5;
+		// remove closing ' char from msg string
+		int record_text_len = strlen(record_text) - 1;
+		AuditRecord *record = (AuditRecord *)protobuf_message_new_from_buf(
+			(uint8_t *)record_text, record_text_len, &audit_record__descriptor);
+		audit_record_log(cmld_container_get_by_uid(uid), record);
+		mem_free(record);
+		TRACE("audit: type=%d %s", type, log_record);
+	} else if (type == AUDIT_USER || type == AUDIT_LOGIN ||
+		   (type >= AUDIT_FIRST_USER_MSG && type <= AUDIT_LAST_USER_MSG) ||
+		   (type >= AUDIT_FIRST_USER_MSG2 && type <= AUDIT_LAST_USER_MSG2)) {
+		log_record = NLMSG_DATA(nlmsg);
+		int uid = -1;
+		int pid = -1;
+		char res[128];
+		char *record_msg = mem_new0(char, MAX_AUDIT_MESSAGE_LENGTH);
+		sscanf(log_record, "%*s pid=%d uid=%d %*s %*s msg='%[^']'", &pid, &uid, record_msg);
+		if (sscanf(record_msg, "%*[^'] res=%s'", res)) {
+			container_t *c = cmld_container_get_by_uid(uid);
+			c = c ? c : cmld_containers_get_a0();
+			char *record_type = mem_printf("type=%d", type);
+			audit_log_event(container_get_uuid(c), strcmp(res, "success") ? FSA : SSA,
+					CMLD, KAUDIT, record_type,
+					uuid_string(container_get_uuid(c)), 2, "msg", log_record);
+			mem_free(record_type);
+		}
+		INFO("audit: type=%d %s", type, log_record);
+	} else if (type == AUDIT_KERNEL ||
+		   (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
 		log_record = NLMSG_DATA(nlmsg);
 		INFO("audit: type=%d %s", type, log_record);
 	}
@@ -717,6 +757,84 @@ audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len)
 	ret = nl_msg_send_kernel_verify(audit_sock, audit_msg);
 
 	nl_msg_free(audit_msg);
+	return ret;
+}
+
+int
+audit_kernel_log_record(const AuditRecord *msg)
+{
+	int ret = 0;
+	char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
+
+	IF_NULL_RETVAL(msg_text, -1);
+
+	DEBUG("kernel log msg='%s'", msg_text);
+
+	/* Open audit netlink socket */
+	nl_sock_t *audit_sock;
+	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
+		ERROR("Failed to allocate audit netlink socket");
+		mem_free(msg_text);
+		return -1;
+	}
+	/* send msg to kernel framwork */
+	if (-1 ==
+	    audit_kernel_send(audit_sock, AUDIT_TRUSTED_APP, msg_text, strlen(msg_text) + 1)) {
+		ERROR("Failed to send log record to kernel!");
+		ret = -1;
+	}
+	/* Close netlink connection */
+	nl_sock_free(audit_sock);
+	mem_free(msg_text);
+	return ret;
+}
+
+int
+audit_kernel_log_event(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENTCLASS evclass,
+		       const char *evtype, const char *subject_id, int meta_count, ...)
+{
+	AuditRecord *record = NULL;
+	AuditRecord__Meta **metas = NULL;
+	int ret = 0;
+
+	if (0 < meta_count) {
+		if (0 != (meta_count % 2)) {
+			ERROR("Odd number of variadic arguments, aborting...");
+			return -1;
+		}
+
+		va_list ap;
+
+		va_start(ap, meta_count);
+
+		metas = mem_alloc0((meta_count / 2) * sizeof(AuditRecord__Meta *));
+		for (int i = 0; i < meta_count / 2; i++) {
+			metas[i] = mem_alloc0(sizeof(AuditRecord__Meta));
+
+			audit_record__meta__init(metas[i]);
+
+			metas[i]->key = mem_strdup(va_arg(ap, const char *));
+			metas[i]->value = mem_strdup(va_arg(ap, const char *));
+		}
+
+		va_end(ap);
+		meta_count /= 2;
+	}
+
+	record = audit_record_new(category, component, evclass, evtype, subject_id, meta_count,
+				  metas);
+
+	if (!record) {
+		ERROR("Failed to create audit record");
+		mem_free(metas);
+		goto out;
+	}
+
+	ret = audit_kernel_log_record(record);
+
+out:
+	protobuf_free_message((ProtobufCMessage *)record);
+
 	return ret;
 }
 
