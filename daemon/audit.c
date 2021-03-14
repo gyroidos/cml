@@ -215,7 +215,7 @@ audit_record_new(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENT
 				audit_evclass_to_string(evclass), evtype);
 	s->timestamp = time(NULL);
 
-	if (EFAULT == errno) {
+	if (s->timestamp == (time_t)-1 && EFAULT == errno) {
 		ERROR_ERRNO("Failed to get current time");
 		return NULL;
 	}
