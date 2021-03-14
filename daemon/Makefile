@@ -65,6 +65,7 @@ PROTO_SRC := \
 	scd.pb-c.c \
 	attestation.pb-c.c \
 	tpm2d.pb-c.c \
+	common/audit.pb-c.c \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
@@ -108,7 +109,7 @@ SRC_FILES := main.c \
 	audit.c \
 	c_audit.c
 
-protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto c_service.proto
+protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
 	protoc-c --c_out=. guestos.proto
