@@ -25,30 +25,11 @@
 #define AUDIT_H
 
 #include "container.h"
-
-typedef enum { CONTAINER, C0 } AUDIT_MODE;
-
-typedef enum { SUA, FUA, SSA, FSA, RLE } AUDIT_CATEGORY;
-
-typedef enum {
-	GUESTOS_MGMT,
-	TOKEN_MGMT,
-	CONTAINER_MGMT,
-	CONTAINER_ISOLATION,
-	TPM_COMM,
-	KAUDIT,
-} AUDIT_EVENTCLASS;
-
-typedef enum { COMMAND, INTERNAL, TOKEN, UPDATE } AUDIT_EVENTTYPE;
-
-typedef enum { CMLD, SCD, TPM2D } AUDIT_COMPONENT;
+#include "common/audit.h"
 
 int
 audit_set_size(uint32_t size);
 
-int
-audit_kernel_log_event(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENTCLASS evclass,
-		       const char *evtype, const char *subject_id, int meta_count, ...);
 int
 audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT component,
 		AUDIT_EVENTCLASS evclass, const char *evtype, const char *subject_id,

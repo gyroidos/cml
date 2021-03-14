@@ -77,6 +77,7 @@ OBJS_COMMON_FULL := \
 	proc.o \
 	loopdev.o \
 	audit.pb-c.o \
+	audit.o \
 
 libcommon: $(OBJS_COMMON)
 	ar rcs libcommon.a $^
