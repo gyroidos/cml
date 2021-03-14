@@ -54,7 +54,7 @@ endif
 all: libcommon
 
 .PHONY: protobuf
-protobuf: logf.pb-c.c
+protobuf: audit.pb-c.c logf.pb-c.c
 
 OBJS_COMMON := \
 	event.o \
@@ -75,7 +75,8 @@ OBJS_COMMON_FULL := \
 	sock.o \
 	network.o \
 	proc.o \
-	loopdev.o
+	loopdev.o \
+	audit.pb-c.o \
 
 libcommon: $(OBJS_COMMON)
 	ar rcs libcommon.a $^
@@ -86,6 +87,9 @@ libcommon_full: $(OBJS_COMMON_FULL)
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
 	
+audit.pb-c.c: audit.proto
+	protoc-c --c_out=. $<
+
 logf.pb-c.c: logf.proto
 	protoc-c --c_out=. $<
 

@@ -26,19 +26,7 @@ syntax = "proto2";
 option java_package = "de.fraunhofer.aisec.trustme.service";
 
 import "container.proto";
-
-message AuditRecord {
-	message Meta {
-		required string key = 1;
-		required string value = 2;
-	};
-
-	required int64 timestamp = 1;
-	required string type = 2;
-	optional string subject_id = 3;
-
-	repeated Meta meta = 4;
-}
+import "common/audit.proto";
 
 message CmldToServiceMessage {
 	enum Code {
