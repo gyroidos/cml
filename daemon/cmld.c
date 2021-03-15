@@ -1228,9 +1228,6 @@ cmld_init(const char *path)
 	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
 	device_config_t *device_config = device_config_new(device_path);
 
-	// set max audit log file size
-	audit_set_size(device_config_get_audit_size(device_config));
-
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);
 
@@ -1267,7 +1264,8 @@ cmld_init(const char *path)
 	else
 		INFO("mounted debugfs");
 
-	if (audit_init() < 0)
+	// init audit and set max audit log file size
+	if (audit_init(device_config_get_audit_size(device_config)) < 0)
 		WARN("Could not init audit module");
 	else
 		INFO("audit initialized.");

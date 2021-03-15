@@ -28,9 +28,6 @@
 #include "common/audit.h"
 
 int
-audit_set_size(uint32_t size);
-
-int
 audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT component,
 		AUDIT_EVENTCLASS evclass, const char *evtype, const char *subject_id,
 		int meta_count, ...);
@@ -39,6 +36,6 @@ int
 audit_process_ack(const container_t *audit, const char *ack);
 
 int
-audit_init();
+audit_init(uint32_t size);
 
 #endif /* AUDIT_H */
