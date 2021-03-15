@@ -83,10 +83,6 @@
 #define IPV4_DHCP_MASK "255.255.255.0"
 #endif
 
-// connection to adb in container
-#define ADB_INTERFACE_NAME "adb"
-#define ADB_DAEMON_PORT 5555
-
 // uplink interface for cmld inside of routing container (c0)
 #define CML_UPLINK_INTERFACE_NAME "cml"
 
@@ -111,7 +107,6 @@ typedef struct {
 /* Network structure with specific network settings */
 struct c_net {
 	container_t *container; //!< container which the c_net struct is associated to
-	uint16_t adb_port;	//!< forwarded port for adb in container
 	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container
@@ -506,15 +501,13 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
  * @return the c_net_t network structure which holds networking information for a container.
  */
 c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list,
-	  uint16_t adb_port)
+c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list)
 {
 	ASSERT(container);
 
 	c_net_t *net = mem_new0(c_net_t, 1);
 	net->container = container;
 	net->ns_net = net_ns;
-	net->adb_port = adb_port;
 
 	/* if the container does not have a network namespace, we don't execute any of this,
 	 * i.e. we always return at the start of the functions  */
@@ -577,40 +570,9 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 				list_append(net->interface_mv_name_list, if_name);
 	}
 
-	if (adb_port > 0) {
-		INFO("Generating debug veth %s", ADB_INTERFACE_NAME);
-		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-		if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
-			WARN_ERRNO("Failed to read from /dev/urandom");
-		}
-		mac[0] &= 0xfe; /* clear multicast bit */
-		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
-
-		c_net_interface_t *ni_adb = c_net_interface_new(ADB_INTERFACE_NAME, mac, true);
-		net->interface_list = list_append(net->interface_list, ni_adb);
-	}
-
 	TRACE("new c_net struct was allocated");
 
 	return net;
-}
-
-static int
-c_net_setup_port_forwarding(c_net_interface_t *ni, uint16_t srcport, uint16_t dstport, bool enable)
-{
-	ASSERT(ni);
-
-	int ret;
-
-	char *src_ip = mem_strdup(inet_ntoa(ni->ipv4_cmld_addr));
-	char *dst_ip = mem_strdup(inet_ntoa(ni->ipv4_cont_addr));
-
-	ret = network_setup_port_forwarding(src_ip, srcport, dst_ip, dstport, enable);
-
-	mem_free(dst_ip);
-	mem_free(src_ip);
-
-	return ret;
 }
 
 static int
@@ -1024,16 +986,9 @@ c_net_start_post_clone(c_net_t *net)
 					    hostns);
 
 			/* Setup firewall for container connectivity */
-			if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
-				if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT,
-								true))
-					FATAL_ERRNO("Could not setup port forwarding for %s!",
-						    ni->veth_cmld_name);
-			} else {
-				if (network_setup_masquerading(ni->subnet, true))
-					FATAL_ERRNO("Could not setup masquerading for %s!",
-						    ni->veth_cmld_name);
-			}
+			if (network_setup_masquerading(ni->subnet, true))
+				FATAL_ERRNO("Could not setup masquerading for %s!",
+					    ni->veth_cmld_name);
 #ifdef ANDROID
 			/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
 			if (ni->cont_offset > 0) {
@@ -1225,17 +1180,8 @@ c_net_cleanup_c0(c_net_t *net)
 				c_net_cleanup_interface(ni);
 				continue;
 			}
-			if (!strcmp(ni->nw_name, ADB_INTERFACE_NAME)) {
-				if (c_net_setup_port_forwarding(ni, net->adb_port, ADB_DAEMON_PORT,
-								false))
-					WARN("Failed to remove port forwarding from %" PRIu16
-					     " to %s:%" PRIu16,
-					     net->adb_port, inet_ntoa(ni->ipv4_cont_addr),
-					     ADB_DAEMON_PORT);
-			} else {
-				if (network_setup_masquerading(ni->subnet, false))
-					WARN("Failed to remove masquerading from %s", ni->subnet);
-			}
+			if (network_setup_masquerading(ni->subnet, false))
+				WARN("Failed to remove masquerading from %s", ni->subnet);
 
 			c_net_cleanup_interface(ni);
 		}

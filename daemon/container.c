@@ -105,9 +105,6 @@
 /* Timeout until a container to be stopped gets killed if not yet down */
 #define CONTAINER_STOP_TIMEOUT 45000
 
-// base port for local ports forwarded to adb in containers
-#define ADB_FWD_PORT_BASE 55550
-
 struct container {
 	container_state_t state;
 	container_state_t prev_state;
@@ -211,17 +208,6 @@ enum container_start_sync_msg {
 	CONTAINER_START_SYNC_MSG_ERROR,
 };
 
-static uint16_t
-container_get_next_adb_port(void)
-{
-#ifdef ANDROID
-	static uint16_t next_free_adb_port = ADB_FWD_PORT_BASE + 1;
-	return next_free_adb_port++;
-#else
-	return 0;
-#endif
-}
-
 void
 container_free_key(container_t *container)
 {
@@ -239,12 +225,11 @@ container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
 		       bool ns_net, bool privileged, const guestos_t *os,
 		       const char *config_filename, const char *images_dir, mount_t *mnt,
-		       unsigned int ram_limit, uint32_t color, uint16_t adb_port,
-		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
-		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
-		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
-		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
-		       bool usb_pin_entry)
+		       unsigned int ram_limit, uint32_t color, bool allow_autostart,
+		       list_t *feature_enabled, const char *dns_server, list_t *net_ifaces,
+		       char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
+		       list_t *usbdev_list, char **init_env, size_t init_env_len, list_t *fifo_list,
+		       container_token_type_t ttype, bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -345,7 +330,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		DEBUG("List element in net_ifaces: %s", if_name_macstr);
 	}
 
-	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list, adb_port);
+	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list);
 	if (!container->net) {
 		WARN("Could not initialize net subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
@@ -571,8 +556,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_type_t type = container_config_get_type(conf);
 
-	uint16_t adb_port = container_get_next_adb_port();
-
 	list_t *feature_enabled = container_config_get_feature_list_new(conf);
 
 	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
@@ -608,7 +591,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_t *c =
 		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
-				       images_dir, mnt, ram_limit, color, adb_port, allow_autostart,
+				       images_dir, mnt, ram_limit, color, allow_autostart,
 				       feature_enabled, dns_server, net_ifaces, allowed_devices,
 				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
 				       init_env_len, fifo_list, ttype, usb_pin_entry);
