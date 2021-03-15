@@ -699,7 +699,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 	}
-
+	DEBUG("[+] Checking if new image: c_vol_check_image(vol, %s)",img);
 	if (c_vol_check_image(vol, img) < 0) {
 		new_image = true;
 		if (c_vol_create_image(vol, img, mntent) < 0) {
@@ -744,7 +744,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			mem_free(crypt);
 			crypt = cryptfs_setup_volume_new(label, dev,
 							 container_get_key(vol->container));
-
+			new_image = true;
 			if (!crypt) {
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
 						CONTAINER_MGMT, "setup-crypted-volume",
@@ -767,7 +767,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 					ERROR("Formatting volume %s failed", crypt);
 					mem_free(label);
 					goto error;
+				}else
+				{
+					DEBUG("[+] Formating device worked");
 				}
+				
 			}
 		}
 
@@ -789,6 +793,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		char *lower_dev = NULL;
 		const char *mount_data = mount_entry_get_mount_data(mntent);
 
+		DEBUG("[+] Mounttype: %d", mount_entry_get_type(mntent));
 		switch (mount_entry_get_type(mntent)) {
 		case MOUNT_TYPE_OVERLAY_RW: {
 			upper_dev = dev;
