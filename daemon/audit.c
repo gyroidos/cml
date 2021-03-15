@@ -611,14 +611,6 @@ out:
 	return ret;
 }
 
-int
-audit_set_size(uint32_t size)
-{
-	AUDIT_STORAGE = size * 1024 * 1024;
-
-	return 0;
-}
-
 static void
 audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, void *data)
 {
@@ -682,8 +674,10 @@ err:
 }
 
 int
-audit_init()
+audit_init(uint32_t size)
 {
+	AUDIT_STORAGE = size * 1024 * 1024;
+
 	/* Open audit netlink socket */
 	nl_sock_t *audit_sock;
 	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
