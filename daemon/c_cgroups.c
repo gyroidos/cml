@@ -704,20 +704,23 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 		return 0;
 	}
 
+	int ret = -1;
+	char *limit_in_bytes_path = mem_printf("%s/memory/%s/memory.limit_in_bytes", CGROUPS_FOLDER,
+					       uuid_string(container_get_uuid(cgroups->container)));
+
 	INFO("Trying to set RAM limit of container %s to %d MBytes",
 	     container_get_description(cgroups->container),
 	     container_get_ram_limit(cgroups->container));
-	char *limit_in_bytes_path = mem_printf("%s/memory/%s/memory.limit_in_bytes", CGROUPS_FOLDER,
-					       uuid_string(container_get_uuid(cgroups->container)));
+
 	if (!file_exists(limit_in_bytes_path)) {
 		ERROR("%s file not found (cgroups or cgroups memory subsystem not mounted?)",
 		      limit_in_bytes_path);
-		return -1;
+		goto out;
 	}
 	if (file_printf(limit_in_bytes_path, "%dM", container_get_ram_limit(cgroups->container)) ==
 	    -1) {
 		ERROR("Could not write to cgroups RAM limit file in %s", limit_in_bytes_path);
-		return -1;
+		goto out;
 	}
 
 	// TODO normally we have to read the file again to check if the kernel set the RAM limit correctly
@@ -725,7 +728,10 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 	     container_get_description(cgroups->container),
 	     container_get_ram_limit(cgroups->container));
 
-	return 0;
+	ret = 0;
+out:
+	mem_free(limit_in_bytes_path);
+	return ret;
 }
 
 #ifndef _BSD_SOURCE
