@@ -114,6 +114,12 @@ container_config_get_ram_limit(const container_config_t *config);
 void
 container_config_set_ram_limit(container_config_t *config, unsigned int ram_limit);
 
+/**
+ * Get the configured cpus which are assigned to a container.
+ */
+const char *
+container_config_get_cpus_allowed(const container_config_t *config);
+
 void
 container_config_fill_mount(const container_config_t *config, mount_t *mnt);
 #if 0

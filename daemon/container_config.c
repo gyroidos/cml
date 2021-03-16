@@ -769,3 +769,11 @@ container_config_get_usb_pin_entry(const container_config_t *config)
 	ASSERT(config->cfg);
 	return config->cfg->usb_pin_entry;
 }
+
+const char *
+container_config_get_cpus_allowed(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->assign_cpus;
+}
