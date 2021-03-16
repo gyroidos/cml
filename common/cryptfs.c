@@ -204,11 +204,7 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 	//set tgt->next right behind dm_target_spec
 	tgt->next = integrity_params - mapping_buffer;
 
-	//print_io_struct(mapping_io);
-
 	for (mapping_counter = 0; mapping_counter < TABLE_LOAD_RETRIES; mapping_counter++) {
-		//DEBUG(" Executing: dm_ioctl(fd_mapper: %d, DM_TABLE_LOAD: %lu, mapping_io:%p)",fd_mapper, DM_TABLE_LOAD,(void *)mapping_io);
-
 		ioctl_ret = dm_ioctl(fd_mapper, DM_TABLE_LOAD, mapping_io);
 
 		if (ioctl_ret == 0) {
@@ -225,134 +221,6 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 	}
 	return mapping_counter + 1;
 }
-
-// This function is used for debugging purposes.
-// TODO: split into load_integrity_mapping_table and create_integrity_blk_dev once it is verified to
-// work properly
-// This function does:
-//		Create an integrity block device with IOCTL(DM_DEV_CREATE)
-//		Next load the mapping table of this device with IOCTL(DM_TABLE_LOAD)
-//		Lastly resume the device with IOCTL(DM_DEV_SUSPEND)
-//		Only then the crypto device can be mounted ontop of the integrity device
-//
-//	This general functionality is adapted from [1] and strace of the dmsetup setup
-//	When executing this functionality on its on (in a separate .c file), on a host system it works
-//	Verified by:
-//		user@host:~/$ sudo dmsetup ls --tree
-//            integrity_with_hash (253:6)
-//             └─ (7:3)
-//
-//	And:
-//      user@host:~/$ sudo dmsetup table
-//            integrity_with_hash: 0 327680 integrity 7:3 0 32 J 5 journal_sectors:3168 interleave_sectors:32768 buffer_sectors:128 journal_watermark:50 commit_time:10000 internal_hash:sha256
-//
-// -> The device gets created with the correct parameters and is mounted. Yet, this function within cryptfs.c, when executed within the VM
-// does return an error while ioctl(DM_TABLE_LOAD)
-// Algorithm modules and kernel configs were set according to [1]
-//
-// [1] https://wiki.gentoo.org/wiki/Device-mapper#Integrity
-// FIXME: currently ioctl with DM_TABLE_LOAD returns errno=22,
-//static int
-//cryptfs_configure_and_execute_integrity(const char *real_blk_name, const char *name,
-//					unsigned long fs_size)
-//{
-//	//general variables
-//	int fd_mapper;
-//	int ioctl_ret;
-//	int load_count = -1;
-//
-//	//create blk dev variables
-//	char create_buffer[DM_INTEGRITY_BUF_SIZE];
-//	struct dm_ioctl *create_io;
-//	int create_counter;
-//
-//	DEBUG("Configuring integrity block device");
-//
-//
-//	//open device mapper
-//	if ((fd_mapper = open(DEV_MAPPER, O_RDWR)) < 0) {
-//		ERROR("Cannot open device-mapper");
-//	}
-//
-//	//#########################################################################
-//	// Create blk device
-//	// ioctl(fd_mapper, DM_DEV_CREATE, io)
-//	DEBUG("Creating block device");
-//
-//	//initialize create_io struct
-//	create_io = (struct dm_ioctl *)create_buffer;
-//	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
-//
-//	for (create_counter = 0; create_counter < TABLE_LOAD_RETRIES; create_counter++) {
-//		ioctl_ret = dm_ioctl(fd_mapper,DM_DEV_CREATE, create_io);
-//		if (ioctl_ret != 0) {
-//			ERROR("Could not create block device: ioctl(DM_DEV_CREATE: '%lu'|int: %d ) ret: %d, errno: %d",
-//			      DM_DEV_CREATE, (int) DM_DEV_CREATE,ioctl_ret, errno);
-//		} else {
-//			DEBUG("Creating block device worked!");
-//			break;
-//		}
-//
-//		usleep(500000);
-//	}
-//
-//	if (create_counter >= TABLE_LOAD_RETRIES) {
-//		ERROR("Failed to create block device after %d tries", create_counter);
-//		goto errout;
-//	}
-//
-//	if (close(fd_mapper) < 0) {
-//		ERROR("Cannot close device-mapper");
-//	}
-//
-//	//#########################################################################
-//	DEBUG("Formating the Device");
-//	// Create 4kb NULL buffer
-//	char null_array[4096];
-//	memset(&null_array[0],0,4096);
-//
-//	// Format superblock
-//	int ret_val = file_write(real_blk_name,&null_array[0],4096);
-//	if(ret_val < 0)
-//	{
-//		ERROR_ERRNO("Could not write to file! Superblock not clear. Aborting");
-//		return -1;
-//	}
-//
-//
-//	//#########################################################################
-//	//Load Integrity map table
-//	// ioctl(fd_mapper, DM_TABLE_LOAD, io)
-//	DEBUG("Loading Integrity mapping table");
-//
-//	load_count = load_integrity_mapping_table(real_blk_name,name,fs_size);
-//	if ( load_count < 0 ) {
-//		ERROR_ERRNO("Error while loading mapping table");
-//		goto errout;
-//	}else {
-//		INFO("Loading integrity map took %d tries",load_count);
-//	}
-//
-//	//#########################################################################
-//	// Resume this device to activate it
-//	// ioctl(fd_mapper, DM_DEV_SUSPEND, io)
-//	DEBUG("Resuming the blk device");
-//	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
-//
-//	ioctl_ret = dm_ioctl(fd_mapper, DM_DEV_SUSPEND, create_io);
-//	if (ioctl_ret != 0) {
-//		ERROR_ERRNO("Cannot resume the dm-integrity device (ioctl ret: %d, errno:%d)",
-//			    ioctl_ret, errno);
-//		goto errout;
-//	}
-//
-//	//if the program ends here: everything worked
-//	return 0;
-//
-//errout:
-//	ERROR("Failed integrity block creation");
-//	return -1;
-//}
 
 static int
 load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name,
@@ -413,6 +281,29 @@ load_crypto_mapping_table(const char *real_blk_name, const char *master_key_asci
 	}
 }
 
+// This function does:
+//		Create an integrity block device with IOCTL(DM_DEV_CREATE)
+//		Next load the mapping table of this device with IOCTL(DM_TABLE_LOAD)
+//		Lastly resume the device with IOCTL(DM_DEV_SUSPEND)
+//		Only then the crypto device can be mounted ontop of the integrity device
+//
+//	This general functionality is adapted from [1,2] and strace of the dmsetup setup
+//	When executing this functionality on its on (in a separate .c file), on a host system it works
+//	Verified by:
+//		user@host:~/$ dmsetup ls --tree
+//			00000000-0000-0000-0000-000000000000-etc (252:1)
+//			 └─00000000-0000-0000-0000-000000000000-etc-integrity (252:0)
+//			    └─ (7:3)
+
+//
+//	And:
+//      user@host:~/$ sudo dmsetup table
+//            dmsetup table
+//				0[...]0-etc-integrity: 0 1677721 integrity 7:3 0 32 J 5 journal_sectors:16368 interleave_sectors:32768 buffer_sectors:128 journal_watermark:50 commit_time:10000
+//				0[...]0-etc: 0 1677721 crypt capi:aegis128-random 00000000000000000000000000000000 0 252:0 0 1 integrity:32:aead
+//
+// [1] https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/dm-integrity.html
+// [2] https://wiki.gentoo.org/wiki/Device-mapper#Integrity
 static int
 create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsigned long fs_size)
 {
@@ -428,9 +319,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 		ERROR("Cannot open device-mapper");
 	}
 
-	//#########################################################################
 	// Create blk device
-
 	//initialize create_io struct
 	create_io = (struct dm_ioctl *)create_buffer;
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
@@ -457,7 +346,6 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 		ERROR("Cannot close device-mapper");
 	}
 
-	//#########################################################################
 	// Format superblock of the device as needed by dmintegrity
 	DEBUG("Formating the Device");
 	// Create 4kb NULL buffer
@@ -471,7 +359,6 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 		return -1;
 	}
 
-	//#########################################################################
 	//Load Integrity map table
 	DEBUG("Loading Integrity mapping table");
 
@@ -483,7 +370,6 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 		INFO("Loading integrity map took %d tries", load_count);
 	}
 
-	//#########################################################################
 	// Resume this device to activate it
 	DEBUG("Resuming the blk device");
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
@@ -699,13 +585,12 @@ get_provided_data_sectors(const char *real_blk_name)
 
 errout:
 	DEBUG("Returning: provided_data_sectors= %ld",provided_data_sectors);
-	DEBUG("[+++++++] get_provided_data_sectors done");
 	close(fd);
 	return provided_data_sectors;
 }
 */
-//TODO: get number of data sectors available from superblock
 
+//TODO: get number of data sectors available from superblock
 static unsigned long
 get_provided_data_sectors(const char *real_blk_name)
 {
