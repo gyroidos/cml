@@ -217,14 +217,13 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 		}
 		usleep(500000);
 	}
-	
 
 	// check that loading the table worked
 	if (mapping_counter >= TABLE_LOAD_RETRIES) {
 		ERROR("Loading Mapping Table did not work after %d tries", mapping_counter);
 		return -1;
 	}
-	return mapping_counter+1;
+	return mapping_counter + 1;
 }
 
 // This function is used for debugging purposes.
@@ -268,7 +267,7 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 //	int create_counter;
 //
 //	DEBUG("Configuring integrity block device");
-//	
+//
 //
 //	//open device mapper
 //	if ((fd_mapper = open(DEV_MAPPER, O_RDWR)) < 0) {
@@ -311,7 +310,7 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 //	// Create 4kb NULL buffer
 //	char null_array[4096];
 //	memset(&null_array[0],0,4096);
-//	
+//
 //	// Format superblock
 //	int ret_val = file_write(real_blk_name,&null_array[0],4096);
 //	if(ret_val < 0)
@@ -354,7 +353,6 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 //	ERROR("Failed integrity block creation");
 //	return -1;
 //}
-
 
 static int
 load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name,
@@ -423,7 +421,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	int load_count = -1;
 	char create_buffer[DM_INTEGRITY_BUF_SIZE];
 	struct dm_ioctl *create_io;
-	int create_counter;	
+	int create_counter;
 
 	//open device mapper
 	if ((fd_mapper = open(DEV_MAPPER, O_RDWR)) < 0) {
@@ -438,10 +436,10 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
 
 	for (create_counter = 0; create_counter < TABLE_LOAD_RETRIES; create_counter++) {
-		ioctl_ret = dm_ioctl(fd_mapper,DM_DEV_CREATE, create_io);
+		ioctl_ret = dm_ioctl(fd_mapper, DM_DEV_CREATE, create_io);
 		if (ioctl_ret != 0) {
 			ERROR("Could not create block device: ioctl(DM_DEV_CREATE: '%lu'|int: %d ) ret: %d, errno: %d",
-			      DM_DEV_CREATE, (int) DM_DEV_CREATE,ioctl_ret, errno);
+			      DM_DEV_CREATE, (int)DM_DEV_CREATE, ioctl_ret, errno);
 		} else {
 			DEBUG("Creating block device worked!");
 			break;
@@ -464,27 +462,25 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	DEBUG("Formating the Device");
 	// Create 4kb NULL buffer
 	char null_array[4096];
-	memset(&null_array[0],0,4096);
-	
+	memset(&null_array[0], 0, 4096);
+
 	// Format superblock
-	int ret_val = file_write(real_blk_name,&null_array[0],4096);
-	if(ret_val < 0)
-	{
+	int ret_val = file_write(real_blk_name, &null_array[0], 4096);
+	if (ret_val < 0) {
 		ERROR_ERRNO("Could not write to file! Superblock not clear. Aborting");
 		return -1;
 	}
-
 
 	//#########################################################################
 	//Load Integrity map table
 	DEBUG("Loading Integrity mapping table");
 
-	load_count = load_integrity_mapping_table(real_blk_name,name,fs_size);
-	if ( load_count < 0 ) {
+	load_count = load_integrity_mapping_table(real_blk_name, name, fs_size);
+	if (load_count < 0) {
 		ERROR_ERRNO("Error while loading mapping table");
 		goto errout;
-	}else {
-		INFO("Loading integrity map took %d tries",load_count);
+	} else {
+		INFO("Loading integrity map took %d tries", load_count);
 	}
 
 	//#########################################################################
@@ -531,8 +527,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	if (fs_size == 0) {
 		ERROR("Cannot get size of volume %s", real_blk_name);
 		return -1;
-	}else
-	{
+	} else {
 		DEBUG("Crypto blk device size: %lu", fs_size);
 	}
 
@@ -742,23 +737,20 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		return NULL;
 	}
 
-	if (create_integrity_blk_dev(real_blkdev, integrity_dev_label, fs_size) < 0)
-	{
+	if (create_integrity_blk_dev(real_blkdev, integrity_dev_label, fs_size) < 0) {
 		DEBUG("create_integrity_blk_dev failed!");
 		return NULL;
 	}
-	
+
 	char *integrity_dev = create_device_node(integrity_dev_label);
 	mem_free(integrity_dev_label);
 	if (!integrity_dev) {
 		ERROR_ERRNO("Could not create device node");
 		return NULL;
-	}else
-	{
+	} else {
 		DEBUG("Successfully created device node");
 	}
-	
-		
+
 	/* Use only the first 32 hex digits of master key for 128 bit aead modes */
 	char aead_key[33];
 	snprintf(aead_key, 33, "%s", key);
@@ -767,7 +759,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		ERROR_ERRNO("Could not create crypto block device");
 		return NULL;
 	}
-		
+
 	return create_device_node(label);
 }
 
