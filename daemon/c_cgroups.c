@@ -734,6 +734,99 @@ out:
 	return ret;
 }
 
+static int
+c_cgroups_set_cpu_exclusive(const c_cgroups_t *cgroups, char *path)
+{
+	ASSERT(cgroups);
+
+	IF_NULL_RETVAL(path, -1);
+
+	int ret = -1;
+	char *cpuset_cpu_exclusive_path = mem_printf("%s/cpuset.cpu_exclusive", path);
+	char *cpuset_cpu_exclusive = file_read_new(cpuset_cpu_exclusive_path, 2);
+
+	if (!file_exists(cpuset_cpu_exclusive_path)) {
+		ERROR("%s file not found (cgroups or cgroups cpuset subsystem not mounted?)",
+		      cpuset_cpu_exclusive_path);
+		goto out;
+	}
+
+	INFO("cgroups cpuset file %s = '%s'", cpuset_cpu_exclusive_path, cpuset_cpu_exclusive);
+	if (cpuset_cpu_exclusive && cpuset_cpu_exclusive[0] == '1') {
+		if (file_printf(cpuset_cpu_exclusive_path, "1") == -1) {
+			ERROR("Could not write to cgroups cpuset file in %s",
+			      cpuset_cpu_exclusive_path);
+			goto out;
+		}
+	}
+
+	if (file_printf(cpuset_cpu_exclusive_path, "1") == -1) {
+		ERROR("Could not write to cgroups cpuset file in %s", cpuset_cpu_exclusive_path);
+		goto out;
+	}
+	ret = 0;
+out:
+	mem_free(cpuset_cpu_exclusive);
+	mem_free(cpuset_cpu_exclusive_path);
+	return ret;
+}
+
+/**
+ * This functions gets the allowed cpus for the container from its associated container
+ * object and configures the cgroups cpuset subsystem to restrict access to that cpus.
+ */
+static int
+c_cgroups_set_cpus_allowed(const c_cgroups_t *cgroups, char *path)
+{
+	ASSERT(cgroups);
+
+	if (NULL == container_get_cpus_allowed(cgroups->container)) {
+		INFO("Setting no CPU restrictions for container %s",
+		     container_get_description(cgroups->container));
+		return 0;
+	}
+
+	IF_NULL_RETVAL(path, -1);
+
+	int ret = -1;
+	char *cpuset_cpus_path = mem_printf("%s/cpuset.cpus", path);
+	char *cpuset_mems_path = mem_printf("%s/cpuset.mems", path);
+
+	if (!file_exists(cpuset_cpus_path)) {
+		ERROR("%s file not found (cgroups or cgroups cpuset subsystem not mounted?)",
+		      cpuset_cpus_path);
+		goto out;
+	}
+	if (file_printf(cpuset_cpus_path, "%s", container_get_cpus_allowed(cgroups->container)) ==
+	    -1) {
+		ERROR("Could not write to cgroups cpuset file in %s", cpuset_cpus_path);
+		goto out;
+	}
+
+	if (!file_exists(cpuset_mems_path)) {
+		ERROR("%s file not found (cgroups or cgroups cpuset subsystem not mounted?)",
+		      cpuset_mems_path);
+		goto out;
+	}
+	if (file_printf(cpuset_mems_path, "0") == -1) {
+		ERROR("Could not write to cgroups cpuset file in %s", cpuset_mems_path);
+		goto out;
+	}
+
+	IF_TRUE_GOTO(c_cgroups_set_cpu_exclusive(cgroups, path) == -1, out);
+
+	INFO("Successfully set CPU restriction of container %s to cores %s",
+	     container_get_description(cgroups->container),
+	     container_get_cpus_allowed(cgroups->container));
+
+	ret = 0;
+out:
+	mem_free(cpuset_cpus_path);
+	mem_free(cpuset_mems_path);
+
+	return ret;
+}
+
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE /* See feature_test_macros(7) */
 #endif
@@ -1026,6 +1119,14 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 			mem_free(subsys_path);
 			goto error;
 		}
+		/* initialize cpuset child subsystem to limit access to allowed cpus */
+		if (!strcmp(subsys, "cpuset")) {
+			if (c_cgroups_set_cpus_allowed(cgroups, subsys_path) < 0) {
+				ERROR("Could not configure cgroup to restrict cpus of container %s",
+				      container_get_description(cgroups->container));
+				goto error;
+			}
+		}
 		mem_free(subsys_path);
 	}
 
@@ -1102,6 +1203,15 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 			goto error;
 		}
 
+		/* initialize cpuset child subsystem to limit access to allowed cpus */
+		if (!strcmp(subsys, "cpuset")) {
+			if (c_cgroups_set_cpus_allowed(cgroups, subsys_child_path) < 0) {
+				ERROR("Could not configure child cgroup to restrict cpus of container %s",
+				      container_get_description(cgroups->container));
+				goto error;
+			}
+		}
+
 		if (container_shift_ids(cgroups->container, subsys_child_path, false)) {
 			ERROR("Could not shift ids of cgroup subsys for userns");
 			mem_free(cgroup_tasks);
@@ -1122,7 +1232,6 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
-
 	return 0;
 error:
 	// remove temporarily added head
