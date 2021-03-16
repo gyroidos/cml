@@ -699,7 +699,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 	}
-	DEBUG("[+] Checking if new image: c_vol_check_image(vol, %s)",img);
 	if (c_vol_check_image(vol, img) < 0) {
 		new_image = true;
 		if (c_vol_create_image(vol, img, mntent) < 0) {
@@ -753,9 +752,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
 				mem_free(label);
 				goto error;
-			}else
-			{
-				DEBUG("Cryptfs_setup_volume_new returned: '%s'",crypt);
 			}
 			audit_log_event(container_get_uuid(vol->container), SSA, CMLD,
 					CONTAINER_MGMT, "setup-crypted-volume",
@@ -781,7 +777,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		char *lower_dev = NULL;
 		const char *mount_data = mount_entry_get_mount_data(mntent);
 
-		DEBUG("[+] Mounttype: %d", mount_entry_get_type(mntent));
 		switch (mount_entry_get_type(mntent)) {
 		case MOUNT_TYPE_OVERLAY_RW: {
 			upper_dev = dev;
@@ -791,7 +786,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 					ERROR("Could not format image %s using %s", img, dev);
 					goto error;
 				}
-				DEBUG("Successfully formatted new image %s using %s", img, dev);
 			}
 			if (!strcmp("btrfs", upper_fstype) &&
 			    !strncmp("subvol", mount_entry_get_mount_data(mntent), 6)) {
