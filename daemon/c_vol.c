@@ -744,7 +744,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			mem_free(crypt);
 			crypt = cryptfs_setup_volume_new(label, dev,
 							 container_get_key(vol->container));
-			new_image = true;
+			
 			if (!crypt) {
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
 						CONTAINER_MGMT, "setup-crypted-volume",
@@ -761,18 +761,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 					CONTAINER_MGMT, "setup-crypted-volume",
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
 					label);
-					
-			if (new_image) {
-				if (cryptfs_format_volume(crypt) < 0) {
-					ERROR("Formatting volume %s failed", crypt);
-					mem_free(label);
-					goto error;
-				}else
-				{
-					DEBUG("[+] Formating device worked");
-				}
-				
-			}
 		}
 
 		mem_free(label);
