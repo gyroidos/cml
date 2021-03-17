@@ -38,42 +38,14 @@
 
 #include <google/protobuf-c/protobuf-c-text.h>
 
-const char *evcategory[] = { "SUA", "FUA", "SSA", "FSA", "RLE" };
-const char *evclass[] = { "GUESTOS_MGMT",	 "TOKEN_MGMT", "CONTAINER_MGMT",
-			  "CONTAINER_ISOLATION", "TPM_COMM",   "KAUDIT" };
-const char *component[] = { "CMLD", "SCD", "TPM2D" };
-const char *result[] = { "SUCCESS", "FAIL" };
-
-static const char *
-audit_category_to_string(AUDIT_CATEGORY c)
-{
-	return evcategory[c];
-}
-
-static const char *
-audit_evclass_to_string(AUDIT_EVENTCLASS c)
-{
-	return evclass[c];
-}
-
-static const char *
-audit_component_to_string(AUDIT_COMPONENT c)
-{
-	return component[c];
-}
-
 AuditRecord *
-audit_record_new(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENTCLASS evclass,
-		 const char *evtype, const char *subject_id, int meta_length,
+audit_record_new(const char *type, const char *subject_id, int meta_length,
 		 AuditRecord__Meta **metas)
 {
 	AuditRecord *s = mem_new0(AuditRecord, 1);
 
 	audit_record__init(s);
 
-	char *type = mem_printf("%s.%s.%s.%s", audit_category_to_string(category),
-				audit_component_to_string(component),
-				audit_evclass_to_string(evclass), evtype);
 	s->timestamp = time(NULL);
 
 	if (s->timestamp == (time_t)-1 && EFAULT == errno) {
@@ -81,7 +53,7 @@ audit_record_new(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENT
 		return NULL;
 	}
 
-	s->type = type;
+	s->type = mem_strdup(type);
 
 	if (subject_id)
 		s->subject_id = mem_strdup(subject_id);
@@ -140,8 +112,7 @@ audit_kernel_log_record(const AuditRecord *msg)
 }
 
 int
-audit_kernel_log_event(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENTCLASS evclass,
-		       const char *evtype, const char *subject_id, int meta_count, ...)
+audit_kernel_log_event(const char *type, const char *subject_id, int meta_count, ...)
 {
 	AuditRecord *record = NULL;
 	AuditRecord__Meta **metas = NULL;
@@ -171,8 +142,7 @@ audit_kernel_log_event(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT
 		meta_count /= 2;
 	}
 
-	record = audit_record_new(category, component, evclass, evtype, subject_id, meta_count,
-				  metas);
+	record = audit_record_new(type, subject_id, meta_count, metas);
 
 	if (!record) {
 		ERROR("Failed to create audit record");

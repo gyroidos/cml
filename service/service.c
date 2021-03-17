@@ -38,6 +38,7 @@
 #include "common/fd.h"
 #include "common/dir.h"
 #include "common/str.h"
+#include "common/audit.h"
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -249,6 +250,10 @@ static void
 service_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *data)
 {
 	DEBUG("Received message from cmld");
+	int kernlog =
+		audit_kernel_log_event("SSA.CONTAINER.SERVICE.recv_cmld_message", "theservice", 0);
+	ERROR("kernel audit log attempt returned %d", kernlog);
+
 	static bool awaiting_record = false;
 
 	uint8_t *buf = NULL;

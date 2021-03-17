@@ -27,6 +27,21 @@
 #include "container.h"
 #include "common/audit.h"
 
+typedef enum { SUA, FUA, SSA, FSA, RLE } AUDIT_CATEGORY;
+
+typedef enum {
+	GUESTOS_MGMT,
+	TOKEN_MGMT,
+	CONTAINER_MGMT,
+	CONTAINER_ISOLATION,
+	TPM_COMM,
+	KAUDIT,
+} AUDIT_EVENTCLASS;
+
+typedef enum { COMMAND, INTERNAL, TOKEN, UPDATE } AUDIT_EVENTTYPE;
+
+typedef enum { CMLD, SCD, TPM2D } AUDIT_COMPONENT;
+
 int
 audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT component,
 		AUDIT_EVENTCLASS evclass, const char *evtype, const char *subject_id,
