@@ -527,7 +527,14 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 	list_t *net_ifaces_list = NULL;
 	for (size_t i = 0; i < config->cfg->n_net_ifaces; i++) {
 		net_ifaces_list =
-			list_append(net_ifaces_list, mem_strdup(config->cfg->net_ifaces[i]));
+			list_append(net_ifaces_list, mem_strdup(config->cfg->net_ifaces[i]->netif));
+		for (size_t i = 0; i < config->cfg->net_ifaces[i]->n_mac_filter; i++) {
+			INFO("MAC Filter on for %s: allow '%s'", config->cfg->net_ifaces[i]->netif,
+			     config->cfg->net_ifaces[i]->mac_filter[i]);
+		}
+		if (config->cfg->net_ifaces[i]->n_mac_filter <= 0)
+			INFO("MAC Filter off for %s: allow any MAC",
+			     config->cfg->net_ifaces[i]->netif);
 	}
 	return net_ifaces_list;
 }
@@ -609,19 +616,30 @@ container_config_append_net_ifaces(const container_config_t *config, const char 
 	ASSERT(config->cfg);
 
 	size_t n = config->cfg->n_net_ifaces++;
-	char **old_net_ifaces = config->cfg->net_ifaces;
+	ContainerPnetConfig **old_net_ifaces = config->cfg->net_ifaces;
 
 	size_t total_len = ADD_WITH_OVERFLOW_CHECK(n, (size_t)1);
-	config->cfg->net_ifaces = mem_new0(char *, total_len);
+	config->cfg->net_ifaces = mem_new(ContainerPnetConfig *, total_len);
 
 	for (size_t i = 0; i < n; i++) {
-		config->cfg->net_ifaces[i] = mem_strdup(old_net_ifaces[i]);
-		mem_free(old_net_ifaces[i]);
+		ContainerPnetConfig *pnet_iface = mem_new(ContainerPnetConfig, 1);
+		container_pnet_config__init(pnet_iface);
+		pnet_iface->netif = mem_strdup(old_net_ifaces[i]->netif);
+		pnet_iface->n_mac_filter = old_net_ifaces[i]->n_mac_filter;
+		for (size_t j = 0; j < pnet_iface->n_mac_filter; j++) {
+			pnet_iface->mac_filter[j] = mem_strdup(old_net_ifaces[i]->mac_filter[j]);
+		}
+		protobuf_free_message((ProtobufCMessage *)old_net_ifaces[i]);
+		config->cfg->net_ifaces[i] = pnet_iface;
 	}
 	if (n > 0)
 		mem_free(old_net_ifaces);
 
-	config->cfg->net_ifaces[n] = mem_strdup(iface);
+	ContainerPnetConfig *pnet_iface = mem_new(ContainerPnetConfig, 1);
+	container_pnet_config__init(pnet_iface);
+	pnet_iface->netif = mem_strdup(iface);
+	pnet_iface->n_mac_filter = 0;
+	config->cfg->net_ifaces[n] = pnet_iface;
 }
 
 void
@@ -632,23 +650,31 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 
 	int n = config->cfg->n_net_ifaces;
 	int nremove = 0;
-	char **old_net_ifaces = config->cfg->net_ifaces;
+	ContainerPnetConfig **old_net_ifaces = config->cfg->net_ifaces;
 
 	for (int i = 0; i < n; i++) {
-		if (!strcmp(iface, old_net_ifaces[i]))
+		if (!strcmp(iface, old_net_ifaces[i]->netif))
 			nremove++;
 	}
 	if (nremove == 0)
 		return;
 
-	config->cfg->net_ifaces = mem_new0(char *, n - nremove);
+	config->cfg->net_ifaces = mem_new0(ContainerPnetConfig *, n - nremove);
 	config->cfg->n_net_ifaces = n - nremove;
 
 	for (int i = 0, j = 0; i < n; i++) {
-		if (strcmp(iface, old_net_ifaces[i])) {
-			config->cfg->net_ifaces[j++] = mem_strdup(old_net_ifaces[i]);
+		if (strcmp(iface, old_net_ifaces[i]->netif)) {
+			ContainerPnetConfig *pnet_iface = mem_new(ContainerPnetConfig, 1);
+			container_pnet_config__init(pnet_iface);
+			pnet_iface->netif = mem_strdup(old_net_ifaces[i]->netif);
+			pnet_iface->n_mac_filter = old_net_ifaces[i]->n_mac_filter;
+			for (size_t k = 0; k < pnet_iface->n_mac_filter; k++) {
+				pnet_iface->mac_filter[k] =
+					mem_strdup(old_net_ifaces[i]->mac_filter[k]);
+			}
+			config->cfg->net_ifaces[j++] = pnet_iface;
 		}
-		mem_free(old_net_ifaces[i]);
+		protobuf_free_message((ProtobufCMessage *)old_net_ifaces[i]);
 	}
 	mem_free(old_net_ifaces);
 }
