@@ -76,7 +76,7 @@ audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len)
 	nl_msg_set_flags(audit_msg, NLM_F_REQUEST | NLM_F_ACK);
 	nl_msg_set_buf_unaligned(audit_msg, (char *)data, len);
 
-	ret = nl_msg_send_kernel_verify(audit_sock, audit_msg);
+	ret = nl_msg_send_kernel(audit_sock, audit_msg);
 
 	nl_msg_free(audit_msg);
 	return ret;
@@ -151,6 +151,8 @@ audit_kernel_log_event(const char *type, const char *subject_id, int meta_count,
 	}
 
 	ret = audit_kernel_log_record(record);
+
+	TRACE("Logged record to kernel audit buffer");
 
 out:
 	protobuf_free_message((ProtobufCMessage *)record);

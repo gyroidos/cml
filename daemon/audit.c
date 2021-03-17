@@ -706,6 +706,8 @@ audit_init(uint32_t size)
 {
 	AUDIT_STORAGE = size * 1024 * 1024;
 
+	TRACE("Initializing audit subsystem");
+
 	/* Open audit netlink socket */
 	nl_sock_t *audit_sock;
 	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
@@ -720,6 +722,10 @@ audit_init(uint32_t size)
 		return -1;
 	}
 
+	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
+						  &audit_kernel_handle_log, audit_sock);
+	event_add_io(audit_io_event);
+
 	/* Register message handler for audit logs */
 	if (fd_make_non_blocking(nl_sock_get_fd(audit_sock))) {
 		ERROR("Could not set fd of audit netlink socket to non blocking!");
@@ -727,8 +733,5 @@ audit_init(uint32_t size)
 		return -1;
 	}
 
-	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
-						  &audit_kernel_handle_log, audit_sock);
-	event_add_io(audit_io_event);
 	return 0;
 }
