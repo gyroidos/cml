@@ -343,19 +343,6 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 		ERROR_ERRNO("Cannot close device-mapper");
 	}
 
-	// Format superblock of the device as needed by dmintegrity
-	DEBUG("Formating the Device");
-	// Create 4kb NULL buffer
-	char null_array[4096];
-	memset(&null_array[0], 0, 4096);
-
-	// Format superblock
-	int ret_val = file_write(real_blk_name, &null_array[0], 4096);
-	if (ret_val < 0) {
-		ERROR_ERRNO("Could not write to file! Superblock not clear. Aborting");
-		return -1;
-	}
-
 	// Load Integrity map table
 	DEBUG("Loading Integrity mapping table");
 
