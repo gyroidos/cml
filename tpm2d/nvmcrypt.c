@@ -226,7 +226,7 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 
 	INFO("Setting up crypto device mapping for %s to %s", device_path, dev_name);
 
-	char *mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key);
+	char *mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key, false);
 
 	if (mapped_path == NULL) {
 		ERROR("Failed to setup device mapping for %s", device_path);

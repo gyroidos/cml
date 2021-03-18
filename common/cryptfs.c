@@ -57,6 +57,7 @@
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
 #define CRYPTO_TYPE "capi:aegis128-random"
+#define CRYPTO_TYPE_LEGACY "aes-xts-plain64"
 
 /* taken from vold */
 #define DEVMAPPER_BUFFER_SIZE 4096
@@ -222,18 +223,22 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 
 static int
 load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name,
-			  int fs_size, int fd)
+			  int fs_size, int fd, bool integrity)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
 	struct dm_target_spec *tgt;
 	char *crypt_params;
-	char *extra_params = mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE);
+	char *extra_params = integrity ? mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE) :
+					 mem_printf("1 allow_discards");
+
+	const char *crypto_type = integrity ? CRYPTO_TYPE : CRYPTO_TYPE_LEGACY;
+
 	int i;
 	int ioctl_ret;
 
-	DEBUG("Loading crypto mapping table (%s,%s,%s,%s,%d,%d)", real_blk_name, CRYPTO_TYPE,
-	      master_key_ascii, name, fs_size, fd);
+	//DEBUG("Loading crypto mapping table (%s,%s,%s,%s,%d,%d)", real_blk_name, crypto_type,
+	//      master_key_ascii, name, fs_size, fd);
 
 	io = (struct dm_ioctl *)buffer;
 
@@ -250,7 +255,7 @@ load_crypto_mapping_table(const char *real_blk_name, const char *master_key_asci
 	crypt_params = buffer + sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec);
 	snprintf(crypt_params,
 		 DM_CRYPT_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
-		 "%s %s 0 %s 0 %s", CRYPTO_TYPE, master_key_ascii, real_blk_name, extra_params);
+		 "%s %s 0 %s 0 %s", crypto_type, master_key_ascii, real_blk_name, extra_params);
 	mem_free(extra_params);
 
 	crypt_params += strlen(crypt_params) + 1;
@@ -381,7 +386,8 @@ errout:
 }
 
 static int
-create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name)
+create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name,
+		      bool integrity)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
@@ -432,7 +438,8 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 		goto errout;
 	}
 
-	load_count = load_crypto_mapping_table(real_blk_name, master_key, name, fs_size, fd);
+	load_count =
+		load_crypto_mapping_table(real_blk_name, master_key, name, fs_size, fd, integrity);
 	if (load_count < 0) {
 		ERROR("Cannot load dm-crypt mapping table");
 		goto errout;
@@ -600,9 +607,8 @@ get_provided_data_sectors(const char *real_blk_name)
 	return provided_data_sectors;
 }
 
-char *
-cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key)
-//			 char *crypto_sys_path, unsigned int max_path)
+static char *
+cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev, const char *key)
 {
 	char *integrity_dev_label = mem_printf("%s-%s", label, "integrity");
 	unsigned long fs_size = get_provided_data_sectors(real_blkdev);
@@ -631,10 +637,24 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	char aead_key[33];
 	snprintf(aead_key, 33, "%s", key);
 
-	if (create_crypto_blk_dev(integrity_dev, aead_key, label) < 0) {
+	if (create_crypto_blk_dev(integrity_dev, aead_key, label, true) < 0) {
 		ERROR("Could not create crypto block device");
 		return NULL;
 	}
+
+	return create_device_node(label);
+}
+
+char *
+cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key,
+			 bool integrity)
+{
+	if (integrity)
+		return cryptfs_setup_volume_integrity_new(label, real_blkdev, key);
+
+	// do dmcrypt device setup only
+	if (create_crypto_blk_dev(real_blkdev, key, label, false) < 0)
+		return NULL;
 
 	return create_device_node(label);
 }
