@@ -743,7 +743,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 			mem_free(crypt);
 			crypt = cryptfs_setup_volume_new(label, dev,
-							 container_get_key(vol->container));
+							 container_get_key(vol->container), true);
 
 			if (!crypt) {
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,

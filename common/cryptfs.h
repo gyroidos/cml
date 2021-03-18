@@ -32,11 +32,14 @@
 #ifndef CRYPTFS_H
 #define CRYPTFS_H
 
+#include <stdbool.h>
+
 char *
 cryptfs_get_device_path_new(const char *label);
 
 char *
-cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key);
+cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key,
+			 bool integrity);
 
 int
 cryptfs_delete_blk_dev(const char *name);
