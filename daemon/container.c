@@ -105,9 +105,6 @@
 /* Timeout until a container to be stopped gets killed if not yet down */
 #define CONTAINER_STOP_TIMEOUT 45000
 
-// base port for local ports forwarded to adb in containers
-#define ADB_FWD_PORT_BASE 55550
-
 struct container {
 	container_state_t state;
 	container_state_t prev_state;
@@ -126,6 +123,7 @@ struct container {
 	uint32_t color;
 	bool allow_autostart;
 	unsigned int ram_limit; /* maximum RAM space the container may use */
+	char *cpus_allowed;
 
 	container_connectivity_t connectivity;
 	bool airplane_mode;
@@ -211,17 +209,6 @@ enum container_start_sync_msg {
 	CONTAINER_START_SYNC_MSG_ERROR,
 };
 
-static uint16_t
-container_get_next_adb_port(void)
-{
-#ifdef ANDROID
-	static uint16_t next_free_adb_port = ADB_FWD_PORT_BASE + 1;
-	return next_free_adb_port++;
-#else
-	return 0;
-#endif
-}
-
 void
 container_free_key(container_t *container)
 {
@@ -239,7 +226,7 @@ container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
 		       bool ns_net, bool privileged, const guestos_t *os,
 		       const char *config_filename, const char *images_dir, mount_t *mnt,
-		       unsigned int ram_limit, uint32_t color, uint16_t adb_port,
+		       unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
 		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
@@ -307,6 +294,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->phone_number = NULL;
 
 	container->ram_limit = ram_limit;
+	container->cpus_allowed = (cpus_allowed) ? mem_strdup(cpus_allowed) : NULL;
 
 	/* Create submodules */
 	container->user = c_user_new(container, ns_usr);
@@ -345,7 +333,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		DEBUG("List element in net_ifaces: %s", if_name_macstr);
 	}
 
-	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list, adb_port);
+	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list);
 	if (!container->net) {
 		WARN("Could not initialize net subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
@@ -480,6 +468,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	char *images_dir;
 	mount_t *mnt;
 	unsigned int ram_limit;
+	const char *cpus_allowed;
 	uint32_t color;
 	uuid_t *uuid;
 	uint64_t current_guestos_version;
@@ -537,6 +526,9 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	ram_limit = container_config_get_ram_limit(conf);
 	DEBUG("New containers max ram is %" PRIu32 "", ram_limit);
 
+	cpus_allowed = container_config_get_cpus_allowed(conf);
+	DEBUG("New containers allowed cpu cores are %s", cpus_allowed);
+
 	color = container_config_get_color(conf);
 
 	allow_autostart = container_config_get_allow_autostart(conf);
@@ -571,8 +563,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_type_t type = container_config_get_type(conf);
 
-	uint16_t adb_port = container_get_next_adb_port();
-
 	list_t *feature_enabled = container_config_get_feature_list_new(conf);
 
 	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
@@ -606,12 +596,11 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
 
-	container_t *c =
-		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
-				       images_dir, mnt, ram_limit, color, adb_port, allow_autostart,
-				       feature_enabled, dns_server, net_ifaces, allowed_devices,
-				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
-				       init_env_len, fifo_list, ttype, usb_pin_entry);
+	container_t *c = container_new_internal(
+		uuid, name, type, ns_usr, ns_net, priv, os, config_filename, images_dir, mnt,
+		ram_limit, cpus_allowed, color, allow_autostart, feature_enabled, dns_server,
+		net_ifaces, allowed_devices, assigned_devices, vnet_cfg_list, usbdev_list, init_env,
+		init_env_len, fifo_list, ttype, usb_pin_entry);
 	if (c)
 		container_config_write(conf);
 
@@ -649,6 +638,8 @@ container_free(container_t *container)
 
 	if (container->config_filename)
 		mem_free(container->config_filename);
+
+	mem_free(container->cpus_allowed);
 
 	if (container->init_argv) {
 		for (char **arg = container->init_argv; *arg; arg++) {
@@ -2112,6 +2103,14 @@ container_get_ram_limit(const container_t *container)
 	ASSERT(container);
 
 	return container->ram_limit;
+}
+
+const char *
+container_get_cpus_allowed(const container_t *container)
+{
+	ASSERT(container);
+
+	return container->cpus_allowed;
 }
 
 int

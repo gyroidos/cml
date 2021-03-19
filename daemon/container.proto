@@ -39,6 +39,11 @@ message ContainerVnetConfig {
 	// TODO Define configuration, for now just use hardcoded default config in c_net
 }
 
+message ContainerPnetConfig {
+	required string netif = 1; // name or mac of physical network intarface mapped to container
+	repeated string mac_filter = 2; // mac of allowed client devices on that netfif
+}
+
 enum ContainerUsbType {
 	GENERIC = 1;
 	TOKEN = 2;
@@ -89,6 +94,8 @@ message ContainerConfig {
 
 	optional bool userns = 10 [default = true];
 
+	optional string assign_cpus = 11; // cpus "m-n", e.g., "0-1"
+
 	// Flags indicating the allows for containers:
 	optional bool allow_autostart = 17 [default = false];
 	// TODO: add further features as necessary
@@ -100,7 +107,7 @@ message ContainerConfig {
 	optional bool netns = 22 [default = true];
 
 	// a list of network interfaces assigned to this container
-	repeated string net_ifaces = 23;
+	repeated ContainerPnetConfig net_ifaces = 23;
 
 	// a list of devices explicitely allowed for this container
 	repeated string allow_dev = 25;

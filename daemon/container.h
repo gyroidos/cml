@@ -187,7 +187,7 @@ container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
 		       bool ns_net, bool privileged, const guestos_t *os,
 		       const char *config_filename, const char *images_folder, mount_t *mnt,
-		       unsigned int ram_limit, uint32_t color, uint16_t adb_port,
+		       unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
 		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
 		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
 		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
@@ -580,6 +580,9 @@ container_get_ram_limit(const container_t *container);
 
 int
 container_set_ram_limit(container_t *container, unsigned int ram_limit);
+
+const char *
+container_get_cpus_allowed(const container_t *container);
 
 /***************************
  * Submodule Interfaces    *
