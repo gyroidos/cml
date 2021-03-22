@@ -547,6 +547,14 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_FAILED;
 		break;
 
+	case CONTROL_RESPONSE_GUESTOS_MGR_REGISTER_CA_ERROR:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_REGISTER_CA_ERROR;
+		break;
+
+	case CONTROL_RESPONSE_GUESTOS_MGR_REGISTER_CA_OK:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_REGISTER_CA_OK;
+		break;
+
 	case CONTROL_RESPONSE_CMD_UNSUPPORTED:
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED;
 		break;
@@ -996,11 +1004,18 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA: {
-		if (!msg->has_guestos_rootcert)
+		if (!msg->has_guestos_rootcert) {
 			WARN("REGISTER_NEWCA without root certificate");
+			res = -1;
+		} else {
+			res = guestos_mgr_register_newca(msg->guestos_rootcert.data,
+							 msg->guestos_rootcert.len);
+		}
+		if (res == -1)
+			control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_REGISTER_CA_ERROR, fd);
 		else
-			guestos_mgr_register_newca(msg->guestos_rootcert.data,
-						   msg->guestos_rootcert.len);
+			control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_REGISTER_CA_OK, fd);
+
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REGISTER_LOCALCA: {
