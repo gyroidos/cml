@@ -508,17 +508,17 @@ nl_msg_receive(const nl_sock_t *nl, char *buf, const size_t len, bool receive_ue
 	while (1) {
 		errno = 0;
 		received = recvmsg(nl->fd, &m, 0);
+		TRACE_ERRNO("recvmsg returned %d", received);
 
 		/* Check if we were interrupted */
 		if (received < 0) {
+			TRACE("recvmsg failed");
 			if (errno == EINTR)
 				continue;
 			goto error;
 		}
 		break;
 	}
-
-	TRACE("received: %d, buffer_size: %zu", received, len);
 
 	if (receive_uevent && nl_verify_uevent_source(&m, nladdr)) {
 		TRACE("Detected possibly malicious uevent");
@@ -565,7 +565,7 @@ nl_msg_receive_nocred(const nl_sock_t *nl, char *buf, const size_t len)
  * This function may possibly block!
  */
 static int
-nl_eval_ack(const nl_sock_t *nl)
+nl_eval_ack(const nl_sock_t *nl, UNUSED uint32_t seq)
 {
 	ASSERT(nl);
 
@@ -602,9 +602,17 @@ nl_eval_ack(const nl_sock_t *nl)
 
 			/* Check if message can be an ACK, i.e. pid is set to
 			 * local address and  sequence number is echoed */
-			if (nl->local.nl_pid != msg->nlmsg_pid ||
-			    msg->nlmsg_seq != (unsigned int)nl->fd)
+			if (nl->local.nl_pid != msg->nlmsg_pid) {
+				TRACE("nl message pid did not match (%d vs. %d), continuing...",
+				      nl->local.nl_pid, msg->nlmsg_pid);
 				continue;
+			}
+
+			if (msg->nlmsg_seq != (unsigned int)nl->fd) {
+				TRACE("nl message seq id did not match (%d vs. %d), continuing...",
+				      msg->nlmsg_seq, (unsigned int)nl->fd);
+				continue;
+			}
 
 			TRACE("Message comes from previous request");
 
@@ -667,7 +675,7 @@ nl_msg_send_kernel_verify(const nl_sock_t *nl_sock, const nl_msg_t *req)
 	DEBUG("Netlink message sent, waiting for ACK");
 
 	/* Wait for and receive acknowledgment */
-	return nl_eval_ack(nl_sock);
+	return nl_eval_ack(nl_sock, req->nlmsghdr.nlmsg_seq);
 }
 
 nl_msg_t *

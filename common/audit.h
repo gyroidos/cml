@@ -43,31 +43,14 @@
 
 typedef enum { CONTAINER, C0 } AUDIT_MODE;
 
-typedef enum { SUA, FUA, SSA, FSA, RLE } AUDIT_CATEGORY;
-
-typedef enum {
-	GUESTOS_MGMT,
-	TOKEN_MGMT,
-	CONTAINER_MGMT,
-	CONTAINER_ISOLATION,
-	TPM_COMM,
-	KAUDIT,
-} AUDIT_EVENTCLASS;
-
-typedef enum { COMMAND, INTERNAL, TOKEN, UPDATE } AUDIT_EVENTTYPE;
-
-typedef enum { CMLD, SCD, TPM2D } AUDIT_COMPONENT;
-
 AuditRecord *
-audit_record_new(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENTCLASS evclass,
-		 const char *evtype, const char *subject_id, int meta_length,
+audit_record_new(const char *type, const char *subject_id, int meta_length,
 		 AuditRecord__Meta **metas);
 
 int
 audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len);
 
 int
-audit_kernel_log_event(AUDIT_CATEGORY category, AUDIT_COMPONENT component, AUDIT_EVENTCLASS evclass,
-		       const char *evtype, const char *subject_id, int meta_count, ...);
+audit_kernel_log_event(const char *type, const char *subject_id, int meta_count, ...);
 
 #endif /* COMMON_AUDIT_H */

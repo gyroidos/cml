@@ -75,6 +75,30 @@ typedef struct {
 	char *value;
 } audit_meta_t;
 
+const char *evcategory[] = { "SUA", "FUA", "SSA", "FSA", "RLE" };
+const char *evclass[] = { "GUESTOS_MGMT",	 "TOKEN_MGMT", "CONTAINER_MGMT",
+			  "CONTAINER_ISOLATION", "TPM_COMM",   "KAUDIT" };
+const char *component[] = { "CMLD", "SCD", "TPM2D" };
+const char *result[] = { "SUCCESS", "FAIL" };
+
+static const char *
+audit_category_to_string(AUDIT_CATEGORY c)
+{
+	return evcategory[c];
+}
+
+static const char *
+audit_evclass_to_string(AUDIT_EVENTCLASS c)
+{
+	return evclass[c];
+}
+
+static const char *
+audit_component_to_string(AUDIT_COMPONENT c)
+{
+	return component[c];
+}
+
 static container_t *
 audit_get_log_container(const uuid_t *uuid)
 {
@@ -588,8 +612,12 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		meta_count /= 2;
 	}
 
-	record = audit_record_new(category, component, evclass, evtype, subject_id, meta_count,
-				  metas);
+	char *type = mem_printf("%s.%s.%s.%s", audit_category_to_string(category),
+				audit_component_to_string(component),
+				audit_evclass_to_string(evclass), evtype);
+
+	record = audit_record_new(type, subject_id, meta_count, metas);
+	mem_free(type);
 
 	if (!record) {
 		ERROR("Failed to create audit record");
@@ -678,6 +706,8 @@ audit_init(uint32_t size)
 {
 	AUDIT_STORAGE = size * 1024 * 1024;
 
+	TRACE("Initializing audit subsystem");
+
 	/* Open audit netlink socket */
 	nl_sock_t *audit_sock;
 	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
@@ -692,6 +722,10 @@ audit_init(uint32_t size)
 		return -1;
 	}
 
+	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
+						  &audit_kernel_handle_log, audit_sock);
+	event_add_io(audit_io_event);
+
 	/* Register message handler for audit logs */
 	if (fd_make_non_blocking(nl_sock_get_fd(audit_sock))) {
 		ERROR("Could not set fd of audit netlink socket to non blocking!");
@@ -699,8 +733,5 @@ audit_init(uint32_t size)
 		return -1;
 	}
 
-	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
-						  &audit_kernel_handle_log, audit_sock);
-	event_add_io(audit_io_event);
 	return 0;
 }
