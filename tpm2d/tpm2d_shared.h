@@ -43,7 +43,7 @@
 #define TPM2D_ATT_PRIV_FILE TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_priv.bin"
 #define TPM2D_ATT_PUB_FILE TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_pub.bin"
 #define TPM2D_ATT_PARENT_PUB_FILE TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR "/attestation_pt_pub.bin"
-#define TPM2D_ATT_CERT_FILE "/" TPM2D_TOKEN_DIR "/device.cert"
+#define TPM2D_ATT_CERT_FILE DEFAULT_BASE_PATH "/" TPM2D_TOKEN_DIR "/device.cert"
 
 // clang-format off
 #define TPM2D_SOCKET SOCK_PATH(tpm2d-control)
