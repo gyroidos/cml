@@ -625,6 +625,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_has_setup_mode(vol->container);
 	int uid = container_get_uid(vol->container);
+	bool integrity = false;
 
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
@@ -742,8 +743,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
 
 			mem_free(crypt);
-			crypt = cryptfs_setup_volume_new(label, dev,
-							 container_get_key(vol->container), true);
+			crypt = cryptfs_setup_volume_new(
+				label, dev, container_get_key(vol->container), integrity);
 
 			if (!crypt) {
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
