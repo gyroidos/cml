@@ -22,7 +22,6 @@
  */
 
 #include "ssl_util.h"
-#include "tpm2d_shared.h"
 
 #include "common/macro.h"
 #include "common/mem.h"

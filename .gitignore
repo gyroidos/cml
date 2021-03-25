@@ -4,3 +4,6 @@ cscope.out
 *.swp
 tags
 /**/compile_commands.json
+*.o
+*.pb-c.*
+*.a

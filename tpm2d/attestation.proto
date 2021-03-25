@@ -83,10 +83,11 @@ message Tpm2dToRemote {
 	// the hash algorith used to sign the quoted information
 	optional HashAlgLen halg = 3;
 
-	// the quoted information (a TPM2B_ATTEST data structure)
+	// the quoted information (a TPMS_ATTEST data structure)
 	optional bytes quoted = 4;
 
-	// the signature over 'quoted' (a TPMT_SIGNATURE data structure)
+	// the signature over 'quoted' (a TPMT_SIGNATURE data structure with an
+	// TPMS_SIGNATURE_RSAPSS signature algorithm)
 	optional bytes signature = 5;
 
 	// the explicit PCR values
