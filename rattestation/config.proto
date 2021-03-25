@@ -1,0 +1,61 @@
+/*
+ * This file is part of trust|me
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ */
+
+syntax = "proto2";
+
+option java_package = "de.fraunhofer.aisec.trustme";
+
+import "attestation.proto";
+
+message PcrStrings {
+  // the PCR number (usually between 0 and 23)
+  optional int32 number = 1;
+
+  // the value of PCR<number>
+  optional string value = 2;
+}
+
+message RAttestationConfig {
+
+    required string name = 1;
+
+	// type of attestation in the IDS context
+	optional IdsAttestationType atype = 2 [default = BASIC];
+
+	// the hash algorith used to sign the quoted information
+	optional HashAlgLen halg = 3 [default = SHA256];
+
+	// pcr bitmask for AttestationType ADVANCED only
+	//  - for BASIC, the default PCRs are PCRs 0 to 11
+	//  - for ALL  , the default PCRs are PCRs 0 to 23
+	optional int32 pcrs = 4;
+
+	// the explicit PCR values
+	repeated PcrStrings pcr_values = 6;
+
+	// an _optional_ certificate that includes the public key
+	optional bytes certificate = 7;
+
+	// the measurement list in ima style hex strings
+	repeated string ml_entry = 8;
+}
