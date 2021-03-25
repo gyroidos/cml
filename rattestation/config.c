@@ -34,37 +34,42 @@
 RAttestationConfig *
 rattestation_read_config_new(const char *file)
 {
-    RAttestationConfig *config = NULL;
+	RAttestationConfig *config = NULL;
 
-    off_t conf_len = 0;
-    uint8_t *buf = NULL;
-    ASSERT(file);
+	off_t conf_len = 0;
+	uint8_t *buf = NULL;
+	ASSERT(file);
 
-    IF_FALSE_GOTO(file_exists(file), err);
+	DEBUG("Checking if config file %s exists", file);
 
-    size_t file_len = strlen(file);
+	IF_FALSE_GOTO(file_exists(file), err);
 
-    IF_TRUE_GOTO(file_len < 5 || strcmp(file + file_len - 5, ".conf"), err);
+	DEBUG("File exists");
 
-    conf_len = file_size(file);
-    if (conf_len <= 0) {
-        WARN("Failed to get file-size of configuration file");
-        goto err;
-    }
+	size_t file_len = strlen(file);
 
-    buf = mem_alloc(conf_len);
-    if (-1 == file_read(file, (char *)buf, conf_len)) {
-        WARN("Failed to read rattestation configuration file");
-        goto err;
-    }
+	IF_TRUE_GOTO(file_len < 5 || strcmp(file + file_len - 5, ".conf"), err);
 
-    config = (RAttestationConfig *)protobuf_message_new_from_buf(buf, conf_len, &rattestation_config__descriptor);
+	conf_len = file_size(file);
+	if (conf_len <= 0) {
+		WARN("Failed to get file-size of configuration file");
+		goto err;
+	}
 
-    if(!config) {
-        WARN("Failed to load rattestation configuration");
-    }
+	buf = mem_alloc(conf_len);
+	if (-1 == file_read(file, (char *)buf, conf_len)) {
+		WARN("Failed to read rattestation configuration file");
+		goto err;
+	}
+
+	config = (RAttestationConfig *)protobuf_message_new_from_buf(
+		buf, conf_len, &rattestation_config__descriptor);
+
+	if (!config) {
+		WARN("Failed to load rattestation configuration");
+	}
 
 err:
-    mem_free(buf);
-    return config;
+	mem_free(buf);
+	return config;
 }

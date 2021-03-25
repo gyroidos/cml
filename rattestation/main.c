@@ -33,6 +33,18 @@
 
 #include "attestation.h"
 
+#include <openssl/err.h>
+#include <openssl/sha.h>
+#include <openssl/pkcs12.h>
+#include <openssl/rand.h>
+#include <openssl/pem.h>
+#include <openssl/conf.h>
+#include <openssl/x509v3.h>
+#include <openssl/rsa.h>
+#include <openssl/engine.h>
+#include <openssl/bio.h>
+#include <openssl/x509_vfy.h>
+
 #define LOGFILE_DIR "/data/logs"
 #define LOGFILE_PATH LOGFILE_DIR "/rattestation"
 
@@ -81,6 +93,7 @@ main(int argc, char **argv)
 	logf_handler_set_prio(ipagent_logfile_handler_stdout, LOGF_PRIO_TRACE);
 
 	char *rhost = (argc < 2) ? "127.0.0.1" : argv[1];
+	char *config_file = (argc < 3) ? "rattestation.conf" : argv[2];
 
 	event_init();
 
@@ -92,7 +105,7 @@ main(int argc, char **argv)
 	 * do attestation and register the main_retrun_result_and_exit handler
 	 * as callback when the response has been validated
 	 */
-	if (-1 == attestation_do_request(rhost, main_return_result_and_exit)) {
+	if (-1 == attestation_do_request(rhost, config_file, main_return_result_and_exit)) {
 		ERROR("Connection to remote host %s failed!", rhost);
 		main_return_result_and_exit(false);
 	}
