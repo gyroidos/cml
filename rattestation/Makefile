@@ -26,7 +26,7 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= n
 SANITIZERS ?= n
-STATIC = -static
+STATIC = # -static TODO OpenSSL causes segfault with -static
 
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -pedantic -O2
 LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
@@ -41,11 +41,11 @@ endif
 ifeq ($(AGGRESSIVE_WARNINGS),y)
     # on CI (and also for well-behaved developers) warnings should be
     # converted to errors; this helps us redistribute the code base without any pain;
-    # pure builds are better than polluted builds. 
+    # pure builds are better than polluted builds.
     LOCAL_CFLAGS += -Werror
 endif
 ifeq ($(SANITIZERS),y)
-    # if requested, we enable sanitization for easier debugging 
+    # if requested, we enable sanitization for easier debugging
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -fsanitize=address -fsanitize=undefined
@@ -56,7 +56,8 @@ endif
 
 
 PROTO_SRC := \
-	attestation.pb-c.c
+	attestation.pb-c.c \
+	config.pb-c.c
 
 SRC_FILES := \
 	common/protobuf.c \
@@ -64,13 +65,15 @@ SRC_FILES := \
 	common/sock.c \
 	common/file.c \
 	attestation.c \
+    common/ssl_util.c \
+    config.c \
 	main.c
 
 .PHONY: all
 all: rattestation
 
 protobuf: attestation.proto
-	protoc-c --c_out=. attestation.proto
+	protoc-c --c_out=. attestation.proto config.proto
 	$(MAKE) -C common protobuf
 
 $(PROTO_SRC): protobuf
@@ -79,7 +82,9 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 rattestation: libcommon $(SRC_FILES) $(PROTO_SRC)
-	$(CC) $(STATIC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o $@
+	$(CC) $(STATIC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -lssl -lcrypto -libmtss -o $@
+
+
 
 
 .PHONY: clean

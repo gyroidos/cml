@@ -1,8 +1,0 @@
-Simple Attestation client which connects to a remote tpm2d
-on its TCP/IP service socket (port 9505) and asks for an attest.
-
-compile:
-	make
-run:
-	./attestation <remote host>
-	default is 127.0.0.1
