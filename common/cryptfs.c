@@ -71,6 +71,9 @@
 
 /******************************************************************************/
 
+static unsigned long
+get_provided_data_sectors(const char *real_blk_name);
+
 #ifdef __GNU_LIBRARY__
 #define dm_ioctl(...) ioctl(__VA_ARGS__)
 #else
@@ -153,10 +156,10 @@ convert_key_to_hex_ascii(unsigned char *master_key, unsigned int keysize,
 #endif
 
 static int
-load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs_size)
+load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta_blk_name,
+			     const char *name, int fs_size)
 {
 	// General variables
-	int fd_mapper;
 	int ioctl_ret;
 
 	// Load mapping variables
@@ -164,13 +167,8 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 	struct dm_target_spec *tgt;
 	struct dm_ioctl *mapping_io;
 	char *integrity_params;
-	char *extra_params = "0";
+	char *extra_params = mem_printf("1 meta_device:%s", meta_blk_name);
 	int mapping_counter;
-
-	// Load Integrity map table
-	if ((fd_mapper = open(DEV_MAPPER, O_RDWR)) < 0) {
-		ERROR_ERRNO("Cannot open device-mapper in load integrity mapping table");
-	}
 
 	mapping_io = (struct dm_ioctl *)mapping_buffer;
 
@@ -194,6 +192,8 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 		 DM_INTEGRITY_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
 		 "%s 0 %d J %s", real_blk_name, INTEGRITY_TAG_SIZE, extra_params);
 
+	mem_free(extra_params);
+
 	// Set pointer behind parameter
 	integrity_params += strlen(integrity_params) + 1;
 	// Byte align the parameter
@@ -203,7 +203,7 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 	tgt->next = integrity_params - mapping_buffer;
 
 	for (mapping_counter = 0; mapping_counter < TABLE_LOAD_RETRIES; mapping_counter++) {
-		ioctl_ret = dm_ioctl(fd_mapper, DM_TABLE_LOAD, mapping_io);
+		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, mapping_io);
 
 		if (ioctl_ret == 0) {
 			DEBUG("DM_TABLE_LOAD successfully returned %d", ioctl_ret);
@@ -222,8 +222,8 @@ load_integrity_mapping_table(const char *real_blk_name, const char *name, int fs
 }
 
 static int
-load_crypto_mapping_table(const char *real_blk_name, const char *master_key_ascii, const char *name,
-			  int fs_size, int fd, bool integrity)
+load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_key_ascii,
+			  const char *name, int fs_size, bool integrity)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
@@ -305,9 +305,10 @@ load_crypto_mapping_table(const char *real_blk_name, const char *master_key_asci
 // [1] https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/dm-integrity.html
 // [2] https://wiki.gentoo.org/wiki/Device-mapper#Integrity
 static int
-create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsigned long fs_size)
+create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *name,
+			 const unsigned long fs_size)
 {
-	int fd_mapper;
+	int fd;
 	int ioctl_ret;
 	int load_count = -1;
 	char create_buffer[DM_INTEGRITY_BUF_SIZE];
@@ -315,7 +316,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	int create_counter;
 
 	// Open device mapper
-	if ((fd_mapper = open(DEV_MAPPER, O_RDWR)) < 0) {
+	if ((fd = open(DEV_MAPPER, O_RDWR)) < 0) {
 		ERROR_ERRNO("Cannot open device-mapper");
 	}
 
@@ -325,7 +326,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
 
 	for (create_counter = 0; create_counter < TABLE_LOAD_RETRIES; create_counter++) {
-		ioctl_ret = dm_ioctl(fd_mapper, DM_DEV_CREATE, create_io);
+		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, create_io);
 		if (!ioctl_ret) {
 			DEBUG("Creating block device worked!");
 			break;
@@ -335,18 +336,14 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	}
 
 	if (create_counter >= TABLE_LOAD_RETRIES) {
-		ERROR("Failed to create block device after %d tries", create_counter);
+		ERROR_ERRNO("Failed to create block device after %d tries", create_counter);
 		goto errout;
-	}
-
-	if (close(fd_mapper) < 0) {
-		ERROR_ERRNO("Cannot close device-mapper");
 	}
 
 	// Load Integrity map table
 	DEBUG("Loading Integrity mapping table");
 
-	load_count = load_integrity_mapping_table(real_blk_name, name, fs_size);
+	load_count = load_integrity_mapping_table(fd, real_blk_name, meta_blk_name, name, fs_size);
 	if (load_count < 0) {
 		ERROR("Error while loading mapping table");
 		goto errout;
@@ -358,49 +355,35 @@ create_integrity_blk_dev(const char *real_blk_name, const char *name, const unsi
 	DEBUG("Resuming the blk device");
 	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
 
-	ioctl_ret = dm_ioctl(fd_mapper, DM_DEV_SUSPEND, create_io);
+	ioctl_ret = dm_ioctl(fd, DM_DEV_SUSPEND, create_io);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("Cannot resume the dm-integrity device (ioctl ret: %d, errno:%d)",
 			    ioctl_ret, errno);
 		goto errout;
 	}
 
+	close(fd);
 	return 0;
 
 errout:
 	ERROR("Failed integrity block creation");
+	close(fd);
 	return -1;
 }
 
 static int
 create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name,
-		      bool integrity)
+		      unsigned long fs_size, bool integrity)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
 	int fd;
 	int retval = -1;
 	int load_count;
-	unsigned long fs_size;
 	int i;
 	int ioctl_ret;
 
 	DEBUG("Creating crypto blk device");
-	/* Update the fs_size field to be the size of the volume */
-	if ((fd = open(real_blk_name, O_RDONLY)) < 0) {
-		ERROR("Cannot open volume %s", real_blk_name);
-		return -1;
-	}
-	fs_size = get_blkdev_size(fd);
-	close(fd);
-
-	if (fs_size == 0) {
-		ERROR("Cannot get size of volume %s", real_blk_name);
-		return -1;
-	} else {
-		DEBUG("Crypto blk device size: %lu", fs_size);
-	}
-
 	if ((fd = open(DEV_MAPPER, O_RDWR)) < 0) {
 		ERROR("Cannot open device-mapper\n");
 		goto errout;
@@ -426,7 +409,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	}
 
 	load_count =
-		load_crypto_mapping_table(real_blk_name, master_key, name, fs_size, fd, integrity);
+		load_crypto_mapping_table(fd, real_blk_name, master_key, name, fs_size, integrity);
 	if (load_count < 0) {
 		ERROR("Cannot load dm-crypt mapping table");
 		goto errout;
@@ -533,7 +516,6 @@ error:
 	return ret;
 }
 
-/*
 static unsigned long
 get_provided_data_sectors(const char *real_blk_name)
 {
@@ -547,7 +529,7 @@ get_provided_data_sectors(const char *real_blk_name)
 	}
 
 	int bytes_read = read(fd, magic, sizeof(magic));
-	DEBUG("Bytes read: %d", bytes_read);
+	DEBUG("Bytes read: %d, '%s'", bytes_read, magic);
 	if (bytes_read != sizeof(magic)) {
 		ERROR("Cannot read superblock type from volume %s", real_blk_name);
 		goto errout;
@@ -564,51 +546,31 @@ get_provided_data_sectors(const char *real_blk_name)
 	DEBUG("Read bytes is: %d", bytes_read);
 
 	if (bytes_read != sizeof(provided_data_sectors) || provided_data_sectors == 0) {
-	        ERROR("Cannot read provided_data_sectors from volume %s", real_blk_name);
+		ERROR("Cannot read provided_data_sectors from volume %s", real_blk_name);
 		goto errout;
 	}
 
 errout:
-	DEBUG("Returning: provided_data_sectors= %ld",provided_data_sectors);
-	close(fd);
-	return provided_data_sectors;
-}
-*/
-
-//TODO: get number of data sectors available from superblock
-static unsigned long
-get_provided_data_sectors(const char *real_blk_name)
-{
-	int fd;
-	unsigned long provided_data_sectors = 0;
-	DEBUG("In get_provided_data_sectors");
-	if ((fd = open(real_blk_name, O_RDONLY)) < 0) {
-		ERROR_ERRNO("Cannot open volume %s", real_blk_name);
-		return 0;
-	}
-
-	DEBUG("Using 80%% of block device size as provided_data_sectors");
-	provided_data_sectors = 0.8 * get_blkdev_size(fd);
-
+	DEBUG("Returning: provided_data_sectors= %ld", provided_data_sectors);
 	close(fd);
 	return provided_data_sectors;
 }
 
 static char *
-cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev, const char *key)
+cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
+				   const char *meta_blkdev, const char *key, unsigned long fs_size)
 {
+	bool initial_format = false;
+	char *crypto_blkdev = NULL;
 	char *integrity_dev_label = mem_printf("%s-%s", label, "integrity");
-	unsigned long fs_size = get_provided_data_sectors(real_blkdev);
 	DEBUG("cryptfs_setup_volume_new");
 
-	if (fs_size <= 0) {
-		DEBUG("get_provided_data_sectors returned %lu!!", fs_size);
-		return NULL;
-	}
+	/* check if meta device is initialized */
+	initial_format = get_provided_data_sectors(meta_blkdev) != fs_size;
 
-	if (create_integrity_blk_dev(real_blkdev, integrity_dev_label, fs_size) < 0) {
+	if (create_integrity_blk_dev(real_blkdev, meta_blkdev, integrity_dev_label, fs_size) < 0) {
 		DEBUG("create_integrity_blk_dev failed!");
-		return NULL;
+		goto error;
 	}
 
 	char *integrity_dev = create_device_node(integrity_dev_label);
@@ -624,23 +586,76 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev, c
 	char aead_key[33];
 	snprintf(aead_key, 33, "%s", key);
 
-	if (create_crypto_blk_dev(integrity_dev, aead_key, label, true) < 0) {
+	if (create_crypto_blk_dev(integrity_dev, aead_key, label, fs_size, true) < 0) {
 		ERROR("Could not create crypto block device");
 		return NULL;
 	}
 
-	return create_device_node(label);
+	crypto_blkdev = create_device_node(label);
+
+	if (initial_format) {
+		/*
+		 * format crypto device, otherwise I/O errors may occur
+		 * also during write attempts which are not bound to
+		 * sector/block size for which no integrity data exist yet.
+		 * This is due to the block has to be read first than.
+		 */
+		DEBUG("Formatting crypto blkdev %s. Generating initial MAC on "
+		      "integrity_dev %s",
+		      crypto_blkdev, integrity_dev);
+		int fd;
+		if ((fd = open(crypto_blkdev, O_WRONLY)) < 0) {
+			ERROR("Cannot open volume %s", crypto_blkdev);
+			goto error;
+		}
+		char *zeros = mem_alloc0(DM_INTEGRITY_BUF_SIZE);
+		for (unsigned long i = 0; i < fs_size / 8; ++i) {
+			if (write(fd, zeros, DM_INTEGRITY_BUF_SIZE) < DM_INTEGRITY_BUF_SIZE) {
+				ERROR_ERRNO("Could not write empty block %lu to %s", i,
+					    crypto_blkdev);
+				mem_free(zeros);
+				close(fd);
+				goto error;
+			}
+		}
+		mem_free(zeros);
+		close(fd);
+	}
+	return crypto_blkdev;
+error:
+	mem_free(integrity_dev_label);
+	mem_free(crypto_blkdev);
+	return NULL;
 }
 
 char *
 cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key,
-			 bool integrity)
+			 const char *meta_blkdev)
 {
-	if (integrity)
-		return cryptfs_setup_volume_integrity_new(label, real_blkdev, key);
+	int fd;
+	unsigned long fs_size;
+
+	/* Update the fs_size field to be the size of the volume */
+	if ((fd = open(real_blkdev, O_RDONLY)) < 0) {
+		ERROR("Cannot open volume %s", real_blkdev);
+		return NULL;
+	}
+	fs_size = get_blkdev_size(fd);
+	close(fd);
+
+	if (fs_size == 0) {
+		ERROR("Cannot get size of volume %s", real_blkdev);
+		return NULL;
+	} else {
+		DEBUG("Crypto blk device size: %lu", fs_size);
+	}
+
+	if (meta_blkdev)
+		return cryptfs_setup_volume_integrity_new(label, real_blkdev, meta_blkdev, key,
+							  fs_size);
 
 	// do dmcrypt device setup only
-	if (create_crypto_blk_dev(real_blkdev, key, label, false) < 0)
+	if (create_crypto_blk_dev(real_blkdev, key, label, fs_size, false) < 0)
 		return NULL;
 
 	return create_device_node(label);
