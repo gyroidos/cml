@@ -56,8 +56,8 @@
 
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
-#define CRYPTO_TYPE "capi:aegis128-random"
-#define CRYPTO_TYPE_LEGACY "aes-xts-plain64"
+#define CRYPTO_TYPE_AUTHENC "capi:authenc(hmac(sha256),xts(aes))-random"
+#define CRYPTO_TYPE "aes-xts-plain64"
 
 /* taken from vold */
 #define DEVMAPPER_BUFFER_SIZE 4096
@@ -232,7 +232,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	char *extra_params = integrity ? mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE) :
 					 mem_printf("1 allow_discards");
 
-	const char *crypto_type = integrity ? CRYPTO_TYPE : CRYPTO_TYPE_LEGACY;
+	const char *crypto_type = integrity ? CRYPTO_TYPE_AUTHENC : CRYPTO_TYPE;
 
 	int i;
 	int ioctl_ret;
@@ -582,11 +582,7 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 		DEBUG("Successfully created device node");
 	}
 
-	/* Use only the first 32 hex digits of master key for 128 bit aead modes */
-	char aead_key[33];
-	snprintf(aead_key, 33, "%s", key);
-
-	if (create_crypto_blk_dev(integrity_dev, aead_key, label, fs_size, true) < 0) {
+	if (create_crypto_blk_dev(integrity_dev, key, label, fs_size, true) < 0) {
 		ERROR("Could not create crypto block device");
 		return NULL;
 	}
@@ -655,7 +651,13 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 							  fs_size);
 
 	// do dmcrypt device setup only
-	if (create_crypto_blk_dev(real_blkdev, key, label, fs_size, false) < 0)
+
+	/* Use only the first 64 hex digits of master key for 512 bit xts mode */
+	IF_FALSE_RETVAL(strlen(key) < 65, NULL);
+	char enc_key[65];
+	snprintf(enc_key, 65, "%s", key);
+
+	if (create_crypto_blk_dev(real_blkdev, enc_key, label, fs_size, false) < 0)
 		return NULL;
 
 	return create_device_node(label);

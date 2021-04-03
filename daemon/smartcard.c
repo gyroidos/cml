@@ -51,7 +51,7 @@
 // clang-format on
 
 // TODO: centrally define key length in container or other module?
-#define TOKEN_KEY_LEN 64 // actual encryption key
+#define TOKEN_KEY_LEN 96 // actual encryption key + hmac key
 #define TOKEN_MAX_WRAPPED_KEY_LEN 4096
 
 #define MAX_PAIR_SEC_LEN 8
