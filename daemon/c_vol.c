@@ -85,6 +85,10 @@
 
 #define BUSYBOX_PATH "/bin/busybox"
 
+#ifndef FALLOC_FL_ZERO_RANGE
+#define FALLOC_FL_ZERO_RANGE 0x10
+#endif
+
 struct c_vol {
 	const container_t *container;
 	char *root;
@@ -131,6 +135,32 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 	}
 
 	return mem_printf("%s/%s.img", dir, mount_entry_get_img(mntent));
+}
+
+static char *
+c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
+{
+	const char *dir;
+
+	ASSERT(vol);
+	ASSERT(mntent);
+
+	switch (mount_entry_get_type(mntent)) {
+	case MOUNT_TYPE_DEVICE:
+	case MOUNT_TYPE_DEVICE_RW:
+	case MOUNT_TYPE_EMPTY:
+	case MOUNT_TYPE_COPY:
+	case MOUNT_TYPE_OVERLAY_RW:
+		// Note: this is the upper img for overlayfs
+		dir = container_get_images_dir(vol->container);
+		break;
+	default:
+		ERROR("Unsupported operating system mount type %d for %s (intergity meta_device)",
+		      mount_entry_get_type(mntent), mount_entry_get_img(mntent));
+		return NULL;
+	}
+
+	return mem_printf("%s/%s.meta.img", dir, mount_entry_get_img(mntent));
 }
 
 /**
@@ -185,16 +215,11 @@ error:
 }
 
 static int
-c_vol_create_image_empty(const char *img, uint64_t size)
+c_vol_create_sparse_file(const char *img, off64_t storage_size)
 {
-	off64_t storage_size;
 	int fd;
 
 	ASSERT(img);
-
-	// minimal storage size is 10 MB
-	storage_size = MAX(size, 10);
-	storage_size *= 1024 * 1024;
 
 	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long)storage_size);
 
@@ -223,7 +248,34 @@ c_vol_create_image_empty(const char *img, uint64_t size)
 		return -1;
 	}
 
+	// also allocate with  zeros for dm-integrity
+	if (fallocate(fd, FALLOC_FL_ZERO_RANGE, 0, storage_size)) {
+		ERROR_ERRNO("Could not write to image file %s", img);
+		close(fd);
+		return -1;
+	}
+
 	close(fd);
+	return 0;
+}
+
+static int
+c_vol_create_image_empty(const char *img, const char *img_meta, uint64_t size)
+{
+	off64_t storage_size;
+	ASSERT(img);
+
+	// minimal storage size is 10 MB
+	storage_size = MAX(size, 10);
+	storage_size *= 1024 * 1024;
+
+	IF_TRUE_RETVAL(-1 == c_vol_create_sparse_file(img, storage_size), -1);
+
+	if (img_meta) {
+		off64_t meta_size = storage_size / 10;
+		IF_TRUE_RETVAL(-1 == c_vol_create_sparse_file(img_meta, meta_size), -1);
+	}
+
 	return 0;
 }
 
@@ -298,13 +350,17 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
+		return 0;
 	case MOUNT_TYPE_SHARED_RW:
 	case MOUNT_TYPE_OVERLAY_RW:
-		return c_vol_create_image_empty(img, mount_entry_get_size(mntent));
+	case MOUNT_TYPE_EMPTY: {
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
+		int ret = c_vol_create_image_empty(img, img_meta, mount_entry_get_size(mntent));
+		mem_free(img_meta);
+		return ret;
+	}
 	case MOUNT_TYPE_FLASH:
 		return -1; // we cannot create such image files
-	case MOUNT_TYPE_EMPTY:
-		return c_vol_create_image_empty(img, mount_entry_get_size(mntent));
 	case MOUNT_TYPE_COPY:
 		return c_vol_create_image_copy(vol, img, mntent);
 	case MOUNT_TYPE_DEVICE:
@@ -616,8 +672,8 @@ c_vol_setup_busybox_install(void)
 static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
-	char *img, *dev, *dir;
-	int fd = 0;
+	char *img, *dev, *img_meta, *dev_meta, *dir;
+	int fd = 0, fd_meta = 0;
 	bool new_image = false;
 	bool encrypted = mount_entry_is_encrypted(mntent);
 	bool overlay = false;
@@ -625,12 +681,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_has_setup_mode(vol->container);
 	int uid = container_get_uid(vol->container);
-	bool integrity = false;
 
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
 
-	img = dev = dir = NULL;
+	img = dev = img_meta = dev_meta = dir = NULL;
 
 	if (mount_entry_get_dir(mntent)[0] == '/')
 		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
@@ -742,9 +797,18 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		} else {
 			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
 
+			img_meta = c_vol_meta_image_path_new(vol, mntent);
+			dev_meta = c_vol_create_loopdev_new(&fd_meta, img_meta);
+
+			IF_NULL_GOTO(dev_meta, error);
+
 			mem_free(crypt);
 			crypt = cryptfs_setup_volume_new(
-				label, dev, container_get_key(vol->container), integrity);
+				label, dev, container_get_key(vol->container), dev_meta);
+
+			// release loopdev fd (crypt device should keep it open now)
+			close(fd_meta);
+			mem_free(img_meta);
 
 			if (!crypt) {
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
@@ -898,31 +962,44 @@ final:
 		goto error;
 	}
 
-	if (shiftids)
+	if (shiftids) {
 		if (container_shift_ids(vol->container, dir, is_root) < 0) {
 			ERROR_ERRNO("Shifting user and gids failed!");
 			goto error;
 		}
+	}
 
 	if (dev)
 		loopdev_free(dev);
+	if (dev_meta)
+		loopdev_free(dev_meta);
 	if (img)
 		mem_free(img);
+	if (img_meta)
+		mem_free(img_meta);
 	if (dir)
 		mem_free(dir);
 	if (fd)
 		close(fd);
+	if (fd_meta)
+		close(fd_meta);
 	return 0;
 
 error:
 	if (dev)
 		loopdev_free(dev);
+	if (dev_meta)
+		loopdev_free(dev_meta);
 	if (img)
 		mem_free(img);
+	if (img_meta)
+		mem_free(img_meta);
 	if (dir)
 		mem_free(dir);
 	if (fd)
 		close(fd);
+	if (fd_meta)
+		close(fd_meta);
 	return -1;
 }
 
@@ -1209,7 +1286,7 @@ c_vol_do_shared_bind_mounts(const c_vol_t *vol)
 	// setup persitent image as date store for shared objects
 	bind_img_path = mem_printf("%s/_store.img", SHARED_FILES_PATH);
 	if (!file_exists(bind_img_path)) {
-		if (c_vol_create_image_empty(bind_img_path, SHARED_FILES_STORE_SIZE) < 0) {
+		if (c_vol_create_image_empty(bind_img_path, NULL, SHARED_FILES_STORE_SIZE) < 0) {
 			goto err;
 		}
 		if (c_vol_format_image(bind_img_path, "ext4") < 0) {
