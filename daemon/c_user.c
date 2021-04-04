@@ -69,6 +69,8 @@ struct c_user {
 	int uid_start;		//!< this is the start of uids and gids in the root namespace
 	list_t *marks;		//marks to be mounted in userns
 	int mark_index;
+	int fd_userns;
+	char *ns_path;
 };
 
 /**
@@ -200,6 +202,11 @@ c_user_new(container_t *container, bool user_ns)
 	user->ns_usr = user_ns;
 	user->uid_start = 0;
 
+	// path to bind userns (used for reboots)
+	dir_mkdir_p("/var/run/userns", 00755);
+	user->ns_path =
+		mem_printf("/var/run/userns/%s", uuid_string(container_get_uuid(container)));
+
 	TRACE("new c_user struct was allocated");
 
 	return user;
@@ -265,13 +272,24 @@ c_user_cleanup_marks_cb(const char *path, const char *file, UNUSED void *data)
  * Cleans up the c_user_t struct.
  */
 void
-c_user_cleanup(c_user_t *user)
+c_user_cleanup(c_user_t *user, bool is_rebooting)
 {
 	ASSERT(user);
 
 	/* We can skip this in case the container has no user ns */
 	if (!user->ns_usr)
 		return;
+
+	/* skip on reboots of c0 */
+	if (is_rebooting && (cmld_containers_get_a0() == user->container))
+		return;
+
+	// remove bound to filesystem
+	ns_unbind(user->ns_path);
+	if (user->fd_userns > 0) {
+		close(user->fd_userns);
+		user->fd_userns = -1;
+	}
 
 	c_user_unset_offset(user->offset);
 
@@ -292,6 +310,7 @@ void
 c_user_free(c_user_t *user)
 {
 	ASSERT(user);
+	mem_free(user->ns_path);
 	mem_free(user);
 }
 
@@ -337,6 +356,8 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 			ret--;
 		}
 	}
+	INFO("Chown file '%s' to (%d:%d) (uid_start %d)", file_to_chown, uid, gid, user->uid_start);
+
 	// chown .
 	if (chown(path, uid, gid) < 0) {
 		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
@@ -478,6 +499,11 @@ c_user_start_pre_clone(c_user_t *user)
 	if (!user->ns_usr)
 		return 0;
 
+	/* skip on reboots of c0 */
+	if ((cmld_containers_get_a0() == user->container) &&
+	    (container_get_prev_state(user->container) == CONTAINER_STATE_REBOOTING))
+		return 0;
+
 	// reserve a new mapping
 	if (c_user_set_next_uid_range_start(user)) {
 		ERROR("Reserving uid range for userns");
@@ -487,13 +513,27 @@ c_user_start_pre_clone(c_user_t *user)
 }
 
 int
-c_user_start_post_clone(const c_user_t *user)
+c_user_start_post_clone(c_user_t *user)
 {
 	ASSERT(user);
 
 	/* Skip this, if the container doesn't have a user namespace */
 	if (!user->ns_usr)
 		return 0;
+
+	/* skip on reboots of c0 */
+	if ((cmld_containers_get_a0() == user->container) &&
+	    (container_get_prev_state(user->container) == CONTAINER_STATE_REBOOTING))
+		return 0;
+
+	// bind userns to file
+	if (ns_bind("user", container_get_pid(user->container), user->ns_path) == -1) {
+		WARN("Could not bind userns of %s into filesystem!",
+		     container_get_name(user->container));
+	}
+	user->fd_userns = open(user->ns_path, O_RDONLY);
+	if (user->fd_userns < 0)
+		WARN("Could not keep userns active for reboot!");
 
 	return c_user_setup_mapping(user);
 }
@@ -560,4 +600,13 @@ error:
 	if (saved_dev)
 		mem_free(saved_dev);
 	return -1;
+}
+
+int
+c_user_join_userns(const c_user_t *user)
+{
+	ASSERT(user);
+	IF_FALSE_RETVAL(file_exists(user->ns_path), -1);
+
+	return ns_join_by_path(user->ns_path);
 }

@@ -62,13 +62,13 @@ c_user_start_child(const c_user_t *user);
  * Setup mapping for uids and gids of the user namespace in rootns
  */
 int
-c_user_start_post_clone(const c_user_t *user);
+c_user_start_post_clone(c_user_t *user);
 
 /**
  * Cleans up the c_user_t struct.
  */
 void
-c_user_cleanup(c_user_t *user);
+c_user_cleanup(c_user_t *user, bool is_rebooting);
 
 /**
  * Frees the c_net_t structure
@@ -95,5 +95,11 @@ c_user_shift_mounts(const c_user_t *user);
  */
 int
 c_user_setuid0(const c_user_t *user);
+
+/**
+ * Rejoin existing userns on reboots where userns is kept active
+ */
+int
+c_user_join_userns(const c_user_t *user);
 
 #endif /* C_USER_H */

@@ -73,7 +73,7 @@ c_net_start_child(c_net_t *net);
  * Reset the c_net structure and shut the interface down
  */
 void
-c_net_cleanup(c_net_t *net);
+c_net_cleanup(c_net_t *net, bool is_rebooting);
 
 /*
  * return a new string with the containers ip address which is
@@ -113,5 +113,11 @@ c_net_remove_ifi(const char *ifi_name, const pid_t pid);
  */
 list_t *
 c_net_get_interface_mapping_new(c_net_t *net);
+
+/**
+ * Rejoin existing netns on reboots where netns is kept active
+ */
+int
+c_net_join_netns(const c_net_t *net);
 
 #endif /* C_NET_H */
