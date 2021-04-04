@@ -543,6 +543,12 @@ container_state_t
 container_get_state(const container_t *container);
 
 /**
+ * Returns the previous state of the container.
+ */
+container_state_t
+container_get_prev_state(const container_t *container);
+
+/**
  * Returns the the type of the container.
  */
 container_type_t

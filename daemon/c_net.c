@@ -48,6 +48,7 @@
 #include "common/sock.h"
 #include "common/list.h"
 #include "common/nl.h"
+#include "common/ns.h"
 #include "common/file.h"
 #include "common/dir.h"
 #include "common/network.h"
@@ -110,6 +111,8 @@ struct c_net {
 	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container
+	char *ns_path;			//!< path for binding netns into filesystem
+	int fd_netns;			//!< fd to keep netns active during reboots
 };
 
 /**
@@ -570,6 +573,10 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 				list_append(net->interface_mv_name_list, if_name);
 	}
 
+	// path to bind netns, compatible to ip netns tool
+	dir_mkdir_p("/var/run/netns", 00755);
+	net->ns_path = mem_printf("/var/run/netns/%s", uuid_string(container_get_uuid(container)));
+
 	TRACE("new c_net struct was allocated");
 
 	return net;
@@ -818,6 +825,11 @@ c_net_start_pre_clone(c_net_t *net)
 	if (!net->ns_net)
 		return 0;
 
+	/* skip on reboots of c0 */
+	if ((cmld_containers_get_a0() == net->container) &&
+	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
+		return 0;
+
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
@@ -890,6 +902,11 @@ c_net_start_post_clone(c_net_t *net)
 
 	/* Skip, if the container doesn't have a network ns */
 	if (!net->ns_net)
+		return 0;
+
+	/* skip on reboots of c0 */
+	if ((cmld_containers_get_a0() == net->container) &&
+	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
 	/* Get container's pid */
@@ -1031,6 +1048,16 @@ c_net_start_post_clone(c_net_t *net)
 			// TODO firewall connections to cml
 		}
 	}
+
+	// bind netns to file
+	if (ns_bind("net", pid, net->ns_path) == -1) {
+		WARN("Could not bind netns of %s into filesystem!",
+		     container_get_name(net->container));
+	}
+	net->fd_netns = open(net->ns_path, O_RDONLY);
+	if (net->fd_netns < 0)
+		WARN("Could not keep netns active for reboot!");
+
 	return 0;
 }
 
@@ -1078,6 +1105,11 @@ c_net_start_child(c_net_t *net)
 
 	/* Skip this, if the container doesn't have a network namespace */
 	if (!net->ns_net || !(list_length(net->interface_list) > 0))
+		return 0;
+
+	/* skip on reboots of c0 */
+	if ((cmld_containers_get_a0() == net->container) &&
+	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
 	// shrink subnet reserverd for loopback device
@@ -1201,13 +1233,24 @@ c_net_cleanup_c0(c_net_t *net)
  * Cleans up the c_net_t struct and shuts down the network interface.
  */
 void
-c_net_cleanup(c_net_t *net)
+c_net_cleanup(c_net_t *net, bool is_rebooting)
 {
 	ASSERT(net);
 
 	/* We can skip this in case the container has no network ns */
 	if (!net->ns_net || !(list_length(net->interface_list)))
 		return;
+
+	/* skip on reboots of c0 */
+	if (is_rebooting && (cmld_containers_get_a0() == net->container))
+		return;
+
+	// remove bound to filesystem
+	ns_unbind(net->ns_path);
+	if (net->fd_netns > 0) {
+		close(net->fd_netns);
+		net->fd_netns = -1;
+	}
 
 	if (c_net_cleanup_c0(net) == -1)
 		WARN("Failed to create helper child for cleanup in c0's netns");
@@ -1251,6 +1294,7 @@ c_net_free(c_net_t *net)
 		mem_free(l->data);
 	}
 	list_delete(net->interface_mv_name_list);
+	mem_free(net->ns_path);
 	mem_free(net);
 }
 
@@ -1285,4 +1329,14 @@ c_net_get_interface_mapping_new(c_net_t *net)
 		mapping = list_append(mapping, vnet_cfg);
 	}
 	return mapping;
+}
+
+/* rejoin existing netns on reboots where netns is kept active */
+int
+c_net_join_netns(const c_net_t *net)
+{
+	ASSERT(net);
+	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
+
+	return ns_join_by_path(net->ns_path);
 }

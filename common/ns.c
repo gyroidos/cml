@@ -351,5 +351,6 @@ ns_join_by_path(const char *ns_path)
 	}
 
 	close(fd);
+	INFO("Sucessfully joined ns by path: '%s'.", ns_path);
 	return 0;
 }

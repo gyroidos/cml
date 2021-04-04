@@ -1009,16 +1009,16 @@ container_cleanup(container_t *container, bool is_rebooting)
 {
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
-	c_net_cleanup(container->net);
 	c_run_cleanup(container->run);
 	c_time_cleanup(container->time);
-	c_user_cleanup(container->user);
 
 	/*
 	 * maintain some state concerning mounts and corresponding shifted uid
 	 * states in case of rebooting. We need this, since the volume key for
 	 * encrypted volumes is cleared from cmld's memory after initial use.
 	 */
+	c_net_cleanup(container->net, is_rebooting);
+	c_user_cleanup(container->user, is_rebooting);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol, is_rebooting);
 
@@ -1198,13 +1198,13 @@ container_start_child(void *data)
 		goto error;
 	}
 
-	if (c_cgroups_start_child(container->cgroups) < 0) {
-		ret = CONTAINER_ERROR_CGROUPS;
+	if (c_net_start_child(container->net) < 0) {
+		ret = CONTAINER_ERROR_NET;
 		goto error;
 	}
 
-	if (c_net_start_child(container->net) < 0) {
-		ret = CONTAINER_ERROR_NET;
+	if (c_cgroups_start_child(container->cgroups) < 0) {
+		ret = CONTAINER_ERROR_CGROUPS;
 		goto error;
 	}
 
@@ -1391,7 +1391,6 @@ container_start_child_early(void *data)
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
 	}
-
 	void *container_stack = NULL;
 	/* Allocate node stack */
 	if (!(container_stack = alloca(CLONE_STACK_SIZE))) {
@@ -1406,10 +1405,24 @@ container_start_child_early(void *data)
 	clone_flags |= CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID;
 	if (container->ns_ipc)
 		clone_flags |= CLONE_NEWIPC;
-	if (container->ns_usr)
-		clone_flags |= CLONE_NEWUSER;
-	if (container->ns_net)
-		clone_flags |= CLONE_NEWNET;
+
+	// on reboots of c0 rejoin existing userns and netns
+	if (cmld_containers_get_a0() == container &&
+	    container->prev_state == CONTAINER_STATE_REBOOTING) {
+		if (c_user_join_userns(container->user) < 0) {
+			ret = CONTAINER_ERROR_USER;
+			goto error;
+		}
+		if (c_net_join_netns(container->net) < 0) {
+			ret = CONTAINER_ERROR_NET;
+			goto error;
+		}
+	} else {
+		if (container->ns_usr)
+			clone_flags |= CLONE_NEWUSER;
+		if (container->ns_net)
+			clone_flags |= CLONE_NEWNET;
+	}
 
 	container->pid = clone(container_start_child, container_stack_high, clone_flags, container);
 	if (container->pid < 0) {
@@ -2170,6 +2183,13 @@ container_get_state(const container_t *container)
 {
 	ASSERT(container);
 	return container->state;
+}
+
+container_state_t
+container_get_prev_state(const container_t *container)
+{
+	ASSERT(container);
+	return container->prev_state;
 }
 
 container_type_t
