@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
 #include <sys/syscall.h>
 #include <stdbool.h>
 
@@ -34,6 +35,7 @@
 #include "macro.h"
 #include "mem.h"
 #include "dir.h"
+#include "file.h"
 
 int
 namespace_setuid0()
@@ -299,4 +301,55 @@ error:
 	mem_free(pid_string);
 	mem_free(folder);
 	return -1;
+}
+
+int
+ns_bind(char *ns, pid_t pid, char *ns_path)
+{
+	int ret = 0;
+	char *ns_proc_path = NULL;
+	IF_TRUE_RETVAL(file_touch(ns_path), -1);
+
+	ns_proc_path = mem_printf("/proc/%d/ns/%s", pid, ns);
+
+	if (mount(ns_proc_path, ns_path, NULL, MS_BIND, NULL) < 0) {
+		ERROR_ERRNO("Could bind mount ns file %s on %s", ns_proc_path, ns_path);
+		ret = -1;
+	}
+
+	mem_free(ns_proc_path);
+	return ret;
+}
+
+int
+ns_unbind(const char *ns_path)
+{
+	if (umount(ns_path) < 0) {
+		ERROR_ERRNO("Could unbind mount ns file %s", ns_path);
+		return -1;
+	}
+	if (unlink(ns_path) < 0) {
+		ERROR_ERRNO("Could rmove ns file %s", ns_path);
+		return -1;
+	}
+	return 0;
+}
+
+int
+ns_join_by_path(const char *ns_path)
+{
+	int fd = open(ns_path, O_RDONLY);
+	if (fd == -1) {
+		ERROR_ERRNO("Could not open namespace file %s", ns_path);
+		return -1;
+	}
+
+	if (setns(fd, 0) == -1) {
+		ERROR_ERRNO("Could not join namespace by path %s!", ns_path);
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+	return 0;
 }

@@ -32,8 +32,8 @@
 #include <unistd.h>
 
 /**
- * This function tries to gain root priviledges.
- * @returns 0 if root priviledges were sucessfully aquired
+ * This function tries to gain root privileges.
+ * @returns 0 if root privileges were successfully acquired
  */
 int
 namespace_setuid0();
@@ -44,7 +44,7 @@ namespace_setuid0();
  *
  * @param ns_pid pid of the namespace to join
  * @param namespaces clone-flags of the namespaces to join
- * @param become_root indicates if setuid(0) should be executed after joinin the namespaces
+ * @param become_root indicates if setuid(0) should be executed after joining the namespaces
  * @param func function pointer that gets executed inside the given namespaces
  * @param data array that is passed as a parameter to func
  * @returns 0 if the forked child exited cleanly, -1 otherwise.
@@ -61,9 +61,40 @@ namespace_exec(pid_t ns_pid, const int namespaces, bool become_root, int (*func)
  *
  * @param pid pid of the namespace to join
  * @param userns switch for joining userns
- * @returns 0 if all namespaces are changed succesfully, -1 otherwise.
+ * @returns 0 if all namespaces are changed successfully, -1 otherwise.
  */
 int
 ns_join_all(pid_t pid, bool userns);
+
+/**
+ * Bind mount ns e.g. "net" to ns_path, which keeps the corresponding
+ * namespace alive even if last process in namespace of pid dies.
+ *
+ * @param ns namespace type e.g. "net"
+ * @param pid pid of the namespace to be bound in the file system
+ * @param ns_path target path for the bind mount of the ns file
+ * @returns 0 if namespace is bound to file system path successfully, -1 otherwise.
+ */
+int
+ns_bind(char *ns, pid_t pid, char *ns_path);
+
+/**
+ * Release a bound ns e.g. "net" in the file system on path ns_path.
+ *
+ * @param ns_path target path for the bind mount of the ns file
+ * @returns 0 if namespace file is unbound successfully, -1 otherwise.
+ */
+int
+ns_unbind(const char *ns_path);
+
+/**
+ * Joins current process to a namespace defined by a bound path in the
+ * file system.
+ *
+ * @param ns_path path of the bound namespace to be joined
+ * @returns 0 if process successfully joined the namespace, -1 otherwise.
+ */
+int
+ns_join_by_path(const char *ns_path);
 
 #endif //NS_H
