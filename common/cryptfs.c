@@ -653,7 +653,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	// do dmcrypt device setup only
 
 	/* Use only the first 64 hex digits of master key for 512 bit xts mode */
-	IF_FALSE_RETVAL(strlen(key) < 65, NULL);
+	IF_TRUE_RETVAL(strlen(key) < 65, NULL);
 	char enc_key[65];
 	snprintf(enc_key, 65, "%s", key);
 
