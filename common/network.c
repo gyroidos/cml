@@ -725,3 +725,58 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 
 	return NULL;
 }
+
+int
+network_create_bridge(const char *name)
+{
+	IF_NULL_RETVAL_ERROR(name, -1);
+
+	const char *const argv[] = { IP_PATH, "link", "add", "name", name, "type", "bridge", NULL };
+	int ret = proc_fork_and_execvp(argv);
+	return ret;
+}
+
+/**
+ * Adds an interface to a bridge.
+ */
+int
+network_bridge_add_port(const char *br_name, const char *prt_name)
+{
+	IF_NULL_RETVAL_ERROR(br_name, -1);
+	IF_NULL_RETVAL_ERROR(prt_name, -1);
+
+	const char *const argv[] = { IP_PATH,  "link",	 "set",	  "dev",
+				     prt_name, "master", br_name, NULL };
+	int ret = proc_fork_and_execvp(argv);
+	return ret;
+}
+
+int
+network_bridge_remove_port(const char *br_name)
+{
+	IF_NULL_RETVAL_ERROR(br_name, -1);
+
+	const char *const argv[] = { IP_PATH, "link", "set", br_name, "nomaster", NULL };
+	int ret = proc_fork_and_execvp(argv);
+	return ret;
+}
+
+int
+network_bridge_set_up(const char *br_name)
+{
+	IF_NULL_RETVAL_ERROR(br_name, -1);
+
+	const char *const argv[] = { IP_PATH, "link", "set", "dev", br_name, "up", NULL };
+	int ret = proc_fork_and_execvp(argv);
+	return ret;
+}
+
+int
+network_delete_bridge(const char *name)
+{
+	IF_NULL_RETVAL_ERROR(name, -1);
+
+	const char *const argv[] = { IP_PATH, "link", "delete", name, "type", "bridge", NULL };
+	int ret = proc_fork_and_execvp(argv);
+	return ret;
+}
