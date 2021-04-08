@@ -302,29 +302,18 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		      (vnet_cfg->configure) ? "configured" : "unconfigured");
 	}
 
-	list_t *nw_mv_name_list = NULL;
-	if (container_uuid_is_c0id(uuid) && ns_net) {
-		nw_mv_name_list = hardware_get_nw_mv_name_list();
-		for (list_t *elem = nw_mv_name_list; elem != NULL; elem = elem->next) {
-			DEBUG("List element in nw_names_list: %s", (char *)(elem->data));
-		}
-	}
-
 	// network interfaces from container config
 	for (list_t *elem = net_ifaces; elem != NULL; elem = elem->next) {
-		char *if_name_macstr = elem->data;
-		nw_mv_name_list = list_append(nw_mv_name_list, mem_strdup(if_name_macstr));
-		DEBUG("List element in net_ifaces: %s", if_name_macstr);
+		container_pnet_cfg_t *pnet_cfg = elem->data;
+		DEBUG("List element in net_ifaces: %s", pnet_cfg->pnet_name);
 	}
 
-	container->net = c_net_new(container, ns_net, vnet_cfg_list, nw_mv_name_list);
+	container->net = c_net_new(container, ns_net, vnet_cfg_list, net_ifaces);
 	if (!container->net) {
 		WARN("Could not initialize net subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
-	list_delete(nw_mv_name_list);
-	list_delete(net_ifaces);
 
 	container->vol = c_vol_new(container);
 	if (!container->vol) {
@@ -588,6 +577,12 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		mem_free(vnet_cfg);
 	}
 	list_delete(vnet_cfg_list);
+
+	for (list_t *l = net_ifaces; l; l = l->next) {
+		container_pnet_cfg_t *pnet_cfg = l->data;
+		container_pnet_cfg_free(pnet_cfg);
+	}
+	list_delete(net_ifaces);
 
 	container_config_free(conf);
 	return c;
@@ -2482,6 +2477,44 @@ container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8
 	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
 	vnet_cfg->configure = configure;
 	return vnet_cfg;
+}
+
+/**
+ * Create a new container_pnet_cfg_t structure for physical NICs that should be
+ * made accessible to a container.
+ */
+container_pnet_cfg_t *
+container_pnet_cfg_new(const char *if_name_mac, bool mac_filter, list_t *mac_whitelist)
+{
+	container_pnet_cfg_t *pnet_cfg = mem_new0(container_pnet_cfg_t, 1);
+
+	pnet_cfg->pnet_name = mem_strdup(if_name_mac);
+	pnet_cfg->mac_filter = mac_filter;
+	pnet_cfg->mac_whitelist = NULL;
+
+	if (!mac_filter)
+		return pnet_cfg;
+
+	for (list_t *l = mac_whitelist; l; l = l->next) {
+		uint8_t *mac = mem_alloc0(6);
+		memcpy(mac, l->data, 6);
+		pnet_cfg->mac_whitelist = list_append(pnet_cfg->mac_whitelist, mac);
+	}
+
+	return pnet_cfg;
+}
+
+void
+container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg)
+{
+	IF_NULL_RETURN(pnet_cfg);
+
+	for (list_t *l = pnet_cfg->mac_whitelist; l; l = l->next) {
+		uint8_t *mac = l->data;
+		mem_free(mac);
+	}
+	list_delete(pnet_cfg->mac_whitelist);
+	mem_free(pnet_cfg);
 }
 
 void

@@ -46,7 +46,6 @@
 
 struct container_config {
 	char *file;
-
 	ContainerConfig *cfg;
 };
 
@@ -390,15 +389,40 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 
 	list_t *net_ifaces_list = NULL;
 	for (size_t i = 0; i < config->cfg->n_net_ifaces; i++) {
-		net_ifaces_list =
-			list_append(net_ifaces_list, mem_strdup(config->cfg->net_ifaces[i]->netif));
-		for (size_t i = 0; i < config->cfg->net_ifaces[i]->n_mac_filter; i++) {
-			INFO("MAC Filter on for %s: allow '%s'", config->cfg->net_ifaces[i]->netif,
-			     config->cfg->net_ifaces[i]->mac_filter[i]);
-		}
-		if (config->cfg->net_ifaces[i]->n_mac_filter <= 0)
+		bool mac_filter_enabled = config->cfg->net_ifaces[i]->n_mac_filter > 0;
+		list_t *mac_whitelist = NULL;
+		// check if MAC filtering is configured
+		if (mac_filter_enabled) {
+			// create list of whitelisted MAC adresses
+			for (size_t j = 0; j < config->cfg->net_ifaces[i]->n_mac_filter; j++) {
+				INFO("MAC Filter on for %s: allow '%s'",
+				     config->cfg->net_ifaces[i]->netif,
+				     config->cfg->net_ifaces[i]->mac_filter[j]);
+
+				uint8_t *whitelisted_mac = mem_new(uint8_t, 6);
+				if (0 != network_str_to_mac_addr(
+						 config->cfg->net_ifaces[i]->mac_filter[j],
+						 whitelisted_mac)) {
+					mem_free(whitelisted_mac);
+				} else {
+					mac_whitelist = list_append(mac_whitelist, whitelisted_mac);
+				}
+			}
+		} else {
 			INFO("MAC Filter off for %s: allow any MAC",
 			     config->cfg->net_ifaces[i]->netif);
+		}
+		container_pnet_cfg_t *pnet_cfg = container_pnet_cfg_new(
+			config->cfg->net_ifaces[i]->netif, mac_filter_enabled, mac_whitelist);
+		if (pnet_cfg == NULL) {
+			ERROR("Failed to create container_pnet_cfg for %s",
+			      config->cfg->net_ifaces[i]->netif);
+			continue;
+		}
+
+		// append to net_ifaces_list
+		net_ifaces_list =
+			list_append(net_ifaces_list, pnet_cfg); // append to net_ifaces_list
 	}
 	return net_ifaces_list;
 }
