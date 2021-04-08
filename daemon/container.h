@@ -97,6 +97,17 @@ typedef struct container_vnet_cfg {
 } container_vnet_cfg_t;
 
 /**
+ * Structure to define a phyiscal NIC that is accesible from inside a container.
+ * The CML bridges or moves the physical IF into the container and enforces
+ * filtering of layer 2 frames based on MAC adresses
+ */
+typedef struct container_pnet_cfg {
+	char *pnet_name;
+	bool mac_filter;
+	list_t *mac_whitelist;
+} container_pnet_cfg_t;
+
+/**
  * Structure to define the configuration of the token associated with the container.
  */
 typedef struct container_token_config {
@@ -671,6 +682,20 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
  */
 list_t *
 container_get_vnet_runtime_cfg_new(container_t *container);
+
+/**
+ * Initialize a container_pnet_cfg_t data structure and allocate needed memory.
+ * @if_name may be either the name or the MAC of the phyiscal NIC
+ */
+container_pnet_cfg_t *
+container_pnet_cfg_new(const char *if_name, bool mac_filter, list_t *mac_whitelist);
+
+/**
+ * Free all memory used by a container_pnet_cfg_t data structure, including
+ * the internal mac_whitelist.
+ */
+void
+container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg);
 
 /**
  * This function updates the containers config on storage with the provided

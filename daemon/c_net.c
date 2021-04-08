@@ -106,9 +106,9 @@ struct c_net {
 	container_t *container; //!< container which the c_net struct is associated to
 	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
-	list_t *interface_mv_name_list; //!< contains list of iff names to be moved into the container
-	char *ns_path;			//!< path for binding netns into filesystem
-	int fd_netns;			//!< fd to keep netns active during reboots
+	list_t *pnet_mv_list; //!< contains list of phyiscal NICs to be bridged via a veth or moved into a container. MAC adress filtering may be applied
+	char *ns_path;	      //!< path for binding netns into filesystem
+	int fd_netns;	      //!< fd to keep netns active during reboots
 };
 
 /**
@@ -501,7 +501,7 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
  * @return the c_net_t network structure which holds networking information for a container.
  */
 c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw_mv_name_list)
+c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pnet_cfg_list)
 {
 	ASSERT(container);
 
@@ -542,8 +542,9 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	}
 
 	uint8_t mac[6];
-	for (list_t *l = nw_mv_name_list; l; l = l->next) {
-		char *if_name_macstr = l->data;
+	for (list_t *l = pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_t *pnet_cfg = l->data;
+		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
 		TRACE("mv_name_list add ifname %s", if_name_macstr);
 		memset(&mac, 0, 6);
@@ -566,8 +567,10 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 		TRACE("mv_name_list add ifname %s", if_name);
 
 		if (cmld_netif_phys_remove_by_name(if_name))
-			net->interface_mv_name_list =
-				list_append(net->interface_mv_name_list, if_name);
+			net->pnet_mv_list = list_append(
+				net->pnet_mv_list,
+				container_pnet_cfg_new(pnet_cfg->pnet_name, pnet_cfg->mac_filter,
+						       pnet_cfg->mac_whitelist));
 	}
 
 	// path to bind netns, compatible to ip netns tool
@@ -717,6 +720,8 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 		goto err;
 	}
 
+	/* TODO: check if physical IF has MAC that is allowed by container config */
+
 	/* Start with second step: create veth pair, set root ns ipv4 add, bring the interface up */
 	DEBUG("Create veth pair %s/%s", ni->veth_cont_name, ni->veth_cmld_name);
 
@@ -828,11 +833,13 @@ c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
 }
 
 /**
- * This function is responisble for moving the container interface to its corresponding namespace.
+ * This function is responsible for moving the container interface to its corresponding namespace.
  *
  * It moves physical interfaces to its configured containers. Furher it creates a new child from
  * cmld and joins this to c0's netns for configuring the network endpoint of container virtual
  * veth's there.
+ * TODO: do not move physical interfaces but rather a veth so that iptables can be applied in the
+ * CML context
  */
 int
 c_net_start_post_clone(c_net_t *net)
@@ -852,12 +859,16 @@ c_net_start_post_clone(c_net_t *net)
 	pid_t pid = container_get_pid(net->container);
 	pid_t pid_c0 = cmld_containers_get_c0() ? container_get_pid(cmld_containers_get_c0()) : 0;
 
-	for (list_t *l = net->interface_mv_name_list; l; l = l->next) {
-		char *iff_name = l->data;
-
-		DEBUG("move phys %s to the ns of this pid: %d", iff_name, pid);
-		if (c_net_move_ifi(iff_name, pid) < 0)
-			return -1;
+	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+		if (false == cfg->mac_filter) { // directly map phys. IF into container
+			DEBUG("move phys %s to the ns of this pid: %d", cfg->pnet_name, pid);
+			if (c_net_move_ifi(cfg->pnet_name, pid) < 0) {
+				return -1;
+			}
+		} else { // pIF should be bridged and MAC filtering applied
+			 // TODO
+		}
 	}
 	if (pid == pid_c0 && container_is_privileged(net->container)) {
 		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
@@ -1216,10 +1227,11 @@ c_net_free(c_net_t *net)
 		c_net_free_interface(ni);
 	}
 	list_delete(net->interface_list);
-	for (list_t *l = net->interface_mv_name_list; l; l = l->next) {
-		mem_free(l->data);
+	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+		container_pnet_cfg_t *pnet = l->data;
+		container_pnet_cfg_free(pnet);
 	}
-	list_delete(net->interface_mv_name_list);
+	list_delete(net->pnet_mv_list);
 	mem_free(net->ns_path);
 	mem_free(net);
 }
