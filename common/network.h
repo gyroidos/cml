@@ -224,4 +224,34 @@ network_get_ifname_by_addr_new(uint8_t mac[6]);
 int
 network_get_mac_by_ifname(const char *ifname, uint8_t mac[6]);
 
+/**
+ * Create a Linux bridge device.
+ */
+int
+network_create_bridge(const char *name);
+
+/**
+ * Set state of a Linux bridge to "up".
+ */
+int
+network_bridge_set_up(const char *br_name);
+
+/**
+ * Add an interface to a Linux bridge.
+ */
+int
+network_bridge_add_port(const char *br_name, const char *prt_name);
+
+/**
+ * Remove an interface from a Linux bridge.
+ */
+int
+network_bridge_remove_port(const char *br_name);
+
+/**
+ * Delete a Linux bridge.
+ */
+int
+network_delete_bridge(const char *name);
+
 #endif /* NETWORK_H */
