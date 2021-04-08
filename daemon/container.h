@@ -940,7 +940,7 @@ container_audit_get_last_ack(const container_t *container);
  * Stores the last ACKi hash that has been received for this container.
  */
 void
-container_audit_set_last_ack(const container_t *container, char *last_ack);
+container_audit_set_last_ack(const container_t *container, const char *last_ack);
 
 /**
  * Returns wether an ACK is currently being processed for this container

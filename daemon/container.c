@@ -931,7 +931,7 @@ container_audit_get_last_ack(const container_t *container)
 }
 
 void
-container_audit_set_last_ack(const container_t *container, char *last_ack)
+container_audit_set_last_ack(const container_t *container, const char *last_ack)
 {
 	ASSERT(container);
 	c_audit_set_last_ack(container->audit, last_ack);

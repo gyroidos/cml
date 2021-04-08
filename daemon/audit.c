@@ -130,11 +130,11 @@ audit_remaining_storage(const char *uuid)
 	char *file = audit_log_file_new(uuid);
 	off_t size = file_size(file);
 
-	mem_free(file);
-
 	if (!file_exists(file)) {
+		mem_free(file);
 		return AUDIT_STORAGE;
 	}
+	mem_free(file);
 
 	if (0 > size) {
 		ERROR_ERRNO("Failed to retrieve size of audit log file");
@@ -153,10 +153,12 @@ static void
 audit_send_record_cb(const char *hash_string, const char *hash_file,
 		     UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
 {
-	if (!hash_string) {
-		ERROR("audit_send_record_cb: hash_string was empty");
-		return;
-	}
+	uint8_t *buf = NULL;
+	const container_t *c = (const container_t *)data;
+	ASSERT(c);
+
+	// callback is triggert twice for cleanup
+	IF_NULL_RETURN_TRACE(hash_string);
 
 	if (!hash_file) {
 		ERROR("audit_send_record_cb: hash_file was empty");
@@ -168,11 +170,8 @@ audit_send_record_cb(const char *hash_string, const char *hash_file,
 		return;
 	}
 
-	const container_t *c = (const container_t *)data;
-	ASSERT(c);
-
 	uint32_t buf_len = file_size(hash_file);
-	uint8_t *buf = mem_alloc0(buf_len);
+	buf = mem_alloc0(buf_len);
 
 	int read = file_read(hash_file, (char *)buf, buf_len);
 
@@ -183,32 +182,36 @@ audit_send_record_cb(const char *hash_string, const char *hash_file,
 
 	TRACE("Got hash from SCD for file %s: %s", hash_file, hash_string);
 
-	container_audit_set_processing_ack(c, false);
-
 	if (unlink(hash_file)) {
 		ERROR_ERRNO("Failed to unlink %s", hash_file);
 	}
 
+	char *old_acked = mem_strdup(container_audit_get_last_ack(c));
+	container_audit_set_last_ack(c, hash_string);
+
 	if (0 > container_audit_record_send(c, buf, buf_len)) {
 		ERROR("Failed to send audit record to container");
+		// rollback
+		container_audit_set_last_ack(c, old_acked);
+		mem_free(old_acked);
 		goto out;
 	}
+	mem_free(old_acked);
 
-	container_audit_set_last_ack(c, mem_strdup(hash_string));
 	TRACE("Sent audit record with ID %s to container %s", container_audit_get_last_ack(c),
 	      uuid_string(container_get_uuid(c)));
-	//sleep(30);
 
 out:
+	container_audit_set_processing_ack(c, false);
 	mem_free(buf);
 }
 
 static AuditRecord *
-audit_record_from_textfile_new(const char *filename, const ProtobufCMessageDescriptor *descriptor,
-			       bool purge)
+audit_record_from_textfile_new(const char *filename, bool purge)
 {
 	ASSERT(filename);
-	ASSERT(descriptor);
+
+	TRACE("audit record from textfile using log '%s'", filename);
 
 	FILE *file = fopen(filename, "r");
 	if (!file) {
@@ -219,7 +222,7 @@ audit_record_from_textfile_new(const char *filename, const ProtobufCMessageDescr
 	ssize_t size = file_size(filename);
 
 	if (0 > size) {
-		ERROR("Failed to retrieve size of audit record log");
+		ERROR("Failed to retrieve size of audit record log '%s'", filename);
 		return NULL;
 	}
 
@@ -236,23 +239,27 @@ audit_record_from_textfile_new(const char *filename, const ProtobufCMessageDescr
 		if (0 > (current = getline(&line, &n, file))) {
 			ERROR_ERRNO("Failed to read line from file");
 			fclose(file);
+			mem_free(line);
 			goto out;
 		}
 
 		if (read + current > (size_t)size) {
 			ERROR("File was changed while reading");
 			fclose(file);
+			mem_free(line);
 			goto out;
 		}
 
 		// if delimiter line was read, stop further processing
 		if (!strcmp(AUDIT_DELIMITER, line)) {
 			delim_found = true;
+			mem_free(line);
 			continue;
 		}
 
 		memcpy(buf + read, line, current);
 		read += current;
+		mem_free(line);
 	}
 	fclose(file);
 
@@ -265,12 +272,13 @@ audit_record_from_textfile_new(const char *filename, const ProtobufCMessageDescr
 		goto out;
 	} else {
 		record = (AuditRecord *)protobuf_message_new_from_buf((uint8_t *)buf, read,
-								      descriptor);
+								      &audit_record__descriptor);
 	}
 
 	if (!record) {
 		ERROR("Failed to parse text protobuf message (%s) from file \"%s\".",
-		      descriptor->name ? descriptor->name : "UNKNOWN", filename);
+		      audit_record__descriptor.name ? audit_record__descriptor.name : "UNKNOWN",
+		      filename);
 		goto out;
 	}
 
@@ -364,6 +372,7 @@ audit_next_record_new(const container_t *container, bool purge)
 	AuditRecord *r;
 
 	char *file = audit_log_file_new(uuid_string(container_get_uuid(container)));
+	TRACE("next record in log file '%s'", file);
 
 	if (!file_exists(file)) {
 		ERROR("Failed to read audit record: no file");
@@ -371,7 +380,7 @@ audit_next_record_new(const container_t *container, bool purge)
 		return NULL;
 	}
 
-	r = (AuditRecord *)audit_record_from_textfile_new(file, &audit_record__descriptor, purge);
+	r = (AuditRecord *)audit_record_from_textfile_new(file, purge);
 
 	mem_free(file);
 
@@ -379,8 +388,10 @@ audit_next_record_new(const container_t *container, bool purge)
 }
 
 static int
-audit_do_send_record(const container_t *c, AuditRecord *record)
+audit_do_send_record(const container_t *c)
 {
+	uint8_t *packed = NULL;
+	uint32_t packed_len = 0;
 	int ret = -1;
 
 	char tmpfile[strlen(AUDIT_LOGDIR) + 14];
@@ -398,15 +409,13 @@ audit_do_send_record(const container_t *c, AuditRecord *record)
 	cmld_to_service_message__init(message_proto);
 	message_proto->code = CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_RECORD;
 
-	message_proto->audit_record = record;
+	if (!(message_proto->audit_record = audit_next_record_new(c, false))) {
+		ERROR("Could not read next audit record");
+		goto out;
+	}
+	TRACE("read next audit record sucessfully");
 
-	uint8_t *packed;
-	uint32_t packed_len = protobuf_pack_message_new((ProtobufCMessage *)message_proto, &packed);
-
-	//	audit_record_free(record);
-	//	mem_free(message_proto);
-
-	protobuf_free_message((ProtobufCMessage *)message_proto);
+	packed_len = protobuf_pack_message_new((ProtobufCMessage *)message_proto, &packed);
 
 	if (!packed) {
 		ERROR("Failed to pack protobuf message");
@@ -415,10 +424,8 @@ audit_do_send_record(const container_t *c, AuditRecord *record)
 
 	if (-1 == file_write(tmpfile, (char *)packed, packed_len)) {
 		ERROR("Failed to write packed message to file.");
-		mem_free(packed);
 		goto out;
 	}
-	mem_free(packed);
 
 	TRACE("Requesting scd to hash serialized protobuf message at %s", tmpfile);
 
@@ -434,9 +441,14 @@ audit_do_send_record(const container_t *c, AuditRecord *record)
 		mem_free(dump);
 	}
 
+	TRACE("sent next stored audit record sucessfully");
 	ret = 0;
 out:
+	if (ret < 0)
+		ERROR("Failed to send next stored audit record");
 
+	mem_free(packed);
+	protobuf_free_message((ProtobufCMessage *)message_proto);
 	return ret;
 }
 
@@ -446,7 +458,10 @@ audit_send_next_stored(const container_t *c)
 	if (!c)
 		return -1;
 
+	TRACE("send_next_stored");
 	char *file = audit_log_file_new(uuid_string(container_get_uuid(c)));
+
+	TRACE("send_next_stored log file: %s", file);
 
 	if (!file_exists(file)) {
 		DEBUG("Sent all stored audit messages");
@@ -457,27 +472,14 @@ audit_send_next_stored(const container_t *c)
 			return -1;
 		}
 
-		container_audit_set_last_ack(c, NULL);
+		container_audit_set_last_ack(c, "");
 		container_audit_set_processing_ack(c, false);
 
 		return 0;
 	}
 	mem_free(file);
 
-	AuditRecord *record;
-	if (!(record = audit_next_record_new(c, false))) {
-		ERROR("Could not read next audit record");
-		return -1;
-	}
-
-	if (audit_do_send_record(c, record)) {
-		ERROR("Failed to send next stored audit record");
-		mem_free(record);
-		return -1;
-	}
-	mem_free(record);
-
-	return 0;
+	return audit_do_send_record(c);
 }
 
 int
@@ -510,6 +512,9 @@ audit_process_ack(const container_t *c, const char *ack)
 	TRACE("Got audit record ACK from container %s: %s", uuid_string(container_get_uuid(c)),
 	      ack);
 
+	TRACE("Last ack for container %s: %s", uuid_string(container_get_uuid(c)),
+	      container_audit_get_last_ack(c));
+
 	if (match_hash(AUDIT_HASH_ALGO_LEN, container_audit_get_last_ack(c), ack)) {
 		TRACE("ACK hash matched last sent record %s", container_audit_get_last_ack(c));
 
@@ -520,10 +525,10 @@ audit_process_ack(const container_t *c, const char *ack)
 			return -1;
 		}
 
-		mem_free(record);
+		protobuf_free_message((ProtobufCMessage *)record);
 		TRACE("Cleaned up ack'ed record");
 
-		container_audit_set_last_ack(c, mem_strdup(""));
+		container_audit_set_last_ack(c, "");
 	} else {
 		WARN("ACK from container %s did not match last sent audit record, try to send last stored record again",
 		     uuid_string(container_get_uuid(c)));
@@ -671,7 +676,7 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 		AuditRecord *record = (AuditRecord *)protobuf_message_new_from_buf(
 			(uint8_t *)record_text, record_text_len, &audit_record__descriptor);
 		audit_record_log(cmld_container_get_by_uid(uid), record);
-		mem_free(record);
+		protobuf_free_message((ProtobufCMessage *)record);
 		TRACE("audit: type=%d %s", type, log_record);
 	} else if (type == AUDIT_USER || type == AUDIT_LOGIN ||
 		   (type >= AUDIT_FIRST_USER_MSG && type <= AUDIT_LAST_USER_MSG) ||
