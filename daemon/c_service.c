@@ -544,7 +544,7 @@ c_service_audit_send_record(c_service_t *service, const uint8_t *buf, uint32_t b
 {
 	ASSERT(service);
 
-	TRACE("Trying to send packed audit record to container %s",
+	TRACE("Trying to send packed audit record of size %u to container %s", buf_len,
 	      uuid_string(container_get_uuid(service->container)));
 
 	if (-1 == protobuf_send_message_packed(service->sock_connected, buf, buf_len)) {

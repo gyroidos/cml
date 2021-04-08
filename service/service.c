@@ -403,13 +403,13 @@ fork_service_message_handler()
 		/* register socket for receiving data */
 		fd_make_non_blocking(sock);
 
-		if (0 != audit_send_ack(*sock_ptr, LAST_AUDIT_HASH)) {
-			ERROR("Failed to send ack to cmld");
-		}
-
 		event_io_t *event =
 			event_io_new(*sock_ptr, EVENT_IO_READ, service_cb_recv_message, NULL);
 		event_add_io(event);
+
+		if (0 != audit_send_ack(*sock_ptr, LAST_AUDIT_HASH)) {
+			ERROR("Failed to send ack to cmld");
+		}
 
 		event_loop();
 

@@ -35,11 +35,11 @@ c_audit_new(const container_t *container);
 int
 c_audit_start_post_clone(c_audit_t *audit);
 
-const char *
+char *
 c_audit_get_last_ack(const c_audit_t *audit);
 
 void
-c_audit_set_last_ack(c_audit_t *audit, char *last_ack);
+c_audit_set_last_ack(c_audit_t *audit, const char *last_ack);
 
 bool
 c_audit_get_processing_ack(const c_audit_t *audit);
