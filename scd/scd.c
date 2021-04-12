@@ -42,7 +42,7 @@
 #include "common/uuid.h"
 #include "common/protobuf.h"
 #include "common/list.h"
-#include "ssl_util.h"
+#include "common/ssl_util.h"
 #include "token.h"
 
 #include <sys/stat.h>

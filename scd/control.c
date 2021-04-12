@@ -30,7 +30,6 @@
 
 #include "usbtoken.h"
 #include "softtoken.h"
-#include "ssl_util.h"
 #include "scd.h"
 
 #include "common/macro.h"
@@ -42,6 +41,7 @@
 #include "common/dir.h"
 #include "common/file.h"
 #include "common/protobuf.h"
+#include "common/ssl_util.h"
 
 #include <unistd.h>
 

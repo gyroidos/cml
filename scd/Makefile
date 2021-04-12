@@ -41,11 +41,11 @@ endif
 ifeq ($(AGGRESSIVE_WARNINGS),y)
     # on CI (and also for well-behaved developers) warnings should be
     # converted to errors; this helps us redistribute the code base without any pain;
-    # pure builds are better than polluted builds. 
+    # pure builds are better than polluted builds.
     LOCAL_CFLAGS += -Werror
 endif
 ifeq ($(SANITIZERS),y)
-    # if requested, we enable sanitization for easier debugging 
+    # if requested, we enable sanitization for easier debugging
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
@@ -69,13 +69,13 @@ SRC_FILES += \
 	common/fd.c \
 	common/uuid.c \
 	common/protobuf.c \
+	common/ssl_util.c \
 	device.pb-c.c \
 	scd.pb-c.c \
 	control.c \
 	softtoken.c \
 	token.c \
 	scd.c \
-	ssl_util.c \
 	tokencontrol.pb-c.c
 
 

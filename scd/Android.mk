@@ -42,12 +42,12 @@ LOCAL_SRC_FILES := \
 	common/uuid.c \
 	common/protobuf.c \
 	common/reboot.c \
+	common/ssl_util.c \
 	scd.proto \
 	device.proto \
 	control.c \
 	softtoken.c \
-	scd.c \
-	ssl_util.c
+	scd.c
 
 ifeq ($(shell test $(PLATFORM_VERSION_MAJOR) -gt 5; echo $$?),0)
 
@@ -101,8 +101,8 @@ LOCAL_SRC_FILES := \
 	common/str.c \
 	common/file.c \
 	common/fd.c \
+	common/ssl_util.c \
 	softtoken.c \
-	ssl_util.c \
 	keyrewrap.c
 
 LOCAL_SHARED_LIBRARIES := \
