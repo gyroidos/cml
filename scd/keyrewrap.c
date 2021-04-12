@@ -23,8 +23,8 @@
 
 #include "common/macro.h"
 #include "common/logf.h"
+#include "common/ssl_util.h"
 
-#include "ssl_util.h"
 #include "softtoken.h"
 
 static softtoken_t *token_old = NULL;

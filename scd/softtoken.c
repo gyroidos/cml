@@ -22,8 +22,8 @@
  */
 
 #include "softtoken.h"
-#include "ssl_util.h"
 
+#include "common/ssl_util.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"

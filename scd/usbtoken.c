@@ -22,7 +22,6 @@
  */
 #include "token.h"
 #include "usbtoken.h"
-#include "ssl_util.h"
 
 #include "sc-hsm-cardservice.h"
 #include <ctapi.h>
@@ -31,6 +30,7 @@
 #include "common/mem.h"
 #include "common/file.h"
 #include "common/str.h"
+#include "common/ssl_util.h"
 
 #include <stdio.h>
 #include <string.h>
