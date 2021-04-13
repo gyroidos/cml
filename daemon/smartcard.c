@@ -57,8 +57,6 @@
 #define MAX_PAIR_SEC_LEN 8
 #define PAIR_SEC_FILE_NAME "device_pairing_secret"
 
-#define TOKEN_IS_INIT_FILE_NAME "token_is_initialized"
-
 struct smartcard {
 	int sock;
 	char *path;
@@ -217,8 +215,7 @@ smartcard_container_token_is_provisioned(const container_t *container)
 
 	bool ret;
 
-	char *token_init_file =
-		mem_printf("%s/%s", container_get_images_dir(container), TOKEN_IS_INIT_FILE_NAME);
+	char *token_init_file = container_token_init_file_new(container);
 
 	ret = file_exists(token_init_file);
 
@@ -792,9 +789,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL: {
-			char *path =
-				mem_printf("%s/%s", container_get_images_dir(startdata->container),
-					   TOKEN_IS_INIT_FILE_NAME);
+			char *path = container_token_init_file_new(startdata->container);
 			rc = file_touch(path);
 			if (rc != 0) { //should never happen
 				ERROR("Could not write file %s to flag that container %s's token has been initialized\n \
@@ -1026,10 +1021,6 @@ smartcard_scd_token_remove_block(container_t *container)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_SUCCESSFUL: {
 		TRACE("CMLD: smartcard_scd_token_block_remove: token in scd removed successfully");
-		char *path = mem_printf("%s/%s", container_get_images_dir(container),
-					TOKEN_IS_INIT_FILE_NAME);
-		unlink(path);
-		mem_free(path);
 		container_set_token_is_init(container, false);
 	} break;
 	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED: {
