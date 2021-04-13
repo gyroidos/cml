@@ -89,7 +89,7 @@ c_audit_new(const container_t *container)
 	return audit;
 }
 
-const char *
+char *
 c_audit_get_last_ack(const c_audit_t *audit)
 {
 	ASSERT(audit);
@@ -97,14 +97,15 @@ c_audit_get_last_ack(const c_audit_t *audit)
 }
 
 void
-c_audit_set_last_ack(c_audit_t *audit, char *last_ack)
+c_audit_set_last_ack(c_audit_t *audit, const char *last_ack)
 {
 	ASSERT(audit);
+	ASSERT(last_ack);
 
 	if (audit->last_ack)
 		mem_free(audit->last_ack);
 
-	audit->last_ack = last_ack;
+	audit->last_ack = mem_strdup(last_ack);
 }
 
 bool
