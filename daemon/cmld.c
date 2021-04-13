@@ -827,9 +827,8 @@ int
 cmld_container_start(container_t *container)
 {
 	if (!container) {
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"container-start-not-existing",
-				uuid_string(container_get_uuid(container)), 0);
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT, "container-start-not-existing",
+				NULL, 0);
 		WARN("Container does not exists!");
 		return -1;
 	}
@@ -1409,8 +1408,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 			     uuid_string(container_get_uuid(c)));
 		}
 	} else {
-		audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
-				"container-create", uuid_string(container_get_uuid(c)), 0);
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT, "container-create", NULL, 0);
 		WARN("Could not create new container object from config");
 	}
 	mem_free(path);
