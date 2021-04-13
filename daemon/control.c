@@ -1211,9 +1211,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		if (NULL == container) {
-			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-					"container-start-not-existing",
-					uuid_string(container_get_uuid(container)), 0);
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT,
+					"container-start-not-existing", NULL, 0);
 			WARN("Container does not exist!");
 			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
