@@ -112,7 +112,7 @@ add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 ENGINE *tpm_engine = NULL;
 
 int
-ssl_init(bool use_tpm)
+ssl_init(bool use_tpm, void *tpm2d_primary_storage_key)
 {
 	// initialize OpenSSL stuff
 	OpenSSL_add_all_digests();     // loads digest algorithm names
@@ -137,10 +137,10 @@ ssl_init(bool use_tpm)
 		}
 		// TODO proper auth handling for hierarchies
 		// set the SRK passphrase to make storage key usable
-		if (TPM2D_PRIMARY_STORAGE_KEY_PW) {
-			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, TPM2D_PRIMARY_STORAGE_KEY_PW,
-					     NULL, 0)) {
-				ERROR("Failed to set SRK passphrase with  TPM2 engine");
+		if (tpm2d_primary_storage_key) {
+			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, tpm2d_primary_storage_key, NULL,
+					     0)) {
+				ERROR("Failed to set SRK passphrase with TPM2 engine");
 				goto error;
 			}
 		}

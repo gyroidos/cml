@@ -157,7 +157,7 @@ provisioning_mode()
 		INFO("Device certificate not available. Switch to device provisioning mode");
 		file_printf(PROVISIONING_MODE_FILE, "provisioning mode");
 
-		if (ssl_init(use_tpm) == -1) {
+		if (ssl_init(use_tpm, TPM2D_PRIMARY_STORAGE_KEY_PW) == -1) {
 			FATAL("Failed to initialize OpenSSL stack for device cert");
 		}
 
@@ -260,7 +260,7 @@ provisioning_mode()
 	if (!token_file_exists()) {
 		DEBUG("Create initial soft token");
 		// TPM not used for soft token
-		if (ssl_init(false) == -1) {
+		if (ssl_init(false, NULL) == -1) {
 			FATAL("Failed to initialize OpenSSL stack for softtoken");
 		}
 
@@ -328,7 +328,7 @@ main(int argc, char **argv)
 	INFO("Starting scd ...");
 
 	// for now, the scd is using the tpm engine only for provisioning
-	if (ssl_init(false) == -1) {
+	if (ssl_init(false, NULL) == -1) {
 		FATAL("Failed to initialize OpenSSL stack for scd runtime");
 	}
 

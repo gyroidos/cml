@@ -52,7 +52,7 @@ softtoken_create_p12(const char *filename, const char *passwd, const char *name)
 	ASSERT(name);
 
 	// instruct openssl to initialize a context without using the tpm as an engine
-	if (ssl_init(false) == -1) {
+	if (ssl_init(false, NULL) == -1) {
 		ERROR("Failed to initialize OpenSSL stack for softtoken");
 		return -1;
 	}
