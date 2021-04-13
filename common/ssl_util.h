@@ -105,6 +105,15 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 		     const char *hash_algo);
 
 /**
+ * verifies a signature just like ssl_verify_signature but takes buffers instead of file names
+ * @return Returns 0 on success, -1 if the verification failed and -2 in case of
+ * an unexpected verification error.
+ */
+int
+ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
+			      const uint8_t *buf, size_t buf_len, const char *hash_algo);
+
+/**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.
  * @return The function reveals the hash  as return value and its length via the parameter calc_len.
  * In case of a failure, NULL is returned.
