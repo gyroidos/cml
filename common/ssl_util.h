@@ -53,7 +53,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 
 /**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
- * of length wrapped_key_len using a public key pkey (unwrap works with the corresp. private key). 
+ * of length wrapped_key_len using a public key pkey (unwrap works with the corresp. private key).
  * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_len,
@@ -141,12 +141,13 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 
 /**
  * Initializes internal OpenSSL structures
- * use_tpm indicates whether the OpenSSL stack should be initialized using
+ * @param use_tpm indicates whether the OpenSSL stack should be initialized using
  * the openssl-tpm-engine or not
- * returns -1 on error, 0 on success
+ * @param tpm2d_primary_storage_key_pw optional tpm2d primary storage key password
+ * @return -1 on error, 0 on success
  */
 int
-ssl_init(bool use_tpm);
+ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw);
 
 /**
  * Frees internal OpenSSL structurs, run this once ati the end of program
