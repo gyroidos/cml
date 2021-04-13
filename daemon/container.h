@@ -884,6 +884,12 @@ uuid_t *
 container_get_token_uuid(const container_t *container);
 
 /**
+ * Returns the path to the container's token flag file
+ */
+char *
+container_token_init_file_new(const container_t *container);
+
+/**
  * Sets the flag whether the token the container is associated with has been initialized in the scd.
  */
 void
