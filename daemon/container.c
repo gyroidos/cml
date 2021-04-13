@@ -105,6 +105,8 @@
 /* Timeout until a container to be stopped gets killed if not yet down */
 #define CONTAINER_STOP_TIMEOUT 45000
 
+#define TOKEN_IS_INIT_FILE_NAME "token_is_initialized"
+
 struct container {
 	container_state_t state;
 	container_state_t prev_state;
@@ -1970,6 +1972,10 @@ container_destroy(container_t *container)
 		}
 	mem_free(file_name_created);
 
+	char *path = container_token_init_file_new(container);
+	unlink(path);
+	mem_free(path);
+
 	if ((ret = unlink(container_get_config_filename(container))))
 		ERROR_ERRNO("Can't delete config file!");
 	return ret;
@@ -2634,6 +2640,12 @@ container_get_token_uuid(const container_t *container)
 {
 	ASSERT(container);
 	return container->token.uuid;
+}
+
+char *
+container_token_init_file_new(const container_t *container)
+{
+	return mem_printf("%s/%s", container->images_dir, TOKEN_IS_INIT_FILE_NAME);
 }
 
 void
