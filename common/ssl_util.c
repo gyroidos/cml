@@ -1177,6 +1177,96 @@ error:
 	return ret;
 }
 
+int
+ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
+				 const uint8_t *hash, size_t hash_len, const char *hash_algo)
+{
+	ASSERT(cert_buf);
+	ASSERT(sig_buf);
+	ASSERT(hash);
+
+	int ret = 0;
+	X509 *cert;
+	EVP_PKEY *key = NULL;
+	BIO *mem;
+	EVP_PKEY_CTX *pkey_ctx = NULL;
+	const EVP_MD *hash_fct;
+
+	// load certificate, verify and get public key
+	mem = BIO_new(BIO_s_mem());
+	BIO_puts(mem, cert_buf);
+	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
+	BIO_free(mem);
+
+	if ((key = X509_get_pubkey(cert)) == NULL) {
+		ERROR("Error in signature verification (loading pubkey failed)");
+		ret = -2;
+		goto error;
+	}
+
+	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
+		ERROR("Error in signature verification (unable to initialize hash function)");
+		ret = -2;
+		goto error;
+	}
+
+	DEBUG("Verifying signature...");
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_PKEY_CTX _pkey_ctx;
+	pkey_ctx = &_pkey_ctx;
+	EVP_PKEY_CTX_init(md_ctx);
+#else
+	if ((pkey_ctx = EVP_PKEY_CTX_new(key, NULL)) == NULL) {
+		ERROR("Allocating EVP_PKEY_CTX failed!");
+		ret = -2;
+		goto error;
+	}
+#endif
+
+	ret = EVP_PKEY_verify_init(pkey_ctx);
+	if (ret != 1) {
+		ret = -2;
+		ERROR("EVP_PKEY_verify_init failed");
+		goto error;
+	}
+
+	if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, EVP_sha256()) != 1) {
+		DEBUG("EVP_PKEY_CTX_set_signature_md failed");
+		ret = -2;
+		goto error;
+	}
+
+	ret = EVP_PKEY_verify(pkey_ctx, sig_buf, sig_len, hash, hash_len);
+	if (ret != 1) {
+		DEBUG("EVP_PKEY_verify error");
+		// any error
+		if (ret == -1) {
+			ret = -2;
+		}
+		// verification failed
+		else {
+			ret = -1;
+		}
+	} else {
+		DEBUG("Signature successfully verified");
+		ret = 0;
+	}
+
+error:
+	if (cert)
+		X509_free(cert);
+	if (key)
+		EVP_PKEY_free(key);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX_cleanup(md_ctx);
+#else
+	if (pkey_ctx)
+		EVP_PKEY_CTX_free(pkey_ctx);
+#endif
+	return ret;
+}
+
 unsigned char *
 ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash_algo)
 {
