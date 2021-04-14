@@ -105,13 +105,25 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 		     const char *hash_algo);
 
 /**
- * verifies a signature just like ssl_verify_signature but takes buffers instead of file names
+ * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Thereby, the
+ * data to be verified located in buf is hashed. Compared to
+ * ssl_verify_signature, this method takes buffers instead of filenames.
  * @return Returns 0 on success, -1 if the verification failed and -2 in case of
  * an unexpected verification error.
  */
 int
 ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-			      const uint8_t *buf, size_t buf_len, const char *hash_algo);
+			      const uint8_t *buf, size_t buf_len);
+
+/**
+ * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Compared to
+ * ssl_verify_from_signature, this function expects the data to be verified already to be hashed.
+ * @return Returns 0 on success, -1 if the verification failed and -2 in case of
+ * an unexpected verification error.
+ */
+int
+ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
+				 const uint8_t *hash, size_t hash_len);
 
 /**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.
@@ -163,5 +175,8 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw);
  */
 void
 ssl_free(void);
+
+const char *
+asn1_object_to_hash_algo(const ASN1_OBJECT *obj);
 
 #endif /* P12UTIL_H */
