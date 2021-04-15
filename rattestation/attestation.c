@@ -21,8 +21,12 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "attestation.pb-c.h"
-#include "config.pb-c.h"
+#include <stdio.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/random.h>
+#include "ibmtss/Unmarshal_fp.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -30,18 +34,15 @@
 #include "common/event.h"
 #include "common/sock.h"
 #include "common/fd.h"
-
-#include <stdio.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/random.h>
-
-#include "attestation.h"
-#include "config.h"
 #include "common/ssl_util.h"
 
-#include "ibmtss/Unmarshal_fp.h"
+#include "attestation.pb-c.h"
+#include "config.pb-c.h"
+#include "attestation.h"
+#include "config.h"
+#include "modsig.h"
+#include "hash.h"
+#include "ima_verify.h"
 
 #define TPM2D_SERVICE_PORT "9505"
 
@@ -59,12 +60,9 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
 	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
 	char *hex = mem_alloc0(len);
-	if (!hex) {
-		FATAL("ERROR: Failed to allocate memory");
-	}
 
 	for (int i = 0; i < length; ++i) {
-		// remember snprintf additionally writs a '0' byte
+		// remember snprintf additionally writes a '0' byte
 		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
 	}
 
@@ -96,10 +94,6 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 		      config_file);
 		return false;
 	}
-
-	DEBUG("Got Response from TPM2D, Response size=%zu",
-	      protobuf_c_message_get_packed_size((ProtobufCMessage *)resp));
-	protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 
 	// Verficication Process
 
@@ -166,7 +160,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	TPMS_ATTEST tpms_attest;
 	TPM_RC rc = TSS_TPMS_ATTEST_Unmarshalu(&tpms_attest, &q, &quote_len);
 	if (rc != TPM_RC_SUCCESS) {
-		printf("TSS_TPMS_ATTEST_Unmarshalu returned error code %u\n", rc);
+		ERROR("TSS_TPMS_ATTEST_Unmarshalu returned error code %u\n", rc);
 		ret = false;
 		goto err;
 	}
@@ -186,8 +180,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	TPMT_SIGNATURE tpmt_signature;
 	rc = TSS_TPMT_SIGNATURE_Unmarshalu(&tpmt_signature, &s, &sig_len, false);
 	if (rc != TPM_RC_SUCCESS) {
-		printf("TSS_TPMT_SIGNATURE_Unmarshalu returned error code %u\n", rc);
-		// TODO Error Handling
+		ERROR("TSS_TPMT_SIGNATURE_Unmarshalu returned error code %u", rc);
 		ret = false;
 		goto err;
 	}
@@ -195,22 +188,31 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	// Verify signature
 	ssl_init(false, NULL);
 
-	int retssl = ssl_verify_signature_from_buf((const char *)resp->certificate.data,
+	int retssl = ssl_verify_signature_from_buf(resp->certificate.data, resp->certificate.len,
 						   tpmt_signature.signature.rsapss.sig.t.buffer,
 						   tpmt_signature.signature.rsapss.sig.t.size,
-						   resp->quoted.data, resp->quoted.len, "SHA256");
+						   resp->quoted.data, resp->quoted.len);
 	if (retssl != 0) {
-		// TODO error handling
-		ERROR("VERIFY SIGNATURE FAILED");
+		ERROR("VERIFY QUOTE SIGNATURE FAILED");
 		ret = false;
 		goto err;
 	} else {
-		INFO("VERIFY SIGNATURE SUCCESSFUL");
+		INFO("VERIFY QUOTE SIGNATURE SUCCESSFUL");
 	}
 
-	// TODO Implement PCR10 and PCR11 verification of measurement lists (kernel module signatures
-	// and containers)
-	WARN("WARN: Measurement List Verification not yet implemented");
+	// PCR10 kernel module verification (from /sys/kernel/security/ima/binary_runtime_measuremts)
+	hash_algo_t hash_algo = size_to_hash_algo((int)resp->halg);
+	int ret_ima =
+		ima_verify_binary_runtime_measurements(resp->ml_entry.data, resp->ml_entry.len,
+						       config->kmod_sign_cert, hash_algo,
+						       resp->pcr_values[10]->value.data);
+	if (ret_ima != 0) {
+		ERROR("Failed to verify measurement list");
+		goto err;
+	}
+
+	// TODO PCR11 container verification
+	WARN("WARN: Measurement List Verification PCR11 not yet implemented");
 
 	ret = true;
 

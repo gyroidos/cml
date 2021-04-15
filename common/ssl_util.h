@@ -112,8 +112,8 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
  * an unexpected verification error.
  */
 int
-ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-			      const uint8_t *buf, size_t buf_len);
+ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+			      size_t sig_len, const uint8_t *buf, size_t buf_len);
 
 /**
  * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Compared to
@@ -176,6 +176,12 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw);
 void
 ssl_free(void);
 
+/**
+ * Takes an ASN1_OBJECT as an input and returns the corresponding hash algorithm
+ * as a string, if supported.
+ * @param ASN1_OBJECT *obj pointer to an ASN1_OBJECT
+ * @return string representation of the hash algorithm
+ */
 const char *
 asn1_object_to_hash_algo(const ASN1_OBJECT *obj);
 

@@ -65,8 +65,11 @@ SRC_FILES := \
 	common/sock.c \
 	common/file.c \
 	attestation.c \
-    common/ssl_util.c \
-    config.c \
+	common/ssl_util.c \
+	hash.c \
+	ima_verify.c \
+	config.c \
+	modsig.c \
 	main.c
 
 .PHONY: all

@@ -988,7 +988,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	fclose(fp);
 	fp = NULL;
 
-	DEBUG("Certificate loaded to verify signature");
+	TRACE("Certificate loaded to verify signature");
 
 	// load signature
 	if (!(fp = fopen(signature_file, "rb"))) {
@@ -1016,7 +1016,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	fclose(fp);
 	fp = NULL;
 
-	DEBUG("Signature loaded");
+	TRACE("Signature loaded");
 
 	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
 		ERROR("Error in signature verification (unable to initialize hash function)");
@@ -1055,11 +1055,11 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	fclose(fp);
 	fp = NULL;
 
-	DEBUG("File hash computed to verify signature");
+	TRACE("File hash computed to verify signature");
 
 	ret = EVP_VerifyFinal(md_ctx, signature, siglen, key);
 	if (ret != 1) {
-		DEBUG("Signature verification error");
+		ERROR("Signature verification error");
 		// any error
 		if (ret == -1)
 			ret = -2;
@@ -1067,7 +1067,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 		else
 			ret = -1;
 	} else {
-		DEBUG("Signature successfully verified");
+		TRACE("Signature successfully verified");
 		ret = 0;
 	}
 
@@ -1090,8 +1090,8 @@ error:
 }
 
 int
-ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-			      const uint8_t *buf, size_t buf_len)
+ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+			      size_t sig_len, const uint8_t *buf, size_t buf_len)
 {
 	ASSERT(cert_buf);
 	ASSERT(sig_buf);
@@ -1110,7 +1110,7 @@ ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size
 
 	// load certificate
 	mem = BIO_new(BIO_s_mem());
-	BIO_puts(mem, cert_buf);
+	BIO_write(mem, cert_buf, cert_len);
 	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
 	BIO_free(mem);
 
@@ -1159,11 +1159,11 @@ ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size
 		goto error;
 	}
 
-	DEBUG("File hash computed to verify signature");
+	TRACE("File hash computed to verify signature");
 
 	ret = EVP_VerifyFinal(md_ctx, sig_buf, sig_len, key);
 	if (ret != 1) {
-		DEBUG("Signature verification error");
+		ERROR("Signature verification error");
 		// any error
 		if (ret == -1)
 			ret = -2;
@@ -1171,7 +1171,7 @@ ssl_verify_signature_from_buf(const char *cert_buf, const uint8_t *sig_buf, size
 		else
 			ret = -1;
 	} else {
-		DEBUG("Signature successfully verified");
+		TRACE("Signature successfully verified");
 		ret = 0;
 	}
 
@@ -1236,7 +1236,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		goto error;
 	}
 
-	DEBUG("Verifying signature...");
+	TRACE("Verifying signature...");
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000
 	EVP_PKEY_CTX _pkey_ctx;
@@ -1265,7 +1265,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 
 	ret = EVP_PKEY_verify(pkey_ctx, sig_buf, sig_len, hash, hash_len);
 	if (ret != 1) {
-		DEBUG("EVP_PKEY_verify error");
+		ERROR("EVP_PKEY_verify error");
 		// any error
 		if (ret == -1) {
 			ret = -2;
@@ -1275,7 +1275,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 			ret = -1;
 		}
 	} else {
-		DEBUG("Signature successfully verified");
+		TRACE("Signature successfully verified");
 		ret = 0;
 	}
 

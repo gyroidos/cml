@@ -40,11 +40,11 @@ rattestation_read_config_new(const char *file)
 	uint8_t *buf = NULL;
 	ASSERT(file);
 
-	DEBUG("Checking if config file %s exists", file);
+	TRACE("Checking if config file %s exists", file);
 
 	IF_FALSE_GOTO(file_exists(file), err);
 
-	DEBUG("File exists");
+	TRACE("File exists");
 
 	size_t file_len = strlen(file);
 

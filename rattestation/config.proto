@@ -53,9 +53,12 @@ message RAttestationConfig {
 	// the explicit PCR values
 	repeated PcrStrings pcr_values = 6;
 
-	// an _optional_ certificate that includes the public key
-	optional bytes certificate = 7;
+	// The certificate corresponding to the private key which was used to sign the
+	// kernel modules. The certificate must be in PEM format
+	required string kmod_sign_cert = 7;
 
-	// the measurement list in ima style hex strings
-	repeated string ml_entry = 8;
+	// The _optional_ TPM certificate used to verify the quote. The certificate is optional
+	// as it can be sent together with the quote in the remote attestation protocol. The
+	// certificate must be in PEM format
+	optional string tpm_cert = 8;
 }
