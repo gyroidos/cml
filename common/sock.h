@@ -34,6 +34,7 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 
 #ifdef ANDROID
 #include <cutils/sockets.h>
@@ -211,5 +212,15 @@ sock_inet_create_and_bind(int type, const char *ip, int port);
  */
 int
 sock_inet_create_and_connect(int type, const char *node, const char *service);
+
+/**
+ * Get uid of the foreign peer
+ *
+ * @param sock		the UNIX socket file descriptor
+ * @param peer_uid	the uid of the connected peer of the UNIX socket file descriptor
+ * @return		0 on success, -1 on error
+ */
+int
+sock_unix_get_peer_uid(int sock, uint32_t *peer_uid);
 
 #endif // SOCK_H

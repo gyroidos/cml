@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
+
 #include "sock.h"
 
 #include "macro.h"
@@ -264,4 +266,16 @@ out:
 	}
 
 	return sock;
+}
+
+int
+sock_unix_get_peer_uid(int sock, uint32_t *peer_uid)
+{
+	struct ucred ucred;
+
+	uint32_t len = sizeof(struct ucred);
+	IF_TRUE_RETVAL((getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len) == -1), -1);
+
+	*peer_uid = ucred.uid;
+	return 0;
 }
