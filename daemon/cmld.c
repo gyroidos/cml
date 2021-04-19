@@ -1287,10 +1287,12 @@ cmld_init(const char *path)
 	else
 		INFO("ksm initialized.");
 
-	if (tss_init() < 0)
-		WARN("Plattform does not support TSS / TPM 2.0");
-	else
-		INFO("tss initialized.");
+	if (device_config_get_tpm_enabled(device_config)) {
+		if (tss_init() < 0)
+			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
+		else
+			INFO("tss initialized.");
+	}
 
 	if (lxcfs_init() < 0)
 		WARN("Plattform does not support LXCFS");

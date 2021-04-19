@@ -34,9 +34,13 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
+#include "common/proc.h"
+#include "common/file.h"
 
 #include <google/protobuf-c/protobuf-c-text.h>
 #include <stdbool.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static int tss_sock = -1;
 
@@ -59,10 +63,55 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 	}
 }
 
+static int
+fork_and_exec_tpm2d(void)
+{
+	TRACE("Starting tpm2d..");
+
+	int status;
+	pid_t pid = fork();
+	char *const param_list[] = { "tpm2d", NULL };
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork for tpm2d");
+		return -1;
+	case 0:
+		execvp((const char *)param_list[0], param_list);
+		FATAL_ERRNO("Could not execvp tpm2d");
+		return -1;
+	default:
+		// Just check if the child is alive but do not wait
+		if (waitpid(pid, &status, WNOHANG) != 0) {
+			ERROR("Failed to start tpm2d");
+			return -1;
+		}
+		return 0;
+	}
+	return -1;
+}
+
 int
 tss_init(void)
 {
-	tss_sock = sock_unix_create_and_connect(SOCK_STREAM, TPM2D_SOCKET);
+	// Check if the platform has a TPM module attached
+	if (!file_exists("/dev/tpm0")) {
+		WARN("Platform does not support TSS / TPM 2.0");
+		return 0;
+	}
+
+	// Start the tpm2d
+	IF_TRUE_RETVAL_TRACE(fork_and_exec_tpm2d(), -1);
+
+	// Connect to tpm2d
+	size_t retries = 0;
+	do {
+		usleep(500000);
+		tss_sock = sock_unix_create_and_connect(SOCK_STREAM, TPM2D_SOCKET);
+		retries++;
+		TRACE("Retry %ld connecting to tpm2d", retries);
+	} while (tss_sock < 0 && retries < 10);
+
 	return (tss_sock < 0) ? -1 : 0;
 }
 
