@@ -670,7 +670,9 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 		int pid = -1;
 		sscanf(log_record, "%*s pid=%d uid=%d %*8970c", &pid, &uid);
 		TRACE("scanned pid=%d, uid=%d", pid, uid);
-		char *record_text = strstr(log_record, "msg='") + 5;
+		char *record_text = strstr(log_record, "msg='");
+		IF_NULL_GOTO(record_text, err);
+		record_text += 5;
 		// remove closing ' char from msg string
 		int record_text_len = strlen(record_text) - 1;
 		AuditRecord *record = (AuditRecord *)protobuf_message_new_from_buf(
@@ -684,18 +686,17 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 		log_record = NLMSG_DATA(nlmsg);
 		int uid = -1;
 		int pid = -1;
-		char res[128];
-		char *record_msg = mem_new0(char, MAX_AUDIT_MESSAGE_LENGTH);
-		sscanf(log_record, "%*s pid=%d uid=%d %*s %*s msg='%[^']'", &pid, &uid, record_msg);
-		if (sscanf(record_msg, "%*[^'] res=%s'", res)) {
-			container_t *c = cmld_container_get_by_uid(uid);
-			c = c ? c : cmld_containers_get_a0();
-			char *record_type = mem_printf("type=%d", type);
-			audit_log_event(container_get_uuid(c), strcmp(res, "success") ? FSA : SSA,
-					CMLD, KAUDIT, record_type,
-					uuid_string(container_get_uuid(c)), 2, "msg", log_record);
-			mem_free(record_type);
-		}
+		sscanf(log_record, "%*s pid=%d uid=%d %*8970c", &pid, &uid);
+		char *res = strstr(log_record, "res=");
+		res = res ? res + 4 : "failed";
+		container_t *c = cmld_container_get_by_uid(uid);
+		c = c ? c : cmld_containers_get_a0();
+		char *record_type = mem_printf("type=%hu", type);
+		audit_log_event(container_get_uuid(c),
+				(strstr(res, "success") || res[0] == '1') ? SSA : FSA, CMLD, KAUDIT,
+				record_type, uuid_string(container_get_uuid(c)), 2, "msg",
+				log_record);
+		mem_free(record_type);
 		TRACE("audit: type=%d %s", type, log_record);
 	} else if (type == AUDIT_KERNEL ||
 		   (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
