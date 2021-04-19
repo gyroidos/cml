@@ -1072,6 +1072,11 @@ smartcard_new(const char *path)
 	smartcard_t *smartcard = mem_alloc(sizeof(smartcard_t));
 	smartcard->path = mem_strdup(path);
 	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+
+	// allow access from namespaced child before chroot and execv of init
+	if (chmod(SCD_CONTROL_SOCKET, 00777))
+		WARN("could not change access rights for scd control socket");
+
 	return smartcard;
 }
 

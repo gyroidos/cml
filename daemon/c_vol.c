@@ -762,15 +762,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 	}
-	if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
-	    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
-	    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
-		if (guestos_check_mount_image_block(container_get_os(vol->container), mntent,
-						    true) != CHECK_IMAGE_GOOD) {
-			ERROR("Cannot mount image %s: image file is corrupted", img);
-			goto error;
-		}
-	}
 
 	dev = c_vol_create_loopdev_new(&fd, img);
 	IF_NULL_GOTO(dev, error);
@@ -1229,6 +1220,29 @@ error:
 	return ret;
 }
 
+static bool
+c_vol_verify_mount_entries(const c_vol_t *vol)
+{
+	ASSERT(vol);
+
+	int n = mount_get_count(container_get_mount(vol->container));
+	for (int i = 0; i < n; i++) {
+		const mount_entry_t *mntent;
+		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
+		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
+		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
+			if (guestos_check_mount_image_block(container_get_os(vol->container),
+							    mntent, true) != CHECK_IMAGE_GOOD) {
+				ERROR("Cannot verify image %s: image file is corrupted",
+				      mount_entry_get_img(mntent));
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 /******************************************************************************/
 
 c_vol_t *
@@ -1649,6 +1663,10 @@ int
 c_vol_start_child(c_vol_t *vol)
 {
 	ASSERT(vol);
+
+	// check image integrity (this is blocking that is why we do this
+	// in the child and not before mounting in the host process
+	IF_FALSE_GOTO(c_vol_verify_mount_entries(vol), error);
 
 	// remount proc to reflect namespace change
 	if (!container_has_userns(vol->container)) {
