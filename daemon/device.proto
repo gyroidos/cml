@@ -64,4 +64,6 @@ message DeviceConfig {
 
 	// max size of audit log per logging sink in MB
 	optional uint64 audit_size = 16 [default = 0];
+
+	required bool tpm_enabled = 17 [ default = true ];
 }

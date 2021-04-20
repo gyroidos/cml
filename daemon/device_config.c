@@ -244,3 +244,12 @@ device_config_get_audit_size(const device_config_t *config)
 
 	return config->cfg->audit_size;
 }
+
+bool
+device_config_get_tpm_enabled(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->tpm_enabled;
+}
