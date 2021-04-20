@@ -26,6 +26,7 @@
 #endif
 
 #include "audit.h"
+#include "fd.h"
 #include "mem.h"
 #include "macro.h"
 #include "protobuf.h"
@@ -35,6 +36,9 @@
 #include <errno.h>
 #include <time.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <google/protobuf-c/protobuf-c-text.h>
 
@@ -157,5 +161,32 @@ audit_kernel_log_event(const char *type, const char *subject_id, int meta_count,
 out:
 	protobuf_free_message((ProtobufCMessage *)record);
 
+	return ret;
+}
+
+int
+audit_kernel_write_loginuid(uint32_t uid)
+{
+	int ret = 0;
+	// skip if no real uid is to be set
+	if (uid == UINT32_MAX)
+		return ret;
+
+	// trace uid if executed through control interface
+	int fd = open("/proc/self/loginuid", O_NOFOLLOW | O_RDWR);
+	if (fd < 0) {
+		ERROR_ERRNO("Failed to open /proc/self/loginuid!");
+		return -1;
+	}
+
+	char *loginuid = mem_printf("%lu", (unsigned long)uid);
+	int len = strlen(loginuid);
+	if (fd_write(fd, loginuid, len) != len) {
+		ERROR("Failed to set login uid %s for kernel audit", loginuid);
+		ret = -1;
+	}
+
+	close(fd);
+	mem_free(loginuid);
 	return ret;
 }

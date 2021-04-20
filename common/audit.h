@@ -53,4 +53,7 @@ audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len)
 int
 audit_kernel_log_event(const char *type, const char *subject_id, int meta_count, ...);
 
+int
+audit_kernel_write_loginuid(uint32_t uid);
+
 #endif /* COMMON_AUDIT_H */
