@@ -185,7 +185,7 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 
 	fd = open(file, oflags, 00666);
 	if (fd < 0) {
-		DEBUG("Could not open output file %s", file);
+		DEBUG_ERRNO("Could not open output file %s", file);
 		return -1;
 	}
 
