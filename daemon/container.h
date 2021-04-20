@@ -981,4 +981,11 @@ container_audit_process_ack(const container_t *container, const char *ack);
 
 int
 container_audit_notify_complete(const container_t *container);
+
+void
+container_audit_set_loginuid(container_t *container, uint32_t uid);
+
+uint32_t
+container_audit_get_loginuid(const container_t *container);
+
 #endif /* CONTAINER_H */

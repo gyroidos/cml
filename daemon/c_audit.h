@@ -35,6 +35,9 @@ c_audit_new(const container_t *container);
 int
 c_audit_start_post_clone(c_audit_t *audit);
 
+int
+c_audit_start_child(c_audit_t *audit);
+
 char *
 c_audit_get_last_ack(const c_audit_t *audit);
 
@@ -46,5 +49,11 @@ c_audit_get_processing_ack(const c_audit_t *audit);
 
 void
 c_audit_set_processing_ack(c_audit_t *audit, bool processing_ack);
+
+void
+c_audit_set_loginuid(c_audit_t *audit, uint32_t uid);
+
+uint32_t
+c_audit_get_loginuid(const c_audit_t *audit);
 
 #endif /* C_AUDIT_H */
