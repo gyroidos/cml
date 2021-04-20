@@ -36,6 +36,7 @@
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include <macro.h>
 
+#include "common/audit.h"
 #include "common/mem.h"
 #include "common/dir.h"
 #include "common/file.h"
@@ -316,6 +317,10 @@ c_run_join_container(c_run_t *run)
 {
 	ASSERT(run);
 
+	if (audit_kernel_write_loginuid(container_audit_get_loginuid(run->container)) < 0) {
+		ERROR("Could not set audit uid!");
+		goto error;
+	}
 	if (container_add_pid_to_cgroups(run->container, getpid()) < 0) {
 		ERROR("Could not join container cgroups!");
 		goto error;

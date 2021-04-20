@@ -799,6 +799,16 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			control_get_container_by_uuid_string(msg->container_uuids[0]) :
 			NULL;
 
+	// Trace user for audit
+	if (container && (control->type == AF_UNIX)) {
+		uint32_t uid;
+		if (sock_unix_get_peer_uid(fd, &uid) != 0) {
+			WARN_ERRNO("Could not set login uid for control connection!");
+		} else {
+			container_audit_set_loginuid(container, uid);
+		}
+	}
+
 	switch (msg->command) {
 		// Global commands:
 

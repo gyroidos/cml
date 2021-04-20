@@ -980,6 +980,20 @@ container_audit_process_ack(const container_t *container, const char *ack)
 	return audit_process_ack(container, ack);
 }
 
+void
+container_audit_set_loginuid(container_t *container, uint32_t uid)
+{
+	ASSERT(container);
+	c_audit_set_loginuid(container->audit, uid);
+}
+
+uint32_t
+container_audit_get_loginuid(const container_t *container)
+{
+	ASSERT(container);
+	return c_audit_get_loginuid(container->audit);
+}
+
 /**
  * This function should be called only on a (physically) not-running container and
  * should make sure that the container and all its submodules are in the same
@@ -1180,6 +1194,11 @@ container_start_child(void *data)
 
 	if (c_vol_start_child(container->vol) < 0) {
 		ret = CONTAINER_ERROR_VOL;
+		goto error;
+	}
+
+	if (c_audit_start_child(container->audit) < 0) {
+		ret = CONTAINER_ERROR_AUDIT;
 		goto error;
 	}
 

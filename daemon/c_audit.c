@@ -48,6 +48,7 @@ struct c_audit {
 	const container_t *container;
 	char *last_ack;
 	bool processing_ack;
+	uint32_t loginuid;
 };
 
 int
@@ -65,10 +66,19 @@ c_audit_start_post_clone(c_audit_t *audit)
 			    uuid_get_node(container_get_uuid(audit->container)))) {
 		ERROR("Failed to set audit container ID");
 		ret = -1;
+		goto out;
 	}
 out:
 	mem_free(aucontid_file);
 	return ret;
+}
+
+int
+c_audit_start_child(c_audit_t *audit)
+{
+	ASSERT(audit);
+	// update kernel login uid with internal set loginuid
+	return audit_kernel_write_loginuid(audit->loginuid);
 }
 
 c_audit_t *
@@ -85,6 +95,7 @@ c_audit_new(const container_t *container)
 	audit->container = container;
 	audit->last_ack = mem_strdup("");
 	audit->processing_ack = false;
+	audit->loginuid = UINT32_MAX;
 
 	return audit;
 }
@@ -121,3 +132,18 @@ c_audit_set_processing_ack(c_audit_t *audit, bool processing_ack)
 	ASSERT(audit);
 	audit->processing_ack = processing_ack;
 }
+
+void
+c_audit_set_loginuid(c_audit_t *audit, uint32_t uid)
+{
+	ASSERT(audit);
+	audit->loginuid = uid;
+}
+
+uint32_t
+c_audit_get_loginuid(const c_audit_t *audit)
+{
+	ASSERT(audit);
+	return audit->loginuid;
+}
+
