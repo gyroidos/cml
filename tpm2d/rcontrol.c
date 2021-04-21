@@ -20,6 +20,8 @@
  * Contact Information:
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
+// #define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 #include <sys/stat.h>
 
 #include "rcontrol.h"
@@ -159,7 +161,6 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		fclose(fp);
 
 		IF_NULL_GOTO_ERROR(attestation_cert, err_att_req);
-		//INFO("att cert:\n%s", (char*) attestation_cert);
 		INFO("att cert done: size=%zu", att_cert_len);
 
 		Pcr out_pcr = PCR__INIT;
@@ -193,16 +194,19 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		out.certificate.data = attestation_cert;
 		out.certificate.len = att_cert_len;
 
-		out.ml_entry = ml_get_measurement_list_strings_new(&out.n_ml_entry);
+		out.ml_entry.data = ml_get_measurement_list_binary_new(&out.ml_entry.len);
+		if (!out.ml_entry.data) {
+			WARN("Failed to retrieve binary measurement list");
+			goto err_att_req;
+		}
 
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+
+		mem_free(out.ml_entry.data);
+
 	err_att_req:
 		tpm2d_flush_as_key_handle();
-
-		for (size_t i = 0; i < out.n_ml_entry; ++i) {
-			mem_free(out.ml_entry[i]);
-		}
 
 		if (pcr_array)
 			for (int i = 0; i < pcr_regs; ++i) {

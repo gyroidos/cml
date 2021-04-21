@@ -26,12 +26,19 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/list.h"
+#include "common/file.h"
 
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #define CONTAINER_PCR_INDEX 11
+
+#define BINARY_RUNTIME_MEASUREMENTS "/sys/kernel/security/ima/binary_runtime_measurements"
+#define ASCII_RUNTIME_MEASUREMENTS "/sys/kernel/security/ima/ascii_runtime_measurements"
 
 typedef struct ml_elem {
 	char *filename;
@@ -109,7 +116,7 @@ ml_get_ima_ml_string_list_new(void)
 	char *line = NULL; // will be malloced by getline
 	size_t line_len = 0;
 
-	fp = fopen("/sys/kernel/security/ima/ascii_runtime_measurements", "r");
+	fp = fopen(ASCII_RUNTIME_MEASUREMENTS, "r");
 	IF_NULL_RETVAL(fp, NULL);
 
 	list_t *ima_list = NULL;
@@ -122,6 +129,50 @@ ml_get_ima_ml_string_list_new(void)
 	if (line)
 		mem_free(line);
 	return ima_list;
+}
+
+uint8_t *
+ml_get_measurement_list_binary_new(size_t *size)
+{
+	int fd = 0;
+
+	fd = open(BINARY_RUNTIME_MEASUREMENTS, O_RDONLY);
+	if (fd < 0) {
+		DEBUG("Could not open file %s", BINARY_RUNTIME_MEASUREMENTS);
+		*size = 0;
+		return NULL;
+	}
+
+	int ret = 0;
+	uint8_t *buf = NULL;
+	size_t s = 0;
+
+	// The binary measurement file in /sys is a special file where the file size cannot
+	// be determined. Therefore it must be read byte by byte
+	while (true) {
+		buf = (uint8_t *)mem_realloc(buf, s + 1);
+		ret = read(fd, buf + s, 1);
+
+		if (ret == 0) {
+			goto out;
+		}
+		if (ret < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				TRACE("Reading from fd %d: Blocked, retrying...", fd);
+				continue;
+			}
+			mem_free(buf);
+			s = 0;
+			ERROR("Failed to read binary_runtime_measurements");
+			goto out;
+		}
+		s++;
+	}
+
+out:
+	close(fd);
+	*size = s;
+	return buf;
 }
 
 char **

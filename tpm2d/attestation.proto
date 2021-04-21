@@ -96,6 +96,6 @@ message Tpm2dToRemote {
 	// an _optional_ certificate that includes the public key
 	optional bytes certificate = 7;
 
-	// the measurement list in ima style hex strings
-	repeated string ml_entry = 11;
+	// the measurement list in ima binary format
+	required bytes ml_entry = 11;
 }
