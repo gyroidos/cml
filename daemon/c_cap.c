@@ -36,6 +36,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #define C_CAP_DROP(cap)                                                                            \
@@ -163,14 +164,14 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 			struct utsname uts_name;
 			if (uname(&uts_name))
 				WARN_ERRNO("Can't get utsname!");
-			char *multiarch_lib = mem_printf("/lib/%s-linux-gnu", uts_name.machine);
-			if (file_exists(multiarch_lib) &&
-			    symlink(multiarch_lib, "/usr/lib/libc.so"))
-				WARN_ERRNO("symlink of %s to libc.so failed!", multiarch_lib);
+			char *multiarch_dir = mem_printf("/lib/%s-linux-gnu", uts_name.machine);
+			int fd = open(multiarch_dir, O_DIRECTORY);
+			if (fd > 0 && symlinkat("libc.so.6", fd, "libc.so"))
+				WARN_ERRNO("symlink of %s to libc.so failed!", multiarch_dir);
 			else if (file_exists("/lib/libc.so.6") &&
 				 symlink("/lib/libc.so.6", "/usr/lib/libc.so"))
 				WARN_ERRNO("symlink to libc.so failed!");
-			mem_free(multiarch_lib);
+			mem_free(multiarch_dir);
 		}
 		execve(argv[0], argv, env_ntp);
 		ERROR_ERRNO("exec with uid_wrapper of '%s' failed!", argv[0]);
