@@ -1392,8 +1392,15 @@ container_start_child_early(void *data)
 
 	close(container->sync_sock_parent);
 
+	bool is_rebooting = container->prev_state == CONTAINER_STATE_REBOOTING;
+
 	if (c_audit_start_child_early(container->audit) < 0) {
 		ret = CONTAINER_ERROR_AUDIT;
+		goto error;
+	}
+
+	if (!is_rebooting && c_vol_start_child_early(container->vol) < 0) {
+		ret = CONTAINER_ERROR_VOL;
 		goto error;
 	}
 
@@ -1743,11 +1750,6 @@ container_start(container_t *container) //, const char *key)
 
 	if (c_service_start_pre_clone(container->service) < 0) {
 		ret = CONTAINER_ERROR_SERVICE;
-		goto error_pre_clone;
-	}
-
-	if (!is_rebooting && c_vol_start_pre_clone(container->vol) < 0) {
-		ret = CONTAINER_ERROR_VOL;
 		goto error_pre_clone;
 	}
 

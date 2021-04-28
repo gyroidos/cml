@@ -1034,6 +1034,18 @@ c_vol_umount_dir(const char *mount_dir)
 	return 0;
 }
 
+static int
+c_vol_cleanup_overlays_cb(const char *path, const char *file, UNUSED void *data)
+{
+	char *overlay = mem_printf("%s/%s", path, file);
+	int ret = c_vol_umount_dir(overlay);
+	if (rmdir(overlay) < 0)
+		TRACE("Unable to remove %s", overlay);
+
+	mem_free(overlay);
+	return ret;
+}
+
 /**
  * Umount all image files.
  * This function is called in the rootns, to cleanup stopped container.
@@ -1081,18 +1093,11 @@ c_vol_umount_all(c_vol_t *vol)
 	if (rmdir(vol->root) < 0)
 		TRACE("Unable to remove %s", mount_dir);
 
-	// umount overlay mounts
-	for (i = 1; i <= vol->overlay_count; ++i) {
-		mount_dir = mem_printf("/tmp/overlayfs/%s/%d",
-				       uuid_string(container_get_uuid(vol->container)), i);
-		if (c_vol_umount_dir(mount_dir) < 0)
-			goto error;
-		if (rmdir(mount_dir) < 0)
-			TRACE("Unable to remove %s", mount_dir);
-		mem_free(mount_dir);
-	}
+	// cleanup left-over overlay mounts in main cmld process
 	mount_dir =
 		mem_printf("/tmp/overlayfs/%s", uuid_string(container_get_uuid(vol->container)));
+	if (dir_foreach(mount_dir, &c_vol_cleanup_overlays_cb, NULL) < 0)
+		WARN("Could not release overlays in '%s'", mount_dir);
 	if (rmdir(mount_dir) < 0)
 		TRACE("Unable to remove %s", mount_dir);
 	mem_free(mount_dir);
@@ -1403,7 +1408,7 @@ err:
 }
 
 int
-c_vol_start_pre_clone(c_vol_t *vol)
+c_vol_start_child_early(c_vol_t *vol)
 {
 	ASSERT(vol);
 
