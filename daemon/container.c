@@ -137,6 +137,7 @@ struct container {
 	list_t *csock_list;  /* List of sockets bound inside the container */
 	const guestos_t *os; /* weak reference */
 	pid_t pid;	     /* PID of the corresponding /init */
+	pid_t pid_early;     /* PID of the corresponding early start child */
 	int exit_status;     /* if the container's init exited, here we store its exit status */
 
 	char **init_argv; /* command line parameters for init */
@@ -259,6 +260,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 
 	/* initialize pid to a value indicating it is invalid */
 	container->pid = -1;
+	container->pid_early = -1;
 
 	/* initialize exit_status to 0 */
 	container->exit_status = 0;
@@ -1023,6 +1025,7 @@ container_cleanup(container_t *container, bool is_rebooting)
 	}
 
 	container->pid = -1;
+	container->pid_early = -1;
 
 	/* timer can be removed here, because container is on the transition to the stopped state */
 	if (container->stop_timer) {
@@ -1114,6 +1117,31 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	TRACE("No more childs to reap. Callback exiting...");
 }
 
+void
+container_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
+{
+	container_t *container = data;
+	ASSERT(container);
+
+	pid_t pid;
+	int status = 0;
+
+	TRACE("SIGCHLD handler called for container %s early start child with PID %d",
+	      container_get_description(container), container->pid);
+
+	if ((pid = waitpid(container->pid_early, &status, WNOHANG)) > 0) {
+		TRACE("Reaped early container child process: %d", pid);
+		/* remove the sigchld callback for this early child from the event loop */
+		event_remove_signal(sig);
+		event_signal_free(sig);
+		// cleanup if early child returned with an error
+		if ((WIFEXITED(status) && WEXITSTATUS(status)) || WIFSIGNALED(status)) {
+			container_set_state(container, CONTAINER_STATE_STOPPED);
+			container->pid_early = -1;
+		}
+	}
+}
+
 static int
 container_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED void *data)
 {
@@ -1147,8 +1175,6 @@ container_start_child(void *data)
 
 	container_t *container = data;
 	char *kvm_root = mem_printf("/tmp/%s", uuid_string(container->uuid));
-
-	close(container->sync_sock_parent);
 
 	/*******************************************************************/
 	// wait on synchronization socket for start message code from parent
@@ -1197,11 +1223,6 @@ container_start_child(void *data)
 		goto error;
 	}
 
-	if (c_audit_start_child(container->audit) < 0) {
-		ret = CONTAINER_ERROR_AUDIT;
-		goto error;
-	}
-
 	if (c_time_start_child(container->time) < 0) {
 		ret = CONTAINER_ERROR_TIME;
 		goto error;
@@ -1230,7 +1251,6 @@ container_start_child(void *data)
 		container_sock_t *cs = l->data;
 		sock_unix_bind(cs->sockfd, cs->path);
 	}
-
 	// send success message to parent
 	DEBUG("Sending CONTAINER_START_SYNC_MSG_SUCCESS to parent");
 	char msg_success = CONTAINER_START_SYNC_MSG_SUCCESS;
@@ -1361,6 +1381,72 @@ error:
 	return ret; // exit the child process
 }
 
+static int
+container_start_child_early(void *data)
+{
+	ASSERT(data);
+
+	int ret = 0;
+
+	container_t *container = data;
+
+	close(container->sync_sock_parent);
+
+	if (c_audit_start_child_early(container->audit) < 0) {
+		ret = CONTAINER_ERROR_AUDIT;
+		goto error;
+	}
+
+	void *container_stack = NULL;
+	/* Allocate node stack */
+	if (!(container_stack = alloca(CLONE_STACK_SIZE))) {
+		WARN_ERRNO("Not enough memory for allocating container stack");
+		goto error;
+	}
+	void *container_stack_high = (void *)((const char *)container_stack + CLONE_STACK_SIZE);
+	/* Set namespaces for node */
+	/* set some basic and non-configurable namespaces */
+	unsigned long clone_flags = 0;
+	clone_flags |= SIGCHLD | CLONE_PARENT; // sig child to main process
+	clone_flags |= CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID;
+	if (container->ns_ipc)
+		clone_flags |= CLONE_NEWIPC;
+	if (container->ns_usr)
+		clone_flags |= CLONE_NEWUSER;
+	if (container->ns_net)
+		clone_flags |= CLONE_NEWNET;
+
+	container->pid = clone(container_start_child, container_stack_high, clone_flags, container);
+	if (container->pid < 0) {
+		ERROR_ERRNO("Double clone container failed");
+		goto error;
+	}
+
+	char *msg_pid = mem_printf("%d", container->pid);
+	if (write(container->sync_sock_child, msg_pid, strlen(msg_pid)) < 0) {
+		ERROR_ERRNO("write pid '%s' to sync socket failed", msg_pid);
+		goto error;
+	}
+	mem_free(msg_pid);
+	return 0;
+
+error:
+	if (ret == 0) {
+		ret = CONTAINER_ERROR;
+	}
+
+	// send error message to parent
+	char msg_error = CONTAINER_START_SYNC_MSG_ERROR;
+	if (write(container->sync_sock_child, &msg_error, 1) < 0) {
+		WARN_ERRNO("write to sync socket failed");
+	}
+
+	if (container_close_all_fds()) {
+		WARN("Closing all file descriptors in container start error failed");
+	}
+	return ret; // exit the child process
+}
+
 static void
 container_start_timeout_cb(event_timer_t *timer, void *data)
 {
@@ -1423,6 +1509,7 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		WARN("c_time_start_pre_exec failed");
 		goto error_pre_exec;
 	}
+
 	if (c_cgroups_start_pre_exec(container->cgroups) < 0) {
 		WARN("c_cgroups_start_pre_exec failed");
 		goto error_pre_exec;
@@ -1514,6 +1601,106 @@ container_write_exec_input(container_t *container, char *exec_input, int session
 	return c_run_write_exec_input(container->run, exec_input, session_fd);
 }
 
+static void
+container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, void *data)
+{
+	ASSERT(data);
+	int ret = 0;
+
+	container_t *container = data;
+
+	DEBUG("Received event from child process %u", events);
+
+	if (events == EVENT_IO_EXCEPT) {
+		ERROR("Received exception from child process");
+		goto error_pre_clone;
+	}
+
+	// receive success or error message from started child
+	char *pid_msg = mem_alloc0(34);
+	if (read(container->sync_sock_parent, pid_msg, 33) <= 0) {
+		WARN_ERRNO("Could not read from sync socket");
+		mem_free(pid_msg);
+		goto error_pre_clone;
+	}
+
+	if (pid_msg[0] == CONTAINER_START_SYNC_MSG_ERROR) {
+		WARN("Early child died with error!");
+		mem_free(pid_msg);
+		goto error_pre_clone;
+	}
+
+	// release post_clone_early io handler
+	event_remove_io(io);
+	event_io_free(io);
+
+	DEBUG("Received pid message from child %s", pid_msg);
+	container->pid = atoi(pid_msg);
+	mem_free(pid_msg);
+
+	/*********************************************************/
+	/* REGISTER SOCKET TO RECEIVE STATUS MESSAGES FROM CHILD */
+	event_io_t *sync_sock_parent_event =
+		event_io_new(fd, EVENT_IO_READ, &container_start_post_clone_cb, container);
+	event_add_io(sync_sock_parent_event);
+
+	/* register SIGCHILD handler which sets the state and
+	 * calls the appropriate cleanup functions if the child
+	 * dies */
+	event_signal_t *sig = event_signal_new(SIGCHLD, container_sigchld_cb, container);
+	event_add_signal(sig);
+
+	/*********************************************************/
+	/* POST CLONE HOOKS */
+	// execute all necessary c_<module>_start_post_clone hooks
+	// goto error_post_clone on an error
+	if (c_cgroups_start_post_clone(container->cgroups)) {
+		ret = CONTAINER_ERROR_CGROUPS;
+		goto error_post_clone;
+	}
+
+	if (c_net_start_post_clone(container->net)) {
+		ret = CONTAINER_ERROR_NET;
+		goto error_post_clone;
+	}
+
+	if (c_user_start_post_clone(container->user)) {
+		ret = CONTAINER_ERROR_USER;
+		goto error_post_clone;
+	}
+
+	if (c_fifo_start_post_clone(container->fifo)) {
+		ret = CONTAINER_ERROR_FIFO;
+		goto error_post_clone;
+	}
+
+	/*********************************************************/
+	/* NOTIFY CHILD TO START */
+	char msg_go = CONTAINER_START_SYNC_MSG_GO;
+	if (write(container->sync_sock_parent, &msg_go, 1) < 0) {
+		WARN_ERRNO("write to sync socket failed");
+		goto error_post_clone;
+	}
+
+	return;
+
+error_pre_clone:
+	event_remove_io(io);
+	event_io_free(io);
+	close(fd);
+	return;
+
+error_post_clone:
+	if (ret == 0)
+		ret = CONTAINER_ERROR;
+	char msg_stop = CONTAINER_START_SYNC_MSG_STOP;
+	if (write(container->sync_sock_parent, &msg_stop, 1) < 0) {
+		WARN_ERRNO("write to sync socket failed");
+	}
+	container_kill(container);
+	return;
+}
+
 int
 container_start(container_t *container) //, const char *key)
 {
@@ -1580,16 +1767,6 @@ container_start(container_t *container) //, const char *key)
 	unsigned long clone_flags = 0;
 	clone_flags |= SIGCHLD;
 
-	/* Set namespaces for node */
-	/* set some basic and non-configurable namespaces */
-	clone_flags |= CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID;
-	if (container->ns_ipc)
-		clone_flags |= CLONE_NEWIPC;
-	if (container->ns_usr)
-		clone_flags |= CLONE_NEWUSER;
-	if (container->ns_net)
-		clone_flags |= CLONE_NEWNET;
-
 	/* Create a socketpair for synchronization and save it in the container structure to be able to
 	 * pass it around */
 	int fd[2];
@@ -1611,7 +1788,7 @@ container_start(container_t *container) //, const char *key)
 
 	/* TODO find out if stack is only necessary with CLONE_VM */
 	pid_t container_pid =
-		clone(container_start_child, container_stack_high, clone_flags, container);
+		clone(container_start_child_early, container_stack_high, clone_flags, container);
 	if (container_pid < 0) {
 		WARN_ERRNO("Clone container failed");
 		goto error_pre_clone;
@@ -1625,64 +1802,18 @@ container_start(container_t *container) //, const char *key)
 	/* REGISTER SOCKET TO RECEIVE STATUS MESSAGES FROM CHILD */
 	event_io_t *sync_sock_parent_event =
 		event_io_new(container->sync_sock_parent, EVENT_IO_READ,
-			     &container_start_post_clone_cb, container);
+			     &container_start_post_clone_early_cb, container);
 	event_add_io(sync_sock_parent_event);
 
-	/* register SIGCHILD handler which sets the state and
-	 * calls the appropriate cleanup functions if the child
-	 * dies */
-	event_signal_t *sig = event_signal_new(SIGCHLD, container_sigchld_cb, container);
+	// handler for early start child process which dies after double fork
+	event_signal_t *sig = event_signal_new(SIGCHLD, container_sigchld_early_cb, container);
 	event_add_signal(sig);
 
-	/*********************************************************/
-	/* POST CLONE HOOKS */
-	// execute all necessary c_<module>_start_post_clone hooks
-	// goto error_post_clone on an error
-
-	if (c_audit_start_post_clone(container->audit)) {
-		ret = CONTAINER_ERROR_AUDIT;
-		goto error_post_clone;
-	}
-
-	if (c_cgroups_start_post_clone(container->cgroups)) {
-		ret = CONTAINER_ERROR_CGROUPS;
-		goto error_post_clone;
-	}
-
-	if (c_net_start_post_clone(container->net)) {
-		ret = CONTAINER_ERROR_NET;
-		goto error_post_clone;
-	}
-
-	if (c_user_start_post_clone(container->user)) {
-		ret = CONTAINER_ERROR_USER;
-		goto error_post_clone;
-	}
-
-	if (c_fifo_start_post_clone(container->fifo)) {
-		ret = CONTAINER_ERROR_FIFO;
-		goto error_post_clone;
-	}
-
-	/*********************************************************/
-	/* NOTIFY CHILD TO START */
-	char msg_go = CONTAINER_START_SYNC_MSG_GO;
-	if (write(container->sync_sock_parent, &msg_go, 1) < 0) {
-		WARN_ERRNO("write to sync socket failed");
-		goto error_post_clone;
+	if (c_audit_start_post_clone_early(container->audit)) {
+		ERROR("c_audit_start_post_clone");
 	}
 
 	return 0;
-
-error_post_clone:
-	if (ret == 0)
-		ret = CONTAINER_ERROR;
-	char msg_stop = CONTAINER_START_SYNC_MSG_STOP;
-	if (write(container->sync_sock_parent, &msg_stop, 1) < 0) {
-		WARN_ERRNO("write to sync socket failed");
-	}
-	container_kill(container);
-	return ret;
 
 error_pre_clone:
 	container_cleanup(container, false);
