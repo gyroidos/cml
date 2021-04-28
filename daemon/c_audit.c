@@ -39,6 +39,8 @@
 
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+#include <inttypes.h>
 #include <google/protobuf-c/protobuf-c-text.h>
 
 //#undef LOGF_LOG_MIN_PRIO
@@ -51,34 +53,53 @@ struct c_audit {
 	uint32_t loginuid;
 };
 
-int
-c_audit_start_post_clone(c_audit_t *audit)
+static int
+c_audit_set_contid(c_audit_t *audit)
 {
+	ASSERT(audit);
+
+	int ret = 0;
 	char *aucontid_file =
 		mem_printf("/proc/%d/audit_containerid", container_get_pid(audit->container));
 
-	int ret = 0;
+	// skip if contid is not supported by kernel
 	if (!file_exists(aucontid_file)) {
 		goto out;
 	}
 
 	if (0 > file_printf(aucontid_file, "%llu",
 			    uuid_get_node(container_get_uuid(audit->container)))) {
-		ERROR("Failed to set audit container ID");
+		ERROR("Failed to set audit container ID '%llu'",
+		      (unsigned long long)uuid_get_node(container_get_uuid(audit->container)));
 		ret = -1;
 		goto out;
 	}
+	INFO("Set audit container ID '%llu'",
+	     (unsigned long long)uuid_get_node(container_get_uuid(audit->container)));
 out:
 	mem_free(aucontid_file);
 	return ret;
 }
 
 int
-c_audit_start_child(c_audit_t *audit)
+c_audit_start_post_clone_early(c_audit_t *audit)
 {
 	ASSERT(audit);
+	// update kernel container id
+	return c_audit_set_contid(audit);
+}
+
+int
+c_audit_start_child_early(c_audit_t *audit)
+{
+	ASSERT(audit);
+
 	// update kernel login uid with internal set loginuid
-	return audit_kernel_write_loginuid(audit->loginuid);
+	if (audit_kernel_write_loginuid(audit->loginuid)) {
+		ERROR("Could not set loginuid!");
+		return -1;
+	}
+	return 0;
 }
 
 c_audit_t *
@@ -146,4 +167,3 @@ c_audit_get_loginuid(const c_audit_t *audit)
 	ASSERT(audit);
 	return audit->loginuid;
 }
-
