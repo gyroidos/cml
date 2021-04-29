@@ -76,8 +76,9 @@ typedef struct {
 } audit_meta_t;
 
 const char *evcategory[] = { "SUA", "FUA", "SSA", "FSA", "RLE" };
-const char *evclass[] = { "GUESTOS_MGMT",	 "TOKEN_MGMT", "CONTAINER_MGMT",
-			  "CONTAINER_ISOLATION", "TPM_COMM",   "KAUDIT" };
+const char *evclass[] = { "GENERIC",	    "GUESTOS_MGMT",	   "TOKEN_MGMT",
+			  "CONTAINER_MGMT", "CONTAINER_ISOLATION", "TPM_COMM",
+			  "KAUDIT" };
 const char *component[] = { "CMLD", "SCD", "TPM2D" };
 const char *result[] = { "SUCCESS", "FAIL" };
 

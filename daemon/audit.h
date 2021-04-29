@@ -30,6 +30,7 @@
 typedef enum { SUA, FUA, SSA, FSA, RLE } AUDIT_CATEGORY;
 
 typedef enum {
+	GENERIC,
 	GUESTOS_MGMT,
 	TOKEN_MGMT,
 	CONTAINER_MGMT,
