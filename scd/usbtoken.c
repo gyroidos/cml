@@ -47,8 +47,8 @@
 
 #define USBTOKEN_SUCCESS 0x9000
 
-#undef LOGF_LOG_MIN_PRIO
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 static unsigned short g_ctn = 0;
 
@@ -353,6 +353,8 @@ usbtoken_init_ctapi_int(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 		ERROR("Could not initiate schsm session");
 		goto err;
 	}
+
+	DEBUG("Successfully initialized CTAPI session for reader with serial  %s", token->serial);
 
 	return 0;
 
