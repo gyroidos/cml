@@ -178,7 +178,7 @@ authenticateUser(int ctn, unsigned char *auth_code, size_t auth_code_len)
 
 	if (rc != USBTOKEN_SUCCESS) {
 		ERROR("Could not authenticate user to usb token, token rc: 0x%04x", rc);
-		return rc;
+		return -2;
 	}
 
 	return 0;
@@ -197,10 +197,10 @@ produceKey(usbtoken_t *token, unsigned char *label, size_t label_len, unsigned c
 {
 	int rc;
 
-	if ((authenticateUser(token->ctn, token->auth_code, token->auth_code_len)) < 0) {
+	if ((rc = (authenticateUser(token->ctn, token->auth_code, token->auth_code_len))) < 0) {
 		// this should not possibly happen; TODO: handle properly if it happens anyway
 		ERROR("Failed to authenticate to token");
-		return -1;
+		return rc;
 	}
 
 	if ((NULL == label) || (0 == label_len)) {
@@ -212,7 +212,7 @@ produceKey(usbtoken_t *token, unsigned char *label, size_t label_len, unsigned c
 
 	if (rc < 0) {
 		ERROR("USBTOKEN: deriveKey failed");
-		return rc;
+		return -1;
 	}
 
 	return 0;
@@ -630,7 +630,6 @@ usbtoken_unwrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 	rc = produceKey(token, label, label_len, key, sizeof(key));
 	if (rc < 0) {
 		ERROR("Failed to get derived key from usbtoken");
-		rc = -1;
 		goto out;
 	}
 
@@ -692,7 +691,7 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 	}
 
 	int rc = authenticateUser(token->ctn, code, auth_code_len);
-	if (rc == -1) { // wrong password
+	if (rc == -2) { // wrong password
 		token->wrong_unlock_attempts++;
 		ERROR("Usbtoken unlock failed (wrong PW)");
 	} else if (rc == 0) {
@@ -741,7 +740,7 @@ usbtoken_reset_auth(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 	}
 
 	rc = authenticateUser(token->ctn, token->auth_code, token->auth_code_len);
-	if (rc == -1) { // wrong password
+	if (rc == -2) { // wrong password
 		ERROR("Usbtoken authenticatio reset failed (wrong PW). This should not happen");
 	} else if (rc == 0) {
 		DEBUG("Usbtoken authenticatio reset successful");
