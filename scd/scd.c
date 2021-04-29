@@ -67,6 +67,9 @@
 #define TOKEN_DEFAULT_NAME "testuser"
 #define TOKEN_DEFAULT_EXT ".p12"
 
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 static list_t *scd_token_list = NULL;
 
 static scd_control_t *scd_control_cmld = NULL;

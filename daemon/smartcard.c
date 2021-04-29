@@ -57,6 +57,9 @@
 #define MAX_PAIR_SEC_LEN 8
 #define PAIR_SEC_FILE_NAME "device_pairing_secret"
 
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 struct smartcard {
 	int sock;
 	char *path;
@@ -934,6 +937,8 @@ smartcard_update_token_state(container_t *container)
 
 	container_set_token_is_linked_to_device(
 		container, smartcard_container_token_is_provisioned(container));
+
+	DEBUG("Updated Token state: %d", container_get_token_is_linked_to_device(container));
 
 	return 0;
 }

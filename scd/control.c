@@ -51,6 +51,9 @@
 #define SCD_CONTROL_SOCK_LISTEN_BACKLOG 8
 #define KEY_LENGTH_BYTES 64
 
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 struct scd_control {
 	int sock; // listen socket fd
 };

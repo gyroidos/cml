@@ -1690,13 +1690,13 @@ cmld_token_detach(char *devpath)
 
 	container_set_usbtoken_devpath(container, NULL);
 
-	if (smartcard_scd_token_remove_block(container)) {
-		ERROR("Failed to notify scd about token detachment");
-	}
-
 	DEBUG("Stopping Container");
 	if (cmld_container_stop(container)) {
 		ERROR("Could not stop container after token detachment.");
+	}
+
+	if (smartcard_scd_token_remove_block(container)) {
+		ERROR("Failed to notify scd about token detachment");
 	}
 
 	return 0;
