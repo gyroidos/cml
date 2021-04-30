@@ -1782,15 +1782,14 @@ c_vol_is_encrypted(c_vol_t *vol)
 }
 
 void
-c_vol_cleanup(c_vol_t *vol)
+c_vol_cleanup(c_vol_t *vol, bool is_rebooting)
 {
 	ASSERT(vol);
 
 	if (c_vol_umount_all(vol))
 		WARN("Could not umount all images properly");
 
-	// TODO: also tries to delete other directories (e.g. system), but doesn't succeed.
-	// There is only an eror message thrown, not an error returned
-	if (c_vol_cleanup_dm(vol))
+	// keep dm crypt/integrity device up for reboot
+	if (!is_rebooting && c_vol_cleanup_dm(vol))
 		WARN("Could not remove mounts properly");
 }
