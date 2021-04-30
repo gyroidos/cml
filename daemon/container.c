@@ -1012,17 +1012,15 @@ container_cleanup(container_t *container, bool is_rebooting)
 	c_net_cleanup(container->net);
 	c_run_cleanup(container->run);
 	c_time_cleanup(container->time);
+	c_user_cleanup(container->user);
 
 	/*
 	 * maintain some state concerning mounts and corresponding shifted uid
 	 * states in case of rebooting. We need this, since the volume key for
 	 * encrypted volumes is cleared from cmld's memory after initial use.
 	 */
-	if (!is_rebooting) {
-		c_user_cleanup(container->user);
-		/* cleanup c_vol last, as it removes partitions */
-		c_vol_cleanup(container->vol);
-	}
+	/* cleanup c_vol last, as it removes partitions */
+	c_vol_cleanup(container->vol, is_rebooting);
 
 	container->pid = -1;
 	container->pid_early = -1;
@@ -1085,17 +1083,9 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			/* cleanup and set states accordingly to notify observers */
 			container_cleanup(container, rebooting);
 
-			if (rebooting) {
-				audit_log_event(container_get_uuid(container), SSA, CMLD,
-						CONTAINER_MGMT, "reboot",
-						uuid_string(container_get_uuid(container)), 0);
-				container_set_state(container, CONTAINER_STATE_REBOOTING);
-			} else {
-				audit_log_event(container_get_uuid(container), SSA, CMLD,
-						CONTAINER_MGMT, "stop",
-						uuid_string(container_get_uuid(container)), 0);
-				container_set_state(container, CONTAINER_STATE_STOPPED);
-			}
+			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+					rebooting ? "reboot" : "stop",
+					uuid_string(container_get_uuid(container)), 0);
 		} else if (pid == -1) {
 			if (errno == ECHILD) {
 				DEBUG("Process group of container %s terminated completely",
@@ -1392,14 +1382,12 @@ container_start_child_early(void *data)
 
 	close(container->sync_sock_parent);
 
-	bool is_rebooting = container->prev_state == CONTAINER_STATE_REBOOTING;
-
 	if (c_audit_start_child_early(container->audit) < 0) {
 		ret = CONTAINER_ERROR_AUDIT;
 		goto error;
 	}
 
-	if (!is_rebooting && c_vol_start_child_early(container->vol) < 0) {
+	if (c_vol_start_child_early(container->vol) < 0) {
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
 	}
@@ -1508,8 +1496,6 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		return; // the child exits on its own and we cleanup in the sigchld handler
 	}
 
-	bool is_rebooting = container->prev_state == CONTAINER_STATE_REBOOTING;
-
 	/********************************************************/
 	/* on success call all c_<module>_start_pre_exec hooks */
 	if (c_time_start_pre_exec(container->time) < 0) {
@@ -1522,7 +1508,7 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		goto error_pre_exec;
 	}
 	// during reboot c_vol state is not cleared, thus skip pre_exec here
-	if (!is_rebooting && c_vol_start_pre_exec(container->vol) < 0) {
+	if (c_vol_start_pre_exec(container->vol) < 0) {
 		WARN("c_vol_start_pre_exec failed");
 		goto error_pre_exec;
 	}
@@ -1726,14 +1712,8 @@ container_start(container_t *container) //, const char *key)
 
 	/*********************************************************/
 	/* PRE CLONE HOOKS */
-	/*
-	 * We do explictitly clear out the vol key from cmld's memory
-	 * thus, on reboot we have to use allready mounted volumes which are
-	 * also kept during container_cleanup().
-	 */
-	bool is_rebooting = container->prev_state == CONTAINER_STATE_REBOOTING;
 
-	if (!is_rebooting && c_user_start_pre_clone(container->user) < 0) {
+	if (c_user_start_pre_clone(container->user) < 0) {
 		ret = CONTAINER_ERROR_USER;
 		goto error_pre_clone;
 	}

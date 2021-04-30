@@ -64,6 +64,6 @@ int
 c_vol_start_pre_exec(c_vol_t *vol);
 
 void
-c_vol_cleanup(c_vol_t *vol);
+c_vol_cleanup(c_vol_t *vol, bool is_rebooting);
 
 #endif /* C_VOL_H */

@@ -84,6 +84,10 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
+// TODO: how should we encrypt a0?
+#define A0_KEY                                                                                     \
+	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
 // TODO think about using an own variable for a0
 //static container_t *cmld_a0 = NULL;
 static const char *cmld_path = DEFAULT_BASE_PATH;
@@ -770,6 +774,7 @@ cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSE
 {
 	if (container_get_state(container) == CONTAINER_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(container));
+		container_set_key(container, A0_KEY); // set dummy key for reboot
 		if (cmld_container_start(container))
 			WARN("Reboot of '%s' failed", container_get_description(container));
 		container_unregister_observer(container, cb);
@@ -922,10 +927,6 @@ cmld_get_control_gui_sock(void)
 }
 
 /******************************************************************************/
-
-// TODO: how should we encrypt a0?
-#define A0_KEY                                                                                     \
-	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
 static void
 cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
