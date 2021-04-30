@@ -243,6 +243,24 @@ error:
 	return -1;
 }
 
+static int
+c_user_cleanup_marks_cb(const char *path, const char *file, UNUSED void *data)
+{
+	char *mark = mem_printf("%s/%s", path, file);
+	if (file_is_mountpoint(mark)) {
+		if (umount2(mark, MNT_DETACH) < 0) {
+			WARN_ERRNO("Could not umount shift mark on %s", mark);
+			mem_free(mark);
+			return -1;
+		}
+		if (rmdir(mark) < 0)
+			TRACE("Unable to remove %s", mark);
+		INFO("Cleanup mark '%s' done.", mark);
+	}
+	mem_free(mark);
+	return 0;
+}
+
 /**
  * Cleans up the c_user_t struct.
  */
@@ -257,26 +275,14 @@ c_user_cleanup(c_user_t *user)
 
 	c_user_unset_offset(user->offset);
 
-	// cleanup shifted mounts in reverse order
-	for (list_t *l = list_tail(user->marks); l; l = l->prev) {
-		struct c_user_shift *shift = l->data;
-		if (shift->is_root) {
-			char *dev_dir = mem_printf("%s/dev", shift->target);
-			if (umount(dev_dir) < 0)
-				WARN_ERRNO("Could not umount dev on %s", dev_dir);
-			mem_free(dev_dir);
-		}
-		if (umount(shift->target) < 0) {
-			if (umount2(shift->target, MNT_DETACH) < 0) {
-				WARN_ERRNO("Could not umount shift target on '%s'", shift->target);
-			}
-		}
-		if (umount(shift->mark) < 0)
-			WARN_ERRNO("Could not umount shift mark on %s", shift->mark);
-		c_user_shift_free(shift);
-	}
-	list_delete(user->marks);
-	user->marks = NULL;
+	// cleanup left-over marks in main cmld process
+	const char *uuid = uuid_string(container_get_uuid(user->container));
+	char *path = mem_printf("%s/%s/mark", SHIFTFS_DIR, uuid);
+	if (dir_foreach(path, &c_user_cleanup_marks_cb, NULL) < 0)
+		WARN("Could not release marks in '%s'", path);
+	if (rmdir(path) < 0)
+		TRACE("Unable to remove %s", path);
+	mem_free(path);
 }
 
 /**
