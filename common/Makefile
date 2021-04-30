@@ -40,11 +40,11 @@ endif
 ifeq ($(AGGRESSIVE_WARNINGS),y)
     # on CI (and also for well-behaved developers) warnings should be
     # converted to errors; this helps us redistribute the code base without any pain;
-    # pure builds are better than polluted builds. 
+    # pure builds are better than polluted builds.
     LOCAL_CFLAGS += -Werror
 endif
 ifeq ($(SANITIZERS),y)
-    # if requested, we enable sanitization for easier debugging 
+    # if requested, we enable sanitization for easier debugging
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
@@ -87,19 +87,25 @@ libcommon_full: $(OBJS_COMMON_FULL)
 
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
-	
+
 audit.pb-c.c: audit.proto
 	protoc-c --c_out=. $<
 
 logf.pb-c.c: logf.proto
 	protoc-c --c_out=. $<
 
+LFLAGS_TEST := \
+	-lssl \
+	-lcrypto \
+
 TEST_SUITES := \
-    mem.test.c \
-    macro.test.c
+	mem.test.c \
+	macro.test.c \
+	ssl_util.c \
+	ssl_util.test.c
 
 common.test: $(TEST_SUITES) munit.h munit.c common.test.c
-	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c
+	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c $(LFLAGS_TEST)
 
 .PHONY: test
 test: libcommon_full common.test
