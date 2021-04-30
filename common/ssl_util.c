@@ -23,9 +23,9 @@
 
 #include "ssl_util.h"
 
-#include "common/macro.h"
-#include "common/mem.h"
-#include "common/file.h"
+#include "macro.h"
+#include "mem.h"
+#include "file.h"
 
 #include <openssl/err.h>
 #include <openssl/sha.h>
