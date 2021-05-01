@@ -649,8 +649,10 @@ uevent_netdev_move(struct uevent *uevent)
 	if (!container)
 		container = cmld_containers_get_a0();
 
-	if (!container) {
-		ERROR("No c0 is running, skip moving %s", uevent->interface);
+	if ((!container) || (container_get_state(container) != CONTAINER_STATE_BOOTING) ||
+	    (container_get_state(container) != CONTAINER_STATE_RUNNING) ||
+	    (container_get_state(container) != CONTAINER_STATE_STARTING)) {
+		WARN("Target container is not running, skip moving %s", uevent->interface);
 		goto error;
 	}
 
