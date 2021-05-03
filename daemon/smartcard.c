@@ -31,6 +31,7 @@
 #include "hardware.h"
 #include "control.h"
 #include "audit.h"
+#include "scd_shared.h"
 
 #include "common/macro.h"
 #include "common/event.h"
@@ -40,9 +41,11 @@
 #include "common/sock.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
+#include "common/proc.h"
 
 #include <google/protobuf-c/protobuf-c-text.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -1070,13 +1073,66 @@ out:
 	return rc;
 }
 
+static int
+fork_and_exec_scd(void)
+{
+	TRACE("Starting scd..");
+
+	int status;
+	pid_t pid = fork();
+	char *const param_list[] = { "scd", NULL };
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork for scd");
+		return -1;
+	case 0:
+		execvp((const char *)param_list[0], param_list);
+		FATAL_ERRNO("Could not execvp scd");
+		return -1;
+	default:
+		// Just check if the child is alive but do not wait
+		if (waitpid(pid, &status, WNOHANG) != 0) {
+			ERROR("Failed to start scd");
+			return -1;
+		}
+		return 0;
+	}
+	return -1;
+}
+
 smartcard_t *
 smartcard_new(const char *path)
 {
 	ASSERT(path);
+
+	// if device.cert is not present, start scd to initialize device (provisioning mode)
+	if (!file_exists(DEVICE_CERT_FILE)) {
+		INFO("Starting scd in Provisioning / Installing Mode");
+		// Start the SCD in provisioning mode
+		const char *const args[] = { "scd", NULL };
+		IF_FALSE_RETVAL_TRACE(proc_fork_and_execvp(args) == 0, NULL);
+	}
+
 	smartcard_t *smartcard = mem_alloc(sizeof(smartcard_t));
 	smartcard->path = mem_strdup(path);
-	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+
+	// Start SCD and wait for control interface
+	IF_TRUE_RETVAL_TRACE(fork_and_exec_scd(), NULL);
+
+	size_t retries = 0;
+	do {
+		usleep(500000);
+		smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+		retries++;
+		TRACE("Retry %ld connecting to scd", retries);
+	} while (smartcard->sock < 0 && retries < 10);
+
+	if (smartcard->sock < 0) {
+		mem_free(smartcard);
+		ERROR("Failed to connect to scd");
+		return NULL;
+	}
 
 	// allow access from namespaced child before chroot and execv of init
 	if (chmod(SCD_CONTROL_SOCKET, 00777))
