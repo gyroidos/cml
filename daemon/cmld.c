@@ -1338,6 +1338,10 @@ cmld_init(const char *path)
 		WARN("Could not get a valid MDM configuration from config file");
 	}
 
+	char *tokens_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
+	cmld_smartcard = smartcard_new(tokens_path);
+	mem_free(tokens_path);
+
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
@@ -1349,10 +1353,6 @@ cmld_init(const char *path)
 	char *containers_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINERS_DIR);
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir containers directory %s", containers_path);
-
-	char *tokens_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
-	cmld_smartcard = smartcard_new(tokens_path);
-	mem_free(tokens_path);
 
 	char *keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)

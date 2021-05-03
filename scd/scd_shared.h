@@ -21,53 +21,30 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef SCD_H
-#define SCD_H
+#ifndef SCD_SHARED_H
+#define SCD_SHARED_H
 
-#include "token.h"
+#define PROVISIONING_MODE_FILE "/tmp/_provisioning_"
 
-#ifdef ANDROID
-#else
-#include "scd.pb-c.h"
+#ifndef DEFAULT_BASE_PATH
+#define DEFAULT_BASE_PATH "/data/cml"
+#endif
+#ifndef DEFAULT_CONF_BASE_PATH
+#define DEFAULT_CONF_BASE_PATH "/data/cml"
+#endif
+#ifndef LOGFILE_DIR
+#define LOGFILE_DIR "/data/logs"
 #endif
 
-#include "scd_shared.h"
+// Do not edit! The provisioning script requires this path (also trustme-main.mk and its dummy provsg folder)
+#define SCD_TOKEN_DIR DEFAULT_BASE_PATH "/tokens"
+#define SSIG_ROOT_CERT SCD_TOKEN_DIR "/ssig_rootca.cert"
+#define LOCALCA_ROOT_CERT SCD_TOKEN_DIR "/localca_rootca.cert"
+#define TRUSTED_CA_STORE SCD_TOKEN_DIR "/ca"
 
-/**
- * Returns the type of the token
- */
-scd_tokentype_t
-scd_proto_to_tokentype(const DaemonToToken *msg);
+#define DEVICE_CERT_FILE SCD_TOKEN_DIR "/device.cert"
+#define DEVICE_CSR_FILE SCD_TOKEN_DIR "/device.csr"
+// Only used on platforms without TPM, otherwise TPM-bound key is used
+#define DEVICE_KEY_FILE SCD_TOKEN_DIR "/device.key"
 
-/**
- * Creates a new scd token structure.
- */
-int
-scd_token_new(const DaemonToToken *msg);
-
-/**
- * Returns an existing scd token.
- */
-scd_token_t *
-scd_get_token(scd_tokentype_t type, char *tuuid);
-
-/**
- * Returns an existing scd token.
- * This is a convience wrapper for scd_get_token(scd_token_t type, char *tuuid).
- */
-scd_token_t *
-scd_get_token_from_msg(const DaemonToToken *msg);
-
-/**
- * Frees a generic token structure.
- */
-void
-scd_token_free(scd_token_t *token);
-
-/**
- * Checks provisioning mode.
- */
-bool
-scd_in_provisioning_mode(void);
-
-#endif // SCD_H
+#endif // SCD_SHARED_H
