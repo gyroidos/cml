@@ -628,7 +628,7 @@ c_net_write_dhcp_config(c_net_interface_t *ni)
 	if (chmod(conf_file, 00644) < 0)
 		ERROR_ERRNO("changing of file access rights failed");
 
-	// restart dnsmasq a0's init while restart it
+	// restart dnsmasq c0's init while restart it
 	proc_killall(-1, "dnsmasq", SIGTERM);
 
 out:
@@ -826,7 +826,7 @@ c_net_start_pre_clone(c_net_t *net)
 		return 0;
 
 	/* skip on reboots of c0 */
-	if ((cmld_containers_get_a0() == net->container) &&
+	if ((cmld_containers_get_c0() == net->container) &&
 	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
@@ -905,13 +905,13 @@ c_net_start_post_clone(c_net_t *net)
 		return 0;
 
 	/* skip on reboots of c0 */
-	if ((cmld_containers_get_a0() == net->container) &&
+	if ((cmld_containers_get_c0() == net->container) &&
 	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
 	/* Get container's pid */
 	pid_t pid = container_get_pid(net->container);
-	pid_t pid_c0 = cmld_containers_get_a0() ? container_get_pid(cmld_containers_get_a0()) : 0;
+	pid_t pid_c0 = cmld_containers_get_c0() ? container_get_pid(cmld_containers_get_c0()) : 0;
 
 	for (list_t *l = net->interface_mv_name_list; l; l = l->next) {
 		char *iff_name = l->data;
@@ -941,7 +941,7 @@ c_net_start_post_clone(c_net_t *net)
 			return -1;
 		if (pid == pid_c0) //skip moving interfaces defined for c0 (e.g. uplink iiff)
 			continue;
-		if (cmld_containers_get_a0()) {
+		if (cmld_containers_get_c0()) {
 			DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
 			if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
 				return -1;
@@ -956,14 +956,14 @@ c_net_start_post_clone(c_net_t *net)
 		mem_free(c0_netns_pid);
 		return -1;
 	} else if (*c0_netns_pid == 0) {
-		const char *hostns = cmld_containers_get_a0() ? "c0" : "CML";
+		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
 
 		DEBUG("Configuring netifs in %s", hostns);
 
 		event_reset(); // reset event_loop of cloned from parent
-		if (cmld_containers_get_a0()) {
+		if (cmld_containers_get_c0()) {
 			char *c0_netns = mem_printf("/proc/%d/ns/net",
-						    container_get_pid(cmld_containers_get_a0()));
+						    container_get_pid(cmld_containers_get_c0()));
 			int netns_fd = open(c0_netns, O_RDONLY);
 			mem_free(c0_netns);
 			if (netns_fd == -1)
@@ -1007,7 +1007,7 @@ c_net_start_post_clone(c_net_t *net)
 				FATAL_ERRNO("Could not setup masquerading for %s!",
 					    ni->veth_cmld_name);
 #ifdef ANDROID
-			/* Write dhcp config for dnsmasq skip first veth (which is used in a0) */
+			/* Write dhcp config for dnsmasq skip first veth (which is used in c0) */
 			if (ni->cont_offset > 0) {
 				if (c_net_write_dhcp_config(ni))
 					FATAL_ERRNO("Could not write dhcpd config!");
@@ -1108,7 +1108,7 @@ c_net_start_child(c_net_t *net)
 		return 0;
 
 	/* skip on reboots of c0 */
-	if ((cmld_containers_get_a0() == net->container) &&
+	if ((cmld_containers_get_c0() == net->container) &&
 	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
@@ -1189,14 +1189,14 @@ c_net_cleanup_c0(c_net_t *net)
 		mem_free(c0_netns_pid);
 		return -1;
 	} else if (*c0_netns_pid == 0) {
-		const char *hostns = cmld_containers_get_a0() ? "c0" : "CML";
+		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
 
 		DEBUG("Cleaning up netifs in %s", hostns);
 
 		event_reset(); // reset event_loop of cloned from parent
-		if (cmld_containers_get_a0()) {
+		if (cmld_containers_get_c0()) {
 			char *c0_netns = mem_printf("/proc/%d/ns/net",
-						    container_get_pid(cmld_containers_get_a0()));
+						    container_get_pid(cmld_containers_get_c0()));
 			int netns_fd = open(c0_netns, O_RDONLY);
 			mem_free(c0_netns);
 			if (netns_fd == -1)
@@ -1242,7 +1242,7 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 		return;
 
 	/* skip on reboots of c0 */
-	if (is_rebooting && (cmld_containers_get_a0() == net->container))
+	if (is_rebooting && (cmld_containers_get_c0() == net->container))
 		return;
 
 	// remove bound to filesystem
