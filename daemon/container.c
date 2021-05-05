@@ -1407,7 +1407,7 @@ container_start_child_early(void *data)
 		clone_flags |= CLONE_NEWIPC;
 
 	// on reboots of c0 rejoin existing userns and netns
-	if (cmld_containers_get_a0() == container &&
+	if (cmld_containers_get_c0() == container &&
 	    container->prev_state == CONTAINER_STATE_REBOOTING) {
 		if (c_user_join_userns(container->user) < 0) {
 			ret = CONTAINER_ERROR_USER;
@@ -2551,27 +2551,27 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 	int res = 0;
 	pid_t pid = container_get_pid(container);
 
-	container_state_t state_a0 = container_get_state(cmld_containers_get_a0());
-	bool a0_is_up = (state_a0 == CONTAINER_STATE_RUNNING ||
-			 state_a0 == CONTAINER_STATE_BOOTING || state_a0 == CONTAINER_STATE_SETUP);
+	container_state_t state_c0 = container_get_state(cmld_containers_get_c0());
+	bool c0_is_up = (state_c0 == CONTAINER_STATE_RUNNING ||
+			 state_c0 == CONTAINER_STATE_BOOTING || state_c0 == CONTAINER_STATE_SETUP);
 
 	IF_FALSE_RETVAL(cmld_netif_phys_remove_by_name(iface), -1);
 
-	if (cmld_containers_get_a0() == container) {
-		if (a0_is_up)
+	if (cmld_containers_get_c0() == container) {
+		if (c0_is_up)
 			res = c_net_move_ifi(iface, pid);
 		// re-add iface to list of available network interfaces
 		cmld_netif_phys_add_by_name(iface);
 		return res;
 	}
 
-	pid_t pid_a0 = container_get_pid(cmld_containers_get_a0());
+	pid_t pid_c0 = container_get_pid(cmld_containers_get_c0());
 
 	/* if c0 is running the interface is occupied by c0, thus we have
 	 * to take it back to cml first.
 	 */
-	if (a0_is_up)
-		res = c_net_remove_ifi(iface, pid_a0);
+	if (c0_is_up)
+		res = c_net_remove_ifi(iface, pid_c0);
 
 	res |= c_net_move_ifi(iface, pid);
 	if (res || !persistent)
