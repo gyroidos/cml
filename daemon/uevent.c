@@ -647,7 +647,7 @@ uevent_netdev_move(struct uevent *uevent)
 	}
 
 	if (!container)
-		container = cmld_containers_get_a0();
+		container = cmld_containers_get_c0();
 
 	if ((!container) || (container_get_state(container) != CONTAINER_STATE_BOOTING) ||
 	    (container_get_state(container) != CONTAINER_STATE_RUNNING) ||
