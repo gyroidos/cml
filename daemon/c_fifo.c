@@ -196,7 +196,7 @@ int
 c_fifo_start_post_clone(c_fifo_t *fifo)
 {
 	int c0_pid = -1, target_pid = -1;
-	container_t *c0 = cmld_containers_get_a0();
+	container_t *c0 = cmld_containers_get_c0();
 
 	if (c0 &&
 	    (c0_pid = container_get_pid(c0)) != (target_pid = container_get_pid(fifo->container))) {
