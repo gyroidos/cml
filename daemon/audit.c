@@ -110,7 +110,7 @@ audit_get_log_container(const uuid_t *uuid)
 	}
 
 	if (!c) {
-		c = cmld_containers_get_a0();
+		c = cmld_containers_get_c0();
 	}
 
 	return c;
@@ -691,7 +691,7 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 		char *res = strstr(log_record, "res=");
 		res = res ? res + 4 : "failed";
 		container_t *c = cmld_container_get_by_uid(uid);
-		c = c ? c : cmld_containers_get_a0();
+		c = c ? c : cmld_containers_get_c0();
 		char *record_type = mem_printf("type=%hu", type);
 		audit_log_event(container_get_uuid(c),
 				(strstr(res, "success") || res[0] == '1') ? SSA : FSA, CMLD, KAUDIT,
