@@ -84,12 +84,13 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
-// TODO: how should we encrypt a0?
-#define A0_KEY                                                                                     \
+/*
+ * dummy key used for unecnrypted c0 and for reboots where the real key
+ * is already in kernel
+ */
+#define DUMMY_KEY                                                                                  \
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
-// TODO think about using an own variable for a0
-//static container_t *cmld_a0 = NULL;
 static const char *cmld_path = DEFAULT_BASE_PATH;
 
 static list_t *cmld_containers_list = NULL; // first element is a0
@@ -127,7 +128,6 @@ cmld_start_a0(container_t *new_a0);
 container_t *
 cmld_containers_get_a0()
 {
-	//return a0;
 	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
 	container_t *container = cmld_container_get_by_uuid(a0_uuid);
 	uuid_free(a0_uuid);
@@ -774,7 +774,7 @@ cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSE
 {
 	if (container_get_state(container) == CONTAINER_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(container));
-		container_set_key(container, A0_KEY); // set dummy key for reboot
+		container_set_key(container, DUMMY_KEY); // set dummy key for reboot
 		if (cmld_container_start(container))
 			WARN("Reboot of '%s' failed", container_get_description(container));
 		container_unregister_observer(container, cb);
@@ -1113,11 +1113,8 @@ cmld_init_a0(const char *path, const char *c0os)
 				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL,
 				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
 
-	/* depending on the storage of the a0 pointer, do ONE of the following: */
-	/* store a0 as first element of the cmld_containers_list */
+	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_a0);
-	/* OR store a0 in a global variable */
-	//a0 = new_a0;
 
 	mem_free(a0_images_folder);
 
@@ -1147,7 +1144,7 @@ cmld_start_a0(container_t *new_a0)
 		return -1;
 	}
 
-	container_set_key(new_a0, A0_KEY);
+	container_set_key(new_a0, DUMMY_KEY);
 	if (container_start(new_a0)) {
 		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
 				uuid_string(container_get_uuid(new_a0)), 0);
