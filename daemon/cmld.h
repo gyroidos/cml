@@ -112,16 +112,6 @@ container_t *
 cmld_containers_get_c0();
 
 /**
- * Deprecated function to get c0 container
- * Use cmld_containers_get_c0() in new code.
- */
-__attribute__((deprecated)) inline container_t *
-cmld_containers_get_a0()
-{
-	return cmld_containers_get_c0();
-}
-
-/**
  * Start a container if it is not already started
  * If the containers requires an encryption key it must be set before calling this method.
  *
