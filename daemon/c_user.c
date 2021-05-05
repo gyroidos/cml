@@ -281,7 +281,7 @@ c_user_cleanup(c_user_t *user, bool is_rebooting)
 		return;
 
 	/* skip on reboots of c0 */
-	if (is_rebooting && (cmld_containers_get_a0() == user->container))
+	if (is_rebooting && (cmld_containers_get_c0() == user->container))
 		return;
 
 	// remove bound to filesystem
@@ -500,7 +500,7 @@ c_user_start_pre_clone(c_user_t *user)
 		return 0;
 
 	/* skip on reboots of c0 */
-	if ((cmld_containers_get_a0() == user->container) &&
+	if ((cmld_containers_get_c0() == user->container) &&
 	    (container_get_prev_state(user->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
@@ -522,7 +522,7 @@ c_user_start_post_clone(c_user_t *user)
 		return 0;
 
 	/* skip on reboots of c0 */
-	if ((cmld_containers_get_a0() == user->container) &&
+	if ((cmld_containers_get_c0() == user->container) &&
 	    (container_get_prev_state(user->container) == CONTAINER_STATE_REBOOTING))
 		return 0;
 
