@@ -93,7 +93,7 @@
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
 
-static list_t *cmld_containers_list = NULL; // first element is a0
+static list_t *cmld_containers_list = NULL; // usually first element is c0
 
 static control_t *cmld_control_mdm = NULL;
 static control_t *cmld_control_gui = NULL;
@@ -121,16 +121,16 @@ static bool cmld_device_provisioned = false;
 /******************************************************************************/
 
 static int
-cmld_start_a0(container_t *new_a0);
+cmld_start_c0(container_t *new_c0);
 
 /******************************************************************************/
 
 container_t *
-cmld_containers_get_a0()
+cmld_containers_get_c0()
 {
-	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
-	container_t *container = cmld_container_get_by_uuid(a0_uuid);
-	uuid_free(a0_uuid);
+	uuid_t *c0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
+	container_t *container = cmld_container_get_by_uuid(c0_uuid);
+	uuid_free(c0_uuid);
 	return container;
 }
 
@@ -138,21 +138,21 @@ container_t *
 cmld_container_get_c_root_netns()
 {
 	container_t *found = NULL;
-	container_t *found_a0 = NULL;
+	container_t *found_c0 = NULL;
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
 		if (!container_has_netns(container)) {
-			if (container == cmld_containers_get_a0()) {
-				found_a0 = container;
+			if (container == cmld_containers_get_c0()) {
+				found_c0 = container;
 			} else {
-				// first container without netns which is not a0
+				// first container without netns which is not c0
 				found = container;
 				break;
 			}
 		}
 	}
-	return ((found) ? found : found_a0);
+	return ((found) ? found : found_c0);
 }
 
 container_t *
@@ -565,16 +565,16 @@ cmld_mobile_change_cb(bool active)
 	/* TODO insert stuff that depends on mobile */
 	if (active) {
 		INFO("Global mobile data activated");
-		/* setup route over a0 with rild */
-		container_t *a0 = cmld_containers_get_a0();
-		char *a0_ipaddr = container_get_first_ip_new(a0);
-		char *a0_subnet = container_get_first_subnet_new(a0);
-		network_setup_route_table(hardware_get_routing_table_radio(), a0_subnet,
+		/* setup route over c0 with rild */
+		container_t *c0 = cmld_containers_get_c0();
+		char *c0_ipaddr = container_get_first_ip_new(c0);
+		char *c0_subnet = container_get_first_subnet_new(c0);
+		network_setup_route_table(hardware_get_routing_table_radio(), c0_subnet,
 					  hardware_get_radio_ifname(), true);
-		network_setup_default_route_table(hardware_get_routing_table_radio(), a0_ipaddr,
+		network_setup_default_route_table(hardware_get_routing_table_radio(), c0_ipaddr,
 						  true);
-		mem_free(a0_ipaddr);
-		mem_free(a0_subnet);
+		mem_free(c0_ipaddr);
+		mem_free(c0_subnet);
 	} else {
 		INFO("Global mobile data deactivated");
 	}
@@ -929,14 +929,14 @@ cmld_get_control_gui_sock(void)
 /******************************************************************************/
 
 static void
-cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
+cmld_init_c0_cb(container_t *container, container_callback_t *cb, void *data)
 {
 	int *control_sock_p = data;
 
 	container_state_t state = container_get_state(container);
 	/* Check if the container got over the initial starting phase */
 	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
-		/* Initialize control interface on the socket previously bound into a0 */
+		/* Initialize control interface on the socket previously bound into c0 */
 		cmld_control_gui = control_new(*control_sock_p, true);
 		mem_free(control_sock_p);
 		container_unregister_observer(container, cb);
@@ -945,11 +945,11 @@ cmld_init_a0_cb(container_t *container, container_callback_t *cb, void *data)
 }
 
 static void
-cmld_a0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
 	container_state_t state = container_get_state(container);
 	if (state == CONTAINER_STATE_RUNNING) {
-		DEBUG("a0 booted successfully!");
+		DEBUG("c0 booted successfully!");
 		container_oom_protect_service(container);
 		cmld_rename_logfiles();
 		// fixup device nodes in userns by triggering uevent forwarding of coldboot events
@@ -1010,29 +1010,29 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 }
 
 /**
- * This callback for a0 is used when a0 gets the shutdown command in order to
+ * This callback for c0 is used when c0 gets the shutdown command in order to
  * trigger the graceful shutdown of the other running containers
  */
 static void
-cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
+cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data)
 {
-	container_state_t a0_state = container_get_state(a0);
+	container_state_t c0_state = container_get_state(c0);
 	bool shutdown_now = true;
 
-	/* only execute the callback if a0 goes down */
-	if (!(a0_state == CONTAINER_STATE_SHUTTING_DOWN || a0_state == CONTAINER_STATE_STOPPED ||
-	      a0_state == CONTAINER_STATE_ZOMBIE)) {
+	/* only execute the callback if c0 goes down */
+	if (!(c0_state == CONTAINER_STATE_SHUTTING_DOWN || c0_state == CONTAINER_STATE_STOPPED ||
+	      c0_state == CONTAINER_STATE_ZOMBIE)) {
 		return;
 	}
-	audit_log_event(container_get_uuid(a0), SSA, CMLD, CONTAINER_MGMT, "shutdown-c0-start",
-			uuid_string(container_get_uuid(a0)), 0);
+	audit_log_event(container_get_uuid(c0), SSA, CMLD, CONTAINER_MGMT, "shutdown-c0-start",
+			uuid_string(container_get_uuid(c0)), 0);
 
-	DEBUG("Device shutdown: a0 went down or shutting down, checking others before shutdown");
+	DEBUG("Device shutdown: c0 went down or shutting down, checking others before shutdown");
 
 	/* iterate over containers and check their status:
 	 * - every container, which is not yet down gets an observer to inspect global containers' statuses
 	 * - every container, which is furthermore not yet shutting down, is sent the shutdown command, which
-	 *   needs not to be done for a0, as this observer callback call tells that it is either already
+	 *   needs not to be done for c0, as this observer callback call tells that it is either already
 	 *   dead or in shutting down state
 	 */
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
@@ -1044,7 +1044,7 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 				ERROR("Could not register observer shutdown callback for %s",
 				      container_get_description(l->data));
 			}
-			if (l->data != a0 &&
+			if (l->data != c0 &&
 			    !(container_get_state(l->data) == CONTAINER_STATE_SHUTTING_DOWN)) {
 				DEBUG("Device shutdown: There is another running container:%s. Shut it down first",
 				      container_get_description(l->data));
@@ -1053,13 +1053,13 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 		}
 	}
 
-	container_unregister_observer(a0, cb);
+	container_unregister_observer(c0, cb);
 
 	if (shutdown_now && !cmld_hostedmode) {
 		/* all containers are down, so shut down */
 		DEBUG("Device shutdown: all containers already down; shutdown now");
-		audit_log_event(container_get_uuid(a0), SSA, CMLD, CONTAINER_MGMT, "shutdown",
-				uuid_string(container_get_uuid(a0)), 0);
+		audit_log_event(container_get_uuid(c0), SSA, CMLD, CONTAINER_MGMT, "shutdown",
+				uuid_string(container_get_uuid(c0)), 0);
 #ifndef TRUSTME_DEBUG
 		reboot_reboot(POWER_OFF);
 		// should never arrive here, but in case the shutdown fails somehow, we exit
@@ -1069,106 +1069,106 @@ cmld_shutdown_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data
 }
 
 /*
- * This callback handles internal reboot of a0
+ * This callback handles internal reboot of c0
  */
 static void
-cmld_reboot_a0_cb(container_t *a0, container_callback_t *cb, UNUSED void *data)
+cmld_reboot_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data)
 {
-	if (container_get_state(a0) == CONTAINER_STATE_REBOOTING) {
-		INFO("Rebooting container %s", container_get_description(a0));
-		if (cmld_start_a0(a0))
-			WARN("Reboot of '%s' failed", container_get_description(a0));
-		container_unregister_observer(a0, cb);
+	if (container_get_state(c0) == CONTAINER_STATE_REBOOTING) {
+		INFO("Rebooting container %s", container_get_description(c0));
+		if (cmld_start_c0(c0))
+			WARN("Reboot of '%s' failed", container_get_description(c0));
+		container_unregister_observer(c0, cb);
 	}
 }
 
 static int
-cmld_init_a0(const char *path, const char *c0os)
+cmld_init_c0(const char *path, const char *c0os)
 {
 	IF_TRUE_RETVAL_TRACE(cmld_hostedmode, 0);
 
-	/* Get the a0 guestos */
-	guestos_t *a0_os = guestos_mgr_get_latest_by_name(c0os, true);
+	/* Get the c0 guestos */
+	guestos_t *c0_os = guestos_mgr_get_latest_by_name(c0os, true);
 
-	uuid_t *a0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
-	char *a0_config_file =
+	uuid_t *c0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
+	char *c0_config_file =
 		mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000.conf");
-	if (file_exists(a0_config_file)) {
+	if (file_exists(c0_config_file)) {
 		// let do load_containers() do the rest
-		INFO("Load c0 config from file %s", a0_config_file);
+		INFO("Load c0 config from file %s", c0_config_file);
 		goto out;
 	}
 
-	char *a0_images_folder = mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000");
-	mount_t *a0_mnt = mount_new();
-	guestos_fill_mount(a0_os, a0_mnt);
-	unsigned int a0_ram_limit = 1024;
-	bool a0_ns_net = true;
+	char *c0_images_folder = mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000");
+	mount_t *c0_mnt = mount_new();
+	guestos_fill_mount(c0_os, c0_mnt);
+	unsigned int c0_ram_limit = 1024;
+	bool c0_ns_net = true;
 	bool privileged = true;
 
-	container_t *new_a0 =
-		container_new_internal(a0_uuid, "a0", CONTAINER_TYPE_CONTAINER, false, a0_ns_net,
-				       privileged, a0_os, NULL, a0_images_folder, a0_mnt,
-				       a0_ram_limit, NULL, 0xffffff00, false, NULL,
+	container_t *new_c0 =
+		container_new_internal(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net,
+				       privileged, c0_os, NULL, c0_images_folder, c0_mnt,
+				       c0_ram_limit, NULL, 0xffffff00, false, NULL,
 				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL,
 				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
 
 	/* store c0 as first element of the cmld_containers_list */
-	cmld_containers_list = list_prepend(cmld_containers_list, new_a0);
+	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);
 
-	mem_free(a0_images_folder);
+	mem_free(c0_images_folder);
 
 out:
-	uuid_free(a0_uuid);
-	mem_free(a0_config_file);
+	uuid_free(c0_uuid);
+	mem_free(c0_config_file);
 
 	return 0;
 }
 
 static int
-cmld_start_a0(container_t *new_a0)
+cmld_start_c0(container_t *new_c0)
 {
 	IF_TRUE_RETVAL_TRACE(cmld_hostedmode, 0);
 
-	INFO("Starting management container %s...", container_get_description(new_a0));
+	INFO("Starting management container %s...", container_get_description(new_c0));
 
 	int *control_sock_p = mem_new0(int, 1);
-	*control_sock_p = container_bind_socket_before_start(new_a0, CMLD_CONTROL_SOCKET);
+	*control_sock_p = container_bind_socket_before_start(new_c0, CMLD_CONTROL_SOCKET);
 
-	if (!container_register_observer(new_a0, &cmld_init_a0_cb, control_sock_p)) {
-		WARN("Could not register observer init callback on a0");
+	if (!container_register_observer(new_c0, &cmld_init_c0_cb, control_sock_p)) {
+		WARN("Could not register observer init callback on c0");
 		return -1;
 	}
-	if (!container_register_observer(new_a0, &cmld_a0_boot_complete_cb, NULL)) {
-		WARN("Could not register observer boot complete callback on a0");
+	if (!container_register_observer(new_c0, &cmld_c0_boot_complete_cb, NULL)) {
+		WARN("Could not register observer boot complete callback on c0");
 		return -1;
 	}
 
-	container_set_key(new_a0, DUMMY_KEY);
-	if (container_start(new_a0)) {
-		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
-				uuid_string(container_get_uuid(new_a0)), 0);
+	container_set_key(new_c0, DUMMY_KEY);
+	if (container_start(new_c0)) {
+		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_c0)), 0);
 		FATAL("Could not start management container");
 	}
 
-	/* register an observer to capture the shutdown command for the special container a0 */
-	if (!container_register_observer(new_a0, &cmld_shutdown_a0_cb, NULL)) {
-		WARN("Could not register observer shutdown callback for a0");
+	/* register an observer to capture the shutdown command for the special container c0 */
+	if (!container_register_observer(new_c0, &cmld_shutdown_c0_cb, NULL)) {
+		WARN("Could not register observer shutdown callback for c0");
 
-		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
-				uuid_string(container_get_uuid(new_a0)), 0);
+		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;
 	}
-	/* register an observer to capture the reboot command for the special container a0 */
-	if (!container_register_observer(new_a0, &cmld_reboot_a0_cb, NULL)) {
-		WARN("Could not register observer reboot callback for a0");
-		audit_log_event(container_get_uuid(new_a0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
-				uuid_string(container_get_uuid(new_a0)), 0);
+	/* register an observer to capture the reboot command for the special container c0 */
+	if (!container_register_observer(new_c0, &cmld_reboot_c0_cb, NULL)) {
+		WARN("Could not register observer reboot callback for c0");
+		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;
 	}
 
-	audit_log_event(container_get_uuid(new_a0), SSA, CMLD, CONTAINER_MGMT, "c0-start",
-			uuid_string(container_get_uuid(new_a0)), 0);
+	audit_log_event(container_get_uuid(new_c0), SSA, CMLD, CONTAINER_MGMT, "c0-start",
+			uuid_string(container_get_uuid(new_c0)), 0);
 	return 0;
 }
 
@@ -1364,14 +1364,14 @@ cmld_init(const char *path)
 	else
 		INFO("Connected to smartcard daemon");
 
-	if (cmld_init_a0(containers_path, device_config_get_c0os(device_config)) < 0)
-		FATAL("Could not init a0");
+	if (cmld_init_c0(containers_path, device_config_get_c0os(device_config)) < 0)
+		FATAL("Could not init c0");
 
 	if (cmld_load_containers(containers_path) < 0)
 		FATAL("Could not load containers");
 
-	if (cmld_start_a0(cmld_containers_get_a0()) < 0)
-		FATAL("Could not start a0");
+	if (cmld_start_c0(cmld_containers_get_c0()) < 0)
+		FATAL("Could not start c0");
 
 	mem_free(containers_path);
 
@@ -1472,7 +1472,7 @@ cmld_container_destroy(container_t *container)
 	ASSERT(container);
 
 	// don't delete management container c0!
-	container_t *c0 = cmld_containers_get_a0();
+	container_t *c0 = cmld_containers_get_c0();
 	IF_TRUE_RETVAL(c0 == container, -1);
 
 	if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
@@ -1511,18 +1511,6 @@ cmld_container_stop(container_t *container)
 				0);
 		return -1;
 	}
-
-	/* if a foreground container is stopped, switch back to a0 */
-	//	container_t *fg = cmld_containers_get_foreground();
-	//	container_t *a0 = cmld_containers_get_a0();
-
-	//	if (a0 && a0 != container) {
-	//		if (container == fg && container_get_state(a0) == CONTAINER_STATE_RUNNING) {
-	//			DEBUG("Stop a foreground container, switch to a0");
-	//			if (cmld_container_switch_to_a0() < 0)
-	//				WARN("Switch to A0 failed");
-	//		}
-	//	}
 
 	return container_stop(container);
 }
@@ -1600,7 +1588,7 @@ cmld_guestos_delete(const char *guestos_name)
 	IF_NULL_RETURN(os);
 
 	// do not delete gustos of managment container c0
-	container_t *c0 = cmld_containers_get_a0();
+	container_t *c0 = cmld_containers_get_c0();
 	IF_TRUE_RETURN(os == container_get_guestos(c0));
 
 	guestos_mgr_delete(os);
