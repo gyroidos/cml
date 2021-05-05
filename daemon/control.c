@@ -1442,10 +1442,10 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 		} else {
 			DEBUG("Connected to remote host %s:%d", control->hostip, control->port);
 			control->connected = true;
-			container_t *container_a0 = cmld_containers_get_a0();
-			char *imei = container_get_imei(container_a0);
-			char *mac_address = container_get_mac_address(container_a0);
-			char *phone_number = container_get_phone_number(container_a0);
+			container_t *container_c0 = cmld_containers_get_c0();
+			char *imei = container_get_imei(container_c0);
+			char *mac_address = container_get_mac_address(container_c0);
+			char *phone_number = container_get_phone_number(container_c0);
 
 			/* send LOGON_DEVICE message */
 			DEBUG("Sending LOGON_DEVICE message to remote host %s:%d", control->hostip,
