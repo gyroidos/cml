@@ -53,8 +53,6 @@ struct c_service {
 	event_io_t *event_io_sock_connected;
 	container_connectivity_t connectivity;
 	container_callback_t *connectivity_observer;
-	bool airplane_mode;
-	container_callback_t *airplane_mode_observer;
 };
 
 static int
@@ -170,14 +168,6 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 		service->connectivity = (container_connectivity_t)message->connectivity;
 		container_set_connectivity(service->container,
 					   (container_connectivity_t)message->connectivity);
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__AIRPLANE_MODE_CHANGED:
-		INFO("Received airplane mode change message `%d' from container %s",
-		     message->airplane_mode, container_get_description(service->container));
-
-		service->airplane_mode = message->airplane_mode;
-		container_set_airplane_mode(service->container, message->airplane_mode);
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__IMEI_MAC_PHONENO:
@@ -355,42 +345,6 @@ c_service_connectivity_observer_cb(container_t *container, UNUSED container_call
 	}
 }
 
-static int
-c_service_send_airplane_mode_proto(c_service_t *service, bool airplane_mode)
-{
-	ASSERT(service);
-
-	INFO("Trying to send and enforce airplane mode %d to container %s", airplane_mode,
-	     container_get_description(service->container));
-
-	/* fill connectivity and send to TrustmeService */
-	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
-	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__AIRPLANE_MODE_CHANGED;
-
-	message_proto.has_airplane_mode = true;
-	message_proto.airplane_mode = airplane_mode;
-
-	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
-}
-
-static void
-c_service_airplane_mode_observer_cb(container_t *container, UNUSED container_callback_t *cb,
-				    void *data)
-{
-	c_service_t *service = data;
-
-	bool desired = container_get_airplane_mode(container);
-	bool current = service->airplane_mode;
-
-	if (current != desired) {
-		/* container airplane mode changed from outside, try to enforce it into the container */
-		if (c_service_send_airplane_mode_proto(service, desired) < 0) {
-			WARN("Failed to send airplane mode change to container %s",
-			     container_get_description(container));
-		}
-	}
-}
-
 c_service_t *
 c_service_new(container_t *container)
 {
@@ -405,9 +359,6 @@ c_service_new(container_t *container)
 
 	service->connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
 	service->connectivity_observer = NULL;
-
-	service->airplane_mode = false;
-	service->airplane_mode_observer = NULL;
 
 	return service;
 }
@@ -442,10 +393,6 @@ c_service_cleanup(c_service_t *service)
 	if (service->connectivity_observer) {
 		container_unregister_observer(service->container, service->connectivity_observer);
 		service->connectivity_observer = NULL;
-	}
-	if (service->airplane_mode_observer) {
-		container_unregister_observer(service->container, service->airplane_mode_observer);
-		service->airplane_mode_observer = NULL;
 	}
 }
 
@@ -504,14 +451,6 @@ c_service_start_pre_exec(c_service_t *service)
 		service->container, &c_service_connectivity_observer_cb, service);
 	if (!service->connectivity_observer) {
 		WARN("Could not register connectivity observer callback");
-		return -1;
-	}
-
-	/* register airplane_mode observer */
-	service->airplane_mode_observer = container_register_observer(
-		service->container, &c_service_airplane_mode_observer_cb, service);
-	if (!service->airplane_mode_observer) {
-		WARN("Could not register airplane mode observer callback");
 		return -1;
 	}
 
