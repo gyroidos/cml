@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2018 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,28 +21,46 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef ML_H
-#define ML_H
+#ifndef HASH_ALGO_H_
+#define HASH_ALGO_H_
 
-#include "tpm2d.h"
+typedef enum {
+	HASH_ALGO_MD4,
+	HASH_ALGO_MD5,
+	HASH_ALGO_SHA1,
+	HASH_ALGO_RIPE_MD_160,
+	HASH_ALGO_SHA256,
+	HASH_ALGO_SHA384,
+	HASH_ALGO_SHA512,
+	HASH_ALGO_SHA224,
+	HASH_ALGO_RIPE_MD_128,
+	HASH_ALGO_RIPE_MD_256,
+	HASH_ALGO_RIPE_MD_320,
+	HASH_ALGO_WP_256,
+	HASH_ALGO_WP_384,
+	HASH_ALGO_WP_512,
+	HASH_ALGO_TGR_128,
+	HASH_ALGO_TGR_160,
+	HASH_ALGO_TGR_192,
+	HASH_ALGO_SM3_256,
+	HASH_ALGO_STREEBOG_256,
+	HASH_ALGO_STREEBOG_512,
+	HASH_ALGO__LAST
+} hash_algo_t;
 
 int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
-			   size_t datahash_len);
+hash_algo_to_size(hash_algo_t hash_algo);
 
-/**
- * Return the measurement list in binary format as a buffer
- * @param len A pointer to the variable where the length of the list should be stored in
- * @return The binary measurement list buffer
- */
-uint8_t *
-ml_get_measurement_list_binary_new(size_t *size);
+const char *
+hash_algo_to_string(hash_algo_t hash_algo);
 
-/**
- * Return the measurement list as string array and uses the inout parameter
- * strings_len to provide the length of the array
- */
-char **
-ml_get_measurement_list_strings_new(size_t *strings_len);
+hash_algo_t
+size_to_hash_algo(int size);
 
-#endif /* ML_H */
+void
+sha1(uint8_t *digest, uint8_t *data, size_t len);
+
+void
+sha256(uint8_t *digest, uint8_t *data, size_t len);
+
+#endif // HASH_ALGO_H_

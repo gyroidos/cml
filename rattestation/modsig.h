@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2018 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2019 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,28 +21,23 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef ML_H
-#define ML_H
+#ifndef MODSIG_H_
+#define MODSIG_H_
 
-#include "tpm2d.h"
+typedef struct {
+	size_t key_id_len;
+	uint8_t *key_id;
+	size_t sig_len;
+	uint8_t *sig;
+	char *signer;
+	const char *hash_algo;
+	const char *sig_algo;
+} sig_info_t;
 
-int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
-			   size_t datahash_len);
+sig_info_t *
+modsig_parse_new(const char *pkcs7_raw, size_t len);
 
-/**
- * Return the measurement list in binary format as a buffer
- * @param len A pointer to the variable where the length of the list should be stored in
- * @return The binary measurement list buffer
- */
-uint8_t *
-ml_get_measurement_list_binary_new(size_t *size);
+void
+modsig_free(sig_info_t *s);
 
-/**
- * Return the measurement list as string array and uses the inout parameter
- * strings_len to provide the length of the array
- */
-char **
-ml_get_measurement_list_strings_new(size_t *strings_len);
-
-#endif /* ML_H */
+#endif // MODSIG_H_

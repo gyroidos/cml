@@ -118,6 +118,6 @@ message TpmToController {
 
 	optional string rand_data = 10;
 
-	// the measurement list in ima style hex strings
-	repeated string ml_entry = 11;
+	// the measurement list in ima binary format
+	required bytes ml_entry = 11;
 }

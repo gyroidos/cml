@@ -22,11 +22,10 @@
  */
 
 #include "ssl_util.h"
-#include "tpm2d_shared.h"
 
-#include "common/macro.h"
-#include "common/mem.h"
-#include "common/file.h"
+#include "macro.h"
+#include "mem.h"
+#include "file.h"
 
 #include <openssl/err.h>
 #include <openssl/sha.h>
@@ -112,7 +111,7 @@ add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 ENGINE *tpm_engine = NULL;
 
 int
-ssl_init(bool use_tpm)
+ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 {
 	// initialize OpenSSL stuff
 	OpenSSL_add_all_digests();     // loads digest algorithm names
@@ -137,10 +136,10 @@ ssl_init(bool use_tpm)
 		}
 		// TODO proper auth handling for hierarchies
 		// set the SRK passphrase to make storage key usable
-		if (TPM2D_PRIMARY_STORAGE_KEY_PW) {
-			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, TPM2D_PRIMARY_STORAGE_KEY_PW,
+		if (tpm2d_primary_storage_key_pw) {
+			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, tpm2d_primary_storage_key_pw,
 					     NULL, 0)) {
-				ERROR("Failed to set SRK passphrase with  TPM2 engine");
+				ERROR("Failed to set SRK passphrase with TPM2 engine");
 				goto error;
 			}
 		}
@@ -989,7 +988,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	fclose(fp);
 	fp = NULL;
 
-	DEBUG("Certificate loaded to verify signature");
+	TRACE("Certificate loaded to verify signature");
 
 	// load signature
 	if (!(fp = fopen(signature_file, "rb"))) {
@@ -1017,7 +1016,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	fclose(fp);
 	fp = NULL;
 
-	DEBUG("Signature loaded");
+	TRACE("Signature loaded");
 
 	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
 		ERROR("Error in signature verification (unable to initialize hash function)");
@@ -1056,11 +1055,11 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	fclose(fp);
 	fp = NULL;
 
-	DEBUG("File hash computed to verify signature");
+	TRACE("File hash computed to verify signature");
 
 	ret = EVP_VerifyFinal(md_ctx, signature, siglen, key);
 	if (ret != 1) {
-		DEBUG("Signature verification error");
+		ERROR("Signature verification error");
 		// any error
 		if (ret == -1)
 			ret = -2;
@@ -1068,7 +1067,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 		else
 			ret = -1;
 	} else {
-		DEBUG("Signature successfully verified");
+		TRACE("Signature successfully verified");
 		ret = 0;
 	}
 
@@ -1086,6 +1085,210 @@ error:
 #else
 	if (md_ctx)
 		EVP_MD_CTX_free(md_ctx);
+#endif
+	return ret;
+}
+
+int
+ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+			      size_t sig_len, const uint8_t *buf, size_t buf_len)
+{
+	ASSERT(cert_buf);
+	ASSERT(sig_buf);
+	ASSERT(buf);
+
+	int ret = 0;
+
+	// certificate variables
+	X509 *cert;
+	EVP_PKEY *key = NULL;
+	BIO *mem;
+
+	// signature variables
+	const EVP_MD *hash_fct;
+	EVP_MD_CTX *md_ctx = NULL;
+
+	// load certificate
+	mem = BIO_new(BIO_s_mem());
+	BIO_write(mem, cert_buf, cert_len);
+	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
+	BIO_free(mem);
+
+	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg(cert);
+	if (!sig_alg) {
+		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
+		ret = -2;
+		goto error;
+	}
+
+	const char *hash_algo = asn1_object_to_hash_algo(sig_alg->algorithm);
+	if (!hash_algo) {
+		ERROR("Error in signature verification (Unsupported hash function)");
+		ret = -2;
+		goto error;
+	}
+
+	// load public key, digest, and verify signature
+	if ((key = X509_get_pubkey(cert)) == NULL) {
+		ERROR("Error in signature verification (loading pubkey failed)");
+		ret = -2;
+		goto error;
+	}
+
+	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
+		ERROR("Error in signature verification (unable to initialize hash function)");
+		ret = -2;
+		goto error;
+	}
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX _md_ctx;
+	md_ctx = &_md_ctx;
+	EVP_MD_CTX_init(md_ctx);
+#else
+	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
+		ERROR("Allocating EVP_MD failed!");
+		goto error;
+	}
+#endif
+	EVP_VerifyInit(md_ctx, hash_fct);
+
+	if (!EVP_VerifyUpdate(md_ctx, buf, buf_len)) {
+		ERROR("Error in signature verification (reading/hashing signed file failed");
+		ret = -2;
+		goto error;
+	}
+
+	TRACE("File hash computed to verify signature");
+
+	ret = EVP_VerifyFinal(md_ctx, sig_buf, sig_len, key);
+	if (ret != 1) {
+		ERROR("Signature verification error");
+		// any error
+		if (ret == -1)
+			ret = -2;
+		// verification failed
+		else
+			ret = -1;
+	} else {
+		TRACE("Signature successfully verified");
+		ret = 0;
+	}
+
+error:
+	if (cert)
+		X509_free(cert);
+	if (key)
+		EVP_PKEY_free(key);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX_cleanup(md_ctx);
+#else
+	if (md_ctx)
+		EVP_MD_CTX_free(md_ctx);
+#endif
+	return ret;
+}
+
+int
+ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
+				 const uint8_t *hash, size_t hash_len)
+{
+	ASSERT(cert_buf);
+	ASSERT(sig_buf);
+	ASSERT(hash);
+
+	int ret = 0;
+	X509 *cert;
+	EVP_PKEY *key = NULL;
+	BIO *mem;
+	EVP_PKEY_CTX *pkey_ctx = NULL;
+	const EVP_MD *hash_fct;
+
+	// load certificate, verify and get public key
+	mem = BIO_new(BIO_s_mem());
+	BIO_puts(mem, cert_buf);
+	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
+	BIO_free(mem);
+
+	if ((key = X509_get_pubkey(cert)) == NULL) {
+		ERROR("Error in signature verification (loading pubkey failed)");
+		ret = -2;
+		goto error;
+	}
+
+	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
+	if (!sig_alg) {
+		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
+		ret = -2;
+		goto error;
+	}
+
+	const char *hash_algo = asn1_object_to_hash_algo(sig_alg->algorithm);
+	if (!hash_algo) {
+		ERROR("Error in signature verification (Unsupported hash function)");
+		ret = -2;
+		goto error;
+	}
+
+	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
+		ERROR("Error in signature verification (unable to initialize hash function)");
+		ret = -2;
+		goto error;
+	}
+
+	TRACE("Verifying signature...");
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_PKEY_CTX _pkey_ctx;
+	pkey_ctx = &_pkey_ctx;
+	EVP_PKEY_CTX_init(md_ctx);
+#else
+	if ((pkey_ctx = EVP_PKEY_CTX_new(key, NULL)) == NULL) {
+		ERROR("Allocating EVP_PKEY_CTX failed!");
+		ret = -2;
+		goto error;
+	}
+#endif
+
+	ret = EVP_PKEY_verify_init(pkey_ctx);
+	if (ret != 1) {
+		ret = -2;
+		ERROR("EVP_PKEY_verify_init failed");
+		goto error;
+	}
+
+	if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, EVP_sha256()) != 1) {
+		DEBUG("EVP_PKEY_CTX_set_signature_md failed");
+		ret = -2;
+		goto error;
+	}
+
+	ret = EVP_PKEY_verify(pkey_ctx, sig_buf, sig_len, hash, hash_len);
+	if (ret != 1) {
+		ERROR("EVP_PKEY_verify error");
+		// any error
+		if (ret == -1) {
+			ret = -2;
+		}
+		// verification failed
+		else {
+			ret = -1;
+		}
+	} else {
+		TRACE("Signature successfully verified");
+		ret = 0;
+	}
+
+error:
+	if (cert)
+		X509_free(cert);
+	if (key)
+		EVP_PKEY_free(key);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX_cleanup(md_ctx);
+#else
+	if (pkey_ctx)
+		EVP_PKEY_CTX_free(pkey_ctx);
 #endif
 	return ret;
 }
@@ -1632,4 +1835,35 @@ error:
 	if (ext_stack)
 		sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
 	return ret;
+}
+
+const char *
+asn1_object_to_hash_algo(const ASN1_OBJECT *obj)
+{
+	// TODO which algorithms shall be supported
+	switch (OBJ_obj2nid(obj)) {
+	case NID_md4:
+		return "md4";
+	case NID_md5:
+		return "md5";
+	case NID_sha1:
+		return "sha1";
+	case NID_ripemd160:
+		return "rmd160";
+	case NID_sha256WithRSAEncryption:
+	case NID_sha256:
+		return "sha256";
+	case NID_sha384WithRSAEncryption:
+	case NID_sha384:
+		return "sha384";
+	case NID_sha512WithRSAEncryption:
+	case NID_sha512:
+		return "sha512";
+	case NID_sha224WithRSAEncryption:
+	case NID_sha224:
+		return "sha224";
+	default:
+		return NULL;
+	}
+	return NULL;
 }

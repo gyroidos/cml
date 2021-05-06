@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2019 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -25,77 +25,40 @@ syntax = "proto2";
 
 option java_package = "de.fraunhofer.aisec.trustme";
 
-// type of attestation in the IDS context
-enum IdsAttestationType {
-  // kernel + core container (PCR 0 to 10)
-  BASIC = 0;
+import "attestation.proto";
 
-  // everything (PCRs 0 to 23)
-  ALL = 1;
-
-  // PCRs must be specified manually
-  ADVANCED = 2;
-}
-
-enum HashAlgLen {
-  SHA1   = 20;
-  SHA256 = 32;
-  SHA384 = 48;
-}
-
-message Pcr {
+message PcrStrings {
   // the PCR number (usually between 0 and 23)
   optional int32 number = 1;
 
   // the value of PCR<number>
-  optional bytes value = 2;
+  optional string value = 2;
 }
 
-message RemoteToTpm2d {
-	enum Code {
-		ATTESTATION_REQ = 1;
-	}
+message RAttestationConfig {
 
-	required Code code = 1;
-
-	// type of attestation in the IDS context
-	optional IdsAttestationType atype = 2 [default = BASIC];
-
-	// qualifingData (i.e. external data provided by the caller, such as a nonce)
-	optional bytes qualifyingData = 3;
-
-	// pcr bitmask for AttestationType ADVANCED only
-	//  - for BASIC, the default PCRs are PCRs 0 to 11
-	//  - for ALL  , the default PCRs are PCRs 0 to 23
-	optional int32 pcrs = 4;
-}
-
-message Tpm2dToRemote {
-	enum Code {
-		ATTESTATION_RES = 1;
-	}
-
-	required Code code = 1;
+    required string name = 1;
 
 	// type of attestation in the IDS context
 	optional IdsAttestationType atype = 2 [default = BASIC];
 
 	// the hash algorith used to sign the quoted information
-	optional HashAlgLen halg = 3;
+	optional HashAlgLen halg = 3 [default = SHA256];
 
-	// the quoted information (a TPMS_ATTEST data structure)
-	optional bytes quoted = 4;
-
-	// the signature over 'quoted' (a TPMT_SIGNATURE data structure with an
-	// TPMS_SIGNATURE_RSAPSS signature algorithm)
-	optional bytes signature = 5;
+	// pcr bitmask for AttestationType ADVANCED only
+	//  - for BASIC, the default PCRs are PCRs 0 to 11
+	//  - for ALL  , the default PCRs are PCRs 0 to 23
+	optional int32 pcrs = 4;
 
 	// the explicit PCR values
-	repeated Pcr pcr_values = 6;
+	repeated PcrStrings pcr_values = 6;
 
-	// an _optional_ certificate that includes the public key
-	optional bytes certificate = 7;
+	// The certificate corresponding to the private key which was used to sign the
+	// kernel modules. The certificate must be in PEM format
+	required string kmod_sign_cert = 7;
 
-	// the measurement list in ima binary format
-	required bytes ml_entry = 11;
+	// The _optional_ TPM certificate used to verify the quote. The certificate is optional
+	// as it can be sent together with the quote in the remote attestation protocol. The
+	// certificate must be in PEM format
+	optional string tpm_cert = 8;
 }

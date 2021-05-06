@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2018 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,28 +21,11 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef ML_H
-#define ML_H
-
-#include "tpm2d.h"
+#ifndef IMA_VERIFY_H_
+#define IMA_VERIFY_H_
 
 int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
-			   size_t datahash_len);
+ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *cert,
+				       hash_algo_t template_hash_algo, uint8_t *pcr_tpm);
 
-/**
- * Return the measurement list in binary format as a buffer
- * @param len A pointer to the variable where the length of the list should be stored in
- * @return The binary measurement list buffer
- */
-uint8_t *
-ml_get_measurement_list_binary_new(size_t *size);
-
-/**
- * Return the measurement list as string array and uses the inout parameter
- * strings_len to provide the length of the array
- */
-char **
-ml_get_measurement_list_strings_new(size_t *strings_len);
-
-#endif /* ML_H */
+#endif // IMA_VERIFY_H_

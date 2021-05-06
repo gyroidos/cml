@@ -10,5 +10,5 @@
  * provided resp_verivied_cb function.
  */
 int
-attestation_do_request(const char *host, void (*resp_verified_cb)(bool));
+attestation_do_request(const char *host, char *config_file, void (*resp_verified_cb)(bool));
 #endif /* IP_AGENT_ATTESTATION_H */

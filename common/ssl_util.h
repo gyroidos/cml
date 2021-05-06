@@ -53,7 +53,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 
 /**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
- * of length wrapped_key_len using a public key pkey (unwrap works with the corresp. private key). 
+ * of length wrapped_key_len using a public key pkey (unwrap works with the corresp. private key).
  * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_len,
@@ -105,6 +105,27 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 		     const char *hash_algo);
 
 /**
+ * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Thereby, the
+ * data to be verified located in buf is hashed. Compared to
+ * ssl_verify_signature, this method takes buffers instead of filenames.
+ * @return Returns 0 on success, -1 if the verification failed and -2 in case of
+ * an unexpected verification error.
+ */
+int
+ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+			      size_t sig_len, const uint8_t *buf, size_t buf_len);
+
+/**
+ * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Compared to
+ * ssl_verify_from_signature, this function expects the data to be verified already to be hashed.
+ * @return Returns 0 on success, -1 if the verification failed and -2 in case of
+ * an unexpected verification error.
+ */
+int
+ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
+				 const uint8_t *hash, size_t hash_len);
+
+/**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.
  * @return The function reveals the hash  as return value and its length via the parameter calc_len.
  * In case of a failure, NULL is returned.
@@ -141,17 +162,27 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 
 /**
  * Initializes internal OpenSSL structures
- * use_tpm indicates whether the OpenSSL stack should be initialized using
+ * @param use_tpm indicates whether the OpenSSL stack should be initialized using
  * the openssl-tpm-engine or not
- * returns -1 on error, 0 on success
+ * @param tpm2d_primary_storage_key_pw optional tpm2d primary storage key password
+ * @return -1 on error, 0 on success
  */
 int
-ssl_init(bool use_tpm);
+ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw);
 
 /**
  * Frees internal OpenSSL structurs, run this once ati the end of program
  */
 void
 ssl_free(void);
+
+/**
+ * Takes an ASN1_OBJECT as an input and returns the corresponding hash algorithm
+ * as a string, if supported.
+ * @param ASN1_OBJECT *obj pointer to an ASN1_OBJECT
+ * @return string representation of the hash algorithm
+ */
+const char *
+asn1_object_to_hash_algo(const ASN1_OBJECT *obj);
 
 #endif /* P12UTIL_H */
