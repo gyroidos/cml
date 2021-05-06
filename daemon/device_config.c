@@ -22,11 +22,7 @@
  */
 
 #include "device_config.h"
-#ifdef ANDROID
-#include "device/fraunhofer/common/cml/daemon/device.pb-c.h"
-#else
 #include "device.pb-c.h"
-#endif
 
 #include "common/macro.h"
 #include "common/file.h"

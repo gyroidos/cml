@@ -108,10 +108,7 @@ main(int argc, char **argv)
 {
 	const char *path;
 
-	if (file_exists("/dev/log/main"))
-		logf_register(&logf_android_write, logf_android_new(argv[0]));
-	else
-		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
+	logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
 	// TODO: where should we store the log files?

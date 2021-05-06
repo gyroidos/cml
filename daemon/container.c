@@ -73,10 +73,6 @@
 #include <selinux/selinux.h>
 #include <selinux/label.h>
 
-#ifdef ANDROID
-#include <selinux/android.h>
-#endif
-
 #define CLONE_STACK_SIZE 8192
 /* Define some missing clone flags in BIONIC */
 #ifndef CLONE_NEWNS

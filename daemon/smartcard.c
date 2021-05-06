@@ -21,11 +21,7 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifdef ANDROID
-#include "device/fraunhofer/common/cml/daemon/scd.pb-c.h"
-#else
 #include "scd.pb-c.h"
-#endif
 
 #include "smartcard.h"
 #include "hardware.h"

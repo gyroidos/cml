@@ -1267,11 +1267,6 @@ cmld_init(const char *path)
 	else
 		INFO("audit initialized.");
 
-#ifdef ANDROID
-	if (power_init() < 0)
-		FATAL("Could not init power module");
-	INFO("power initialized.");
-#endif
 	if (time_init() < 0)
 		FATAL("Could not init time module");
 	INFO("time initialized.");

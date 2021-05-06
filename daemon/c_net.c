@@ -38,11 +38,6 @@
 #include <inttypes.h>
 #include <signal.h>
 
-#ifdef ANDROID
-#include <linux/if_arp.h>
-#include <linux/if.h>
-#endif
-
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/sock.h"
@@ -587,59 +582,9 @@ c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
 {
 	if (network_set_flag(if_name, up ? IFF_UP : IFF_DOWN))
 		return -1;
-#ifdef ANDROID
-	// setup proper route to subnet via interface
-	int error = network_setup_route(subnet, if_name, up);
-	if (error) {
-		if (error != 2) {
-			ERROR("Failed to setup route %s (%i)", subnet, error);
-			return -1;
-		}
-		WARN("Failed to setup route %s (already %s)", subnet, up ? "exists" : "removed");
-	}
-#else
 	TRACE("Skipping network_setup_route(%s,%s,%d)", subnet, if_name, up);
-#endif
 	return 0;
 }
-
-#ifdef ANDROID
-static int
-c_net_write_dhcp_config(c_net_interface_t *ni)
-{
-	ASSERT(ni);
-
-	int bytes_written = -1;
-
-	char *conf_dir = mem_printf("/data/misc/dhcp/dnsmasq.d");
-	char *conf_file = mem_printf("%s/%s.conf", conf_dir, ni->veth_cmld_name);
-	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
-	char *ipv4_end = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
-
-	// create config dir if not created yet
-	if (dir_mkdir_p(conf_dir, 0755) < 0) {
-		DEBUG_ERRNO("Could not mkdir %s", conf_dir);
-		goto out;
-	}
-
-	bytes_written = file_printf(conf_file, "interface=%s\n dhcp-range=%s,%s,1h",
-				    ni->veth_cmld_name, ipv4_start, ipv4_end);
-
-	if (chmod(conf_file, 00644) < 0)
-		ERROR_ERRNO("changing of file access rights failed");
-
-	// restart dnsmasq c0's init while restart it
-	proc_killall(-1, "dnsmasq", SIGTERM);
-
-out:
-	mem_free(conf_dir);
-	mem_free(conf_file);
-	mem_free(ipv4_start);
-	mem_free(ipv4_end);
-
-	return (bytes_written > 0) ? 0 : -1;
-}
-#endif
 
 void
 c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
@@ -1006,20 +951,13 @@ c_net_start_post_clone(c_net_t *net)
 			if (network_setup_masquerading(ni->subnet, true))
 				FATAL_ERRNO("Could not setup masquerading for %s!",
 					    ni->veth_cmld_name);
-#ifdef ANDROID
-			/* Write dhcp config for dnsmasq skip first veth (which is used in c0) */
-			if (ni->cont_offset > 0) {
-				if (c_net_write_dhcp_config(ni))
-					FATAL_ERRNO("Could not write dhcpd config!");
-			}
-#else
+
 			/* Start busybox' dhcpd server for veth */
 			if (c_net_udhcpd_start(ni))
 				FATAL_ERRNO("Could not start udhcpd!");
 
 			DEBUG("Successfully configured %s in %s, wait for child to exit.",
 			      ni->veth_cmld_name, hostns);
-#endif
 		}
 		DEBUG("Setup of net ifs in netns of %s done, exiting netns child!", hostns);
 		exit(0);

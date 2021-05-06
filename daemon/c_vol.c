@@ -62,11 +62,7 @@
 
 #include <selinux/selinux.h>
 
-#ifdef ANDORID
-#define MAKE_EXT4FS "make_ext4fs"
-#else
 #define MAKE_EXT4FS "mkfs.ext4"
-#endif
 #define BTRFSTUNE "btrfstune"
 #define MAKE_BTRFS "mkfs.btrfs"
 #define MDEV "mdev"

@@ -22,11 +22,7 @@
  */
 
 #include "guestos_config.h"
-#ifdef ANDROID
-#include "device/fraunhofer/common/cml/daemon/guestos.pb-c.h"
-#else
 #include "guestos.pb-c.h"
-#endif
 
 #include "mount.h"
 
