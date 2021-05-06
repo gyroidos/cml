@@ -87,7 +87,6 @@ SRC_FILES := main.c \
 	common/sock.c \
 	c_cgroups.c \
 	c_service.c \
-	display.c \
 	c_net.c \
 	c_user.c \
 	c_vol.c \

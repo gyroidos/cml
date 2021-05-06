@@ -1295,10 +1295,6 @@ container_start_child(void *data)
 			WARN_ERRNO("Could not drop trustme-lsm privileges");
 	}
 
-	if (hardware_backlight_on() < 0) {
-		WARN("Could not turn on backlight for container start...");
-	}
-
 	if (container->type == CONTAINER_TYPE_KVM) {
 		int fd_master;
 		int pid = forkpty(&fd_master, NULL, NULL, NULL);
