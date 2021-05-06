@@ -35,7 +35,6 @@
 
 #include "cmld.h"
 #include "hardware.h"
-#include "power.h"
 #include "lxcfs.h"
 
 #include <sys/stat.h>
