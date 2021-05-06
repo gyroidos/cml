@@ -1315,7 +1315,9 @@ cmld_init(const char *path)
 	 * callback (via event_) and parses incoming commands
 	 * and calls the corresponding function in the cmld module,
 	 * e.g. cmld_switch_container */
-	//control_cmld_cli = control_local_new(config_get_cmld_cli_sock_path(config));
+	if (dir_mkdir_p(CMLD_SOCKET_DIR, 0755) < 0) {
+		FATAL("Could not create directory for cmld_cli control socket");
+	}
 	cmld_control_cml = control_local_new(CMLD_CONTROL_SOCKET);
 	if (!cmld_control_cml) {
 		FATAL("Could not init cmld_cli control socket");
