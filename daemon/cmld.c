@@ -100,7 +100,6 @@ static control_t *cmld_control_cml = NULL;
 static smartcard_t *cmld_smartcard = NULL;
 
 static container_connectivity_t cmld_connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
-static bool cmld_airplane_mode = false;
 
 static char *cmld_device_uuid = NULL;
 static char *cmld_device_update_base_url = NULL;
@@ -693,56 +692,6 @@ cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback
 //}
 
 static void
-cmld_airplane_mode_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb,
-			     UNUSED void *data)
-{
-	if ((container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) ||
-	    (container_get_state(c_root_netns) == CONTAINER_STATE_REBOOTING)) {
-		DEBUG("Container %s stopped/rebooting, unregistering airplane_mode c_root_netns callback",
-		      container_get_description(c_root_netns));
-		container_unregister_observer(c_root_netns, cb);
-	}
-
-	bool mode = container_get_airplane_mode(c_root_netns);
-
-	/* check if anything has changed and return if not */
-	if (cmld_airplane_mode == mode)
-		return;
-
-	bool old_mode = cmld_airplane_mode;
-	cmld_airplane_mode = mode;
-
-	DEBUG("Global airplane mode changed from %d to %d", old_mode, cmld_airplane_mode);
-
-	/* set the airplane mode in aX containers to the global state */
-	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		container_t *container = l->data;
-		if (container != c_root_netns) {
-			container_set_airplane_mode(container, mode);
-		}
-	}
-}
-
-static void
-cmld_airplane_mode_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void *data)
-{
-	if ((container_get_state(aX) == CONTAINER_STATE_STOPPED) ||
-	    (container_get_state(aX) == CONTAINER_STATE_REBOOTING)) {
-		DEBUG("Container %s stopped/rebooting, unregistering airplane_mode aX callback",
-		      container_get_description(aX));
-		container_unregister_observer(aX, cb);
-	}
-
-	if (cmld_airplane_mode == container_get_airplane_mode(aX))
-		return;
-
-	DEBUG("Setting global airplane mode %d in container %s", cmld_airplane_mode,
-	      container_get_description(aX));
-
-	container_set_airplane_mode(aX, cmld_airplane_mode);
-}
-
-static void
 cmld_init_control_cb(container_t *container, container_callback_t *cb, void *data)
 {
 	int *control_sock_p = data;
@@ -797,17 +746,8 @@ cmld_container_register_observers(container_t *container)
 			ERROR("Could not register connectivity observer callback for %s",
 			      container_get_description(container));
 		}
-
-		if (!container_register_observer(container, &cmld_airplane_mode_rootns_cb, NULL)) {
-			ERROR("Could not register airplane_mode observer callback for %s",
-			      container_get_description(container));
-		}
-	} else {
-		if (!container_register_observer(container, &cmld_airplane_mode_aX_cb, NULL)) {
-			ERROR("Could not register airplane mode observer callback for %s",
-			      container_get_description(container));
-		}
 	}
+
 	if (guestos_get_feature_install_guest(container_get_os(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
 		int *control_sock_p = mem_new0(int, 1);

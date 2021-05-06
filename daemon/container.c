@@ -124,7 +124,6 @@ struct container {
 	char *cpus_allowed;
 
 	container_connectivity_t connectivity;
-	bool airplane_mode;
 
 	bool screen_on;
 
@@ -250,7 +249,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		mem_printf("%s (%s)", container->name, uuid_string(container->uuid));
 
 	container->connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
-	container->airplane_mode = false;
 
 	container->screen_on = false;
 
@@ -2297,28 +2295,6 @@ container_get_connectivity(container_t *container)
 {
 	ASSERT(container);
 	return container->connectivity;
-}
-
-void
-container_set_airplane_mode(container_t *container, bool airplane_mode)
-{
-	ASSERT(container);
-
-	if (container->airplane_mode == airplane_mode)
-		return;
-
-	DEBUG("Setting container airplane mode state to %d for container %s", airplane_mode,
-	      container_get_description(container));
-	container->airplane_mode = airplane_mode;
-
-	container_notify_observers(container);
-}
-
-bool
-container_get_airplane_mode(container_t *container)
-{
-	ASSERT(container);
-	return container->airplane_mode;
 }
 
 void
