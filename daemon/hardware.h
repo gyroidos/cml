@@ -162,22 +162,6 @@ int
 hardware_get_random(unsigned char *buf, size_t len);
 
 /**
- * Take a wakelock (suspend blocker) to disallow the system going to deep sleep
- * @param name	name of the suspend blocker (wakelock)
- * @param len	size of 'name' string
- */
-void
-hardware_suspend_block(const char *name, size_t name_len);
-
-/**
- * Release a wakelock (suspend blocker) to allow the system going to deep sleep
- * @param name	name of the suspend blocker (wakelock)
- * @param len	size of 'name' string
- */
-void
-hardware_suspend_unblock(const char *name, size_t name_len);
-
-/**
  * Returns a list containing strings of the active cgroups subsystems
  */
 list_t *
