@@ -203,13 +203,3 @@ hardware_get_random(unsigned char *buf, size_t len)
 		return file_read(sw, (char *)buf, len);
 	}
 }
-
-void
-hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len)
-{
-}
-
-void
-hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
-{
-}

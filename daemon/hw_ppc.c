@@ -148,16 +148,6 @@ hardware_get_random(unsigned char *buf, size_t len)
 	}
 }
 
-void
-hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len)
-{
-}
-
-void
-hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
-{
-}
-
 const char **
 hardware_get_devices_whitelist_audio()
 {
