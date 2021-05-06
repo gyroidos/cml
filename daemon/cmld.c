@@ -42,7 +42,6 @@
 #include "common/reboot.h"
 #include "hardware.h"
 #include "mount.h"
-#include "power.h"
 #include "device_config.h"
 #include "control.h"
 #include "guestos_mgr.h"
