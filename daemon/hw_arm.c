@@ -135,16 +135,6 @@ hardware_get_devices_whitelist_audio()
 	return hw_arm_devices_whitelist_audio;
 }
 
-int
-hardware_backlight_on()
-{
-	if (file_printf("/sys/class/leds/lcd-backlight/brightness", "%d", BOOT_BL_BRIGHTNESS) < 0) {
-		WARN_ERRNO("Could not write brightness file");
-		return -1;
-	}
-	return 0;
-}
-
 list_t *
 hardware_get_active_cgroups_subsystems(void)
 {
@@ -222,10 +212,4 @@ hardware_suspend_block(UNUSED const char *name, UNUSED size_t name_len)
 void
 hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
 {
-}
-
-bool
-hardware_display_power_state(void)
-{
-	return false;
 }

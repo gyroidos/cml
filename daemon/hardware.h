@@ -152,12 +152,6 @@ hardware_get_audio_device_dir(void);
 bool
 hardware_is_audio_device(const char *file);
 
-bool
-hardware_display_power_state(void);
-
-int
-hardware_backlight_on();
-
 /**
  * Get random bytes using the hardware random number generator (if supported).
  * If no support is available, get random bytes from /dev/random.

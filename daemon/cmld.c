@@ -40,7 +40,6 @@
 #include "common/dir.h"
 #include "common/network.h"
 #include "common/reboot.h"
-#include "display.h"
 #include "hardware.h"
 #include "mount.h"
 #include "power.h"

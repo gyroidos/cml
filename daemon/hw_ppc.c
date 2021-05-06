@@ -158,22 +158,10 @@ hardware_suspend_unblock(UNUSED const char *name, UNUSED size_t name_len)
 {
 }
 
-bool
-hardware_display_power_state(void)
-{
-	return false;
-}
-
 const char **
 hardware_get_devices_whitelist_audio()
 {
 	return hw_ppc_devices_whitelist_audio;
-}
-
-int
-hardware_backlight_on()
-{
-	return 0;
 }
 
 list_t *
