@@ -1,3 +1,0 @@
-A simple tool to check /proc/last_kmsg for kernel panics.
-
-WARNING: This tool may copy the last kernel msg to a file which might include sensitive information.
