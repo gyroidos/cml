@@ -48,11 +48,7 @@
 #include <google/protobuf-c/protobuf-c-text.h>
 
 //TODO implement ACK mechanism fpr all service messages inside c-service.c?
-#ifdef ANDROID
-#include "device/fraunhofer/common/cml/daemon/c_service.pb-c.h"
-#else
 #include "c_service.pb-c.h"
-#endif
 
 #define AUDIT_HASH_ALGO SHA512
 #define AUDIT_HASH_ALGO_LEN 64

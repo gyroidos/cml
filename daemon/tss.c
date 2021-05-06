@@ -23,12 +23,7 @@
 
 #include "tss.h"
 
-#ifdef ANDROID
-#include "device/fraunhofer/common/cml/daemon/tpm2d.pb-c.h"
-#else
 #include "tpm2d.pb-c.h"
-#endif
-
 #include "tpm2d_shared.h"
 
 #include "common/macro.h"
