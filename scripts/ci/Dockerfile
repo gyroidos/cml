@@ -1,4 +1,4 @@
-FROM debian:stretch
+FROM debian:buster
 
 
 # Essentials
@@ -10,8 +10,8 @@ RUN apt-get install -y libssl-dev libcap-dev libselinux-dev apt-transport-https
 #
 # clang-9 toolchain for debian stretch
 # maybe even 11 would be good
-RUN echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-10 main" >> /etc/apt/sources.list
-RUN echo "deb-src http://apt.llvm.org/stretch/ llvm-toolchain-stretch-10 main" >> /etc/apt/sources.list
+RUN echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list
+RUN echo "deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
 RUN apt-get update && apt-get install -y clang-10 clang-tools-10 clang-10-doc libclang-common-10-dev libclang-10-dev libclang1-10 clang-format-10 python3-clang-10 clangd-10 lld-10 lldb-10 libfuzzer-10-dev
 RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-10 100
@@ -49,7 +49,7 @@ RUN curl -sL https://deb.nodesource.com/setup_11.x | bash - \
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
 RUN echo "deb http://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
 	&& apt-get update \
-	&& apt-get install -y vim openjdk-8-jdk-headless openjdk-8-jre-headless yarn
+	&& apt-get install -y vim openjdk-11-jdk-headless openjdk-11-jre-headless yarn
 
 # optee python dependings
 RUN apt-get update && apt-get install -y python-crypto python3-crypto
