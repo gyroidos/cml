@@ -577,15 +577,6 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *nw
 	return net;
 }
 
-static int
-c_net_bring_up_link_and_route(const char *if_name, const char *subnet, bool up)
-{
-	if (network_set_flag(if_name, up ? IFF_UP : IFF_DOWN))
-		return -1;
-	TRACE("Skipping network_setup_route(%s,%s,%d)", subnet, if_name, up);
-	return 0;
-}
-
 void
 c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
@@ -943,7 +934,7 @@ c_net_start_post_clone(c_net_t *net)
 					    hostns);
 
 			/* Bring veth up */
-			if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
+			if (network_set_flag(ni->veth_cmld_name, IFF_UP))
 				FATAL_ERRNO("Could not configure %s in %s!", ni->veth_cmld_name,
 					    hostns);
 
@@ -978,7 +969,7 @@ c_net_start_post_clone(c_net_t *net)
 					    ni->veth_cmld_name);
 
 			/* Bring veth up */
-			if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, true))
+			if (network_set_flag(ni->veth_cmld_name, IFF_UP))
 				ERROR_ERRNO("Could not configure uplink %s!", ni->veth_cmld_name);
 
 			if (network_setup_default_route(inet_ntoa(ni->ipv4_cont_addr), true))
@@ -1026,7 +1017,7 @@ c_net_start_child_interface(c_net_interface_t *ni)
 	/* bring net->nw_name interface up */
 	DEBUG("bring %s interface up", ni->nw_name);
 
-	if (c_net_bring_up_link_and_route(ni->nw_name, ni->subnet, true))
+	if (network_set_flag(ni->nw_name, IFF_UP))
 		return -1;
 
 	return 0;
@@ -1081,7 +1072,7 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	/* shut the network interface down */
 	// check if iface was allready destroyed by kernel
 	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
-		if (c_net_bring_up_link_and_route(ni->veth_cmld_name, ni->subnet, false))
+		if (network_set_flag(ni->veth_cmld_name, IFF_DOWN))
 			WARN("network interface could not be gracefully shut down");
 
 		if (network_delete_link(ni->veth_cmld_name))
