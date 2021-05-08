@@ -66,6 +66,7 @@
 struct smartcard {
 	int sock;
 	char *path;
+	pid_t scd_pid;
 };
 
 typedef struct smartcard_startdata {
@@ -1073,7 +1074,7 @@ out:
 	return rc;
 }
 
-static int
+static pid_t
 fork_and_exec_scd(void)
 {
 	TRACE("Starting scd..");
@@ -1096,7 +1097,7 @@ fork_and_exec_scd(void)
 			ERROR("Failed to start %s", SCD_BINARY_NAME);
 			return -1;
 		}
-		return 0;
+		return pid;
 	}
 	return -1;
 }
@@ -1118,7 +1119,8 @@ smartcard_new(const char *path)
 	smartcard->path = mem_strdup(path);
 
 	// Start SCD and wait for control interface
-	IF_TRUE_RETVAL_TRACE(fork_and_exec_scd(), NULL);
+	smartcard->scd_pid = fork_and_exec_scd();
+	IF_TRUE_RETVAL_TRACE(smartcard->scd_pid == -1, NULL);
 
 	size_t retries = 0;
 	do {
@@ -1141,11 +1143,20 @@ smartcard_new(const char *path)
 	return smartcard;
 }
 
+static void
+smartcard_scd_stop(smartcard_t *smartcard)
+{
+	DEBUG("Stopping %s process with pid=%d!", SCD_BINARY_NAME, smartcard->scd_pid);
+	kill(smartcard->scd_pid, SIGTERM);
+}
+
 void
 smartcard_free(smartcard_t *smartcard)
 {
 	IF_NULL_RETURN(smartcard);
-	// TODO properly cleanup
+
+	smartcard_scd_stop(smartcard);
+
 	mem_free(smartcard->path);
 	mem_free(smartcard);
 }
