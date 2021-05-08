@@ -25,7 +25,8 @@ include Makefile
 
 LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" \
 		-DLOGFILE_DIR=\"/var/log/cml\" \
-		-DDEFAULT_CONF_BASE_PATH=\"/etc/cml\"
+		-DDEFAULT_CONF_BASE_PATH=\"/etc/cml\" \
+		-DSCD_BINARY_NAME=\"cml-scd\"
 
 SBINDIR := /usr/sbin
 install:

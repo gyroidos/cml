@@ -49,6 +49,10 @@
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
 // clang-format on
 
+#ifndef SCD_BINARY_NAME
+#define SCD_BINARY_NAME "scd"
+#endif
+
 // TODO: centrally define key length in container or other module?
 #define TOKEN_KEY_LEN 96 // actual encryption key + hmac key
 #define TOKEN_MAX_WRAPPED_KEY_LEN 4096
@@ -1076,20 +1080,20 @@ fork_and_exec_scd(void)
 
 	int status;
 	pid_t pid = fork();
-	char *const param_list[] = { "scd", NULL };
+	char *const param_list[] = { SCD_BINARY_NAME, NULL };
 
 	switch (pid) {
 	case -1:
-		ERROR_ERRNO("Could not fork for scd");
+		ERROR_ERRNO("Could not fork for %s", SCD_BINARY_NAME);
 		return -1;
 	case 0:
 		execvp((const char *)param_list[0], param_list);
-		FATAL_ERRNO("Could not execvp scd");
+		FATAL_ERRNO("Could not execvp %s", SCD_BINARY_NAME);
 		return -1;
 	default:
 		// Just check if the child is alive but do not wait
 		if (waitpid(pid, &status, WNOHANG) != 0) {
-			ERROR("Failed to start scd");
+			ERROR("Failed to start %s", SCD_BINARY_NAME);
 			return -1;
 		}
 		return 0;
@@ -1106,7 +1110,7 @@ smartcard_new(const char *path)
 	if (!file_exists(DEVICE_CERT_FILE)) {
 		INFO("Starting scd in Provisioning / Installing Mode");
 		// Start the SCD in provisioning mode
-		const char *const args[] = { "scd", NULL };
+		const char *const args[] = { SCD_BINARY_NAME, NULL };
 		IF_FALSE_RETVAL_TRACE(proc_fork_and_execvp(args) == 0, NULL);
 	}
 
