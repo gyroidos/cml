@@ -42,6 +42,7 @@
 #endif
 
 static int tss_sock = -1;
+static pid_t tss_tpm2d_pid = -1;
 
 /**
  * Returns the HashAlgLen (proto) for the given tss_hash_algo_t algo.
@@ -79,7 +80,7 @@ tss_is_tpm2d_installed(void)
 	return false;
 }
 
-static int
+static pid_t
 fork_and_exec_tpm2d(void)
 {
 	TRACE("Starting tpm2d..");
@@ -102,7 +103,7 @@ fork_and_exec_tpm2d(void)
 			ERROR("Failed to start %s", TPM2D_BINARY_NAME);
 			return -1;
 		}
-		return 0;
+		return pid;
 	}
 	return -1;
 }
@@ -117,7 +118,8 @@ tss_init(void)
 	}
 
 	// Start the tpm2d
-	IF_TRUE_RETVAL_TRACE(fork_and_exec_tpm2d(), -1);
+	tss_tpm2d_pid = fork_and_exec_tpm2d();
+	IF_TRUE_RETVAL_TRACE(tss_tpm2d_pid == -1, -1);
 
 	// Connect to tpm2d
 	size_t retries = 0;
@@ -131,6 +133,20 @@ tss_init(void)
 	} while (tss_sock < 0);
 
 	return (tss_sock < 0) ? -1 : 0;
+}
+
+static void
+tss_tpm2d_stop(void)
+{
+	IF_TRUE_RETURN_TRACE(tss_tpm2d_pid == -1);
+	DEBUG("Stopping %s process with pid=%d!", TPM2D_BINARY_NAME, tss_tpm2d_pid);
+	kill(tss_tpm2d_pid, SIGTERM);
+}
+
+void
+tss_cleanup(void)
+{
+	tss_tpm2d_stop();
 }
 
 void

@@ -36,6 +36,7 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "lxcfs.h"
+#include "tss.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -66,6 +67,7 @@ static void
 main_exit(void)
 {
 	lxcfs_cleanup();
+	tss_cleanup();
 	cmld_cleanup();
 	exit(0);
 }
