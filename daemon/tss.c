@@ -62,6 +62,23 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 	}
 }
 
+static bool
+tss_is_tpm2d_installed(void)
+{
+	bool found = false;
+	const char *path[] = { "/bin",	    "/sbin",	      "/usr/bin",
+			       "/usr/sbin", "/usr/local/bin", "/usr/local/bin" };
+
+	for (size_t i = 0; i < 6; ++i) {
+		char *binary = mem_printf("%s/%s", path[i], TPM2D_BINARY_NAME);
+		found = file_exists(binary);
+		mem_free(binary);
+		if (found)
+			return true;
+	}
+	return false;
+}
+
 static int
 fork_and_exec_tpm2d(void)
 {
@@ -94,7 +111,7 @@ int
 tss_init(void)
 {
 	// Check if the platform has a TPM module attached
-	if (!file_exists("/dev/tpm0")) {
+	if (!file_exists("/dev/tpm0") || !tss_is_tpm2d_installed()) {
 		WARN("Platform does not support TSS / TPM 2.0");
 		return 0;
 	}
