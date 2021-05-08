@@ -1622,3 +1622,35 @@ cmld_token_detach(char *devpath)
 
 	return 0;
 }
+
+void
+cmld_cleanup(void)
+{
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *container = l->data;
+		container_free(container);
+	}
+	list_delete(cmld_containers_list);
+
+	if (cmld_control_mdm)
+		control_free(cmld_control_mdm);
+	if (cmld_control_gui)
+		control_free(cmld_control_gui);
+	if (cmld_control_cml)
+		control_free(cmld_control_cml);
+
+	if (cmld_smartcard)
+		smartcard_free(cmld_smartcard);
+
+	mem_free(cmld_device_uuid);
+	mem_free(cmld_device_update_base_url);
+	mem_free(cmld_device_host_dns);
+	mem_free(cmld_c0os_name);
+	mem_free(cmld_shared_data_dir);
+
+	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
+		char *name = l->data;
+		mem_free(name);
+	}
+	list_delete(cmld_netif_phys_list);
+}

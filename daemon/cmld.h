@@ -65,6 +65,12 @@ int
 cmld_init(const char *path);
 
 /**
+ * Cleans up the CMLD module.
+ */
+void
+cmld_cleanup(void);
+
+/**
  * Reloads all containers from storage path.
  *
  * @return 0 on success, -1 on error
