@@ -37,6 +37,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifndef TPM2D_BINARY_NAME
+#define TPM2D_BINARY_NAME "tpm2d"
+#endif
+
 static int tss_sock = -1;
 
 /**
@@ -65,20 +69,20 @@ fork_and_exec_tpm2d(void)
 
 	int status;
 	pid_t pid = fork();
-	char *const param_list[] = { "tpm2d", NULL };
+	char *const param_list[] = { "TPM2D_BINARY_NAME", NULL };
 
 	switch (pid) {
 	case -1:
-		ERROR_ERRNO("Could not fork for tpm2d");
+		ERROR_ERRNO("Could not fork for %s", TPM2D_BINARY_NAME);
 		return -1;
 	case 0:
 		execvp((const char *)param_list[0], param_list);
-		FATAL_ERRNO("Could not execvp tpm2d");
+		FATAL_ERRNO("Could not execvp %s", TPM2D_BINARY_NAME);
 		return -1;
 	default:
 		// Just check if the child is alive but do not wait
 		if (waitpid(pid, &status, WNOHANG) != 0) {
-			ERROR("Failed to start tpm2d");
+			ERROR("Failed to start %s", TPM2D_BINARY_NAME);
 			return -1;
 		}
 		return 0;
