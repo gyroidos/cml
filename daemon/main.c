@@ -66,6 +66,7 @@ static void
 main_exit(void)
 {
 	lxcfs_cleanup();
+	cmld_cleanup();
 	exit(0);
 }
 
