@@ -37,7 +37,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifndef TPM2D_BINARY_NAME
+#define TPM2D_BINARY_NAME "tpm2d"
+#endif
+
 static int tss_sock = -1;
+static pid_t tss_tpm2d_pid = -1;
 
 /**
  * Returns the HashAlgLen (proto) for the given tss_hash_algo_t algo.
@@ -58,30 +63,47 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 	}
 }
 
-static int
+static bool
+tss_is_tpm2d_installed(void)
+{
+	bool found = false;
+	const char *path[] = { "/bin",	    "/sbin",	      "/usr/bin",
+			       "/usr/sbin", "/usr/local/bin", "/usr/local/bin" };
+
+	for (size_t i = 0; i < 6; ++i) {
+		char *binary = mem_printf("%s/%s", path[i], TPM2D_BINARY_NAME);
+		found = file_exists(binary);
+		mem_free(binary);
+		if (found)
+			return true;
+	}
+	return false;
+}
+
+static pid_t
 fork_and_exec_tpm2d(void)
 {
 	TRACE("Starting tpm2d..");
 
 	int status;
 	pid_t pid = fork();
-	char *const param_list[] = { "tpm2d", NULL };
+	char *const param_list[] = { "TPM2D_BINARY_NAME", NULL };
 
 	switch (pid) {
 	case -1:
-		ERROR_ERRNO("Could not fork for tpm2d");
+		ERROR_ERRNO("Could not fork for %s", TPM2D_BINARY_NAME);
 		return -1;
 	case 0:
 		execvp((const char *)param_list[0], param_list);
-		FATAL_ERRNO("Could not execvp tpm2d");
+		FATAL_ERRNO("Could not execvp %s", TPM2D_BINARY_NAME);
 		return -1;
 	default:
 		// Just check if the child is alive but do not wait
 		if (waitpid(pid, &status, WNOHANG) != 0) {
-			ERROR("Failed to start tpm2d");
+			ERROR("Failed to start %s", TPM2D_BINARY_NAME);
 			return -1;
 		}
-		return 0;
+		return pid;
 	}
 	return -1;
 }
@@ -90,13 +112,14 @@ int
 tss_init(void)
 {
 	// Check if the platform has a TPM module attached
-	if (!file_exists("/dev/tpm0")) {
+	if (!file_exists("/dev/tpm0") || !tss_is_tpm2d_installed()) {
 		WARN("Platform does not support TSS / TPM 2.0");
 		return 0;
 	}
 
 	// Start the tpm2d
-	IF_TRUE_RETVAL_TRACE(fork_and_exec_tpm2d(), -1);
+	tss_tpm2d_pid = fork_and_exec_tpm2d();
+	IF_TRUE_RETVAL_TRACE(tss_tpm2d_pid == -1, -1);
 
 	// Connect to tpm2d
 	size_t retries = 0;
@@ -110,6 +133,20 @@ tss_init(void)
 	} while (tss_sock < 0);
 
 	return (tss_sock < 0) ? -1 : 0;
+}
+
+static void
+tss_tpm2d_stop(void)
+{
+	IF_TRUE_RETURN_TRACE(tss_tpm2d_pid == -1);
+	DEBUG("Stopping %s process with pid=%d!", TPM2D_BINARY_NAME, tss_tpm2d_pid);
+	kill(tss_tpm2d_pid, SIGTERM);
+}
+
+void
+tss_cleanup(void)
+{
+	tss_tpm2d_stop();
 }
 
 void

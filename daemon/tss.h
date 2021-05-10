@@ -34,6 +34,12 @@ typedef enum { TSS_SHA1 = 0, TSS_SHA256, TSS_SHA384 } tss_hash_algo_t;
 int
 tss_init(void);
 
+/**
+ * Cleanup the tss submodule, mainly stop tpm2d daemon.
+ */
+void
+tss_cleanup(void);
+
 void
 tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo);
 
