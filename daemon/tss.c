@@ -87,7 +87,7 @@ fork_and_exec_tpm2d(void)
 
 	int status;
 	pid_t pid = fork();
-	char *const param_list[] = { "TPM2D_BINARY_NAME", NULL };
+	char *const param_list[] = { TPM2D_BINARY_NAME, NULL };
 
 	switch (pid) {
 	case -1:
