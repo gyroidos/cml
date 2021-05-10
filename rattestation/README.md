@@ -9,7 +9,17 @@ The `rattestation` is automatically built together with the `cmld` in the yocto 
 (`bitbake cmld`). If you want to build it on the host, the following prerequisites are required:
 
 ### Install protobuf
-TODO protobuf
+
+```sh
+git clone https://github.com/trustm3/external_protobuf-c-text.git
+cd external_protobuf-c-text/
+git submodule update --init --recursive
+
+autoreconf -f -i
+./configure --enable-static=yes
+make
+make install
+```
 
 ### Install CML common tools
 
@@ -18,6 +28,13 @@ TODO
 ### Install the IBM TSS Library
 
 ```sh
+# TODO check for newest version
+mkdir -p ibmtss1.6.0
+cd ibmtss1.6.0
+wget https://deac-ams.dl.sourceforge.net/project/ibmtpm20tss/ibmtss1.6.0.tar.gz
+tar xvzf ibmtss1.6.0.tar.gz
+rm ibmtss1.6.0.tar.gz
+
 export LD_LIBRARY_PATH=/usr/local/lib
 
 autoreconf -i
