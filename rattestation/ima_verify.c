@@ -387,7 +387,7 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 			SHA_CTX c;
 			SHA1_Init(&c);
 			SHA1_Update(&c, pcr, SHA_DIGEST_LENGTH);
-			SHA1_Update(&c, template.header.digest, 20);
+			SHA1_Update(&c, template.header.digest, SHA_DIGEST_LENGTH);
 			SHA1_Final(pcr, &c);
 		}
 
@@ -399,7 +399,7 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 		return -1;
 	}
 
-	INFO("Verify TPM PCR SUCCESSFUL");
+	INFO("Verify IMA TPM PCR (kernel modules) SUCCESSFUL");
 
 	return 0;
 }
