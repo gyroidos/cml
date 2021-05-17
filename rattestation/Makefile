@@ -68,6 +68,7 @@ SRC_FILES := \
 	common/ssl_util.c \
 	hash.c \
 	ima_verify.c \
+	container_verify.c \
 	config.c \
 	modsig.c \
 	main.c
