@@ -117,13 +117,21 @@ pipeline {
             post {
                 success {
                     sh '''
-                    xz -T 0 -f out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img
+                    xz -T 0 -f out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img --keep
                     '''
 
                     archiveArtifacts artifacts: 'out-yocto/tmp/deploy/images/**/trustme_image/trustmeimage.img.xz', fingerprint: true
                 }
             }
 
+        }
+
+        stage('Functional Test Development Image') {
+            steps {
+                 sh '''
+                     bash ${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --ssh 2229 --kill
+                '''
+            }
         }
 
         stage('Production Image') {
