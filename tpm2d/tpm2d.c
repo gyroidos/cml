@@ -297,10 +297,6 @@ static const struct option global_options[] = { { "sim", no_argument, 0, 's' },
 int
 main(UNUSED int argc, char **argv)
 {
-	if (file_exists("/dev/log/main"))
-		logf_register(&logf_android_write, logf_android_new(argv[0]));
-	else
-		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
 	for (int c, option_index = 0;
@@ -319,7 +315,7 @@ main(UNUSED int argc, char **argv)
 
 	tpm2d_logfile_handler =
 		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-tpm2d"));
-	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);
+	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_TRACE);
 
 	INFO("Starting tpm2d ...");
 
