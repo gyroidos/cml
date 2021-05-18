@@ -862,6 +862,9 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 
 	ret = smartcard_get_pairing_secret(smartcard, pair_sec, sizeof(pair_sec));
 	if (ret < 0) {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, TOKEN_MGMT,
+				"read-pairing-secret", uuid_string(container_get_uuid(container)),
+				0);
 		ERROR("Could not retrieve pairing secret, ret code : %d", ret);
 		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 		mem_free(startdata);
