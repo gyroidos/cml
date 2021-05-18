@@ -101,7 +101,7 @@
 /* Timeout until a container to be stopped gets killed if not yet down */
 #define CONTAINER_STOP_TIMEOUT 45000
 
-#define TOKEN_IS_INIT_FILE_NAME "token_is_initialized"
+#define TOKEN_IS_PAIRED_FILE_NAME "token_is_paired"
 
 struct container {
 	container_state_t state;
@@ -2107,7 +2107,7 @@ container_destroy(container_t *container)
 		}
 	mem_free(file_name_created);
 
-	char *path = container_token_init_file_new(container);
+	char *path = container_token_paired_file_new(container);
 	unlink(path);
 	mem_free(path);
 
@@ -2763,9 +2763,9 @@ container_get_token_uuid(const container_t *container)
 }
 
 char *
-container_token_init_file_new(const container_t *container)
+container_token_paired_file_new(const container_t *container)
 {
-	return mem_printf("%s/%s", container->images_dir, TOKEN_IS_INIT_FILE_NAME);
+	return mem_printf("%s/%s", container->images_dir, TOKEN_IS_PAIRED_FILE_NAME);
 }
 
 void
