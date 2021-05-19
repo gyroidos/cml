@@ -698,7 +698,7 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 	} else if (type == AUDIT_KERNEL ||
 		   (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
 		log_record = NLMSG_DATA(nlmsg);
-		INFO("audit: type=%d %s", type, log_record);
+		TRACE("audit: type=%d %s", type, log_record);
 	}
 err:
 	mem_free(buf);
