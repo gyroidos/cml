@@ -109,6 +109,7 @@ pipeline {
                     echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
                     echo "BB_GENERATE_MIRROR_TARBALLS = \\\"1\\\"" >> conf/local.conf
 
+                    bitbake -f -c do_cleanall trustx-cml
                     bitbake trustx-cml-initramfs multiconfig:container:trustx-core
                     bitbake trustx-cml
                 '''
