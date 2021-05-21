@@ -49,6 +49,7 @@
 #include "common/network.h"
 #include "common/proc.h"
 #include "common/event.h"
+#include "common/ns.h"
 #include "container.h"
 #include "cmld.h"
 #include "hardware.h"
@@ -1124,14 +1125,13 @@ c_net_cleanup_c0(c_net_t *net)
 
 		event_reset(); // reset event_loop of cloned from parent
 		if (cmld_containers_get_c0()) {
-			char *c0_netns = mem_printf("/proc/%d/ns/net",
-						    container_get_pid(cmld_containers_get_c0()));
-			int netns_fd = open(c0_netns, O_RDONLY);
-			mem_free(c0_netns);
-			if (netns_fd == -1)
-				FATAL_ERRNO("Could not open netns file of c0");
-			if (setns(netns_fd, CLONE_NEWNET) == -1)
-				FATAL_ERRNO("Could not join network namespace of c0");
+			if (ns_join_all(container_get_pid(cmld_containers_get_c0()), true)) {
+				ERROR("Failed to join namespaces of container c0");
+			}
+
+			if (namespace_setuid0()) {
+				ERROR("Failed to become root in new namespace");
+			}
 		}
 
 		for (list_t *l = net->interface_list; l; l = l->next) {
@@ -1183,11 +1183,6 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 
 	if (c_net_cleanup_c0(net) == -1)
 		WARN("Failed to create helper child for cleanup in c0's netns");
-
-	for (list_t *l = net->interface_list; l; l = l->next) {
-		c_net_interface_t *ni = l->data;
-		c_net_cleanup_interface(ni);
-	}
 }
 
 /**
