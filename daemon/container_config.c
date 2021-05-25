@@ -55,12 +55,6 @@ struct container_config {
 #define C_CONFIG_MAX_RAM_LIMIT (1 << 30) // TODO 1GB? (< 4GB due to uint32)
 #define C_CONFIG_MAX_STORAGE (4LL << 30) // TODO 4GB?
 
-// used to validate config
-#define C_CONFIG_FEATURES_LEN 7
-static const char *container_config_features[C_CONFIG_FEATURES_LEN] = {
-	"generic", "bluetooth", "camera", "gapps", "gps", "telephony", "fhgapps",
-};
-
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
@@ -486,33 +480,6 @@ container_config_set_allow_autostart(container_config_t *config, bool allow_auto
 	ASSERT(config);
 	ASSERT(config->cfg);
 	config->cfg->allow_autostart = allow_autostart;
-}
-
-static bool
-container_config_is_valid_feature(const char *feature)
-{
-	for (size_t i = 0; i < C_CONFIG_FEATURES_LEN; i++) {
-		if (strcmp(container_config_features[i], feature) == 0)
-			return true;
-	}
-	return false;
-}
-
-list_t *
-container_config_get_feature_list_new(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	list_t *feature_list = NULL;
-
-	for (size_t i = 0; i < config->cfg->n_feature_enabled; i++) {
-		if (container_config_is_valid_feature(config->cfg->feature_enabled[i])) {
-			feature_list = list_append(feature_list,
-						   mem_strdup(config->cfg->feature_enabled[i]));
-		}
-	}
-	return feature_list;
 }
 
 list_t *

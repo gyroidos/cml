@@ -165,9 +165,6 @@ struct container {
 	char *mac_address;
 	char *phone_number;
 
-	/* list of enabled features checked against during overlay mounts */
-	list_t *feature_enabled_list;
-
 	// list of allowed devices (rules)
 	char **device_allowed_list;
 
@@ -225,11 +222,10 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       bool ns_net, bool privileged, const guestos_t *os,
 		       const char *config_filename, const char *images_dir, mount_t *mnt,
 		       unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
-		       bool allow_autostart, list_t *feature_enabled, const char *dns_server,
-		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
-		       list_t *vnet_cfg_list, list_t *usbdev_list, char **init_env,
-		       size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
-		       bool usb_pin_entry)
+		       bool allow_autostart, const char *dns_server, list_t *net_ifaces,
+		       char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
+		       list_t *usbdev_list, char **init_env, size_t init_env_len, list_t *fifo_list,
+		       container_token_type_t ttype, bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -403,11 +399,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	for (size_t j = 0; j < init_env_len; ++j)
 		container->init_env[i + j] = mem_strdup(init_env[j]);
 
-	container->feature_enabled_list = feature_enabled;
-	for (list_t *elem = container->feature_enabled_list; elem != NULL; elem = elem->next) {
-		DEBUG("Feature %s enabeld for %s", (char *)(elem->data), container->name);
-	}
-
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
 	container->device_allowed_list = allowed_devices;
 	container->device_assigned_list = assigned_devices;
@@ -561,8 +552,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_type_t type = container_config_get_type(conf);
 
-	list_t *feature_enabled = container_config_get_feature_list_new(conf);
-
 	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
 
 	const char *dns_server = (container_config_get_dns_server(conf)) ?
@@ -594,11 +583,12 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
 
-	container_t *c = container_new_internal(
-		uuid, name, type, ns_usr, ns_net, priv, os, config_filename, images_dir, mnt,
-		ram_limit, cpus_allowed, color, allow_autostart, feature_enabled, dns_server,
-		net_ifaces, allowed_devices, assigned_devices, vnet_cfg_list, usbdev_list, init_env,
-		init_env_len, fifo_list, ttype, usb_pin_entry);
+	container_t *c =
+		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
+				       images_dir, mnt, ram_limit, cpus_allowed, color,
+				       allow_autostart, dns_server, net_ifaces, allowed_devices,
+				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
+				       init_env_len, fifo_list, ttype, usb_pin_entry);
 	if (c)
 		container_config_write(conf);
 
@@ -651,12 +641,6 @@ container_free(container_t *container)
 		}
 		mem_free(container->init_env);
 	}
-
-	for (list_t *l = container->feature_enabled_list; l; l = l->next) {
-		char *feature = l->data;
-		mem_free(feature);
-	}
-	list_delete(container->feature_enabled_list);
 
 	if (container->mnt)
 		mount_free(container->mnt);
@@ -2399,66 +2383,6 @@ container_get_guestos(const container_t *container)
 {
 	ASSERT(container);
 	return container->os;
-}
-
-bool
-container_is_feature_enabled(const container_t *container, const char *feature)
-{
-	ASSERT(container);
-	for (list_t *l = container->feature_enabled_list; l; l = l->next) {
-		char *feature_enabled = l->data;
-		if (strcmp(feature, feature_enabled) == 0)
-			return true;
-	}
-	return false;
-}
-
-static void
-container_set_feature_enable(container_t *container, const char *feature)
-{
-	ASSERT(container);
-	if (container_is_feature_enabled(container, feature))
-		return;
-
-	// TODO syncronize this with config file
-	container->feature_enabled_list =
-		list_append(container->feature_enabled_list, mem_strdup(feature));
-}
-
-void
-container_enable_bluetooth(container_t *container)
-{
-	container_set_feature_enable(container, "bluetooth");
-}
-
-void
-container_enable_camera(container_t *container)
-{
-	container_set_feature_enable(container, "camera");
-}
-
-void
-container_enable_gps(container_t *container)
-{
-	container_set_feature_enable(container, "gps");
-}
-
-void
-container_enable_telephony(container_t *container)
-{
-	container_set_feature_enable(container, "telephony");
-}
-
-void
-container_enable_gapps(container_t *container)
-{
-	container_set_feature_enable(container, "gapps");
-}
-
-void
-container_enable_fhgapps(container_t *container)
-{
-	container_set_feature_enable(container, "fhgapps");
 }
 
 const char *

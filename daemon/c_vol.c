@@ -848,18 +848,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		} break;
 
 		case MOUNT_TYPE_OVERLAY_RO: {
-			// check if its a feature mount and if the container has the feature enabled
-			const char *img_name = mount_entry_get_img(mntent);
-			size_t feature_len = strlen("feature_");
-			if (strncmp(img_name, "feature_", feature_len) == 0) {
-				if (!container_is_feature_enabled(vol->container,
-								  img_name + feature_len)) {
-					DEBUG("Feature %s not enabled, skipping...",
-					      img_name + feature_len);
-					goto final;
-				}
-				DEBUG("Going to mount feature %s", img_name + feature_len);
-			}
 			upper_dev = dev;
 			upper_fstype = mount_entry_get_fs(mntent);
 			mountflags |= MS_RDONLY;
