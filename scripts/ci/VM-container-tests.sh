@@ -115,6 +115,20 @@ do_wait_running () {
 	done
 }
 
+do_wait_stopped () {
+	while [ true ];do
+		STATE="$(ssh ${SSH_OPTS} '/usr/sbin/control state test-container' 2>&1)"
+
+		if ! [ -z "$(grep STOPPED <<< \"${STATE}\")" ];then
+			echo "SUCCESS: Container is stopped"
+			break
+		else
+			printf "."
+			sleep 2
+		fi
+	done
+}
+
 # Compile project
 # -----------------------------------------------
 if [[ $COMPILE == true ]]
@@ -145,16 +159,17 @@ else
 	cd out-yocto
 fi
 
-# Check if cmld was build
-if [ -z $(ls -d tmp/work/core*/cmld/git*/git) ]
-then
-  echo "ERROR: No cmld build found: did you compile?"
-  exit 1
-fi
-
 # Check if the branch matches the built one
 if [[ $BRANCH != "" ]]
 then
+  # Check if cmld was build
+  if [ -z $(ls -d tmp/work/core*/cmld/git*/git) ]
+  then
+    echo "ERROR: No cmld build found: did you compile?"
+    exit 1
+  fi
+
+
   BUILD_BRANCH=$(git -C tmp/work/core*/cmld/git*/git branch | grep '*' | awk '{ print $NF }')  # check if git repo found and correct branch used
   if [[ $BRANCH != $BUILD_BRANCH ]]
   then
@@ -259,6 +274,16 @@ ssh ${SSH_OPTS} "/usr/sbin/control ca_register /tmp/ssig_rootca.cert" 2>&1 | gre
 
 echo "STATUS: Calling control stop"
 ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | grep CONTAINER_STOP_OK
+do_wait_stopped
+
+# start container again to ensure cleanup code is working correctly
+echo "STATUS: Calling control start"
+ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | grep CONTAINER_START_OK
+do_wait_running
+
+echo "STATUS: Calling control stop"
+ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | grep CONTAINER_STOP_OK
+do_wait_stopped
 
 echo "STATUS: Calling control remove"
 ssh ${SSH_OPTS} "/usr/sbin/control remove test-container" 2>&1 | grep -v FATAL
