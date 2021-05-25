@@ -82,7 +82,6 @@ protobuf_send_message_packed(int fd, const uint8_t *buf, uint32_t buflen)
 	bytes_sent = fd_write(fd, (char *)buf, buflen);
 	if (-1 == bytes_sent)
 		goto error_write;
-	fsync(fd); // make sure all data is written so that receiving client unblocks
 	TRACE("sent protobuf message data (%zd bytes sent, %u bytes expected)", bytes_sent, buflen);
 
 	ASSERT((size_t)bytes_sent == buflen);
