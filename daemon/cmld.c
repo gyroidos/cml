@@ -21,8 +21,10 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-// uncomment to prevent reboot
+#ifdef DEBUG_BUILD
+// prevent reboot in debug build
 #define TRUSTME_DEBUG
+#endif
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
