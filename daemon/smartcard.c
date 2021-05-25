@@ -222,7 +222,7 @@ smartcard_container_token_is_provisioned(const container_t *container)
 
 	bool ret;
 
-	char *token_init_file = container_token_init_file_new(container);
+	char *token_init_file = container_token_paired_file_new(container);
 
 	ret = file_exists(token_init_file);
 
@@ -796,7 +796,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL: {
-			char *path = container_token_init_file_new(startdata->container);
+			char *path = container_token_paired_file_new(startdata->container);
 			rc = file_touch(path);
 			if (rc != 0) { //should never happen
 				ERROR("Could not write file %s to flag that container %s's token has been initialized\n \
@@ -862,6 +862,9 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 
 	ret = smartcard_get_pairing_secret(smartcard, pair_sec, sizeof(pair_sec));
 	if (ret < 0) {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, TOKEN_MGMT,
+				"read-pairing-secret", uuid_string(container_get_uuid(container)),
+				0);
 		ERROR("Could not retrieve pairing secret, ret code : %d", ret);
 		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 		mem_free(startdata);
