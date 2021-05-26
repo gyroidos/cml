@@ -55,6 +55,7 @@ struct container_config {
 #define C_CONFIG_MAX_RAM_LIMIT (1 << 30) // TODO 1GB? (< 4GB due to uint32)
 #define C_CONFIG_MAX_STORAGE (4LL << 30) // TODO 4GB?
 
+/* TODO: legacy? --> remove */
 // used to validate config
 #define C_CONFIG_FEATURES_LEN 7
 static const char *container_config_features[C_CONFIG_FEATURES_LEN] = {

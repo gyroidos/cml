@@ -1,0 +1,237 @@
+/*
+ * This file is part of trust|me
+ * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ */
+
+syntax = "proto2";
+
+option java_package = "de.fraunhofer.aisec.trustme";
+
+import "guestos.proto";
+import "container.proto";
+import "common/logf.proto";
+//import "update.proto";
+
+/******************************************************************************
+ * @exclude
+ * Incoming messages 
+ *******************************************************************************/
+
+
+/**
+ * Control message sent to and processed by the cml-daemon on the device.
+ */
+message ControllerToDaemon {
+	enum Command {
+
+		/**********************************************************************
+		 * @exclude
+		 * Commands (global) that query information
+		**********************************************************************/
+
+		// Responds with [guestos_configs] which includes a list of all GuestOS configs
+		// installed on the device.
+		LIST_GUESTOS_CONFIGS = 1;	// -> [guestos_configs]
+
+		// Responds with [container_uuid] with the UUIDs of all containers
+		// available on the device.
+		LIST_CONTAINERS = 2;	// -> [container_uuid]
+
+		// Responds [container_status] with the ContainerStatus
+		// for each specified container in [container_uuid],
+		// or for all containers if [container_uuid] is empty.
+		GET_CONTAINER_STATUS = 3;	// [container_uuid] -> [container_status]
+
+		// Responds [container_config] with the ContainerStatus
+		// for each specified container in [container_uuid],
+		// or for all containers if [container_uuid] is empty.
+		// Also fills [container_uuids] with the corresponding container UUIDs.
+		GET_CONTAINER_CONFIG = 4;	// [container_uuid] -> [container_config]
+
+		/**********************************************************************
+		 * @exclude
+		 * Commands (global) that modify the system 
+		**********************************************************************/
+		// Push new GuestOS config. Needs [guestos_config_*].
+		// Images will be updated later.
+		PUSH_GUESTOS_CONFIG = 20;
+
+		// Reloads containers from config files, e.g. if a new container should be created
+		RELOAD_CONTAINERS = 21;
+
+		// Creates a container, answers with CONTAINER_CONFIGS
+		CREATE_CONTAINER = 22;
+
+		// Removes container config and destroys created container image files
+		REMOVE_CONTAINER = 23;
+
+		// Registers a root certificate for signed GuestOSes.
+		REGISTER_NEWCA = 25;
+
+		// reboot the device
+		REBOOT_DEVICE = 31;
+
+		// Set the device to provisioned state
+		SET_PROVISIONED = 32;
+
+		// Pulls the device csr (provisioning)
+		PULL_DEVICE_CSR = 40;
+		// Pushes bach the device certificate (provisioning)
+		PUSH_DEVICE_CERT = 41;
+
+		/**********************************************************************
+		 * @exclude
+		 * Commands that operate on a specific container
+		**********************************************************************/
+
+	// The UUID of the container must be in the container_uuids field.
+
+		// Starts a container. Also needs [start_params].
+		CONTAINER_START = 101;
+
+		// Stops a container.
+		CONTAINER_STOP = 102;
+
+		// List network interfaces assigned to a container
+		CONTAINER_LIST_IFACES = 112;
+
+		// Starts a container. Also needs ontainer_config_file.
+		CONTAINER_UPDATE_CONFIG = 115;
+
+		// Change the PIN of the token taht is assigned to the token.
+		CONTAINER_CHANGE_TOKEN_PIN = 116;
+
+		// Request if CMLD handles pin input
+		CONTAINER_CMLD_HANDLES_PIN = 117;
+
+	}
+	required Command command = 1;
+
+	/**************************************************************************
+	 * @exclude
+	 * Command-specific params
+	***************************************************************************/
+
+	// Container
+	repeated string container_uuids = 10;		// container UUID(s) for GET_CONTAINER_* and CONTAINER_*
+	optional ContainerStartParams container_start_params = 11;	// start parameters for CONTAINER_START
+	optional bytes container_config_file = 13;		// new container config for CREATE_CNTAINER
+	optional bytes container_config_signature = 18;		// signature of the container config file
+	optional bytes container_config_certificate = 19;	// sw signing certificate to verify the signature on the container config file
+	optional string newpin = 20;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN
+	
+	// Daemon
+	optional bytes guestos_config_file = 30;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
+	optional bytes guestos_config_signature = 31;	// signature of the GuestOS config file
+	optional bytes guestos_config_certificate = 32;	// sw signing certificate to verify the signature on the config file
+	optional bytes guestos_rootcert = 33;	// rootca certificate for local or new CAs to verify GuestOSes
+	optional string guestos_name = 34;	// name of a GuestOS (e.g. used in remove command)
+
+	optional bytes device_cert = 41;	// device cert for PUSH_DEVICE_CERT
+	optional string device_pin = 42;	// pin for token for CHANGE_DEVICE_PIN
+}
+
+message ContainerStartParams {
+	optional string key = 1;
+	optional bool no_switch = 2 [default = false];
+	optional bool setup = 3 [default = false];
+}
+
+message AssignInterfaceParams {
+	optional string iface_name = 1;
+	optional bool persistent = 2 [default = false];
+}
+
+/******************************************************************************
+ * @exclude
+ * Outgoing messages
+ *****************************************************************************/
+
+/**
+ * Control message sent from the cml-daemon on the device to the backend/cmdline tool/etc.
+ */
+message DaemonToController {
+	enum Code {
+		// Push info to other endpoint:
+
+		GUESTOS_CONFIGS_LIST = 1;	// -> [guestos_config]
+
+		CONTAINERS_LIST = 2;		// -> [container_uuid]
+
+		CONTAINER_STATUS = 3;		// -> [container_status]
+		CONTAINER_CONFIG = 4;		// -> [container_config], [container_uuids]
+
+		CONTAINER_IFACES = 5;		// -> [container_ifaces]
+
+		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
+
+		STATUS_CHANGED = 10;		// -> [log_message]
+		NOTIFICATION = 11;		// -> [log_message]
+		LOG_MESSAGE = 12;		// -> [log_message]
+
+		RESPONSE = 13;			// -> [response]
+
+		DEVICE_CSR = 40;		// -> [device_csr]
+	}
+	enum Response {
+		CONTAINER_START_OK = 1;
+		CONTAINER_START_LOCK_FAILED = 2;
+		CONTAINER_START_UNLOCK_FAILED = 3;
+		CONTAINER_START_PASSWD_WRONG = 4;
+		CONTAINER_START_EEXIST = 6;
+		CONTAINER_START_EINTERNAL = 13;
+		CONTAINER_START_TOKEN_UNINIT = 18;
+		CONTAINER_START_TOKEN_UNPAIRED = 19;
+		CONTAINER_STOP_OK = 21;
+		CONTAINER_STOP_LOCK_FAILED = 22;
+		CONTAINER_STOP_UNLOCK_FAILED = 23;
+		CONTAINER_STOP_PASSWD_WRONG = 24;
+		CONTAINER_STOP_FAILED_NOT_RUNNING = 25;
+		CONTAINER_CTRL_EINTERNAL = 26;
+		CONTAINER_CHANGE_PIN_FAILED = 8;
+		CONTAINER_CHANGE_PIN_SUCCESSFUL = 9;
+		CONTAINER_LOCKED_TILL_REBOOT = 5;
+		CONTAINER_USB_PIN_ENTRY_FAIL = 20;
+		DEVICE_PROVISIONING_ERROR = 10;
+		DEVICE_CERT_ERROR = 11;
+		DEVICE_CERT_OK = 12;
+		GUESTOS_MGR_INSTALL_STARTED = 14;
+		GUESTOS_MGR_INSTALL_FAILED = 15;
+		GUESTOS_MGR_INSTALL_WAITING = 16;
+		GUESTOS_MGR_INSTALL_COMPLETED = 17;
+		GUESTOS_MGR_REGISTER_CA_ERROR = 27;
+		GUESTOS_MGR_REGISTER_CA_OK = 28;
+		CMD_UNSUPPORTED = 7;
+	}
+
+	required Code code = 1;
+
+	repeated GuestOSConfig guestos_configs = 5;			// GuestOS configs for LIST_GUESTOS_CONFIGS
+
+	repeated string container_uuids = 6;				// UUIDs for LIST_CONTAINERS
+	repeated ContainerStatus container_status = 7;		// ContainerStatus(es) for GET_CONTAINER_STATUS
+	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
+	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
+	optional bool container_cmld_handles_pin = 11; 		// Indicate that CMLD handles pin input for container start and stop
+
+	optional Response response = 13;
+	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
+}
