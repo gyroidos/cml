@@ -128,11 +128,13 @@ pipeline {
         }
 
         stage('Functional Test Development Image') {
-            steps {
-                 sh '''
-                     bash ${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --ssh 2229 --kill
-                '''
-            }
+          steps {
+              lock ('functional-test-vm') {
+                   sh '''
+                       bash ${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --ssh 2229 --kill
+                  '''
+              }
+           }
         }
 
         stage('Production Image') {
