@@ -176,6 +176,7 @@ c_user_set_next_uid_range_start(c_user_t *user)
 	user->uid_start = UID_RANGES_START + (user->offset * UID_RANGE);
 	DEBUG("Next free uid/gid map start is: %u", user->uid_start);
 
+	mem_free(file_name_uid);
 	return 0;
 }
 

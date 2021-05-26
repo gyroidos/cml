@@ -376,6 +376,7 @@ cmld_set_device_provisioned(void)
 			}
 		}
 	}
+	mem_free(provisioned_file);
 }
 
 /**
@@ -1245,6 +1246,7 @@ cmld_init(const char *path)
 	} else {
 		DEBUG("Device is not yet provisioned and provision-status-file does not yet exist");
 	}
+	mem_free(provisioned_file);
 
 	/* the control module sets up a local or remote socket, registers a
 	 * callback (via event_) and parses incoming commands
