@@ -210,7 +210,7 @@ cp tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img trustmeimage.i
 # copy for faster startup
 cp /usr/share/OVMF/OVMF_VARS.fd .
 
-qemu-system-x86_64 -machine accel=kvm,vmport=off -m 1024G -smp 4 -cpu host -bios OVMF.fd \
+qemu-system-x86_64 -machine accel=kvm,vmport=off -m 64G -smp 4 -cpu host -bios OVMF.fd \
   -name trustme-tester,process=${PROCESS_NAME} -nodefaults -nographic \
 	-device virtio-rng-pci,rng=id -object rng-random,id=id,filename=/dev/urandom \
 	-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd0 \
