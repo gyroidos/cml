@@ -223,6 +223,8 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 		return NULL;
 	}
 
+	AuditRecord *record = NULL;
+
 	// read file up to delimiter
 	char *buf = mem_alloc0(size + 1);
 	size_t read = 0;
@@ -261,7 +263,6 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 	fclose(file);
 
 	// parse record from file
-	AuditRecord *record;
 	if (0 == size) {
 		INFO("Read audit record with default values");
 		record = (AuditRecord *)mem_new0(AuditRecord, 1);
