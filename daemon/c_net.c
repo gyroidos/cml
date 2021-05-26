@@ -491,6 +491,7 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
 	ni->dhcpd_pid = -1;
+	ni->cont_offset = -1;
 
 	return ni;
 }
@@ -727,7 +728,8 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 
 	/* In case of an error, release the current offset */
 err:
-	c_net_unset_offset(ni->cont_offset);
+	if (ni->cont_offset >= 0)
+		c_net_unset_offset(ni->cont_offset);
 	if (ni->veth_cmld_name) {
 		// delete veth pair if it was created!
 		if (c_net_is_veth_used(ni->veth_cmld_name)) {
