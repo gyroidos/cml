@@ -31,18 +31,27 @@ ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t
 			   size_t datahash_len);
 
 /**
- * Return the measurement list in binary format as a buffer
+ * Return the IMA measurement list in binary format as a buffer
  * @param len A pointer to the variable where the length of the list should be stored in
  * @return The binary measurement list buffer
  */
 uint8_t *
-ml_get_measurement_list_binary_new(size_t *size);
+ml_get_ima_list_new(size_t *len);
 
 /**
- * Return the measurement list as string array and uses the inout parameter
- * strings_len to provide the length of the array
+ * Return the container measurement list in protobuf format
+ * @param len A pointer to the variable where the length of the list should be stored in
+ * @return The protobuf measurement list
  */
-char **
-ml_get_measurement_list_strings_new(size_t *strings_len);
+MlContainerEntry **
+ml_get_container_list_new(size_t *len);
+
+/**
+ * Free the container measurement list allocated by ml_get_container_list_new
+ * @param entries The list to be freed
+ * @param len The length of the list
+ */
+void
+ml_container_list_free(MlContainerEntry **entries, size_t len);
 
 #endif /* ML_H */

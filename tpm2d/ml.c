@@ -21,6 +21,7 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#include "attestation.pb-c.h"
 #include "ml.h"
 
 #include "common/macro.h"
@@ -38,7 +39,6 @@
 #define CONTAINER_PCR_INDEX 11
 
 #define BINARY_RUNTIME_MEASUREMENTS "/sys/kernel/security/ima/binary_runtime_measurements"
-#define ASCII_RUNTIME_MEASUREMENTS "/sys/kernel/security/ima/ascii_runtime_measurements"
 
 typedef struct ml_elem {
 	char *filename;
@@ -109,49 +109,27 @@ halg_id_to_ima_string(TPM_ALG_ID alg_id)
 	}
 }
 
-static list_t *
-ml_get_ima_ml_string_list_new(void)
-{
-	FILE *fp;
-	char *line = NULL; // will be malloced by getline
-	size_t line_len = 0;
-
-	fp = fopen(ASCII_RUNTIME_MEASUREMENTS, "r");
-	IF_NULL_RETVAL(fp, NULL);
-
-	list_t *ima_list = NULL;
-	while (-1 != getline(&line, &line_len, fp)) {
-		line[line_len - 1] = '\0'; // overwrite '\n'
-		ima_list = list_append(ima_list, mem_strdup(line));
-	}
-
-	fclose(fp);
-	if (line)
-		mem_free(line);
-	return ima_list;
-}
-
 uint8_t *
-ml_get_measurement_list_binary_new(size_t *size)
+ml_get_ima_list_new(size_t *len)
 {
 	int fd = 0;
 
 	fd = open(BINARY_RUNTIME_MEASUREMENTS, O_RDONLY);
 	if (fd < 0) {
 		DEBUG("Could not open file %s", BINARY_RUNTIME_MEASUREMENTS);
-		*size = 0;
+		*len = 0;
 		return NULL;
 	}
 
 	int ret = 0;
 	uint8_t *buf = NULL;
-	size_t s = 0;
+	size_t l = 0;
 
 	// The binary measurement file in /sys is a special file where the file size cannot
 	// be determined. Therefore it must be read byte by byte
 	while (true) {
-		buf = (uint8_t *)mem_realloc(buf, s + 1);
-		ret = read(fd, buf + s, 1);
+		buf = (uint8_t *)mem_realloc(buf, l + 1);
+		ret = read(fd, buf + l, 1);
 
 		if (ret == 0) {
 			goto out;
@@ -162,46 +140,61 @@ ml_get_measurement_list_binary_new(size_t *size)
 				continue;
 			}
 			mem_free(buf);
-			s = 0;
+			l = 0;
 			ERROR("Failed to read binary_runtime_measurements");
 			goto out;
 		}
-		s++;
+		l++;
 	}
 
 out:
 	close(fd);
-	*size = s;
+	*len = l;
 	return buf;
 }
 
-char **
-ml_get_measurement_list_strings_new(size_t *strings_len)
+void
+ml_container_list_free(MlContainerEntry **entries, size_t len)
 {
-	list_t *ima_strings_list = ml_get_ima_ml_string_list_new();
-	*strings_len = measurement_list_len + list_length(ima_strings_list);
-	char **strings = mem_new0(char *, *strings_len);
-
-	int i = 0;
-	for (list_t *l = ima_strings_list; l; l = l->next, ++i) {
-		char *ima_ml_string = l->data;
-		strings[i] = ima_ml_string;
-		INFO("ML (%d): %s", i, strings[i]);
+	for (size_t i = 0; i < len; i++) {
+		mem_free(entries[i]->filename);
+		mem_free(entries[i]->template_hash_alg);
+		mem_free(entries[i]->template_hash.data);
+		mem_free(entries[i]->data_hash_alg);
+		mem_free(entries[i]->data_hash.data);
 	}
-	list_delete(ima_strings_list); // only deletes the list elements not the element's data
+	mem_free(entries);
+}
 
-	for (list_t *l = measurement_list; l; l = l->next, ++i) {
+MlContainerEntry **
+ml_get_container_list_new(size_t *len)
+{
+	MlContainerEntry **entries = mem_new(MlContainerEntry *, measurement_list_len);
+	*len = measurement_list_len;
+
+	size_t i = 0;
+	for (list_t *l = measurement_list; l; l = l->next, i++) {
 		ml_elem_t *ml_elem = l->data;
-		char *hex_datahash = convert_bin_to_hex_new(ml_elem->datahash, ml_elem->hash_len);
-		const char *halg_string = halg_id_to_ima_string(ml_elem->algid);
-		char *hex_template = convert_bin_to_hex_new(ml_elem->template->pcr_value,
-							    ml_elem->template->pcr_size);
-		strings[i] = mem_printf("%d %s ima-ng %s:%s %s", CONTAINER_PCR_INDEX, hex_template,
-					halg_string, hex_datahash, ml_elem->filename);
-		INFO("ML (%d): %s", i, strings[i]);
-		mem_free(hex_datahash);
-		mem_free(hex_template);
+		MlContainerEntry *entry = mem_new(MlContainerEntry, 1);
+		ml_container_entry__init(entry);
+		entry->pcr_index = CONTAINER_PCR_INDEX;
+		entry->filename = mem_strdup(ml_elem->filename);
+		entry->template_hash_alg =
+			mem_strdup(halg_id_to_ima_string(ml_elem->template->halg_id));
+		entry->template_hash.data =
+			mem_memcpy(ml_elem->template->pcr_value, ml_elem->template->pcr_size);
+		entry->template_hash.len = ml_elem->template->pcr_size;
+		entry->data_hash_alg = mem_strdup(halg_id_to_ima_string(ml_elem->algid));
+		entry->data_hash.data = mem_memcpy(ml_elem->datahash, ml_elem->hash_len);
+		entry->data_hash.len = ml_elem->hash_len;
+
+		if (i >= measurement_list_len) {
+			WARN("Measurement List out of range. Abort");
+			break;
+		}
+
+		entries[i] = entry;
 	}
 
-	return strings;
+	return entries;
 }
