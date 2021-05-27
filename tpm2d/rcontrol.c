@@ -194,16 +194,23 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		out.certificate.data = attestation_cert;
 		out.certificate.len = att_cert_len;
 
-		out.ml_entry.data = ml_get_measurement_list_binary_new(&out.ml_entry.len);
-		if (!out.ml_entry.data) {
-			WARN("Failed to retrieve binary measurement list");
+		out.ml_ima_entry.data = ml_get_ima_list_new(&out.ml_ima_entry.len);
+		if (!out.ml_ima_entry.data) {
+			WARN("Failed to retrieve IMA measurement list");
+			goto err_att_req;
+		}
+
+		out.ml_container_entry = ml_get_container_list_new(&out.n_ml_container_entry);
+		if (!out.ml_container_entry) {
+			WARN("Failed to retrieve container measurement list");
 			goto err_att_req;
 		}
 
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 
-		mem_free(out.ml_entry.data);
+		mem_free(out.ml_ima_entry.data);
+		ml_container_list_free(out.ml_container_entry, out.n_ml_container_entry);
 
 	err_att_req:
 		tpm2d_flush_as_key_handle();
