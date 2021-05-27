@@ -127,16 +127,6 @@ pipeline {
 
         }
 
-        stage('Functional Test Development Image') {
-          steps {
-              lock ('functional-test-vm') {
-                   sh '''
-                       bash ${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --ssh 2229 --kill
-                  '''
-              }
-           }
-        }
-
         stage('Production Image') {
             agent {
                 dockerfile {
@@ -188,26 +178,22 @@ pipeline {
       stage('Integration Testing') {
           parallel {
               stage('Development Image') {
-                  /*TODO;Skipped for now*/
-                  when {
-                      expression {
-                          return false
-                      }
-                  }
                   steps {
-                      sh 'echo pass'
-                  }
+                      lock ('functional-test-dev') {
+                           sh '''
+                               bash ${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --name "qemu-trustme-dev" --ssh 2229 --kill
+                          '''
+                      }
+                   }
               }
 
               stage('Production Image') {
-                  /*TODO;Skipped for now*/
-                  when {
-                      expression {
-                          return false
-                      }
-                  }
                   steps {
-                      sh 'echo pass'
+                      lock ('functional-test-production') {
+                           sh '''
+                               bash ${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --ssh 2228 --name "qemu-trustme-production" --kill
+                          '''
+                      }
                   }
               }
           }

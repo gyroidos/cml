@@ -2,6 +2,7 @@
 
 set -e
 
+PROCESS_NAME="qemu-trustme-ci"
 SSH_PORT=2223
 
 # Argument retrieval
@@ -24,6 +25,7 @@ while [[ $# > 0 ]]; do
       echo "-v, --vnc <display number>  Start the VM with VNC (port 5900 + display number)"
       echo "-t, --telnet <telnet port>  Start VM with telnet on specified port (connect with 'telnet localhost <telnet port>')"
       echo "-k, --kill                  Kill the VM after the tests are completed"
+      echo "-n, --name        Use the given name for the QEMU VM"
       exit 1
       ;;
     -c|--compile)
@@ -88,6 +90,11 @@ while [[ $# > 0 ]]; do
       shift
       KILL_VM=true
       ;;
+    -n|--name)
+      shift
+      PROCESS_NAME=$1
+      shift
+      ;;
      *)
       echo "Unnecessary arguments? ($1)"
       exit 1
@@ -96,7 +103,7 @@ while [[ $# > 0 ]]; do
 done
 
 
-SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=vm_key -o GlobalKnownHostsFile=/dev/null -p $SSH_PORT root@localhost"
+SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -p $SSH_PORT root@localhost"
 
 do_wait_running () {
 	while [ true ];do
@@ -181,12 +188,11 @@ fi
 # Ensure VM is not running
 # -----------------------------------------------
 echo "STATUS: Ensure VM is not running"
-PROCESS_NAME="qemu-trustme-ci"
 if [[ $(pgrep $PROCESS_NAME) != "" ]]
 then
   if [ ${KILL_VM} ];then
 	  echo "Kill current VM (--kill was given)"
-	  pgrep ${PROCESS_NAME} | xargs kill
+	  pgrep ${PROCESS_NAME} | xargs kill -SIGKILL
   else
 	  echo "WARNING: VM instance called \"$PROCESS_NAME\" already running. Please stop/kill it first."
 	  exit 1
@@ -196,13 +202,13 @@ fi
 # Create image
 # -----------------------------------------------
 echo "STATUS: Creating images"
-rm -f containers.btrfs
-dd if=/dev/zero of=containers.btrfs bs=1M count=10000 &> /dev/null
-mkfs.btrfs -f -L containers containers.btrfs
+rm -f ${PROCESS_NAME}.btrfs
+dd if=/dev/zero of=${PROCESS_NAME}.btrfs bs=1M count=10000 &> /dev/null
+mkfs.btrfs -f -L containers ${PROCESS_NAME}.btrfs
 
 # Backup system image
 # TODO it could have been modified if VM run outside of this script with different args already
-cp tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img trustmeimage.img
+cp tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img ${PROCESS_NAME}.img
 
 # Start VM
 # -----------------------------------------------
@@ -214,9 +220,9 @@ qemu-system-x86_64 -machine accel=kvm,vmport=off -m 64G -smp 4 -cpu host -bios O
   -name trustme-tester,process=${PROCESS_NAME} -nodefaults -nographic \
 	-device virtio-rng-pci,rng=id -object rng-random,id=id,filename=/dev/urandom \
 	-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd0 \
-	-drive if=none,id=hd0,file=trustmeimage.img,format=raw \
+	-drive if=none,id=hd0,file=${PROCESS_NAME}.img,format=raw \
 	-device scsi-hd,drive=hd1 \
-	-drive if=none,id=hd1,file=containers.btrfs,format=raw \
+	-drive if=none,id=hd1,file=${PROCESS_NAME}.btrfs,format=raw \
 	-device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
 	-drive "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd" \
 	-drive "if=pflash,format=raw,file=./OVMF_VARS.fd" \
@@ -227,7 +233,7 @@ qemu-system-x86_64 -machine accel=kvm,vmport=off -m 64G -smp 4 -cpu host -bios O
 # Waiting for VM's ssh server to start and get cert
 sleep 10
 echo "STATUS: Waiting for VM ssh server to start up..."
-ssh-keyscan -T 600 -p $SSH_PORT -H localhost  > vm_key
+ssh-keyscan -T 600 -p $SSH_PORT -H localhost  > ${PROCESS_NAME}.vm_key
 sleep 10
 
 # Perform tests
@@ -242,63 +248,77 @@ assign_dev: "c 4:2 rwm"
 EOF
 
 echo "ssh_opts: ${SSH_OPTS}"
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=vm_key -o GlobalKnownHostsFile=/dev/null -P $SSH_PORT test_certificates/ssig_rootca.cert root@localhost:/tmp/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -P $SSH_PORT test_certificates/ssig_rootca.cert root@localhost:/tmp/
 
 echo "STATUS: Calling control list"
 ssh ${SSH_OPTS} "/usr/sbin/control list" | grep -v Abort
+sleep 2
 
 echo "STATUS: Calling control list_guestos"
 ssh ${SSH_OPTS} "/usr/sbin/control list_guestos" | grep -v Abort
+sleep 2
 
 echo "STATUS: Calling control create"
 ssh ${SSH_OPTS} "/usr/sbin/control create /tmp/template" | grep -v Abort
+sleep 2
 
 echo "STATUS: Calling control change_pin"
 ssh ${SSH_OPTS} 'echo -ne "trustme\npw\npw\n" | /usr/sbin/control change_pin test-container' | grep CONTAINER_CHANGE_PIN_SUCCESSFUL
+sleep 2
 
 echo "STATUS: Calling control start"
 ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | grep CONTAINER_START_OK
+sleep 2
 
 echo "STATUS: Calling control list"
 ssh ${SSH_OPTS} "/usr/sbin/control list" | grep test-container
+sleep 2
 
 echo "STATUS: Calling control config"
 ssh ${SSH_OPTS} "/usr/sbin/control config test-container" | grep test-container
+sleep 2
 
 echo "STATUS: Wait for container to start (Calling control state)"
 do_wait_running
+sleep 2
 
 # below has no other way to verify command success
 echo "STATUS: Calling control ca_register"
 ssh ${SSH_OPTS} "/usr/sbin/control ca_register /tmp/ssig_rootca.cert" 2>&1 | grep -v Abort
+sleep 2
 
 echo "STATUS: Calling control stop"
 ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | grep CONTAINER_STOP_OK
 do_wait_stopped
+sleep 2
 
 # start container again to ensure cleanup code is working correctly
 echo "STATUS: Calling control start"
 ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | grep CONTAINER_START_OK
 do_wait_running
+sleep 2
 
 echo "STATUS: Calling control stop"
 ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | grep CONTAINER_STOP_OK
 do_wait_stopped
+sleep 2
 
 echo "STATUS: Calling control remove"
 ssh ${SSH_OPTS} "/usr/sbin/control remove test-container" 2>&1 | grep -v FATAL
+sleep 2
 
 # above command has no proper return value thus we check below if test-container no longer in list
 echo "STATUS: Calling control list"
 ssh ${SSH_OPTS} "/usr/sbin/control list" | grep -v test-container
+sleep 2
 
 if [[ $KILL_VM == true ]]
 then
   echo "Terminating VM"
-  pkill $PROCESS_NAME
+  pkill $PROCESS_NAME || true
 fi
 
-rm vm_key
+rm ${PROCESS_NAME}.vm_key
 
 # Success
 # -----------------------------------------------
