@@ -25,6 +25,7 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
+CC_MODE ?= n
 
 TRUSTME_HARDWARE := x86
 
@@ -49,6 +50,10 @@ ifeq ($(SANITIZERS),y)
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
+endif
+ifeq ($(CC_MODE),y)
+    # build for restrictive CC mode
+    LOCAL_CFLAGS += -DCC_MODE
 endif
 
 LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
