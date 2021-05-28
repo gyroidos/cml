@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2019 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -43,6 +43,7 @@
 #include "modsig.h"
 #include "hash.h"
 #include "ima_verify.h"
+#include "container_verify.h"
 
 #define TPM2D_SERVICE_PORT "9505"
 
@@ -94,8 +95,6 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 		      config_file);
 		return false;
 	}
-
-	// Verficication Process
 
 	if (resp->has_quoted) {
 		char *quote_str = convert_bin_to_hex_new(resp->quoted.data, resp->quoted.len);
@@ -202,17 +201,24 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 
 	// PCR10 kernel module verification (from /sys/kernel/security/ima/binary_runtime_measuremts)
 	hash_algo_t hash_algo = size_to_hash_algo((int)resp->halg);
-	int ret_ima =
-		ima_verify_binary_runtime_measurements(resp->ml_entry.data, resp->ml_entry.len,
-						       config->kmod_sign_cert, hash_algo,
-						       resp->pcr_values[10]->value.data);
+	int ret_ima = ima_verify_binary_runtime_measurements(resp->ml_ima_entry.data,
+							     resp->ml_ima_entry.len,
+							     config->kmod_sign_cert, hash_algo,
+							     resp->pcr_values[10]->value.data);
 	if (ret_ima != 0) {
 		ERROR("Failed to verify measurement list");
 		goto err;
 	}
 
-	// TODO PCR11 container verification
-	WARN("WARN: Measurement List Verification PCR11 not yet implemented");
+	// PCR11 container verification
+	int ret_container =
+		container_verify_runtime_measurements(resp->ml_container_entry,
+						      resp->n_ml_container_entry, hash_algo,
+						      resp->pcr_values[11]->value.data);
+	if (ret_container != 0) {
+		ERROR("Failed to verify container measurement list");
+		goto err;
+	}
 
 	ret = true;
 
