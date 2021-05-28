@@ -72,6 +72,7 @@ message GuestOSMount {
 
 
 message GuestOSConfig {
+	reserved 20 to 26;
 	// The following three fields together should UNIQUELY identify the actual guestos image files and config:
 	required string name = 1;       // unique name of the operating system
 	required string hardware = 2;   // target hardware; must match hardware_get_name(), e.g. "i9505", etc.
@@ -87,13 +88,6 @@ message GuestOSConfig {
 	repeated GuestOSMount mounts_setup = 9;      // list of mounts for setup mode of a container
 
 	// Flags indicating the features supported by the OS:
-	optional bool feature_phone = 20 [default = false];
-	optional bool feature_bluetooth = 21 [default = false];
-	optional bool feature_wifi = 22 [default = false];
-	optional bool feature_mobile_data = 23 [default = false];
-	optional bool feature_sensors = 24 [default = false];
-	optional bool feature_camera = 25 [default = false];
-	optional bool feature_audio = 26 [default = false];
 	optional bool feature_bg_booting = 27 [default = false];
 	optional bool feature_vpn = 28 [default = false];
 	optional bool feature_devtmpfs = 29 [default = false];
