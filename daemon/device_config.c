@@ -142,15 +142,6 @@ device_config_get_update_base_url(const device_config_t *config)
 	return config->cfg->update_base_url;
 }
 
-int
-device_config_get_should_led_blink(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->should_led_blink;
-}
-
 const char *
 device_config_get_c0os(const device_config_t *config)
 {
