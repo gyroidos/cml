@@ -266,9 +266,6 @@ uint32_t
 guestos_get_def_ram_limit(const guestos_t *os);
 
 bool
-guestos_get_feature_vpn(const guestos_t *os);
-
-bool
 guestos_get_feature_bg_booting(const guestos_t *os);
 
 bool
