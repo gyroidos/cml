@@ -77,9 +77,6 @@ device_config_get_telephony_uuid(const device_config_t *config);
 const char *
 device_config_get_update_base_url(const device_config_t *config);
 
-int
-device_config_get_should_led_blink(const device_config_t *config);
-
 const char *
 device_config_get_c0os(const device_config_t *config);
 

@@ -26,6 +26,7 @@ syntax = "proto2";
 option java_package = "de.fraunhofer.aisec.trustme";
 
 message DeviceConfig {
+	reserved 6;
 	// unique uuid. may change due to user change.
 	// may be generated if no uuid is available.
 	required string uuid = 1;
@@ -40,9 +41,6 @@ message DeviceConfig {
 	// base url for fetching updates (image files, etc.)
 	optional string update_base_url = 5;
 	// e.g. http://server:port/trustme/operatingsystems/<device>/<name>-<version>/<filename.img>
-
-	// flag which decides led blinking
-	optional bool should_led_blink = 6 [default = false];
 
 	// configure os of the management container
 	optional string c0os = 7 [default = "trustx-coreos"];
