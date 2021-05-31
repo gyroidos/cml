@@ -1045,14 +1045,13 @@ cmld_init_c0(const char *path, const char *c0os)
 	guestos_fill_mount(c0_os, c0_mnt);
 	unsigned int c0_ram_limit = 1024;
 	bool c0_ns_net = true;
-	bool privileged = true;
 
 	container_t *new_c0 =
 		container_new_internal(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net,
-				       privileged, c0_os, NULL, c0_images_folder, c0_mnt,
-				       c0_ram_limit, NULL, 0xffffff00, false,
-				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL,
-				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
+				       c0_os, NULL, c0_images_folder, c0_mnt, c0_ram_limit, NULL,
+				       0xffffff00, false, cmld_get_device_host_dns(), NULL, NULL,
+				       NULL, NULL, NULL, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE,
+				       false);
 
 	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);
