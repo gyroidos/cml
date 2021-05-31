@@ -1077,13 +1077,6 @@ guestos_get_def_ram_limit(const guestos_t *os)
 }
 
 bool
-guestos_get_feature_vpn(const guestos_t *os)
-{
-	ASSERT(os);
-	return guestos_config_get_feature_vpn(os->cfg);
-}
-
-bool
 guestos_get_feature_bg_booting(const guestos_t *os)
 {
 	ASSERT(os);

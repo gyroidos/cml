@@ -148,12 +148,6 @@ uint32_t
 guestos_config_get_def_ram_limit(const guestos_config_t *cfg);
 
 /**
- * Returns if feture vpn is enabled in the GuestOS config.
- */
-bool
-guestos_config_get_feature_vpn(const guestos_config_t *cfg);
-
-/**
  * Returns if the GuestOS supports background booting.
  */
 bool

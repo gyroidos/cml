@@ -256,13 +256,6 @@ guestos_config_get_def_ram_limit(const guestos_config_t *cfg)
 }
 
 bool
-guestos_config_get_feature_vpn(const guestos_config_t *cfg)
-{
-	ASSERT(cfg);
-	return cfg->feature_vpn ? cfg->feature_vpn : false;
-}
-
-bool
 guestos_config_get_feature_bg_booting(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
