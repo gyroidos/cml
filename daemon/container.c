@@ -114,7 +114,6 @@ struct container {
 	bool ns_net;
 	bool ns_usr;
 	bool ns_ipc;
-	bool privileged;
 	char *config_filename;
 	char *images_dir;
 	char *key;
@@ -219,12 +218,12 @@ container_free_key(container_t *container)
 
 container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
-		       bool ns_net, bool privileged, const guestos_t *os,
-		       const char *config_filename, const char *images_dir, mount_t *mnt,
-		       unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
-		       bool allow_autostart, const char *dns_server, list_t *net_ifaces,
-		       char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
-		       list_t *usbdev_list, char **init_env, size_t init_env_len, list_t *fifo_list,
+		       bool ns_net, const guestos_t *os, const char *config_filename,
+		       const char *images_dir, mount_t *mnt, unsigned int ram_limit,
+		       const char *cpus_allowed, uint32_t color, bool allow_autostart,
+		       const char *dns_server, list_t *net_ifaces, char **allowed_devices,
+		       char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list,
+		       char **init_env, size_t init_env_len, list_t *fifo_list,
 		       container_token_type_t ttype, bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
@@ -258,7 +257,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->ns_usr = ns_usr;
 	container->ns_net = ns_net;
 	container->ns_ipc = hardware_supports_systemv_ipc() ? true : false;
-	container->privileged = privileged;
 
 	/* Allow config_filename to be NULL for "configless"/"anonymous" containers */
 	if (config_filename)
@@ -313,7 +311,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	}
 
 	list_t *nw_mv_name_list = NULL;
-	if (privileged && ns_net) {
+	if (container_uuid_is_c0id(uuid) && ns_net) {
 		nw_mv_name_list = hardware_get_nw_mv_name_list();
 		for (list_t *elem = nw_mv_name_list; elem != NULL; elem = elem->next) {
 			DEBUG("List element in nw_names_list: %s", (char *)(elem->data));
@@ -463,7 +461,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	uint64_t current_guestos_version;
 	uint64_t new_guestos_version;
 	bool allow_autostart;
-	bool priv;
 	char **allowed_devices;
 	char **assigned_devices;
 
@@ -547,9 +544,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
 	ns_net = container_config_has_netns(conf);
 
-	priv = guestos_is_privileged(os);
-	//priv |= !ns_net;
-
 	container_type_t type = container_config_get_type(conf);
 
 	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
@@ -584,7 +578,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
 
 	container_t *c =
-		container_new_internal(uuid, name, type, ns_usr, ns_net, priv, os, config_filename,
+		container_new_internal(uuid, name, type, ns_usr, ns_net, os, config_filename,
 				       images_dir, mnt, ram_limit, cpus_allowed, color,
 				       allow_autostart, dns_server, net_ifaces, allowed_devices,
 				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
@@ -883,7 +877,7 @@ bool
 container_is_privileged(const container_t *container)
 {
 	ASSERT(container);
-	return container->privileged;
+	return container_uuid_is_c0id(container->uuid);
 }
 
 bool
@@ -1266,7 +1260,7 @@ container_start_child(void *data)
 		WARN_ERRNO("Could not set security context init");
 	}
 
-	if (!container->privileged) {
+	if (!container_uuid_is_c0id(container->uuid)) {
 		DEBUG("Dropping all trustme-lsm privileges for container %s",
 		      container_get_description(container));
 		if (open("/sys/kernel/security/trustme/drop_privileges", 0) < 0)

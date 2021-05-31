@@ -185,12 +185,12 @@ container_connectivity_online(container_connectivity_t connectivity)
  */
 container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
-		       bool ns_net, bool privileged, const guestos_t *os,
-		       const char *config_filename, const char *images_folder, mount_t *mnt,
-		       unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
-		       bool allow_autostart, const char *dns_server, list_t *net_ifaces,
-		       char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
-		       list_t *usbdev_list, char **init_env, size_t init_env_len, list_t *fifo_list,
+		       bool ns_net, const guestos_t *os, const char *config_filename,
+		       const char *images_folder, mount_t *mnt, unsigned int ram_limit,
+		       const char *cpus_allowed, uint32_t color, bool allow_autostart,
+		       const char *dns_server, list_t *net_ifaces, char **allowed_devices,
+		       char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list,
+		       char **init_env, size_t init_env_len, list_t *fifo_list,
 		       container_token_type_t ttype, bool usb_pin_entry);
 
 /**
