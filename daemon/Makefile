@@ -116,11 +116,12 @@ SRC_FILES := main.c \
 ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
 	$(MAKE) -C cc_mode
+	ln -sf cc_mode/container.pb-c.c container.pb-c.c
+	ln -sf cc_mode/container.pb-c.h container.pb-c.h
 	ln -sf cc_mode/guestos.pb-c.c guestos.pb-c.c
 	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
 	ln -sf cc_mode/device.pb-c.c device.pb-c.c
 	ln -sf cc_mode/device.pb-c.h device.pb-c.h
-	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
 	protoc-c --c_out=. scd.proto
 	protoc-c --c_out=. attestation.proto

@@ -365,22 +365,6 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 	}
 }
 
-uint32_t
-container_config_get_color(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->color;
-}
-
-container_type_t
-container_config_get_type(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return container_config_proto_to_type(config->cfg->type);
-}
-
 uint64_t
 container_config_get_guestos_version(const container_config_t *config)
 {
@@ -396,14 +380,6 @@ container_config_set_guestos_version(container_config_t *config, uint64_t guesto
 	ASSERT(config->cfg);
 	config->cfg->has_guestos_version = true;
 	config->cfg->guestos_version = guestos_version;
-}
-
-bool
-container_config_get_allow_autostart(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->allow_autostart;
 }
 
 list_t *
@@ -462,22 +438,6 @@ container_config_get_dns_server(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->dns_server;
-}
-
-bool
-container_config_has_netns(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->netns;
-}
-
-bool
-container_config_has_userns(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->userns;
 }
 
 void
@@ -674,3 +634,76 @@ container_config_get_cpus_allowed(const container_config_t *config)
 	ASSERT(config->cfg);
 	return config->cfg->assign_cpus;
 }
+
+// hardcode some restricted config otpions in CC Mode
+#ifdef CC_MODE
+uint32_t
+container_config_get_color(UNUSED const container_config_t *config)
+{
+	return 0;
+}
+
+container_type_t
+container_config_get_type(UNUSED const container_config_t *config)
+{
+	return CONTAINER_TYPE_CONTAINER;
+}
+
+bool
+container_config_get_allow_autostart(UNUSED const container_config_t *config)
+{
+	return true;
+}
+
+bool
+container_config_has_netns(UNUSED const container_config_t *config)
+{
+	return true;
+}
+
+bool
+container_config_has_userns(UNUSED const container_config_t *config)
+{
+	return true;
+}
+#else
+uint32_t
+container_config_get_color(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->color;
+}
+
+container_type_t
+container_config_get_type(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return container_config_proto_to_type(config->cfg->type);
+}
+
+bool
+container_config_get_allow_autostart(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->allow_autostart;
+}
+
+bool
+container_config_has_netns(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->netns;
+}
+
+bool
+container_config_has_userns(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->userns;
+}
+#endif /* CC_MODE */
