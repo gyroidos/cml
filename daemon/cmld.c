@@ -21,8 +21,10 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-// uncomment to prevent reboot
+#ifdef DEBUG_BUILD
+// prevent reboot in debug build
 #define TRUSTME_DEBUG
+#endif
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
@@ -1047,7 +1049,7 @@ cmld_init_c0(const char *path, const char *c0os)
 	container_t *new_c0 =
 		container_new_internal(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net,
 				       privileged, c0_os, NULL, c0_images_folder, c0_mnt,
-				       c0_ram_limit, NULL, 0xffffff00, false, NULL,
+				       c0_ram_limit, NULL, 0xffffff00, false,
 				       cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL,
 				       NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
 
