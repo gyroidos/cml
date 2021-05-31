@@ -270,13 +270,6 @@ guestos_config_get_feature_bg_booting(const guestos_config_t *cfg)
 }
 
 bool
-guestos_config_get_feature_devtmpfs(const guestos_config_t *cfg)
-{
-	ASSERT(cfg);
-	return cfg->feature_devtmpfs ? cfg->feature_devtmpfs : false;
-}
-
-bool
 guestos_config_get_feature_install_guest(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);

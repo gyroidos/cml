@@ -160,12 +160,6 @@ bool
 guestos_config_get_feature_bg_booting(const guestos_config_t *cfg);
 
 /**
- * Returns if the GuestOS supports udev less devtmpfs for minimal /dev
- */
-bool
-guestos_config_get_feature_devtmpfs(const guestos_config_t *cfg);
-
-/**
  * Returns if the GuestOS is allowed to install new GuestOSes
  * e.g., an OS which converts other container runtime images for the CML
  */

@@ -272,9 +272,6 @@ bool
 guestos_get_feature_bg_booting(const guestos_t *os);
 
 bool
-guestos_get_feature_devtmpfs(const guestos_t *os);
-
-bool
 guestos_get_feature_install_guest(const guestos_t *os);
 
 /**
