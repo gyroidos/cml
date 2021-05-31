@@ -118,9 +118,10 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	$(MAKE) -C cc_mode
 	ln -sf cc_mode/guestos.pb-c.c guestos.pb-c.c
 	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
+	ln -sf cc_mode/device.pb-c.c device.pb-c.c
+	ln -sf cc_mode/device.pb-c.h device.pb-c.h
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. device.proto
 	protoc-c --c_out=. scd.proto
 	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
