@@ -259,7 +259,7 @@ bool
 guestos_config_get_feature_bg_booting(const guestos_config_t *cfg)
 {
 	ASSERT(cfg);
-	return cfg->feature_bg_booting ? cfg->feature_bg_booting : false;
+	return cfg->feature_bg_booting ? cfg->feature_bg_booting : true;
 }
 
 bool

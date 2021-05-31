@@ -88,7 +88,7 @@ message GuestOSConfig {
 	repeated GuestOSMount mounts_setup = 9;      // list of mounts for setup mode of a container
 
 	// Flags indicating the features supported by the OS:
-	optional bool feature_bg_booting = 27 [default = false];
+	optional bool feature_bg_booting = 27 [default = true];
 	optional bool feature_install_guest = 40 [default = false];
 	// TODO: add further features as necessary
 
