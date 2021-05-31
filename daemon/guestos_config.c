@@ -80,6 +80,27 @@ guestos_config_write_to_file(const guestos_config_t *cfg, const char *file)
 
 /******************************************************************************/
 
+#ifdef CC_MODE
+static inline enum mount_type
+guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
+{
+	switch (mt) {
+		//TODO Prettify this
+	case GUEST_OSMOUNT__TYPE__SHARED:
+		return MOUNT_TYPE_SHARED;
+	case GUEST_OSMOUNT__TYPE__EMPTY:
+		return MOUNT_TYPE_EMPTY;
+	case GUEST_OSMOUNT__TYPE__FLASH:
+		return MOUNT_TYPE_FLASH;
+	case GUEST_OSMOUNT__TYPE__SHARED_RW:
+		return MOUNT_TYPE_SHARED_RW;
+	case GUEST_OSMOUNT__TYPE__OVERLAY_RW:
+		return MOUNT_TYPE_OVERLAY_RW;
+	default:
+		FATAL("Invalid protobuf mount type %d in CC Mode.", mt);
+	}
+}
+#else
 static inline enum mount_type
 guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 {
@@ -111,6 +132,7 @@ guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 		FATAL("Invalid protobuf mount type %d.", mt);
 	}
 }
+#endif /* CC_MODE */
 
 #if 0
 static inline GuestOSMount__Type
@@ -164,6 +186,14 @@ guestos_config_fill_mount(const guestos_config_t *cfg, mount_t *mount)
 	guestos_config_fill_mount_internal(cfg->mounts, cfg->n_mounts, mount);
 }
 
+#ifdef CC_MODE
+void
+guestos_config_fill_mount_setup(UNUSED const guestos_config_t *cfg, UNUSED mount_t *mount)
+{
+	WARN("Setup mode disabled by CC Mode!");
+	return;
+}
+#else
 void
 guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
 {
@@ -174,6 +204,7 @@ guestos_config_fill_mount_setup(const guestos_config_t *cfg, mount_t *mount)
 	if (cfg->n_mounts_setup == 0)
 		mount_add_entry(mount, MOUNT_TYPE_EMPTY, "tmpfs", "/", "tmpfs", 16);
 }
+#endif /* CC_MODE */
 
 /******************************************************************************/
 
@@ -255,6 +286,19 @@ guestos_config_get_def_ram_limit(const guestos_config_t *cfg)
 	return cfg->has_def_ram_limit ? cfg->def_ram_limit : 0;
 }
 
+#ifdef CC_MODE
+bool
+guestos_config_get_feature_bg_booting(UNUSED const guestos_config_t *cfg)
+{
+	return true;
+}
+
+bool
+guestos_config_get_feature_install_guest(UNUSED const guestos_config_t *cfg)
+{
+	return false;
+}
+#else
 bool
 guestos_config_get_feature_bg_booting(const guestos_config_t *cfg)
 {
@@ -268,6 +312,7 @@ guestos_config_get_feature_install_guest(const guestos_config_t *cfg)
 	ASSERT(cfg);
 	return cfg->feature_install_guest ? cfg->feature_install_guest : false;
 }
+#endif /* CC_MODE */
 
 const char *
 guestos_config_get_update_base_url(const guestos_config_t *cfg)

@@ -113,6 +113,21 @@ SRC_FILES := main.c \
 	audit.c \
 	c_audit.c
 
+ifeq ($(CC_MODE),y)
+protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
+	$(MAKE) -C cc_mode
+	ln -sf cc_mode/guestos.pb-c.c guestos.pb-c.c
+	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
+	protoc-c --c_out=. container.proto
+	protoc-c --c_out=. control.proto
+	protoc-c --c_out=. device.proto
+	protoc-c --c_out=. scd.proto
+	protoc-c --c_out=. attestation.proto
+	protoc-c --c_out=. tpm2d.proto
+	protoc-c --c_out=. c_service.proto
+	$(MAKE) -C common protobuf
+
+else
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
@@ -123,6 +138,8 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	protoc-c --c_out=. tpm2d.proto
 	protoc-c --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
+
+endif
 
 $(PROTO_SRC): protobuf
 
