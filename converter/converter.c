@@ -190,11 +190,6 @@ write_guestos_config(docker_config_t *config, const char *root_image_file, const
 	description.de = mem_printf("Konvertiertes docker image: %s:%s", image_name, image_tag);
 	cfg.description = &description;
 
-	cfg.has_feature_bg_booting = true;
-	cfg.feature_bg_booting = true;
-	cfg.has_feature_devtmpfs = true;
-	cfg.feature_devtmpfs = true;
-
 	// skip siging and pushing if no control interface is available
 	if (!control_is_enabled()) {
 		protobuf_message_write_to_file(out_file, (ProtobufCMessage *)&cfg);
