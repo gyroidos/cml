@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -51,8 +51,6 @@ struct c_service {
 	int sock_connected;
 	event_io_t *event_io_sock;
 	event_io_t *event_io_sock_connected;
-	container_connectivity_t connectivity;
-	container_callback_t *connectivity_observer;
 };
 
 static int
@@ -116,72 +114,6 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 	switch (message->code) {
 	case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
 		container_set_state(service->container, CONTAINER_STATE_RUNNING);
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_SUSPEND_COMPLETED:
-		// currently empty
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIO_RESUME_COMPLETED:
-		// currently empty
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__SUSPEND_COMPLETED:
-		INFO("Received a suspend completed message from container %s",
-		     container_get_description(service->container));
-		container_set_screen_on(service->container, false);
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__RESUME_COMPLETED:
-		INFO("Received a resume completed message from container %s",
-		     container_get_description(service->container));
-		container_set_screen_on(service->container, true);
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__SHUTDOWN:
-		// check container state and take action if container is not
-		// stopped or just shutting down
-		if (container_get_state(service->container) == CONTAINER_STATE_SHUTTING_DOWN) {
-			INFO("TrustmeService received container shutdown message for %s",
-			     container_get_description(service->container));
-		} else if (container_get_state(service->container) == CONTAINER_STATE_STOPPED) {
-			ERROR("TrustmeService received a notification that a stopped container %s \
-					is shutting down",
-			      container_get_description(service->container));
-		} else {
-			INFO("TrustmeService received a notification that the container %s is \
-					shutting down, so try to stop it from our side",
-			     container_get_description(service->container));
-			// container_stop kills the container if there is a problem
-			container_stop(service->container);
-		}
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__MASTER_CLEAR:
-		container_wipe(service->container);
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__CONNECTIVITY_CHANGE:
-		INFO("Received connectivity change message `%d' from container %s",
-		     message->connectivity, container_get_description(service->container));
-
-		service->connectivity = (container_connectivity_t)message->connectivity;
-		container_set_connectivity(service->container,
-					   (container_connectivity_t)message->connectivity);
-		break;
-
-	case SERVICE_TO_CMLD_MESSAGE__CODE__IMEI_MAC_PHONENO:
-		INFO("Received imei: %s, mac: %s and phoneno.: %s from container %s",
-		     message->imei ? message->imei : "", message->mac ? message->mac : "",
-		     message->phonenumber ? message->phonenumber : "",
-		     container_get_description(service->container));
-		if (message->imei)
-			container_set_imei(service->container, message->imei);
-		if (message->mac)
-			container_set_mac_address(service->container, message->mac);
-		if (message->phonenumber)
-			container_set_phone_number(service->container, message->phonenumber);
-
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_NAME_REQ:
@@ -309,42 +241,6 @@ error:
 	return;
 }
 
-static int
-c_service_send_connectivity_proto(c_service_t *service, container_connectivity_t connectivity)
-{
-	ASSERT(service);
-
-	INFO("Trying to send and enforce connectivity status %d to container %s", connectivity,
-	     container_get_description(service->container));
-
-	/* fill connectivity and send to TrustmeService */
-	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
-	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__CONNECTIVITY_CHANGE;
-
-	message_proto.has_connectivity = true;
-	message_proto.connectivity = (const ContainerConnectivity)connectivity;
-
-	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
-}
-
-static void
-c_service_connectivity_observer_cb(container_t *container, UNUSED container_callback_t *cb,
-				   void *data)
-{
-	c_service_t *service = data;
-
-	container_connectivity_t desired = container_get_connectivity(container);
-	container_connectivity_t current = service->connectivity;
-
-	if (current != desired) {
-		/* container connectivity state changed from outside, try to enforce it into the container */
-		if (c_service_send_connectivity_proto(service, desired) < 0) {
-			WARN("Failed to send connectivity status to container %s",
-			     container_get_description(container));
-		}
-	}
-}
-
 c_service_t *
 c_service_new(container_t *container)
 {
@@ -356,9 +252,6 @@ c_service_new(container_t *container)
 	service->sock_connected = -1;
 	service->event_io_sock = NULL;
 	service->event_io_sock_connected = NULL;
-
-	service->connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
-	service->connectivity_observer = NULL;
 
 	return service;
 }
@@ -389,10 +282,6 @@ c_service_cleanup(c_service_t *service)
 		event_remove_io(service->event_io_sock);
 		event_io_free(service->event_io_sock);
 		service->event_io_sock = NULL;
-	}
-	if (service->connectivity_observer) {
-		container_unregister_observer(service->container, service->connectivity_observer);
-		service->connectivity_observer = NULL;
 	}
 }
 
@@ -445,14 +334,6 @@ c_service_start_pre_exec(c_service_t *service)
 	service->event_io_sock =
 		event_io_new(service->sock, EVENT_IO_READ, &c_service_cb_accept, service);
 	event_add_io(service->event_io_sock);
-
-	/* register connectivity observer */
-	service->connectivity_observer = container_register_observer(
-		service->container, &c_service_connectivity_observer_cb, service);
-	if (!service->connectivity_observer) {
-		WARN("Could not register connectivity observer callback");
-		return -1;
-	}
 
 	return 0;
 }
@@ -530,32 +411,6 @@ c_service_send_message(c_service_t *service, c_service_message_t message)
 	case C_SERVICE_MESSAGE_SHUTDOWN:
 		ret = c_service_send_message_proto(service,
 						   CMLD_TO_SERVICE_MESSAGE__CODE__SHUTDOWN);
-		break;
-
-	case C_SERVICE_MESSAGE_SUSPEND:
-		ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__SUSPEND);
-		break;
-
-	case C_SERVICE_MESSAGE_RESUME:
-		if ((ret = c_service_send_message_proto(service,
-							CMLD_TO_SERVICE_MESSAGE__CODE__RESUME)) < 0)
-			break;
-		//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
-		break;
-
-		/*
-		case C_SERVICE_MESSAGE_WALLPAPER:
-			ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__WALLPAPER);
-			break;
-		*/
-
-	case C_SERVICE_MESSAGE_AUDIO_SUSPEND:
-		ret = c_service_send_message_proto(service,
-						   CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_SUSPEND);
-		break;
-
-	case C_SERVICE_MESSAGE_AUDIO_RESUME:
-		//ret = c_service_send_message_proto(service, CMLD_TO_SERVICE_MESSAGE__CODE__AUDIO_RESUME);
 		break;
 
 	case C_SERVICE_MESSAGE_AUDIT_COMPLETE:

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -29,20 +29,11 @@ import "container.proto";
 import "common/audit.proto";
 
 message CmldToServiceMessage {
-	reserved 10 to 12;
+	reserved 6 to 12, 15; // legacy
 	enum Code {
-		reserved 15, 16;
+		reserved 2 to 6, 14 to 16; // legacy
 
 		SHUTDOWN = 1;
-		SUSPEND = 2;
-		RESUME = 3;
-
-		//WALLPAPER = 4;
-
-		AUDIO_SUSPEND = 5;
-		AUDIO_RESUME = 6;
-
-		CONNECTIVITY_CHANGE = 14;
 
 		CONTAINER_CFG_NAME = 17;
 		CONTAINER_CFG_DNS = 18;
@@ -53,39 +44,17 @@ message CmldToServiceMessage {
 	}
 	required Code code = 1;
 
-	optional ContainerConnectivity connectivity = 6 [default = OFFLINE];
-	optional string source_id = 8;
-	optional string source_color = 9;
 	optional string container_cfg_name = 13;
 	optional string container_cfg_dns = 14;
-	optional string msg = 15;
 	optional AuditRecord audit_record = 16;
 	optional uint64 audit_remaining_storage = 17;
 }
 
 message ServiceToCmldMessage {
-	reserved 11, 14;
+	reserved 6 to 14; // legacy
 	enum Code {
-		reserved 16, 17;
+		reserved 2 to 17; // legacy
 		BOOT_COMPLETED = 1;
-		SUSPEND_COMPLETED = 2;
-		RESUME_COMPLETED = 3;
-
-		//WALLPAPER = 4;
-
-		AUDIO_SUSPEND_COMPLETED = 5;
-		AUDIO_RESUME_COMPLETED = 6;
-
-		CALL_ACTIVE = 7;
-		CALL_HANGUP = 8;
-
-		SHUTDOWN = 10;
-		MASTER_CLEAR = 11;
-
-		SWITCH_CONTAINER = 13;
-
-		CONNECTIVITY_CHANGE = 14;
-		IMEI_MAC_PHONENO = 15;
 
 		CONTAINER_CFG_NAME_REQ = 18;
 		CONTAINER_CFG_DNS_REQ = 19;
@@ -96,12 +65,6 @@ message ServiceToCmldMessage {
 	}
 	required Code code = 1;
 
-	//optional bytes wallpaper_data = 4;
-	optional ContainerConnectivity connectivity = 6 [default = OFFLINE];
-	optional string imei = 8;
-	optional string mac = 9;
-	optional string phonenumber = 10;
-	optional string target_container = 13;
 	optional string captime_exec_path = 15;
 	repeated string captime_exec_param = 16;
 	optional string audit_ack = 17;
