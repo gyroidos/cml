@@ -4,6 +4,7 @@ set -e
 
 PROCESS_NAME="qemu-trustme-ci"
 SSH_PORT=2223
+BUILD_DIR="out-yocto"
 
 # Argument retrieval
 # -----------------------------------------------
@@ -20,6 +21,7 @@ while [[ $# > 0 ]]; do
       echo "-b, --branch <branch>       Use this device_fraunhofer_common_cml git branch (if not default) during compilation"
       echo "                            (see cmld recipe and init_ws.sh for details on branch name and repository location)"
       echo "-d, --dir <directory>       Use this path to workspace root directory if not current directory"
+      echo "-d, --builddir <directory>       Use this path as build directory name"
       echo "-f, --force                 Clean up all components and rebuild them"
       echo "-s, --ssh <ssh port>        Use this port on the host for port forwarding (if not default 2223)"
       echo "-v, --vnc <display number>  Start the VM with VNC (port 5900 + display number)"
@@ -50,6 +52,11 @@ while [[ $# > 0 ]]; do
         exit 1
       fi
       cd $1
+      shift
+      ;;
+    -o|--builddir)
+      shift
+      BUILD_DIR=$1
       shift
       ;;
     -f|--force)
@@ -103,7 +110,7 @@ while [[ $# > 0 ]]; do
 done
 
 
-SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -p $SSH_PORT root@localhost"
+SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=1200 -p $SSH_PORT root@localhost"
 
 do_wait_running () {
 	while [ true ];do
@@ -140,8 +147,8 @@ do_wait_stopped () {
 # -----------------------------------------------
 if [[ $COMPILE == true ]]
 then
-	# changes dir to out-yocto/
-	source init_ws.sh out-yocto x86 genericx86-64
+	# changes dir to BUILD_DIR
+	source init_ws.sh ${BUILD_DIR} x86 genericx86-64
 
 	if [[ $FORCE == true ]]
 	then
@@ -158,12 +165,12 @@ then
   bitbake multiconfig:container:trustx-core
 	bitbake trustx-cml
 else
-	if [ ! -d "out-yocto" ]
+	if [ ! -d "${BUILD_DIR}" ]
 	then
 		echo "ERROR: Project setup not complete. Try with --compile?"
 		exit 1
 	fi
-	cd out-yocto
+	cd ${BUILD_DIR}
 fi
 
 # Check if the branch matches the built one
@@ -177,7 +184,7 @@ then
   fi
 
 
-  BUILD_BRANCH=$(git -C tmp/work/core*/cmld/git*/git branch | grep '*' | awk '{ print $NF }')  # check if git repo found and correct branch used
+  BUILD_BRANCH=$(git -C tmp/work/core*/cmld/git*/git branch | tee /proc/self/fd/2 | grep '*' | awk '{ print $NF }')  # check if git repo found and correct branch used
   if [[ $BRANCH != $BUILD_BRANCH ]]
   then
     echo "ERROR: The specified branch \"$BRANCH\" does not match the build ($BUILD_BRANCH). Please recompile with flag -c."
@@ -208,6 +215,8 @@ mkfs.btrfs -f -L containers ${PROCESS_NAME}.btrfs
 
 # Backup system image
 # TODO it could have been modified if VM run outside of this script with different args already
+echo "Using image at ${PWD}/tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img"
+rm -f ${PROCESS_NAME}.img
 cp tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img ${PROCESS_NAME}.img
 
 # Start VM
@@ -234,12 +243,15 @@ qemu-system-x86_64 -machine accel=kvm,vmport=off -m 64G -smp 4 -cpu host -bios O
 sleep 10
 echo "STATUS: Waiting for VM ssh server to start up..."
 ssh-keyscan -T 600 -p $SSH_PORT -H localhost  > ${PROCESS_NAME}.vm_key
-sleep 10
 
 # Perform tests
 # -----------------------------------------------
 
-echo "ssh_opts: ${SSH_OPTS}"
+for I in $(seq 1 10) ;do
+	sleep 10
+	scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT test_certificates/ssig_rootca.cert root@localhost:/tmp/ || true
+done
+
 ssh ${SSH_OPTS} "cat > /tmp/template" << EOF
 name: "test-container"
 guest_os: "trustx-coreos"
@@ -247,35 +259,32 @@ guestos_version: 1
 assign_dev: "c 4:2 rwm"
 EOF
 
-echo "ssh_opts: ${SSH_OPTS}"
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -P $SSH_PORT test_certificates/ssig_rootca.cert root@localhost:/tmp/
-
 echo "STATUS: Calling control list"
-ssh ${SSH_OPTS} "/usr/sbin/control list" | grep -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/2 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control list_guestos"
-ssh ${SSH_OPTS} "/usr/sbin/control list_guestos" | grep -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control list_guestos" | tee /proc/self/fd/2 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control create"
-ssh ${SSH_OPTS} "/usr/sbin/control create /tmp/template" | grep -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control create /tmp/template" | tee /proc/self/fd/2 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control change_pin"
-ssh ${SSH_OPTS} 'echo -ne "trustme\npw\npw\n" | /usr/sbin/control change_pin test-container' | grep CONTAINER_CHANGE_PIN_SUCCESSFUL
+ssh ${SSH_OPTS} 'echo -ne "trustme\npw\npw\n" | /usr/sbin/control change_pin test-container' | tee /proc/self/fd/2 | grep -q CONTAINER_CHANGE_PIN_SUCCESSFUL
 sleep 2
 
 echo "STATUS: Calling control start"
-ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | grep CONTAINER_START_OK
+ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | tee /proc/self/fd/2 | grep -q CONTAINER_START_OK
 sleep 2
 
 echo "STATUS: Calling control list"
-ssh ${SSH_OPTS} "/usr/sbin/control list" | grep test-container
+ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/2 | grep -q test-container
 sleep 2
 
 echo "STATUS: Calling control config"
-ssh ${SSH_OPTS} "/usr/sbin/control config test-container" | grep test-container
+ssh ${SSH_OPTS} "/usr/sbin/control config test-container" | tee /proc/self/fd/2 | grep -q test-container
 sleep 2
 
 echo "STATUS: Wait for container to start (Calling control state)"
@@ -284,32 +293,32 @@ sleep 2
 
 # below has no other way to verify command success
 echo "STATUS: Calling control ca_register"
-ssh ${SSH_OPTS} "/usr/sbin/control ca_register /tmp/ssig_rootca.cert" 2>&1 | grep -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control ca_register /tmp/ssig_rootca.cert" 2>&1 | tee /proc/self/fd/2 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control stop"
-ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | grep CONTAINER_STOP_OK
+ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | tee /proc/self/fd/2 | grep -q CONTAINER_STOP_OK
 do_wait_stopped
 sleep 2
 
 # start container again to ensure cleanup code is working correctly
 echo "STATUS: Calling control start"
-ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | grep CONTAINER_START_OK
+ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | tee /proc/self/fd/2 | tee /proc/self/fd/2 | grep -q CONTAINER_START_OK
 do_wait_running
 sleep 2
 
 echo "STATUS: Calling control stop"
-ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | grep CONTAINER_STOP_OK
+ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | tee /proc/self/fd/2 | grep -q CONTAINER_STOP_OK
 do_wait_stopped
 sleep 2
 
 echo "STATUS: Calling control remove"
-ssh ${SSH_OPTS} "/usr/sbin/control remove test-container" 2>&1 | grep -v FATAL
+ssh ${SSH_OPTS} "/usr/sbin/control remove test-container --key=pw" 2>&1 | tee /proc/self/fd/2 | grep -q -v FATAL
 sleep 2
 
 # above command has no proper return value thus we check below if test-container no longer in list
 echo "STATUS: Calling control list"
-ssh ${SSH_OPTS} "/usr/sbin/control list" | grep -v test-container
+ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/2 | grep -q -v test-container
 sleep 2
 
 if [[ $KILL_VM == true ]]
