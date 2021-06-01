@@ -122,19 +122,9 @@ container_config_get_cpus_allowed(const container_config_t *config);
 
 void
 container_config_fill_mount(const container_config_t *config, mount_t *mnt);
-#if 0
-uint64_t
-container_config_get_storage_size(const container_config_t *config);
-
-void
-container_config_set_storage_size(container_config_t *config, uint64_t storage_size);
-#endif
 
 uint32_t
 container_config_get_color(const container_config_t *config);
-
-void
-container_config_set_color(container_config_t *config, uint32_t color);
 
 container_type_t
 container_config_get_type(const container_config_t *config);
@@ -146,42 +136,10 @@ void
 container_config_set_guestos_version(container_config_t *config, uint64_t guestos_version);
 
 /**
- * Get the autostart flag which indicates whether the container
- * should be started automatially.
- */
-bool
-container_config_get_autostart(container_config_t *config);
-
-/**
- * Get the autostart flag which indicates whether the container
- * should be started automatially.
- */
-void
-container_config_set_autostart(container_config_t *config, bool autostart);
-
-/**
- * Indicates whether the container is allowed to initiate switches to other containers.
- */
-bool
-container_config_get_allow_container_switch(const container_config_t *config);
-
-/**
- * Sets whether the container is allowed to initiate switches to other containers.
- */
-void
-container_config_set_allow_container_switch(container_config_t *config, bool container_switch);
-
-/**
  * Indicates whether the container is allowed to be started automatically after a0.
  */
 bool
 container_config_get_allow_autostart(const container_config_t *config);
-
-/**
- * Sets whether the container is allowed to be started automatically after a0.
- */
-void
-container_config_set_allow_autostart(container_config_t *config, bool allow_autostart);
 
 /**
  * Provides the list of network interfaces assigned to the container from the container's config file
