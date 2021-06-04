@@ -149,33 +149,6 @@ enum container_error {
 	CONTAINER_ERROR_AUDIT
 };
 
-typedef enum {
-	CONTAINER_CONNECTIVITY_OFFLINE = 1,
-	CONTAINER_CONNECTIVITY_MOBILE_ONLY,
-	CONTAINER_CONNECTIVITY_WIFI_ONLY,
-	CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI
-} container_connectivity_t;
-
-static inline bool
-container_connectivity_wifi(container_connectivity_t connectivity)
-{
-	return (connectivity == CONTAINER_CONNECTIVITY_WIFI_ONLY ||
-		connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
-}
-
-static inline bool
-container_connectivity_mobile(container_connectivity_t connectivity)
-{
-	return (connectivity == CONTAINER_CONNECTIVITY_MOBILE_ONLY ||
-		connectivity == CONTAINER_CONNECTIVITY_MOBILE_AND_WIFI);
-}
-
-static inline bool
-container_connectivity_online(container_connectivity_t connectivity)
-{
-	return (connectivity != CONTAINER_CONNECTIVITY_OFFLINE);
-}
-
 /**
  * Low-level constructor that creates a new container instance
  * with the given parameters.
@@ -592,12 +565,6 @@ container_get_cpus_allowed(const container_t *container);
 /***************************
  * Submodule Interfaces    *
  **************************/
-
-void
-container_set_connectivity(container_t *container, container_connectivity_t connectivity);
-
-container_connectivity_t
-container_get_connectivity(container_t *container);
 
 void
 container_set_imei(container_t *container, char *imei);
