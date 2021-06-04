@@ -613,12 +613,6 @@ bool
 container_get_airplane_mode(container_t *container);
 
 void
-container_set_screen_on(container_t *container, bool screen_on);
-
-bool
-container_is_screen_on(container_t *container);
-
-void
 container_set_wifi_user_enabled(container_t *container, bool enabled);
 
 bool
