@@ -28,7 +28,6 @@ option java_package = "de.fraunhofer.aisec.trustme";
 import "guestos.proto";
 import "container.proto";
 import "common/logf.proto";
-//import "update.proto";
 
 /******************************************************************************
  * @exclude
@@ -169,7 +168,9 @@ message AssignInterfaceParams {
  * Control message sent from the cml-daemon on the device to the backend/cmdline tool/etc.
  */
 message DaemonToController {
+	reserved 10, 12;
 	enum Code {
+		reserved 6, 10, 11;
 		// Push info to other endpoint:
 
 		GUESTOS_CONFIGS_LIST = 1;	// -> [guestos_config]

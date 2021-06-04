@@ -66,8 +66,6 @@
 struct control {
 	int sock; // listen socket fd
 	int sock_client;
-	//char const *format;	// TBD control message encoding format
-	//uint32_t permissions; // TBD
 	int type;
 	char *hostip;	// remote host for inet (MDM) connection
 	int port;	// remote port
@@ -76,57 +74,10 @@ struct control {
 	bool privileged;
 };
 
-// TODO really?!
 static list_t *control_list = NULL;
-UNUSED static logf_handler_t *control_logf_handler = NULL;
 
 static int
 control_remote_reconnect(control_t *control);
-
-UNUSED static void
-control_logf(logf_prio_t prio, const char *msg, UNUSED void *data)
-{
-	static bool log_bomb_prevention = false;
-	if (log_bomb_prevention) {
-		return;
-	}
-	log_bomb_prevention = true;
-
-	if (prio < LOGF_PRIO_DEBUG) {
-		log_bomb_prevention = false;
-		return;
-	}
-
-	//Prevent the child process (after clone in container startup) from writing
-	//to the socket
-	if (getpid() == 1)
-		return;
-
-	for (list_t *l = control_list; l; l = l->next) {
-		control_t *control = l->data;
-
-		if (!control->connected)
-			continue;
-
-		LogMessage message = LOG_MESSAGE__INIT;
-		message.prio = (LogPriority)prio; // FIXME
-		message.msg = mem_strdup(msg);
-		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-		out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE;
-		out.log_message = &message;
-		if (cmld_get_device_uuid()) {
-			out.device_uuid = mem_strdup(cmld_get_device_uuid());
-		}
-		if (protobuf_send_message(control->sock_client, (ProtobufCMessage *)&out) < 0) {
-			WARN("Could not send log message");
-			//Do not try to reconnect here
-			//Reconnection handling is done by control_cb_recv_message()
-		}
-		mem_free(message.msg);
-		mem_free(out.device_uuid);
-	}
-	log_bomb_prevention = false;
-}
 
 static void UNUSED
 control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool send_last_line_info)
@@ -1008,22 +959,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		//control_send_log_file(fd, "/proc/last_kmsg", false, false);
 		//control_send_log_file(fd, "/dev/log/main", true, true);
 	} break;
-	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_LOG_START: {
-		WARN("Due to privacy concerns this command is currently not supported.");
-		//if (control_logf_handler == NULL)
-		//	control_logf_handler = logf_register(&control_logf, NULL);
-	} break;
-	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_LOG_STOP: {
-		WARN("Due to privacy concerns this command is currently not supported.");
-		//if (control_logf_handler != NULL)
-		//	logf_unregister(control_logf_handler);
-		//	control_logf_handler = NULL;
-	} break;
-	// TODO
-	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_STATUS_START:
-	case CONTROLLER_TO_DAEMON__COMMAND__OBSERVE_STATUS_STOP:
-		WARN("ControllerToDaemon command %d not implemented yet", msg->command);
-		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG: {
 		control_handle_cmd_push_guestos_configs(msg, fd);
@@ -1354,18 +1289,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		for (size_t i = 0; i < n; i++)
 			mem_free(results[i]);
 		mem_free(results);
-	} break;
-
-	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_PID: {
-		IF_NULL_RETURN(container);
-		pid_t pid = container_get_pid(container);
-		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-		out.code = DAEMON_TO_CONTROLLER__CODE__CONTAINER_PID;
-		out.has_container_pid = true;
-		out.container_pid = pid;
-		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
-			WARN("Could not send container PID to MDM");
-		}
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD: {

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ option java_package = "de.fraunhofer.aisec.trustme";
 import "guestos.proto";
 import "container.proto";
 import "common/logf.proto";
-//import "update.proto";
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Incoming messages //////////////////////////////////////////////////////////////////////////////
@@ -78,18 +77,6 @@ message ControllerToDaemon {
 		//This is a debugging feature!
 		GET_LAST_LOG = 5;
 
-		// Returns a namespace PID for the given container UUID
-		GET_CONTAINER_PID = 6;
-
-		// Starts or stops observing the status.
-		// TODO not implemented yet
-		OBSERVE_STATUS_START = 10;
-		OBSERVE_STATUS_STOP = 11;
-
-		// Starts or stops observing log messages.
-		OBSERVE_LOG_START = 14;
-		OBSERVE_LOG_STOP = 15;
-
 		//////////////////////////////////////////////
 		// Commands (global) that modify the system //
 		//////////////////////////////////////////////
@@ -115,10 +102,6 @@ message ControllerToDaemon {
 
 		// Removes a guestos including images, configs and signature files
 		REMOVE_GUESTOS = 26;
-
-		// TODO (optional) REMOVE_GUESTOS
-		// How to remove? Send same package_info as during install and delete list of files?
-		// TODO: Are there other files/settings/configs to be managed remotely (install/update/remove)?
 
 		// Wipes the entire device (i.e. all containers)
 		// TODO: Only wipes containers, not e.g. GuestOSes and device.conf.
@@ -229,10 +212,11 @@ message ControllerToDaemon {
 
 /**
  * Control message sent from the cml-daemon on the device to the backend/cmdline tool/etc.
- * TODO: Maybe (but only maybe) use separate messages for the different endpoints.
  */
 message DaemonToController {
+	reserved 10; // legacy
 	enum Code {
+		reserved 6, 10, 11; // legacy
 		// Push info to other endpoint:
 
 		GUESTOS_CONFIGS_LIST = 1;	// -> [guestos_config]
@@ -243,12 +227,9 @@ message DaemonToController {
 		CONTAINER_CONFIG = 4;		// -> [container_config], [container_uuids]
 
 		CONTAINER_IFACES = 5;		// -> [container_ifaces]
-		CONTAINER_PID = 6;		// -> [container_pid]
 
 		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
 
-		STATUS_CHANGED = 10;		// -> [log_message]
-		NOTIFICATION = 11;		// -> [log_message]
 		LOG_MESSAGE = 12;		// -> [log_message]
 
 		RESPONSE = 13;			// -> [response]
@@ -303,7 +284,6 @@ message DaemonToController {
 	repeated ContainerStatus container_status = 7;		// ContainerStatus(es) for GET_CONTAINER_STATUS
 	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
 	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
-	optional uint32 container_pid = 10;			// PID of the container's namespace
 	optional bool container_cmld_handles_pin = 11; 		// Indicate that CMLD handles pin input for container start and stop
 
 	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
