@@ -211,19 +211,6 @@ const char *
 cmld_get_shared_data_dir(void);
 
 /**
- * Get the global wifi state of the device.
- */
-bool
-cmld_is_wifi_active(void);
-
-/**
- * Get the global internet state of the device. Returns true if the device
- * has either mobile or wifi connectivity.
- */
-bool
-cmld_is_internet_active(void);
-
-/**
  * Checks if cmld is running in hosted mode (e.g. on debian)
  */
 bool

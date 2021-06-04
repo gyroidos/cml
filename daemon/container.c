@@ -122,8 +122,6 @@ struct container {
 	unsigned int ram_limit; /* maximum RAM space the container may use */
 	char *cpus_allowed;
 
-	container_connectivity_t connectivity;
-
 	char *description;
 
 	list_t *csock_list;  /* List of sockets bound inside the container */
@@ -240,8 +238,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	/* do not forget to update container->description in the setters of uuid and name */
 	container->description =
 		mem_printf("%s (%s)", container->name, uuid_string(container->uuid));
-
-	container->connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
 
 	/* initialize pid to a value indicating it is invalid */
 	container->pid = -1;
@@ -2247,28 +2243,6 @@ container_set_ram_limit(container_t *container, unsigned int ram_limit)
 
 	/* Note that the c_cgroups submodule gets the ram_limit value from its container reference */
 	return c_cgroups_set_ram_limit(container->cgroups);
-}
-
-void
-container_set_connectivity(container_t *container, container_connectivity_t connectivity)
-{
-	ASSERT(container);
-
-	if (container->connectivity == connectivity)
-		return;
-
-	DEBUG("Setting container connectivity state to %d for container %s", connectivity,
-	      container_get_description(container));
-	container->connectivity = connectivity;
-
-	container_notify_observers(container);
-}
-
-container_connectivity_t
-container_get_connectivity(container_t *container)
-{
-	ASSERT(container);
-	return container->connectivity;
 }
 
 void

@@ -101,8 +101,6 @@ static control_t *cmld_control_cml = NULL;
 
 static smartcard_t *cmld_smartcard = NULL;
 
-static container_connectivity_t cmld_connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
-
 static char *cmld_device_uuid = NULL;
 static char *cmld_device_update_base_url = NULL;
 static char *cmld_device_host_dns = NULL;
@@ -331,18 +329,6 @@ cmld_get_netif_phys_list(void)
 }
 
 bool
-cmld_is_wifi_active(void)
-{
-	return container_connectivity_wifi(cmld_connectivity);
-}
-
-bool
-cmld_is_internet_active(void)
-{
-	return container_connectivity_online(cmld_connectivity);
-}
-
-bool
 cmld_is_hostedmode_active(void)
 {
 	return cmld_hostedmode;
@@ -537,72 +523,6 @@ cmld_rename_logfiles()
 		ERROR("Couldn't open the directory %s", LOGFILE_DIR);
 }
 
-/**
- * This function is called every time the state of the wifi connection changes from
- * offline to online and vice versa.
- */
-static void
-cmld_wifi_change_cb(bool active)
-{
-	/* TODO insert stuff that depends on wifi */
-	if (active) {
-		INFO("Global wifi activated");
-
-		INFO("Triggering guestos updates and image downloads");
-		guestos_mgr_update_images();
-	} else {
-		INFO("Global wifi deactivated");
-	}
-}
-
-/**
- * This function is called every time the state of the mobile connection changes from
- * offline to online and vice versa.
- */
-static void
-cmld_mobile_change_cb(bool active)
-{
-	/* TODO insert stuff that depends on mobile */
-	if (active) {
-		INFO("Global mobile data activated");
-		/* setup route over c0 with rild */
-		container_t *c0 = cmld_containers_get_c0();
-		char *c0_ipaddr = container_get_first_ip_new(c0);
-		char *c0_subnet = container_get_first_subnet_new(c0);
-		network_setup_route_table(hardware_get_routing_table_radio(), c0_subnet,
-					  hardware_get_radio_ifname(), true);
-		network_setup_default_route_table(hardware_get_routing_table_radio(), c0_ipaddr,
-						  true);
-		mem_free(c0_ipaddr);
-		mem_free(c0_subnet);
-	} else {
-		INFO("Global mobile data deactivated");
-	}
-}
-
-/**
- * This function is called every time the state of the global connection changes from
- * offline to online and vice versa.
- */
-static void
-cmld_online_change_cb(bool active)
-{
-	/* connect the MDM dynamically */
-	if (active) {
-		INFO("Global internet (wifi or mobile) activated");
-		if (!control_remote_connecting(cmld_control_mdm)) {
-			/* If not already in progress, try to connect MDM */
-			INFO("Trying to connect to MDM");
-			control_remote_connect(cmld_control_mdm);
-		}
-	} else {
-		INFO("Global internet (wifi or mobile) deactivated");
-
-		INFO("Disconnecting MDM");
-		control_remote_disconnect(cmld_control_mdm);
-	}
-}
-
 static void
 cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
@@ -628,71 +548,6 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 		ksm_set_aggressive_for(CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT);
 	}
 }
-
-static void
-cmld_connectivity_rootns_cb(container_t *c_root_netns, UNUSED container_callback_t *cb,
-			    UNUSED void *data)
-{
-	container_connectivity_t conn = container_get_connectivity(c_root_netns);
-
-	if ((container_get_state(c_root_netns) == CONTAINER_STATE_STOPPED) ||
-	    (container_get_state(c_root_netns) == CONTAINER_STATE_REBOOTING)) {
-		DEBUG("Container %s stopped/rebooting, unregistering connectivity c_root_netns callback",
-		      container_get_description(c_root_netns));
-		container_unregister_observer(c_root_netns, cb);
-	}
-
-	/* check if anything has changed and return if not */
-	if (cmld_connectivity == conn)
-		return;
-
-	container_connectivity_t old_conn = cmld_connectivity;
-	cmld_connectivity = conn;
-
-	DEBUG("Global connectivity changed from %d to %d", old_conn, cmld_connectivity);
-
-	/* detect changes in connection state and call the respective callbacks */
-	if (container_connectivity_wifi(cmld_connectivity) !=
-	    container_connectivity_wifi(old_conn)) {
-		/* wifi connectivity has changed */
-		cmld_wifi_change_cb(container_connectivity_wifi(cmld_connectivity));
-	}
-	if (container_connectivity_mobile(cmld_connectivity) !=
-	    container_connectivity_mobile(old_conn)) {
-		/* mobile connectivity has changed */
-		cmld_mobile_change_cb(container_connectivity_mobile(cmld_connectivity));
-	}
-	if (container_connectivity_online(cmld_connectivity) !=
-	    container_connectivity_online(old_conn)) {
-		/* internet connectivity has changed */
-		cmld_online_change_cb(container_connectivity_online(cmld_connectivity));
-	}
-
-	///* set the connectivity in aX containers to the global state */
-	//for (list_t *l = cmld_containers_list; l; l = l->next) {
-	//	container_t *container = l->data;
-	//	if (container != c_root_netns) {
-	//		container_set_connectivity(container, conn);
-	//	}
-	//}
-}
-
-//static void
-//cmld_connectivity_aX_cb(container_t *aX, container_callback_t *cb, UNUSED void *data)
-//{
-//	if (container_get_state(aX) == CONTAINER_STATE_STOPPED) {
-//		DEBUG("Container %s stopped, unregistering connectivity aX callback",
-//				container_get_description(aX));
-//		container_unregister_observer(aX, cb);
-//	}
-//
-//	if (cmld_connectivity == container_get_connectivity(aX))
-//		return;
-//
-//	DEBUG("Setting global connectivity %d in container %s", cmld_connectivity, container_get_description(aX));
-//
-//	container_set_connectivity(aX, cmld_connectivity);
-//}
 
 static void
 cmld_init_control_cb(container_t *container, container_callback_t *cb, void *data)
@@ -739,16 +594,6 @@ cmld_container_register_observers(container_t *container)
 	if (!container_register_observer(container, &cmld_container_boot_complete_cb, NULL)) {
 		ERROR("Could not register container boot complete observer callback for %s",
 		      container_get_description(container));
-	}
-	// first container without netns 'c_root_netns' is responsible for global cannectivity
-	if (container == cmld_container_get_c_root_netns()) {
-		INFO("Container %s is sharing root network namespace, connect global connectivity observers!",
-		     container_get_description(container));
-
-		if (!container_register_observer(container, &cmld_connectivity_rootns_cb, NULL)) {
-			ERROR("Could not register connectivity observer callback for %s",
-			      container_get_description(container));
-		}
 	}
 
 	if (guestos_get_feature_install_guest(container_get_os(container))) {
