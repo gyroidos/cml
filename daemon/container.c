@@ -124,8 +124,6 @@ struct container {
 
 	container_connectivity_t connectivity;
 
-	bool screen_on;
-
 	char *description;
 
 	list_t *csock_list;  /* List of sockets bound inside the container */
@@ -244,8 +242,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		mem_printf("%s (%s)", container->name, uuid_string(container->uuid));
 
 	container->connectivity = CONTAINER_CONNECTIVITY_OFFLINE;
-
-	container->screen_on = false;
 
 	/* initialize pid to a value indicating it is invalid */
 	container->pid = -1;
@@ -2273,33 +2269,6 @@ container_get_connectivity(container_t *container)
 {
 	ASSERT(container);
 	return container->connectivity;
-}
-
-void
-container_set_screen_on(container_t *container, bool screen_on)
-{
-	ASSERT(container);
-
-	if (screen_on) {
-		DEBUG("Setting screen on for container %s", container_get_description(container));
-	} else {
-		DEBUG("Setting screen off for container %s", container_get_description(container));
-	}
-
-	if (container->screen_on == screen_on)
-		return;
-
-	container->screen_on = screen_on;
-
-	container_notify_observers(container);
-}
-
-bool
-container_is_screen_on(container_t *container)
-{
-	ASSERT(container);
-
-	return container->screen_on;
 }
 
 void
