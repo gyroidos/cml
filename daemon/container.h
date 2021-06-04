@@ -593,30 +593,11 @@ container_get_cpus_allowed(const container_t *container);
  * Submodule Interfaces    *
  **************************/
 
-/**
- * Inject the given input event into this container.
- * TODO: Still used? Remove otherwise!
- */
-//int
-//container_inject_input_event(container_t *container /*, input event */);
-
 void
 container_set_connectivity(container_t *container, container_connectivity_t connectivity);
 
 container_connectivity_t
 container_get_connectivity(container_t *container);
-
-void
-container_set_airplane_mode(container_t *container, bool airplane_mode);
-
-bool
-container_get_airplane_mode(container_t *container);
-
-void
-container_set_wifi_user_enabled(container_t *container, bool enabled);
-
-bool
-container_get_wifi_user_enabled(container_t *container);
 
 void
 container_set_imei(container_t *container, char *imei);
@@ -644,51 +625,6 @@ container_get_allow_autostart(container_t *container);
  */
 const guestos_t *
 container_get_guestos(const container_t *container);
-
-/*
- * Checks wether a feature is enabled or not for this container.
- *
- * fetaure can be a string out of the following set:
- *
- *    {
- *       "bluetooth",
- *       "camera",
- *       "gapps",
- *       "generic",
- *       "gps",
- *       "telephony",
- *       "fhgapps"
- *    }
- */
-bool
-container_is_feature_enabled(const container_t *container, const char *feature);
-
-void
-container_enable_bluetooth(container_t *conatiner);
-
-void
-container_enable_camera(container_t *conatiner);
-
-void
-container_enable_gps(container_t *conatiner);
-
-void
-container_enable_gapps(container_t *conatiner);
-
-void
-container_enable_fhgapps(container_t *conatiner);
-
-void
-container_enable_telephony(container_t *conatiner);
-
-void
-container_set_radio_ip(container_t *container, char *ip);
-
-void
-container_set_radio_dns(container_t *container, char *dns);
-
-void
-container_set_radio_gateway(container_t *container, char *gateway);
 
 /**
  * Returns the ip address currently set for container.
