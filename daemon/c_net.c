@@ -496,6 +496,195 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 	return ni;
 }
 
+static int
+c_net_bridge_ifi(const char *if_name, const pid_t pid)
+{
+	ASSERT(if_name);
+
+	char *br_cmld_name = mem_printf("br_%s", if_name);
+	char *veth_cmld_name = mem_printf("r_%s", if_name);
+	char *veth_cont_name = mem_printf("c_%s", if_name);
+
+	/* Create veth pair */
+	if (c_net_is_veth_used(veth_cmld_name)) {
+		ERROR("root ns veth %s already in use", veth_cmld_name);
+		goto err;
+	}
+	if (c_net_is_veth_used(veth_cont_name)) {
+		ERROR("container veth %s already in use", veth_cont_name);
+		goto err;
+	}
+
+	uint8_t veth_mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+	if (file_read("/dev/urandom", (char *)veth_mac, 6) < 0) {
+		WARN_ERRNO("Failed to read from /dev/urandom");
+	}
+	// sanitize mac veth otherwise kernel may reject the mac
+	veth_mac[0] &= 0xfe; /* clear multicast bit */
+	veth_mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
+
+	if (c_net_create_veth_pair(veth_cont_name, veth_cmld_name, veth_mac))
+		goto err;
+
+	/* Bring up ports */
+	if (network_set_flag(veth_cmld_name, IFF_UP)) {
+		WARN_ERRNO("Could not set bridge port %s up!", veth_cmld_name);
+		goto err_br;
+	}
+	if (network_set_flag(if_name, IFF_UP)) {
+		WARN_ERRNO("Could not set bridge port %s up!", if_name);
+		goto err_br;
+	}
+
+	/* Create and setup bridge */
+	if (0 != network_create_bridge(br_cmld_name)) {
+		ERROR("Failed to create bridge %s", br_cmld_name);
+		goto err_br;
+	}
+	if (0 != network_bridge_set_up(br_cmld_name)) {
+		ERROR("Failed to bring up bridge %s", br_cmld_name);
+		goto err_port;
+	}
+	if (0 != network_bridge_add_port(br_cmld_name, if_name)) {
+		ERROR("Failed to add port %s to bridge %s", if_name, br_cmld_name);
+		goto err_port;
+	}
+	if (0 != network_bridge_add_port(br_cmld_name, veth_cmld_name)) {
+		ERROR("Failed to add port %s to bridge %s", veth_cmld_name, br_cmld_name);
+		network_delete_bridge(br_cmld_name);
+		goto err_port;
+	}
+
+	// TODO apply MAC filtering rules
+
+	/* Move end point to Container */
+	if (c_net_move_ifi(veth_cont_name, pid)) {
+		ERROR("Failed to move %s to container with pid %d", veth_cont_name, pid);
+		goto err_port;
+	}
+
+	mem_free(br_cmld_name);
+	mem_free(veth_cmld_name);
+	mem_free(veth_cont_name);
+
+	return 0;
+
+err_port:
+	network_delete_bridge(br_cmld_name);
+err_br:
+	network_delete_link(veth_cmld_name);
+	network_delete_link(veth_cont_name);
+	network_set_flag(if_name, IFF_DOWN);
+err:
+	mem_free(br_cmld_name);
+	mem_free(veth_cmld_name);
+	mem_free(veth_cont_name);
+
+	return -1;
+}
+
+/*
+ * used internally by c_net_new, than we already have grabbed the interface.
+ * also this function is used externally for new devices during runtime from control
+ * or uevent handler. Then we have to grab the interface from cmld's list of available
+ * interfaces and add the pnet_cfg to the internal c_net list.
+ */
+int
+c_net_add_interface(c_net_t *net, container_pnet_cfg_t *pnet_cfg)
+{
+	ASSERT(net);
+	IF_NULL_RETVAL(pnet_cfg, -1);
+
+	bool c_net_internal = (NULL != list_find(net->pnet_mv_list, pnet_cfg));
+	pid_t pid = container_get_pid(net->container);
+
+	uint8_t if_mac[6];
+	char *if_name = (network_str_to_mac_addr(pnet_cfg->pnet_name, if_mac) != -1) ?
+				network_get_ifname_by_addr_new(if_mac) :
+				mem_strdup(pnet_cfg->pnet_name);
+
+	if (!c_net_internal) {
+		IF_FALSE_GOTO_ERROR(cmld_netif_phys_remove_by_name(if_name), err);
+
+		// adding to c0, thus mark this interface available as free for others
+		if (cmld_containers_get_c0() == net->container) {
+			// re-add iface to list of available network interfaces
+			cmld_netif_phys_add_by_name(if_name);
+		}
+	}
+
+	if (!pnet_cfg->mac_filter) { // directly map phys. IF into container
+		DEBUG("move phys %s to the ns of this pid: %d", pnet_cfg->pnet_name, pid);
+		IF_TRUE_GOTO_ERROR(-1 == c_net_move_ifi(if_name, pid), err);
+	} else { // pIF should be bridged and MAC filtering applied
+		DEBUG("bridge phys %s to the ns of this pid: %d", pnet_cfg->pnet_name, pid);
+		IF_TRUE_GOTO_ERROR(-1 == c_net_bridge_ifi(if_name, pid), err);
+	}
+
+	if (!c_net_internal) // called externally add to internal list
+		net->pnet_mv_list = list_append(net->pnet_mv_list, pnet_cfg);
+
+	INFO("Sucessfully move/bridged iface %s to %s", if_name,
+	     container_get_name(net->container));
+	return 0;
+err:
+	mem_free(if_name);
+	mem_free(pnet_cfg);
+	return -1;
+}
+
+int
+c_net_remove_interface(c_net_t *net, const char *if_name_mac)
+{
+	ASSERT(net);
+	IF_NULL_RETVAL(if_name_mac, -1);
+
+	container_pnet_cfg_t *cfg = NULL;
+	pid_t pid = container_get_pid(net->container);
+
+	uint8_t if_mac[6];
+	char *if_name = (network_str_to_mac_addr(if_name_mac, if_mac) != -1) ?
+				network_get_ifname_by_addr_new(if_mac) :
+				mem_strdup(if_name_mac);
+
+	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+		container_pnet_cfg_t *_cfg = l->data;
+		char *_if_name = (network_str_to_mac_addr(_cfg->pnet_name, if_mac) != -1) ?
+					 network_get_ifname_by_addr_new(if_mac) :
+					 mem_strdup(_cfg->pnet_name);
+		if (strcmp(if_name, _if_name)) {
+			cfg = _cfg;
+			mem_free(_if_name);
+			break;
+		}
+		mem_free(_if_name);
+	}
+
+	if (NULL == cfg) {
+		mem_free(if_name);
+		return 0;
+	}
+
+	if (!cfg->mac_filter) { // remove directly mapped ifi
+		DEBUG("remove phys %s to the ns of this pid: %d", cfg->pnet_name, pid);
+		IF_TRUE_GOTO_ERROR(-1 == c_net_remove_ifi(if_name, pid), err);
+	} else { // pIF remove bridged and MAC filtering rules
+		DEBUG("remove bridged phys %s to the ns of this pid: %d", cfg->pnet_name, pid);
+		// TODO remove bridge and mapped veth pair
+	}
+
+	net->pnet_mv_list = list_remove(net->pnet_mv_list, cfg);
+	container_pnet_cfg_free(cfg);
+
+	cmld_netif_phys_add_by_name(if_name);
+	mem_free(if_name);
+	return 0;
+
+err:
+	mem_free(if_name);
+	return -1;
+}
+
 /**
  * This function allocates a new c_net_t instance, associated to a specific container object.
  * @return the c_net_t network structure which holds networking information for a container.
@@ -838,8 +1027,8 @@ c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
  * It moves physical interfaces to its configured containers. Furher it creates a new child from
  * cmld and joins this to c0's netns for configuring the network endpoint of container virtual
  * veth's there.
- * TODO: do not move physical interfaces but rather a veth so that iptables can be applied in the
- * CML context
+ * If mac filter is applied do not move physical interfaces but rather a veth so that iptables
+ * can be applied in the CML context.
  */
 int
 c_net_start_post_clone(c_net_t *net)
@@ -859,25 +1048,20 @@ c_net_start_post_clone(c_net_t *net)
 	pid_t pid = container_get_pid(net->container);
 	pid_t pid_c0 = cmld_containers_get_c0() ? container_get_pid(cmld_containers_get_c0()) : 0;
 
-	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
-		container_pnet_cfg_t *cfg = l->data;
-		if (false == cfg->mac_filter) { // directly map phys. IF into container
-			DEBUG("move phys %s to the ns of this pid: %d", cfg->pnet_name, pid);
-			if (c_net_move_ifi(cfg->pnet_name, pid) < 0) {
-				return -1;
-			}
-		} else { // pIF should be bridged and MAC filtering applied
-			 // TODO
-		}
-	}
+	/* append list for c0 with available phys network interfaces */
 	if (pid == pid_c0 && container_is_privileged(net->container)) {
 		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
 			char *iff_name = l->data;
-
-			DEBUG("move phys %s to the ns of this pid: %d", iff_name, pid);
-			if (c_net_move_ifi(iff_name, pid) < 0)
-				return -1;
+			container_pnet_cfg_t *cfg = container_pnet_cfg_new(iff_name, false, NULL);
+			net->pnet_mv_list = list_append(net->pnet_mv_list, cfg);
 		}
+	}
+
+	/* move or bridge phys network intrefaces to container */
+	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+		if (c_net_add_interface(net, cfg) < 0)
+			return -1;
 	}
 
 	// nothing to be configured
