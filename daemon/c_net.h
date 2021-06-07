@@ -106,6 +106,12 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid);
 int
 c_net_remove_ifi(const char *ifi_name, const pid_t pid);
 
+int
+c_net_add_interface(c_net_t *net, container_pnet_cfg_t *cfg);
+
+int
+c_net_remove_interface(c_net_t *net, const char *if_name_mac);
+
 /**
  * This funtion provides a list of conatiner_net_cfg_t* objects
  * which contain the name of an interface inside the container and the
