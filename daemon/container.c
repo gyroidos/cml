@@ -2372,38 +2372,33 @@ container_add_net_iface(container_t *container, const char *iface, bool persiste
 	ASSERT(container);
 	IF_NULL_RETVAL(iface, -1);
 
-	int res = 0;
-	pid_t pid = container_get_pid(container);
+	container_pnet_cfg_t *pnet_cfg = container_pnet_cfg_new(iface, false, NULL);
 
-	container_state_t state_c0 = container_get_state(cmld_containers_get_c0());
+	int res = 0;
+	container_t *c0 = cmld_containers_get_c0();
+	container_state_t state_c0 = container_get_state(c0);
 	bool c0_is_up = (state_c0 == CONTAINER_STATE_RUNNING ||
 			 state_c0 == CONTAINER_STATE_BOOTING || state_c0 == CONTAINER_STATE_SETUP);
 
-	IF_FALSE_RETVAL(cmld_netif_phys_remove_by_name(iface), -1);
-
-	if (cmld_containers_get_c0() == container) {
+	if (c0 == container) {
 		if (c0_is_up)
-			res = c_net_move_ifi(iface, pid);
-		// re-add iface to list of available network interfaces
-		cmld_netif_phys_add_by_name(iface);
+			res = c_net_add_interface(container->net, pnet_cfg);
 		return res;
 	}
-
-	pid_t pid_c0 = container_get_pid(cmld_containers_get_c0());
 
 	/* if c0 is running the interface is occupied by c0, thus we have
 	 * to take it back to cml first.
 	 */
 	if (c0_is_up)
-		res = c_net_remove_ifi(iface, pid_c0);
+		res = c_net_remove_interface(c0->net, pnet_cfg->pnet_name);
 
-	res |= c_net_move_ifi(iface, pid);
+	res |= c_net_add_interface(container->net, pnet_cfg);
 	if (res || !persistent)
 		return res;
 
 	container_config_t *conf =
 		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
-	container_config_append_net_ifaces(conf, iface);
+	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
 	container_config_write(conf);
 	container_config_free(conf);
 	return 0;
@@ -2413,12 +2408,9 @@ int
 container_remove_net_iface(container_t *container, const char *iface, bool persistent)
 {
 	ASSERT(container);
-	pid_t pid = container_get_pid(container);
-	int res = c_net_remove_ifi(iface, pid);
+	int res = c_net_remove_interface(container->net, iface);
 	if (res || !persistent)
 		return res;
-
-	cmld_netif_phys_add_by_name(iface);
 
 	container_config_t *conf =
 		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
