@@ -145,6 +145,7 @@ typedef struct uevent_container_dev_mapping {
 
 typedef struct uevent_net_dev_mapping {
 	container_t *container;
+	container_pnet_cfg_t *pnet_cfg;
 	uint8_t mac[6];
 } uevent_container_netdev_mapping_t;
 
@@ -224,20 +225,26 @@ uevent_container_dev_mapping_free(uevent_container_dev_mapping_t *mapping)
 	mem_free(mapping);
 }
 
-static uevent_container_netdev_mapping_t *
-uevent_container_netdev_mapping_new(container_t *container, uint8_t mac[6])
-{
-	uevent_container_netdev_mapping_t *mapping = mem_new0(uevent_container_netdev_mapping_t, 1);
-	mapping->container = container;
-	memcpy(mapping->mac, mac, 6);
-
-	return mapping;
-}
-
 static void
 uevent_container_netdev_mapping_free(uevent_container_netdev_mapping_t *mapping)
 {
 	mem_free(mapping);
+}
+
+static uevent_container_netdev_mapping_t *
+uevent_container_netdev_mapping_new(container_t *container, container_pnet_cfg_t *pnet_cfg)
+{
+	uevent_container_netdev_mapping_t *mapping = mem_new0(uevent_container_netdev_mapping_t, 1);
+	mapping->container = container;
+	mapping->pnet_cfg = pnet_cfg;
+
+	// We only accept mac strings in pnet config for mappings
+	if (-1 == network_str_to_mac_addr(pnet_cfg->pnet_name, mapping->mac)) {
+		uevent_container_netdev_mapping_free(mapping);
+		return NULL;
+	}
+
+	return mapping;
 }
 
 static void
@@ -638,14 +645,17 @@ uevent_netdev_move(struct uevent *uevent)
 	}
 
 	container_t *container = NULL;
+	container_pnet_cfg_t *pnet_cfg = NULL;
 	for (list_t *l = uevent_container_netdev_mapping_list; l; l = l->next) {
 		uevent_container_netdev_mapping_t *mapping = l->data;
 		if (0 == memcmp(iface_mac, mapping->mac, 6)) {
 			container = mapping->container;
+			pnet_cfg = mapping->pnet_cfg;
 			break;
 		}
 	}
 
+	// no mapping found move to c0
 	if (!container)
 		container = cmld_containers_get_c0();
 
@@ -655,6 +665,9 @@ uevent_netdev_move(struct uevent *uevent)
 		WARN("Target container is not running, skip moving %s", uevent->interface);
 		goto error;
 	}
+
+	if (!pnet_cfg)
+		pnet_cfg = container_pnet_cfg_new(uevent->interface, false, NULL);
 
 	// rename network interface to avoid name clashes when moving to container
 	DEBUG("Renaming new interface we were notified about");
@@ -670,12 +683,19 @@ uevent_netdev_move(struct uevent *uevent)
 	}
 
 	macstr = network_mac_addr_to_str_new(iface_mac);
-	if (container_add_net_iface(container, uevent->interface, false)) {
+	if (container_add_net_iface(container, pnet_cfg, false)) {
 		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
 		goto error;
 	} else {
 		INFO("Moved phys network interface '%s' (mac: %s) to %s", uevent->interface, macstr,
 		     container_get_name(container));
+	}
+
+	// if mac_filter is applied we have a bridge interface and do not
+	// need to send the uevent about the physical if
+	if (pnet_cfg->mac_filter) {
+		mem_free(macstr);
+		return 0;
 	}
 
 	// if moving was successful also inject uevent
@@ -1071,10 +1091,13 @@ uevent_unregister_usbdevice(container_t *container, uevent_usbdev_t *usbdev)
 }
 
 int
-uevent_register_netdev(container_t *container, uint8_t mac[6])
+uevent_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg)
 {
 	uevent_container_netdev_mapping_t *mapping =
-		uevent_container_netdev_mapping_new(container, mac);
+		uevent_container_netdev_mapping_new(container, pnet_cfg);
+
+	IF_NULL_RETVAL(mapping, -1);
+
 	uevent_container_netdev_mapping_list =
 		list_append(uevent_container_netdev_mapping_list, mapping);
 	char *macstr = network_mac_addr_to_str_new(mapping->mac);
