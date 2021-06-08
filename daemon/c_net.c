@@ -745,7 +745,10 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pn
 			if (NULL == if_name) {
 				INFO("Interface for mac '%s' is not yet connected register at uevent subsys",
 				     if_name_macstr);
-				uevent_register_netdev(net->container, mac);
+				if (-1 == uevent_register_netdev(net->container, pnet_cfg)) {
+					WARN("Could not register Interface for moving");
+					container_pnet_cfg_free(pnet_cfg);
+				}
 				continue;
 			}
 		}

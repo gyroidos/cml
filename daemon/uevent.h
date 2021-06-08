@@ -100,16 +100,20 @@ int
 uevent_unregister_usbdevice(container_t *container, uevent_usbdev_t *usbdev);
 
 /**
-  * Registers a net device by its mac address for a container at the uevent subsystem
-  */
+ * Registers a net device by its pnet_cfg for a container at the uevent subsystem
+ * 
+ * @param container container which assigns the interface
+ * @param pnet_cfg containing the config including mac address of the interface which should be registered
+ * @return 0 if successful. -1 indicates an error.
+ */
 int
-uevent_register_netdev(container_t *container, uint8_t mac[6]);
+uevent_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg);
 
 /**
  * Unregisters a net device by its mac address for a container at the uevent subsystem
  *
- * @param container container which assigns the interface
- * @param mac buffer containing the mac address of the interface which should be registered
+ * @param container container which has the interface assigned
+ * @param mac buffer containing the mac address of the interface which should be removed
  * @return 0 if successful. -1 indicates an error.
  */
 int

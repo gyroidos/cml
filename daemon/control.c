@@ -1245,7 +1245,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		char *net_iface = msg->assign_iface_params->iface_name;
 		bool persistent = msg->assign_iface_params->persistent;
-		container_add_net_iface(container, net_iface, persistent);
+		container_add_net_iface(container, container_pnet_cfg_new(net_iface, false, NULL),
+					persistent);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE: {

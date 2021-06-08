@@ -2367,12 +2367,10 @@ container_get_creation_time(const container_t *container)
 }
 
 int
-container_add_net_iface(container_t *container, const char *iface, bool persistent)
+container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg, bool persistent)
 {
 	ASSERT(container);
-	IF_NULL_RETVAL(iface, -1);
-
-	container_pnet_cfg_t *pnet_cfg = container_pnet_cfg_new(iface, false, NULL);
+	IF_NULL_RETVAL(pnet_cfg, -1);
 
 	int res = 0;
 	container_t *c0 = cmld_containers_get_c0();
