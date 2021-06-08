@@ -92,23 +92,16 @@ char *
 c_net_get_subnet_new(c_net_t *net);
 
 /**
- * This function moves the network interface to the corresponding namespace,
- * specified by the pid (from root namespace to container namespace).
- * It transmits a netlink message using the netlink socket
+ * This function moves/bridges the network interface to the corresponding net
+ * namespace of a container.
  */
-int
-c_net_move_ifi(const char *ifi_name, const pid_t pid);
-
-/**
- * This function removes the network interface from the corresponding namespace,
- * specified by the pid
- */
-int
-c_net_remove_ifi(const char *ifi_name, const pid_t pid);
-
 int
 c_net_add_interface(c_net_t *net, container_pnet_cfg_t *cfg);
 
+/**
+ * This function removes the network interface from the corresponding net
+ * namespace of a container, according to the name or mac address.
+ */
 int
 c_net_remove_interface(c_net_t *net, const char *if_name_mac);
 

@@ -276,7 +276,7 @@ c_net_is_veth_used(const char *if_name)
  * This function moves the network interface to the corresponding namespace,
  * specified by the pid (from root namespace to container namespace).
  */
-int
+static int
 c_net_move_ifi(const char *ifi_name, const pid_t pid)
 {
 	if (network_interface_is_wifi(ifi_name))
@@ -289,7 +289,7 @@ c_net_move_ifi(const char *ifi_name, const pid_t pid)
  * This function removes the network interface from the corresponding namespace,
  * specified by the pid
  */
-int
+static int
 c_net_remove_ifi(const char *ifi_name, const pid_t pid)
 {
 	ASSERT(ifi_name);
