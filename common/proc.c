@@ -273,7 +273,6 @@ proc_stat_btime(unsigned long long *boottime_sec)
 	FILE *proc;
 	char line_buf[2048];
 
-	proc = fopen("/proc/stat", "r");
 	IF_NULL_RETVAL((proc = fopen("/proc/stat", "r")), -1);
 
 	while (fgets(line_buf, 2048, proc)) {

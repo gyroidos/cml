@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -26,24 +26,14 @@ syntax = "proto2";
 option java_package = "de.fraunhofer.aisec.trustme";
 
 message DeviceConfig {
-	reserved 6;
+	reserved 2 to 4, 6, 7, 13 to 15, 17; // legacy or only available in non-CC Mode
 	// unique uuid. may change due to user change.
 	// may be generated if no uuid is available.
 	required string uuid = 1;
 
-	// IP and port of backend (MDM)
-	optional string mdm_node = 2;
-	optional string mdm_service = 3;
-
-	// UUID of the container receiving phone calls (TODO currently unused)
-	optional string telephony_uuid = 4;
-
 	// base url for fetching updates (image files, etc.)
 	optional string update_base_url = 5;
 	// e.g. http://server:port/trustme/operatingsystems/<device>/<name>-<version>/<filename.img>
-
-	// configure os of the management container
-	optional string c0os = 7 [default = "trustx-coreos"];
 
 	// configure network
 	optional string host_addr = 8 [default = ""];
@@ -52,16 +42,6 @@ message DeviceConfig {
 	optional string host_gateway = 11 [default = ""];
 	optional string host_dns = 12 [default = ""];
 
-	// enable locally signed images
-	optional bool locally_signed_images = 13 [default = false];
-
-	// hostmode
-	required bool hostedmode = 14 [default = false];
-
-	optional bool signed_configs = 15 [default = false];
-
 	// max size of audit log per logging sink in MB
 	optional uint64 audit_size = 16 [default = 0];
-
-	required bool tpm_enabled = 17 [ default = true ];
 }

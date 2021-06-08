@@ -53,6 +53,9 @@ device_config_new(const char *path)
 		cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
 			file, &device_config__descriptor);
 		if (!cfg) {
+#ifdef CC_MODE
+			FATAL("Failed loading device config from file \"%s\" in CC Mode.", file);
+#endif
 			WARN("Failed loading device config from file \"%s\". Reverting to default values.",
 			     file);
 			cfg = mem_new(DeviceConfig, 1);
@@ -97,15 +100,57 @@ device_config_write(const device_config_t *config)
 }
 #endif
 
+// hardcode some restricted config otpions in CC Mode
+#ifdef CC_MODE
 const char *
-device_config_get_uuid(const device_config_t *config)
+device_config_get_mdm_node(UNUSED const device_config_t *config)
 {
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->uuid;
+	return NULL;
 }
 
+const char *
+device_config_get_mdm_service(UNUSED const device_config_t *config)
+{
+	return NULL;
+}
+
+const char *
+device_config_get_telephony_uuid(UNUSED const device_config_t *config)
+{
+	return NULL;
+}
+
+const char *
+device_config_get_c0os(UNUSED const device_config_t *config)
+{
+	return "trustx-coreos";
+}
+
+bool
+device_config_get_locally_signed_images(UNUSED const device_config_t *config)
+{
+	return false;
+}
+
+bool
+device_config_get_hostedmode(UNUSED const device_config_t *config)
+{
+	return false;
+}
+
+bool
+device_config_get_signed_configs(UNUSED const device_config_t *config)
+{
+	return true;
+}
+
+bool
+device_config_get_tpm_enabled(UNUSED const device_config_t *config)
+{
+	return true;
+}
+
+#else
 const char *
 device_config_get_mdm_node(const device_config_t *config)
 {
@@ -133,22 +178,31 @@ device_config_get_telephony_uuid(const device_config_t *config)
 	return config->cfg->telephony_uuid;
 }
 
-const char *
-device_config_get_update_base_url(const device_config_t *config)
+bool
+device_config_get_locally_signed_images(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 
-	return config->cfg->update_base_url;
+	return config->cfg->locally_signed_images;
 }
 
-int
-device_config_get_should_led_blink(const device_config_t *config)
+bool
+device_config_get_hostedmode(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 
-	return config->cfg->should_led_blink;
+	return config->cfg->hostedmode;
+}
+
+bool
+device_config_get_signed_configs(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->signed_configs;
 }
 
 const char *
@@ -158,6 +212,34 @@ device_config_get_c0os(const device_config_t *config)
 	ASSERT(config->cfg);
 
 	return config->cfg->c0os;
+}
+
+bool
+device_config_get_tpm_enabled(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->tpm_enabled;
+}
+#endif /* CC_MODE */
+
+const char *
+device_config_get_uuid(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->uuid;
+}
+
+const char *
+device_config_get_update_base_url(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->update_base_url;
 }
 
 const char *
@@ -206,46 +288,10 @@ device_config_get_host_if(const device_config_t *config)
 }
 
 bool
-device_config_get_locally_signed_images(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->locally_signed_images;
-}
-
-bool
-device_config_get_hostedmode(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->hostedmode;
-}
-
-bool
-device_config_get_signed_configs(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->signed_configs;
-}
-
-bool
 device_config_get_audit_size(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 
 	return config->cfg->audit_size;
-}
-
-bool
-device_config_get_tpm_enabled(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->tpm_enabled;
 }

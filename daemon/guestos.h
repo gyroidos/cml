@@ -177,9 +177,9 @@ bool
 guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb, void *data);
 
 /**
- * Flash the images for the given privileged GuestOS (i.e. a0os).
+ * Flash the images for the given GuestOS
  *
- * @param os the privileged GuestOS with images to be flashed
+ * @param os the GuestOS with images to be flashed
  * @return number of images that have been flashed, or -1 on error
  */
 int
@@ -266,19 +266,10 @@ uint32_t
 guestos_get_def_ram_limit(const guestos_t *os);
 
 bool
-guestos_get_feature_vpn(const guestos_t *os);
-
-bool
 guestos_get_feature_bg_booting(const guestos_t *os);
 
 bool
-guestos_get_feature_devtmpfs(const guestos_t *os);
-
-bool
 guestos_get_feature_install_guest(const guestos_t *os);
-
-bool
-guestos_is_privileged(const guestos_t *os);
 
 /**
  * Result of guestos config verification process.

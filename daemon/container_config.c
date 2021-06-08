@@ -106,45 +106,6 @@ container_config_proto_to_usb_type(ContainerUsbType type)
 
 /******************************************************************************/
 
-#if 0
-/**
- * Fill the storage_size array according to the operating system mount table.
- * TODO: This seems to be too complicated, find a better way to provide config options to c_vol.
- */
-static void
-container_config_storage_size(container_config_t *config)
-{
-	const guestos_t *os;
-	size_t i, n;
-
-	ASSERT(config);
-
-	if (config->storage_size)
-		mem_free(config->storage_size);
-
-	os = guestos_get_by_name(container_config_get_guestos(config));
-	n = guestos_get_mount_count(os);
-	config->storage_size = mem_new0(uint64_t, n);
-
-	// this list must match guestos_get_mounts
-	for (i = 0; i < n; i++) {
-		const guestos_mount_t *mnt;
-		const char *name;
-
-		mnt = guestos_get_mount(os, i);
-		name = guestos_mount_get_img(mnt);
-
-		if (!strcmp(name, "data"))
-			config->storage_size[i] = 1024;
-		else if (!strcmp(name, "cache"))
-			config->storage_size[i] = 512;
-		else
-			config->storage_size[i] = 0;
-	}
-}
-#endif
-/******************************************************************************/
-
 static bool
 container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, uint8_t *sig_buf,
 			size_t sig_len, uint8_t *cert_buf, size_t cert_len)
@@ -403,51 +364,6 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		}
 	}
 }
-#if 0
-uint64_t
-container_config_get_storage_size(const container_config_t *config)
-{
-	ASSERT(config && config->cfg);
-	return config->cfg->storage_size;
-}
-
-void
-container_config_set_storage_size(container_config_t *config, uint64_t storage_size)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	// TODO sanity checks, etc.
-	if (storage_size > C_CONFIG_MAX_STORAGE) {
-		WARN("Cannot set storage_size to %llu, maximum is %llu.",
-				storage_size, C_CONFIG_MAX_STORAGE);
-		return;
-	}
-	config->cfg->storage_size = storage_size;
-}
-#endif
-uint32_t
-container_config_get_color(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->color;
-}
-
-void
-container_config_set_color(container_config_t *config, uint32_t color)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	config->cfg->color = color;
-}
-
-container_type_t
-container_config_get_type(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return container_config_proto_to_type(config->cfg->type);
-}
 
 uint64_t
 container_config_get_guestos_version(const container_config_t *config)
@@ -464,22 +380,6 @@ container_config_set_guestos_version(container_config_t *config, uint64_t guesto
 	ASSERT(config->cfg);
 	config->cfg->has_guestos_version = true;
 	config->cfg->guestos_version = guestos_version;
-}
-
-bool
-container_config_get_allow_autostart(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->allow_autostart;
-}
-
-void
-container_config_set_allow_autostart(container_config_t *config, bool allow_autostart)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	config->cfg->allow_autostart = allow_autostart;
 }
 
 list_t *
@@ -532,45 +432,12 @@ container_config_get_dev_assign_list_new(const container_config_t *config)
 	return dev_assign_list;
 }
 
-#if 0
-bool
-container_config_get_autostart(container_config_t *config)
-{
-	ASSERT(config && config->cfg);
-	return !strcmp(config->cfg->name, "a0"); // FIXME
-}
-
-void
-container_config_set_autostart(container_config_t *config, UNUSED bool autostart)
-{
-	ASSERT(config && config->cfg);
-	ASSERT(0);
-	// TODO
-}
-#endif
-
 const char *
 container_config_get_dns_server(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->dns_server;
-}
-
-bool
-container_config_has_netns(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->netns;
-}
-
-bool
-container_config_has_userns(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->userns;
 }
 
 void
@@ -767,3 +634,76 @@ container_config_get_cpus_allowed(const container_config_t *config)
 	ASSERT(config->cfg);
 	return config->cfg->assign_cpus;
 }
+
+// hardcode some restricted config otpions in CC Mode
+#ifdef CC_MODE
+uint32_t
+container_config_get_color(UNUSED const container_config_t *config)
+{
+	return 0;
+}
+
+container_type_t
+container_config_get_type(UNUSED const container_config_t *config)
+{
+	return CONTAINER_TYPE_CONTAINER;
+}
+
+bool
+container_config_get_allow_autostart(UNUSED const container_config_t *config)
+{
+	return true;
+}
+
+bool
+container_config_has_netns(UNUSED const container_config_t *config)
+{
+	return true;
+}
+
+bool
+container_config_has_userns(UNUSED const container_config_t *config)
+{
+	return true;
+}
+#else
+uint32_t
+container_config_get_color(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->color;
+}
+
+container_type_t
+container_config_get_type(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return container_config_proto_to_type(config->cfg->type);
+}
+
+bool
+container_config_get_allow_autostart(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->allow_autostart;
+}
+
+bool
+container_config_has_netns(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->netns;
+}
+
+bool
+container_config_has_userns(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->userns;
+}
+#endif /* CC_MODE */

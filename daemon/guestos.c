@@ -161,19 +161,6 @@ guestos_free(guestos_t *os)
 
 /******************************************************************************/
 
-/**
- * Returns true iff the GuestOS instance is privileged (i.e. if it is a0).
- */
-bool
-guestos_is_privileged(const guestos_t *os)
-{
-	bool ispriv = false;
-	ispriv |= !strcmp(guestos_get_name(os), cmld_get_c0os());
-	ispriv |= guestos_get_feature_vpn(os);
-
-	return ispriv;
-}
-
 typedef void (*check_mount_image_complete_cb)(guestos_check_mount_image_result_t res, guestos_t *os,
 					      mount_entry_t *e, void *data);
 
@@ -921,12 +908,6 @@ guestos_images_flash(guestos_t *os)
 	INFO("Flashing images of GuestOS %s %" PRIu64, guestos_get_name(os),
 	     guestos_get_version(os));
 
-	// TODO allow flashing for non-privileged (not "a0") GuestOSes?
-	if (!guestos_is_privileged(os)) {
-		ERROR("Cannot flash images for non-privileged GuestOS %s.", guestos_get_name(os));
-		return -1;
-	}
-
 	if (!guestos_images_are_complete(os, true)) {
 		ERROR("Cannot flash images for GuestOS %s: some images are corrupted!",
 		      guestos_get_name(os));
@@ -1096,24 +1077,10 @@ guestos_get_def_ram_limit(const guestos_t *os)
 }
 
 bool
-guestos_get_feature_vpn(const guestos_t *os)
-{
-	ASSERT(os);
-	return guestos_config_get_feature_vpn(os->cfg);
-}
-
-bool
 guestos_get_feature_bg_booting(const guestos_t *os)
 {
 	ASSERT(os);
 	return guestos_config_get_feature_bg_booting(os->cfg);
-}
-
-bool
-guestos_get_feature_devtmpfs(const guestos_t *os)
-{
-	ASSERT(os);
-	return guestos_config_get_feature_devtmpfs(os->cfg);
 }
 
 bool

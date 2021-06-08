@@ -223,6 +223,8 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 		return NULL;
 	}
 
+	AuditRecord *record = NULL;
+
 	// read file up to delimiter
 	char *buf = mem_alloc0(size + 1);
 	size_t read = 0;
@@ -261,7 +263,6 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 	fclose(file);
 
 	// parse record from file
-	AuditRecord *record;
 	if (0 == size) {
 		INFO("Read audit record with default values");
 		record = (AuditRecord *)mem_new0(AuditRecord, 1);
@@ -642,7 +643,7 @@ out:
 }
 
 static void
-audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, void *data)
+audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 {
 	nl_sock_t *audit_sock = data;
 	ASSERT(audit_sock);
@@ -651,11 +652,15 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 	char *buf = mem_new0(char, MAX_AUDIT_MESSAGE_LENGTH);
 	char *log_record = NULL;
 
+	if (events & EVENT_IO_EXCEPT) {
+		goto out;
+	}
+
 	int msg_len;
 	if ((msg_len = nl_msg_receive_kernel(audit_sock, buf, MAX_AUDIT_MESSAGE_LENGTH, false)) <=
 	    0) {
 		WARN("could not read audit meassge.");
-		goto err;
+		goto out;
 	}
 
 	struct nlmsghdr *nlmsg = (struct nlmsghdr *)buf;
@@ -668,7 +673,7 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 		sscanf(log_record, "%*s pid=%d uid=%d %*8970c", &pid, &uid);
 		TRACE("scanned pid=%d, uid=%d", pid, uid);
 		char *record_text = strstr(log_record, "msg='");
-		IF_NULL_GOTO(record_text, err);
+		IF_NULL_GOTO(record_text, out);
 		record_text += 5;
 		// remove closing ' char from msg string
 		int record_text_len = strlen(record_text) - 1;
@@ -700,7 +705,7 @@ audit_kernel_handle_log(int fd, UNUSED unsigned events, UNUSED event_io_t *io, v
 		log_record = NLMSG_DATA(nlmsg);
 		TRACE("audit: type=%d %s", type, log_record);
 	}
-err:
+out:
 	mem_free(buf);
 }
 
@@ -726,7 +731,7 @@ audit_init(uint32_t size)
 	}
 
 	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
-						  &audit_kernel_handle_log, audit_sock);
+						  &audit_cb_kernel_handle_log, audit_sock);
 	event_add_io(audit_io_event);
 
 	/* Register message handler for audit logs */

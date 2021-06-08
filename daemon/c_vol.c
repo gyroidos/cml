@@ -1454,39 +1454,6 @@ c_vol_start_child_early(c_vol_t *vol)
 	mem_free(cservice_bin);
 	mem_free(cservice_dir);
 
-#if 0
-	/* Bind-mount shared mount for communication */
-	// TODO: properly secure this against intercontainer attacks
-	char *com_mnt = mem_printf("%s/%s/", root, ICC_SHARED_MOUNT);
-	char *com_mnt_data = NULL;
-	if(is_selinux_enabled())
-		com_mnt_data = mem_printf("defcontext=%s", ICC_SHARED_DATA_TYPE);
-	DEBUG("Mounting %s", com_mnt);
-	if (mkdir(com_mnt, 0755) < 0 && errno != EEXIST)
-		WARN_ERRNO("Could not mkdir %s", com_mnt);
-	if (is_selinux_enabled()) {
-		if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
-			ERROR_ERRNO("Could not set selabel for dir %s to \"%s\"", com_mnt, ICC_SHARED_DATA_TYPE);
-	}
-	if (mount(DEFAULT_BASE_PATH "/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
-		WARN_ERRNO("Could not mount %s", com_mnt);
-	mem_free(com_mnt);
-
-	if (guestos_is_privileged(container_get_guestos(vol->container))) {
-		com_mnt = mem_printf("%s/%s/", root, TPM2D_SHARED_MOUNT);
-		DEBUG("Mounting %s", com_mnt);
-		if (mkdir(com_mnt, 0755) < 0 && errno != EEXIST)
-			WARN_ERRNO("Could not mkdir %s", com_mnt);
-		if (is_selinux_enabled()) {
-			if (-1 == setfilecon(com_mnt, ICC_SHARED_DATA_TYPE))
-				ERROR_ERRNO("Could not set selabel for dir %s to \"%s\"", com_mnt, ICC_SHARED_DATA_TYPE);
-		}
-		if (mount(DEFAULT_BASE_PATH"/tpm2d/communication", com_mnt, "bind", MS_BIND | MS_NOSUID, com_mnt_data) < 0)
-			WARN_ERRNO("Could not mount %s", com_mnt);
-		mem_free(com_mnt);
-	}
-	mem_free(com_mnt_data);
-#endif
 	return 0;
 error:
 	ERROR("Failed to execute post clone hook for c_vol");
