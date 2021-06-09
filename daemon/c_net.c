@@ -583,6 +583,49 @@ err:
 	return -1;
 }
 
+static int
+c_net_unbridge_ifi(const char *if_name, const pid_t pid)
+{
+	ASSERT(if_name);
+
+	char *br_cmld_name = mem_printf("br_%s", if_name);
+	char *veth_cmld_name = mem_printf("r_%s", if_name);
+	char *veth_cont_name = mem_printf("c_%s", if_name);
+
+	/* Bring down ports */
+	if (pid > 0 && c_net_remove_ifi(veth_cont_name, pid) < 0) {
+		WARN("container's network interface could not be grabbed");
+	} else if (c_net_is_veth_used(veth_cont_name)) {
+		if (network_set_flag(veth_cmld_name, IFF_DOWN))
+			WARN("network interface could not be gracefully shut down");
+
+		if (network_delete_link(veth_cmld_name))
+			WARN("network interface %s could not be destroyed", veth_cmld_name);
+	}
+	if (c_net_is_veth_used(veth_cmld_name)) {
+		if (network_set_flag(veth_cmld_name, IFF_DOWN))
+			WARN("network interface could not be gracefully shut down");
+
+		if (network_delete_link(veth_cmld_name))
+			WARN("network interface %s could not be destroyed", veth_cmld_name);
+	}
+
+	/* delete bridge */
+	if (0 != network_delete_bridge(br_cmld_name))
+		WARN("Failed to delete bridge %s", br_cmld_name);
+
+	if (0 != network_set_flag(if_name, IFF_DOWN))
+		WARN("Failed to delete bridge %s", br_cmld_name);
+
+	// TODO clean out MAC filtering rules
+
+	mem_free(br_cmld_name);
+	mem_free(veth_cmld_name);
+	mem_free(veth_cont_name);
+
+	return 0;
+}
+
 /*
  * used internally by c_net_new, than we already have grabbed the interface.
  * also this function is used externally for new devices during runtime from control
@@ -670,7 +713,7 @@ c_net_remove_interface(c_net_t *net, const char *if_name_mac)
 		IF_TRUE_GOTO_ERROR(-1 == c_net_remove_ifi(if_name, pid), err);
 	} else { // pIF remove bridged and MAC filtering rules
 		DEBUG("remove bridged phys %s to the ns of this pid: %d", cfg->pnet_name, pid);
-		// TODO remove bridge and mapped veth pair
+		IF_TRUE_GOTO_ERROR(-1 == c_net_unbridge_ifi(if_name, pid), err);
 	}
 
 	net->pnet_mv_list = list_remove(net->pnet_mv_list, cfg);
@@ -1379,6 +1422,24 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 	if (net->fd_netns > 0) {
 		close(net->fd_netns);
 		net->fd_netns = -1;
+	}
+
+	/* remove phys network intrefaces from container */
+	uint8_t if_mac[6];
+	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+		if (!cfg->mac_filter) { // skip directly moved if will fallback to rootns
+			continue;
+		} else { // pIF remove bridged and MAC filtering rules
+			char *if_name = (network_str_to_mac_addr(cfg->pnet_name, if_mac) != -1) ?
+						network_get_ifname_by_addr_new(if_mac) :
+						mem_strdup(cfg->pnet_name);
+			DEBUG("remove bridged phys %s of %s", cfg->pnet_name,
+			      container_get_name(net->container));
+			if (-1 == c_net_unbridge_ifi(if_name, -1))
+				WARN("Failed to remove phys if %s", if_name);
+			mem_free(if_name);
+		}
 	}
 
 	if (c_net_cleanup_c0(net) == -1)
