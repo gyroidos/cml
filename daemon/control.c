@@ -1238,26 +1238,28 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE: {
 		IF_NULL_RETURN(container);
-		if (!msg->assign_iface_params || !msg->assign_iface_params->has_persistent ||
-		    !msg->assign_iface_params->iface_name) {
+		if (!msg->assign_iface_params || !msg->assign_iface_params->iface_name) {
 			ERROR("Missing net iface information");
 			break;
 		}
 		char *net_iface = msg->assign_iface_params->iface_name;
-		bool persistent = msg->assign_iface_params->persistent;
+		bool persistent = (!msg->assign_iface_params->has_persistent) ?
+					  false :
+					  msg->assign_iface_params->persistent;
 		container_add_net_iface(container, container_pnet_cfg_new(net_iface, false, NULL),
 					persistent);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE: {
 		IF_NULL_RETURN(container);
-		if (!msg->assign_iface_params || !msg->assign_iface_params->has_persistent ||
-		    !msg->assign_iface_params->iface_name) {
+		if (!msg->assign_iface_params || !msg->assign_iface_params->iface_name) {
 			ERROR("Missing net iface information");
 			break;
 		}
 		char *net_iface = msg->assign_iface_params->iface_name;
-		bool persistent = msg->assign_iface_params->persistent;
+		bool persistent = (!msg->assign_iface_params->has_persistent) ?
+					  false :
+					  msg->assign_iface_params->persistent;
 		container_remove_net_iface(container, net_iface, persistent);
 	} break;
 
