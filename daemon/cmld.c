@@ -673,19 +673,8 @@ cmld_container_change_pin(control_t *control, container_t *container, const char
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
-	int rc = smartcard_container_change_pin(cmld_smartcard, control, container, passwd,
-						newpasswd);
-
-	if (!rc)
-		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-				"container-change-pin", uuid_string(container_get_uuid(container)),
-				0);
-	else
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"container-change-pin", uuid_string(container_get_uuid(container)),
-				0);
-
-	return rc;
+	return smartcard_container_change_pin(cmld_smartcard, control, container, passwd,
+					      newpasswd);
 }
 
 int
