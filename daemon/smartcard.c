@@ -736,18 +736,6 @@ smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 			return;
 		}
 		switch (msg->code) {
-		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
-			WARN("Unlocking the token failed (locked till reboot).");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
-					     resp_fd);
-		} break;
-		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL: {
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL,
-					     resp_fd);
-		} break;
-		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED: {
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
-		} break;
 		case TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR: {
 			control_send_message(CONTROL_RESPONSE_DEVICE_PROVISIONING_ERROR, resp_fd);
 		} break;
@@ -776,6 +764,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 	smartcard_startdata_t *startdata = data;
 	int resp_fd = control_get_client_sock(startdata->control);
 	int rc = -1;
+	bool command_state = false;
 
 	if (events & EVENT_IO_READ) {
 		TokenToDaemon *msg =
@@ -784,16 +773,18 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 			ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard change_pin callback.");
 			event_remove_io(io);
 			event_io_free(io);
+			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
+					CONTAINER_MGMT, "container-change-pin",
+					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 			return;
 		}
 		switch (msg->code) {
 		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL: {
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL,
-					     resp_fd);
+			command_state = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED: {
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+			command_state = false;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL: {
 			char *path = container_token_paired_file_new(startdata->container);
@@ -804,24 +795,31 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 				      path, uuid_string(container_get_uuid(startdata->container)));
 				container_set_token_is_linked_to_device(startdata->container,
 									false);
-				control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
-						     resp_fd);
+				command_state = false;
 			} else {
 				container_set_token_is_linked_to_device(startdata->container, true);
-				control_send_message(
-					CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL, resp_fd);
+				command_state = true;
 			}
 			mem_free(path);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_FAILED: {
 			container_set_token_is_linked_to_device(startdata->container, false);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+			command_state = false;
 		} break;
 		default:
 			ERROR("TokenToDaemon command %d not expected as answer to change_pin",
 			      msg->code);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+			command_state = false;
 		}
+
+		audit_log_event(container_get_uuid(startdata->container), command_state ? SSA : FSA,
+				CMLD, CONTAINER_MGMT, "container-change-pin",
+				uuid_string(container_get_uuid(startdata->container)), 0);
+		control_send_message(command_state ?
+					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL :
+					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
+				     resp_fd);
+
 		protobuf_free_message((ProtobufCMessage *)msg);
 		event_remove_io(io);
 		event_io_free(io);
@@ -900,34 +898,6 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	mem_free(out.token_newpin);
 	mem_free(out.pairing_secret.data);
 	mem_free(out.token_uuid);
-
-	return (ret > 0) ? 0 : -1;
-}
-
-int
-smartcard_change_pin(smartcard_t *smartcard, control_t *control, const char *passwd,
-		     const char *newpasswd)
-{
-	ASSERT(smartcard);
-	ASSERT(control);
-	ASSERT(passwd);
-	ASSERT(newpasswd);
-
-	int ret = -1;
-	DEBUG("SCD: Received new password from UI");
-
-	event_io_t *event =
-		event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, control);
-	event_add_io(event);
-	DEBUG("SCD: Registered generic container callback for scd");
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CHANGE_PIN;
-	out.token_pin = mem_strdup(passwd);
-	out.token_newpin = mem_strdup(newpasswd);
-	ret = protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-	mem_free(out.token_pin);
-	mem_free(out.token_newpin);
 
 	return (ret > 0) ? 0 : -1;
 }
