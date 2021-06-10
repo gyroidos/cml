@@ -254,4 +254,18 @@ network_bridge_remove_port(const char *br_name);
 int
 network_delete_bridge(const char *name);
 
+/**
+ * Adds/Removes a rule to firewall to drop all input traffic on the
+ * physical (bridge-port) interface netif.
+ */
+int
+network_iptables_phys_deny(const char *chain, const char *netif, bool add);
+
+/**
+ * Adds/Removes a rule to firewall to allow input traffic of a client
+ * by its mac address on the physical (bridge-port) interface netif.
+ */
+int
+network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], bool add);
+
 #endif /* NETWORK_H */

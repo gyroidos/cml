@@ -780,3 +780,37 @@ network_delete_bridge(const char *name)
 	int ret = proc_fork_and_execvp(argv);
 	return ret;
 }
+
+int
+network_iptables_phys_deny(const char *chain, const char *netif, bool add)
+{
+	ASSERT(netif);
+
+	const char *const argv[] = { IPTABLES_PATH, add ? "-I" : "-D",
+				     chain,	    "-m",
+				     "physdev",	    "--physdev-in",
+				     netif,	    "-j",
+				     "DROP",	    NULL };
+
+	return proc_fork_and_execvp(argv);
+}
+
+int
+network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], bool add)
+{
+	ASSERT(netif);
+
+	char *mac_str = network_mac_addr_to_str_new(mac);
+	const char *const argv[] = { IPTABLES_PATH, add ? "-I" : "-D",
+				     chain,	    "-m",
+				     "physdev",	    "--physdev-in",
+				     netif,	    "-m",
+				     "mac",	    "--mac-source",
+				     mac_str,	    "-j",
+				     "ACCEPT",	    NULL };
+
+	int ret = proc_fork_and_execvp(argv);
+
+	mem_free(mac_str);
+	return ret;
+}
