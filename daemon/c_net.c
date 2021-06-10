@@ -496,8 +496,35 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 	return ni;
 }
 
+/*
+ * This funtion enables or disables the mac_filter according to param apply
+ */
 static int
-c_net_bridge_ifi(const char *if_name, const pid_t pid)
+c_net_mac_filter(const char *if_name, list_t *mac_whitelist, bool apply)
+{
+	int ret;
+	ret = network_iptables_phys_deny("INPUT", if_name, apply);
+	ret |= network_iptables_phys_deny("FORWARD", if_name, apply);
+	if (ret) {
+		ERROR("Failed to %s deny all on %s", apply ? "apply" : "reset", if_name);
+		return -1;
+	}
+	for (list_t *l = mac_whitelist; l; l = l->next) {
+		uint8_t *mac = l->data;
+		ret = network_phys_allow_mac("INPUT", if_name, mac, apply);
+		ret |= network_phys_allow_mac("FORWARD", if_name, mac, apply);
+		if (ret) {
+			char *mac_str = network_mac_addr_to_str_new(mac);
+			ERROR("Failed to allow %s on %s", mac_str, if_name);
+			mem_free(mac_str);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static int
+c_net_bridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 {
 	ASSERT(if_name);
 
@@ -555,7 +582,11 @@ c_net_bridge_ifi(const char *if_name, const pid_t pid)
 		goto err_port;
 	}
 
-	// TODO apply MAC filtering rules
+	/* apply MAC filtering rules */
+	if (c_net_mac_filter(if_name, mac_whitelist, true)) {
+		ERROR("Failed apply mac_filter to %s", if_name);
+		goto err_port;
+	}
 
 	/* Move end point to Container */
 	if (c_net_move_ifi(veth_cont_name, pid)) {
@@ -584,7 +615,7 @@ err:
 }
 
 static int
-c_net_unbridge_ifi(const char *if_name, const pid_t pid)
+c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 {
 	ASSERT(if_name);
 
@@ -617,7 +648,9 @@ c_net_unbridge_ifi(const char *if_name, const pid_t pid)
 	if (0 != network_set_flag(if_name, IFF_DOWN))
 		WARN("Failed to delete bridge %s", br_cmld_name);
 
-	// TODO clean out MAC filtering rules
+	/* clean out MAC filtering rules */
+	if (-1 == c_net_mac_filter(if_name, mac_whitelist, false))
+		WARN("Failed apply mac_filter to %s", if_name);
 
 	mem_free(br_cmld_name);
 	mem_free(veth_cmld_name);
@@ -661,7 +694,8 @@ c_net_add_interface(c_net_t *net, container_pnet_cfg_t *pnet_cfg)
 		IF_TRUE_GOTO_ERROR(-1 == c_net_move_ifi(if_name, pid), err);
 	} else { // pIF should be bridged and MAC filtering applied
 		DEBUG("bridge phys %s to the ns of this pid: %d", pnet_cfg->pnet_name, pid);
-		IF_TRUE_GOTO_ERROR(-1 == c_net_bridge_ifi(if_name, pid), err);
+		IF_TRUE_GOTO_ERROR(-1 == c_net_bridge_ifi(if_name, pnet_cfg->mac_whitelist, pid),
+				   err);
 	}
 
 	if (!c_net_internal) // called externally add to internal list
@@ -713,7 +747,7 @@ c_net_remove_interface(c_net_t *net, const char *if_name_mac)
 		IF_TRUE_GOTO_ERROR(-1 == c_net_remove_ifi(if_name, pid), err);
 	} else { // pIF remove bridged and MAC filtering rules
 		DEBUG("remove bridged phys %s to the ns of this pid: %d", cfg->pnet_name, pid);
-		IF_TRUE_GOTO_ERROR(-1 == c_net_unbridge_ifi(if_name, pid), err);
+		IF_TRUE_GOTO_ERROR(-1 == c_net_unbridge_ifi(if_name, cfg->mac_whitelist, pid), err);
 	}
 
 	net->pnet_mv_list = list_remove(net->pnet_mv_list, cfg);
@@ -1436,7 +1470,7 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 						mem_strdup(cfg->pnet_name);
 			DEBUG("remove bridged phys %s of %s", cfg->pnet_name,
 			      container_get_name(net->container));
-			if (-1 == c_net_unbridge_ifi(if_name, -1))
+			if (-1 == c_net_unbridge_ifi(if_name, cfg->mac_whitelist, -1))
 				WARN("Failed to remove phys if %s", if_name);
 			mem_free(if_name);
 		}
