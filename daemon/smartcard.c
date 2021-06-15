@@ -777,6 +777,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 					CONTAINER_MGMT, "container-change-pin",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+			mem_free(startdata);
 			return;
 		}
 		switch (msg->code) {
