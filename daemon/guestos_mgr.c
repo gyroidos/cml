@@ -50,10 +50,9 @@
 // Log title and messages regarding trustme system updates.
 #define GUESTOS_MGR_UPDATE_TITLE "Trustme Update"
 #define GUESTOS_MGR_UPDATE_DOWNLOAD "Downloading..."
-#define GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI "Waiting for WiFi connection..."
 #define GUESTOS_MGR_UPDATE_SUCCESS "Reboot to install/activate"
 #define GUESTOS_MGR_UPDATE_FLASH_FAILED "Flashing to device partitions failed"
-#define GUESTOS_MGR_UPDATE_FAILED "Download failed"
+#define GUESTOS_MGR_UPDATE_FAILED "Download failed, purging os"
 
 #define GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME "kernel"
 
@@ -248,11 +247,20 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 		goto out;
 	}
 
+	bool cml_update = !strcmp(guestos_get_name(os), GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME);
+
 	if (complete && count > 0) {
 		if (guestos_images_flash(os) < 0) {
 			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash-failed",
 					guestos_get_name(os), 0);
-			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+			if (cml_update) { // remove failed update images in case of cml updates
+				ERROR("%s %s", GUESTOS_MGR_UPDATE_TITLE,
+				      GUESTOS_MGR_UPDATE_FLASH_FAILED);
+				guestos_mgr_delete(os);
+			} else {
+				WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE,
+				     GUESTOS_MGR_UPDATE_FLASH_FAILED);
+			}
 		} else {
 			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash-success",
 					guestos_get_name(os), 0);
@@ -262,7 +270,8 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 	} else {
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-failed",
 				guestos_get_name(os), 0);
-		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FAILED);
+		ERROR("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FAILED);
+		guestos_mgr_delete(os);
 	}
 out:
 	if (control_send_message(resp, *resp_fd) < 0)
@@ -279,6 +288,8 @@ guestos_mgr_download_latest(const char *name, int resp_fd)
 {
 	control_message_t resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED;
 	IF_NULL_GOTO(name, out);
+
+	bool cml_update = !strcmp(name, GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME);
 
 	guestos_t *os = guestos_mgr_get_latest_by_name(name, false);
 	IF_NULL_GOTO_WARN(os, out);
@@ -297,7 +308,12 @@ guestos_mgr_download_latest(const char *name, int resp_fd)
 	}
 	if (guestos_images_flash(os) < 0) {
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "flash-os", name, 0);
-		WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+		if (cml_update) { // remove failed update images in case of cml updates
+			ERROR("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+			guestos_mgr_delete(os);
+		} else {
+			WARN("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FLASH_FAILED);
+		}
 	} else {
 		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "flash-os", name, 0);
 		INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
@@ -367,13 +383,13 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	switch (verify_result) {
 	case VERIFY_GOOD:
 		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "verify-good", os_name, 0);
-		INFO("Signature of GuestOS OK (GOOD)");
+		INFO("Signature of GuestOS %s OK (GOOD)", os_name);
 		break;
 	case VERIFY_LOCALLY_SIGNED:
 		if (guestos_mgr_allow_locally_signed) {
 			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "verify-locally-signed",
 					os_name, 0);
-			INFO("Signature of GuestOS OK (locally signed)");
+			INFO("Signature of GuestOS %s OK (locally signed)", os_name);
 			break;
 		}
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-locally-signed", os_name, 0);
@@ -386,12 +402,11 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 	}
 
 	uint64_t os_ver = guestos_get_version(os);
-	bool cml_update = !strcmp(os_name, GUESTOS_MGR_CML_UPDATE_FAKE_OS_NAME);
 	const guestos_t *old_os = guestos_mgr_get_latest_by_name(os_name, false);
 	if (old_os) {
 		// existing os of same name => verify and update
 		uint64_t old_ver = guestos_get_version(old_os);
-		if (os_ver <= old_ver) {
+		if (os_ver < old_ver) {
 			char *installed_str = mem_printf(PRIu64, old_ver);
 			char *update_str = mem_printf(PRIu64, os_ver);
 
@@ -406,6 +421,10 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 			     " to older/same version %" PRIu64 ".",
 			     os_name, old_ver, os_ver);
 			goto cleanup_os;
+		} else if (os_ver == old_ver) {
+			DEBUG("Retrigger download of GuestOS images for %s of v%" PRIu64 ".",
+			      os_name, os_ver);
+			goto trigger_download;
 		}
 		DEBUG("Updating GuestOS config for %s from v%" PRIu64 " to v%" PRIu64 ".", os_name,
 		      old_ver, os_ver);
@@ -451,18 +470,12 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 
 	audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "push-os", guestos_basepath, 0);
 
-	//INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE,
-	//     cmld_is_wifi_active() ? GUESTOS_MGR_UPDATE_DOWNLOAD :
-	//			     GUESTOS_MGR_UPDATE_DOWNLOAD_NO_WIFI);
-
-	// 4. trigger image download if os is used by a container or a fresh install
-	if (guestos_mgr_is_guestos_used_by_containers(os_name) || !old_os || cml_update) {
-		INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_DOWNLOAD);
-		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED, *resp_fd) <
-		    0)
-			WARN("Could not send response to fd=%d", *resp_fd);
-		guestos_mgr_download_latest(os_name, *resp_fd);
-	}
+trigger_download:
+	// 4. trigger image download
+	INFO("%s: %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_DOWNLOAD);
+	if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_STARTED, *resp_fd) < 0)
+		WARN("Could not send response to fd=%d", *resp_fd);
+	guestos_mgr_download_latest(os_name, *resp_fd);
 
 	mem_free(resp_fd);
 	return;
