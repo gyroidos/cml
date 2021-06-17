@@ -1294,8 +1294,6 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 				}
 				break;
 			}
-			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
-
 			ERROR("Missing hash_value in CRYPTO_HASH_OK response!"); // fallthrough
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR:
 			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
@@ -1335,20 +1333,6 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 	}
 
 cleanup:
-	// trigger callbacks nonetheless so that they can clean up their allocated buffers as well
-	if (task->hash_complete) {
-		task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
-	}
-	if (task->verify_buf_complete) {
-		task->verify_buf_complete(VERIFY_ERROR, task->verify_data_buf,
-					  task->verify_data_buf_len, task->verify_sig_buf,
-					  task->verify_sig_buf_len, task->verify_cert_buf,
-					  task->verify_cert_buf_len, task->hash_algo, task->data);
-	}
-	if (task->verify_complete) {
-		task->verify_complete(VERIFY_ERROR, task->verify_data_file, task->verify_sig_file,
-				      task->verify_cert_file, task->hash_algo, task->data);
-	}
 	event_remove_io(io);
 	event_io_free(io);
 	crypto_callback_task_free(task);
@@ -1470,9 +1454,6 @@ smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsign
 
 	if (smartcard_send_crypto(&out, task) < 0) {
 		crypto_callback_task_free(task);
-		// call the cb fct with error code so it can free its remaining buffers
-		task->verify_buf_complete(VERIFY_ERROR, data_buf, data_buf_len, sig_buf,
-					  sig_buf_len, cert_buf, cert_buf_len, hashalgo, data);
 		return -1;
 	}
 	return 0;
