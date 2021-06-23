@@ -225,7 +225,7 @@ cmld_uses_signed_configs(void);
 bool
 cmld_is_device_provisioned(void);
 
-void
+int
 cmld_set_device_provisioned(void);
 
 /**

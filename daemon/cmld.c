@@ -346,23 +346,27 @@ cmld_is_device_provisioned(void)
 	return cmld_device_provisioned;
 }
 
-void
+int
 cmld_set_device_provisioned(void)
 {
-	cmld_device_provisioned = true;
-
 	char *provisioned_file = mem_printf("%s/%s", DEFAULT_BASE_PATH, PROVISIONED_FILE_NAME);
 	if (!file_exists(provisioned_file)) {
 		if (file_touch(provisioned_file) != 0) {
-			FATAL("Failed to create provisioned file");
-			// TODO does this fulfill the required access rights??
-			uid_t uid = getuid();
-			if (chown(provisioned_file, uid, uid)) {
-				FATAL("Failed to chown provision-status-file to %d", uid);
-			}
+			ERROR("Failed to create provisioned file");
+			return -1;
+		}
+		// TODO does this fulfill the required access rights?
+		uid_t uid = getuid();
+		if (chown(provisioned_file, uid, uid)) {
+			ERROR("Failed to chown provision-status-file to %d", uid);
+			return -1;
 		}
 	}
 	mem_free(provisioned_file);
+
+	cmld_device_provisioned = true;
+
+	return 0;
 }
 
 /**
