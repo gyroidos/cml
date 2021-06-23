@@ -1045,8 +1045,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED: {
-		cmld_set_device_provisioned();
-		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+		res = cmld_set_device_provisioned();
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
