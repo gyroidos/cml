@@ -63,8 +63,9 @@ guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_resul
  * its images. this does not free the operating system object, this must be done
  * separately by the module that called operatingsystem_new in the first place.
  * @param os The operating system to be deleted.
+ * @return 0 if the guest OS was successully deleted, -1 on error
  */
-void
+int
 guestos_mgr_delete(guestos_t *os);
 
 /******************************************************************************/
