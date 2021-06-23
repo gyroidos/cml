@@ -274,6 +274,8 @@ message DaemonToController {
 		GUESTOS_MGR_REGISTER_CA_ERROR = 27;
 		GUESTOS_MGR_REGISTER_CA_OK = 28;
 		CMD_UNSUPPORTED = 7;
+		CMD_OK = 29;
+		CMD_FAILED = 30;
 	}
 
 	required Code code = 1;
