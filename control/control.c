@@ -268,7 +268,6 @@ main(int argc, char *argv[])
 {
 	logf_register(&logf_test_write, stderr);
 
-	bool has_response = false;
 	const char *socket_file = CONTROL_SOCKET;
 	uuid_t *uuid = NULL;
 	int sock = 0;
@@ -304,12 +303,10 @@ main(int argc, char *argv[])
 	 */
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
-		has_response = true;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "list_guestos")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS;
-		has_response = true;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "reload")) {
@@ -330,7 +327,6 @@ main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_guestos_config")) {
-		has_response = true;
 		if (optind + 2 >= argc)
 			print_usage(argv[0]);
 
@@ -412,12 +408,10 @@ main(int argc, char *argv[])
 		if (optind != argc - 1)
 			print_usage(argv[0]);
 
-		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_cert")) {
-		has_response = true;
 		// need exactly one more argument (certificate file)
 		if (optind != argc - 1)
 			print_usage(argv[0]);
@@ -439,7 +433,6 @@ main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "create")) {
-		has_response = true;
 		// need at least one more argument (container config)
 		if (optind >= argc)
 			print_usage(argv[0]);
@@ -504,7 +497,6 @@ main(int argc, char *argv[])
 	if (!strcasecmp(command, "remove")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER;
 	} else if (!strcasecmp(command, "start")) {
-		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START;
 		msg.container_start_params = NULL;
 		bool ask_for_password = true;
@@ -542,7 +534,6 @@ main(int argc, char *argv[])
 		msg.container_start_params = &container_start_params;
 		optind += argc - start_argc; // adjust optind to be used with argv
 	} else if (!strcasecmp(command, "stop")) {
-		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP;
 		msg.container_start_params = NULL;
 		bool ask_for_password = true;
@@ -589,12 +580,9 @@ main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DENYAUDIO;
 	} else if (!strcasecmp(command, "state")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
-		has_response = true;
 	} else if (!strcasecmp(command, "config")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
-		has_response = true;
 	} else if (!strcasecmp(command, "update_config")) {
-		has_response = true;
 		optind++;
 		// need at least one more argument (container config)
 		if (optind >= argc)
@@ -644,7 +632,6 @@ main(int argc, char *argv[])
 		}
 	} else if (!strcasecmp(command, "ifaces")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES;
-		has_response = true;
 	} else if (!strcasecmp(command, "assign_iface") || !strcasecmp(command, "unassign_iface")) {
 		AssignInterfaceParams assign_iface_params = ASSIGN_INTERFACE_PARAMS__INIT;
 		msg.assign_iface_params = &assign_iface_params;
@@ -682,7 +669,6 @@ main(int argc, char *argv[])
 		if (optind > argc - 1)
 			print_usage(argv[0]);
 
-		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD;
 
 		int argcount = 0;
@@ -723,7 +709,6 @@ main(int argc, char *argv[])
 
 	} else if (!strcasecmp(command, "change_pin")) {
 		char *newpin_verify = NULL;
-		has_response = true;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN;
 		msg.device_pin = get_password_new("Current Password: ");
 		msg.device_newpin = get_password_new("New Password: ");
@@ -836,46 +821,43 @@ send_message:
 	}
 
 handle_resp:
-	// recv response if applicable
-	if (has_response) {
-		TRACE("[CLIENT] Awaiting response");
+	TRACE("[CLIENT] Awaiting response");
 
-		DaemonToController *resp = recv_message(sock);
+	DaemonToController *resp = recv_message(sock);
 
-		TRACE("[CLIENT] Got response. Processing");
+	TRACE("[CLIENT] Got response. Processing");
 
-		// do command-specific response processing
-		switch (resp->code) {
-		case DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR: {
-			const char *dev_csr_file = argv[optind];
-			if (!resp->has_device_csr) {
-				ERROR("DEVICE_CSR_ERROR: Device not in Provisioning mode!");
-			} else if (-1 == file_write(dev_csr_file, (char *)resp->device_csr.data,
-						    resp->device_csr.len)) {
-				ERROR("writing device csr to %s", dev_csr_file);
-			} else {
-				INFO("device csr written to %s", dev_csr_file);
-			}
-		} break;
-		case DAEMON_TO_CONTROLLER__CODE__RESPONSE: {
-			if (!resp->has_response)
-				break;
-			switch (resp->response) {
-			case DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_STARTED: {
-				INFO("Waiting for images to be transfered ...");
-				protobuf_free_message((ProtobufCMessage *)resp);
-				goto handle_resp;
-			} break;
-			default:
-				protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
-			}
+	// do command-specific response processing
+	switch (resp->code) {
+	case DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR: {
+		const char *dev_csr_file = argv[optind];
+		if (!resp->has_device_csr) {
+			ERROR("DEVICE_CSR_ERROR: Device not in Provisioning mode!");
+		} else if (-1 == file_write(dev_csr_file, (char *)resp->device_csr.data,
+					    resp->device_csr.len)) {
+			ERROR("writing device csr to %s", dev_csr_file);
+		} else {
+			INFO("device csr written to %s", dev_csr_file);
+		}
+	} break;
+	case DAEMON_TO_CONTROLLER__CODE__RESPONSE: {
+		if (!resp->has_response)
+			break;
+		switch (resp->response) {
+		case DAEMON_TO_CONTROLLER__RESPONSE__GUESTOS_MGR_INSTALL_STARTED: {
+			INFO("Waiting for images to be transfered ...");
+			protobuf_free_message((ProtobufCMessage *)resp);
+			goto handle_resp;
 		} break;
 		default:
-			// TODO for now just dump the response in text format
 			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 		}
-		protobuf_free_message((ProtobufCMessage *)resp);
+	} break;
+	default:
+		// TODO for now just dump the response in text format
+		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 	}
+	protobuf_free_message((ProtobufCMessage *)resp);
 
 exit:
 	close(sock);

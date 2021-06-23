@@ -506,6 +506,14 @@ control_send_message(control_message_t message, int fd)
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_UNSUPPORTED;
 		break;
 
+	case CONTROL_RESPONSE_CMD_OK:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_OK;
+		break;
+
+	case CONTROL_RESPONSE_CMD_FAILED:
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_FAILED;
+		break;
+
 	default:
 		DEBUG("Unknown message `%d' (not sent)", message);
 		return -1;
@@ -967,8 +975,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__REMOVE_GUESTOS: {
 		if (!msg->guestos_name) {
 			WARN("REMOVE_GUESTOS without name");
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
 		} else {
-			cmld_guestos_delete(msg->guestos_name);
+			res = cmld_guestos_delete(msg->guestos_name);
+			control_send_message(
+				res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK, fd);
 		}
 	} break;
 
@@ -992,15 +1003,20 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__RELOAD_CONTAINERS: {
-		cmld_reload_containers();
+		res = cmld_reload_containers();
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE: {
 		cmld_wipe_device();
+		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE: {
-		reboot_reboot(REBOOT);
+		res = reboot_reboot(REBOOT);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {
@@ -1030,6 +1046,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED: {
 		cmld_set_device_provisioned();
+		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
@@ -1100,9 +1117,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER:
 		if (NULL == container) {
 			INFO("Container does not exist, nothing to destroy!");
+			res = control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
 			break;
 		}
 		res = cmld_container_destroy(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG: {
@@ -1212,28 +1232,40 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE:
 		IF_NULL_RETURN(container);
 		res = cmld_container_freeze(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNFREEZE:
 		IF_NULL_RETURN(container);
 		res = cmld_container_unfreeze(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ALLOWAUDIO:
 		IF_NULL_RETURN(container);
 		res = cmld_container_allow_audio(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DENYAUDIO:
 		IF_NULL_RETURN(container);
 		res = cmld_container_deny_audio(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_WIPE:
 		IF_NULL_RETURN(container);
 		res = cmld_container_wipe(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_SNAPSHOT:
 		IF_NULL_RETURN(container);
 		res = cmld_container_snapshot(container);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ASSIGNIFACE: {
@@ -1246,8 +1278,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		bool persistent = (!msg->assign_iface_params->has_persistent) ?
 					  false :
 					  msg->assign_iface_params->persistent;
-		container_add_net_iface(container, container_pnet_cfg_new(net_iface, false, NULL),
-					persistent);
+		res = container_add_net_iface(
+			container, container_pnet_cfg_new(net_iface, false, NULL), persistent);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE: {
@@ -1260,7 +1294,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		bool persistent = (!msg->assign_iface_params->has_persistent) ?
 					  false :
 					  msg->assign_iface_params->persistent;
-		container_remove_net_iface(container, net_iface, persistent);
+		res = container_remove_net_iface(container, net_iface, persistent);
+		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
+				     fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES: {
