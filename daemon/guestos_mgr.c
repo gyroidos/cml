@@ -214,7 +214,7 @@ guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_resul
 	return 0;
 }
 
-void
+int
 guestos_mgr_delete(guestos_t *os)
 {
 	ASSERT(os);
@@ -222,7 +222,7 @@ guestos_mgr_delete(guestos_t *os)
 	if (guestos_mgr_is_guestos_used_by_containers(os_name)) {
 		WARN("Containers which use guestos %s still exist! Not deleting anything.",
 		     os_name);
-		return;
+		return -1;
 	}
 
 	INFO("Deleting GuestOS: %s", os_name);
@@ -230,6 +230,8 @@ guestos_mgr_delete(guestos_t *os)
 	guestos_purge(os);
 	guestos_list = list_remove(guestos_list, os);
 	guestos_free(os);
+
+	return 0;
 }
 
 /******************************************************************************/
