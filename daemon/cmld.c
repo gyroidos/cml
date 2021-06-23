@@ -1321,7 +1321,7 @@ int
 cmld_container_snapshot(container_t *container)
 {
 	ASSERT(container);
-	ASSERT(0);
+	WARN("Container snapshot is not implemented, yet");
 	return 0;
 }
 
