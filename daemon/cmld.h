@@ -270,8 +270,9 @@ cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
  * rejects attempts to delete the GuestOS of the management container c0.
  *
  * @param guestos_name name of the GuestOS which should be deleted
+ * @return -1 on failure, 0 on success
  */
-void
+int
 cmld_guestos_delete(const char *guestos_name);
 
 /**

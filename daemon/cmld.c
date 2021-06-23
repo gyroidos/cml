@@ -1351,17 +1351,17 @@ cmld_get_c0os(void)
 	return cmld_c0os_name;
 }
 
-void
+int
 cmld_guestos_delete(const char *guestos_name)
 {
 	guestos_t *os = guestos_mgr_get_latest_by_name(guestos_name, false);
-	IF_NULL_RETURN(os);
+	IF_NULL_RETVAL(os, -1);
 
 	// do not delete gustos of managment container c0
 	container_t *c0 = cmld_containers_get_c0();
-	IF_TRUE_RETURN(os == container_get_guestos(c0));
+	IF_TRUE_RETVAL(os == container_get_guestos(c0), -1);
 
-	guestos_mgr_delete(os);
+	return guestos_mgr_delete(os);
 }
 
 bool
