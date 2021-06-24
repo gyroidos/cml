@@ -31,18 +31,28 @@
  * @brief Minimal card service for key generator
  */
 
-void setDebugLevel(int level);
+void
+setDebugLevel(int level);
 
-int processAPDU(int ctn, int todad,
-		unsigned char CLA, unsigned char INS, unsigned char P1, unsigned char P2,
-		int OutLen, unsigned char *OutData,
-		int InLen, unsigned char *InData, int InSize, unsigned short *SW1SW2);
+int
+processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned char P1,
+	    unsigned char P2, int OutLen, unsigned char *OutData, int InLen, unsigned char *InData,
+	    int InSize, unsigned short *SW1SW2);
 
-int selectHSM(int ctn);
-int initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin, int pinlen);
-int queryPIN(int ctn);
-int verifyPIN(int ctn, unsigned char *pin, int pinlen);
-int changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, int newpinlen);
-int generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int algolen);
-int writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desclen);
-int deriveKey(int ctn, unsigned char id, unsigned char *label, int labellen, unsigned char *keybuff, int keybufflen);
+int
+selectHSM(int ctn);
+int
+initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin, int pinlen);
+int
+queryPIN(int ctn);
+int
+verifyPIN(int ctn, unsigned char *pin, int pinlen);
+int
+changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, int newpinlen);
+int
+generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int algolen);
+int
+writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desclen);
+int
+deriveKey(int ctn, unsigned char id, unsigned char *label, int labellen, unsigned char *keybuff,
+	  int keybufflen);
