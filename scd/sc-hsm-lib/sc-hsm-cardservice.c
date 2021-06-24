@@ -39,13 +39,12 @@
 
 static unsigned char aid[] = { 0xE8, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x81, 0xC3, 0x1F, 0x02, 0x01 };
 static unsigned char inittemplate[] = {
-		0x80,0x02,0x00,0x02,									// Option Transport PIN
-		0x81,0x06,0x36,0x35,0x34,0x33,0x32,0x31,				// T-PIN, Offset 6
-		0x82,0x08,0x35,0x37,0x36,0x32,0x31,0x38,0x38,0x30,		// SO-PIN, Offset 14
-		0x91,0x01,0x03,											// Retry counter 3
-		0x97,0x01,0x01 };										// One Key Domain
-
-
+	0x80, 0x02, 0x00, 0x02,					    // Option Transport PIN
+	0x81, 0x06, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31,		    // T-PIN, Offset 6
+	0x82, 0x08, 0x35, 0x37, 0x36, 0x32, 0x31, 0x38, 0x38, 0x30, // SO-PIN, Offset 14
+	0x91, 0x01, 0x03,					    // Retry counter 3
+	0x97, 0x01, 0x01
+}; // One Key Domain
 
 #ifdef DEBUG
 /**
@@ -54,9 +53,10 @@ static unsigned char inittemplate[] = {
  * @param mem the memory area to dump
  * @param len the length of the memory area
  */
-static void dump(unsigned char *mem, int len)
+static void
+dump(unsigned char *mem, int len)
 {
-	while(len--) {
+	while (len--) {
 		printf("%02x ", *mem);
 		mem++;
 	}
@@ -64,8 +64,6 @@ static void dump(unsigned char *mem, int len)
 	printf("\n");
 }
 #endif
-
-
 
 /**
  * Process an ISO 7816 APDU with the underlying CT-API terminal hardware.
@@ -84,10 +82,10 @@ static void dump(unsigned char *mem, int len)
  * @param SW1SW2 Address of short integer to receive SW1SW2
  * @return the number of bytes received, excluding SW1SW2 or < 0 in case of an error
  */
-static int processAPDU(int ctn, int todad,
-		unsigned char CLA, unsigned char INS, unsigned char P1, unsigned char P2,
-		int OutLen, unsigned char *OutData,
-		int InLen, unsigned char *InData, int InSize, unsigned short *SW1SW2)
+static int
+processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned char P1,
+	    unsigned char P2, int OutLen, unsigned char *OutData, int InLen, unsigned char *InData,
+	    int InSize, unsigned short *SW1SW2)
 {
 	int rv, rc, r;
 	unsigned short lenr;
@@ -151,8 +149,8 @@ static int processAPDU(int ctn, int todad,
 	}
 
 #ifdef DEBUG
-		printf("R: ");
-		dump(scr, lenr);
+	printf("R: ");
+	dump(scr, lenr);
 #endif
 
 	rv = lenr - 2;
@@ -168,10 +166,8 @@ static int processAPDU(int ctn, int todad,
 	*SW1SW2 = (scr[lenr - 2] << 8) + scr[lenr - 1];
 
 	memset(scr, 0, sizeof(scr));
-	return(rv);
+	return (rv);
 }
-
-
 
 /**
  * Select the SmartCard-HSM application on the device
@@ -179,15 +175,15 @@ static int processAPDU(int ctn, int todad,
  * @param ctn the card terminal number
  * @return < 0 in case of an error
  */
-int selectHSM(int ctn)
+int
+selectHSM(int ctn)
 {
 	unsigned char rdata[256];
 	unsigned short SW1SW2;
 	int rc;
 
-	rc = processAPDU(ctn, 0, 0x00, 0xA4, 0x04, 0x04,
-					 sizeof(aid), aid,
-					 0, rdata, sizeof(rdata), &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0xA4, 0x04, 0x04, sizeof(aid), aid, 0, rdata, sizeof(rdata),
+			 &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -200,8 +196,6 @@ int selectHSM(int ctn)
 	return 0;
 }
 
-
-
 /**
  * Initialize SmartCard-HSM with Transport PIN and one key domain
  *
@@ -212,7 +206,8 @@ int selectHSM(int ctn)
  * @param pinlen the length of the transport PIN (must be 6)
  * @return < 0 in case of an error
  */
-int initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin, int pinlen)
+int
+initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin, int pinlen)
 {
 	unsigned short SW1SW2;
 	unsigned char cdata[32];
@@ -227,9 +222,7 @@ int initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char 
 	memcpy(cdata + 6, pin, pinlen);
 	memcpy(cdata + 14, sopin, sopinlen);
 
-	rc = processAPDU(ctn, 0, 0x80, 0x50, 0x00, 0x00,
-					len, cdata,
-					0, NULL, 0, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x80, 0x50, 0x00, 0x00, len, cdata, 0, NULL, 0, &SW1SW2);
 
 	memset(cdata, 0, sizeof(cdata));
 
@@ -244,22 +237,19 @@ int initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char 
 	return 0;
 }
 
-
-
 /**
  * Query the PIN status
  *
  * @param ctn the card terminal number
  * @return < 0 in case of an error or SW1/SW2
  */
-int queryPIN(int ctn)
+int
+queryPIN(int ctn)
 {
 	unsigned short SW1SW2;
 	int rc;
 
-	rc = processAPDU(ctn, 0, 0x00, 0x20, 0x00, 0x81,
-					0, NULL,
-					0, NULL, 0, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0x20, 0x00, 0x81, 0, NULL, 0, NULL, 0, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -267,8 +257,6 @@ int queryPIN(int ctn)
 
 	return SW1SW2;
 }
-
-
 
 /**
  * Verify the User PIN
@@ -279,7 +267,8 @@ int queryPIN(int ctn)
  *
  * @return < 0 in case of an error or SW1/SW2
  */
-int verifyPIN(int ctn, unsigned char *pin, int pinlen)
+int
+verifyPIN(int ctn, unsigned char *pin, int pinlen)
 {
 	unsigned short SW1SW2;
 	int rc;
@@ -288,9 +277,7 @@ int verifyPIN(int ctn, unsigned char *pin, int pinlen)
 		return -1;
 	}
 
-	rc = processAPDU(ctn, 0, 0x00, 0x20, 0x00, 0x81,
-					pinlen, pin,
-					0, NULL, 0, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0x20, 0x00, 0x81, pinlen, pin, 0, NULL, 0, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -298,8 +285,6 @@ int verifyPIN(int ctn, unsigned char *pin, int pinlen)
 
 	return SW1SW2;
 }
-
-
 
 /**
  * Change PIN
@@ -311,7 +296,8 @@ int verifyPIN(int ctn, unsigned char *pin, int pinlen)
  * @param newpinlen the length of the new PIN
  * @return < 0 in case of an error or SW1/SW2
  */
-int changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, int newpinlen)
+int
+changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, int newpinlen)
 {
 	unsigned char cdata[32];
 	unsigned short SW1SW2;
@@ -324,9 +310,8 @@ int changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newp
 	memcpy(cdata, oldpin, oldpinlen);
 	memcpy(cdata + oldpinlen, newpin, newpinlen);
 
-	rc = processAPDU(ctn, 0, 0x00, 0x24, 0x00, 0x81,
-					oldpinlen + newpinlen, cdata,
-					0, NULL, 0, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0x24, 0x00, 0x81, oldpinlen + newpinlen, cdata, 0, NULL, 0,
+			 &SW1SW2);
 
 	memset(cdata, 0, sizeof(cdata));
 
@@ -337,8 +322,6 @@ int changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newp
 	return SW1SW2;
 }
 
-
-
 /**
  * Generate AES-128 key as master secret
  *
@@ -348,7 +331,8 @@ int changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newp
  * @param algolen the length of the algorithm list
  * @return < 0 in case of an error
  */
-int generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int algolen)
+int
+generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int algolen)
 {
 	unsigned short SW1SW2;
 	int rc;
@@ -357,9 +341,7 @@ int generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int alg
 		return -1;
 	}
 
-	rc = processAPDU(ctn, 0, 0x00, 0x48, id, 0xB0,
-					algolen, algo,
-					0, NULL, 0, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0x48, id, 0xB0, algolen, algo, 0, NULL, 0, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -372,8 +354,6 @@ int generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int alg
 	return 0;
 }
 
-
-
 /**
  * Write key description
  *
@@ -383,7 +363,8 @@ int generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int alg
  * @param desclen the length of the key description
  * @return < 0 in case of an error
  */
-int writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desclen)
+int
+writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desclen)
 {
 	unsigned char cdata[256];
 	unsigned short SW1SW2;
@@ -402,9 +383,7 @@ int writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desc
 
 	memcpy(cdata + 6, desc, desclen);
 
-	rc = processAPDU(ctn, 0, 0x00, 0xD7, 0xC4, id,
-					desclen + 6, cdata,
-					0, NULL, 0, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0xD7, 0xC4, id, desclen + 6, cdata, 0, NULL, 0, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -417,8 +396,6 @@ int writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desc
 	return 0;
 }
 
-
-
 /**
  * Derive a key from the master key
  *
@@ -430,7 +407,9 @@ int writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desc
  * @param keybuff the length of the key buffer
  * @return < 0 in case of an error
  */
-int deriveKey(int ctn, unsigned char id, unsigned char *label, int labellen, unsigned char *keybuff, int keybufflen)
+int
+deriveKey(int ctn, unsigned char id, unsigned char *label, int labellen, unsigned char *keybuff,
+	  int keybufflen)
 {
 	unsigned short SW1SW2;
 	int rc;
@@ -439,9 +418,8 @@ int deriveKey(int ctn, unsigned char id, unsigned char *label, int labellen, uns
 		return -1;
 	}
 
-	rc = processAPDU(ctn, 0, 0x80, 0x78, id, 0x99,
-					labellen, label,
-					0, keybuff, keybufflen, &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x80, 0x78, id, 0x99, labellen, label, 0, keybuff, keybufflen,
+			 &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
