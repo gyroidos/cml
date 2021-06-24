@@ -52,8 +52,10 @@ ifeq ($(SANITIZERS),y)
 endif
 ifeq ($(TRUSTME_SCHSM), y)
     # If requested, we build sc-hsm support into trustme
-    LOCAL_CFLAGS += -DENABLESCHSM -lctccid -lcardservice
-    SRC_FILES += usbtoken.c
+    LOCAL_CFLAGS += -DENABLESCHSM -lctccid
+    SRC_FILES += \
+	sc-hsm-lib/sc-hsm-cardservice.c \
+	usbtoken.c
 endif
 
 
