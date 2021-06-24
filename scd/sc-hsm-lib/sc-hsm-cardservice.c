@@ -46,7 +46,7 @@ static unsigned char inittemplate[] = {
 	0x97, 0x01, 0x01
 }; // One Key Domain
 
-#ifdef DEBUG
+#ifdef DEBUG_BUILD
 /**
  * Dump the memory pointed to by <mem>
  *
@@ -132,7 +132,7 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 		}
 	}
 
-#ifdef DEBUG
+#ifdef DEBUG_BUILD
 	printf("C: ");
 	dump(scr, po - scr);
 #endif
@@ -148,7 +148,7 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 		return rc;
 	}
 
-#ifdef DEBUG
+#ifdef DEBUG_BUILD
 	printf("R: ");
 	dump(scr, lenr);
 #endif
