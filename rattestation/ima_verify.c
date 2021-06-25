@@ -343,8 +343,6 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 	// PCRs are initialized with zero's
 	memset(pcr, 0, hash_size);
 
-	OpenSSL_add_all_digests();
-
 	while (!buf_read(&template.header, &ptr, sizeof(template.header), &remain)) {
 		TRACE("PCR %02d Measurement:", template.header.pcr);
 
@@ -376,19 +374,16 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 			uint8_t template_hash[SHA256_DIGEST_LENGTH];
 			sha256(template_hash, template.template_data, template.template_data_len);
 
-			SHA256_CTX c_256;
-			SHA256_Init(&c_256);
-			SHA256_Update(&c_256, pcr, SHA256_DIGEST_LENGTH);
-			SHA256_Update(&c_256, template_hash, SHA256_DIGEST_LENGTH);
-			SHA256_Final(pcr, &c_256);
-		} else if (template_hash_algo == HASH_ALGO_SHA1) {
-			// In case of SHA1 PCRs, the already verified template hash can be used
-			// to extend the simulated PCR
-			SHA_CTX c;
-			SHA1_Init(&c);
-			SHA1_Update(&c, pcr, SHA_DIGEST_LENGTH);
-			SHA1_Update(&c, template.header.digest, SHA_DIGEST_LENGTH);
-			SHA1_Final(pcr, &c);
+			EVP_MD_CTX *c_256 = EVP_MD_CTX_new();
+			EVP_DigestInit(c_256, EVP_sha256());
+			EVP_DigestUpdate(c_256, pcr, SHA256_DIGEST_LENGTH);
+			EVP_DigestUpdate(c_256, template_hash, SHA256_DIGEST_LENGTH);
+			EVP_DigestFinal(c_256, pcr, NULL);
+			EVP_MD_CTX_free(c_256);
+
+		} else {
+			ERROR("Hash algorithm not supported");
+			return -1;
 		}
 
 		free(template.template_data);
