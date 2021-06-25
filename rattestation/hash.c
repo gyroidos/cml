@@ -22,6 +22,7 @@
  */
 
 #include <stdint.h>
+#include <openssl/evp.h>
 #include <openssl/sha.h>
 
 #include "common/macro.h"
@@ -80,10 +81,11 @@ sha1(uint8_t *digest, uint8_t *data, size_t len)
 	ASSERT(digest);
 	ASSERT(data);
 
-	SHA_CTX c;
-	SHA1_Init(&c);
-	SHA1_Update(&c, data, len);
-	SHA1_Final(digest, &c);
+	EVP_MD_CTX *c = EVP_MD_CTX_new();
+	EVP_DigestInit(c, EVP_sha1());
+	EVP_DigestUpdate(c, data, len);
+	EVP_DigestFinal(c, digest, NULL);
+	EVP_MD_CTX_free(c);
 }
 
 void
@@ -92,8 +94,9 @@ sha256(uint8_t *digest, uint8_t *data, size_t len)
 	ASSERT(digest);
 	ASSERT(data);
 
-	SHA256_CTX c;
-	SHA256_Init(&c);
-	SHA256_Update(&c, data, len);
-	SHA256_Final(digest, &c);
+	EVP_MD_CTX *c = EVP_MD_CTX_new();
+	EVP_DigestInit(c, EVP_sha256());
+	EVP_DigestUpdate(c, data, len);
+	EVP_DigestFinal(c, digest, NULL);
+	EVP_MD_CTX_free(c);
 }
