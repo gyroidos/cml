@@ -113,11 +113,6 @@ ENGINE *tpm_engine = NULL;
 int
 ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 {
-	// initialize OpenSSL stuff
-	OpenSSL_add_all_digests();     // loads digest algorithm names
-	OpenSSL_add_all_ciphers();     // loads cipher algorithm names
-	ERR_load_crypto_strings();     // load error strings
-	OpenSSL_add_all_algorithms();  // load internal table of algorithms
 	ENGINE_load_builtin_engines(); // load all bundled ENGINEs into memory and make them visible
 	if (use_tpm) {
 		tpm_engine = ENGINE_by_id("tpm2");
@@ -159,11 +154,6 @@ error:
 void
 ssl_free(void)
 {
-	// free OpenSSL stuff
-	ERR_free_strings();	      // free error strings
-	EVP_cleanup();		      // cleans loaded alogrithms, ciphers and digests
-	ENGINE_cleanup();	      // cleanup previsouly loaded ENGINEs
-	CRYPTO_cleanup_all_ex_data(); // cleans some more generally used memory
 	if (tpm_engine) {
 		ENGINE_free(tpm_engine);
 		ENGINE_finish(tpm_engine);
@@ -1024,16 +1014,11 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 		goto error;
 	}
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX _md_ctx;
-	md_ctx = &_md_ctx;
-	EVP_MD_CTX_init(md_ctx);
-#else
 	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
 		ERROR("Allocating EVP_MD failed!");
 		goto error;
 	}
-#endif
+
 	EVP_VerifyInit(md_ctx, hash_fct);
 
 	int len = 0;
@@ -1080,12 +1065,8 @@ error:
 		EVP_PKEY_free(key);
 	if (signature)
 		mem_free(signature);
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX_cleanup(md_ctx);
-#else
 	if (md_ctx)
 		EVP_MD_CTX_free(md_ctx);
-#endif
 	return ret;
 }
 
@@ -1141,16 +1122,10 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		goto error;
 	}
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX _md_ctx;
-	md_ctx = &_md_ctx;
-	EVP_MD_CTX_init(md_ctx);
-#else
 	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
 		ERROR("Allocating EVP_MD failed!");
 		goto error;
 	}
-#endif
 	EVP_VerifyInit(md_ctx, hash_fct);
 
 	if (!EVP_VerifyUpdate(md_ctx, buf, buf_len)) {
@@ -1180,12 +1155,8 @@ error:
 		X509_free(cert);
 	if (key)
 		EVP_PKEY_free(key);
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX_cleanup(md_ctx);
-#else
 	if (md_ctx)
 		EVP_MD_CTX_free(md_ctx);
-#endif
 	return ret;
 }
 
@@ -1238,17 +1209,11 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 
 	TRACE("Verifying signature...");
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_PKEY_CTX _pkey_ctx;
-	pkey_ctx = &_pkey_ctx;
-	EVP_PKEY_CTX_init(md_ctx);
-#else
 	if ((pkey_ctx = EVP_PKEY_CTX_new(key, NULL)) == NULL) {
 		ERROR("Allocating EVP_PKEY_CTX failed!");
 		ret = -2;
 		goto error;
 	}
-#endif
 
 	ret = EVP_PKEY_verify_init(pkey_ctx);
 	if (ret != 1) {
@@ -1284,12 +1249,8 @@ error:
 		X509_free(cert);
 	if (key)
 		EVP_PKEY_free(key);
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX_cleanup(md_ctx);
-#else
 	if (pkey_ctx)
 		EVP_PKEY_CTX_free(pkey_ctx);
-#endif
 	return ret;
 }
 
@@ -1315,17 +1276,12 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
 		return NULL;
 	}
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX _md_ctx;
-	md_ctx = &_md_ctx;
-	EVP_MD_CTX_init(md_ctx);
-#else
 	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
 		ERROR("Allocating EVP_MD failed!");
 		fclose(fp);
 		return NULL;
 	}
-#endif
+
 	EVP_DigestInit(md_ctx, hash_fct);
 
 	int len = 0;
@@ -1354,11 +1310,7 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
 	*/
 
 error:
-#if OPENSSL_VERSION_NUMBER < 0x10100000
-	EVP_MD_CTX_cleanup(md_ctx);
-#else
 	EVP_MD_CTX_free(md_ctx);
-#endif
 	return ret;
 }
 
