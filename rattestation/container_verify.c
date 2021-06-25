@@ -49,8 +49,6 @@ container_verify_runtime_measurements(MlContainerEntry **entries, size_t len,
 	// Static PCRs are initialized with zero's
 	memset(pcr_calculated, 0, hash_size);
 
-	OpenSSL_add_all_digests();
-
 	for (size_t i = 0; i < len; i++) {
 		if (strcmp(entries[i]->template_hash_alg, hash_algo_to_string(pcr_hash_algo))) {
 			ERROR("Failed to verify container runtime measurement list: Hash algos do not match");
