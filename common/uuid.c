@@ -29,8 +29,8 @@
 #include <limits.h>
 #include <unistd.h>
 
-#include "common/macro.h"
-#include "common/mem.h"
+#include "macro.h"
+#include "mem.h"
 
 #include "uuid.h"
 
