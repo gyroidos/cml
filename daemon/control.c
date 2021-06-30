@@ -753,9 +753,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 static void
 control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd)
 {
-	// TODO cases when and how to report the result back to the caller?
-	// => for now, only reply if there is actual data to be sent back to the caller
-	UNUSED int res = -1;
+	int res = -1;
 	if (NULL == msg) {
 		WARN("msg=NULL, returning");
 		return;
