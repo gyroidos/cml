@@ -26,7 +26,10 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -O2
-LOCAL_CFLAGS += -pedantic -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -pedantic -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+ifeq ($(WCAST_ALIGN),y)
+    LOCAL_CFLAGS += -Wcast-align
+endif
 ifeq ($(CC),gcc)
     # clang does not support stack clash protection yet
     LOCAL_CFLAGS += -fstack-clash-protection
