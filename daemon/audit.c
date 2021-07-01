@@ -45,6 +45,7 @@
 #include <string.h>
 #include <time.h>
 #include <linux/audit.h>
+#include <inttypes.h>
 #include <google/protobuf-c/protobuf-c-text.h>
 
 //TODO implement ACK mechanism fpr all service messages inside c-service.c?
@@ -334,8 +335,9 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	    (strlen(msg_text) + strlen(AUDIT_DELIMITER))) {
 		container_t *c = cmld_container_get_by_uuid(uuid);
 
-		TRACE("Trying to notify container %s about stored audit events, remaining storage: %ld",
-		      (uuid_string(uuid)), audit_remaining_storage(uuid_string(uuid)));
+		TRACE("Trying to notify container %s about stored audit events,"
+		      " remaining storage: %" PRIu64,
+		      uuid_string(uuid), audit_remaining_storage(uuid_string(uuid)));
 		if ((!c) || (-1 == container_audit_record_notify(
 					   c, audit_remaining_storage(uuid_string(uuid))))) {
 			ERROR("Failed to notify container about audit log overflow");
