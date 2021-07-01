@@ -25,13 +25,6 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
-//#define TSSINCLUDE(x) < TSS_INCLUDE/x >
-//#include TSSINCLUDE(tss.h)
-//#include TSSINCLUDE(tssutils.h)
-//#include TSSINCLUDE(tssmarshal.h)
-//#include TSSINCLUDE(Unmarshal_fp.h)
-//#include TSSINCLUDE(tsscrypto.h)
-//#include TSSINCLUDE(tsscryptoh.h)
 #include <ibmtss/tss.h>
 #include <ibmtss/tssutils.h>
 #include <ibmtss/tssmarshal.h>
@@ -40,8 +33,6 @@
 #include <ibmtss/tsscryptoh.h>
 
 #include "tpm2-asn.h"
-//#include "tpm2-common.h"
-
 #include "tpm2d_write_openssl.h"
 
 static int
