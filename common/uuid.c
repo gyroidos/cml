@@ -184,7 +184,7 @@ uuid_get_node(const uuid_t *uuid)
 	uint64_t node = 0;
 
 	// 48-bit correspond to 12 hex characters
-	if (1 != sscanf(uuid->string + strlen(uuid->string) - 12, "%12lx", &node)) {
+	if (1 != sscanf(uuid->string + strlen(uuid->string) - 12, "%12" SCNx64, &node)) {
 		ERROR_ERRNO("Failed to read node ID");
 		DEBUG("Failed to return id");
 		return ULLONG_MAX;
