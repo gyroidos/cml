@@ -98,7 +98,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 
 	if (resp->has_quoted) {
 		char *quote_str = convert_bin_to_hex_new(resp->quoted.data, resp->quoted.len);
-		DEBUG("Quote (Length %ld): %s", resp->quoted.len, quote_str);
+		DEBUG("Quote (Length %zu): %s", resp->quoted.len, quote_str);
 		mem_free(quote_str);
 	} else {
 		ERROR("Response does not contain quote to be verified");
@@ -108,7 +108,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 
 	if (resp->has_signature) {
 		char *sig_str = convert_bin_to_hex_new(resp->signature.data, resp->signature.len);
-		DEBUG("Signature (Length %ld): %s\n", resp->signature.len, sig_str);
+		DEBUG("Signature (Length %zu): %s\n", resp->signature.len, sig_str);
 		mem_free(sig_str);
 	} else {
 		ERROR("Response does not contain signature");
@@ -136,23 +136,23 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 
 	for (size_t i = 0; i < config->n_pcr_values; i++) {
 		if (strlen(pcr_strings[i]) != pcr_string_len) {
-			ERROR("Length of configured PCR value %ld invalid (%ld, must be %ld)", i,
+			ERROR("Length of configured PCR value %zu invalid (%zu,	must be %zu)", i,
 			      strlen(pcr_strings[i]), pcr_string_len);
 			ret = false;
 			goto err;
 		}
 		if (strlen(config->pcr_values[i]->value) != pcr_string_len) {
-			ERROR("Length of received PCR value %ld invalid (%ld, must be %ld)", i,
+			ERROR("Length of received PCR value %zu invalid (%zu, must be %zu)", i,
 			      strlen(config->pcr_values[i]->value), pcr_string_len);
 			ret = false;
 			goto err;
 		}
 		if (strncmp(pcr_strings[i], config->pcr_values[i]->value, pcr_string_len)) {
-			DEBUG("PCR_%ld: %s - VERIFICATION FAILED", i, pcr_strings[i]);
+			DEBUG("PCR_%zu: %s - VERIFICATION FAILED", i, pcr_strings[i]);
 			ret = false;
 			goto err;
 		}
-		DEBUG("PCR_%ld: %s - VERIFICATION SUCCESSFUL", i, pcr_strings[i]);
+		DEBUG("PCR_%zu: %s - VERIFICATION SUCCESSFUL", i, pcr_strings[i]);
 	}
 
 	// The quote is sent as a TPMS_ATTEST and has to be unmarshalled
@@ -300,7 +300,7 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 	ssize_t msg_size = protobuf_send_message(sock, (ProtobufCMessage *)&msg);
 	IF_TRUE_RETVAL(msg_size < 0, -1);
 
-	INFO("Send message with size %ld", msg_size);
+	INFO("Send message with size %zd", msg_size);
 
 	char *nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
 	INFO("Request with Nonce %s, Request size=%zd", nonce_str, msg_size);
