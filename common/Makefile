@@ -26,9 +26,13 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
+WCAST_ALIGN ?= y
 
 LOCAL_CFLAGS += -I../include -pedantic -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -fPIC
+LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -fPIC
+ifeq ($(WCAST_ALIGN),y)
+    LOCAL_CFLAGS += -Wcast-align
+endif
 ifeq ($(CC),gcc)
     # clang does not support stack clash protection yet
     LOCAL_CFLAGS += -fstack-clash-protection

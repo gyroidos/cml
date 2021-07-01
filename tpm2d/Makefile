@@ -25,14 +25,18 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
+WCAST_ALIGN ?= y
 
 tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
 	-DTPM_POSIX
 
 LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon $(tss_cflags) -O2
-LOCAL_CFLAGS += -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 #LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
+ifeq ($(WCAST_ALIGN),y)
+    LOCAL_CFLAGS += -Wcast-align
+endif
 ifeq ($(CC),gcc)
     # clang does not support stack clash protection yet
     LOCAL_CFLAGS += -fstack-clash-protection

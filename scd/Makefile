@@ -25,11 +25,15 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
+WCAST_ALIGN ?= y
 TRUSTME_SCHSM ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
-LOCAL_CFLAGS += -Wall -Wextra -Wcast-align -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+ifeq ($(WCAST_ALIGN),y)
+    LOCAL_CFLAGS += -Wcast-align
+endif
 ifeq ($(CC),gcc)
     # clang does not support stack clash protection yet
     LOCAL_CFLAGS += -fstack-clash-protection
