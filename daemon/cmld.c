@@ -1050,7 +1050,7 @@ cmld_init(const char *path)
 		FATAL("Could not init time module");
 	INFO("time initialized.");
 
-	char *btime = mem_printf("%ld", time_cml(NULL));
+	char *btime = mem_printf("%lld", (long long)time_cml(NULL));
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
 	mem_free(btime);
 
