@@ -127,7 +127,7 @@ tss_init(void)
 		usleep(500000);
 		tss_sock = sock_unix_create_and_connect(SOCK_STREAM, TPM2D_SOCKET);
 		retries++;
-		TRACE("Retry %ld connecting to tpm2d", retries);
+		TRACE("Retry %zu connecting to tpm2d", retries);
 		printf(".");
 		fflush(stdout);
 	} while (tss_sock < 0);

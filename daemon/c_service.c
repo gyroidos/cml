@@ -34,6 +34,7 @@
 #include "common/protobuf.h"
 #include "common/sock.h"
 
+#include <inttypes.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -375,7 +376,7 @@ c_service_audit_send_record(c_service_t *service, const uint8_t *buf, uint32_t b
 int
 c_service_audit_notify(c_service_t *service, uint64_t remaining_storage)
 {
-	TRACE("Notifying container %s about stored audit events, remaining storage: %ld",
+	TRACE("Notifying container %s about stored audit events, remaining storage: %" PRIu64,
 	      uuid_string(container_get_uuid(service->container)), remaining_storage);
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
 	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_NOTIFY;

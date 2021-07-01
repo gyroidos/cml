@@ -111,7 +111,7 @@ c_audit_new(const container_t *container)
 
 	audit->container = container;
 
-	TRACE("Node ID test: %lx", uuid_get_node(container_get_uuid(container)));
+	TRACE("Node ID test: %" PRIx64, uuid_get_node(container_get_uuid(container)));
 
 	audit->container = container;
 	audit->last_ack = mem_strdup("");
