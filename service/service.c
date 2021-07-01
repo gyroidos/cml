@@ -44,6 +44,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <inttypes.h>
 
 #include "dumb_init.h"
 
@@ -275,7 +276,8 @@ service_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *da
 			if (awaiting_record) {
 				TRACE("Got AUDIT_NOTIFY but already awaiting a record, ignoring...");
 			} else {
-				TRACE("New audit records available, remaining storage: %ld, start fetching...",
+				TRACE("New audit records available, remaining storage: %" PRIu64
+				      ", start fetching...",
 				      msg->audit_remaining_storage);
 
 				if (0 != audit_send_ack(fd, LAST_AUDIT_HASH)) {
