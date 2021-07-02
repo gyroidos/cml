@@ -58,9 +58,12 @@ hash_algo_t
 size_to_hash_algo(int size);
 
 void
-sha1(uint8_t *digest, uint8_t *data, size_t len);
+hash_sha1(uint8_t *digest, uint8_t *data, size_t len);
 
 void
-sha256(uint8_t *digest, uint8_t *data, size_t len);
+hash_sha256(uint8_t *digest, uint8_t *data, size_t len);
+
+void
+hash_extend(hash_algo_t hash_algo, uint8_t *pcr_value, uint8_t *pcr_extend);
 
 #endif // HASH_ALGO_H_
