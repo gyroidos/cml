@@ -194,8 +194,8 @@ TPM_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len);
 
 tpm2d_quote_t *
-tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const char *sig_key_pwd,
-	       uint8_t *qualifying_data, size_t qualifying_data_len);
+tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_key_handle,
+	       const char *sig_key_pwd, uint8_t *qualifying_data, size_t qualifying_data_len);
 
 void
 tpm2_quote_free(tpm2d_quote_t *quote);

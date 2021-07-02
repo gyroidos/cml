@@ -841,8 +841,8 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 }
 
 tpm2d_quote_t *
-tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const char *sig_key_pwd,
-	       uint8_t *qualifying_data, size_t qualifying_data_len)
+tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_key_handle,
+	       const char *sig_key_pwd, uint8_t *qualifying_data, size_t qualifying_data_len)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	Quote_In in;
@@ -852,17 +852,14 @@ tpm2_quote_new(TPMI_DH_PCR pcr_indices, TPMI_DH_OBJECT sig_key_handle, const cha
 
 	IF_NULL_RETVAL_ERROR(tss_context, NULL);
 
-	if (pcr_indices > 23) {
+	if (size_pcr_bitmap > PCR_SELECT_MAX) {
 		ERROR("Exceeded maximum available PCR registers!");
 		return NULL;
 	}
 
-	in.PCRselect.pcrSelections[0].sizeofSelect = 3;
-	in.PCRselect.pcrSelections[0].pcrSelect[0] = 0;
-	in.PCRselect.pcrSelections[0].pcrSelect[1] = 0;
-	in.PCRselect.pcrSelections[0].pcrSelect[2] = 0;
-	for (size_t i = 0; i < pcr_indices; ++i) {
-		in.PCRselect.pcrSelections[0].pcrSelect[pcr_indices / 8] |= 1 << (pcr_indices % 8);
+	in.PCRselect.pcrSelections[0].sizeofSelect = size_pcr_bitmap;
+	for (size_t i = 0; i < size_pcr_bitmap; i++) {
+		in.PCRselect.pcrSelections[0].pcrSelect[i] = pcr_bitmap[i];
 	}
 
 	in.signHandle = sig_key_handle;
