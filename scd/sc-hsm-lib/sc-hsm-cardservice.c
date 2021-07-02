@@ -87,7 +87,7 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 	    unsigned char P2, int OutLen, unsigned char *OutData, int InLen, unsigned char *InData,
 	    int InSize, unsigned short *SW1SW2)
 {
-	int rv, rc, r;
+	int rv, rc;
 	unsigned short lenr;
 	unsigned char dad, sad;
 	unsigned char scr[MAX_APDULEN], *po;
