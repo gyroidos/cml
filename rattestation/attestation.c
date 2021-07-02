@@ -134,25 +134,30 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	// The pcrs are configured as hex strings
 	size_t pcr_string_len = config->halg * 2;
 
+	bool ret_pcr = true;
 	for (size_t i = 0; i < config->n_pcr_values; i++) {
 		if (strlen(pcr_strings[i]) != pcr_string_len) {
 			ERROR("Length of configured PCR value %zu invalid (%zu,	must be %zu)", i,
 			      strlen(pcr_strings[i]), pcr_string_len);
-			ret = false;
-			goto err;
+			ret_pcr = false;
 		}
 		if (strlen(config->pcr_values[i]->value) != pcr_string_len) {
 			ERROR("Length of received PCR value %zu invalid (%zu, must be %zu)", i,
 			      strlen(config->pcr_values[i]->value), pcr_string_len);
-			ret = false;
-			goto err;
+			ret_pcr = false;
 		}
 		if (strncmp(pcr_strings[i], config->pcr_values[i]->value, pcr_string_len)) {
-			DEBUG("PCR_%zu: %s - VERIFICATION FAILED", i, pcr_strings[i]);
-			ret = false;
-			goto err;
+			ERROR("PCR_%zu: %s - VERIFICATION FAILED", i, pcr_strings[i]);
+			ret_pcr = false;
+		} else {
+			DEBUG("PCR_%zu: %s - VERIFICATION SUCCESSFUL", i, pcr_strings[i]);
 		}
-		DEBUG("PCR_%zu: %s - VERIFICATION SUCCESSFUL", i, pcr_strings[i]);
+	}
+
+	if (!ret_pcr) {
+		ERROR("PCR VERIFICATION FAILED");
+		ret = false;
+		goto err;
 	}
 
 	// The quote is sent as a TPMS_ATTEST and has to be unmarshalled
@@ -174,6 +179,10 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	      ret_nonce ? "VERIFICATION FAILED" : "VERIFICATION SUCCESSFUL");
 	mem_free(nonce_str);
 	mem_free(rcv_nonce_str);
+	if (ret_nonce) {
+		ret = false;
+		goto err;
+	}
 
 	// The signature is sent as a TPMT_SIGNATURE and has to be unmarshalled
 	TPMT_SIGNATURE tpmt_signature;
@@ -198,6 +207,25 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	} else {
 		INFO("VERIFY QUOTE SIGNATURE SUCCESSFUL");
 	}
+
+	// Verify aggregated PCR value
+	char *pcr_digest = convert_bin_to_hex_new(tpms_attest.attested.quote.pcrDigest.t.buffer,
+						  tpms_attest.attested.quote.pcrDigest.t.size);
+	DEBUG("Quote PCR Digest: %s\n", pcr_digest);
+	mem_free(pcr_digest);
+	SHA256_CTX ctx;
+	SHA256_Init(&ctx);
+	uint8_t pcr_calc[SHA256_DIGEST_LENGTH] = { 0 };
+	for (size_t i = 0; i < resp->n_pcr_values; i++) {
+		SHA256_Update(&ctx, resp->pcr_values[i]->value.data, SHA256_DIGEST_LENGTH);
+	}
+	SHA256_Final(pcr_calc, &ctx);
+	if (memcmp(tpms_attest.attested.quote.pcrDigest.t.buffer, pcr_calc, SHA256_DIGEST_LENGTH)) {
+		ERROR("VERIFY AGGREGATED PCR FAILED");
+		ret = false;
+		goto err;
+	}
+	INFO("VERIFY AGGREGATED PCR SUCCESSFUL");
 
 	// PCR10 kernel module verification (from /sys/kernel/security/ima/binary_runtime_measuremts)
 	hash_algo_t hash_algo = size_to_hash_algo((int)resp->halg);

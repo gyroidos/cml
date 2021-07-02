@@ -76,7 +76,7 @@ hash_algo_to_string(hash_algo_t hash_algo)
 }
 
 void
-sha1(uint8_t *digest, uint8_t *data, size_t len)
+hash_sha1(uint8_t *digest, uint8_t *data, size_t len)
 {
 	ASSERT(digest);
 	ASSERT(data);
@@ -89,7 +89,7 @@ sha1(uint8_t *digest, uint8_t *data, size_t len)
 }
 
 void
-sha256(uint8_t *digest, uint8_t *data, size_t len)
+hash_sha256(uint8_t *digest, uint8_t *data, size_t len)
 {
 	ASSERT(digest);
 	ASSERT(data);
@@ -99,4 +99,24 @@ sha256(uint8_t *digest, uint8_t *data, size_t len)
 	EVP_DigestUpdate(c, data, len);
 	EVP_DigestFinal(c, digest, NULL);
 	EVP_MD_CTX_free(c);
+}
+
+void
+hash_extend(hash_algo_t hash_algo, uint8_t *pcr_value, uint8_t *pcr_extend)
+{
+	if (hash_algo == HASH_ALGO_SHA1) {
+		SHA_CTX ctx;
+		SHA1_Init(&ctx);
+		SHA1_Update(&ctx, pcr_value, SHA_DIGEST_LENGTH);
+		SHA1_Update(&ctx, pcr_extend, SHA_DIGEST_LENGTH);
+		SHA1_Final(pcr_value, &ctx);
+	} else if (hash_algo == HASH_ALGO_SHA256) {
+		SHA256_CTX ctx;
+		SHA256_Init(&ctx);
+		SHA256_Update(&ctx, pcr_value, SHA256_DIGEST_LENGTH);
+		SHA256_Update(&ctx, pcr_extend, SHA256_DIGEST_LENGTH);
+		SHA256_Final(pcr_value, &ctx);
+	} else {
+		printf("Error: Hash algo not supported\n");
+	}
 }

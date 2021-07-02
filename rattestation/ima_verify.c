@@ -316,7 +316,7 @@ verify_template_hash(struct event *template)
 {
 	uint8_t digest[SHA_DIGEST_LENGTH];
 
-	sha1(digest, template->template_data, template->template_data_len);
+	hash_sha1(digest, template->template_data, template->template_data_len);
 	if (memcmp(digest, template->header.digest, sizeof digest) == 0) {
 		return 0;
 	}
@@ -372,7 +372,8 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 			// instead, the SHA256 hash of the template must be manually calculated to
 			// extend the simulated PCR
 			uint8_t template_hash[SHA256_DIGEST_LENGTH];
-			sha256(template_hash, template.template_data, template.template_data_len);
+			hash_sha256(template_hash, template.template_data,
+				    template.template_data_len);
 
 			EVP_MD_CTX *c_256 = EVP_MD_CTX_new();
 			EVP_DigestInit(c_256, EVP_sha256());
