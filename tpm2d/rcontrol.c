@@ -45,6 +45,8 @@
 
 #include <google/protobuf-c/protobuf-c-text.h>
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x)[0])
+
 struct tpm2d_rcontrol {
 	int sock; // listen ip socket fd
 };
@@ -92,12 +94,13 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 	switch (msg->code) {
 	case REMOTE_TO_TPM2D__CODE__ATTESTATION_REQ: {
 		Pcr **out_pcrs = NULL;
-		int pcr_regs = 0;
-		int pcr_indices = 0;
 		tpm2d_pcr_t **pcr_array = NULL;
 		tpm2d_quote_t *quote = NULL;
 		uint8_t *attestation_cert = NULL;
 		size_t att_cert_len = 0;
+		uint8_t pcr_bitmap[3];
+		int pcr_regs = 0;
+		int index = 0;
 
 		TPMI_DH_OBJECT att_key_handle = tpm2d_get_as_key_handle();
 		if (att_key_handle == TPM_RH_NULL)
@@ -110,32 +113,53 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		case IDS_ATTESTATION_TYPE__BASIC:
 			TRACE("atype BASIC");
 			pcr_regs = 12;
+			for (int i = 0; i < pcr_regs; ++i) {
+				pcr_bitmap[i / 8] |= 1 << (i % 8);
+			}
 			break;
 		case IDS_ATTESTATION_TYPE__ALL:
 			TRACE("atype ALL");
 			pcr_regs = 24;
+			for (int i = 0; i < pcr_regs; ++i) {
+				pcr_bitmap[i / 8] |= 1 << (i % 8);
+			}
 			break;
 		case IDS_ATTESTATION_TYPE__ADVANCED:
-			TRACE("atype ADVACE");
-			pcr_regs = (msg->has_pcrs) ? msg->pcrs : 0;
+			TRACE("atype ADVANCED");
+			memcpy(pcr_bitmap, &msg->pcrs, sizeof(pcr_bitmap));
+			for (size_t i = 0; i < ARRAY_SIZE(pcr_bitmap); i++) {
+				for (size_t j = 0; j < 8; j++) {
+					if (pcr_bitmap[i] & (1 << j)) {
+						pcr_regs++;
+					}
+				}
+			}
 			break;
 		default:
 			goto err_att_req;
 			break;
 		}
-		pcr_indices = pcr_regs - 1;
 
 		pcr_array = mem_alloc0(
 			MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(tpm2d_pcr_t *), pcr_regs));
-		for (int i = 0; i < pcr_regs; ++i) {
-			pcr_array[i] = tpm2_pcrread_new(i, TPM2D_HASH_ALGORITHM);
-
-			IF_NULL_GOTO_ERROR(pcr_array[i], err_att_req);
-			INFO("PCR%d: size %zu", i, pcr_array[i]->pcr_size);
+		index = 0;
+		for (int i = 0; i < (int)ARRAY_SIZE(pcr_bitmap); ++i) {
+			for (int j = 0; j < 8; j++) {
+				if (pcr_bitmap[i] & (1 << j)) {
+					int pcr_num = i * 8 + j;
+					pcr_array[index] =
+						tpm2_pcrread_new(pcr_num, TPM2D_HASH_ALGORITHM);
+					IF_NULL_GOTO_ERROR(pcr_array[index], err_att_req);
+					INFO("PCR%d: size %zu", pcr_num,
+					     pcr_array[index]->pcr_size);
+					index++;
+				}
+			}
 		}
 
-		quote = tpm2_quote_new(pcr_indices, att_key_handle, TPM2D_ATT_KEY_PW,
-				       msg->qualifyingdata.data, msg->qualifyingdata.len);
+		quote = tpm2_quote_new(pcr_bitmap, sizeof(pcr_bitmap), att_key_handle,
+				       TPM2D_ATT_KEY_PW, msg->qualifyingdata.data,
+				       msg->qualifyingdata.len);
 		IF_NULL_GOTO_ERROR(quote, err_att_req);
 
 		// add device certificate to quote
@@ -165,15 +189,21 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 
 		Pcr out_pcr = PCR__INIT;
 		out_pcrs = mem_new(Pcr *, pcr_regs);
-		for (int i = 0; i < pcr_regs; ++i) {
-			out_pcr.has_value = true;
-			out_pcr.value.data = pcr_array[i]->pcr_value;
-			out_pcr.value.len = pcr_array[i]->pcr_size;
-			INFO("pcr: %zu", out_pcr.value.len);
-			out_pcr.has_number = true;
-			out_pcr.number = i;
-			out_pcrs[i] = mem_alloc(sizeof(Pcr));
-			memcpy(out_pcrs[i], &out_pcr, sizeof(Pcr));
+		index = 0;
+		for (int i = 0; i < (int)ARRAY_SIZE(pcr_bitmap); ++i) {
+			for (int j = 0; j < 8; j++) {
+				if (pcr_bitmap[i] & (1 << j)) {
+					out_pcr.has_value = true;
+					out_pcr.value.data = pcr_array[index]->pcr_value;
+					out_pcr.value.len = pcr_array[index]->pcr_size;
+					out_pcr.has_number = true;
+					out_pcr.number = (i * 8) + j;
+					INFO("PCR_%d: %zu", index, out_pcr.value.len);
+					out_pcrs[index] = mem_alloc(sizeof(Pcr));
+					memcpy(out_pcrs[index], &out_pcr, sizeof(Pcr));
+					index++;
+				}
+			}
 		}
 
 		out.has_atype = true;
