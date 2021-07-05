@@ -613,6 +613,11 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 				close(fd);
 				goto error;
 			}
+			/*
+			 * on slow disk I/O we need to flush the kernel buffers regularly
+			 * to avoid out of memory
+			 */
+			IF_TRUE_GOTO_ERROR(fsync(fd), error);
 		}
 		mem_free(zeros);
 		close(fd);
