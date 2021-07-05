@@ -35,7 +35,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <ctccid/ctapi.h>
+#include <ctapi.h>
 
 static unsigned char aid[] = { 0xE8, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x81, 0xC3, 0x1F, 0x02, 0x01 };
 static unsigned char inittemplate[] = {
@@ -87,7 +87,7 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 	    unsigned char P2, int OutLen, unsigned char *OutData, int InLen, unsigned char *InData,
 	    int InSize, unsigned short *SW1SW2)
 {
-	int rv, rc, r;
+	int rv, rc;
 	unsigned short lenr;
 	unsigned char dad, sad;
 	unsigned char scr[MAX_APDULEN], *po;
