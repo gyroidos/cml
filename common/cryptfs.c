@@ -600,26 +600,19 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 		      "integrity_dev %s",
 		      crypto_blkdev, integrity_dev);
 		int fd;
-		if ((fd = open(crypto_blkdev, O_WRONLY)) < 0) {
+		if ((fd = open(crypto_blkdev, O_WRONLY | O_DIRECT)) < 0) {
 			ERROR("Cannot open volume %s", crypto_blkdev);
 			goto error;
 		}
-		char *zeros = mem_alloc0(DM_INTEGRITY_BUF_SIZE);
+		char zeros[DM_INTEGRITY_BUF_SIZE] __attribute__((__aligned__(512)));
 		for (unsigned long i = 0; i < fs_size / 8; ++i) {
 			if (write(fd, zeros, DM_INTEGRITY_BUF_SIZE) < DM_INTEGRITY_BUF_SIZE) {
 				ERROR_ERRNO("Could not write empty block %lu to %s", i,
 					    crypto_blkdev);
-				mem_free(zeros);
 				close(fd);
 				goto error;
 			}
-			/*
-			 * on slow disk I/O we need to flush the kernel buffers regularly
-			 * to avoid out of memory
-			 */
-			IF_TRUE_GOTO_ERROR(fsync(fd), error);
 		}
-		mem_free(zeros);
 		close(fd);
 	}
 	return crypto_blkdev;
