@@ -51,7 +51,7 @@ struct attestation_resp_cb_data {
 	void (*resp_verified_cb)(bool);
 	size_t nonce_len;
 	uint8_t *nonce;
-	char *config_file;
+	RAttestationConfig *config;
 };
 
 static char *
@@ -71,10 +71,10 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 }
 
 static bool
-attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *nonce,
+attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t *nonce,
 			size_t nonce_len)
 {
-	ASSERT(config_file);
+	ASSERT(config);
 	ASSERT(nonce);
 	ASSERT(resp);
 
@@ -86,15 +86,6 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	uint32_t quote_len = resp->quoted.len;
 	uint32_t sig_len = resp->signature.len;
 	char *pcr_strings[resp->n_pcr_values];
-
-	// TODO Right now, the "good" values are read from the configuration file.
-	// Later, different methods could be implemented
-	RAttestationConfig *config = rattestation_read_config_new(config_file);
-	if (!config) {
-		ERROR("Failed to read config file %s. The file has to be provided as a command line argument",
-		      config_file);
-		return false;
-	}
 
 	if (resp->has_quoted) {
 		char *quote_str = convert_bin_to_hex_new(resp->quoted.data, resp->quoted.len);
@@ -134,24 +125,47 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	// The pcrs are configured as hex strings
 	size_t pcr_string_len = config->halg * 2;
 
+	if (resp->n_pcr_values != config->n_pcr_values) {
+		ERROR("Number of configured PCR values (%lu) does not match responded PCR values (%lu)",
+		      config->n_pcr_values, resp->n_pcr_values);
+		ret = false;
+		goto err;
+	}
+
 	bool ret_pcr = true;
 	for (size_t i = 0; i < config->n_pcr_values; i++) {
 		if (strlen(pcr_strings[i]) != pcr_string_len) {
 			ERROR("Length of configured PCR value %zu invalid (%zu,	must be %zu)", i,
 			      strlen(pcr_strings[i]), pcr_string_len);
 			ret_pcr = false;
+			continue;
+		}
+		if (!config->pcr_values[i]->has_number || !resp->pcr_values[i]->has_number) {
+			ERROR("PCR number not specified");
+			ret_pcr = false;
+			continue;
+		}
+		if (config->pcr_values[i]->number != resp->pcr_values[i]->number) {
+			ERROR("Configured PCR number (%d) does not match responded PCR number (%d)",
+			      config->pcr_values[i]->number, resp->pcr_values[i]->number);
+			ret_pcr = false;
+			continue;
 		}
 		if (strlen(config->pcr_values[i]->value) != pcr_string_len) {
 			ERROR("Length of received PCR value %zu invalid (%zu, must be %zu)", i,
 			      strlen(config->pcr_values[i]->value), pcr_string_len);
 			ret_pcr = false;
+			continue;
 		}
 		if (strncmp(pcr_strings[i], config->pcr_values[i]->value, pcr_string_len)) {
-			ERROR("PCR_%zu: %s - VERIFICATION FAILED", i, pcr_strings[i]);
+			ERROR("PCR_%d: %s - VERIFICATION FAILED", resp->pcr_values[i]->number,
+			      pcr_strings[i]);
 			ret_pcr = false;
-		} else {
-			DEBUG("PCR_%zu: %s - VERIFICATION SUCCESSFUL", i, pcr_strings[i]);
+			continue;
 		}
+
+		DEBUG("PCR_%d: %s - VERIFICATION SUCCESSFUL", resp->pcr_values[i]->number,
+		      pcr_strings[i]);
 	}
 
 	if (!ret_pcr) {
@@ -211,7 +225,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, const char *config_file, uint8_t *n
 	// Verify aggregated PCR value
 	char *pcr_digest = convert_bin_to_hex_new(tpms_attest.attested.quote.pcrDigest.t.buffer,
 						  tpms_attest.attested.quote.pcrDigest.t.size);
-	DEBUG("Quote PCR Digest: %s\n", pcr_digest);
+	DEBUG("Quote PCR Digest: %s", pcr_digest);
 	mem_free(pcr_digest);
 	SHA256_CTX ctx;
 	SHA256_Init(&ctx);
@@ -259,7 +273,6 @@ err:
 	for (size_t i = 0; i < resp->n_pcr_values; i++) {
 		mem_free(pcr_strings[i]);
 	}
-	protobuf_free_message((ProtobufCMessage *)config);
 	ssl_free();
 
 	return ret;
@@ -282,7 +295,7 @@ attestation_response_recv_cb(int fd, unsigned events, event_io_t *io, void *data
 		(Tpm2dToRemote *)protobuf_recv_message(fd, &tpm2d_to_remote__descriptor);
 	IF_NULL_GOTO_ERROR(resp, cleanup);
 
-	verified = attestation_verify_resp(resp, resp_cb_data->config_file, resp_cb_data->nonce,
+	verified = attestation_verify_resp(resp, resp_cb_data->config, resp_cb_data->nonce,
 					   resp_cb_data->nonce_len);
 
 	protobuf_free_message((ProtobufCMessage *)resp);
@@ -298,6 +311,7 @@ cleanup:
 		(resp_cb_data->resp_verified_cb)(verified);
 	if (resp_cb_data->nonce)
 		mem_free(resp_cb_data->nonce);
+	protobuf_free_message((ProtobufCMessage *)resp_cb_data->config);
 	mem_free(resp_cb_data);
 }
 
@@ -312,6 +326,15 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 		return -1;
 	}
 
+	// Read the configuration which contains information about the remote attestation request
+	// as well as the expected values for the PCRs
+	RAttestationConfig *config = rattestation_read_config_new(config_file);
+	if (!config) {
+		ERROR("Failed to read config file %s. The file has to be provided as a command line argument",
+		      config_file);
+		return -1;
+	}
+
 	// build RemoteToTpm2d message
 	RemoteToTpm2d msg = REMOTE_TO_TPM2D__INIT;
 
@@ -319,6 +342,16 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 	msg.has_qualifyingdata = true;
 	msg.qualifyingdata.data = nonce;
 	msg.qualifyingdata.len = nonce_len;
+	msg.has_atype = true;
+	msg.atype = config->atype;
+	if (config->atype == IDS_ATTESTATION_TYPE__ADVANCED) {
+		if (!config->has_pcrs) {
+			ERROR("Missing PCR bitmap configuration for attestation type advanced");
+			return -1;
+		}
+		msg.has_pcrs = true;
+		msg.pcrs = config->pcrs;
+	}
 
 	int sock = sock_inet_create_and_connect(SOCK_STREAM, host, TPM2D_SERVICE_PORT);
 	IF_TRUE_RETVAL(sock < 0, -1);
@@ -340,7 +373,7 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 	resp_cb_data->nonce = mem_new0(uint8_t, nonce_len);
 	memcpy(resp_cb_data->nonce, nonce, nonce_len);
 	resp_cb_data->nonce_len = nonce_len;
-	resp_cb_data->config_file = config_file;
+	resp_cb_data->config = config;
 
 	DEBUG("Register Response handler on sockfd=%d", sock);
 	fd_make_non_blocking(sock);
