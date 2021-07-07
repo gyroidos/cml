@@ -305,7 +305,7 @@ guestos_mgr_download_latest(const char *name, int resp_fd)
 		} else {
 			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-start", name,
 					0);
-			return;
+			goto out;
 		}
 	}
 	if (guestos_images_flash(os) < 0) {
