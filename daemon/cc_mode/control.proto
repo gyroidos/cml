@@ -170,7 +170,7 @@ message AssignInterfaceParams {
 message DaemonToController {
 	reserved 10, 12;
 	enum Code {
-		reserved 6, 10, 11;
+		reserved 6, 10, 11, 12;
 		// Push info to other endpoint:
 
 		GUESTOS_CONFIGS_LIST = 1;	// -> [guestos_config]
@@ -183,10 +183,6 @@ message DaemonToController {
 		CONTAINER_IFACES = 5;		// -> [container_ifaces]
 
 		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
-
-		STATUS_CHANGED = 10;		// -> [log_message]
-		NOTIFICATION = 11;		// -> [log_message]
-		LOG_MESSAGE = 12;		// -> [log_message]
 
 		RESPONSE = 13;			// -> [response]
 
