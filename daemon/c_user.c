@@ -357,7 +357,8 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 			ret--;
 		}
 	}
-	INFO("Chown file '%s' to (%d:%d) (uid_start %d)", file_to_chown, uid, gid, user->uid_start);
+	TRACE("Chown file '%s' to (%d:%d) (uid_start %d)", file_to_chown, uid, gid,
+	      user->uid_start);
 
 	// chown .
 	if (chown(path, uid, gid) < 0) {
