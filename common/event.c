@@ -119,6 +119,7 @@ static bool event_signal_received1[NSIG] = { false };
 static bool *event_signal_received = event_signal_received0;
 static unsigned event_io_active = 0;
 static bool event_initialized = false;
+static event_io_t *event_inotify_io = NULL;
 
 /******************************************************************************/
 
@@ -324,7 +325,7 @@ wrapped_remove_signal(void *elem)
 static void
 wrapped_remove_inotify(void *elem)
 {
-	event_remove_inotify((event_inotify_t *)elem);
+	event_inotify_list = list_unlink(event_inotify_list, elem);
 	event_inotify_free(elem);
 }
 
@@ -348,6 +349,10 @@ event_reset()
 		TRACE("Resetting event inotify list");
 		list_foreach(event_inotify_list, wrapped_remove_inotify);
 		event_inotify_list = NULL;
+		event_remove_io(event_inotify_io);
+		close(event_inotify_io->fd);
+		event_io_free(event_inotify_io);
+		event_inotify_io = NULL;
 	}
 }
 
@@ -552,12 +557,10 @@ event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *da
 static int
 event_inotify_fd(void)
 {
-	static int fd = -1;
+	if (event_inotify_io && event_inotify_io->fd >= 0)
+		return event_inotify_io->fd;
 
-	if (fd >= 0)
-		return fd;
-
-	fd = inotify_init();
+	int fd = inotify_init();
 	if (fd < 0)
 		FATAL_ERRNO("Could not init inotify");
 
