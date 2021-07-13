@@ -42,6 +42,7 @@
 #include "common/fd.h"
 #include "common/nl.h"
 
+#include <fcntl.h>
 #include <string.h>
 #include <time.h>
 #include <linux/audit.h>
@@ -275,10 +276,25 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 	}
 
 	if (!record) {
-		ERROR("Failed to parse text protobuf message (%s) from file \"%s\".",
-		      audit_record__descriptor.name ? audit_record__descriptor.name : "UNKNOWN",
-		      filename);
-		goto out;
+		WARN("Failed to parse text protobuf message (%s) from file \"%s\"."
+		     "Generating new record with corrupted data as raw_text",
+		     audit_record__descriptor.name ? audit_record__descriptor.name : "UNKNOWN",
+		     filename);
+
+		AuditRecord__Meta **meta = mem_new0(AuditRecord__Meta *, 1);
+		meta[0] = mem_new0(AuditRecord__Meta, 1);
+		audit_record__meta__init(meta[0]);
+
+		// store corrput message as meta
+		meta[0]->key = mem_strdup("raw_text");
+		meta[0]->value = mem_strndup(buf, read);
+
+		char *type = mem_printf("%s.%s.%s.%s", audit_category_to_string(FSA),
+					audit_component_to_string(CMLD),
+					audit_evclass_to_string(GENERIC), "corrupt-record");
+
+		record = audit_record_new(type, NULL, 1, meta);
+		mem_free(type);
 	}
 
 	if (purge) {
@@ -310,6 +326,34 @@ out:
 		mem_free(buf);
 
 	return (AuditRecord *)record;
+}
+
+static bool
+audit_log_check_delimiter(const char *log_file)
+{
+	int fd = -1;
+	char buf[sizeof(AUDIT_DELIMITER)];
+	size_t log_file_size = 0;
+	bool ret = false;
+
+	IF_TRUE_RETVAL_TRACE(0 >= (log_file_size = file_size(log_file)), true);
+	if (0 > (fd = open(log_file, O_RDONLY))) {
+		TRACE_ERRNO("open failed by returning fd=%d", fd);
+		return true;
+	}
+
+	IF_TRUE_GOTO_WARN(-1 == lseek(fd, -strlen(AUDIT_DELIMITER), SEEK_END), out);
+	IF_TRUE_GOTO_WARN(-1 == fd_read(fd, buf, strlen(AUDIT_DELIMITER)), out);
+
+	buf[sizeof(AUDIT_DELIMITER) - 1] = '\0';
+
+	// if delimiter line was read, all is fine
+	if (!strcmp(AUDIT_DELIMITER, buf))
+		ret = true;
+
+out:
+	close(fd);
+	return ret;
 }
 
 static int
@@ -347,12 +391,20 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	}
 
 	TRACE("Logging audit record to file: %s", file);
+	if (!audit_log_check_delimiter(file)) {
+		TRACE("Fixup audit delimiter to %s", file);
+		if (0 > file_write_append(file, AUDIT_DELIMITER, strlen(AUDIT_DELIMITER))) {
+			ERROR("Failed to fixup audit log file: %s", file);
+			goto out;
+		}
+	}
+
 	if (0 > file_write_append(file, msg_text, strlen(msg_text))) {
 		ERROR("Failed to log audit message to file: %s", file);
 		goto out;
 	}
 
-	if (0 > file_write_append(file, "-----\n", strlen("-----\n"))) {
+	if (0 > file_write_append(file, AUDIT_DELIMITER, strlen(AUDIT_DELIMITER))) {
 		ERROR("Failed to log audit message to file: %s", msg_text);
 		goto out;
 	}
