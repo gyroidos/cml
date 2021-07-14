@@ -332,6 +332,14 @@ wrapped_remove_inotify(void *elem)
 void
 event_reset()
 {
+	if (event_inotify_io) {
+		TRACE("Resetting inotify event");
+		event_remove_io(event_inotify_io);
+		close(event_inotify_io->fd);
+		event_io_free(event_inotify_io);
+		event_inotify_io = NULL;
+	}
+
 	TRACE("Resetting event epoll fd");
 	event_reset_fd();
 
@@ -349,10 +357,6 @@ event_reset()
 		TRACE("Resetting event inotify list");
 		list_foreach(event_inotify_list, wrapped_remove_inotify);
 		event_inotify_list = NULL;
-		event_remove_io(event_inotify_io);
-		close(event_inotify_io->fd);
-		event_io_free(event_inotify_io);
-		event_inotify_io = NULL;
 	}
 }
 
