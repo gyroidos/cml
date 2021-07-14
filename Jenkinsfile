@@ -5,7 +5,13 @@ pipeline {
    stages {
       stage('Repo') {
 	 steps {
-             sh 'repo init -u https://github.com/trustm3/trustme_main.git -b ${CHANGE_TARGET} -m yocto-x86-genericx86-64.xml'
+             sh '''
+                manifest_branch=${CHANGE_TARGET}
+                if [ -z "${manifest_branch}" ]; then
+                   mainfest_branch=${BRANCH_NAME}
+                fi
+                repo init -u https://github.com/trustm3/trustme_main.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
+             '''
              sh 'mkdir -p .repo/local_manifests'
              sh '''
                 echo "<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>" > .repo/local_manifests/jenkins.xml
