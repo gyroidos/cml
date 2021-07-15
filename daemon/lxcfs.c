@@ -128,6 +128,13 @@ lxcfs_daemon_start(const char *rt_path)
 		event_add_signal(sigchld);
 	}
 
+
+	if (! file_exists("/var/lib/lxcfs/proc")) {
+		ERROR("/var/lib/lxcfs/proc missing, lxcfs ist not working as intenden, disabling...");
+		return -1;
+	}
+
+
 	return 0;
 }
 
@@ -183,6 +190,7 @@ lxcfs_init(void)
 {
 	lxcfs_rt_path = LXCFS_RT_PATH;
 	lxcfs_bin_path = lxcfs_get_bin_path_if_supported();
+
 
 	if (lxcfs_bin_path) {
 		int ret = mount_cgroups(hardware_get_active_cgroups_subsystems());
