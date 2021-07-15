@@ -1197,7 +1197,7 @@ c_net_start_post_clone(c_net_t *net)
 			DEBUG("set IFF_UP for veth: %s", ni->veth_cmld_name);
 
 			/* Configure uplink of CML in c0 */
-			if (!strcmp(ni->nw_name, CML_UPLINK_INTERFACE_NAME)) {
+			if (!cmld_is_hostedmode_active() && !strcmp(ni->nw_name, CML_UPLINK_INTERFACE_NAME)) {
 				if (network_setup_masquerading(ni->subnet, true))
 					FATAL_ERRNO("Could not setup masquerading for %s!",
 						    ni->veth_cmld_name);
