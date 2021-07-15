@@ -115,6 +115,7 @@ static bool cmld_signed_configs = false;
 
 static bool cmld_device_provisioned = false;
 
+static bool cmld_lxcfs = false;
 /******************************************************************************/
 
 static int
@@ -332,6 +333,12 @@ bool
 cmld_is_hostedmode_active(void)
 {
 	return cmld_hostedmode;
+}
+
+bool
+cmld_is_lxcfs_active(void)
+{
+	return cmld_lxcfs;
 }
 
 bool
@@ -1070,10 +1077,12 @@ cmld_init(const char *path)
 			INFO("tss initialized.");
 	}
 
-	if (lxcfs_init() < 0)
+	if (lxcfs_init() < 0) {
 		WARN("Plattform does not support LXCFS");
-	else
+	} else {
 		INFO("lxcfs initialized.");
+		cmld_lxcfs = true;
+	}
 
 	// Read the provision-status-file to set provisioned flag of control structs accordingly
 	char *provisioned_file = mem_printf("%s/%s", DEFAULT_BASE_PATH, PROVISIONED_FILE_NAME);

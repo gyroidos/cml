@@ -1498,7 +1498,7 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		ERROR_ERRNO("Could not mount %s", mnt_proc);
 		goto error;
 	}
-	if (lxcfs_mount_proc_overlay(mnt_proc)) {
+	if (cmld_is_lxcfs_active() && lxcfs_mount_proc_overlay(mnt_proc)) {
 		ERROR_ERRNO("Could not apply lxcfs overlay on mount %s", mnt_proc);
 		goto error;
 	}

@@ -225,6 +225,12 @@ cmld_uses_signed_configs(void);
 bool
 cmld_is_device_provisioned(void);
 
+/**
+ * Checks if lxcfs is supported on the current platform
+ */
+bool
+cmld_is_lxcfs_active(void);
+
 int
 cmld_set_device_provisioned(void);
 
