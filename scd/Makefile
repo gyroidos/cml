@@ -88,11 +88,20 @@ SRC_FILES += \
 .PHONY: all
 all: scd
 
+ifeq ($(CC_MODE),y)
+protobuf: device.proto scd.proto tokencontrol.proto
+	ln -sf ../daemon/cc_mode/device.proto device.proto
+	protoc-c --c_out=. scd.proto
+	protoc-c --c_out=. device.proto
+	protoc-c --c_out=. tokencontrol.proto
 
+else
 protobuf: device.proto scd.proto tokencontrol.proto
 	protoc-c --c_out=. scd.proto
 	protoc-c --c_out=. device.proto
 	protoc-c --c_out=. tokencontrol.proto
+
+endif
 
 $(SRC_FILES): protobuf
 
