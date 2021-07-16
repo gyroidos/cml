@@ -8,7 +8,7 @@ pipeline {
              sh '''
                 manifest_branch=${CHANGE_TARGET}
                 if [ -z "${manifest_branch}" ]; then
-                   mainfest_branch=${BRANCH_NAME}
+                   manifest_branch=${BRANCH_NAME}
                 fi
                 repo init -u https://github.com/trustm3/trustme_main.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
              '''
