@@ -139,11 +139,11 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	}
 
 cleanup_files:
-	mem_free(cfg_file);
-	mem_free(sig_file);
-	mem_free(cert_file);
+	mem_free0(cfg_file);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
 cleanup:
-	mem_free(dir);
+	mem_free0(dir);
 	return res;
 }
 
@@ -278,7 +278,7 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 out:
 	if (control_send_message(resp, *resp_fd) < 0)
 		WARN("Could not send response to fd=%d", *resp_fd);
-	mem_free(resp_fd);
+	mem_free0(resp_fd);
 }
 
 /**
@@ -358,7 +358,7 @@ write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 	} else {
 		ERROR("Failed to create temp file.");
 	}
-	mem_free(file);
+	mem_free0(file);
 	return NULL;
 }
 
@@ -416,8 +416,8 @@ push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsign
 					os_name, 4, "installed_version", installed_str,
 					"update_version", update_str);
 
-			mem_free(installed_str);
-			mem_free(update_str);
+			mem_free0(installed_str);
+			mem_free0(update_str);
 
 			WARN("Skipping update of GuestOS %s version %" PRIu64
 			     " to older/same version %" PRIu64 ".",
@@ -479,7 +479,7 @@ trigger_download:
 		WARN("Could not send response to fd=%d", *resp_fd);
 	guestos_mgr_download_latest(os_name, *resp_fd);
 
-	mem_free(resp_fd);
+	mem_free0(resp_fd);
 	return;
 
 cleanup_purge:
@@ -491,7 +491,7 @@ err:
 
 	if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, *resp_fd) < 0)
 		WARN("Could not send response to fd=%d", *resp_fd);
-	mem_free(resp_fd);
+	mem_free0(resp_fd);
 }
 
 int
@@ -521,7 +521,7 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 	if (res < 0) {
 		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, resp_fd) < 0)
 			WARN("Could not send response to fd=%d", resp_fd);
-		mem_free(cb_resp_fd);
+		mem_free0(cb_resp_fd);
 	}
 
 	return res;
@@ -544,7 +544,7 @@ guestos_mgr_register_localca(unsigned char *cacert, size_t cacertlen)
 		INFO("Successfully installed localca root certificate %s to %s", tmp_cacert_file,
 		     LOCALCA_ROOT_CERT);
 	}
-	mem_free(tmp_cacert_file);
+	mem_free0(tmp_cacert_file);
 	return ret;
 }
 
@@ -581,9 +581,9 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 		     cacert_file);
 	}
 out:
-	mem_free(cacert_file);
-	mem_free(cacert_hash);
-	mem_free(tmp_cacert_file);
+	mem_free0(cacert_file);
+	mem_free0(cacert_hash);
+	mem_free0(tmp_cacert_file);
 	return ret;
 }
 

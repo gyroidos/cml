@@ -219,16 +219,16 @@ uevent_container_dev_mapping_free(uevent_container_dev_mapping_t *mapping)
 {
 	if (mapping->usbdev) {
 		if (mapping->usbdev->i_serial)
-			mem_free(mapping->usbdev->i_serial);
-		mem_free(mapping->usbdev);
+			mem_free0(mapping->usbdev->i_serial);
+		mem_free0(mapping->usbdev);
 	}
-	mem_free(mapping);
+	mem_free0(mapping);
 }
 
 static void
 uevent_container_netdev_mapping_free(uevent_container_netdev_mapping_t *mapping)
 {
-	mem_free(mapping);
+	mem_free0(mapping);
 }
 
 static uevent_container_netdev_mapping_t *
@@ -392,7 +392,7 @@ uevent_replace_member(const struct uevent *uevent, char *oldmember, char *newmem
 
 error:
 	if (newevent)
-		mem_free(newevent);
+		mem_free0(newevent);
 
 	return NULL;
 }
@@ -449,7 +449,7 @@ uevent_rename_ifi_new(const char *oldname, const char *infix)
 
 	if (network_rename_ifi(oldname, newname)) {
 		ERROR("Failed to rename interface %s", oldname);
-		mem_free(newname);
+		mem_free0(newname);
 		return NULL;
 	}
 
@@ -488,7 +488,7 @@ uevent_rename_interface(const struct uevent *uevent)
 
 	if (!uev_chdevpath) {
 		ERROR("Failed to rename devpath %s in uevent", uevent->devpath);
-		mem_free(uev_chname);
+		mem_free0(uev_chname);
 		return NULL;
 	}
 	DEBUG("Injected renamed devpath %s into uevent", new_ifname);
@@ -545,7 +545,7 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 			int usrns_fd = open(usrns, O_RDONLY);
 			if (usrns_fd == -1)
 				FATAL_ERRNO("Could not open userns file %s!", usrns);
-			mem_free(usrns);
+			mem_free0(usrns);
 			if (setns(usrns_fd, CLONE_NEWUSER) == -1)
 				FATAL_ERRNO("Could not join uesr namespace of pid %d!", netns_pid);
 			if (setuid(0) < 0)
@@ -562,7 +562,7 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 		int netns_fd = open(netns, O_RDONLY);
 		if (netns_fd == -1)
 			FATAL_ERRNO("Could not open netns file %s!", netns);
-		mem_free(netns);
+		mem_free0(netns);
 		if (setns(netns_fd, CLONE_NEWNET) == -1)
 			FATAL_ERRNO("Could not join network namespace of pid %d!", netns_pid);
 		nl_sock_t *target = nl_sock_uevent_new(0);
@@ -626,10 +626,10 @@ shift:
 		      container_get_name(container));
 		goto err;
 	}
-	mem_free(path_dirname);
+	mem_free0(path_dirname);
 	return 0;
 err:
-	mem_free(path_dirname);
+	mem_free0(path_dirname);
 	return -1;
 }
 
@@ -694,7 +694,7 @@ uevent_netdev_move(struct uevent *uevent)
 	// if mac_filter is applied we have a bridge interface and do not
 	// need to send the uevent about the physical if
 	if (pnet_cfg->mac_filter) {
-		mem_free(macstr);
+		mem_free0(macstr);
 		return 0;
 	}
 
@@ -708,10 +708,10 @@ uevent_netdev_move(struct uevent *uevent)
 		      container_get_name(container));
 	}
 
-	mem_free(macstr);
+	mem_free0(macstr);
 	return 0;
 error:
-	mem_free(macstr);
+	mem_free0(macstr);
 	return -1;
 }
 
@@ -731,7 +731,7 @@ uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 	else
 		INFO("Moved net interface to target.");
 
-	mem_free(uevent_cb);
+	mem_free0(uevent_cb);
 	event_remove_timer(timer);
 	event_timer_free(timer);
 }
@@ -760,7 +760,7 @@ uevent_device_node_and_forward(struct uevent *uevent, container_t *container)
 	if (!strncmp(uevent->action, "add", 3)) {
 		if (uevent_create_device_node(uevent, devname, container) < 0) {
 			ERROR("Could not create device node");
-			mem_free(devname);
+			mem_free0(devname);
 			return;
 		}
 	} else if (!strncmp(uevent->action, "remove", 6)) {
@@ -777,7 +777,7 @@ uevent_device_node_and_forward(struct uevent *uevent, container_t *container)
 		TRACE("Sucessfully injected uevent into netns of container %s!",
 		      container_get_name(container));
 	}
-	mem_free(devname);
+	mem_free0(devname);
 }
 
 /*
@@ -825,7 +825,7 @@ uevent_handle_usb_device(struct uevent *uevent)
 		if (file_exists(serial_path))
 			serial = file_read_new(serial_path, 255);
 
-		mem_free(serial_path);
+		mem_free0(serial_path);
 
 		if (!serial || strlen(serial) < 1) {
 			TRACE("Failed to read serial of usb device");
@@ -842,7 +842,7 @@ uevent_handle_usb_device(struct uevent *uevent)
 		if (uevent->devpath) {
 			if (!cmld_token_attach(serial, uevent->devpath)) {
 				TRACE("Uevent was triggered by container token, finished handling kernel uevent");
-				mem_free(serial);
+				mem_free0(serial);
 				return true;
 			}
 		}
@@ -870,7 +870,7 @@ uevent_handle_usb_device(struct uevent *uevent)
 						       mapping->usbdev->minor, mapping->assign);
 			}
 		}
-		mem_free(serial);
+		mem_free0(serial);
 	}
 	return false;
 }
@@ -903,7 +903,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			goto out;
 		}
 		uevent_device_node_and_forward(uevent, container);
-		mem_free(uev_fwd);
+		mem_free0(uev_fwd);
 		goto out;
 	}
 
@@ -983,7 +983,7 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		TRACE("no uevent: %s", raw_p);
 	}
 err:
-	mem_free(uev);
+	mem_free0(uev);
 }
 
 int
@@ -1004,7 +1004,7 @@ uevent_init()
 		const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
 		char *if_name_new = uevent_rename_ifi_new(ifname, prefix);
 		if (if_name_new) {
-			mem_free(l->data);
+			mem_free0(l->data);
 			l->data = if_name_new;
 		}
 	}
@@ -1105,7 +1105,7 @@ uevent_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg)
 	INFO("Registered netdev '%s' for container %s", macstr,
 	     container_get_name(mapping->container));
 
-	mem_free(macstr);
+	mem_free0(macstr);
 	return 0;
 }
 
@@ -1132,7 +1132,7 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6])
 	     container_get_name(mapping_to_remove->container));
 
 	uevent_container_netdev_mapping_free(mapping_to_remove);
-	mem_free(macstr);
+	mem_free0(macstr);
 
 	return 0;
 }
@@ -1175,11 +1175,11 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 		} else {
 			DEBUG("Trigger event %s <- %s", full_path, trigger);
 		}
-		mem_free(trigger);
+		mem_free0(trigger);
 	}
 out:
-	mem_free(full_path);
-	mem_free(dev_file);
+	mem_free0(full_path);
+	mem_free0(dev_file);
 	return ret;
 }
 

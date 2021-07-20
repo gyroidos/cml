@@ -71,7 +71,7 @@ c_service_send_container_cfg_name_proto(c_service_t *service)
 
 	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 
-	mem_free(message_proto.container_cfg_name);
+	mem_free0(message_proto.container_cfg_name);
 	return ret;
 }
 
@@ -93,7 +93,7 @@ c_service_send_container_cfg_dns_proto(c_service_t *service)
 
 	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 
-	mem_free(message_proto.container_cfg_dns);
+	mem_free0(message_proto.container_cfg_dns);
 	return ret;
 }
 
@@ -302,7 +302,7 @@ c_service_free(c_service_t *service)
 	ASSERT(service);
 
 	c_service_cleanup(service);
-	mem_free(service);
+	mem_free0(service);
 }
 
 int

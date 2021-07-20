@@ -176,7 +176,7 @@ c_user_set_next_uid_range_start(c_user_t *user)
 	user->uid_start = UID_RANGES_START + (user->offset * UID_RANGE);
 	DEBUG("Next free uid/gid map start is: %u", user->uid_start);
 
-	mem_free(file_name_uid);
+	mem_free0(file_name_uid);
 	return 0;
 }
 
@@ -184,9 +184,9 @@ static void
 c_user_shift_free(struct c_user_shift *s)
 {
 	IF_NULL_RETURN_ERROR(s);
-	mem_free(s->target);
-	mem_free(s->mark);
-	mem_free(s);
+	mem_free0(s->target);
+	mem_free0(s->mark);
+	mem_free0(s);
 }
 
 /**
@@ -240,14 +240,14 @@ c_user_setup_mapping(const c_user_t *user)
 	INFO("uid/gid mapping '%s' for %s activated", uid_mapping,
 	     container_get_name(user->container));
 
-	mem_free(uid_mapping);
-	mem_free(uid_map_path);
-	mem_free(gid_map_path);
+	mem_free0(uid_mapping);
+	mem_free0(uid_map_path);
+	mem_free0(gid_map_path);
 	return 0;
 error:
-	mem_free(uid_mapping);
-	mem_free(uid_map_path);
-	mem_free(gid_map_path);
+	mem_free0(uid_mapping);
+	mem_free0(uid_map_path);
+	mem_free0(gid_map_path);
 	return -1;
 }
 
@@ -258,14 +258,14 @@ c_user_cleanup_marks_cb(const char *path, const char *file, UNUSED void *data)
 	if (file_is_mountpoint(mark)) {
 		if (umount2(mark, MNT_DETACH) < 0) {
 			WARN_ERRNO("Could not umount shift mark on %s", mark);
-			mem_free(mark);
+			mem_free0(mark);
 			return -1;
 		}
 		if (rmdir(mark) < 0)
 			TRACE("Unable to remove %s", mark);
 		INFO("Cleanup mark '%s' done.", mark);
 	}
-	mem_free(mark);
+	mem_free0(mark);
 	return 0;
 }
 
@@ -301,7 +301,7 @@ c_user_cleanup(c_user_t *user, bool is_rebooting)
 		WARN("Could not release marks in '%s'", path);
 	if (rmdir(path) < 0)
 		TRACE("Unable to remove %s", path);
-	mem_free(path);
+	mem_free0(path);
 }
 
 /**
@@ -311,8 +311,8 @@ void
 c_user_free(c_user_t *user)
 {
 	ASSERT(user);
-	mem_free(user->ns_path);
-	mem_free(user);
+	mem_free0(user->ns_path);
+	mem_free0(user);
 }
 
 int
@@ -332,7 +332,7 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 
 	char *file_to_chown = mem_printf("%s/%s", path, file);
 	if (lstat(file_to_chown, &s) == -1) {
-		mem_free(file_to_chown);
+		mem_free0(file_to_chown);
 		return -1;
 	}
 
@@ -365,7 +365,7 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
 		ret--;
 	}
-	mem_free(file_to_chown);
+	mem_free0(file_to_chown);
 	return ret;
 }
 
@@ -592,15 +592,15 @@ c_user_shift_mounts(const c_user_t *user)
 	}
 
 	if (target_dev)
-		mem_free(target_dev);
+		mem_free0(target_dev);
 	if (saved_dev)
-		mem_free(saved_dev);
+		mem_free0(saved_dev);
 	return 0;
 error:
 	if (target_dev)
-		mem_free(target_dev);
+		mem_free0(target_dev);
 	if (saved_dev)
-		mem_free(saved_dev);
+		mem_free0(saved_dev);
 	return -1;
 }
 

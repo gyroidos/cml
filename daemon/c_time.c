@@ -71,7 +71,7 @@ c_time_get_creation_time_from_file(c_time_t *_time)
 	INFO("container %s was created at %s", uuid_string(container_get_uuid(_time->container)),
 	     ctime(&ret));
 
-	mem_free(file_name_created);
+	mem_free0(file_name_created);
 	return ret;
 }
 
@@ -98,7 +98,7 @@ void
 c_time_free(c_time_t *time)
 {
 	ASSERT(time);
-	mem_free(time);
+	mem_free0(time);
 }
 
 int
@@ -144,10 +144,10 @@ c_time_start_pre_exec(const c_time_t *time)
 	}
 	INFO("Successfully updated timens offsets in new time namespace");
 
-	mem_free(path_timens_offsets);
+	mem_free0(path_timens_offsets);
 	return 0;
 error:
-	mem_free(path_timens_offsets);
+	mem_free0(path_timens_offsets);
 	return -1;
 }
 

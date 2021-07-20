@@ -140,12 +140,12 @@ main(void)
 	DEBUG("offset checking done");
 
 	list_delete(nw_name_list);
-	mem_free(real_cmld_ip_string);
-	mem_free(real_cont_ip_string);
-	mem_free(real_bc_ip_string);
-	mem_free(cmld_ip_string);
-	mem_free(cont_ip_string);
-	mem_free(bc_ip_string);
+	mem_free0(real_cmld_ip_string);
+	mem_free0(real_cont_ip_string);
+	mem_free0(real_bc_ip_string);
+	mem_free0(cmld_ip_string);
+	mem_free0(cont_ip_string);
+	mem_free0(bc_ip_string);
 	container_free(cont0);
 	c_net_free(net0);
 	container_free(cont1);

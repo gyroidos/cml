@@ -130,10 +130,10 @@ audit_remaining_storage(const char *uuid)
 	off_t size = file_size(file);
 
 	if (!file_exists(file)) {
-		mem_free(file);
+		mem_free0(file);
 		return AUDIT_STORAGE;
 	}
-	mem_free(file);
+	mem_free0(file);
 
 	if (0 > size) {
 		ERROR_ERRNO("Failed to retrieve size of audit log file");
@@ -192,17 +192,17 @@ audit_send_record_cb(const char *hash_string, const char *hash_file,
 		ERROR("Failed to send audit record to container");
 		// rollback
 		container_audit_set_last_ack(c, old_acked);
-		mem_free(old_acked);
+		mem_free0(old_acked);
 		goto out;
 	}
-	mem_free(old_acked);
+	mem_free0(old_acked);
 
 	TRACE("Sent audit record with ID %s to container %s", container_audit_get_last_ack(c),
 	      uuid_string(container_get_uuid(c)));
 
 out:
 	container_audit_set_processing_ack(c, false);
-	mem_free(buf);
+	mem_free0(buf);
 }
 
 static AuditRecord *
@@ -240,27 +240,27 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 		if (0 > (current = getline(&line, &n, file))) {
 			ERROR_ERRNO("Failed to read line from file");
 			fclose(file);
-			mem_free(line);
+			mem_free0(line);
 			goto out;
 		}
 
 		if (read + current > (size_t)size) {
 			ERROR("File was changed while reading");
 			fclose(file);
-			mem_free(line);
+			mem_free0(line);
 			goto out;
 		}
 
 		// if delimiter line was read, stop further processing
 		if (!strcmp(AUDIT_DELIMITER, line)) {
 			delim_found = true;
-			mem_free(line);
+			mem_free0(line);
 			continue;
 		}
 
 		memcpy(buf + read, line, current);
 		read += current;
-		mem_free(line);
+		mem_free0(line);
 	}
 	fclose(file);
 
@@ -294,7 +294,7 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 					audit_evclass_to_string(GENERIC), "corrupt-record");
 
 		record = audit_record_new(type, NULL, 1, meta);
-		mem_free(type);
+		mem_free0(type);
 	}
 
 	if (purge) {
@@ -318,12 +318,12 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 		if (-1 == file_write(filename, filebuf + offset, strlen(filebuf + offset))) {
 			ERROR_ERRNO("Failed to remove message from file: %s", filename);
 		}
-		mem_free(filebuf);
+		mem_free0(filebuf);
 	}
 
 out:
 	if (buf)
-		mem_free(buf);
+		mem_free0(buf);
 
 	return (AuditRecord *)record;
 }
@@ -365,10 +365,10 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 
 	if (!file_is_dir(dir) && dir_mkdir_p(dir, 0600)) {
 		ERROR("Failed to create logdir");
-		mem_free(dir);
+		mem_free0(dir);
 		return -1;
 	}
-	mem_free(dir);
+	mem_free0(dir);
 
 	char *file = audit_log_file_new(uuid_string(uuid));
 
@@ -412,8 +412,8 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	ret = 0;
 
 out:
-	mem_free(file);
-	mem_free(msg_text);
+	mem_free0(file);
+	mem_free0(msg_text);
 
 	return ret;
 }
@@ -428,13 +428,13 @@ audit_next_record_new(const container_t *container, bool purge)
 
 	if (!file_exists(file)) {
 		ERROR("Failed to read audit record: no file");
-		mem_free(file);
+		mem_free0(file);
 		return NULL;
 	}
 
 	r = (AuditRecord *)audit_record_from_textfile_new(file, purge);
 
-	mem_free(file);
+	mem_free0(file);
 
 	return r;
 }
@@ -490,7 +490,7 @@ audit_do_send_record(const container_t *c)
 		str_t *dump = str_hexdump_new((unsigned char *)packed, (int)packed_len);
 		ERROR("Failed to request hashing of record to be sent with length %u: %s.",
 		      packed_len, str_buffer(dump));
-		mem_free(dump);
+		mem_free0(dump);
 	}
 
 	TRACE("sent next stored audit record sucessfully");
@@ -499,7 +499,7 @@ out:
 	if (ret < 0)
 		ERROR("Failed to send next stored audit record");
 
-	mem_free(packed);
+	mem_free0(packed);
 	protobuf_free_message((ProtobufCMessage *)message_proto);
 	return ret;
 }
@@ -517,7 +517,7 @@ audit_send_next_stored(const container_t *c)
 
 	if (!file_exists(file)) {
 		DEBUG("Sent all stored audit messages");
-		mem_free(file);
+		mem_free0(file);
 
 		if (0 > container_audit_notify_complete(c)) {
 			ERROR("Failed to notify container that all records were sent");
@@ -529,7 +529,7 @@ audit_send_next_stored(const container_t *c)
 
 		return 0;
 	}
-	mem_free(file);
+	mem_free0(file);
 
 	return audit_do_send_record(c);
 }
@@ -674,17 +674,17 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 				audit_evclass_to_string(evclass), evtype);
 
 	record = audit_record_new(type, subject_id, meta_count, metas);
-	mem_free(type);
+	mem_free0(type);
 
 	if (!record) {
 		ERROR("Failed to create audit record");
-		mem_free(metas);
+		mem_free0(metas);
 		goto out;
 	}
 
 	char *record_text = protobuf_c_text_to_string((ProtobufCMessage *)record, NULL);
 	DEBUG("Logging audit message %s", record_text ? record_text : "");
-	mem_free(record_text);
+	mem_free0(record_text);
 
 	ret = audit_record_log(audit_get_log_container(uuid), record);
 
@@ -752,7 +752,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 				(strstr(res, "success") || res[0] == '1') ? SSA : FSA, CMLD, KAUDIT,
 				record_type, uuid_string(container_get_uuid(c)), 2, "msg",
 				log_record);
-		mem_free(record_type);
+		mem_free0(record_type);
 		TRACE("audit: type=%d %s", type, log_record);
 	} else if (type == AUDIT_KERNEL ||
 		   (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
@@ -760,7 +760,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		TRACE("audit: type=%d %s", type, log_record);
 	}
 out:
-	mem_free(buf);
+	mem_free0(buf);
 }
 
 int

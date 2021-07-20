@@ -100,7 +100,7 @@ c_fifo_create_fifos(c_fifo_t *fifo, container_t *container)
 		char *fifo_path = mem_printf("%s/%s", fifo_dir, current_fifo);
 		if (0 != mkfifo(fifo_path, 666)) {
 			ERROR_ERRNO("Failed to create fifo at %s", fifo_path);
-			mem_free(fifo_path);
+			mem_free0(fifo_path);
 			audit_log_event(container_get_uuid(fifo->container), FSA, CMLD,
 					CONTAINER_ISOLATION, "create-fifo",
 					uuid_string(container_get_uuid(fifo->container)), 2, "name",
@@ -119,7 +119,7 @@ c_fifo_create_fifos(c_fifo_t *fifo, container_t *container)
 					uuid_string(container_get_uuid(fifo->container)), 2, "path",
 					fifo_path);
 			ERROR("Failed to chown fifo dir to %d", uid);
-			mem_free(fifo_path);
+			mem_free0(fifo_path);
 			goto error;
 		}
 
@@ -129,15 +129,15 @@ c_fifo_create_fifos(c_fifo_t *fifo, container_t *container)
 				fifo_path);
 		DEBUG("Chowned FIFO at %s to %d", fifo_path ? fifo_path : "NULL", uid);
 
-		mem_free(fifo_path);
+		mem_free0(fifo_path);
 	}
 
-	mem_free(fifo_dir);
+	mem_free0(fifo_dir);
 
 	return 0;
 
 error:
-	mem_free(fifo_dir);
+	mem_free0(fifo_dir);
 	return -1;
 }
 

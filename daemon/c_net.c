@@ -174,13 +174,13 @@ c_net_get_next_ipv4_cmld_addr(int offset, struct in_addr *ipv4_addr)
 	}
 
 	if (!inet_aton(ipv4_next, ipv4_addr)) {
-		mem_free(ipv4_next);
+		mem_free0(ipv4_next);
 		ERROR("failed to determine free ip address");
 		return -1;
 	}
 
 	DEBUG("next free ip cmld address is: %s", ipv4_next);
-	mem_free(ipv4_next);
+	mem_free0(ipv4_next);
 	return 0;
 }
 
@@ -221,13 +221,13 @@ c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
 	}
 
 	if (!inet_aton(ipv4_next, ipv4_addr)) {
-		mem_free(ipv4_next);
+		mem_free0(ipv4_next);
 		ERROR("failed to determine free ip address");
 		return -1;
 	}
 
 	DEBUG("next free ipv4 container address is: %s", ipv4_next);
-	mem_free(ipv4_next);
+	mem_free0(ipv4_next);
 	return 0;
 }
 
@@ -260,11 +260,11 @@ c_net_is_veth_used(const char *if_name)
 			if (!strncmp(dp->d_name, if_name, IFNAMSIZ)) {
 				DEBUG("veth %s is occupied", if_name);
 				closedir(dirp);
-				mem_free(path);
+				mem_free0(path);
 				return 1;
 			}
 		}
-		mem_free(path);
+		mem_free0(path);
 	}
 
 	DEBUG("veth %s is free", if_name);
@@ -516,7 +516,7 @@ c_net_mac_filter(const char *if_name, list_t *mac_whitelist, bool apply)
 		if (ret) {
 			char *mac_str = network_mac_addr_to_str_new(mac);
 			ERROR("Failed to allow %s on %s", mac_str, if_name);
-			mem_free(mac_str);
+			mem_free0(mac_str);
 			return -1;
 		}
 	}
@@ -594,9 +594,9 @@ c_net_bridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 		goto err_port;
 	}
 
-	mem_free(br_cmld_name);
-	mem_free(veth_cmld_name);
-	mem_free(veth_cont_name);
+	mem_free0(br_cmld_name);
+	mem_free0(veth_cmld_name);
+	mem_free0(veth_cont_name);
 
 	return 0;
 
@@ -607,9 +607,9 @@ err_br:
 	network_delete_link(veth_cont_name);
 	network_set_flag(if_name, IFF_DOWN);
 err:
-	mem_free(br_cmld_name);
-	mem_free(veth_cmld_name);
-	mem_free(veth_cont_name);
+	mem_free0(br_cmld_name);
+	mem_free0(veth_cmld_name);
+	mem_free0(veth_cont_name);
 
 	return -1;
 }
@@ -652,9 +652,9 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 	if (-1 == c_net_mac_filter(if_name, mac_whitelist, false))
 		WARN("Failed apply mac_filter to %s", if_name);
 
-	mem_free(br_cmld_name);
-	mem_free(veth_cmld_name);
-	mem_free(veth_cont_name);
+	mem_free0(br_cmld_name);
+	mem_free0(veth_cmld_name);
+	mem_free0(veth_cont_name);
 
 	return 0;
 }
@@ -705,8 +705,8 @@ c_net_add_interface(c_net_t *net, container_pnet_cfg_t *pnet_cfg)
 	     container_get_name(net->container));
 	return 0;
 err:
-	mem_free(if_name);
-	mem_free(pnet_cfg);
+	mem_free0(if_name);
+	mem_free0(pnet_cfg);
 	return -1;
 }
 
@@ -731,14 +731,14 @@ c_net_remove_interface(c_net_t *net, const char *if_name_mac)
 					 mem_strdup(_cfg->pnet_name);
 		if (strcmp(if_name, _if_name)) {
 			cfg = _cfg;
-			mem_free(_if_name);
+			mem_free0(_if_name);
 			break;
 		}
-		mem_free(_if_name);
+		mem_free0(_if_name);
 	}
 
 	if (NULL == cfg) {
-		mem_free(if_name);
+		mem_free0(if_name);
 		return 0;
 	}
 
@@ -754,11 +754,11 @@ c_net_remove_interface(c_net_t *net, const char *if_name_mac)
 	container_pnet_cfg_free(cfg);
 
 	cmld_netif_phys_add_by_name(if_name);
-	mem_free(if_name);
+	mem_free0(if_name);
 	return 0;
 
 err:
-	mem_free(if_name);
+	mem_free0(if_name);
 	return -1;
 }
 
@@ -930,12 +930,12 @@ c_net_udhcpd_start(c_net_interface_t *ni)
 		event_add_signal(sigchld);
 	}
 out:
-	mem_free(lease_file);
-	mem_free(pid_file);
-	mem_free(run_dir);
-	mem_free(conf_file);
-	mem_free(ipv4_start);
-	mem_free(ipv4_end);
+	mem_free0(lease_file);
+	mem_free0(pid_file);
+	mem_free0(run_dir);
+	mem_free0(conf_file);
+	mem_free0(ipv4_start);
+	mem_free0(ipv4_end);
 
 	return (bytes_written > 0) ? 0 : -1;
 }
@@ -1011,11 +1011,11 @@ err:
 				TRACE("network interface %s could not be destroyed",
 				      ni->veth_cmld_name);
 		}
-		mem_free(ni->veth_cmld_name);
+		mem_free0(ni->veth_cmld_name);
 		ni->veth_cmld_name = NULL;
 	}
 	if (ni->veth_cont_name) {
-		mem_free(ni->veth_cont_name);
+		mem_free0(ni->veth_cont_name);
 		ni->veth_cont_name = NULL;
 	}
 	return -1;
@@ -1073,7 +1073,7 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 		if (network_rename_ifi(ni->veth_cmld_name, hardware_get_radio_ifname()))
 			return -1;
 
-		mem_free(ni->veth_cmld_name);
+		mem_free0(ni->veth_cmld_name);
 		ni->veth_cmld_name = mem_strdup(hardware_get_radio_ifname());
 	}
 
@@ -1095,7 +1095,7 @@ c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		/* remove the sigchld callback for this container from the event loop */
 		event_remove_signal(sig);
 		event_signal_free(sig);
-		mem_free(c0_netns_pid);
+		mem_free0(c0_netns_pid);
 	} else {
 		TRACE("Failed to reap c0 netns helper process");
 	}
@@ -1167,7 +1167,7 @@ c_net_start_post_clone(c_net_t *net)
 	*c0_netns_pid = fork();
 	if (*c0_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to c0's netns");
-		mem_free(c0_netns_pid);
+		mem_free0(c0_netns_pid);
 		return -1;
 	} else if (*c0_netns_pid == 0) {
 		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
@@ -1179,7 +1179,7 @@ c_net_start_post_clone(c_net_t *net)
 			char *c0_netns = mem_printf("/proc/%d/ns/net",
 						    container_get_pid(cmld_containers_get_c0()));
 			int netns_fd = open(c0_netns, O_RDONLY);
-			mem_free(c0_netns);
+			mem_free0(c0_netns);
 			if (netns_fd == -1)
 				FATAL_ERRNO("Could not open netns file of c0");
 			if (setns(netns_fd, CLONE_NEWNET) == -1)
@@ -1363,7 +1363,7 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	c_net_unset_offset(ni->cont_offset);
 
 	if (ni->subnet) {
-		mem_free(ni->subnet);
+		mem_free0(ni->subnet);
 		ni->subnet = NULL;
 	}
 	memset(&ni->ipv4_cmld_addr, 0, sizeof(struct in_addr));
@@ -1371,11 +1371,11 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	memset(&ni->ipv4_bc_addr, 0, sizeof(struct in_addr));
 
 	if (ni->veth_cmld_name) {
-		mem_free(ni->veth_cmld_name);
+		mem_free0(ni->veth_cmld_name);
 		ni->veth_cmld_name = NULL;
 	}
 	if (ni->veth_cont_name) {
-		mem_free(ni->veth_cont_name);
+		mem_free0(ni->veth_cont_name);
 		ni->veth_cont_name = NULL;
 	}
 }
@@ -1393,7 +1393,7 @@ c_net_cleanup_c0(c_net_t *net)
 	*c0_netns_pid = fork();
 	if (*c0_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to c0's netns");
-		mem_free(c0_netns_pid);
+		mem_free0(c0_netns_pid);
 		return -1;
 	} else if (*c0_netns_pid == 0) {
 		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
@@ -1472,7 +1472,7 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 			      container_get_name(net->container));
 			if (-1 == c_net_unbridge_ifi(if_name, cfg->mac_whitelist, -1))
 				WARN("Failed to remove phys if %s", if_name);
-			mem_free(if_name);
+			mem_free0(if_name);
 		}
 	}
 
@@ -1489,11 +1489,11 @@ c_net_free_interface(c_net_interface_t *ni)
 	ASSERT(ni);
 
 	if (ni->subnet)
-		mem_free(ni->subnet);
-	mem_free(ni->veth_cmld_name);
-	mem_free(ni->veth_cont_name);
-	mem_free(ni->nw_name);
-	mem_free(ni);
+		mem_free0(ni->subnet);
+	mem_free0(ni->veth_cmld_name);
+	mem_free0(ni->veth_cont_name);
+	mem_free0(ni->nw_name);
+	mem_free0(ni);
 }
 
 /**
@@ -1514,8 +1514,8 @@ c_net_free(c_net_t *net)
 		container_pnet_cfg_free(pnet);
 	}
 	list_delete(net->pnet_mv_list);
-	mem_free(net->ns_path);
-	mem_free(net);
+	mem_free0(net->ns_path);
+	mem_free0(net);
 }
 
 char *

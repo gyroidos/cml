@@ -153,7 +153,7 @@ smartcard_get_pairing_secret(smartcard_t *smartcard, unsigned char *buf, int buf
 	}
 
 out:
-	mem_free(pair_sec_file);
+	mem_free0(pair_sec_file);
 	return bytes_read;
 }
 
@@ -226,7 +226,7 @@ smartcard_container_token_is_provisioned(const container_t *container)
 
 	ret = file_exists(token_init_file);
 
-	mem_free(token_init_file);
+	mem_free0(token_init_file);
 	return ret;
 }
 
@@ -279,7 +279,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 		event_remove_io(io);
 		event_io_free(io);
-		mem_free(startdata);
+		mem_free0(startdata);
 		return;
 	} else if (events & EVENT_IO_READ) {
 		// use protobuf for communication with scd
@@ -291,7 +291,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 			event_remove_io(io);
 			event_io_free(io);
-			mem_free(startdata);
+			mem_free0(startdata);
 			return;
 		}
 
@@ -384,8 +384,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 				//delete wrapped key from RAM
 				memset(key, 0, sizeof(key));
-				mem_free(out.container_uuid);
-				mem_free(out.token_uuid);
+				mem_free0(out.container_uuid);
+				mem_free0(out.token_uuid);
 			} else {
 				DEBUG("No previous key found for container %s. Generating new key.",
 				      container_get_name(startdata->container));
@@ -418,7 +418,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				container_set_key(startdata->container, ascii_key);
 				// delete key from RAM
 				memset(ascii_key, 0, strlen(ascii_key));
-				mem_free(ascii_key);
+				mem_free0(ascii_key);
 				// wrap key via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 				out.code = DAEMON_TO_TOKEN__CODE__WRAP_KEY;
@@ -440,10 +440,10 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 
 				// delete key from RAM
 				memset(key, 0, sizeof(key));
-				mem_free(out.container_uuid);
-				mem_free(out.token_uuid);
+				mem_free0(out.container_uuid);
+				mem_free0(out.token_uuid);
 			}
-			mem_free(keyfile);
+			mem_free0(keyfile);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY: {
 			// lock token via scd
@@ -458,7 +458,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				mem_strdup(uuid_string(container_get_uuid(startdata->container)));
 
 			protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
-			mem_free(out.token_uuid);
+			mem_free0(out.token_uuid);
 			if (!msg->has_unwrapped_key) {
 				WARN("Expected derived key, but none was returned!");
 				audit_log_event(
@@ -480,7 +480,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			//delete key from RAM
 			memset(ascii_key, 0, strlen(ascii_key));
 			memset(msg->unwrapped_key.data, 0, msg->unwrapped_key.len);
-			mem_free(ascii_key);
+			mem_free0(ascii_key);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__WRAPPED_KEY: {
 			// lock token via scd
@@ -495,7 +495,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				mem_strdup(uuid_string(container_get_uuid(startdata->container)));
 
 			protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
-			mem_free(out.token_uuid);
+			mem_free0(out.token_uuid);
 			// save wrapped key
 			if (!msg->has_wrapped_key) {
 				audit_log_event(
@@ -529,7 +529,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			TRACE("Stored wrapped key on disk successfully");
 			// delete wrapped key from RAM
 			memset(msg->wrapped_key.data, 0, msg->wrapped_key.len);
-			mem_free(keyfile);
+			mem_free0(keyfile);
 		} break;
 		default:
 			ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
@@ -541,7 +541,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 		if (done) {
 			event_remove_io(io);
 			event_io_free(io);
-			mem_free(startdata);
+			mem_free0(startdata);
 		}
 	}
 }
@@ -602,7 +602,7 @@ smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 		out.token_uuid = mem_strdup(uuid_string(container_get_uuid(startdata->container)));
 
 		protobuf_send_message(startdata->smartcard->sock, (ProtobufCMessage *)&out);
-		mem_free(out.token_uuid);
+		mem_free0(out.token_uuid);
 	} break;
 	default:
 		ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
@@ -614,7 +614,7 @@ smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 exit:
 	event_remove_io(io);
 	event_io_free(io);
-	mem_free(startdata);
+	mem_free0(startdata);
 	return;
 }
 
@@ -707,13 +707,13 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	}
 
 	protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-	mem_free(out.token_pin);
-	mem_free(out.pairing_secret.data);
-	mem_free(out.token_uuid);
+	mem_free0(out.token_pin);
+	mem_free0(out.pairing_secret.data);
+	mem_free0(out.token_uuid);
 	return 0;
 
 err:
-	mem_free(startdata);
+	mem_free0(startdata);
 	return -1;
 }
 
@@ -777,7 +777,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 					CONTAINER_MGMT, "container-change-pin",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
-			mem_free(startdata);
+			mem_free0(startdata);
 			return;
 		}
 		switch (msg->code) {
@@ -801,7 +801,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 				container_set_token_is_linked_to_device(startdata->container, true);
 				command_state = true;
 			}
-			mem_free(path);
+			mem_free0(path);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_FAILED: {
 			container_set_token_is_linked_to_device(startdata->container, false);
@@ -824,12 +824,12 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 		protobuf_free_message((ProtobufCMessage *)msg);
 		event_remove_io(io);
 		event_io_free(io);
-		mem_free(startdata);
+		mem_free0(startdata);
 	} else {
 		ERROR("Failed to receive message: EVENT_IO_EXCEPT. Aborting smartcard change_pin.");
 		event_remove_io(io);
 		event_io_free(io);
-		mem_free(startdata);
+		mem_free0(startdata);
 	}
 }
 
@@ -866,7 +866,7 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 				0);
 		ERROR("Could not retrieve pairing secret, ret code : %d", ret);
 		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
-		mem_free(startdata);
+		mem_free0(startdata);
 		return -1;
 	}
 
@@ -895,10 +895,10 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	out.pairing_secret.data = mem_memcpy(pair_sec, sizeof(pair_sec));
 
 	ret = protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-	mem_free(out.token_pin);
-	mem_free(out.token_newpin);
-	mem_free(out.pairing_secret.data);
-	mem_free(out.token_uuid);
+	mem_free0(out.token_pin);
+	mem_free0(out.token_newpin);
+	mem_free0(out.pairing_secret.data);
+	mem_free0(out.token_uuid);
 
 	return (ret > 0) ? 0 : -1;
 }
@@ -975,7 +975,7 @@ smartcard_scd_token_add_block(container_t *container)
 	protobuf_free_message((ProtobufCMessage *)msg);
 
 err:
-	mem_free(out.token_uuid);
+	mem_free0(out.token_uuid);
 	return rc;
 }
 
@@ -997,7 +997,7 @@ smartcard_scd_token_remove_block(container_t *container)
 	TokenToDaemon *msg = smartcard_send_recv_block(&out);
 	if (!msg) {
 		ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard_scd_token_block_new.");
-		mem_free(out.token_uuid);
+		mem_free0(out.token_uuid);
 		return -1;
 	}
 
@@ -1013,7 +1013,7 @@ smartcard_scd_token_remove_block(container_t *container)
 		ERROR("TokenToDaemon command %d not expected as answer to change_pin", msg->code);
 	}
 
-	mem_free(out.token_uuid);
+	mem_free0(out.token_uuid);
 	protobuf_free_message((ProtobufCMessage *)msg);
 	return 0;
 }
@@ -1044,7 +1044,7 @@ smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container)
 	rc = 0;
 
 out:
-	mem_free(keyfile);
+	mem_free0(keyfile);
 	return rc;
 }
 
@@ -1105,7 +1105,7 @@ smartcard_new(const char *path)
 	} while (smartcard->sock < 0 && retries < 10);
 
 	if (smartcard->sock < 0) {
-		mem_free(smartcard);
+		mem_free0(smartcard);
 		ERROR("Failed to connect to scd");
 		return NULL;
 	}
@@ -1131,8 +1131,8 @@ smartcard_free(smartcard_t *smartcard)
 
 	smartcard_scd_stop(smartcard);
 
-	mem_free(smartcard->path);
-	mem_free(smartcard);
+	mem_free0(smartcard->path);
+	mem_free0(smartcard);
 }
 
 /// *** CRYPTO *** ///
@@ -1244,20 +1244,20 @@ crypto_callback_task_free(crypto_callback_task_t *task)
 {
 	IF_NULL_RETURN(task);
 	if (task->hash_file)
-		mem_free(task->hash_file);
+		mem_free0(task->hash_file);
 	if (task->verify_data_file)
-		mem_free(task->verify_data_file);
+		mem_free0(task->verify_data_file);
 	if (task->verify_sig_file)
-		mem_free(task->verify_sig_file);
+		mem_free0(task->verify_sig_file);
 	if (task->verify_cert_file)
-		mem_free(task->verify_cert_file);
+		mem_free0(task->verify_cert_file);
 	if (task->verify_data_buf)
-		mem_free(task->verify_data_buf);
+		mem_free0(task->verify_data_buf);
 	if (task->verify_sig_buf)
-		mem_free(task->verify_sig_buf);
+		mem_free0(task->verify_sig_buf);
 	if (task->verify_cert_buf)
-		mem_free(task->verify_cert_buf);
-	mem_free(task);
+		mem_free0(task->verify_cert_buf);
+	mem_free0(task);
 }
 
 static void
@@ -1290,7 +1290,7 @@ smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
 				task->hash_complete(hash, task->hash_file, task->hash_algo,
 						    task->data);
 				if (hash != NULL) {
-					mem_free(hash);
+					mem_free0(hash);
 				}
 				break;
 			}
@@ -1361,7 +1361,7 @@ smartcard_send_crypto(const DaemonToToken *out, crypto_callback_task_t *task)
 	if (!string)
 		string = mem_printf("%d", out->code);
 	DEBUG("smartcard_send_crypto: sending crypto command {%s}", string);
-	mem_free(string);
+	mem_free0(string);
 	*/
 
 	if (protobuf_send_message(sock, (ProtobufCMessage *)out) < 0) {
@@ -1472,7 +1472,7 @@ smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo
 	out.hash_file = mem_strdup(file);
 
 	TokenToDaemon *msg = smartcard_send_recv_block(&out);
-	mem_free(out.hash_file);
+	mem_free0(out.hash_file);
 
 	IF_NULL_RETVAL(msg, NULL);
 
@@ -1514,9 +1514,9 @@ smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, co
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
 
 	TokenToDaemon *msg = smartcard_send_recv_block(&out);
-	mem_free(out.verify_data_file);
-	mem_free(out.verify_sig_file);
-	mem_free(out.verify_cert_file);
+	mem_free0(out.verify_data_file);
+	mem_free0(out.verify_sig_file);
+	mem_free0(out.verify_cert_file);
 
 	IF_NULL_RETVAL(msg, VERIFY_ERROR);
 

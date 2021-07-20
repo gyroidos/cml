@@ -207,7 +207,7 @@ container_free_key(container_t *container)
 	IF_NULL_RETURN(container->key);
 
 	memset(container->key, 0, strlen(container->key));
-	mem_free(container->key);
+	mem_free0(container->key);
 
 	INFO("Key of container %s was freed", container->name);
 }
@@ -466,8 +466,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	if (!conf) {
 		WARN("Could not read config file %s", config_filename);
-		mem_free(config_filename);
-		mem_free(images_dir);
+		mem_free0(config_filename);
+		mem_free0(images_dir);
 		uuid_free(uuid);
 		return NULL;
 	}
@@ -479,8 +479,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	os = guestos_mgr_get_latest_by_name(os_name, true);
 	if (!os) {
 		WARN("Could not get GuestOS %s instance for container %s", os_name, name);
-		mem_free(config_filename);
-		mem_free(images_dir);
+		mem_free0(config_filename);
+		mem_free0(images_dir);
 		uuid_free(uuid);
 		container_config_free(conf);
 		return NULL;
@@ -515,8 +515,8 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low",
 		     new_guestos_version, name);
 		WARN("Current version is %" PRIu64 "; Aborting...", current_guestos_version);
-		mem_free(config_filename);
-		mem_free(images_dir);
+		mem_free0(config_filename);
+		mem_free0(images_dir);
 		uuid_free(uuid);
 		container_config_free(conf);
 		mount_free(mnt);
@@ -568,13 +568,13 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		container_config_write(conf);
 
 	uuid_free(uuid);
-	mem_free(images_dir);
-	mem_free(config_filename);
+	mem_free0(images_dir);
+	mem_free0(config_filename);
 
 	for (list_t *l = vnet_cfg_list; l; l = l->next) {
 		container_vnet_cfg_t *vnet_cfg = l->data;
-		mem_free(vnet_cfg->vnet_name);
-		mem_free(vnet_cfg);
+		mem_free0(vnet_cfg->vnet_name);
+		mem_free0(vnet_cfg);
 	}
 	list_delete(vnet_cfg_list);
 
@@ -596,31 +596,31 @@ container_free(container_t *container)
 	container_free_key(container);
 
 	uuid_free(container->uuid);
-	mem_free(container->name);
+	mem_free0(container->name);
 
 	for (list_t *l = container->csock_list; l; l = l->next) {
 		container_sock_t *cs = l->data;
-		mem_free(cs->path);
-		mem_free(cs);
+		mem_free0(cs->path);
+		mem_free0(cs);
 	}
 	list_delete(container->csock_list);
 
 	if (container->config_filename)
-		mem_free(container->config_filename);
+		mem_free0(container->config_filename);
 
-	mem_free(container->cpus_allowed);
+	mem_free0(container->cpus_allowed);
 
 	if (container->init_argv) {
 		for (char **arg = container->init_argv; *arg; arg++) {
-			mem_free(*arg);
+			mem_free0(*arg);
 		}
-		mem_free(container->init_argv);
+		mem_free0(container->init_argv);
 	}
 	if (container->init_env) {
 		for (char **arg = container->init_env; *arg; arg++) {
-			mem_free(*arg);
+			mem_free0(*arg);
 		}
-		mem_free(container->init_env);
+		mem_free0(container->init_env);
 	}
 
 	if (container->mnt)
@@ -643,18 +643,18 @@ container_free(container_t *container)
 	if (container->service)
 		c_service_free(container->service);
 	if (container->imei)
-		mem_free(container->imei);
+		mem_free0(container->imei);
 	if (container->mac_address)
-		mem_free(container->mac_address);
+		mem_free0(container->mac_address);
 	if (container->phone_number)
-		mem_free(container->phone_number);
+		mem_free0(container->phone_number);
 	if (container->dns_server)
-		mem_free(container->dns_server);
-	mem_free(container->device_allowed_list);
-	mem_free(container->device_assigned_list);
+		mem_free0(container->dns_server);
+	mem_free0(container->device_allowed_list);
+	mem_free0(container->device_assigned_list);
 
 	for (list_t *l = container->usbdev_list; l; l = l->next) {
-		mem_free(l->data);
+		mem_free0(l->data);
 	}
 	list_delete(container->usbdev_list);
 
@@ -662,11 +662,11 @@ container_free(container_t *container)
 		uuid_free(container->token.uuid);
 
 	if (container->token.serial)
-		mem_free(container->token.serial);
+		mem_free0(container->token.serial);
 
 	if (container->token.devpath)
-		mem_free(container->token.devpath);
-	mem_free(container);
+		mem_free0(container->token.devpath);
+	mem_free0(container);
 }
 
 const uuid_t *
@@ -773,7 +773,7 @@ container_oom_protect_service(const container_t *container)
 	int ret = file_write(path, "-17", -1);
 	if (ret < 0)
 		ERROR_ERRNO("Failed to write to %s", path);
-	mem_free(path);
+	mem_free0(path);
 }
 
 c_cgroups_t *
@@ -1390,7 +1390,7 @@ container_start_child_early(void *data)
 		ERROR_ERRNO("write pid '%s' to sync socket failed", msg_pid);
 		goto error;
 	}
-	mem_free(msg_pid);
+	mem_free0(msg_pid);
 	return 0;
 
 error:
@@ -1581,13 +1581,13 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 	char *pid_msg = mem_alloc0(34);
 	if (read(container->sync_sock_parent, pid_msg, 33) <= 0) {
 		WARN_ERRNO("Could not read from sync socket");
-		mem_free(pid_msg);
+		mem_free0(pid_msg);
 		goto error_pre_clone;
 	}
 
 	if (pid_msg[0] == CONTAINER_START_SYNC_MSG_ERROR) {
 		WARN("Early child died with error!");
-		mem_free(pid_msg);
+		mem_free0(pid_msg);
 		goto error_pre_clone;
 	}
 
@@ -1597,7 +1597,7 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 
 	DEBUG("Received pid message from child %s", pid_msg);
 	container->pid = atoi(pid_msg);
-	mem_free(pid_msg);
+	mem_free0(pid_msg);
 
 	/*********************************************************/
 	/* REGISTER SOCKET TO RECEIVE STATUS MESSAGES FROM CHILD */
@@ -1870,7 +1870,7 @@ container_bind_socket_before_start(container_t *container, const char *path)
 
 	container_sock_t *cs = mem_new0(container_sock_t, 1);
 	if ((cs->sockfd = sock_unix_create(SOCK_STREAM)) < 0) {
-		mem_free(cs);
+		mem_free0(cs);
 		return -1;
 	}
 	cs->path = mem_strdup(path);
@@ -1978,7 +1978,7 @@ container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 		if (unlink(image_path) == -1) {
 			ERROR_ERRNO("Could not delete image %s", image_path);
 		}
-		mem_free(image_path);
+		mem_free0(image_path);
 	}
 	return 0;
 }
@@ -2063,18 +2063,18 @@ container_destroy(container_t *container)
 		if (0 != unlink(file_name_created)) {
 			ERROR_ERRNO("Can't delete .created file!");
 		}
-	mem_free(file_name_created);
+	mem_free0(file_name_created);
 
 	char *file_name_uid = mem_printf("%s.uid", container_get_images_dir(container));
 	if (file_exists(file_name_uid))
 		if (0 != unlink(file_name_uid)) {
 			ERROR_ERRNO("Can't delete .uid file!");
 		}
-	mem_free(file_name_created);
+	mem_free0(file_name_created);
 
 	char *path = container_token_paired_file_new(container);
 	unlink(path);
-	mem_free(path);
+	mem_free0(path);
 
 	if ((ret = unlink(container_get_config_filename(container))))
 		ERROR_ERRNO("Can't delete config file!");
@@ -2179,7 +2179,7 @@ container_unregister_observer(container_t *container, container_callback_t *cb)
 
 	if (list_find(container->observer_list, cb)) {
 		container->observer_list = list_remove(container->observer_list, cb);
-		mem_free(cb);
+		mem_free0(cb);
 	}
 	DEBUG("Container %s: callback %p unregistered (nr of observers: %d)",
 	      container_get_description(container), CAST_FUNCPTR_VOIDPTR(cb),
@@ -2248,7 +2248,7 @@ container_set_imei(container_t *container, char *imei)
 		DEBUG("Setting container imei to %s for container %s", imei,
 		      container_get_description(container));
 		if (container->imei)
-			mem_free(container->imei);
+			mem_free0(container->imei);
 		container->imei = mem_strdup(imei);
 		container_notify_observers(container);
 	}
@@ -2269,7 +2269,7 @@ container_set_mac_address(container_t *container, char *mac_address)
 		DEBUG("Setting container MAC address to %s for container %s", mac_address,
 		      container_get_description(container));
 		if (container->mac_address)
-			mem_free(container->mac_address);
+			mem_free0(container->mac_address);
 		container->mac_address = mem_strdup(mac_address);
 		container_notify_observers(container);
 	}
@@ -2290,7 +2290,7 @@ container_set_phone_number(container_t *container, char *phone_number)
 		DEBUG("Setting container phone number to %s for container %s", phone_number,
 		      container_get_description(container));
 		if (container->phone_number)
-			mem_free(container->phone_number);
+			mem_free0(container->phone_number);
 		container->phone_number = mem_strdup(phone_number);
 		container_notify_observers(container);
 	}
@@ -2501,10 +2501,10 @@ container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg)
 
 	for (list_t *l = pnet_cfg->mac_whitelist; l; l = l->next) {
 		uint8_t *mac = l->data;
-		mem_free(mac);
+		mem_free0(mac);
 	}
 	list_delete(pnet_cfg->mac_whitelist);
-	mem_free(pnet_cfg);
+	mem_free0(pnet_cfg);
 }
 
 void
@@ -2512,10 +2512,10 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
 {
 	IF_NULL_RETURN(vnet_cfg);
 	if (vnet_cfg->vnet_name)
-		mem_free(vnet_cfg->vnet_name);
+		mem_free0(vnet_cfg->vnet_name);
 	if (vnet_cfg->rootns_name)
-		mem_free(vnet_cfg->rootns_name);
-	mem_free(vnet_cfg);
+		mem_free0(vnet_cfg->rootns_name);
+	mem_free0(vnet_cfg);
 }
 
 list_t *
@@ -2625,7 +2625,7 @@ container_set_usbtoken_devpath(container_t *container, char *devpath)
 	IF_FALSE_RETURN(CONTAINER_TOKEN_TYPE_USB == container->token.type);
 
 	if (container->token.devpath)
-		mem_free(container->token.devpath);
+		mem_free0(container->token.devpath);
 
 	DEBUG("Setting token devpath for container %s to %s", container->name, devpath);
 

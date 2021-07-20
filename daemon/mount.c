@@ -92,21 +92,21 @@ mount_free(mount_t *mnt)
 		mount_entry_t *mntent = mnt->list->data;
 		ASSERT(mntent);
 		// free mandatory/required fields
-		mem_free(mntent->image_file);
-		mem_free(mntent->mount_point);
-		mem_free(mntent->fs_type);
+		mem_free0(mntent->image_file);
+		mem_free0(mntent->mount_point);
+		mem_free0(mntent->fs_type);
 		// free optional fields
 		if (mntent->sha1)
-			mem_free(mntent->sha1);
+			mem_free0(mntent->sha1);
 		if (mntent->sha256)
-			mem_free(mntent->sha256);
+			mem_free0(mntent->sha256);
 		if (mntent->mount_data)
-			mem_free(mntent->mount_data);
-		mem_free(mntent);
+			mem_free0(mntent->mount_data);
+		mem_free0(mntent);
 		mnt->list = list_unlink(mnt->list, mnt->list);
 	}
 
-	mem_free(mnt);
+	mem_free0(mnt);
 }
 
 size_t
@@ -162,7 +162,7 @@ mount_entry_set_img(mount_entry_t *mntent, char *image_name)
 	ASSERT(mntent);
 	IF_NULL_RETURN(image_name);
 	if (mntent->image_file)
-		mem_free(mntent->image_file);
+		mem_free0(mntent->image_file);
 	mntent->image_file = mem_strdup(image_name);
 }
 
@@ -369,13 +369,13 @@ mount_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path
 		char *use_hierarchy = mem_printf("%s/memory.use_hierarchy", mount_path);
 		if (file_printf(use_hierarchy, "1") < 0)
 			WARN_ERRNO("Cloning default setting to child cgroups failes!");
-		mem_free(use_hierarchy);
+		mem_free0(use_hierarchy);
 	}
 	if (strcmp(subsys, "devices")) {
 		char *cgroup_clone_children = mem_printf("%s/cgroup.clone_children", mount_path);
 		if (file_printf(cgroup_clone_children, "1") < 0)
 			WARN_ERRNO("Cloning default setting to child cgroups failes!");
-		mem_free(cgroup_clone_children);
+		mem_free0(cgroup_clone_children);
 	}
 	return ret;
 }
@@ -403,10 +403,10 @@ mount_cgroups(list_t *cgroups_subsystems)
 		char *subsys = l->data;
 		char *mount_path = mem_printf("%s/%s", MOUNT_CGROUPS_FOLDER, subsys);
 		if (mount_cgroups_create_and_mount_subsys(subsys, mount_path) < 0) {
-			mem_free(mount_path);
+			mem_free0(mount_path);
 			goto error;
 		}
-		mem_free(mount_path);
+		mem_free0(mount_path);
 	}
 
 	// create a named hierarchy for systemd containers
@@ -423,7 +423,7 @@ error:
 		char *subsys = l->data;
 		char *subsys_path = mem_printf("%s/%s", MOUNT_CGROUPS_FOLDER, subsys);
 		umount(subsys_path);
-		mem_free(subsys_path);
+		mem_free0(subsys_path);
 	}
 	umount(MOUNT_CGROUPS_FOLDER "/systemd");
 	umount(MOUNT_CGROUPS_FOLDER);

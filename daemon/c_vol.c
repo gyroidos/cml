@@ -206,7 +206,7 @@ c_vol_create_loopdev_new(int *fd, const char *img)
 	}
 	return dev;
 error:
-	mem_free(dev);
+	mem_free0(dev);
 	return NULL;
 }
 
@@ -307,7 +307,7 @@ c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mnte
 		ret = c_vol_btrfs_regen_uuid(img);
 	}
 
-	mem_free(src);
+	mem_free0(src);
 	return ret;
 }
 
@@ -335,7 +335,7 @@ c_vol_create_image_device(c_vol_t *vol, const char *img, const mount_entry_t *mn
 	if (ret < 0)
 		ERROR("Could not copy file %s to %s", dev, img);
 
-	mem_free(dev);
+	mem_free0(dev);
 	return ret;
 }
 
@@ -352,7 +352,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 	case MOUNT_TYPE_EMPTY: {
 		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
 		int ret = c_vol_create_image_empty(img, img_meta, mount_entry_get_size(mntent));
-		mem_free(img_meta);
+		mem_free0(img_meta);
 		return ret;
 	}
 	case MOUNT_TYPE_FLASH:
@@ -397,7 +397,7 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	char *subvol = strtok(token, "=");
 	subvol = strtok(NULL, "=");
 	if (NULL == subvol) {
-		mem_free(token);
+		mem_free0(token);
 		return -1;
 	}
 
@@ -431,11 +431,11 @@ out:
 	if (tmp_mount)
 		unlink(tmp_mount);
 	if (subvol_path)
-		mem_free(subvol_path);
+		mem_free0(subvol_path);
 	if (tmp_mount)
-		mem_free(tmp_mount);
+		mem_free0(tmp_mount);
 	if (token)
-		mem_free(token);
+		mem_free0(token);
 	return ret;
 }
 
@@ -495,7 +495,7 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 			unlink(lower_dir);
 		if (symlink(target_dir, lower_dir) < 0) {
 			ERROR_ERRNO("link lowerdir failed");
-			mem_free(lower_dir);
+			mem_free0(lower_dir);
 			lower_dir = mem_strdup(target_dir);
 		}
 	}
@@ -517,28 +517,28 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 	// mount overlayfs to dir
 	if (mount("overlay", target_dir, "overlay", 0, overlayfs_options) < 0) {
 		ERROR_ERRNO("Could not mount overlay");
-		mem_free(overlayfs_options);
+		mem_free0(overlayfs_options);
 		if (chdir(cwd))
 			WARN("Could not change back to former cwd %s", cwd);
-		mem_free(cwd);
+		mem_free0(cwd);
 		goto error;
 	}
-	mem_free(overlayfs_options);
+	mem_free0(overlayfs_options);
 	if (chdir(cwd))
 		WARN("Could not change back to former cwd %s", cwd);
-	mem_free(cwd);
-	mem_free(lower_dir);
-	mem_free(upper_dir);
-	mem_free(work_dir);
+	mem_free0(cwd);
+	mem_free0(lower_dir);
+	mem_free0(upper_dir);
+	mem_free0(work_dir);
 	return 0;
 error:
 	if (file_is_link(lower_dir)) {
 		if (unlink(lower_dir))
 			WARN_ERRNO("could not remove temporary link %s", lower_dir);
 	}
-	mem_free(lower_dir);
-	mem_free(upper_dir);
-	mem_free(work_dir);
+	mem_free0(lower_dir);
+	mem_free0(upper_dir);
+	mem_free0(work_dir);
 	return -1;
 }
 
@@ -589,12 +589,12 @@ c_vol_mount_file_bind(const char *src, const char *dst, unsigned long flags)
 	}
 	DEBUG("Sucessfully bind mounted %s to %s", src, dst);
 
-	mem_free(_src);
-	mem_free(_dst);
+	mem_free0(_src);
+	mem_free0(_dst);
 	return 0;
 err:
-	mem_free(_src);
-	mem_free(_dst);
+	mem_free0(_src);
+	mem_free0(_dst);
 	return -1;
 }
 
@@ -639,8 +639,8 @@ c_vol_setup_busybox_copy(const char *target_base)
 		ret = -1;
 	}
 
-	mem_free(target_bin);
-	mem_free(target_dir);
+	mem_free0(target_bin);
+	mem_free0(target_dir);
 	return ret;
 }
 
@@ -741,13 +741,13 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags,
 			  tmpfs_opts) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
-			mem_free(tmpfs_opts);
+			mem_free0(tmpfs_opts);
 			if (is_root && setup_mode && c_vol_setup_busybox_copy(dir) < 0)
 				WARN("Cannot copy busybox for setup mode!");
 			goto final;
 		} else {
 			ERROR_ERRNO("Cannot mount %s to %s", mount_entry_get_fs(mntent), dir);
-			mem_free(tmpfs_opts);
+			mem_free0(tmpfs_opts);
 			goto error;
 		}
 	}
@@ -774,7 +774,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
 					label);
 			ERROR("Trying to mount encrypted volume without key...");
-			mem_free(label);
+			mem_free0(label);
 			goto error;
 		}
 
@@ -789,13 +789,13 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 			IF_NULL_GOTO(dev_meta, error);
 
-			mem_free(crypt);
+			mem_free0(crypt);
 			crypt = cryptfs_setup_volume_new(
 				label, dev, container_get_key(vol->container), dev_meta);
 
 			// release loopdev fd (crypt device should keep it open now)
 			close(fd_meta);
-			mem_free(img_meta);
+			mem_free0(img_meta);
 
 			if (!crypt) {
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
@@ -803,7 +803,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 						uuid_string(container_get_uuid(vol->container)), 2,
 						"label", label);
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
-				mem_free(label);
+				mem_free0(label);
 				goto error;
 			}
 			audit_log_event(container_get_uuid(vol->container), SSA, CMLD,
@@ -812,8 +812,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 					label);
 		}
 
-		mem_free(label);
-		mem_free(dev);
+		mem_free0(label);
+		mem_free0(dev);
 		dev = crypt;
 
 		// TODO: timeout?
@@ -871,11 +871,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		if (c_vol_mount_overlay(dir, upper_fstype, lower_fstype, mountflags, mount_data,
 					upper_dev, lower_dev, overlayfs_mount_dir) < 0) {
 			ERROR_ERRNO("Could not mount %s to %s", img, dir);
-			mem_free(overlayfs_mount_dir);
+			mem_free0(overlayfs_mount_dir);
 			goto error;
 		}
 		DEBUG("Successfully mounted %s using overlay to %s", img, dir);
-		mem_free(overlayfs_mount_dir);
+		mem_free0(overlayfs_mount_dir);
 		goto final;
 	}
 
@@ -949,11 +949,11 @@ final:
 	if (dev_meta)
 		loopdev_free(dev_meta);
 	if (img)
-		mem_free(img);
+		mem_free0(img);
 	if (img_meta)
-		mem_free(img_meta);
+		mem_free0(img_meta);
 	if (dir)
-		mem_free(dir);
+		mem_free0(dir);
 	if (fd)
 		close(fd);
 	if (fd_meta)
@@ -966,11 +966,11 @@ error:
 	if (dev_meta)
 		loopdev_free(dev_meta);
 	if (img)
-		mem_free(img);
+		mem_free0(img);
 	if (img_meta)
-		mem_free(img_meta);
+		mem_free0(img_meta);
 	if (dir)
-		mem_free(dir);
+		mem_free0(dir);
 	if (fd)
 		close(fd);
 	if (fd_meta)
@@ -996,7 +996,7 @@ c_vol_cleanup_dm(c_vol_t *vol)
 		// we just try to delete all mounts and ignore their type...
 		if (cryptfs_delete_blk_dev(label) < 0)
 			DEBUG("Could not delete dm %s", label);
-		mem_free(label);
+		mem_free0(label);
 	}
 
 	return 0;
@@ -1026,7 +1026,7 @@ c_vol_cleanup_overlays_cb(const char *path, const char *file, UNUSED void *data)
 	if (rmdir(overlay) < 0)
 		TRACE("Unable to remove %s", overlay);
 
-	mem_free(overlay);
+	mem_free0(overlay);
 	return ret;
 }
 
@@ -1045,7 +1045,7 @@ c_vol_umount_all(c_vol_t *vol)
 	char *mount_dir = mem_printf("%s/dev", vol->root);
 	if (c_vol_umount_dir(mount_dir) < 0)
 		goto error;
-	mem_free(mount_dir);
+	mem_free0(mount_dir);
 
 	if (setup_mode) {
 		// umount setup in revers order
@@ -1058,7 +1058,7 @@ c_vol_umount_all(c_vol_t *vol)
 			mount_dir = mem_printf("%s/%s", c_root, mount_entry_get_dir(mntent));
 			if (c_vol_umount_dir(mount_dir) < 0)
 				goto error;
-			mem_free(mount_dir);
+			mem_free0(mount_dir);
 		}
 	}
 
@@ -1072,7 +1072,7 @@ c_vol_umount_all(c_vol_t *vol)
 		mount_dir = mem_printf("%s/%s", vol->root, mount_entry_get_dir(mntent));
 		if (c_vol_umount_dir(mount_dir) < 0)
 			goto error;
-		mem_free(mount_dir);
+		mem_free0(mount_dir);
 	}
 	if (rmdir(vol->root) < 0)
 		TRACE("Unable to remove %s", mount_dir);
@@ -1084,13 +1084,13 @@ c_vol_umount_all(c_vol_t *vol)
 		WARN("Could not release overlays in '%s'", mount_dir);
 	if (rmdir(mount_dir) < 0)
 		TRACE("Unable to remove %s", mount_dir);
-	mem_free(mount_dir);
+	mem_free0(mount_dir);
 
-	mem_free(c_root);
+	mem_free0(c_root);
 	return 0;
 error:
-	mem_free(mount_dir);
-	mem_free(c_root);
+	mem_free0(mount_dir);
+	mem_free0(c_root);
 	return -1;
 }
 
@@ -1137,12 +1137,12 @@ c_vol_mount_images(c_vol_t *vol)
 			goto err;
 		}
 	}
-	mem_free(c_root);
+	mem_free0(c_root);
 	return 0;
 err:
 	c_vol_umount_all(vol);
 	c_vol_cleanup_dm(vol);
-	mem_free(c_root);
+	mem_free0(c_root);
 	return -1;
 }
 
@@ -1204,8 +1204,8 @@ c_vol_mount_dev(c_vol_t *vol)
 
 	ret = 0;
 error:
-	mem_free(dev_mnt);
-	mem_free(tmpfs_opts);
+	mem_free0(dev_mnt);
+	mem_free0(tmpfs_opts);
 	return ret;
 }
 
@@ -1252,8 +1252,8 @@ c_vol_free(c_vol_t *vol)
 {
 	ASSERT(vol);
 
-	mem_free(vol->root);
-	mem_free(vol);
+	mem_free0(vol->root);
+	mem_free0(vol);
 }
 
 static int
@@ -1306,16 +1306,16 @@ c_vol_do_shared_bind_mounts(const c_vol_t *vol)
 	}
 
 	close(loop_fd);
-	mem_free(bind_img_path);
-	mem_free(bind_dev);
+	mem_free0(bind_img_path);
+	mem_free0(bind_dev);
 	return 0;
 err:
 	if (loop_fd)
 		close(loop_fd);
 	if (bind_img_path)
-		mem_free(bind_img_path);
+		mem_free0(bind_img_path);
 	if (bind_dev)
-		mem_free(bind_dev);
+		mem_free0(bind_dev);
 	return -1;
 }
 
@@ -1384,9 +1384,9 @@ c_vol_bind_token(c_vol_t *vol)
 	ret = 0;
 
 err:
-	mem_free(src_path);
-	mem_free(dest_dir);
-	mem_free(dest_path);
+	mem_free0(src_path);
+	mem_free0(dest_dir);
+	mem_free0(dest_path);
 
 	return ret;
 }
@@ -1451,8 +1451,8 @@ c_vol_start_child_early(c_vol_t *vol)
 	if (chmod(cservice_bin, 0755))
 		WARN_ERRNO("Could not set %s executable", cservice_bin);
 
-	mem_free(cservice_bin);
-	mem_free(cservice_dir);
+	mem_free0(cservice_bin);
+	mem_free0(cservice_dir);
 
 	return 0;
 error:
@@ -1467,7 +1467,7 @@ c_vol_start_pre_exec(c_vol_t *vol)
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
 	if (dir_copy_folder("/dev", dev_mnt, &c_vol_populate_dev_filter_cb, vol) < 0) {
 		ERROR_ERRNO("Could not populate /dev!");
-		mem_free(dev_mnt);
+		mem_free0(dev_mnt);
 		return -1;
 	}
 	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
@@ -1480,7 +1480,7 @@ c_vol_start_pre_exec(c_vol_t *vol)
 
 	return 0;
 
-	mem_free(dev_mnt);
+	mem_free0(dev_mnt);
 	return 0;
 }
 static int
@@ -1517,12 +1517,12 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		goto error;
 	}
 
-	mem_free(mnt_proc);
-	mem_free(mnt_sys);
+	mem_free0(mnt_proc);
+	mem_free0(mnt_sys);
 	return 0;
 error:
-	mem_free(mnt_proc);
-	mem_free(mnt_sys);
+	mem_free0(mnt_proc);
+	mem_free0(mnt_sys);
 	return -1;
 }
 
@@ -1706,7 +1706,7 @@ c_vol_start_child(c_vol_t *vol)
 	char *mount_output = file_read_new("/proc/self/mounts", 2048);
 	INFO("Mounted filesystems:");
 	INFO("%s", mount_output);
-	mem_free(mount_output);
+	mem_free0(mount_output);
 
 	return 0;
 

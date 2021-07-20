@@ -138,7 +138,7 @@ container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, 
 			sig = mem_alloc(sig_size);
 			if (-1 == file_read(sig_file, (char *)sig, sig_size)) {
 				ERROR("Failed to read sig file '%s'!", sig_file);
-				mem_free(sig);
+				mem_free0(sig);
 				sig = NULL;
 			}
 		}
@@ -147,12 +147,12 @@ container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, 
 			cert = mem_alloc(cert_size);
 			if (-1 == file_read(cert_file, (char *)cert, cert_size)) {
 				ERROR("Failed to read cert file '%s'!", cert_file);
-				mem_free(cert);
+				mem_free0(cert);
 				cert = NULL;
 			}
 		}
-		mem_free(sig_file);
-		mem_free(cert_file);
+		mem_free0(sig_file);
+		mem_free0(cert_file);
 	}
 
 	// check cert and signature buffers
@@ -165,8 +165,8 @@ container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, 
 out:
 	INFO("Verify Result of target with prefix '%s': %s", prefix, ret ? "GOOD" : "UNSIGNED");
 
-	mem_free(sig);
-	mem_free(cert);
+	mem_free0(sig);
+	mem_free0(cert);
 	return ret;
 }
 
@@ -195,7 +195,7 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 		if (conf_len > 0) {
 			buf_internal = mem_alloc(conf_len);
 			if (-1 == file_read(file, (char *)buf_internal, conf_len)) {
-				mem_free(buf_internal);
+				mem_free0(buf_internal);
 				buf_internal = NULL;
 			}
 		}
@@ -237,8 +237,8 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 	config->file = mem_strdup(file);
 	config->cfg = ccfg;
 out:
-	mem_free(buf_internal);
-	mem_free(prefix);
+	mem_free0(buf_internal);
+	mem_free0(prefix);
 	return config;
 }
 
@@ -247,8 +247,8 @@ container_config_free(container_config_t *config)
 {
 	ASSERT(config);
 	protobuf_free_message((ProtobufCMessage *)config->cfg);
-	mem_free(config->file);
-	mem_free(config);
+	mem_free0(config->file);
+	mem_free0(config);
 }
 
 int
@@ -285,7 +285,7 @@ container_config_set_name(container_config_t *config, UNUSED const char *name)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	if (config->cfg->name)
-		mem_free(config->cfg->name);
+		mem_free0(config->cfg->name);
 	config->cfg->name = mem_strdup(name);
 }
 
@@ -303,7 +303,7 @@ container_config_set_guestos(container_config_t *config, const char *os)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	if (config->cfg->guest_os)
-		mem_free(config->cfg->guest_os);
+		mem_free0(config->cfg->guest_os);
 	config->cfg->guest_os = mem_strdup(os);
 }
 
@@ -403,7 +403,7 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 				if (0 != network_str_to_mac_addr(
 						 config->cfg->net_ifaces[i]->mac_filter[j],
 						 whitelisted_mac)) {
-					mem_free(whitelisted_mac);
+					mem_free0(whitelisted_mac);
 				} else {
 					mac_whitelist = list_append(mac_whitelist, whitelisted_mac);
 				}
@@ -488,7 +488,7 @@ container_config_append_net_ifaces(const container_config_t *config, const char 
 		config->cfg->net_ifaces[i] = pnet_iface;
 	}
 	if (n > 0)
-		mem_free(old_net_ifaces);
+		mem_free0(old_net_ifaces);
 
 	ContainerPnetConfig *pnet_iface = mem_new(ContainerPnetConfig, 1);
 	container_pnet_config__init(pnet_iface);
@@ -531,7 +531,7 @@ container_config_remove_net_ifaces(const container_config_t *config, const char 
 		}
 		protobuf_free_message((ProtobufCMessage *)old_net_ifaces[i]);
 	}
-	mem_free(old_net_ifaces);
+	mem_free0(old_net_ifaces);
 }
 
 list_t *

@@ -154,7 +154,7 @@ input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 	}
 
 	fclose(fp);
-	mem_free(line);
+	mem_free0(line);
 	return event_path;
 }
 
@@ -179,7 +179,7 @@ pin_entry_timeout_cb(event_timer_t *timer, void *data)
 	input_key_index = 0;
 	if (input_key) {
 		memset(input_key, 0x0, strlen(input_key));
-		mem_free(input_key);
+		mem_free0(input_key);
 	}
 	event_remove_timer(timer);
 	event_timer_free(timer);
@@ -208,7 +208,7 @@ input_clean_pin_entry(void)
 	input_key_index = 0;
 	if (input_key) {
 		memset(input_key, 0x0, strlen(input_key));
-		mem_free(input_key);
+		mem_free0(input_key);
 	}
 	event_remove_timer(input_timer);
 	event_timer_free(input_timer);
@@ -318,10 +318,10 @@ exit:
 	event_io_free(io);
 	close(fd);
 
-	mem_free(cb_data);
+	mem_free0(cb_data);
 	if (input_key) {
 		memset(input_key, 0x0, input_key_index);
-		mem_free(input_key);
+		mem_free0(input_key);
 	}
 	input_key_index = 0;
 	input_pin_entry_active = false;
@@ -382,13 +382,13 @@ input_register_container_ctrl_cb(control_t *control, container_t *container,
 
 	TRACE("Registering callback for pin entry");
 	event_add_io(input_event_io);
-	mem_free(input_file);
+	mem_free0(input_file);
 
 	input_pin_entry_active = true;
 
 	return 0;
 
 err:
-	mem_free(input_file);
+	mem_free0(input_file);
 	return -1;
 }
