@@ -115,6 +115,12 @@ mem_printf(const char *fmt, ...)
 }
 
 void
+mem_free(void *ptr)
+{
+	free(ptr);
+}
+
+void
 mem_free_array(void **array, size_t size)
 {
 	if (array != NULL) {
