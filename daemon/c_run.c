@@ -138,18 +138,18 @@ c_run_session_free(c_run_session_t *session)
 {
 	ASSERT(session);
 	if (session->cmd)
-		mem_free(session->cmd);
+		mem_free0(session->cmd);
 	if (session->pty_slave_name)
-		mem_free(session->pty_slave_name);
+		mem_free0(session->pty_slave_name);
 	mem_free_array((void *)session->argv, session->argc);
-	mem_free(session);
+	mem_free0(session);
 }
 
 void
 c_run_free(c_run_t *run)
 {
 	ASSERT(run);
-	mem_free(run);
+	mem_free0(run);
 }
 
 static void

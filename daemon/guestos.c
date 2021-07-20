@@ -151,12 +151,12 @@ void
 guestos_free(guestos_t *os)
 {
 	IF_NULL_RETURN(os);
-	mem_free(os->cert_file);
-	mem_free(os->sig_file);
-	mem_free(os->cfg_file);
-	mem_free(os->dir);
+	mem_free0(os->cert_file);
+	mem_free0(os->sig_file);
+	mem_free0(os->cfg_file);
+	mem_free0(os->dir);
 	guestos_config_free(os->cfg);
-	mem_free(os);
+	mem_free0(os);
 }
 
 /******************************************************************************/
@@ -189,8 +189,8 @@ static void
 check_mount_image_free(check_mount_image_t *task)
 {
 	IF_NULL_RETURN_WARN(task);
-	mem_free(task->img_path);
-	mem_free(task);
+	mem_free0(task->img_path);
+	mem_free0(task);
 }
 
 static void
@@ -248,7 +248,7 @@ convert_hex_to_bin_new(const char *hex_str, int *out_length)
 	return bin;
 err:
 	ERROR("Converstion of hex string to bin failed!");
-	mem_free(bin);
+	mem_free0(bin);
 	return NULL;
 }
 
@@ -283,7 +283,7 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 		if (mount_entry_get_sha256(e) == NULL) { // fallback to sha1
 			char *sha1 = smartcard_crypto_hash_file_block_new(img_path, SHA1);
 			match = mount_entry_match_sha1(e, sha1);
-			mem_free(sha1);
+			mem_free0(sha1);
 		} else {
 			char *sha256 = smartcard_crypto_hash_file_block_new(img_path, SHA256);
 			match = mount_entry_match_sha256(e, sha256);
@@ -292,16 +292,16 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 				uint8_t *sha256_bin =
 					convert_hex_to_bin_new(sha256, &sha256_bin_len);
 				tss_ml_append(img_path, sha256_bin, sha256_bin_len, TSS_SHA256);
-				mem_free(sha256_bin);
+				mem_free0(sha256_bin);
 			}
-			mem_free(sha256);
+			mem_free0(sha256);
 		}
 		if (!match)
 			res = CHECK_IMAGE_HASH_MISMATCH;
 	}
 
 cleanup:
-	mem_free(img_path);
+	mem_free0(img_path);
 	return res;
 }
 
@@ -363,7 +363,7 @@ guestos_check_mount_image(guestos_t *os, mount_entry_t *e, check_mount_image_com
 	check_mount_image_t *task = check_mount_image_new(os, e, img_path, cb, data);
 	smartcard_crypto_hash_file(img_path, SHA1, check_mount_image_cb_sha1, task);
 
-	mem_free(img_path);
+	mem_free0(img_path);
 }
 
 // ITERATE IMAGES
@@ -418,7 +418,7 @@ iterate_images_free(iterate_images_t *task)
 {
 	IF_NULL_RETURN(task);
 	mount_free(task->mnt);
-	mem_free(task);
+	mem_free0(task);
 }
 
 static void
@@ -591,8 +591,8 @@ iterate_images_trigger_download(iterate_images_t *task)
 	// invoke downloader
 	DEBUG("Downloading %s to %s (attempt=%u).", img_url, img_path, task->dl_attempts);
 	download_t *dl = download_new(img_url, img_path, iterate_images_cb_download_complete, task);
-	mem_free(img_url);
-	mem_free(img_path);
+	mem_free0(img_url);
+	mem_free0(img_path);
 	if (download_start(dl) < 0) {
 		ERROR("Failed to start download for %s", download_get_url(dl));
 		download_free(dl);
@@ -773,8 +773,8 @@ verify_partition(const char *img_path, const char *part_path)
 	res = VERIFY_PARTITION_MISMATCH;
 
 cleanup:
-	mem_free(part_buf);
-	mem_free(img_buf);
+	mem_free0(part_buf);
+	mem_free0(img_buf);
 cleanup_files:
 	if (img != -1)
 		close(img);
@@ -846,8 +846,8 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 		break;
 	}
 
-	mem_free(flash_path);
-	mem_free(img_path);
+	mem_free0(flash_path);
+	mem_free0(img_path);
 	return res;
 }
 
@@ -931,7 +931,7 @@ guestos_purge(guestos_t *os)
 		if (file_exists(img_path) && unlink(img_path) < 0) {
 			WARN_ERRNO("Failed to erase file %s", img_path);
 		}
-		mem_free(img_path);
+		mem_free0(img_path);
 	}
 	// remove config and signature file
 	const char *file = guestos_get_cfg_file(os);

@@ -77,7 +77,7 @@ c_audit_set_contid(c_audit_t *audit)
 	INFO("Set audit container ID '%llu'",
 	     (unsigned long long)uuid_get_node(container_get_uuid(audit->container)));
 out:
-	mem_free(aucontid_file);
+	mem_free0(aucontid_file);
 	return ret;
 }
 
@@ -135,7 +135,7 @@ c_audit_set_last_ack(c_audit_t *audit, const char *last_ack)
 	ASSERT(last_ack);
 
 	if (audit->last_ack)
-		mem_free(audit->last_ack);
+		mem_free0(audit->last_ack);
 
 	audit->last_ack = mem_strdup(last_ack);
 }

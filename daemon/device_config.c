@@ -79,8 +79,8 @@ device_config_free(device_config_t *config)
 {
 	ASSERT(config);
 	protobuf_free_message((ProtobufCMessage *)config->cfg);
-	mem_free(config->file);
-	mem_free(config);
+	mem_free0(config->file);
+	mem_free0(config);
 }
 
 #if 0

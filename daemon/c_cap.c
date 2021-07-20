@@ -171,7 +171,7 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 			else if (file_exists("/lib/libc.so.6") &&
 				 symlink("/lib/libc.so.6", "/usr/lib/libc.so"))
 				WARN_ERRNO("symlink to libc.so failed!");
-			mem_free(multiarch_dir);
+			mem_free0(multiarch_dir);
 		}
 		execve(argv[0], argv, env_ntp);
 		ERROR_ERRNO("exec with uid_wrapper of '%s' failed!", argv[0]);
@@ -193,7 +193,7 @@ c_cap_exec_cap_systime_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *
 		TRACE("Reaped exec_cap_systime process: %d", *pid);
 		event_remove_signal(sig);
 		event_signal_free(sig);
-		mem_free(pid);
+		mem_free0(pid);
 	} else {
 		TRACE("Failed to reap exec_cap_systime process");
 	}
@@ -224,7 +224,7 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 				      uid_wrapper_lib);
 			if (chmod(uid_wrapper_lib, 0755))
 				WARN_ERRNO("Could not set %s executeable", uid_wrapper_lib);
-			mem_free(uid_wrapper_lib);
+			mem_free0(uid_wrapper_lib);
 		}
 		// join container namespace but maintain root user ns
 		if (ns_join_all(container_get_pid(container), false) < 0) {

@@ -141,7 +141,7 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
 			skipped_lines = true;
 			break;
 		}
-		mem_free(message.msg);
+		mem_free0(message.msg);
 	}
 	if (send_last_line_info) {
 		message.msg = mem_printf("Last line of log");
@@ -149,10 +149,10 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR("Could not sent last line info for %s", log_file_name);
 		}
-		mem_free(message.msg);
+		mem_free0(message.msg);
 	}
 	if (out.device_uuid != NULL) {
-		mem_free(out.device_uuid);
+		mem_free0(out.device_uuid);
 	}
 	if (file_is_open) {
 		if (read_low_level) {
@@ -263,10 +263,10 @@ static void
 control_container_status_free(ContainerStatus *c_status)
 {
 	IF_NULL_RETURN(c_status);
-	mem_free(c_status->name);
-	mem_free(c_status->uuid);
-	mem_free(c_status->guestos);
-	mem_free(c_status);
+	mem_free0(c_status->name);
+	mem_free0(c_status->uuid);
+	mem_free0(c_status->guestos);
+	mem_free0(c_status);
 }
 
 static ssize_t
@@ -335,7 +335,7 @@ control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 		}
 
 		TRACE("Sent notification of command termination to client");
-		mem_free(cfd);
+		mem_free0(cfd);
 	}
 }
 
@@ -549,7 +549,7 @@ control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDaemon *msg, in
 	}
 
 	// collect garbage
-	mem_free(results);
+	mem_free0(results);
 }
 
 /**
@@ -820,8 +820,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 		// collect garbage
 		for (size_t i = 0; i < n; i++)
-			mem_free(results[i]);
-		mem_free(results);
+			mem_free0(results[i]);
+		mem_free0(results);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS: {
@@ -850,7 +850,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		list_delete(containers);
 		for (size_t i = 0; i < n; i++)
 			control_container_status_free(results[i]);
-		mem_free(results);
+		mem_free0(results);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG: {
@@ -894,7 +894,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 					TRACE("freed config time results[%zu]->vnet_configs[%zu]",
 					      number_of_configs, i);
 				}
-				mem_free(results[number_of_configs]->vnet_configs);
+				mem_free0(results[number_of_configs]->vnet_configs);
 				list_t *vnet_runtime_cfg_list =
 					container_get_vnet_runtime_cfg_new(container);
 				int vnet_config_len = list_length(vnet_runtime_cfg_list);
@@ -920,7 +920,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 					      i, vnet_configs[i]->if_name,
 					      vnet_configs[i]->if_rootns_name,
 					      vnet_configs[i]->configure ? "configured" : "manual");
-					mem_free(vnet_cfg);
+					mem_free0(vnet_cfg);
 				}
 				list_delete(vnet_runtime_cfg_list);
 				results[number_of_configs]->n_vnet_configs = vnet_config_len;
@@ -952,12 +952,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		// collect garbage
 		list_delete(containers);
 		for (size_t i = 0; i < number_of_configs; i++) {
-			mem_free(result_uuids[i]);
+			mem_free0(result_uuids[i]);
 			if (results[i] != NULL)
 				protobuf_free_message((ProtobufCMessage *)results[i]);
 		}
-		mem_free(result_uuids);
-		mem_free(results);
+		mem_free0(result_uuids);
+		mem_free0(results);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG: {
@@ -1029,7 +1029,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			WARN("Could not send device csr!");
 		}
 		if (csr)
-			mem_free(csr);
+			mem_free0(csr);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT: {
@@ -1091,9 +1091,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 		if (!ccfg[0]) {
 			ERROR("Failed to get new config for %s", cuuid_str[0]);
-			mem_free(ccfg);
-			mem_free(cuuid_str[0]);
-			mem_free(cuuid_str);
+			mem_free0(ccfg);
+			mem_free0(cuuid_str[0]);
+			mem_free0(cuuid_str);
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to CREATE");
 			break;
@@ -1106,10 +1106,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send container config as Response to CREATE");
 		}
-		mem_free(cuuid_str[0]);
-		mem_free(cuuid_str);
+		mem_free0(cuuid_str[0]);
+		mem_free0(cuuid_str);
 		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
-		mem_free(ccfg);
+		mem_free0(ccfg);
 	} break;
 
 	// Container-specific commands:
@@ -1172,9 +1172,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 		if (!ccfg[0]) {
 			ERROR("Failed to get new config for %s", cuuid_str[0]);
-			mem_free(ccfg);
-			mem_free(cuuid_str[0]);
-			mem_free(cuuid_str);
+			mem_free0(ccfg);
+			mem_free0(cuuid_str[0]);
+			mem_free0(cuuid_str);
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 				WARN("Could not send empty Response to UPDATE_CONFIG");
 			break;
@@ -1192,10 +1192,10 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send container config as Response to UPDATE_CONFIG");
 		}
-		mem_free(cuuid_str[0]);
-		mem_free(cuuid_str);
+		mem_free0(cuuid_str[0]);
+		mem_free0(cuuid_str);
 		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
-		mem_free(ccfg);
+		mem_free0(ccfg);
 	} break;
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START: {
 		if (NULL == container) {
@@ -1325,8 +1325,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		// collect garbage
 		list_delete(link_list);
 		for (size_t i = 0; i < n; i++)
-			mem_free(results[i]);
-		mem_free(results);
+			mem_free0(results[i]);
+		mem_free0(results);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_CMD: {
@@ -1470,12 +1470,12 @@ control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
 				WARN("Could not send LOGON message");
 			}
 			DEBUG("Sent LOGON message");
-			mem_free(out.device_uuid);
-			mem_free(out.logon_hardware_name);
-			mem_free(out.logon_hardware_serial);
-			mem_free(out.logon_imei);
-			mem_free(out.logon_mac_address);
-			mem_free(out.logon_phone_number);
+			mem_free0(out.device_uuid);
+			mem_free0(out.logon_hardware_name);
+			mem_free0(out.logon_hardware_serial);
+			mem_free0(out.logon_imei);
+			mem_free0(out.logon_mac_address);
+			mem_free0(out.logon_phone_number);
 
 			/* remove write watch */
 			event_remove_io(io);
@@ -1761,7 +1761,7 @@ control_free(control_t *control)
 		close(control->sock_client);
 	}
 	if (control->hostip)
-		mem_free(control->hostip);
+		mem_free0(control->hostip);
 
 	if (control->reconnect_timer) {
 		event_remove_timer(control->reconnect_timer);
@@ -1771,6 +1771,6 @@ control_free(control_t *control)
 
 	control_list = list_remove(control_list, control);
 
-	mem_free(control);
+	mem_free0(control);
 	return;
 }

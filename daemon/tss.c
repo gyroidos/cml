@@ -73,7 +73,7 @@ tss_is_tpm2d_installed(void)
 	for (size_t i = 0; i < 6; ++i) {
 		char *binary = mem_printf("%s/%s", path[i], TPM2D_BINARY_NAME);
 		found = file_exists(binary);
-		mem_free(binary);
+		mem_free0(binary);
 		if (found)
 			return true;
 	}

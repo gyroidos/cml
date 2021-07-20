@@ -51,7 +51,7 @@ lxcfs_get_bin_path_if_supported(void)
 	char *fses = file_read_new(PROC_FSES, 2048);
 	bool ret = strstr(fses, "fuse") ? true : false;
 
-	mem_free(fses);
+	mem_free0(fses);
 
 	IF_FALSE_RETVAL_TRACE(ret, NULL);
 
@@ -109,7 +109,7 @@ lxcfs_daemon_start(const char *rt_path)
 				INFO("Killing previous instance of lxcfs!");
 				kill(lxcfs_daemon_prev_pid, SIGTERM);
 			}
-			mem_free(pid_buf);
+			mem_free0(pid_buf);
 			for (int i = 0; file_exists(LXCFS_PID_FILE); ++i) {
 				sleep(1);
 				if (i > 4) {
@@ -157,8 +157,8 @@ lxcfs_proc_dir_foreach_cb(const char *path, const char *file, void *data)
 	else
 		TRACE("Applied overlay on %s with %s from lxcfs!", dst, src);
 
-	mem_free(dst);
-	mem_free(src);
+	mem_free0(dst);
+	mem_free0(src);
 	return ret;
 }
 
@@ -174,7 +174,7 @@ lxcfs_mount_proc_overlay(char *target)
 		ERROR("Could not mount proc overlay %s -> %s", lxcfs_proc, target);
 		ret = -1;
 	}
-	mem_free(lxcfs_proc);
+	mem_free0(lxcfs_proc);
 	return ret;
 }
 

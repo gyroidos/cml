@@ -362,7 +362,7 @@ cmld_set_device_provisioned(void)
 			return -1;
 		}
 	}
-	mem_free(provisioned_file);
+	mem_free0(provisioned_file);
 
 	cmld_device_provisioned = true;
 
@@ -452,8 +452,8 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 cleanup:
 	if (uuid)
 		uuid_free(uuid);
-	mem_free(dir);
-	mem_free(prefix);
+	mem_free0(dir);
+	mem_free0(prefix);
 	return res;
 }
 
@@ -479,7 +479,7 @@ cmld_reload_containers(void)
 	char *path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
 	ret = cmld_load_containers(path);
 
-	mem_free(path);
+	mem_free0(path);
 	return ret;
 }
 
@@ -516,10 +516,10 @@ cmld_rename_logfiles()
 				else
 					DEBUG("Rename successful %s -> %s", old_filename_with_path,
 					      new_filename_with_path);
-				mem_free(filename_with_old_timestamp);
-				mem_free(filename_with_correct_timestamp);
-				mem_free(old_filename_with_path);
-				mem_free(new_filename_with_path);
+				mem_free0(filename_with_old_timestamp);
+				mem_free0(filename_with_correct_timestamp);
+				mem_free0(old_filename_with_path);
+				mem_free0(new_filename_with_path);
 			}
 		}
 		closedir(directory);
@@ -569,7 +569,7 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 			INFO("Create unpriv control socket for %s",
 			     container_get_description(container));
 		}
-		mem_free(control_sock_p);
+		mem_free0(control_sock_p);
 		container_unregister_observer(container, cb);
 	}
 	// TODO think about if this is unregistered correctly in corner cases...
@@ -717,7 +717,7 @@ cmld_init_c0_cb(container_t *container, container_callback_t *cb, void *data)
 	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
 		/* Initialize control interface on the socket previously bound into c0 */
 		cmld_control_gui = control_new(*control_sock_p, true);
-		mem_free(control_sock_p);
+		mem_free0(control_sock_p);
 		container_unregister_observer(container, cb);
 	}
 	// TODO think about if this is unregistered correctly in corner cases...
@@ -894,11 +894,11 @@ cmld_init_c0(const char *path, const char *c0os)
 	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);
 
-	mem_free(c0_images_folder);
+	mem_free0(c0_images_folder);
 
 out:
 	uuid_free(c0_uuid);
-	mem_free(c0_config_file);
+	mem_free0(c0_config_file);
 
 	return 0;
 }
@@ -999,7 +999,7 @@ cmld_init(const char *path)
 	char *users_path = mem_printf("%s/%s", path, CMLD_PATH_USERS_DIR);
 	if (mkdir(users_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir users directory %s", users_path);
-	mem_free(users_path);
+	mem_free0(users_path);
 
 	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
 	device_config_t *device_config = device_config_new(device_path);
@@ -1052,7 +1052,7 @@ cmld_init(const char *path)
 
 	char *btime = mem_printf("%lld", (long long)time_cml(NULL));
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
-	mem_free(btime);
+	mem_free0(btime);
 
 	if (uevent_init() < 0)
 		FATAL("Could not init uevent module");
@@ -1083,7 +1083,7 @@ cmld_init(const char *path)
 	} else {
 		DEBUG("Device is not yet provisioned and provision-status-file does not yet exist");
 	}
-	mem_free(provisioned_file);
+	mem_free0(provisioned_file);
 
 	/* the control module sets up a local or remote socket, registers a
 	 * callback (via event_) and parses incoming commands
@@ -1114,13 +1114,13 @@ cmld_init(const char *path)
 
 	char *tokens_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	cmld_smartcard = smartcard_new(tokens_path);
-	mem_free(tokens_path);
+	mem_free0(tokens_path);
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
 		FATAL("Could not load guest operating systems");
-	mem_free(guestos_path);
+	mem_free0(guestos_path);
 	INFO("guestos initialized.");
 	guestos_mgr_update_images();
 
@@ -1131,7 +1131,7 @@ cmld_init(const char *path)
 	char *keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
-	mem_free(keys_path);
+	mem_free0(keys_path);
 
 	if (cmld_smartcard == NULL)
 		FATAL("Could not connect to smartcard daemon");
@@ -1147,7 +1147,7 @@ cmld_init(const char *path)
 	if (cmld_start_c0(cmld_containers_get_c0()) < 0)
 		FATAL("Could not start c0");
 
-	mem_free(containers_path);
+	mem_free0(containers_path);
 
 	device_config_free(device_config);
 	return 0;
@@ -1192,7 +1192,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT, "container-create", NULL, 0);
 		WARN("Could not create new container object from config");
 	}
-	mem_free(path);
+	mem_free0(path);
 	return c;
 }
 
@@ -1378,7 +1378,7 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 		char *cmld_if_name = l->data;
 		if (0 == strcmp(if_name, cmld_if_name)) {
 			found = l;
-			mem_free(cmld_if_name);
+			mem_free0(cmld_if_name);
 			break;
 		}
 	}
@@ -1411,7 +1411,7 @@ cmld_is_shiftfs_supported(void)
 {
 	char *fses = file_read_new(PROC_FSES, 2048);
 	bool ret = strstr(fses, "shiftfs") ? true : false;
-	mem_free(fses);
+	mem_free0(fses);
 	return ret;
 }
 
@@ -1483,15 +1483,15 @@ cmld_cleanup(void)
 	if (cmld_smartcard)
 		smartcard_free(cmld_smartcard);
 
-	mem_free(cmld_device_uuid);
-	mem_free(cmld_device_update_base_url);
-	mem_free(cmld_device_host_dns);
-	mem_free(cmld_c0os_name);
-	mem_free(cmld_shared_data_dir);
+	mem_free0(cmld_device_uuid);
+	mem_free0(cmld_device_update_base_url);
+	mem_free0(cmld_device_host_dns);
+	mem_free0(cmld_c0os_name);
+	mem_free0(cmld_shared_data_dir);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
 		char *name = l->data;
-		mem_free(name);
+		mem_free0(name);
 	}
 	list_delete(cmld_netif_phys_list);
 }

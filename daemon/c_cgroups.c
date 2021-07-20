@@ -112,8 +112,8 @@ void
 c_cgroups_free(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
-	mem_free(cgroups->cgroup_path);
-	mem_free(cgroups);
+	mem_free0(cgroups->cgroup_path);
+	mem_free0(cgroups);
 }
 
 /*******************/
@@ -235,7 +235,7 @@ c_cgroups_dev_from_rule(const char *rule)
 	}
 
 out:
-	mem_free(rule_cp);
+	mem_free0(rule_cp);
 	return ret;
 }
 
@@ -253,7 +253,7 @@ c_cgroups_list_remove(list_t **list, const int *dev)
 	for (list_t *elem = *list; elem != NULL; elem = elem->next) {
 		int *dev_elem = (int *)elem->data;
 		if ((dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1])) {
-			mem_free(elem->data);
+			mem_free0(elem->data);
 			*list = list_unlink(*list, elem);
 			break;
 		}
@@ -297,7 +297,7 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 				uuid_string(container_get_uuid(cgroups->container)));
 	if (file_write(path, rule, -1) == -1) {
 		ERROR_ERRNO("Failed to write to %s", path);
-		mem_free(path);
+		mem_free0(path);
 		return -1;
 	}
 
@@ -307,14 +307,14 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 	if (file_exists(path_child)) {
 		if (file_write(path, rule, -1) == -1) {
 			ERROR_ERRNO("Failed to write to %s", path);
-			mem_free(path);
-			mem_free(path_child);
+			mem_free0(path);
+			mem_free0(path_child);
 			return -1;
 		}
 	}
 
-	mem_free(path);
-	mem_free(path_child);
+	mem_free0(path);
+	mem_free0(path_child);
 	return 0;
 }
 
@@ -328,11 +328,11 @@ c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
 	if (c_cgroups_list_contains_match(global_assigned_devs_list, dev)) {
 		WARN("Unable to allow rule %s: device busy (already assigned to another container)",
 		     rule);
-		mem_free(dev);
+		mem_free0(dev);
 		return 0;
 	}
 	c_cgroups_add_allowed(cgroups, dev);
-	mem_free(dev);
+	mem_free0(dev);
 	return c_cgroups_allow_rule(cgroups, rule);
 }
 
@@ -346,18 +346,18 @@ c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
 	if (c_cgroups_list_contains_match(global_allowed_devs_list, dev)) {
 		ERROR("Unable to exclusively assign device according to rule %s: device busy (already available to another container)",
 		      rule);
-		mem_free(dev);
+		mem_free0(dev);
 		return -1;
 	}
 
 	if (c_cgroups_allow_rule(cgroups, rule) < 0) {
-		mem_free(dev);
+		mem_free0(dev);
 		return -1;
 	}
 
 	c_cgroups_add_allowed(cgroups, dev);
 	c_cgroups_add_assigned(cgroups, dev);
-	mem_free(dev);
+	mem_free0(dev);
 	return 0;
 }
 
@@ -377,10 +377,10 @@ c_cgroups_devices_deny(c_cgroups_t *cgroups, const char *rule)
 	}
 	TRACE("Succeded to write '%s' to %s", rule, path);
 
-	mem_free(path);
+	mem_free0(path);
 	return 0;
 error:
-	mem_free(path);
+	mem_free0(path);
 	return -1;
 }
 
@@ -555,8 +555,8 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 	char *list_output = file_read_new(list_path, 10000);
 	DEBUG("Devices whitelist for container %s:", container_get_description(cgroups->container));
 	DEBUG("%s", list_output);
-	mem_free(list_output);
-	mem_free(list_path);
+	mem_free0(list_output);
+	mem_free0(list_path);
 
 	return 0;
 }
@@ -587,10 +587,10 @@ c_cgroups_freeze(c_cgroups_t *cgroups)
 					      uuid_string(container_get_uuid(cgroups->container)));
 	if (file_write(freezer_state_path, "FROZEN", -1) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
-		mem_free(freezer_state_path);
+		mem_free0(freezer_state_path);
 		return -1;
 	}
-	mem_free(freezer_state_path);
+	mem_free0(freezer_state_path);
 	return 0;
 }
 
@@ -605,10 +605,10 @@ c_cgroups_unfreeze(c_cgroups_t *cgroups)
 					      uuid_string(container_get_uuid(cgroups->container)));
 	if (file_write(freezer_state_path, "THAWED", -1) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
-		mem_free(freezer_state_path);
+		mem_free0(freezer_state_path);
 		return -1;
 	}
-	mem_free(freezer_state_path);
+	mem_free0(freezer_state_path);
 	return 0;
 }
 
@@ -658,7 +658,7 @@ c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask,
 	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
 					      uuid_string(container_get_uuid(cgroups->container)));
 	char *state = file_read_new(freezer_state_path, 10);
-	mem_free(freezer_state_path);
+	mem_free0(freezer_state_path);
 
 	DEBUG("State of freezer for container %s is %s",
 	      container_get_description(cgroups->container), state);
@@ -690,7 +690,7 @@ c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask,
 		container_set_state(cgroups->container, CONTAINER_STATE_FROZEN);
 	}
 
-	mem_free(state);
+	mem_free0(state);
 }
 
 int
@@ -730,7 +730,7 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 
 	ret = 0;
 out:
-	mem_free(limit_in_bytes_path);
+	mem_free0(limit_in_bytes_path);
 	return ret;
 }
 
@@ -766,8 +766,8 @@ c_cgroups_set_cpu_exclusive(const c_cgroups_t *cgroups, char *path)
 	}
 	ret = 0;
 out:
-	mem_free(cpuset_cpu_exclusive);
-	mem_free(cpuset_cpu_exclusive_path);
+	mem_free0(cpuset_cpu_exclusive);
+	mem_free0(cpuset_cpu_exclusive_path);
 	return ret;
 }
 
@@ -821,8 +821,8 @@ c_cgroups_set_cpus_allowed(const c_cgroups_t *cgroups, char *path)
 
 	ret = 0;
 out:
-	mem_free(cpuset_cpus_path);
-	mem_free(cpuset_mems_path);
+	mem_free0(cpuset_cpus_path);
+	mem_free0(cpuset_mems_path);
 
 	return ret;
 }
@@ -911,7 +911,7 @@ c_cgroups_devices_dev_dir_foreach_cb(const char *path, const char *name, void *d
 	}
 
 out:
-	mem_free(full_path);
+	mem_free0(full_path);
 	return 0;
 }
 
@@ -930,7 +930,7 @@ c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 		WARN("Could not open %s for registering device watcher", dev_path);
 	}
 
-	mem_free(dev_path);
+	mem_free0(dev_path);
 }
 
 int
@@ -944,7 +944,7 @@ c_cgroups_devices_chardev_allow(c_cgroups_t *cgroups, int major, int minor, bool
 	else
 		ret = c_cgroups_devices_allow(cgroups, rule);
 
-	mem_free(rule);
+	mem_free0(rule);
 	return ret;
 }
 int
@@ -955,7 +955,7 @@ c_cgroups_devices_chardev_deny(c_cgroups_t *cgroups, int major, int minor)
 	char *rule = mem_printf("c %d:%d rwm", major, minor);
 	ret = c_cgroups_devices_deny(cgroups, rule);
 
-	mem_free(rule);
+	mem_free0(rule);
 	return ret;
 }
 
@@ -1039,10 +1039,10 @@ c_cgroups_sys_usb_devices_dir_foreach_cb(const char *path, const char *name, voi
 	return 0;
 
 out:
-	mem_free(id_product_file);
-	mem_free(id_vendor_file);
-	mem_free(i_serial_file);
-	mem_free(dev_file);
+	mem_free0(id_product_file);
+	mem_free0(id_vendor_file);
+	mem_free0(i_serial_file);
+	mem_free0(dev_file);
 	return 0;
 }
 
@@ -1065,7 +1065,7 @@ c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
 	// for hotplug events register the device at uevent subsystem
 	uevent_register_usbdevice(cgroups->container, usbdev);
 
-	mem_free(cgusbd);
+	mem_free0(cgusbd);
 	return ret;
 }
 
@@ -1116,7 +1116,7 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 		if (mkdir(subsys_path, 0755) && errno != EEXIST) {
 			ERROR_ERRNO("Could not create cgroup %s for container %s", subsys,
 				    container_get_description(cgroups->container));
-			mem_free(subsys_path);
+			mem_free0(subsys_path);
 			goto error;
 		}
 		/* initialize cpuset child subsystem to limit access to allowed cpus */
@@ -1127,7 +1127,7 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 				goto error;
 			}
 		}
-		mem_free(subsys_path);
+		mem_free0(subsys_path);
 	}
 
 	// remove temporarily added head
@@ -1146,7 +1146,7 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 	cgroups->inotify_freezer_state = event_inotify_new(freezer_state_path, IN_MODIFY,
 							   &c_cgroups_freezer_state_cb, cgroups);
 	event_add_inotify(cgroups->inotify_freezer_state);
-	mem_free(freezer_state_path);
+	mem_free0(freezer_state_path);
 
 	return 0;
 error:
@@ -1198,8 +1198,8 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 		if (mkdir(subsys_child_path, 0755) && errno != EEXIST) {
 			ERROR_ERRNO("Could not create child %s for container %s", subsys,
 				    container_get_description(cgroups->container));
-			mem_free(cgroup_tasks);
-			mem_free(subsys_child_path);
+			mem_free0(cgroup_tasks);
+			mem_free0(subsys_child_path);
 			goto error;
 		}
 
@@ -1214,8 +1214,8 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 
 		if (container_shift_ids(cgroups->container, subsys_child_path, false)) {
 			ERROR("Could not shift ids of cgroup subsys for userns");
-			mem_free(cgroup_tasks);
-			mem_free(subsys_child_path);
+			mem_free0(cgroup_tasks);
+			mem_free0(subsys_child_path);
 			goto error;
 		}
 
@@ -1224,8 +1224,8 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 			ERROR_ERRNO("Could not add container %s to its cgroup under %s",
 				    container_get_description(cgroups->container),
 				    subsys_child_path);
-			mem_free(cgroup_tasks);
-			mem_free(subsys_child_path);
+			mem_free0(cgroup_tasks);
+			mem_free0(subsys_child_path);
 			goto error;
 		}
 	}
@@ -1259,8 +1259,8 @@ c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid)
 			ERROR_ERRNO("Could not add container %s to its cgroup under %s",
 				    container_get_description(cgroups->container),
 				    subsys_child_path);
-			mem_free(cgroup_tasks);
-			mem_free(subsys_child_path);
+			mem_free0(cgroup_tasks);
+			mem_free0(subsys_child_path);
 			goto error;
 		}
 	}
@@ -1308,7 +1308,7 @@ c_cgroups_start_child(c_cgroups_t *cgroups)
 		if (umount(subsys_path) < 0) {
 			WARN_ERRNO("Could not umount %s", subsys_path);
 		}
-		mem_free(subsys_path);
+		mem_free0(subsys_path);
 	}
 	if (umount(CGROUPS_FOLDER) < 0) {
 		WARN_ERRNO("Could not umount %s", CGROUPS_FOLDER);
@@ -1334,7 +1334,7 @@ c_cgroups_cleanup_subsys_remove_cb(const char *path, const char *name, UNUSED vo
 			ret--;
 		}
 	}
-	mem_free(file_to_remove);
+	mem_free0(file_to_remove);
 	return ret;
 }
 
@@ -1372,7 +1372,7 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 				     container_get_description(cgroups->container));
 			}
 		}
-		mem_free(subsys_path);
+		mem_free0(subsys_path);
 	}
 
 	// remove temporarily added head

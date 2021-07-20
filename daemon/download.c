@@ -59,9 +59,9 @@ void
 download_free(download_t *dl)
 {
 	IF_NULL_RETURN(dl);
-	mem_free(dl->url);
-	mem_free(dl->file);
-	mem_free(dl);
+	mem_free0(dl->url);
+	mem_free0(dl->file);
+	mem_free0(dl);
 }
 
 static void

@@ -58,8 +58,8 @@ void
 container_free(container_t *container)
 {
 	uuid_free(container->uuid);
-	mem_free((void *)container->name);
-	mem_free((void *)container);
+	mem_free0((void *)container->name);
+	mem_free0((void *)container);
 }
 
 /**

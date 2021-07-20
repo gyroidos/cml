@@ -95,11 +95,11 @@ time_get_ntp_coarse(char *server)
 	time_t ret = (time_t)(ntp->tx_timestamp_sec - NTP_TIMESTAMP_DELTA);
 
 	INFO("Got current time from server %s", ctime(&ret));
-	mem_free(ntp);
+	mem_free0(ntp);
 	return ret;
 err:
 	ERROR("Communication Error with NTP Server '%s'!", server);
-	mem_free(ntp);
+	mem_free0(ntp);
 	return (time_t)-1;
 }
 
