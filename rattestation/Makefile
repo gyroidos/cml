@@ -68,6 +68,7 @@ SRC_FILES := \
 	common/fd.c \
 	common/sock.c \
 	common/file.c \
+	common/uuid.c \
 	attestation.c \
 	common/ssl_util.c \
 	hash.c \
