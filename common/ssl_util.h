@@ -29,6 +29,11 @@
 #include <openssl/evp.h>
 #include <openssl/x509v3.h>
 
+typedef enum {
+	RSA_PSS_PADDING,
+	RSA_SSA_PADDING
+} rsa_padding_t;
+
 /**
  * reads a pkcs12 softtoken located in the file token_file, unlocked with the password passphrase,
  * whereas the private key is stored in pkey
@@ -123,7 +128,7 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
  */
 int
 ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-				 const uint8_t *hash, size_t hash_len);
+				 const uint8_t *hash, size_t hash_len, rsa_padding_t rsa_padding);
 
 /**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.
@@ -178,11 +183,15 @@ ssl_free(void);
 
 /**
  * Takes an ASN1_OBJECT as an input and returns the corresponding hash algorithm
- * as a string, if supported.
+ * as a string, if supported. NOTE: Only for signature algorithms, use
+ * builtin openssl functions for digests
  * @param ASN1_OBJECT *obj pointer to an ASN1_OBJECT
  * @return string representation of the hash algorithm
  */
 const char *
-asn1_object_to_hash_algo(const ASN1_OBJECT *obj);
+get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj);
+
+EVP_PKEY *
+ssl_mkkeypair_pss(void);
 
 #endif /* P12UTIL_H */

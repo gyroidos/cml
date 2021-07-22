@@ -435,6 +435,87 @@ error:
 	return NULL;
 }
 
+EVP_PKEY *
+ssl_mkkeypair_pss(void)
+{
+	EVP_PKEY_CTX *ctx = NULL;
+	EVP_PKEY *pk = NULL;
+	BIGNUM *e = NULL;
+	BN_CTX *bnctx = NULL;
+	const EVP_PKEY_ASN1_METHOD *ameth;
+
+	// long newkeylen = 0; // -> key length
+	const char *keyalg = "rsa-pss";
+	// char *keyalgstr = NULL; // -> unset
+
+	ameth = EVP_PKEY_asn1_find_str(NULL, keyalg, strlen(keyalg));
+	if (ameth == NULL) {
+		ERROR("Algorithm unknown: %s\n", keyalg);
+		return NULL;
+	}
+
+	// genctx = set_keygen_ctx(keyalg, &pkey_type, &newkeylen,
+	// 									&keyalgstr, NULL);
+
+	// EVP_PKEY_keygen(genctx, &pkey)
+
+
+       if ((bnctx = BN_CTX_new()) == NULL) {
+               ERROR("Error setting up big number context");
+               goto error;
+       }
+
+       if ((e = BN_CTX_get(bnctx)) == NULL) {
+               ERROR("Error in loading BIGNUM");
+               goto error;
+       }
+
+       if (!BN_set_word(e, RSA_KEY_EXPONENT)) {
+               ERROR("Error setting BIGNUM");
+               goto error;
+       }
+
+       if (EVP_PKEY_CTX_set_rsa_keygen_pubexp(ctx, e) != 1) {
+               ERROR("Error setting RSA exponent");
+               goto error;
+       }
+
+       if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PSS_PADDING) != 1) {
+               ERROR("Error setting RSA PSS padding");
+       }
+
+       if (EVP_PKEY_CTX_set_rsa_pss_keygen_md(ctx, EVP_sha256()) != 1) {
+               ERROR("Error setting RSA PSS message digest algorithm");
+               goto error;
+       }
+
+       if (EVP_PKEY_CTX_set_rsa_pss_keygen_mgf1_md(ctx, EVP_sha256()) != 1) {
+               ERROR("Error setting RSA PSS ");
+               goto error;
+       }
+
+       // TODO vs RSA_PSS_SALTLEN_AUTO, RSA_PSS_SALTLEN_MAX
+       if (EVP_PKEY_CTX_set_rsa_pss_keygen_saltlen(ctx, RSA_PSS_SALTLEN_DIGEST) != 1) {
+               ERROR("Error setting RSA PSS saltlen");
+               goto error;
+       }
+
+       if (EVP_PKEY_keygen(ctx, &pk) != 1) {
+               ERROR("Error generating RSA key pair");
+               goto error;
+       }
+
+       EVP_PKEY_CTX_free(ctx);
+       BN_CTX_free(bnctx);
+       return pk;
+
+error:
+       EVP_PKEY_free(pk);
+       EVP_PKEY_CTX_free(ctx);
+       BN_CTX_free(bnctx);
+       return NULL;
+}
+
 static EVP_PKEY *
 ssl_mkkeypair()
 {
@@ -1070,6 +1151,18 @@ error:
 	return ret;
 }
 
+static UNUSED void
+print_data (const uint8_t *buf, size_t buf_len, const char *info)
+{
+	if (info) {
+		printf("%s: ", info);
+	}
+	for (size_t i = 0; i < buf_len; i++) {
+		printf("%02x ", buf[i]);
+	}
+	printf("\n");
+}
+
 int
 ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
 			      size_t sig_len, const uint8_t *buf, size_t buf_len)
@@ -1102,7 +1195,7 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		goto error;
 	}
 
-	const char *hash_algo = asn1_object_to_hash_algo(sig_alg->algorithm);
+	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
 	if (!hash_algo) {
 		ERROR("Error in signature verification (Unsupported hash function)");
 		ret = -2;
@@ -1112,12 +1205,6 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 	// load public key, digest, and verify signature
 	if ((key = X509_get_pubkey(cert)) == NULL) {
 		ERROR("Error in signature verification (loading pubkey failed)");
-		ret = -2;
-		goto error;
-	}
-
-	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
-		ERROR("Error in signature verification (unable to initialize hash function)");
 		ret = -2;
 		goto error;
 	}
@@ -1150,6 +1237,8 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		ret = 0;
 	}
 
+	ERROR("XX TEST");
+
 error:
 	if (cert)
 		X509_free(cert);
@@ -1160,9 +1249,35 @@ error:
 	return ret;
 }
 
+static int
+ssl_set_pkey_ctx_rsa_pss (EVP_PKEY_CTX *ctx)
+{
+	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PSS_PADDING) != 1) {
+		ERROR("Error setting RSA PSS padding");
+		return -1;
+	}
+
+	if (EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) != 1) {
+		ERROR("Error setting signature digest");
+		return -1;
+	}
+
+	if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha256()) != 1) {
+		ERROR("Error setting RSA PSS mgf1 digest");
+		return -1;
+	}
+
+	// TODO vs RSA_PSS_SALTLEN_AUTO, RSA_PSS_SALTLEN_MAX
+	if (EVP_PKEY_CTX_set_rsa_pss_saltlen(ctx, RSA_PSS_SALTLEN_DIGEST) != 1) {
+		ERROR("Error setting RSA PSS saltlen");
+		return -1;
+	}
+	return 0;
+}
+
 int
 ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-				 const uint8_t *hash, size_t hash_len)
+				 const uint8_t *hash, size_t hash_len, rsa_padding_t rsa_padding)
 {
 	ASSERT(cert_buf);
 	ASSERT(sig_buf);
@@ -1194,7 +1309,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		goto error;
 	}
 
-	const char *hash_algo = asn1_object_to_hash_algo(sig_alg->algorithm);
+	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
 	if (!hash_algo) {
 		ERROR("Error in signature verification (Unsupported hash function)");
 		ret = -2;
@@ -1226,6 +1341,10 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		DEBUG("EVP_PKEY_CTX_set_signature_md failed");
 		ret = -2;
 		goto error;
+	}
+
+	if (rsa_padding == RSA_PSS_PADDING) {
+		ssl_set_pkey_ctx_rsa_pss(pkey_ctx);
 	}
 
 	ret = EVP_PKEY_verify(pkey_ctx, sig_buf, sig_len, hash, hash_len);
@@ -1790,29 +1909,19 @@ error:
 }
 
 const char *
-asn1_object_to_hash_algo(const ASN1_OBJECT *obj)
+get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj)
 {
 	// TODO which algorithms shall be supported
 	switch (OBJ_obj2nid(obj)) {
-	case NID_md4:
-		return "md4";
-	case NID_md5:
-		return "md5";
-	case NID_sha1:
-		return "sha1";
-	case NID_ripemd160:
-		return "rmd160";
+	case NID_rsassaPss:
+		return "sha256";
 	case NID_sha256WithRSAEncryption:
-	case NID_sha256:
 		return "sha256";
 	case NID_sha384WithRSAEncryption:
-	case NID_sha384:
 		return "sha384";
 	case NID_sha512WithRSAEncryption:
-	case NID_sha512:
 		return "sha512";
 	case NID_sha224WithRSAEncryption:
-	case NID_sha224:
 		return "sha224";
 	default:
 		return NULL;

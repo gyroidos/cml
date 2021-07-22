@@ -101,10 +101,12 @@ logf.pb-c.c: logf.proto
 LFLAGS_TEST := \
 	-lssl \
 	-lcrypto \
+	-libmtss
 
 TEST_SUITES := \
 	mem.test.c \
 	macro.test.c \
+	uuid.c \
 	ssl_util.c \
 	ssl_util.test.c
 

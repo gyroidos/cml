@@ -1,7 +1,11 @@
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "munit.h"
 
 #include "macro.h"
 #include "file.h"
+#include "uuid.h"
 #include "ssl_util.h"
 #include "mem.h"
 
@@ -49,6 +53,55 @@ static const uint8_t sig_valid[] = {
 };
 uint8_t quote_valid[] = { 0x68, 0x61, 0x6c, 0x6c, 0x6f, 0x0a };
 
+static const char *
+rfs (const char * name)
+{
+	FILE *f = fopen(name, "rb");
+	if (!f) {
+		ERROR("Failed to read file");
+		return NULL;
+	}
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	char *s = malloc(fsize + 1);
+	int ret = fread(s, 1, fsize, f);
+	if (ret != fsize) {
+		ERROR("Failed to read file");
+		return NULL;
+	}
+	fclose(f);
+
+	s[fsize] = 0;
+
+	return s;
+}
+
+static uint8_t *
+rfb (const char * name, long *size)
+{
+	FILE *f = fopen(name, "rb");
+	if (!f) {
+		ERROR("Failed to read file %s", name);
+		return NULL;
+	}
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	uint8_t *b = malloc(fsize);
+	if (!b) {
+		ERROR("Failed to allocate memory");
+		return NULL;
+	}
+	int ret = fread(b, 1, fsize, f);
+	fclose(f);
+
+	*size = ret;
+	return b;
+}
+
 static void *
 setup(UNUSED const MunitParameter params[], UNUSED void *data)
 {
@@ -64,11 +117,10 @@ setup(UNUSED const MunitParameter params[], UNUSED void *data)
 static void
 tear_down(UNUSED void *fixture)
 {
-	EVP_cleanup();
 	ssl_free();
 }
 
-static MunitResult
+static UNUSED MunitResult
 test_ssl_verify_signature_from_buf(UNUSED const MunitParameter params[], UNUSED void *data)
 {
 	int ret =
@@ -81,14 +133,113 @@ test_ssl_verify_signature_from_buf(UNUSED const MunitParameter params[], UNUSED 
 	return MUNIT_OK;
 }
 
+static MunitResult
+test_ssl_create_csr(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uuid_t *dev_uuid = uuid_new(NULL);
+    const char *uid;
+    if (!dev_uuid || (uid = uuid_string(dev_uuid)) == NULL) {
+        FATAL("Could not create device uuid");
+    }
+
+	if (ssl_create_csr("testdata/munic-device.csr", "testdata/munit-private.key", NULL, "common_name", uid, false) != 0) {
+        FATAL("Unable to create CSR");
+	}
+	INFO("Created CSR");
+	return 0;
+}
+
+static MunitResult
+test_ssl_verify_signature_from_digest_ssa_success(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	long size_hash;
+	long size_sig_ssa;
+
+	const char *cert_ssa = rfs("testdata/cert-ssa.pem");
+	uint8_t *sigbuf_ssa =  rfb("testdata/sig-ssa", &size_sig_ssa);
+
+	uint8_t *hash = rfb("testdata/test-quote-hash", &size_hash);
+
+	int ret = ssl_verify_signature_from_digest(cert_ssa, (const uint8_t *)sigbuf_ssa, size_sig_ssa,
+				 (const uint8_t*)hash, SHA256_DIGEST_LENGTH, RSA_SSA_PADDING);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_verify_signature_from_digest_pss_success(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	long size_hash;
+	long size_sig_pss;
+
+	const char *cert_pss = rfs("testdata/cert-pss.pem");
+
+	uint8_t *sigbuf_pss =  rfb("testdata/sig-pss", &size_sig_pss);
+	uint8_t *hash = rfb("testdata/test-quote-hash", &size_hash);
+
+	int ret = ssl_verify_signature_from_digest(cert_pss, (const uint8_t *)sigbuf_pss, size_sig_pss,
+				 (const uint8_t*)hash, SHA256_DIGEST_LENGTH, RSA_PSS_PADDING);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_mkkeypair_pss_success(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	EVP_PKEY * key = ssl_mkkeypair_pss();
+
+	// Check if key was successfully created
+	munit_assert(key != NULL);
+
+	return MUNIT_OK;
+}
+
 static MunitTest tests[] = {
+	// {
+	// 	"ssl_verify_signature_from_buf",    /* name */
+	// 	test_ssl_verify_signature_from_buf, /* test */
+	// 	setup,				    /* setup */
+	// 	tear_down,			    /* tear_down */
+	// 	MUNIT_TEST_OPTION_NONE,		    /* options */
+	// 	NULL				    /* parameters */
+	// },
 	{
-		"ssl_verify_signature_from_buf",    /* name */
-		test_ssl_verify_signature_from_buf, /* test */
-		setup,				    /* setup */
-		tear_down,			    /* tear_down */
-		MUNIT_TEST_OPTION_NONE,		    /* options */
-		NULL				    /* parameters */
+		"ssl_verify_signature_from_digest SSA Success",
+		test_ssl_verify_signature_from_digest_ssa_success,
+		setup,
+		tear_down,
+		MUNIT_TEST_OPTION_NONE,
+		NULL
+	},
+	{
+		"ssl_verify_signature_from_digest PSS Success",
+		test_ssl_verify_signature_from_digest_pss_success,
+		setup,
+		tear_down,
+		MUNIT_TEST_OPTION_NONE,
+		NULL
+	},
+	{
+		"ssl_create_csr",
+		test_ssl_create_csr,
+		setup,
+		tear_down,
+		MUNIT_TEST_OPTION_NONE,
+		NULL
+	},
+	{
+		"ssl_mkkeypair_pss",
+		test_ssl_mkkeypair_pss_success,
+		setup,
+		tear_down,
+		MUNIT_TEST_OPTION_NONE,
+		NULL
 	},
 
 	// Mark the end of the array with an entry where the test function is NULL
