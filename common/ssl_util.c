@@ -97,7 +97,7 @@ ssl_add_ext_cert(X509 *cert, int nid, char *value);
 
 /* creates a public key pair */
 static EVP_PKEY *
-ssl_mkkeypair();
+ssl_mkkeypair(int key_type);
 
 /* creates a CSR of a public key. If tpmkey is set true, openssl-tpm-engine
  * is used to create the request with a TPM-bound key */
@@ -108,7 +108,21 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey
 static int
 add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 
+/*configure pkey context for RSA-PSS padding scheme*/
+static int
+ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx);
+
+static unsigned char *
+ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
+	     const char *hash_algo);
+
 ENGINE *tpm_engine = NULL;
+
+#define ssl_print_err()                                                                            \
+	int lineno;                                                                                \
+	const char *filename;                                                                      \
+	unsigned long errnum = ERR_get_error_line(&filename, &lineno);                             \
+	ERROR("OpenSSL: %s (file: %s, line %d)", ERR_error_string(errnum, NULL), filename, lineno);
 
 int
 ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
@@ -220,7 +234,7 @@ end:
 
 int
 ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase,
-	       const char *common_name, const char *uid, bool tpmkey)
+	       const char *common_name, const char *uid, bool tpmkey, rsa_padding_t rsa_padding)
 {
 	ASSERT(req_file);
 	ASSERT(key_file);
@@ -234,7 +248,16 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 	int pass_len = 0;
 
 	if (!tpmkey) {
-		if ((pkeyp = ssl_mkkeypair()) == NULL) {
+		if (RSA_SSA_PADDING == rsa_padding) {
+			pkeyp = ssl_mkkeypair(EVP_PKEY_RSA);
+		} else if (RSA_PSS_PADDING == rsa_padding) {
+			pkeyp = ssl_mkkeypair(EVP_PKEY_RSA_PSS);
+		} else {
+			ERROR("Unknown RSA padding");
+			goto error;
+		}
+
+		if (NULL == pkeyp) {
 			ERROR("Error creating public key pair");
 			goto error;
 		}
@@ -436,65 +459,50 @@ error:
 }
 
 static EVP_PKEY *
-ssl_mkkeypair()
+ssl_mkkeypair(int key_type)
 {
-	EVP_PKEY *pk = NULL;
-	RSA *rsa = NULL;
-	BIGNUM *e = NULL;
-	BN_CTX *ctx = NULL;
+	//https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_keygen_init.html
+	EVP_PKEY_CTX *ctx = NULL;
+	EVP_PKEY *pkey = NULL;
 
-	if ((pk = EVP_PKEY_new()) == NULL) {
-		ERROR("Error in creating public key pair structure");
-		goto error;
+	if (EVP_PKEY_RSA == key_type) {
+		ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+	} else if (EVP_PKEY_RSA_PSS == key_type) {
+		ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
+	} else {
+		ERROR("Unsupported key type");
+		return NULL;
 	}
 
-	if ((rsa = RSA_new()) == NULL) {
-		ERROR("Error in loading RSA method");
-		goto error;
+	if (!ctx) {
+		ERROR("Failed to create EVP_PKEY_CTX");
+		return NULL;
 	}
 
-	if ((ctx = BN_CTX_new()) == NULL) {
-		ERROR("Error setting up big number context");
-		goto error;
+	if (EVP_PKEY_keygen_init(ctx) <= 0) {
+		ERROR("Failed to initialize EVP_PKEY_keygen");
+		goto out;
 	}
 
-	if ((e = BN_CTX_get(ctx)) == NULL) {
-		ERROR("Error in loading BIGNUM");
-		goto error;
+	if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, RSA_KEY_SIZE_MKKEYP) <= 0) {
+		ERROR("Failed to set key length");
+		goto out;
 	}
 
-	if (!BN_set_word(e, RSA_KEY_EXPONENT)) {
-		ERROR("Error setting BIGNUM");
-		goto error;
+	//if (0 != ssl_set_pkey_ctx_rsa_pss(ctx)) {
+	//	ERROR("Failed to configure context for RSA-PSS");
+	//	goto out;
+	//}
+
+	/* Generate key */
+	if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
+		ERROR("Failed to generate keypair");
+		goto out;
 	}
 
-	//DEBUG("%s: DEBUG!", ERR_error_string(ERR_get_error(), NULL));
-	if (RSA_generate_key_ex(rsa, RSA_KEY_SIZE_MKKEYP, e, NULL) != 1) {
-		ERROR("Error generating pkey pair");
-		//int lineno;
-		//const char * filename;
-		//unsigned long errnum = ERR_get_error_line(&filename, &lineno);
-		//ERROR("%s: Error in generating public key pair (file: %s, line %d)", ERR_error_string(errnum, NULL), filename, lineno);
-		goto error;
-	}
-
-	// since we return the keypair, we don't free the rsa structure
-	if (!EVP_PKEY_assign_RSA(pk, rsa)) {
-		ERROR("Error in filling public key pair structure");
-		goto error;
-	}
-
-	DEBUG("Public key pair generated");
-	//BN_free(e);
-	BN_CTX_free(ctx);
-	return pk;
-
-error:
-	RSA_free(rsa);
-	EVP_PKEY_free(pk);
-	//BN_free(e);
-	BN_CTX_free(ctx);
-	return NULL;
+out:
+	EVP_PKEY_CTX_free(ctx);
+	return pkey;
 }
 
 static int
@@ -1070,6 +1078,18 @@ error:
 	return ret;
 }
 
+static UNUSED void
+print_data(const uint8_t *buf, size_t buf_len, const char *info)
+{
+	if (info) {
+		printf("%s: ", info);
+	}
+	for (size_t i = 0; i < buf_len; i++) {
+		printf("%02x ", buf[i]);
+	}
+	printf("\n");
+}
+
 int
 ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
 			      size_t sig_len, const uint8_t *buf, size_t buf_len)
@@ -1102,7 +1122,7 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		goto error;
 	}
 
-	const char *hash_algo = asn1_object_to_hash_algo(sig_alg->algorithm);
+	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
 	if (!hash_algo) {
 		ERROR("Error in signature verification (Unsupported hash function)");
 		ret = -2;
@@ -1112,12 +1132,6 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 	// load public key, digest, and verify signature
 	if ((key = X509_get_pubkey(cert)) == NULL) {
 		ERROR("Error in signature verification (loading pubkey failed)");
-		ret = -2;
-		goto error;
-	}
-
-	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
-		ERROR("Error in signature verification (unable to initialize hash function)");
 		ret = -2;
 		goto error;
 	}
@@ -1150,6 +1164,8 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		ret = 0;
 	}
 
+	ERROR("XX TEST");
+
 error:
 	if (cert)
 		X509_free(cert);
@@ -1158,6 +1174,32 @@ error:
 	if (md_ctx)
 		EVP_MD_CTX_free(md_ctx);
 	return ret;
+}
+
+static int
+ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx)
+{
+	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PSS_PADDING) != 1) {
+		ERROR("Error setting RSA PSS padding");
+		return -1;
+	}
+
+	if (EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) != 1) {
+		ERROR("Error setting signature digest");
+		return -1;
+	}
+
+	if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha256()) != 1) {
+		ERROR("Error setting RSA PSS mgf1 digest");
+		return -1;
+	}
+
+	// TODO vs RSA_PSS_SALTLEN_AUTO, RSA_PSS_SALTLEN_MAX
+	if (EVP_PKEY_CTX_set_rsa_pss_saltlen(ctx, RSA_PSS_SALTLEN_DIGEST) != 1) {
+		ERROR("Error setting RSA PSS saltlen");
+		return -1;
+	}
+	return 0;
 }
 
 int
@@ -1194,7 +1236,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		goto error;
 	}
 
-	const char *hash_algo = asn1_object_to_hash_algo(sig_alg->algorithm);
+	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
 	if (!hash_algo) {
 		ERROR("Error in signature verification (Unsupported hash function)");
 		ret = -2;
@@ -1228,9 +1270,31 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		goto error;
 	}
 
+	DEBUG("EVP_PKEY_RSA: %d", EVP_PKEY_RSA);
+	DEBUG("EVP_PKEY_RSA_PSS: %d", EVP_PKEY_RSA_PSS);
+
+	int key_base_id = EVP_PKEY_base_id(key);
+
+	DEBUG("Got base_id %d", key_base_id);
+
+	if (EVP_PKEY_RSA_PSS == key_base_id) {
+		DEBUG("Verifying signature with RSA-PSS padding scheme");
+		if (0 > (ret = ssl_set_pkey_ctx_rsa_pss(pkey_ctx))) {
+			ERROR("Failed to configue ctx for RSA-PSS padding scheme");
+			goto error;
+		}
+	} else if (EVP_PKEY_RSA == key_base_id) {
+		DEBUG("Verifying signature with OpenSSL default padding scheme");
+	} else {
+		ERROR("Unsupported key type");
+		ret = -1;
+		goto error;
+	}
+
 	ret = EVP_PKEY_verify(pkey_ctx, sig_buf, sig_len, hash, hash_len);
 	if (ret != 1) {
 		ERROR("EVP_PKEY_verify error");
+		ssl_print_err();
 		// any error
 		if (ret == -1) {
 			ret = -2;
@@ -1316,7 +1380,7 @@ error:
 
 int
 ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const char *passphrase,
-			const char *user_name)
+			const char *user_name, rsa_padding_t rsa_padding)
 {
 	ASSERT(token_file && passphrase);
 
@@ -1326,7 +1390,16 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 	PKCS12 *p12 = NULL;
 	char *passphr = mem_strdup(passphrase);
 
-	if ((pkey = ssl_mkkeypair()) == NULL) {
+	if (RSA_SSA_PADDING == rsa_padding) {
+		pkey = ssl_mkkeypair(EVP_PKEY_RSA);
+	} else if (RSA_PSS_PADDING == rsa_padding) {
+		pkey = ssl_mkkeypair(EVP_PKEY_RSA_PSS);
+	} else {
+		ERROR("Unkown RSA padding specified");
+		goto error;
+	}
+
+	if (NULL == pkey) {
 		ERROR("Error creating public-key pair");
 		goto error;
 	}
@@ -1566,10 +1639,6 @@ ssl_mkcert(EVP_PKEY *pkeyp, const char *common_name)
 	//DEBUG("Error status: %s", ERR_error_string(ERR_get_error(), NULL));
 
 	if (!X509_sign(cert, pkeyp, EVP_sha256())) {
-		//int lineno;
-		//const char * filename;
-		//unsigned long errnum = ERR_get_error_line(&filename, &lineno);
-		//ERROR("%s: Error in generating public key pair (file: %s, line %d)", ERR_error_string(errnum, NULL), filename, lineno);
 		ERROR("Error signing certificate");
 		return NULL;
 	}
@@ -1790,29 +1859,19 @@ error:
 }
 
 const char *
-asn1_object_to_hash_algo(const ASN1_OBJECT *obj)
+get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj)
 {
 	// TODO which algorithms shall be supported
 	switch (OBJ_obj2nid(obj)) {
-	case NID_md4:
-		return "md4";
-	case NID_md5:
-		return "md5";
-	case NID_sha1:
-		return "sha1";
-	case NID_ripemd160:
-		return "rmd160";
+	case NID_rsassaPss:
+		return "sha256";
 	case NID_sha256WithRSAEncryption:
-	case NID_sha256:
 		return "sha256";
 	case NID_sha384WithRSAEncryption:
-	case NID_sha384:
 		return "sha384";
 	case NID_sha512WithRSAEncryption:
-	case NID_sha512:
 		return "sha512";
 	case NID_sha224WithRSAEncryption:
-	case NID_sha224:
 		return "sha224";
 	default:
 		return NULL;

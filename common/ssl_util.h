@@ -29,6 +29,8 @@
 #include <openssl/evp.h>
 #include <openssl/x509v3.h>
 
+typedef enum { RSA_PSS_PADDING, RSA_SSA_PADDING } rsa_padding_t;
+
 /**
  * reads a pkcs12 softtoken located in the file token_file, unlocked with the password passphrase,
  * whereas the private key is stored in pkey
@@ -49,7 +51,7 @@ ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY *
  * @return returns 0 on success, -1 in case of a failure. */
 int
 ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase,
-	       const char *common_name, const char *uid, bool tpmkey);
+	       const char *common_name, const char *uid, bool tpmkey, rsa_padding_t rsa_padding);
 
 /**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
@@ -139,7 +141,7 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
  */
 int
 ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const char *passphrase,
-			const char *user_name);
+			const char *user_name, rsa_padding_t rsa_padding);
 
 /**
  * changes the passwphrase/pin of a pkcs 12 softtoken located in the file token_file,
@@ -178,11 +180,12 @@ ssl_free(void);
 
 /**
  * Takes an ASN1_OBJECT as an input and returns the corresponding hash algorithm
- * as a string, if supported.
+ * as a string, if supported. NOTE: Only for signature algorithms, use
+ * builtin openssl functions for digests
  * @param ASN1_OBJECT *obj pointer to an ASN1_OBJECT
  * @return string representation of the hash algorithm
  */
 const char *
-asn1_object_to_hash_algo(const ASN1_OBJECT *obj);
+get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj);
 
 #endif /* P12UTIL_H */
