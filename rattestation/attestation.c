@@ -90,7 +90,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	if (resp->has_quoted) {
 		char *quote_str = convert_bin_to_hex_new(resp->quoted.data, resp->quoted.len);
 		DEBUG("Quote (Length %zu): %s", resp->quoted.len, quote_str);
-		mem_free(quote_str);
+		mem_free0(quote_str);
 	} else {
 		ERROR("Response does not contain quote to be verified");
 		ret = false;
@@ -100,7 +100,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	if (resp->has_signature) {
 		char *sig_str = convert_bin_to_hex_new(resp->signature.data, resp->signature.len);
 		DEBUG("Signature (Length %zu): %s\n", resp->signature.len, sig_str);
-		mem_free(sig_str);
+		mem_free0(sig_str);
 	} else {
 		ERROR("Response does not contain signature");
 		goto err;
@@ -191,8 +191,8 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 						     tpms_attest.extraData.t.size);
 	DEBUG("Nonce (sent %s, received %s) - %s", nonce_str, rcv_nonce_str,
 	      ret_nonce ? "VERIFICATION FAILED" : "VERIFICATION SUCCESSFUL");
-	mem_free(nonce_str);
-	mem_free(rcv_nonce_str);
+	mem_free0(nonce_str);
+	mem_free0(rcv_nonce_str);
 	if (ret_nonce) {
 		ret = false;
 		goto err;
@@ -226,7 +226,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	char *pcr_digest = convert_bin_to_hex_new(tpms_attest.attested.quote.pcrDigest.t.buffer,
 						  tpms_attest.attested.quote.pcrDigest.t.size);
 	DEBUG("Quote PCR Digest: %s", pcr_digest);
-	mem_free(pcr_digest);
+	mem_free0(pcr_digest);
 	SHA256_CTX ctx;
 	SHA256_Init(&ctx);
 	uint8_t pcr_calc[SHA256_DIGEST_LENGTH] = { 0 };
@@ -271,7 +271,7 @@ err:
 
 	// Free resources
 	for (size_t i = 0; i < resp->n_pcr_values; i++) {
-		mem_free(pcr_strings[i]);
+		mem_free0(pcr_strings[i]);
 	}
 	ssl_free();
 
@@ -310,9 +310,9 @@ cleanup:
 	if (resp_cb_data->resp_verified_cb)
 		(resp_cb_data->resp_verified_cb)(verified);
 	if (resp_cb_data->nonce)
-		mem_free(resp_cb_data->nonce);
+		mem_free0(resp_cb_data->nonce);
 	protobuf_free_message((ProtobufCMessage *)resp_cb_data->config);
-	mem_free(resp_cb_data);
+	mem_free0(resp_cb_data);
 }
 
 int
@@ -365,7 +365,7 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 
 	char *nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
 	INFO("Request with Nonce %s, Request size=%zd", nonce_str, msg_size);
-	mem_free(nonce_str);
+	mem_free0(nonce_str);
 
 	struct attestation_resp_cb_data *resp_cb_data =
 		mem_new0(struct attestation_resp_cb_data, 1);

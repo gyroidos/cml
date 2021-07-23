@@ -87,10 +87,10 @@ x509_get_common_name_new(X509_NAME *name)
 void
 modsig_free(sig_info_t *s)
 {
-	mem_free(s->key_id);
-	mem_free(s->sig);
-	mem_free(s->signer);
-	mem_free(s);
+	mem_free0(s->key_id);
+	mem_free0(s->sig);
+	mem_free0(s->signer);
+	mem_free0(s);
 }
 
 sig_info_t *
