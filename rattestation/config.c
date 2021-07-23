@@ -70,6 +70,6 @@ rattestation_read_config_new(const char *file)
 	}
 
 err:
-	mem_free(buf);
+	mem_free0(buf);
 	return config;
 }
