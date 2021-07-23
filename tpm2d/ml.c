@@ -139,7 +139,7 @@ ml_get_ima_list_new(size_t *len)
 				TRACE("Reading from fd %d: Blocked, retrying...", fd);
 				continue;
 			}
-			mem_free(buf);
+			mem_free0(buf);
 			l = 0;
 			ERROR("Failed to read binary_runtime_measurements");
 			goto out;
@@ -157,13 +157,13 @@ void
 ml_container_list_free(MlContainerEntry **entries, size_t len)
 {
 	for (size_t i = 0; i < len; i++) {
-		mem_free(entries[i]->filename);
-		mem_free(entries[i]->template_hash_alg);
-		mem_free(entries[i]->template_hash.data);
-		mem_free(entries[i]->data_hash_alg);
-		mem_free(entries[i]->data_hash.data);
+		mem_free0(entries[i]->filename);
+		mem_free0(entries[i]->template_hash_alg);
+		mem_free0(entries[i]->template_hash.data);
+		mem_free0(entries[i]->data_hash_alg);
+		mem_free0(entries[i]->data_hash.data);
 	}
-	mem_free(entries);
+	mem_free0(entries);
 }
 
 MlContainerEntry **

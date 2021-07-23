@@ -165,9 +165,9 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		out.rand_data = rand_hex;
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (rand)
-			mem_free(rand);
+			mem_free0(rand);
 		if (rand_hex)
-			mem_free(rand_hex);
+			mem_free0(rand_hex);
 	} break;
 	case CONTROLLER_TO_TPM__CODE__CLEAR: {
 		INFO("Received Clear command!");

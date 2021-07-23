@@ -35,7 +35,7 @@ ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
 	uint8_t *cert_raw = mem_new0(uint8_t, *cert_len);
 	if (tpm2_nv_read(TPM_RH_NULL, cert_index, NULL, cert_raw, cert_len)) {
 		ERROR("Reading Index of EK cert failed!");
-		mem_free(cert_raw);
+		mem_free0(cert_raw);
 		return NULL;
 	}
 	const unsigned char *p = cert_raw;

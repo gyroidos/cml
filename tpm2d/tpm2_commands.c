@@ -119,7 +119,7 @@ convert_hex_to_bin_new(const char *hex_str, int *out_length)
 	return bin;
 err:
 	ERROR("Converstion of hex string to bin failed!");
-	mem_free(bin);
+	mem_free0(bin);
 	return NULL;
 }
 
@@ -924,10 +924,10 @@ void
 tpm2_quote_free(tpm2d_quote_t *quote)
 {
 	if (quote->quoted_value)
-		mem_free(quote->quoted_value);
+		mem_free0(quote->quoted_value);
 	if (quote->signature_value)
-		mem_free(quote->signature_value);
-	mem_free(quote);
+		mem_free0(quote->signature_value);
+	mem_free0(quote);
 }
 
 TPM_RC
@@ -1124,14 +1124,14 @@ tpm2_getrandom_new(size_t rand_length)
 
 	if (TPM_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_GetRandom");
-		mem_free(rand);
+		mem_free0(rand);
 		return NULL;
 	}
 
 	char *rand_hex = convert_bin_to_hex_new(rand, rand_length);
 	INFO("Generated Rand: %s", rand_hex);
 
-	mem_free(rand_hex);
+	mem_free0(rand_hex);
 
 	if (TPM_RC_SUCCESS != tpm2_flushcontext(se_handle))
 		WARN("Flush failed, maybe session handle was allready flushed.");
@@ -1191,8 +1191,8 @@ void
 tpm2_pcrread_free(tpm2d_pcr_t *pcr)
 {
 	if (pcr->pcr_value)
-		mem_free(pcr->pcr_value);
-	mem_free(pcr);
+		mem_free0(pcr->pcr_value);
+	mem_free0(pcr);
 }
 
 size_t

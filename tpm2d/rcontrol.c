@@ -239,7 +239,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 
-		mem_free(out.ml_ima_entry.data);
+		mem_free0(out.ml_ima_entry.data);
 		ml_container_list_free(out.ml_container_entry, out.n_ml_container_entry);
 
 	err_att_req:
@@ -250,16 +250,16 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 				if (pcr_array[i])
 					tpm2_pcrread_free(pcr_array[i]);
 				if (out_pcrs && out_pcrs[i])
-					mem_free(out_pcrs[i]);
+					mem_free0(out_pcrs[i]);
 			}
 		if (out_pcrs)
-			mem_free(out_pcrs);
+			mem_free0(out_pcrs);
 		if (pcr_array)
-			mem_free(pcr_array);
+			mem_free0(pcr_array);
 		if (quote)
 			tpm2_quote_free(quote);
 		if (attestation_cert)
-			mem_free(attestation_cert);
+			mem_free0(attestation_cert);
 	} break;
 	default:
 		WARN("RemoteToTpm2d command %d unknown or not implemented yet", msg->code);
