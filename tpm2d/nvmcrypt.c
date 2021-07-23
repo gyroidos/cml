@@ -69,7 +69,7 @@ cleanup:
 		if (pcrs[i])
 			tpm2_pcrread_free(pcrs[i]);
 	if (pcrs)
-		mem_free(pcrs);
+		mem_free0(pcrs);
 
 	return ret;
 }
@@ -140,7 +140,7 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 				WARN("nv_read returned with unexpected error %08x", ret);
 				fde_state = FDE_UNEXPECTED_ERROR;
 			}
-			mem_free(fde_key);
+			mem_free0(fde_key);
 			return NULL;
 		}
 	}
@@ -198,16 +198,16 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 		goto err;
 	}
 
-	mem_free(verify_key);
+	mem_free0(verify_key);
 
 	fde_state = FDE_OK;
 	return fde_key;
 err:
 	fde_state = FDE_KEYGEN_FAILED;
 	if (verify_key)
-		mem_free(verify_key);
+		mem_free0(verify_key);
 	if (fde_key)
-		mem_free(fde_key);
+		mem_free0(fde_key);
 
 	return NULL;
 }
@@ -233,9 +233,9 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 		fde_state = FDE_NO_DEVICE;
 	}
 
-	mem_free(mapped_path);
-	mem_free(ascii_key);
-	mem_free(key);
+	mem_free0(mapped_path);
+	mem_free0(ascii_key);
+	mem_free0(key);
 	return fde_state;
 }
 

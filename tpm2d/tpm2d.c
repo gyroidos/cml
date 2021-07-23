@@ -133,7 +133,7 @@ tpm2d_setup_keys(void)
 
 	if (file_exists(TPM2D_ATT_PRIV_FILE)) {
 		INFO("Signing key for attestation found in %s, nothing to be done.", token_dir);
-		mem_free(token_dir);
+		mem_free0(token_dir);
 		return;
 	}
 
@@ -188,7 +188,7 @@ retry:
 		INFO("Created signing key for attestation in %s, not loading need to wait for provsg ...",
 		     token_dir);
 	}
-	mem_free(token_dir);
+	mem_free0(token_dir);
 }
 #endif /* ifndef TPM2D_NVMCRYPT_ONLY */
 
@@ -241,7 +241,7 @@ tpm2d_init(void)
 	nvmcrypt_init(false);
 #endif
 
-	mem_free(session_dir);
+	mem_free0(session_dir);
 	INFO("Sucessfully initialized TPM2.0");
 	tss2_destroy();
 }
