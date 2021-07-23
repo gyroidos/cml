@@ -198,7 +198,7 @@ write_guestos_config(docker_config_t *config, const char *root_image_file, const
 
 	char *local_ip = get_ifname_ip_new("eth0");
 	cfg.update_base_url = mem_printf("http://%s/", local_ip);
-	mem_free(local_ip);
+	mem_free0(local_ip);
 
 	protobuf_message_write_to_file(out_file, (ProtobufCMessage *)&cfg);
 
@@ -231,31 +231,31 @@ write_guestos_config(docker_config_t *config, const char *root_image_file, const
 	else
 		ret = control_push_guestos(out_file, out_cert_file, out_sig_file);
 
-	mem_free(cfg.update_base_url);
-	mem_free(out_sig_file);
-	mem_free(out_cert_file);
-	mem_free(out_www_image_path_versioned);
+	mem_free0(cfg.update_base_url);
+	mem_free0(out_sig_file);
+	mem_free0(out_cert_file);
+	mem_free0(out_www_image_path_versioned);
 
 free_stuff:
 	for (uint32_t j = 0; j < cfg.n_mounts; ++j) {
-		mem_free(cfg.mounts[j]->image_file);
-		mem_free(cfg.mounts[j]->mount_point);
-		mem_free(cfg.mounts[j]->fs_type);
-		mem_free(cfg.mounts[j]->image_sha1);
-		mem_free(cfg.mounts[j]->image_sha2_256);
+		mem_free0(cfg.mounts[j]->image_file);
+		mem_free0(cfg.mounts[j]->mount_point);
+		mem_free0(cfg.mounts[j]->fs_type);
+		mem_free0(cfg.mounts[j]->image_sha1);
+		mem_free0(cfg.mounts[j]->image_sha2_256);
 		if (j > 0) {
-			mem_free(cfg.mounts[j]);
+			mem_free0(cfg.mounts[j]);
 		}
 	}
-	mem_free(cfg.name);
-	mem_free(cfg.upstream_version);
-	mem_free(cfg.mounts);
-	mem_free(description.en);
-	mem_free(description.de);
-	mem_free(init);
-	mem_free(image_path_unversioned);
-	mem_free(out_image_path_versioned);
-	mem_free(out_file);
+	mem_free0(cfg.name);
+	mem_free0(cfg.upstream_version);
+	mem_free0(cfg.mounts);
+	mem_free0(description.en);
+	mem_free0(description.de);
+	mem_free0(init);
+	mem_free0(image_path_unversioned);
+	mem_free0(out_image_path_versioned);
+	mem_free0(out_file);
 
 	return ret;
 }
@@ -284,20 +284,20 @@ merge_layers_new(docker_manifest_t *manifest, char *in_path, char *out_path, cha
 		INFO("Extracting layer[%d]: %s", i, layer_file_name);
 		if (-1 == util_tar_extract(layer_file_name, extracted_image_path)) {
 			ERROR_ERRNO("Failed to extract %s", layer_file_name);
-			mem_free(layer_file_name);
+			mem_free0(layer_file_name);
 			goto out;
 		}
-		mem_free(layer_file_name);
+		mem_free0(layer_file_name);
 	}
 	image_file = mem_printf("%s/%s", target_image_path, IMAGE_NAME_ROOT);
 	if (util_squash_image(extracted_image_path, image_file) < 0) {
-		mem_free(image_file);
+		mem_free0(image_file);
 		image_file = NULL;
 		goto out;
 	}
 out:
-	mem_free(extracted_image_path);
-	mem_free(target_image_path);
+	mem_free0(extracted_image_path);
+	mem_free0(target_image_path);
 	return image_file;
 }
 
@@ -424,8 +424,8 @@ main(UNUSED int argc, char **argv)
 		}
 		docker_set_host_url(url);
 		docker_generate_basic_auth(user, password, token_file);
-		mem_free(token_file);
-		mem_free(docker_image_path);
+		mem_free0(token_file);
+		mem_free0(docker_image_path);
 		return 0;
 	}
 
@@ -449,7 +449,7 @@ main(UNUSED int argc, char **argv)
 
 	ml = docker_parse_manifest_list_new(buf);
 
-	mem_free(buf);
+	mem_free0(buf);
 	buf = NULL;
 
 	for (int i = 0; i < ml->manifests_size; ++i) {
@@ -489,7 +489,7 @@ main(UNUSED int argc, char **argv)
 
 	manifest = docker_parse_manifest_new(buf);
 
-	mem_free(buf);
+	mem_free0(buf);
 	buf = NULL;
 
 	if (docker_download_image(token, manifest, docker_image_path, image_name, image_tag) < 0) {
@@ -532,39 +532,39 @@ main(UNUSED int argc, char **argv)
 
 	write_guestos_config(config, trustx_image_file, trustx_image_path, image_name, image_tag);
 
-	mem_free(manifest_list_file);
-	mem_free(manifest_file);
-	mem_free(docker_image_path);
-	mem_free(trustx_image_path);
-	mem_free(trustx_image_file);
+	mem_free0(manifest_list_file);
+	mem_free0(manifest_file);
+	mem_free0(docker_image_path);
+	mem_free0(trustx_image_path);
+	mem_free0(trustx_image_file);
 
 	docker_manifest_free(manifest);
 	docker_config_free(config);
 
-	mem_free(token_file);
-	mem_free(token);
+	mem_free0(token_file);
+	mem_free0(token);
 	return 0;
 
 err:
 	INFO("Cleaning up token_file: %s", token_file);
 	if (file_exists(token_file))
 		remove(token_file);
-	mem_free(token_file);
+	mem_free0(token_file);
 	if (token)
-		mem_free(token);
+		mem_free0(token);
 
 	if (manifest_list_file)
-		mem_free(manifest_list_file);
+		mem_free0(manifest_list_file);
 	if (manifest_url_digest)
-		mem_free(manifest_url_digest);
+		mem_free0(manifest_url_digest);
 	if (manifest_file)
-		mem_free(manifest_file);
+		mem_free0(manifest_file);
 	if (docker_image_path)
-		mem_free(docker_image_path);
+		mem_free0(docker_image_path);
 	if (trustx_image_path)
-		mem_free(trustx_image_path);
+		mem_free0(trustx_image_path);
 	if (trustx_image_file)
-		mem_free(trustx_image_file);
+		mem_free0(trustx_image_file);
 
 	if (manifest)
 		docker_manifest_free(manifest);

@@ -50,19 +50,19 @@ static void
 docker_remote_file_free(docker_remote_file_t *rf)
 {
 	if (rf->media_type)
-		mem_free(rf->media_type);
+		mem_free0(rf->media_type);
 	if (rf->digest_algorithm)
-		mem_free(rf->digest_algorithm);
+		mem_free0(rf->digest_algorithm);
 	// strtok sub pointer
 	//if (rf->digest)
-	//	mem_free(rf->digest);
+	//	mem_free0(rf->digest);
 	if (rf->suffix)
-		mem_free(rf->suffix);
+		mem_free0(rf->suffix);
 	if (rf->platform_arch)
-		mem_free(rf->platform_arch);
+		mem_free0(rf->platform_arch);
 	if (rf->platform_variant)
-		mem_free(rf->platform_variant);
-	mem_free(rf);
+		mem_free0(rf->platform_variant);
+	mem_free0(rf);
 }
 
 static docker_remote_file_t *
@@ -129,7 +129,7 @@ docker_parse_manifest_list_new(const char *raw_file_buffer)
 			ml->manifests[0]->platform_arch = mem_strdup(jarchitecture->valuestring);
 		} else {
 			ERROR("Unsuported schema verison = %d", ml->schema_version);
-			mem_free(ml);
+			mem_free0(ml);
 			ml = NULL;
 			goto out;
 		}
@@ -140,7 +140,7 @@ docker_parse_manifest_list_new(const char *raw_file_buffer)
 		ml->manifests_size = cJSON_GetArraySize(jmanifests);
 		if (ml->manifests_size < 0) {
 			ERROR("No manifests in list");
-			mem_free(ml);
+			mem_free0(ml);
 			ml = NULL;
 			goto out;
 		}
@@ -159,7 +159,7 @@ docker_parse_manifest_list_new(const char *raw_file_buffer)
 	}
 	default:
 		ERROR("Unsuported schema verison = %d", ml->schema_version);
-		mem_free(ml);
+		mem_free0(ml);
 		ml = NULL;
 	}
 out:
@@ -171,12 +171,12 @@ void
 docker_manifest_list_free(docker_manifest_list_t *ml)
 {
 	if (ml->media_type)
-		mem_free(ml->media_type);
+		mem_free0(ml->media_type);
 	for (int i = 0; i < ml->manifests_size; ++i) {
 		if (ml->manifests[i])
 			docker_remote_file_free(ml->manifests[i]);
 	}
-	mem_free(ml);
+	mem_free0(ml);
 }
 
 docker_manifest_t *
@@ -215,7 +215,7 @@ void
 docker_manifest_free(docker_manifest_t *manifest)
 {
 	if (manifest->media_type)
-		mem_free(manifest->media_type);
+		mem_free0(manifest->media_type);
 
 	if (manifest->config)
 		docker_remote_file_free(manifest->config);
@@ -224,7 +224,7 @@ docker_manifest_free(docker_manifest_t *manifest)
 		if (manifest->layers[i])
 			docker_remote_file_free(manifest->layers[i]);
 	}
-	mem_free(manifest);
+	mem_free0(manifest);
 }
 
 docker_config_t *
@@ -324,41 +324,41 @@ void
 docker_config_free(docker_config_t *cfg)
 {
 	if (cfg->hostname)
-		mem_free(cfg->hostname);
+		mem_free0(cfg->hostname);
 	if (cfg->domainname)
-		mem_free(cfg->domainname);
+		mem_free0(cfg->domainname);
 	if (cfg->user)
-		mem_free(cfg->user);
+		mem_free0(cfg->user);
 
 	for (list_t *l = cfg->exposedports_list; l; l = l->next) {
-		mem_free(l->data);
+		mem_free0(l->data);
 	}
 	list_delete(cfg->exposedports_list);
 
 	if (cfg->env) {
 		for (int i = 0; i < cfg->env_size; ++i)
-			mem_free(cfg->env[i]);
-		mem_free(cfg->env);
+			mem_free0(cfg->env[i]);
+		mem_free0(cfg->env);
 	}
 
 	if (cfg->cmd) {
 		for (int i = 0; i < cfg->cmd_size; ++i)
-			mem_free(cfg->cmd[i]);
-		mem_free(cfg->cmd);
+			mem_free0(cfg->cmd[i]);
+		mem_free0(cfg->cmd);
 	}
 
 	if (cfg->entrypoint) {
 		for (int i = 0; i < cfg->entrypoint_size; ++i)
-			mem_free(cfg->entrypoint[i]);
-		mem_free(cfg->entrypoint);
+			mem_free0(cfg->entrypoint[i]);
+		mem_free0(cfg->entrypoint);
 	}
 
 	for (list_t *l = cfg->labels_list; l; l = l->next) {
-		mem_free(l->data);
+		mem_free0(l->data);
 	}
 	list_delete(cfg->labels_list);
 
-	mem_free(cfg);
+	mem_free0(cfg);
 }
 
 void
@@ -390,10 +390,10 @@ docker_generate_basic_auth(const char *user, const char *password, const char *t
 		file_printf(token_file, "{ \"token\": \"%s\" }", out);
 	}
 
-	mem_free(in);
-	mem_free(out);
-	mem_free(auth);
-	mem_free(url);
+	mem_free0(in);
+	mem_free0(out);
+	mem_free0(auth);
+	mem_free0(url);
 
 	return ret;
 }
@@ -424,7 +424,7 @@ docker_get_curl_token_new(char *image_name, char *token_file)
 	char *token = mem_strdup(jtoken->valuestring);
 	//DEBUG("token: %s", token);
 
-	mem_free(url);
+	mem_free0(url);
 	cJSON_Delete(jroot);
 	return token;
 }
@@ -452,9 +452,9 @@ docker_download_manifest_list(const char *curl_token, const char *out_file, cons
 		ret = proc_fork_and_execvp(argv_basic);
 	}
 
-	mem_free(url);
-	mem_free(auth_basic);
-	mem_free(auth_bearer);
+	mem_free0(url);
+	mem_free0(auth_basic);
+	mem_free0(auth_bearer);
 	return ret;
 }
 
@@ -484,9 +484,9 @@ docker_download_manifest(const char *curl_token, const char *out_file, const cha
 		ret = proc_fork_and_execvp(argv_basic);
 	}
 
-	mem_free(url);
-	mem_free(auth_basic);
-	mem_free(auth_bearer);
+	mem_free0(url);
+	mem_free0(auth_basic);
+	mem_free0(auth_bearer);
 	return ret;
 }
 
@@ -503,10 +503,10 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 		image_hash = util_hash_sha256_image_file_new(out_file);
 		if (!strncmp(image_hash, rf->digest, strlen(image_hash))) {
 			INFO("File %s already downloaded!", rf->digest);
-			mem_free(image_hash);
+			mem_free0(image_hash);
 			return ret;
 		}
-		mem_free(image_hash);
+		mem_free0(image_hash);
 	}
 
 	//char *url = mem_printf("https://registry-1.docker.io/v2/library/%s/blobs/%s:%s",
@@ -525,9 +525,9 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 	if (ret != 0)
 		ret = proc_fork_and_execvp(argv_basic);
 
-	mem_free(url);
-	mem_free(auth_basic);
-	mem_free(auth_bearer);
+	mem_free0(url);
+	mem_free0(auth_basic);
+	mem_free0(auth_bearer);
 
 	if (ret < 0) {
 		ERROR("Download failed!");
@@ -542,7 +542,7 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 	INFO("Download of file %s completed!", rf->digest);
 
 	if (image_hash)
-		mem_free(image_hash);
+		mem_free0(image_hash);
 
 	return ret;
 }

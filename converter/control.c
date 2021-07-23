@@ -119,11 +119,11 @@ control_push_guestos(char *cfgfile, char *certfile, char *sigfile)
 	ret = send_message(&msg);
 out:
 	if (cfg)
-		mem_free(cfg);
+		mem_free0(cfg);
 	if (sig)
-		mem_free(sig);
+		mem_free0(sig);
 	if (cert)
-		mem_free(cert);
+		mem_free0(cert);
 	return ret;
 }
 
@@ -153,6 +153,6 @@ control_register_localca(char *ca_cert_file)
 	ret = send_message(&msg);
 out:
 	if (ca_cert)
-		mem_free(ca_cert);
+		mem_free0(ca_cert);
 	return ret;
 }
