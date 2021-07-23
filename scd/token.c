@@ -139,7 +139,7 @@ err:
 	goto close_fd;
 
 close_fd:
-	mem_free(brsp);
+	mem_free0(brsp);
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected control socket");
 	return;
@@ -159,7 +159,7 @@ out:
 	if ((protobuf_send_message(fd, (ProtobufCMessage *)&out)) < 0) {
 		ERROR("Could not send protobuf response on socket %d", fd);
 	}
-	mem_free(brsp);
+	mem_free0(brsp);
 }
 
 /**
@@ -296,8 +296,8 @@ scd_tokencontrol_new(scd_token_t *token)
 	return 0;
 
 err:
-	mem_free(token->token_data->tctrl);
-	mem_free(token->token_data->tctrl->lsock_path);
+	mem_free0(token->token_data->tctrl);
+	mem_free0(token->token_data->tctrl->lsock_path);
 	return -1;
 }
 
@@ -321,9 +321,9 @@ scd_tokencontrol_free(scd_token_t *token)
 			   uuid_string(token->token_data->token_uuid));
 	};
 	token->token_data->tctrl->lsock = -1;
-	mem_free(token->token_data->tctrl->lsock_path);
+	mem_free0(token->token_data->tctrl->lsock_path);
 
-	mem_free(token->token_data->tctrl);
+	mem_free0(token->token_data->tctrl);
 }
 #endif // ENABLESCHSM
 
@@ -520,17 +520,17 @@ token_new(const token_constr_data_t *constr_data)
 			if (softtoken_create_p12(token_file, STOKEN_DEFAULT_PASS,
 						 constr_data->uuid) != 0) {
 				ERROR("Could not create new softtoken file");
-				mem_free(token_file);
+				mem_free0(token_file);
 				goto err;
 			}
 		}
 		new_token->token_data->int_token.softtoken = softtoken_new_from_p12(token_file);
 		if (!new_token->token_data->int_token.softtoken) {
 			ERROR("Creation of softtoken failed");
-			mem_free(token_file);
+			mem_free0(token_file);
 			goto err;
 		}
-		mem_free(token_file);
+		mem_free0(token_file);
 
 		new_token->token_data->type = SOFT;
 		new_token->lock = int_lock_st;
@@ -589,9 +589,9 @@ err:
 	if (new_token->token_data->token_uuid)
 		uuid_free(new_token->token_data->token_uuid);
 	if (new_token->token_data)
-		mem_free(new_token->token_data);
+		mem_free0(new_token->token_data);
 	if (new_token)
-		mem_free(new_token);
+		mem_free0(new_token);
 
 	return NULL;
 }
@@ -639,7 +639,7 @@ token_free(scd_token_t *token)
 
 		if (token->token_data->token_uuid)
 			uuid_free(token->token_data->token_uuid);
-		mem_free(token->token_data);
+		mem_free0(token->token_data);
 	}
-	mem_free(token);
+	mem_free0(token);
 }
