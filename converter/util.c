@@ -72,7 +72,7 @@
 //    	char value = mem_strdup(owner_info);
 //    	hashmapPut(pseudo_file_map, key, value);
 //    } else {
-//	mem_free(old_owner_info);
+//	mem_free0(old_owner_info);
 //	*old_owner_info = owner_info;
 //    }
 //}
