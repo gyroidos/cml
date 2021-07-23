@@ -72,6 +72,6 @@ main(int argc, char **argv)
 	// closing socket to cmld
 	close(sock);
 
-	mem_free(msg.captime_exec_param);
+	mem_free0(msg.captime_exec_param);
 	return 0;
 }
