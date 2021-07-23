@@ -103,7 +103,7 @@ service_set_hostname(int fd)
 	// write hostname to kernel
 	rc += file_write("/proc/sys/kernel/hostname", name, strlen(name));
 
-	mem_free(line);
+	mem_free0(line);
 	if (resp)
 		protobuf_free_message((ProtobufCMessage *)resp);
 
@@ -137,7 +137,7 @@ service_set_dnsserver(int fd)
 	line = mem_printf("nameserver %s\n", dns_addr);
 	rc = file_write("/etc/resolv.conf", line, strlen(line));
 
-	mem_free(line);
+	mem_free0(line);
 	if (resp)
 		protobuf_free_message((ProtobufCMessage *)resp);
 
@@ -200,7 +200,7 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 	if (!fgets(hash_buf, 129, hash_file)) {
 		ERROR("Hash length was smaller than 64 bytes");
 		fclose(hash_file);
-		mem_free(hash_buf);
+		mem_free0(hash_buf);
 		goto out;
 	}
 	fclose(hash_file);
@@ -213,7 +213,7 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 		TRACE("Storing audit record %s", record);
 		file_write_append(AUDIT_LOGDIR "/audit.log", record, strlen(record));
 
-		mem_free(LAST_AUDIT_HASH);
+		mem_free0(LAST_AUDIT_HASH);
 		LAST_AUDIT_HASH = hash_buf;
 		ret = 0;
 	} else {
@@ -241,7 +241,7 @@ audit_send_ack(int sock, const char *hash)
 	if (msg_size < 0)
 		WARN("Could not request audit event delivery, error: %zd\n", msg_size);
 
-	mem_free(auditmsg.audit_ack);
+	mem_free0(auditmsg.audit_ack);
 
 	return 0;
 }
@@ -324,7 +324,7 @@ service_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *da
 
 out:
 	if (buf)
-		mem_free(buf);
+		mem_free0(buf);
 	if (msg)
 		protobuf_free_message((ProtobufCMessage *)msg);
 
