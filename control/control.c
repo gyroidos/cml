@@ -177,8 +177,8 @@ get_container_usb_pin_entry(uuid_t *uuid, int sock)
 
 	pin_entry = resp->container_cmld_handles_pin;
 
-	mem_free(msg.container_uuids[0]);
-	mem_free(msg.container_uuids);
+	mem_free0(msg.container_uuids[0]);
+	mem_free0(msg.container_uuids);
 	protobuf_free_message((ProtobufCMessage *)resp);
 
 	return pin_entry;
@@ -717,7 +717,7 @@ main(int argc, char *argv[])
 		if (strcmp(msg.device_newpin, newpin_verify) != 0)
 			FATAL("Passwords don't match!");
 
-		mem_free(newpin_verify);
+		mem_free0(newpin_verify);
 	} else
 		print_usage(argv[0]);
 
@@ -778,7 +778,7 @@ send_message:
 					      argv[optind]);
 
 					send_message(sock, &inputmsg);
-					mem_free(inputmsg.container_uuids);
+					mem_free0(inputmsg.container_uuids);
 					TRACE("[CLIENT] Sent input to cmld");
 				}
 			}
@@ -864,28 +864,28 @@ exit:
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
 
 	if (msg.has_container_config_file)
-		mem_free(msg.container_config_file.data);
+		mem_free0(msg.container_config_file.data);
 	if (msg.has_guestos_rootcert)
-		mem_free(msg.guestos_rootcert.data);
+		mem_free0(msg.guestos_rootcert.data);
 	if (msg.has_guestos_config_file)
-		mem_free(msg.guestos_config_file.data);
+		mem_free0(msg.guestos_config_file.data);
 	if (msg.has_guestos_config_signature)
-		mem_free(msg.guestos_config_signature.data);
+		mem_free0(msg.guestos_config_signature.data);
 	if (msg.has_guestos_config_certificate)
-		mem_free(msg.guestos_config_certificate.data);
+		mem_free0(msg.guestos_config_certificate.data);
 	if (msg.has_device_cert)
-		mem_free(msg.device_cert.data);
+		mem_free0(msg.device_cert.data);
 
 	if (has_container_start_params_key)
-		mem_free(container_start_params.key);
+		mem_free0(container_start_params.key);
 	if (msg.device_pin)
-		mem_free(msg.device_pin);
+		mem_free0(msg.device_pin);
 	if (msg.device_newpin)
-		mem_free(msg.device_newpin);
+		mem_free0(msg.device_newpin);
 
 	for (size_t i = 0; i < msg.n_container_uuids; ++i)
-		mem_free(msg.container_uuids[i]);
-	mem_free(msg.container_uuids);
+		mem_free0(msg.container_uuids[i]);
+	mem_free0(msg.container_uuids);
 	if (uuid)
 		uuid_free(uuid);
 
