@@ -235,7 +235,7 @@ event_timer_free(event_timer_t *timer)
 {
 	IF_NULL_RETURN(timer);
 
-	mem_free(timer);
+	mem_free0(timer);
 }
 
 void
@@ -383,7 +383,7 @@ event_io_free(event_io_t *io)
 {
 	IF_NULL_RETURN(io);
 
-	mem_free(io);
+	mem_free0(io);
 }
 
 void
@@ -497,7 +497,7 @@ event_inotify_handler(int wd, const char *path, uint32_t mask)
 			if (path) {
 				char *full_path = mem_printf("%s/%s", inotify->path, path);
 				(inotify->func)(full_path, mask, inotify, inotify->data);
-				mem_free(full_path);
+				mem_free0(full_path);
 			} else {
 				(inotify->func)(inotify->path, mask, inotify, inotify->data);
 			}
@@ -602,9 +602,9 @@ event_inotify_free(event_inotify_t *inotify)
 	IF_NULL_RETURN(inotify);
 
 	if (inotify->path)
-		mem_free(inotify->path);
+		mem_free0(inotify->path);
 
-	mem_free(inotify);
+	mem_free0(inotify);
 }
 
 int
@@ -693,7 +693,7 @@ event_signal_free(event_signal_t *sig)
 {
 	IF_NULL_RETURN(sig);
 
-	mem_free(sig);
+	mem_free0(sig);
 }
 
 void

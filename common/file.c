@@ -89,7 +89,7 @@ file_is_mountpoint(const char *file)
 	ret &= !lstat(parent, &s_parent);
 	ret &= (s.st_dev != s_parent.st_dev);
 
-	mem_free(parent);
+	mem_free0(parent);
 	return ret;
 }
 
@@ -232,7 +232,7 @@ file_printf(const char *file, const char *fmt, ...)
 	va_end(ap);
 
 	ret = file_write(file, buf, -1);
-	mem_free(buf);
+	mem_free0(buf);
 	return ret;
 }
 
@@ -250,7 +250,7 @@ file_printf_append(const char *file, const char *fmt, ...)
 	va_end(ap);
 
 	ret = file_write_append(file, buf, -1);
-	mem_free(buf);
+	mem_free0(buf);
 	return ret;
 }
 
@@ -292,7 +292,7 @@ file_read_new(const char *file, size_t maxlen)
 	int bytes_read;
 
 	if ((bytes_read = file_read(file, maxbuf, maxlen - 1)) < 0) {
-		mem_free(maxbuf);
+		mem_free0(maxbuf);
 		return NULL;
 	}
 
@@ -300,7 +300,7 @@ file_read_new(const char *file, size_t maxlen)
 	maxbuf[bytes_read] = '\0';
 
 	buf = mem_strdup(maxbuf);
-	mem_free(maxbuf);
+	mem_free0(maxbuf);
 	return buf;
 }
 

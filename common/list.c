@@ -90,7 +90,7 @@ list_unlink(list_t *list, list_t *elem)
 		head = elem->next; // elem was the head
 	if (elem->next)
 		elem->next->prev = elem->prev;
-	mem_free(elem);
+	mem_free0(elem);
 
 	return head;
 }
@@ -199,7 +199,7 @@ list_replace(list_t *list, list_t *elem, void *data)
 	if (elem->next)
 		elem->next->prev = e;
 
-	mem_free(elem);
+	mem_free0(elem);
 
 	return head;
 }

@@ -106,7 +106,7 @@ dir_mkdir_p(const char *path, mode_t mode)
 	}
 out:
 	umask(old_mask);
-	mem_free(p);
+	mem_free0(p);
 	return ret;
 }
 
@@ -134,7 +134,7 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 			ret--;
 		}
 	}
-	mem_free(file_to_remove);
+	mem_free0(file_to_remove);
 	return ret;
 }
 
@@ -154,7 +154,7 @@ dir_delete_folder(const char *path, const char *dir_name)
 		ERROR_ERRNO("Could not delete dir %s", dir_to_remove);
 		ret--;
 	}
-	mem_free(dir_to_remove);
+	mem_free0(dir_to_remove);
 
 	return ret;
 }
@@ -178,8 +178,8 @@ dir_copy_params_new(const char *path, const char *name,
 static void
 dir_copy_params_free(dir_copy_params_t *params)
 {
-	mem_free(params->target);
-	mem_free(params);
+	mem_free0(params->target);
+	mem_free0(params);
 }
 
 static int
@@ -223,7 +223,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		ret = readlink(file_src, target, s.st_size + 1);
 		if (ret < 0 || ret > s.st_size) {
 			ERROR_ERRNO("Failed to read lnk");
-			mem_free(target);
+			mem_free0(target);
 			ret = -1;
 			break;
 		}
@@ -231,7 +231,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 
 		if ((ret = symlink(target, file_dst)) < 0)
 			ERROR_ERRNO("Could not create symlink %s at %s", target, file_dst);
-		mem_free(target);
+		mem_free0(target);
 	} break;
 	case S_IFIFO:
 	case S_IFSOCK:
@@ -269,7 +269,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 	}
 out:
 	dir_copy_params_free(params);
-	mem_free(file_src);
+	mem_free0(file_src);
 	return ret;
 }
 

@@ -73,7 +73,7 @@ loopdev_new(void)
 void
 loopdev_free(char *dev)
 {
-	mem_free(dev);
+	mem_free0(dev);
 }
 
 int

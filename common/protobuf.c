@@ -103,18 +103,18 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 	if (!(buflen < PROTOBUF_MAX_MESSAGE_SIZE)) {
 		ERROR("Packed message exceeds PROTOBUF_MAX_MESSAGE_SIZE");
 		if (buf)
-			mem_free(buf);
+			mem_free0(buf);
 
 		return -1;
 	}
 
 	if (-1 == protobuf_send_message_packed(fd, buf, buflen)) {
 		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
-		mem_free(buf);
+		mem_free0(buf);
 		return -1;
 	}
 
-	mem_free(buf);
+	mem_free0(buf);
 
 	return buflen;
 }
@@ -155,7 +155,7 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 		bytes_read = fd_read(fd, (char *)buf, buflen);
 	} while (-1 == bytes_read && errno == EINTR);
 	if (-1 == bytes_read) {
-		mem_free(buf);
+		mem_free0(buf);
 		goto error_read;
 	}
 	TRACE("read protobuf message data (%zd bytes read, %u bytes expected)", bytes_read, buflen);
@@ -163,7 +163,7 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 	if ((size_t)bytes_read != buflen) {
 		ERROR("Dropped protobuf message (expected length : %zd bytes read != %u bytes expected)",
 		      bytes_read, buflen);
-		mem_free(buf);
+		mem_free0(buf);
 		goto error_read;
 	}
 	// TODO: what if only part of a message could be read?
@@ -198,7 +198,7 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	}
 
 	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
-	mem_free(buf);
+	mem_free0(buf);
 	return msg;
 }
 
@@ -234,7 +234,7 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message)
 		return -1;
 	}
 	ssize_t bytes_written = write(fd, string, strlen(string));
-	mem_free(string);
+	mem_free0(string);
 	if (-1 == bytes_written)
 		WARN_ERRNO("Failed to write text protobuf message to fd %d.", fd);
 	return bytes_written;
@@ -322,7 +322,7 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
 
 	ProtobufCMessage *msg = protobuf_message_new_from_string(string, descriptor);
 
-	mem_free(string);
+	mem_free0(string);
 	return msg;
 }
 

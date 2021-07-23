@@ -55,7 +55,7 @@ str_append_printf_internal(str_t *str, const char *fmt, va_list ap)
 
 	buf = mem_vprintf(fmt, ap);
 	str_insert_len(str, -1, buf, -1);
-	mem_free(buf);
+	mem_free0(buf);
 }
 
 str_t *
@@ -252,13 +252,13 @@ str_free(str_t *str, bool free_buf)
 	IF_NULL_RETVAL(str, NULL);
 
 	if (free_buf) {
-		mem_free(str->buf);
+		mem_free0(str->buf);
 		buf = NULL;
 	} else {
 		buf = str->buf;
 	}
 
-	mem_free(str);
+	mem_free0(str);
 
 	return buf;
 }

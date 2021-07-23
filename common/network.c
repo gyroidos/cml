@@ -69,7 +69,7 @@ network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *
 	char *net = mem_printf("%s/%i", addr, subnet);
 	const char *const argv[] = { IP_PATH, "addr", action, net, "dev", interface, NULL };
 	int ret = proc_fork_and_execvp(argv);
-	mem_free(net);
+	mem_free0(net);
 	return ret;
 }
 
@@ -85,8 +85,8 @@ network_move_link_ns(pid_t src_pid, pid_t dest_pid, const char *interface)
 	for (int i = 0; argv[i]; i++)
 		DEBUG("-- %s", argv[i]);
 	int ret = proc_fork_and_execvp(argv);
-	mem_free(src_pid_str);
-	mem_free(dest_pid_str);
+	mem_free0(src_pid_str);
+	mem_free0(dest_pid_str);
 	return ret;
 }
 
@@ -99,9 +99,9 @@ network_list_link_ns(pid_t pid, list_t **link_list)
 	char *line = mem_new0(char, line_size);
 
 	fp = popen(command, "r");
-	mem_free(command);
+	mem_free0(command);
 	if (fp == NULL) {
-		mem_free(line);
+		mem_free0(line);
 		return -1;
 	}
 
@@ -116,7 +116,7 @@ network_list_link_ns(pid_t pid, list_t **link_list)
 		}
 	}
 	pclose(fp);
-	mem_free(line);
+	mem_free0(line);
 	return 0;
 }
 
@@ -226,9 +226,9 @@ network_setup_port_forwarding(const char *srcip, uint16_t srcport, const char *d
 				      srcip,	     NULL };
 	error |= proc_fork_and_execvp(argv2);
 
-	mem_free(src_port);
-	mem_free(dst_port);
-	mem_free(dst);
+	mem_free0(src_port);
+	mem_free0(dst_port);
+	mem_free0(dst);
 
 	return error;
 }
@@ -372,7 +372,7 @@ network_route_localnet(const char *interface, bool enable)
 			    interface);
 		error = -1;
 	}
-	mem_free(route_localnet_file);
+	mem_free0(route_localnet_file);
 	return error;
 }
 #endif
@@ -425,7 +425,7 @@ network_interface_is_wifi(const char *if_name)
 
 	phy_path = mem_printf("/sys/class/net/%s/phy80211", if_name);
 	ret = file_exists(phy_path);
-	mem_free(phy_path);
+	mem_free0(phy_path);
 
 	return ret;
 }
@@ -450,7 +450,7 @@ network_get_physical_interfaces_new()
 		} else {
 			DEBUG("Skipping %d: Not a physical network interface", i->if_index);
 		}
-		mem_free(dev_drv_path);
+		mem_free0(dev_drv_path);
 	}
 	if_freenameindex(if_ni);
 	return if_name_list;
@@ -473,8 +473,8 @@ network_nl80211_get_index(const char *if_name)
 	phy_index = atoi(phy_file);
 
 out:
-	mem_free(phy_file);
-	mem_free(dev_phy_path);
+	mem_free0(phy_file);
+	mem_free0(dev_phy_path);
 	return phy_index;
 }
 
@@ -682,14 +682,14 @@ network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
 
 	char *dev_addr_path = mem_printf("/sys/class/net/%s/address", ifname);
 	char *mac_str = file_read_new(dev_addr_path, 128);
-	mem_free(dev_addr_path);
+	mem_free0(dev_addr_path);
 
 	IF_NULL_RETVAL(mac_str, -1);
 
 	memset(mac, 0, 6);
 	int ret = network_str_to_mac_addr(mac_str, mac);
 
-	mem_free(mac_str);
+	mem_free0(mac_str);
 	return ret;
 }
 
@@ -708,7 +708,7 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_addr_path = mem_printf("/sys/class/net/%s/address", i->if_name);
 		char *mac_str = file_read_new(dev_addr_path, 128);
-		mem_free(dev_addr_path);
+		mem_free0(dev_addr_path);
 		if (mac_str == NULL)
 			continue;
 
@@ -716,11 +716,11 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 
 		if ((0 == network_str_to_mac_addr(mac_str, mac_i)) &&
 		    (0 == memcmp(mac, mac_i, 6))) {
-			mem_free(mac_str);
+			mem_free0(mac_str);
 			return mem_strdup(i->if_name);
 		}
 
-		mem_free(mac_str);
+		mem_free0(mac_str);
 	}
 
 	return NULL;
@@ -811,6 +811,6 @@ network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], boo
 
 	int ret = proc_fork_and_execvp(argv);
 
-	mem_free(mac_str);
+	mem_free0(mac_str);
 	return ret;
 }

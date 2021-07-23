@@ -71,7 +71,7 @@ proc_status_new(pid_t pid)
 
 	file = mem_printf("/proc/%d/status", pid);
 	buf = file_read_new(file, 4096);
-	mem_free(file);
+	mem_free0(file);
 
 	IF_NULL_RETVAL(buf, NULL);
 
@@ -118,18 +118,18 @@ proc_status_new(pid_t pid)
 	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid, status->egid, status->sgid,
 	      status->fgid);
 
-	mem_free(buf);
+	mem_free0(buf);
 	return status;
 error:
-	mem_free(status);
-	mem_free(buf);
+	mem_free0(status);
+	mem_free0(buf);
 	return NULL;
 }
 
 void
 proc_status_free(proc_status_t *status)
 {
-	mem_free(status);
+	mem_free0(status);
 }
 
 const char *
@@ -263,7 +263,7 @@ proc_cap_last_cap(void)
 		cap = -1;
 	}
 
-	mem_free(str_cap_last_cap);
+	mem_free0(str_cap_last_cap);
 	return cap;
 }
 

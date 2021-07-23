@@ -59,7 +59,7 @@ test_can_allocate_primitives_and_structs(UNUSED const MunitParameter params[], U
 
 	*ptr_int = 0xc0ffe;
 	munit_assert_int(*ptr_int, ==, 0xc0ffe);
-	mem_free(ptr_int);
+	mem_free0(ptr_int);
 
 	// we can calloc memory and modify it
 	ptr_int = mem_alloc0(sizeof(int));
@@ -68,7 +68,7 @@ test_can_allocate_primitives_and_structs(UNUSED const MunitParameter params[], U
 
 	*ptr_int = 0xb0b0;
 	munit_assert_int(*ptr_int, ==, 0xb0b0);
-	mem_free(ptr_int);
+	mem_free0(ptr_int);
 
 	// we can alloc new objects and modify it
 	struct complex_t *ptr_struct = mem_new(struct complex_t, 1);
@@ -82,7 +82,7 @@ test_can_allocate_primitives_and_structs(UNUSED const MunitParameter params[], U
 	munit_assert_char(ptr_struct->buf[10], ==, 'V');
 	munit_assert_int(ptr_struct->int_field, ==, 0xdead);
 	munit_assert_ullong(ptr_struct->long_field, ==, 0xbeef);
-	mem_free(ptr_struct);
+	mem_free0(ptr_struct);
 
 	// we can calloc new objects and modify them
 	ptr_struct = mem_new0(struct complex_t, 1);
@@ -94,7 +94,7 @@ test_can_allocate_primitives_and_structs(UNUSED const MunitParameter params[], U
 	munit_assert_double_equal(ptr_struct->precision_number, 0, 9);
 	for (size_t i = 0; i < sizeof(ptr_struct->buf); i++)
 		munit_assert_char(ptr_struct->buf[i], ==, 0);
-	mem_free(ptr_struct);
+	mem_free0(ptr_struct);
 
 	return MUNIT_OK;
 }
@@ -116,8 +116,8 @@ test_can_realloc_primitives_and_structs(UNUSED const MunitParameter params[], UN
 	munit_assert_not_null(ptr_struct);
 	munit_assert_char(ptr_struct->buf[15], ==, 'Z');
 
-	mem_free(ptr_int);
-	mem_free(ptr_struct);
+	mem_free0(ptr_int);
+	mem_free0(ptr_struct);
 
 	return MUNIT_OK;
 }
@@ -135,26 +135,26 @@ test_strdup_strndup(UNUSED const MunitParameter params[], UNUSED void *data)
 	// b is in a different memory chunk than a and can be modified
 	b[8] = '\0';
 	munit_assert_string_not_equal(a, b);
-	mem_free(b);
+	mem_free0(b);
 
 	// strndup copies full string
 	char *c = mem_strndup(a, strlen(a));
 	munit_assert_not_null(c);
 	munit_assert_string_equal(a, c);
-	mem_free(c);
+	mem_free0(c);
 
 	// strndup cuts
 	c = mem_strndup(a, 7);
 	munit_assert_not_null(c);
 	munit_assert_string_not_equal(a, c);
 	munit_assert_string_equal("hehe, s", c);
-	mem_free(c);
+	mem_free0(c);
 
 	// strndup does not overflow
 	c = mem_strndup(a, 1024);
 	munit_assert_not_null(c);
 	munit_assert_string_equal(a, c);
-	mem_free(c);
+	mem_free0(c);
 
 	return MUNIT_OK;
 }
@@ -174,20 +174,20 @@ test_mem_memcpy(UNUSED const MunitParameter params[], UNUSED void *data)
 	// b is in a different memory chunk than a and can be modified
 	b[8] = ~b[8];
 	munit_assert_memory_not_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, b);
-	mem_free(b);
+	mem_free0(b);
 
 	// memcpy copies entire memory
 	unsigned char *c = mem_memcpy(a, TEST_MEM_MEMCPY_BUF_SIZE);
 	munit_assert_not_null(c);
 	munit_assert_memory_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, c);
-	mem_free(c);
+	mem_free0(c);
 
 	// memcpy cuts
 	c = mem_memcpy(a, (TEST_MEM_MEMCPY_BUF_SIZE / 2) + 1);
 	munit_assert_not_null(c);
 	munit_assert_memory_not_equal(TEST_MEM_MEMCPY_BUF_SIZE, a, c);
 	munit_assert_memory_equal(129, a, c);
-	mem_free(c);
+	mem_free0(c);
 
 	return MUNIT_OK;
 }
@@ -209,8 +209,8 @@ test_printf_dynamic_buffer(UNUSED const MunitParameter params[], UNUSED void *da
 
 	//TODO: test against format string attacks. The %n modifier should be killed.
 
-	mem_free(buf);
-	mem_free(ptr);
+	mem_free0(buf);
+	mem_free0(ptr);
 
 	return MUNIT_OK;
 }
@@ -223,13 +223,13 @@ test_freed_pointers_are_set_to_null(UNUSED const MunitParameter params[], UNUSED
 	// for primitives
 	int *x = mem_alloc(sizeof(int));
 	munit_assert_not_null(x);
-	mem_free(x);
+	mem_free0(x);
 	munit_assert_null(x);
 
 	// for structs
 	struct complex_t *ptr = (struct complex_t *)mem_alloc(sizeof(struct complex_t));
 	munit_assert_not_null(ptr);
-	mem_free(ptr);
+	mem_free0(ptr);
 	munit_assert_null(ptr);
 
 	return MUNIT_OK;
@@ -246,7 +246,7 @@ test_integer_overflow_in_mem_new_is_detected(UNUSED const MunitParameter params[
 	struct complex_t *ptr = mem_new(struct complex_t, MAX >> 1);
 
 	// shouldn't be reached
-	mem_free(ptr);
+	mem_free0(ptr);
 	return MUNIT_FAIL;
 }
 
@@ -261,7 +261,7 @@ test_integer_overflow_in_mem_new0_is_detected(UNUSED const MunitParameter params
 	struct complex_t *ptr = mem_new0(struct complex_t, MAX >> 1);
 
 	// shouldn't be reached
-	mem_free(ptr);
+	mem_free0(ptr);
 	return MUNIT_FAIL;
 }
 
@@ -277,7 +277,7 @@ test_integer_overflow_in_mem_renew_is_detected(UNUSED const MunitParameter param
 	ptr = mem_renew(struct complex_t, ptr, MAX >> 1);
 
 	// shouldn't be reached
-	mem_free(ptr);
+	mem_free0(ptr);
 	return MUNIT_FAIL;
 }
 

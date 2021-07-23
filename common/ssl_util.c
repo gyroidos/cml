@@ -214,7 +214,7 @@ ssl_read_pkcs12_token(const char *token_file, const char *passphrase, EVP_PKEY *
 end:
 	if (p12)
 		PKCS12_free(p12);
-	mem_free(passphr);
+	mem_free0(passphr);
 	return ret;
 }
 
@@ -587,9 +587,9 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 
 	res = 0;
 cleanup:
-	mem_free(tmpkey);
-	mem_free(iv_buf);
-	mem_free(out);
+	mem_free0(tmpkey);
+	mem_free0(iv_buf);
+	mem_free0(out);
 	EVP_CIPHER_CTX_free(ctx);
 	return res;
 }
@@ -1064,7 +1064,7 @@ error:
 	if (key)
 		EVP_PKEY_free(key);
 	if (signature)
-		mem_free(signature);
+		mem_free0(signature);
 	if (md_ctx)
 		EVP_MD_CTX_free(md_ctx);
 	return ret;
@@ -1299,7 +1299,7 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
 	ret = (unsigned char *)mem_alloc0(EVP_MAX_MD_SIZE);
 	if (EVP_DigestFinal(md_ctx, ret, calc_len) != 1) {
 		ERROR("Error in file hashing (computing hash)");
-		mem_free(ret);
+		mem_free0(ret);
 		ret = NULL;
 		goto error;
 	}
@@ -1389,7 +1389,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 	DEBUG("PKCS12_free %p", (void *)p12);
 	PKCS12_free(p12);
 	DEBUG("mem_free passphr %p", (void *)passphr);
-	mem_free(passphr);
+	mem_free0(passphr);
 	DEBUG("all free done");
 	return 0;
 error:
@@ -1399,7 +1399,7 @@ error:
 		X509_free(cert);
 	if (p12)
 		PKCS12_free(p12);
-	mem_free(passphr);
+	mem_free0(passphr);
 	return -1;
 }
 

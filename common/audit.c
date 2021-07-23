@@ -100,7 +100,7 @@ audit_kernel_log_record(const AuditRecord *msg)
 	nl_sock_t *audit_sock;
 	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
 		ERROR("Failed to allocate audit netlink socket");
-		mem_free(msg_text);
+		mem_free0(msg_text);
 		return -1;
 	}
 	/* send msg to kernel framwork */
@@ -111,7 +111,7 @@ audit_kernel_log_record(const AuditRecord *msg)
 	}
 	/* Close netlink connection */
 	nl_sock_free(audit_sock);
-	mem_free(msg_text);
+	mem_free0(msg_text);
 	return ret;
 }
 
@@ -150,7 +150,7 @@ audit_kernel_log_event(const char *type, const char *subject_id, int meta_count,
 
 	if (!record) {
 		ERROR("Failed to create audit record");
-		mem_free(metas);
+		mem_free0(metas);
 		goto out;
 	}
 
@@ -187,6 +187,6 @@ audit_kernel_write_loginuid(uint32_t uid)
 	}
 
 	close(fd);
-	mem_free(loginuid);
+	mem_free0(loginuid);
 	return ret;
 }

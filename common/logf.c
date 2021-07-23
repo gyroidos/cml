@@ -226,7 +226,7 @@ logf_file_new(const char *name)
 	char *name_with_time_of_day = logf_file_new_name(name);
 	f = fopen(name_with_time_of_day, "w");
 
-	mem_free(name_with_time_of_day);
+	mem_free0(name_with_time_of_day);
 
 	return f;
 }

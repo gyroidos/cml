@@ -165,8 +165,8 @@ uuid_free(uuid_t *uuid)
 {
 	IF_NULL_RETURN(uuid);
 
-	mem_free(uuid->string);
-	mem_free(uuid);
+	mem_free0(uuid->string);
+	mem_free0(uuid);
 }
 
 const char *
