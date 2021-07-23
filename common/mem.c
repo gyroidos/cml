@@ -128,13 +128,13 @@ mem_free_array(void **array, size_t size)
 		while (i < size) {
 			if (array[i] != NULL) {
 				DEBUG("[MEM] Freeing element %zu", i);
-				mem_free(array[i]);
+				mem_free0(array[i]);
 			}
 
 			i++;
 		}
 
 		DEBUG("[MEM] Freeing array");
-		mem_free(array);
+		mem_free0(array);
 	}
 }

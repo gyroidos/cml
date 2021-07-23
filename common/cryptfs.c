@@ -192,7 +192,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 		 DM_INTEGRITY_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
 		 "%s 0 %d J %s", real_blk_name, INTEGRITY_TAG_SIZE, extra_params);
 
-	mem_free(extra_params);
+	mem_free0(extra_params);
 
 	// Set pointer behind parameter
 	integrity_params += strlen(integrity_params) + 1;
@@ -256,7 +256,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	snprintf(crypt_params,
 		 DM_CRYPT_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
 		 "%s %s 0 %s 0 %s", crypto_type, master_key_ascii, real_blk_name, extra_params);
-	mem_free(extra_params);
+	mem_free0(extra_params);
 
 	crypt_params += strlen(crypt_params) + 1;
 	crypt_params =
@@ -445,7 +445,7 @@ create_device_node(const char *name)
 	int fd = open(DEV_MAPPER, O_RDWR);
 	if (fd < 0) {
 		ERROR_ERRNO("Error opening devmapper");
-		mem_free(buffer);
+		mem_free0(buffer);
 		return NULL;
 	}
 
@@ -456,7 +456,7 @@ create_device_node(const char *name)
 		if (errno != ENXIO) {
 			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
 		}
-		mem_free(buffer);
+		mem_free0(buffer);
 		close(fd);
 		return NULL;
 	}
@@ -470,11 +470,11 @@ create_device_node(const char *name)
 	unlink(device);
 	if (mknod(device, S_IFBLK | 00777, io->dev) != 0) {
 		ERROR_ERRNO("Cannot mknod device %s", device);
-		mem_free(buffer);
-		mem_free(device);
+		mem_free0(buffer);
+		mem_free0(device);
 		return NULL;
 	}
-	mem_free(buffer);
+	mem_free0(buffer);
 	return device;
 }
 
@@ -505,7 +505,7 @@ delete_integrity_blk_dev(const char *name)
 	/* remove device node if necessary */
 	char *device = cryptfs_get_device_path_new(name);
 	unlink(device);
-	mem_free(device);
+	mem_free0(device);
 
 	DEBUG("Successfully deleted dm-integrity device");
 	/* We made it here with no errors.  Woot! */
@@ -574,7 +574,7 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 	}
 
 	char *integrity_dev = create_device_node(integrity_dev_label);
-	mem_free(integrity_dev_label);
+	mem_free0(integrity_dev_label);
 	if (!integrity_dev) {
 		ERROR("Could not create device node");
 		return NULL;
@@ -617,8 +617,8 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 	}
 	return crypto_blkdev;
 error:
-	mem_free(integrity_dev_label);
-	mem_free(crypto_blkdev);
+	mem_free0(integrity_dev_label);
+	mem_free0(crypto_blkdev);
 	return NULL;
 }
 
@@ -688,17 +688,17 @@ cryptfs_delete_blk_dev(const char *name)
 	/* remove device node if necessary */
 	char *device = cryptfs_get_device_path_new(name);
 	unlink(device);
-	mem_free(device);
+	mem_free0(device);
 
 	DEBUG("Successfully deleted dm-crypt device");
 
 	char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
 	if (delete_integrity_blk_dev(integrity_dev_name) < 0) {
-		mem_free(integrity_dev_name);
+		mem_free0(integrity_dev_name);
 		goto error;
 	}
 
-	mem_free(integrity_dev_name);
+	mem_free0(integrity_dev_name);
 
 	/* We made it here with no errors.  Woot! */
 	ret = 0;

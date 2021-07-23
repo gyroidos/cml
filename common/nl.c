@@ -342,7 +342,7 @@ nl_sock_free(nl_sock_t *nl)
 {
 	IF_NULL_RETURN(nl);
 	close(nl->fd);
-	mem_free(nl);
+	mem_free0(nl);
 }
 
 struct nlattr *
@@ -642,7 +642,7 @@ nl_eval_ack(const nl_sock_t *nl, UNUSED uint32_t seq)
 					break;
 				} else {
 					DEBUG("ACK successfully found");
-					mem_free(buf);
+					mem_free0(buf);
 					return 0;
 				}
 			}
@@ -651,7 +651,7 @@ nl_eval_ack(const nl_sock_t *nl, UNUSED uint32_t seq)
 
 	/* ACK could not be validated */
 	ERROR("Message could not be received/decoded or was not an ACK response");
-	mem_free(buf);
+	mem_free0(buf);
 	return -1;
 }
 
@@ -712,7 +712,7 @@ void
 nl_msg_free(nl_msg_t *msg)
 {
 	IF_NULL_RETURN(msg);
-	mem_free(msg);
+	mem_free0(msg);
 }
 
 int
@@ -816,7 +816,7 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 	IF_NULL_RETVAL_TRACE(buf, -1);
 
 	if (nl_msg_receive_kernel(nl, buf, NL_DEFAULT_SOCK_RCVBUF_SIZE, false) < 0) {
-		mem_free(buf);
+		mem_free0(buf);
 		return -1;
 	}
 
@@ -829,7 +829,7 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 			ret = -1;
 		}
 	}
-	mem_free(buf);
+	mem_free0(buf);
 	return ret;
 }
 
@@ -962,7 +962,7 @@ nl_genl_family_getid(const char *family_name)
 	if (nl_sock)
 		nl_sock_free(nl_sock);
 	if (buf)
-		mem_free(buf);
+		mem_free0(buf);
 	return ret;
 
 msg_err:
@@ -971,6 +971,6 @@ msg_err:
 	if (nl_sock)
 		nl_sock_free(nl_sock);
 	if (buf)
-		mem_free(buf);
+		mem_free0(buf);
 	return 0;
 }

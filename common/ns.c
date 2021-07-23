@@ -108,18 +108,18 @@ do_join_namespace(const char *namespace, const int pid)
 		goto error;
 	}
 
-	mem_free(target_namespace_path);
-	mem_free(target_namespace_id);
-	mem_free(current_namespace_path);
-	mem_free(current_namespace_id);
+	mem_free0(target_namespace_path);
+	mem_free0(target_namespace_id);
+	mem_free0(current_namespace_path);
+	mem_free0(current_namespace_id);
 
 	return 0;
 
 error:
-	mem_free(target_namespace_path);
-	mem_free(target_namespace_id);
-	mem_free(current_namespace_path);
-	mem_free(current_namespace_id);
+	mem_free0(target_namespace_path);
+	mem_free0(target_namespace_id);
+	mem_free0(current_namespace_path);
+	mem_free0(current_namespace_id);
 
 	return -1;
 }
@@ -239,7 +239,7 @@ ns_setns_cb(const char *path, const char *file, void *data)
 
 	if (ns_is_self_userns_file(ns_file)) {
 		TRACE("Joining same user namespace, not allowed and also not necessary -> skip.");
-		mem_free(ns_file);
+		mem_free0(ns_file);
 		return EXIT_SUCCESS;
 	}
 
@@ -256,12 +256,12 @@ ns_setns_cb(const char *path, const char *file, void *data)
 
 	*i = *i + 1;
 
-	mem_free(ns_file);
+	mem_free0(ns_file);
 	return EXIT_SUCCESS;
 
 error:
 	TRACE("An error occurred. Exiting...");
-	mem_free(ns_file);
+	mem_free0(ns_file);
 	exit(EXIT_FAILURE);
 }
 
@@ -292,14 +292,14 @@ ns_join_all(pid_t pid, bool userns)
 
 	TRACE("Successfully joined all namespaces");
 
-	mem_free(pid_string);
-	mem_free(folder);
+	mem_free0(pid_string);
+	mem_free0(folder);
 	return 0;
 
 error:
 	TRACE("An error occurred. Exiting...");
-	mem_free(pid_string);
-	mem_free(folder);
+	mem_free0(pid_string);
+	mem_free0(folder);
 	return -1;
 }
 
@@ -317,7 +317,7 @@ ns_bind(char *ns, pid_t pid, char *ns_path)
 		ret = -1;
 	}
 
-	mem_free(ns_proc_path);
+	mem_free0(ns_proc_path);
 	return ret;
 }
 
