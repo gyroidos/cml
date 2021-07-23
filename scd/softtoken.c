@@ -134,9 +134,9 @@ softtoken_free(softtoken_t *token)
 	softtoken_free_secrets(token);
 
 	if (token->token_file)
-		mem_free(token->token_file);
+		mem_free0(token->token_file);
 
-	mem_free(token);
+	mem_free0(token);
 }
 
 int

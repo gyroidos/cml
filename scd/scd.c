@@ -99,11 +99,11 @@ is_softtoken(const char *path, const char *file, UNUSED void *data)
 		return 0;
 	if (!strncmp(ext, TOKEN_DEFAULT_EXT, strlen(TOKEN_DEFAULT_EXT))) {
 		DEBUG("Found token file: %s", location);
-		mem_free(location);
+		mem_free0(location);
 		return 1;
 	}
 
-	mem_free(location);
+	mem_free0(location);
 	return 0;
 }
 
@@ -214,7 +214,7 @@ provisioning_mode()
 			// set device uuid
 			char *proto_uid = mem_strdup(uid);
 			// free this element, as it is overwritten
-			mem_free(dev_cfg->uuid);
+			mem_free0(dev_cfg->uuid);
 			dev_cfg->uuid = proto_uid;
 
 			// write the uuid to device config file
@@ -230,9 +230,9 @@ provisioning_mode()
 
 			// this call also frees proto_uid
 			protobuf_free_message((ProtobufCMessage *)dev_cfg);
-			mem_free(hw_serial);
-			mem_free(hw_name);
-			mem_free(common_name);
+			mem_free0(hw_serial);
+			mem_free0(hw_name);
+			mem_free0(common_name);
 			uuid_free(dev_uuid);
 			DEBUG("CSR with privkey created and stored");
 		} else {
@@ -273,7 +273,7 @@ provisioning_mode()
 					    TOKEN_DEFAULT_NAME) != 0) {
 			FATAL("Unable to create initial user token");
 		}
-		mem_free(token_file);
+		mem_free0(token_file);
 		ssl_free();
 	}
 
@@ -388,7 +388,7 @@ scd_load_softtoken(const char *path, const char *name)
 		TRACE("Softtoken filename: %s", token_file);
 
 		ntoken = softtoken_new_from_p12(token_file);
-		mem_free(token_file);
+		mem_free0(token_file);
 		return ntoken;
 	}
 

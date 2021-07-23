@@ -95,7 +95,7 @@ write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 	} else {
 		ERROR("Failed to create temp file.");
 	}
-	mem_free(file);
+	mem_free0(file);
 	return NULL;
 }
 
@@ -121,7 +121,7 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 		// break dir_foreach
 		ret = -1;
 	}
-	mem_free(ca_file);
+	mem_free0(ca_file);
 	return ret;
 }
 
@@ -302,7 +302,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_wrapped_key) {
 			memset(wrapped_key, 0, wrapped_key_len);
-			mem_free(wrapped_key);
+			mem_free0(wrapped_key);
 		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
@@ -332,7 +332,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_unwrapped_key) {
 			memset(unwrapped_key, 0, unwrapped_key_len);
-			mem_free(unwrapped_key);
+			mem_free0(unwrapped_key);
 		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CHANGE_PIN: {
@@ -410,7 +410,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		INFO("csr: %p", csr);
 		if (csr)
-			mem_free(csr);
+			mem_free0(csr);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__PUSH_DEVICE_CERT: {
 		TRACE("SCD: Handle messsage PUSH_DEV_CERT");
@@ -452,7 +452,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (hash)
-			mem_free(hash);
+			mem_free0(hash);
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF: {
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
@@ -473,15 +473,15 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (tmp_data_file) {
 			unlink(tmp_data_file);
-			mem_free(tmp_data_file);
+			mem_free0(tmp_data_file);
 		}
 		if (tmp_sig_file) {
 			unlink(tmp_sig_file);
-			mem_free(tmp_sig_file);
+			mem_free0(tmp_sig_file);
 		}
 		if (tmp_cert_file) {
 			unlink(tmp_cert_file);
-			mem_free(tmp_cert_file);
+			mem_free0(tmp_cert_file);
 		}
 
 	} break;

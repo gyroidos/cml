@@ -265,7 +265,7 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 			TRACE("USBTOKEN: token_filter_by_serial() found reader with serial: %s at port 0x%04x",
 			      serial, iport);
 			*port = iport;
-			mem_free(s);
+			mem_free0(s);
 			return 0;
 		}
 
@@ -274,7 +274,7 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 	}
 
 	*port = 0;
-	mem_free(s);
+	mem_free0(s);
 	return -1;
 }
 
@@ -291,7 +291,7 @@ usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_le
 		return -1;
 	}
 	if (NULL != token->latr)
-		mem_free(token->latr);
+		mem_free0(token->latr);
 	token->latr = mem_memcpy(brsp, lr);
 	token->latr_len = lr;
 
@@ -340,7 +340,7 @@ usbtoken_init_ctapi_int(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 		ERROR("Could not find specified token reader with serial %s", token->serial);
 		goto err;
 	}
-	mem_free(readers);
+	mem_free0(readers);
 	token->port = port;
 
 	rc = CT_init(token->ctn, port);
@@ -359,7 +359,7 @@ usbtoken_init_ctapi_int(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 	return 0;
 
 err:
-	mem_free(readers);
+	mem_free0(readers);
 	return -1;
 }
 
@@ -387,7 +387,7 @@ usbtoken_new(const char *serial)
 	IF_NULL_GOTO_ERROR(token->serial, err);
 
 	rc = usbtoken_init_ctapi_int(token, brsp, brsp_len);
-	mem_free(brsp);
+	mem_free0(brsp);
 	if (rc != 0) {
 		ERROR("Failed to initialize ctapi interface to usb token reader");
 		goto err;
@@ -399,8 +399,8 @@ usbtoken_new(const char *serial)
 	return token;
 
 err:
-	mem_free(token->serial);
-	mem_free(token);
+	mem_free0(token->serial);
+	mem_free0(token);
 	return NULL;
 }
 
@@ -543,7 +543,7 @@ usbtoken_free_secrets(usbtoken_t *token)
 	IF_NULL_RETURN(token->auth_code);
 
 	memset(token->auth_code, 0, token->auth_code_len);
-	mem_free(token->auth_code);
+	mem_free0(token->auth_code);
 }
 
 void
@@ -557,12 +557,12 @@ usbtoken_free(usbtoken_t *token)
 		ERROR("Closing CT interface to token failed.");
 	}
 
-	mem_free(token->latr);
+	mem_free0(token->latr);
 
-	mem_free(token->serial);
+	mem_free0(token->serial);
 	usbtoken_free_secrets(token);
 
-	mem_free(token);
+	mem_free0(token);
 	g_ctn--;
 }
 
