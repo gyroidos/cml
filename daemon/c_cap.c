@@ -30,12 +30,13 @@
 #include "common/proc.h"
 #include "common/file.h"
 
-#include <sys/capability.h>
+#include <linux/capability.h>
 #include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <sys/syscall.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -100,6 +101,12 @@ c_cap_set_current_process(const container_t *container)
 	}
 
 	return 0;
+}
+
+int
+capset(cap_user_header_t hdrp, const cap_user_data_t datap)
+{
+	return syscall(SYS_capset, hdrp, datap);
 }
 
 static int
