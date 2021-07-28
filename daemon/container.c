@@ -1240,13 +1240,6 @@ container_start_child(void *data)
 		DEBUG("\t%s", *arg);
 	}
 
-	if (!container_uuid_is_c0id(container->uuid)) {
-		DEBUG("Dropping all trustme-lsm privileges for container %s",
-		      container_get_description(container));
-		if (open("/sys/kernel/security/trustme/drop_privileges", 0) < 0)
-			WARN_ERRNO("Could not drop trustme-lsm privileges");
-	}
-
 	if (container->type == CONTAINER_TYPE_KVM) {
 		int fd_master;
 		int pid = forkpty(&fd_master, NULL, NULL, NULL);
