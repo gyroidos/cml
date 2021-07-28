@@ -60,24 +60,13 @@
 #include <errno.h>
 #include <libgen.h>
 
-#include <selinux/selinux.h>
-
 #define MAKE_EXT4FS "mkfs.ext4"
 #define BTRFSTUNE "btrfstune"
 #define MAKE_BTRFS "mkfs.btrfs"
 #define MDEV "mdev"
 
-#if 0
-#define ICC_SHARED_MOUNT "data/trustme-com"
-#define TPM2D_SHARED_MOUNT ICC_SHARED_MOUNT "/tpm2d"
-#define ICC_SHARED_DATA_TYPE "u:object_r:trustme-com:s0"
-#endif
-
 #define SHARED_FILES_PATH DEFAULT_BASE_PATH "/files_shared"
 #define SHARED_FILES_STORE_SIZE 100
-
-#define is_selinux_disabled() !file_is_mountpoint("/sys/fs/selinux")
-#define is_selinux_enabled() file_is_mountpoint("/sys/fs/selinux")
 
 #define BUSYBOX_PATH "/bin/busybox"
 
@@ -888,9 +877,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		goto final;
 	}
 
-	// retry with default options if selinux is disabled .. (e.g. context= will cause an EINVAL)
-	if (is_selinux_disabled() &&
-	    mount(dev, dir, mount_entry_get_fs(mntent), mountflags, NULL) >= 0) {
+	// retry with default options
+	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags, NULL) >= 0) {
 		DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
 		goto final;
 	}
@@ -1183,10 +1171,9 @@ c_vol_mount_dev(c_vol_t *vol)
 	ASSERT(vol);
 
 	int ret = -1;
-	const char *mount_data = is_selinux_enabled() ? "rootcontext=u:object_r:device:s0" : NULL;
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
 	int uid = container_get_uid(vol->container);
-	char *tmpfs_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
+	char *tmpfs_opts = c_vol_get_tmpfs_opts_new(NULL, uid, uid);
 	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir /dev");
 		goto error;

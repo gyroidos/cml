@@ -60,7 +60,7 @@ ifeq ($(CC_MODE),y)
     LOCAL_CFLAGS += -DCC_MODE
 endif
 
-LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -lselinux -Lcommon -lcommon -lutil
+LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -lutil
 
 .PHONY: all
 all: cmld

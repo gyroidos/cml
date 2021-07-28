@@ -70,9 +70,6 @@
 #include <sys/wait.h>
 #include <pty.h>
 
-#include <selinux/selinux.h>
-#include <selinux/label.h>
-
 #define CLONE_STACK_SIZE 8192
 /* Define some missing clone flags in BIONIC */
 #ifndef CLONE_NEWNS
@@ -1241,10 +1238,6 @@ container_start_child(void *data)
 	DEBUG("init_env:");
 	for (char **arg = container->init_env; *arg; arg++) {
 		DEBUG("\t%s", *arg);
-	}
-
-	if (setcon("u:r:init:s0") < 0) {
-		WARN_ERRNO("Could not set security context init");
 	}
 
 	if (!container_uuid_is_c0id(container->uuid)) {
