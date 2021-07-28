@@ -14,7 +14,7 @@ REPO_DIR="$(cd "${DIR}/../.." >/dev/null 2>&1 && pwd)"
 # Piggyback on the compiler's static analysis;
 # Build every subproject with enabled aggressive warnings;
 # Check if the compiler catches any errors
-dirs=(common control converter daemon run scd)
+dirs=(common control converter daemon scd)
 for d in ${dirs[*]}; do
     cd "${REPO_DIR}/common"
     make clean
