@@ -52,6 +52,10 @@
 //TODO implement ACK mechanism fpr all service messages inside c-service.c?
 #include "c_service.pb-c.h"
 
+#ifndef AUDIT_DM_INTEGRITY
+#define AUDIT_DM_INTEGRITY 1600
+#endif
+
 #define AUDIT_HASH_ALGO SHA512
 #define AUDIT_HASH_ALGO_LEN 64
 
@@ -753,6 +757,49 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 				record_type, uuid_string(container_get_uuid(c)), 2, "msg",
 				log_record);
 		mem_free0(record_type);
+		TRACE("audit: type=%d %s", type, log_record);
+	} else if (type == AUDIT_DM_INTEGRITY) {
+		log_record = NLMSG_DATA(nlmsg);
+		uuid_t *uuid = NULL;
+		char *dev_file = NULL;
+		char *op_buf = mem_new0(char, MAX_AUDIT_MESSAGE_LENGTH);
+		int dev_major, dev_minor, res;
+		unsigned long long sector;
+		int sscanf_ret =
+			sscanf(log_record, "%*s module=%*s dev=%d:%d op=%s sector=%llu res=%d",
+			       &dev_major, &dev_minor, op_buf, &sector, &res);
+		TRACE("audit: sscanf_ret=%d", sscanf_ret);
+		if (sscanf_ret == 5) {
+			char *dev_name = NULL;
+			char *sector_str = NULL;
+			dev_file = mem_printf("/sys/dev/block/%d:%d/dm/name", dev_major, dev_minor);
+			dev_name = file_read_new(dev_file, MAX_AUDIT_MESSAGE_LENGTH);
+			if (dev_name) {
+				char *dev_name_p;
+				if ((dev_name_p = strchr(dev_name, '\n')) != NULL)
+					*dev_name_p = '\0';
+				char *uuid_str = mem_strndup(dev_name, 36);
+				uuid = uuid_new(uuid_str);
+				TRACE("uuid %s from dev '%s'", uuid_str, dev_file);
+				mem_free0(uuid_str);
+			}
+
+			container_t *c = uuid ? cmld_container_get_by_uuid(uuid) : NULL;
+			c = c ? c : cmld_containers_get_c0();
+
+			sector_str = mem_printf("%llu", sector);
+			audit_log_event(container_get_uuid(c), (res == 1) ? SSA : FSA, CMLD,
+					CONTAINER_MGMT, "dm-integrity",
+					uuid_string(container_get_uuid(c)), 6, "op", op_buf,
+					"label", dev_name, "sector", sector_str);
+
+			mem_free0(sector_str);
+			mem_free0(dev_name);
+		}
+		mem_free0(op_buf);
+		mem_free0(dev_file);
+		if (uuid)
+			uuid_free(uuid);
 		TRACE("audit: type=%d %s", type, log_record);
 	} else if (type == AUDIT_KERNEL ||
 		   (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
