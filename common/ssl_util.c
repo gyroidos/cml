@@ -42,6 +42,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#undef LOGF_LOG_MIN_PRIO
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 /* Properties for device CSR */
 #define COUNTRY_C_CSR "DE"
 //#define STATE_ST_CSR "Bayern"
@@ -944,113 +947,6 @@ end:
 	return ret;
 }
 
-int
-ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file,
-		     const char *hash_algo)
-{
-	ASSERT(cert_file);
-	ASSERT(signature_file);
-	ASSERT(signed_file);
-
-	off_t cert_len = file_size(cert_file);
-	char *cert_buf = mem_alloc0(cert_len);
-
-	if (0 > file_read(cert_file, cert_buf, cert_len)) {
-		ERROR("Failed to read cert file");
-		return -1;
-	}
-
-	int sig_len = file_size(signature_file);
-	unsigned char *sig_buf = mem_alloc0(sig_len);
-
-	if (0 > file_read(signature_file, (char *)sig_buf, sig_len)) {
-		ERROR("Failed to read signature file");
-		return -1;
-	}
-
-	unsigned int hash_len;
-	unsigned char *hash = ssl_hash_file(signed_file, &hash_len, hash_algo);
-
-	if (!hash) {
-		ERROR("Failed to hash file: %s", signed_file);
-		return -1;
-	}
-
-	//	int ret = ssl_verify_signature_from_digest(cert_pss, (const uint8_t *)sigbuf_pss, size_sig_pss,
-	//				 (const uint8_t*)hash, SHA256_DIGEST_LENGTH, RSA_PSS_PADDING);
-
-	//DEBUG("ssl_verify_signature_from_digest(cert_buf:%s, sig_buf, %d, "cert_buf, sig_buf, sig_len, hash, hash_len, rsa_padding)",
-	int ret = ssl_verify_signature_from_digest(cert_buf, sig_buf, sig_len, hash, hash_len);
-
-	return ret;
-}
-
-static UNUSED void
-print_data(const uint8_t *buf, size_t buf_len, const char *info)
-{
-	if (info) {
-		printf("%s: ", info);
-	}
-	for (size_t i = 0; i < buf_len; i++) {
-		printf("%02x ", buf[i]);
-	}
-	printf("\n");
-}
-
-int
-ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
-			      size_t sig_len, const uint8_t *buf, size_t buf_len)
-
-{
-	ASSERT(cert_buf);
-	ASSERT(sig_buf);
-	ASSERT(buf);
-
-	int ret = 0;
-
-	// certificate variables
-	X509 *cert;
-	BIO *mem;
-
-	// load certificate
-	mem = BIO_new(BIO_s_mem());
-	BIO_write(mem, cert_buf, cert_len);
-	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
-	BIO_free(mem);
-
-	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
-	if (!sig_alg) {
-		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
-		ret = -2;
-		goto error;
-	}
-
-	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
-	if (!hash_algo) {
-		ERROR("Error in signature verification (Unsupported hash function)");
-		ret = -2;
-		goto error;
-	}
-	DEBUG("Certificate uses hash algorithm %s", hash_algo);
-
-	unsigned int hash_len = 0;
-	unsigned char *hash = ssl_hash_buf(buf, buf_len, &hash_len, hash_algo);
-
-	if (0 > (ret = ssl_verify_signature_from_digest((char *)cert_buf, sig_buf, sig_len, hash,
-							hash_len))) {
-		ssl_print_err();
-		ERROR("Failed to verify signature");
-		ret = -2;
-		goto error;
-	}
-
-error:
-	if (cert)
-		X509_free(cert);
-
-	return ret;
-}
-
 static int
 ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx)
 {
@@ -1141,7 +1037,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		goto error;
 	}
 
-	if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, EVP_sha256()) != 1) {
+	if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, EVP_sha512()) != 1) {
 		DEBUG("EVP_PKEY_CTX_set_signature_md failed");
 		ret = -2;
 		goto error;
@@ -1804,4 +1700,101 @@ get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj)
 		return NULL;
 	}
 	return NULL;
+}
+
+int
+ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+			      size_t sig_len, const uint8_t *buf, size_t buf_len)
+
+{
+	ASSERT(cert_buf);
+	ASSERT(sig_buf);
+	ASSERT(buf);
+
+	int ret = 0;
+
+	// certificate variables
+	X509 *cert;
+	BIO *mem;
+
+	// load certificate
+	mem = BIO_new(BIO_s_mem());
+	BIO_write(mem, cert_buf, cert_len);
+	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
+	BIO_free(mem);
+
+	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
+	if (!sig_alg) {
+		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
+		ret = -2;
+		goto error;
+	}
+
+	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
+	if (!hash_algo) {
+		ERROR("Error in signature verification (Unsupported hash function)");
+		ret = -2;
+		goto error;
+	}
+	DEBUG("Certificate uses hash algorithm %s", hash_algo);
+
+	unsigned int hash_len = 0;
+	unsigned char *hash = ssl_hash_buf(buf, buf_len, &hash_len, hash_algo);
+
+	if (0 > (ret = ssl_verify_signature_from_digest((char *)cert_buf, sig_buf, sig_len, hash,
+							hash_len))) {
+		ssl_print_err();
+		ERROR("Failed to verify signature");
+		ret = -2;
+		goto error;
+	}
+
+error:
+	if (cert)
+		X509_free(cert);
+
+	return ret;
+}
+
+int
+ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file,
+		     const char *hash_algo)
+{
+	ASSERT(cert_file);
+	ASSERT(signature_file);
+	ASSERT(signed_file);
+
+	off_t cert_len = file_size(cert_file);
+	char *cert_buf = mem_alloc0(cert_len);
+
+	if (0 > file_read(cert_file, cert_buf, cert_len)) {
+		ERROR("Failed to read cert file");
+		return -1;
+	}
+
+	int sig_len = file_size(signature_file);
+	unsigned char *sig_buf = mem_alloc0(sig_len);
+
+	if (0 > file_read(signature_file, (char *)sig_buf, sig_len)) {
+		ERROR("Failed to read signature file");
+		return -1;
+	}
+
+	unsigned int hash_len;
+	unsigned char *hash = ssl_hash_file(signed_file, &hash_len, hash_algo);
+
+	DEBUG("Got file hash %s", hash);
+
+	if (!hash) {
+		ERROR("Failed to hash file: %s", signed_file);
+		return -1;
+	}
+
+	//	int ret = ssl_verify_signature_from_digest(cert_pss, (const uint8_t *)sigbuf_pss, size_sig_pss,
+	//				 (const uint8_t*)hash, SHA256_DIGEST_LENGTH, RSA_PSS_PADDING);
+
+	//DEBUG("ssl_verify_signature_from_digest(cert_buf:%s, sig_buf, %d, "cert_buf, sig_buf, sig_len, hash, hash_len, rsa_padding)",
+	int ret = ssl_verify_signature_from_digest(cert_buf, sig_buf, sig_len, hash, hash_len);
+
+	return ret;
 }
