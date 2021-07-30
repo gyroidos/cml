@@ -952,129 +952,36 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	ASSERT(signature_file);
 	ASSERT(signed_file);
 
-	FILE *fp = NULL;
-	int ret = 0;
+	off_t cert_len = file_size(cert_file);
+	char *cert_buf = mem_alloc0(cert_len);
 
-	// certificate variables
-	X509 *test_cert = NULL;
-	EVP_PKEY *key = NULL;
-
-	// signature variables
-	struct stat stat_buf;
-	unsigned char *signature = NULL;
-	unsigned int siglen;
-	const EVP_MD *hash_fct;
-	EVP_MD_CTX *md_ctx = NULL;
-
-	//load certificate, verify and get public key
-	if (!(fp = fopen(cert_file, "rb"))) {
-		ERROR("Error in signature verification (opening certificate file)");
-		ret = -2;
-		goto error;
-	}
-	if (PEM_read_X509(fp, &test_cert, NULL, NULL) == NULL) {
-		ERROR("Error in signature verification (loading certificate file)");
-		ret = -2;
-		goto error;
+	if (0 > file_read(cert_file, cert_buf, cert_len)) {
+		ERROR("Failed to read cert file");
+		return -1;
 	}
 
-	if ((key = X509_get_pubkey(test_cert)) == NULL) {
-		ERROR("Error in signature verification (loading pubkey failed)");
-		ret = -2;
-		goto error;
-	}
-	fclose(fp);
-	fp = NULL;
+	int sig_len = file_size(signature_file);
+	unsigned char *sig_buf = mem_alloc0(sig_len);
 
-	TRACE("Certificate loaded to verify signature");
-
-	// load signature
-	if (!(fp = fopen(signature_file, "rb"))) {
-		ERROR("Error in signature verification (opening signature file)");
-		ret = -2;
-		goto error;
+	if (0 > file_read(signature_file, (char *)sig_buf, sig_len)) {
+		ERROR("Failed to read signature file");
+		return -1;
 	}
 
-	// read signature file
-	if (fstat(fileno(fp), &stat_buf) == -1) {
-		ERROR("Error in signature verification (unable to read signature file)");
-		ret = -2;
-		goto error;
+	unsigned int hash_len;
+	unsigned char *hash = ssl_hash_file(signed_file, &hash_len, hash_algo);
+
+	if (!hash) {
+		ERROR("Failed to hash file: %s", signed_file);
+		return -1;
 	}
 
-	siglen = stat_buf.st_size;
-	signature = mem_new(unsigned char, siglen);
+	//	int ret = ssl_verify_signature_from_digest(cert_pss, (const uint8_t *)sigbuf_pss, size_sig_pss,
+	//				 (const uint8_t*)hash, SHA256_DIGEST_LENGTH, RSA_PSS_PADDING);
 
-	// read signature
-	if ((fread(signature, 1, siglen, fp)) != siglen) {
-		ERROR("Error in signature verification (unable to read out signature)");
-		ret = -2;
-		goto error;
-	}
-	fclose(fp);
-	fp = NULL;
+	//DEBUG("ssl_verify_signature_from_digest(cert_buf:%s, sig_buf, %d, "cert_buf, sig_buf, sig_len, hash, hash_len, rsa_padding)",
+	int ret = ssl_verify_signature_from_digest(cert_buf, sig_buf, sig_len, hash, hash_len);
 
-	TRACE("Signature loaded");
-
-	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
-		ERROR("Error in signature verification (unable to initialize hash function)");
-		ret = -2;
-		goto error;
-	}
-
-	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
-		ERROR("Allocating EVP_MD failed!");
-		goto error;
-	}
-
-	EVP_VerifyInit(md_ctx, hash_fct);
-
-	int len = 0;
-	unsigned char buffer[SIGN_HASH_BUFFER_SIZE];
-
-	if (!(fp = fopen(signed_file, "rb"))) {
-		ERROR("Error in signature verification (opening signed file failed)");
-		ret = -2;
-		goto error;
-	}
-
-	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-		if (!EVP_VerifyUpdate(md_ctx, buffer, len)) {
-			ERROR("Error in signature verification (reading/hashing signed file failed");
-			ret = -2;
-			goto error;
-		}
-	}
-	fclose(fp);
-	fp = NULL;
-
-	TRACE("File hash computed to verify signature");
-
-	ret = EVP_VerifyFinal(md_ctx, signature, siglen, key);
-	if (ret != 1) {
-		ERROR("Signature verification error");
-		// any error
-		if (ret == -1)
-			ret = -2;
-		// verification failed
-		else
-			ret = -1;
-	} else {
-		TRACE("Signature successfully verified");
-		ret = 0;
-	}
-
-error:
-	if (fp)
-		fclose(fp);
-	if (test_cert)
-		X509_free(test_cert);
-	if (key)
-		EVP_PKEY_free(key);
-	if (signature)
-		mem_free0(signature);
-	if (md_ctx)
-		EVP_MD_CTX_free(md_ctx);
 	return ret;
 }
 
@@ -1093,6 +1000,7 @@ print_data(const uint8_t *buf, size_t buf_len, const char *info)
 int
 ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
 			      size_t sig_len, const uint8_t *buf, size_t buf_len)
+
 {
 	ASSERT(cert_buf);
 	ASSERT(sig_buf);
@@ -1102,12 +1010,7 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 
 	// certificate variables
 	X509 *cert;
-	EVP_PKEY *key = NULL;
 	BIO *mem;
-
-	// signature variables
-	const EVP_MD *hash_fct;
-	EVP_MD_CTX *md_ctx = NULL;
 
 	// load certificate
 	mem = BIO_new(BIO_s_mem());
@@ -1115,7 +1018,7 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
 	BIO_free(mem);
 
-	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg(cert);
+	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
 	if (!sig_alg) {
 		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
 		ret = -2;
@@ -1128,51 +1031,23 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		ret = -2;
 		goto error;
 	}
+	DEBUG("Certificate uses hash algorithm %s", hash_algo);
 
-	// load public key, digest, and verify signature
-	if ((key = X509_get_pubkey(cert)) == NULL) {
-		ERROR("Error in signature verification (loading pubkey failed)");
+	unsigned int hash_len = 0;
+	unsigned char *hash = ssl_hash_buf(buf, buf_len, &hash_len, hash_algo);
+
+	if (0 > (ret = ssl_verify_signature_from_digest((char *)cert_buf, sig_buf, sig_len, hash,
+							hash_len))) {
+		ssl_print_err();
+		ERROR("Failed to verify signature");
 		ret = -2;
 		goto error;
 	}
-
-	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
-		ERROR("Allocating EVP_MD failed!");
-		goto error;
-	}
-	EVP_VerifyInit(md_ctx, hash_fct);
-
-	if (!EVP_VerifyUpdate(md_ctx, buf, buf_len)) {
-		ERROR("Error in signature verification (reading/hashing signed file failed");
-		ret = -2;
-		goto error;
-	}
-
-	TRACE("File hash computed to verify signature");
-
-	ret = EVP_VerifyFinal(md_ctx, sig_buf, sig_len, key);
-	if (ret != 1) {
-		ERROR("Signature verification error");
-		// any error
-		if (ret == -1)
-			ret = -2;
-		// verification failed
-		else
-			ret = -1;
-	} else {
-		TRACE("Signature successfully verified");
-		ret = 0;
-	}
-
-	ERROR("XX TEST");
 
 error:
 	if (cert)
 		X509_free(cert);
-	if (key)
-		EVP_PKEY_free(key);
-	if (md_ctx)
-		EVP_MD_CTX_free(md_ctx);
+
 	return ret;
 }
 
@@ -1180,6 +1055,7 @@ static int
 ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx)
 {
 	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PSS_PADDING) != 1) {
+		ssl_print_err();
 		ERROR("Error setting RSA PSS padding");
 		return -1;
 	}
@@ -1242,6 +1118,7 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		ret = -2;
 		goto error;
 	}
+	DEBUG("Certificate uses hash algorithm %s", hash_algo);
 
 	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
 		ERROR("Error in signature verification (unable to initialize hash function)");
@@ -1315,6 +1192,56 @@ error:
 		EVP_PKEY_free(key);
 	if (pkey_ctx)
 		EVP_PKEY_CTX_free(pkey_ctx);
+	return ret;
+}
+
+static unsigned char *
+ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
+	     const char *hash_algo)
+{
+	ASSERT(buf_to_hash);
+	ASSERT(hash_algo);
+
+	unsigned char *ret = NULL;
+	FILE *fp = NULL;
+	const EVP_MD *hash_fct;
+	EVP_MD_CTX *md_ctx = NULL;
+
+	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
+		ERROR("Error in file hasing (unable to initialize hash function");
+		fclose(fp);
+		return NULL;
+	}
+
+	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
+		ERROR("Allocating EVP_MD failed!");
+		fclose(fp);
+		return NULL;
+	}
+
+	EVP_DigestInit(md_ctx, hash_fct);
+
+	if (!EVP_DigestUpdate(md_ctx, buf_to_hash, buf_len)) {
+		ERROR("Error in buffer hashing");
+		fclose(fp);
+		goto error;
+	}
+
+	ret = (unsigned char *)mem_alloc0(EVP_MAX_MD_SIZE);
+	if (EVP_DigestFinal(md_ctx, ret, calc_len) != 1) {
+		ERROR("Error in file hashing (computing hash)");
+		mem_free0(ret);
+		ret = NULL;
+		goto error;
+	}
+	/* DEBUG OUTPUT
+	char *string = mem_alloc0(*calc_len*2+1);
+	for (unsigned int i = 0;  i < *calc_len;  i++) snprintf(string+2*i, 3, "%02x", ret[i]);
+	DEBUG("Calc hash: %s", string);
+	*/
+
+error:
+	EVP_MD_CTX_free(md_ctx);
 	return ret;
 }
 
