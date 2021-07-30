@@ -216,7 +216,7 @@ verify_template_data(struct event *template, const char *cert)
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert, sig->sig,
 					field_len - sizeof(struct signature_v2_hdr), digest,
-					digest_len, false);
+					digest_len);
 				if (retssl != 0) {
 					ERROR("Signature verification FAILED for %s", f);
 					ret = -1;
@@ -254,7 +254,7 @@ verify_template_data(struct event *template, const char *cert)
 
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert, (const uint8_t *)sig_info->sig,
-					sig_info->sig_len, digest, digest_len, false);
+					sig_info->sig_len, digest, digest_len);
 				if (retssl != 0) {
 					ERROR("Signature verification FAILED for %s", f);
 					ret = -1;

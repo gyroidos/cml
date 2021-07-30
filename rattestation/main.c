@@ -26,8 +26,6 @@
 #include "common/file.h"
 #include "common/logf.h"
 #include "common/event.h"
-#include "common/uuid.h"
-#include "common/ssl_util.h"
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -96,48 +94,6 @@ main(int argc, char **argv)
 
 	char *rhost = (argc < 2) ? "127.0.0.1" : argv[1];
 	char *config_file = (argc < 3) ? "rattestation.conf" : argv[2];
-
-	// uuid_t *dev_uuid = uuid_new(NULL);
-	// const char *uid;
-	// if (!dev_uuid || (uid = uuid_string(dev_uuid)) == NULL) {
-	//     FATAL("Could not create device uuid");
-	// }
-
-	// if (ssl_create_csr("device.cert", "private.key", NULL, "common_name", uid, false) != 0) {
-	//     FATAL("Unable to create CSR");
-	// }
-	// INFO("Created CSR");
-	// return 0;
-
-	long size_hash;
-	long size_sig_pss;
-	long size_sig_ssa;
-
-	const char *cert_pss = rfs("/home/simon/tmp/pss/cert-pss.pem");
-	uint8_t *sigbuf_pss = rfb("/home/simon/tmp/pss/sig-pss", &size_sig_pss);
-	uint8_t *hash = rfb("/home/simon/tmp/pss/test-quote-hash", &size_hash);
-
-	const char *cert_ssa = rfs("/home/simon/tmp/pss/cert-ssa.pem");
-	uint8_t *sigbuf_ssa = rfb("/home/simon/tmp/pss/sig-ssa", &size_sig_ssa);
-
-	int ret = ssl_verify_signature_from_digest(cert_pss, (const uint8_t *)sigbuf_pss,
-						   size_sig_pss, (const uint8_t *)hash,
-						   SHA256_DIGEST_LENGTH, true);
-	if (ret) {
-		ERROR("ERRRROR PSS");
-		return 0;
-	}
-	INFO("SUCCCCESS PSS");
-
-	ret = ssl_verify_signature_from_digest(cert_ssa, (const uint8_t *)sigbuf_ssa, size_sig_ssa,
-					       (const uint8_t *)hash, SHA256_DIGEST_LENGTH, false);
-	if (ret) {
-		ERROR("ERRRROR SSA");
-		return 0;
-	}
-	INFO("SUCCCCESS SSA");
-
-	return 0;
 
 	event_init();
 
