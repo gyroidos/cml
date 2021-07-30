@@ -1,0 +1,136 @@
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            0a:7a:df:83:51:25:d6:e1:b1:05:1f:a5:4e:81:ef:10:8d:33:b3:2c
+        Signature Algorithm: rsassaPss         
+         Hash Algorithm: sha256
+         Mask Algorithm: mgf1 with sha256
+          Salt Length: 0xDE
+         Trailer Field: 0xBC (default)
+        Issuer: C=DE, O=OSS Release, OU=Development, CN=trustme General Root CA
+        Validity
+            Not Before: Jul 29 20:23:09 2021 GMT
+            Not After : Jul 28 20:23:09 2027 GMT
+        Subject: C=DE, O=OSS Release, OU=Development, CN=trustme User Sub CA
+        Subject Public Key Info:
+            Public Key Algorithm: rsassaPss
+                RSA-PSS Public-Key: (2048 bit)
+                Modulus:
+                    00:d6:d2:8c:3e:30:82:d5:63:c2:fa:aa:48:19:55:
+                    b5:e8:e1:9e:a7:9d:6a:73:92:78:ae:db:cd:55:8c:
+                    8d:5f:f5:6c:fc:74:90:9c:33:10:a4:f9:b1:67:5e:
+                    dc:5c:c2:ed:e1:b7:17:5a:1a:10:b0:92:e7:1a:6c:
+                    52:c7:2f:1f:b1:23:d8:0c:11:54:c7:dc:4f:37:e6:
+                    ed:f9:b3:06:65:86:b9:27:d4:de:9d:94:8b:3e:c6:
+                    5d:fd:6d:15:21:94:9f:04:ec:1a:d4:96:83:af:78:
+                    91:ef:45:f9:f6:0f:e7:05:90:1c:59:a5:1d:b6:5b:
+                    b9:7c:6b:75:a6:b3:ff:67:2b:2f:78:ae:31:56:f5:
+                    32:01:f2:9a:8e:bc:8f:6e:a2:32:97:81:29:54:a2:
+                    19:08:52:6c:ec:79:21:65:11:95:c4:e0:15:69:8b:
+                    e7:df:1e:e6:44:12:94:65:3b:f0:75:3f:35:ca:34:
+                    a2:cb:1c:d8:e6:b0:89:a8:dc:48:8d:dc:d3:5f:d1:
+                    7c:26:05:19:16:0d:de:e0:88:4d:63:40:b2:a9:60:
+                    77:58:46:29:de:0a:88:f2:3e:c8:d2:ae:0f:1e:a6:
+                    f7:f2:8f:7d:cc:b3:5b:74:9d:1d:e7:76:9b:11:86:
+                    2a:6a:2a:7c:e1:55:f8:a6:bf:1e:55:87:7d:a2:01:
+                    83:b3
+                Exponent: 65537 (0x10001)
+                No PSS parameter restrictions
+        X509v3 extensions:
+            X509v3 Subject Key Identifier: 
+                60:C6:A8:49:71:F7:36:0A:1C:83:60:55:7C:7A:03:6F:C1:B4:5A:C2
+            X509v3 Authority Key Identifier: 
+                keyid:48:C4:8B:72:4E:94:E3:66:01:FC:9B:58:0B:BF:36:4F:8B:77:60:5C
+                DirName:/C=DE/O=OSS Release/OU=Development/CN=trustme General Root CA
+                serial:4B:8E:14:B5:AC:F9:55:4E:C9:D6:2E:E1:0A:E5:30:EB:2F:8D:49:3C
+
+            X509v3 Basic Constraints: critical
+                CA:TRUE
+            X509v3 Key Usage: 
+                Digital Signature, Certificate Sign, CRL Sign
+            Authority Information Access: 
+                CA Issuers - URI:http://localhost/dummy.cer
+                OCSP - URI:http://localhost/dummy-ocsp
+
+            X509v3 CRL Distribution Points: 
+
+                Full Name:
+                  URI:http://localhost/dummy.crl
+
+    Signature Algorithm: rsassaPss         
+         Hash Algorithm: sha256
+         Mask Algorithm: mgf1 with sha256
+          Salt Length: 0xDE
+         Trailer Field: 0xBC (default)
+
+         7c:8a:49:1c:92:f9:05:65:aa:09:3f:94:57:d0:17:f0:72:79:
+         51:1c:8d:1c:22:ea:16:e8:df:96:e2:ce:42:5d:3b:2b:f9:67:
+         1d:00:31:41:57:5b:15:22:35:72:c3:f4:b2:16:64:9a:60:80:
+         e4:8b:05:dc:0c:05:65:c8:3f:04:66:c6:5e:0c:1e:a0:84:b0:
+         bb:37:fa:3b:eb:8a:df:22:9f:e9:2e:57:15:63:ef:a2:63:2a:
+         e7:ba:78:dc:db:86:0c:af:29:90:9b:cc:64:b4:a9:24:18:aa:
+         6e:6e:d6:c2:20:c3:5e:9f:81:de:59:c5:bf:9a:ac:b9:5a:92:
+         88:03:5e:78:01:10:0e:dd:da:fb:e1:40:05:78:ec:cf:b1:65:
+         51:1b:d1:64:bc:b9:dc:b7:39:08:3f:21:94:34:d6:a0:f3:85:
+         a4:53:d9:1c:d2:49:30:6c:be:3e:ea:26:a9:79:d4:ae:8e:0d:
+         cb:7b:89:81:e0:e0:36:3c:65:a0:85:ac:e5:33:63:4f:25:f4:
+         79:71:5d:b0:26:8b:67:d7:58:fb:e6:c4:c0:a4:38:09:14:44:
+         18:d2:14:82:3b:39:de:87:a1:42:19:6a:00:56:c7:2b:fc:fe:
+         b6:09:04:bd:94:0a:30:d3:88:34:0e:78:96:e8:ee:fc:27:ea:
+         eb:72:d4:bb
+-----BEGIN CERTIFICATE-----
+MIIFDDCCA8OgAwIBAgIUCnrfg1El1uGxBR+lToHvEI0zsywwPgYJKoZIhvcNAQEK
+MDGgDTALBglghkgBZQMEAgGhGjAYBgkqhkiG9w0BAQgwCwYJYIZIAWUDBAIBogQC
+AgDeMFsxCzAJBgNVBAYTAkRFMRQwEgYDVQQKDAtPU1MgUmVsZWFzZTEUMBIGA1UE
+CwwLRGV2ZWxvcG1lbnQxIDAeBgNVBAMMF3RydXN0bWUgR2VuZXJhbCBSb290IENB
+MB4XDTIxMDcyOTIwMjMwOVoXDTI3MDcyODIwMjMwOVowVzELMAkGA1UEBhMCREUx
+FDASBgNVBAoMC09TUyBSZWxlYXNlMRQwEgYDVQQLDAtEZXZlbG9wbWVudDEcMBoG
+A1UEAwwTdHJ1c3RtZSBVc2VyIFN1YiBDQTCCASAwCwYJKoZIhvcNAQEKA4IBDwAw
+ggEKAoIBAQDW0ow+MILVY8L6qkgZVbXo4Z6nnWpzkniu281VjI1f9Wz8dJCcMxCk
++bFnXtxcwu3htxdaGhCwkucabFLHLx+xI9gMEVTH3E835u35swZlhrkn1N6dlIs+
+xl39bRUhlJ8E7BrUloOveJHvRfn2D+cFkBxZpR22W7l8a3Wms/9nKy94rjFW9TIB
+8pqOvI9uojKXgSlUohkIUmzseSFlEZXE4BVpi+ffHuZEEpRlO/B1PzXKNKLLHNjm
+sImo3EiN3NNf0XwmBRkWDd7giE1jQLKpYHdYRineCojyPsjSrg8epvfyj33Ms1t0
+nR3ndpsRhipqKnzhVfimvx5Vh32iAYOzAgMBAAGjggFqMIIBZjAdBgNVHQ4EFgQU
+YMaoSXH3Ngocg2BVfHoDb8G0WsIwgZgGA1UdIwSBkDCBjYAUSMSLck6U42YB/JtY
+C782T4t3YFyhX6RdMFsxCzAJBgNVBAYTAkRFMRQwEgYDVQQKDAtPU1MgUmVsZWFz
+ZTEUMBIGA1UECwwLRGV2ZWxvcG1lbnQxIDAeBgNVBAMMF3RydXN0bWUgR2VuZXJh
+bCBSb290IENBghRLjhS1rPlVTsnWLuEK5TDrL41JPDAPBgNVHRMBAf8EBTADAQH/
+MAsGA1UdDwQEAwIBhjBfBggrBgEFBQcBAQRTMFEwJgYIKwYBBQUHMAKGGmh0dHA6
+Ly9sb2NhbGhvc3QvZHVtbXkuY2VyMCcGCCsGAQUFBzABhhtodHRwOi8vbG9jYWxo
+b3N0L2R1bW15LW9jc3AwKwYDVR0fBCQwIjAgoB6gHIYaaHR0cDovL2xvY2FsaG9z
+dC9kdW1teS5jcmwwPgYJKoZIhvcNAQEKMDGgDTALBglghkgBZQMEAgGhGjAYBgkq
+hkiG9w0BAQgwCwYJYIZIAWUDBAIBogQCAgDeA4IBAQB8ikkckvkFZaoJP5RX0Bfw
+cnlRHI0cIuoW6N+W4s5CXTsr+WcdADFBV1sVIjVyw/SyFmSaYIDkiwXcDAVlyD8E
+ZsZeDB6ghLC7N/o764rfIp/pLlcVY++iYyrnunjc24YMrymQm8xktKkkGKpubtbC
+IMNen4HeWcW/mqy5WpKIA154ARAO3dr74UAFeOzPsWVRG9FkvLnctzkIPyGUNNag
+84WkU9kc0kkwbL4+6iapedSujg3Le4mB4OA2PGWghazlM2NPJfR5cV2wJotn11j7
+5sTApDgJFEQY0hSCOzneh6FCGWoAVscr/P62CQS9lAow04g0DniW6O78J+rrctS7
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIETTCCAwSgAwIBAgIUS44Utaz5VU7J1i7hCuUw6y+NSTwwPgYJKoZIhvcNAQEK
+MDGgDTALBglghkgBZQMEAgGhGjAYBgkqhkiG9w0BAQgwCwYJYIZIAWUDBAIBogQC
+AgDeMFsxCzAJBgNVBAYTAkRFMRQwEgYDVQQKDAtPU1MgUmVsZWFzZTEUMBIGA1UE
+CwwLRGV2ZWxvcG1lbnQxIDAeBgNVBAMMF3RydXN0bWUgR2VuZXJhbCBSb290IENB
+MB4XDTIxMDcyOTIwMjMwOVoXDTMxMDcyNzIwMjMwOVowWzELMAkGA1UEBhMCREUx
+FDASBgNVBAoMC09TUyBSZWxlYXNlMRQwEgYDVQQLDAtEZXZlbG9wbWVudDEgMB4G
+A1UEAwwXdHJ1c3RtZSBHZW5lcmFsIFJvb3QgQ0EwggEgMAsGCSqGSIb3DQEBCgOC
+AQ8AMIIBCgKCAQEAxV3PVqVcysdLhlJDrDq3sCTKbjmhNr8O7HaEmjmNVWWJkoh+
+FoAwOLT9MRCmTB6D8n3S2UZV/Il6VFmAOkSEjZQjMFJc56TzCZ1B9blvf/pix9Uf
+ObKBkSzFm1PZtd8GswcgZOPLi8Ve3J1ZDluZ+QN2zPh1//Ka/i2ihvvaZquSED62
+lJX7XY8dskJ362m5ZGq7PLpapAGx234MIiPJZpojlkQdVtTX4Qv9eVKhcZIDRel0
+Kn9vvbJz/387w9vdHeBXGmxn57zbFzJnW2Gr9CikPsYiCpENciRGeMbA2mF02Sdd
+4OZJotN2mHtO6xuqiX6+Sh0lRuH80PaGWW4fTwIDAQABo4GoMIGlMB0GA1UdDgQW
+BBRIxItyTpTjZgH8m1gLvzZPi3dgXDAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB
+/wQEAwIBBjA2BggrBgEFBQcBAQQqMCgwJgYIKwYBBQUHMAKGGmh0dHA6Ly9sb2Nh
+bGhvc3QvZHVtbXkuY2VyMCsGA1UdHwQkMCIwIKAeoByGGmh0dHA6Ly9sb2NhbGhv
+c3QvZHVtbXkuY3JsMD4GCSqGSIb3DQEBCjAxoA0wCwYJYIZIAWUDBAIBoRowGAYJ
+KoZIhvcNAQEIMAsGCWCGSAFlAwQCAaIEAgIA3gOCAQEAl6041G5t/n5FG/v1Ld3h
+9Ab+tDsodymDKSM/IyCGIvBUftBxjlZYksPqOl349VsvCUr46+/f4MsJD1ioX/UT
+/9xwEQx7IIe+yhlaii0RL0jdWLL+acWnVRWJfZ/EdrUZqiVQpcOqf1+tRcfmx8hN
+fzXp5YZCM6I7YJ+9tQfgCQ5gQPdY1Fzx9EGCLfxiVd2NZgGo64jJflcZquFg+T8r
+P7qmqc466RYgRwQNUqtSIKFgkdjkQE04s45/9waHMz8sNDVN7Fo/gXORkuCfqBTH
+VIxsq1FuO8A7qQpghh+42+vPpgz5+HWIAV7grVgELos80EWOGFGi418wiOrYsB4s
+iw==
+-----END CERTIFICATE-----
