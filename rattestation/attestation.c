@@ -213,7 +213,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	int retssl = ssl_verify_signature_from_buf(resp->certificate.data, resp->certificate.len,
 						   tpmt_signature.signature.rsapss.sig.t.buffer,
 						   tpmt_signature.signature.rsapss.sig.t.size,
-						   resp->quoted.data, resp->quoted.len);
+						   resp->quoted.data, resp->quoted.len, "SHA256");
 	if (retssl != 0) {
 		ERROR("VERIFY QUOTE SIGNATURE FAILED");
 		ret = false;
