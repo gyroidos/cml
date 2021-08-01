@@ -104,7 +104,7 @@ ssl_verify_certificate(const char *test_cert_file, const char *root_cert_file, b
  */
 int
 ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file,
-		     const char *hash_algo);
+		     const char *digest_algo);
 
 /**
  * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Thereby, the
@@ -115,7 +115,8 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
  */
 int
 ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
-			      size_t sig_len, const uint8_t *buf, size_t buf_len);
+			      size_t sig_len, const uint8_t *buf, size_t buf_len,
+			      const char *digest_algo);
 
 /**
  * verifies a signature stored in sig_buf with a certificate stored in cert_buf. Compared to
@@ -124,8 +125,9 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
  * an unexpected verification error.
  */
 int
-ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-				 const uint8_t *hash, size_t hash_len);
+ssl_verify_signature_from_digest(const char *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+				 size_t sig_len, const uint8_t *hash, size_t hash_len,
+				 const char *digest_algo);
 
 /**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.

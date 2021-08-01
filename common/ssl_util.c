@@ -113,11 +113,11 @@ add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 
 /*configure pkey context for RSA-PSS padding scheme*/
 static int
-ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx);
+ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx, const EVP_MD *hash_fct);
 
 static unsigned char *
 ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
-	     const char *hash_algo);
+	     const char *digest_algo);
 
 ENGINE *tpm_engine = NULL;
 
@@ -467,6 +467,7 @@ ssl_mkkeypair(int key_type)
 	//https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_keygen_init.html
 	EVP_PKEY_CTX *ctx = NULL;
 	EVP_PKEY *pkey = NULL;
+	//const EVP_MD *hash_fct = EVP_sha512();
 
 	if (EVP_PKEY_RSA == key_type) {
 		ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
@@ -491,11 +492,6 @@ ssl_mkkeypair(int key_type)
 		ERROR("Failed to set key length");
 		goto out;
 	}
-
-	//if (0 != ssl_set_pkey_ctx_rsa_pss(ctx)) {
-	//	ERROR("Failed to configure context for RSA-PSS");
-	//	goto out;
-	//}
 
 	/* Generate key */
 	if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
@@ -948,7 +944,7 @@ end:
 }
 
 static int
-ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx)
+ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx, const EVP_MD *hash_fct)
 {
 	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PSS_PADDING) != 1) {
 		ssl_print_err();
@@ -956,18 +952,21 @@ ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx)
 		return -1;
 	}
 
-	if (EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) != 1) {
+	if (EVP_PKEY_CTX_set_signature_md(ctx, hash_fct) != 1) {
+		ssl_print_err();
 		ERROR("Error setting signature digest");
 		return -1;
 	}
 
-	if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha256()) != 1) {
+	if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, hash_fct) != 1) {
+		ssl_print_err();
 		ERROR("Error setting RSA PSS mgf1 digest");
 		return -1;
 	}
 
 	// TODO vs RSA_PSS_SALTLEN_AUTO, RSA_PSS_SALTLEN_MAX
 	if (EVP_PKEY_CTX_set_rsa_pss_saltlen(ctx, RSA_PSS_SALTLEN_DIGEST) != 1) {
+		ssl_print_err();
 		ERROR("Error setting RSA PSS saltlen");
 		return -1;
 	}
@@ -975,8 +974,9 @@ ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx)
 }
 
 int
-ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, size_t sig_len,
-				 const uint8_t *hash, size_t hash_len)
+ssl_verify_signature_from_digest(const char *cert_buf, size_t cert_len, const uint8_t *sig_buf,
+				 size_t sig_len, const uint8_t *hash, size_t hash_len,
+				 const char *digest_algo)
 {
 	ASSERT(cert_buf);
 	ASSERT(sig_buf);
@@ -987,37 +987,15 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 	EVP_PKEY *key = NULL;
 	BIO *mem;
 	EVP_PKEY_CTX *pkey_ctx = NULL;
-	const EVP_MD *hash_fct;
 
-	// load certificate, verify and get public key
+	// load certificate
 	mem = BIO_new(BIO_s_mem());
-	BIO_puts(mem, cert_buf);
+	BIO_write(mem, cert_buf, cert_len);
 	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
 	BIO_free(mem);
 
 	if ((key = X509_get_pubkey(cert)) == NULL) {
 		ERROR("Error in signature verification (loading pubkey failed)");
-		ret = -2;
-		goto error;
-	}
-
-	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
-	if (!sig_alg) {
-		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
-		ret = -2;
-		goto error;
-	}
-
-	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
-	if (!hash_algo) {
-		ERROR("Error in signature verification (Unsupported hash function)");
-		ret = -2;
-		goto error;
-	}
-	DEBUG("Certificate uses hash algorithm %s", hash_algo);
-
-	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
-		ERROR("Error in signature verification (unable to initialize hash function)");
 		ret = -2;
 		goto error;
 	}
@@ -1037,27 +1015,29 @@ ssl_verify_signature_from_digest(const char *cert_buf, const uint8_t *sig_buf, s
 		goto error;
 	}
 
-	if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, EVP_sha512()) != 1) {
-		DEBUG("EVP_PKEY_CTX_set_signature_md failed");
+	const EVP_MD *digest_fct;
+	if ((digest_fct = EVP_get_digestbyname(digest_algo)) == NULL) {
+		ERROR("Error in file hasing (unable to initialize digest hash function");
 		ret = -2;
 		goto error;
 	}
 
-	DEBUG("EVP_PKEY_RSA: %d", EVP_PKEY_RSA);
-	DEBUG("EVP_PKEY_RSA_PSS: %d", EVP_PKEY_RSA_PSS);
-
 	int key_base_id = EVP_PKEY_base_id(key);
-
-	DEBUG("Got base_id %d", key_base_id);
 
 	if (EVP_PKEY_RSA_PSS == key_base_id) {
 		DEBUG("Verifying signature with RSA-PSS padding scheme");
-		if (0 > (ret = ssl_set_pkey_ctx_rsa_pss(pkey_ctx))) {
+		if (0 > (ret = ssl_set_pkey_ctx_rsa_pss(pkey_ctx, digest_fct))) {
 			ERROR("Failed to configue ctx for RSA-PSS padding scheme");
 			goto error;
 		}
 	} else if (EVP_PKEY_RSA == key_base_id) {
 		DEBUG("Verifying signature with OpenSSL default padding scheme");
+		if (EVP_PKEY_CTX_set_signature_md(pkey_ctx, digest_fct) != 1) {
+			DEBUG("EVP_PKEY_CTX_set_signature_md failed");
+			ret = -2;
+			goto error;
+		}
+
 	} else {
 		ERROR("Unsupported key type");
 		ret = -1;
@@ -1093,19 +1073,18 @@ error:
 
 static unsigned char *
 ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
-	     const char *hash_algo)
+	     const char *digest_algo)
 {
 	ASSERT(buf_to_hash);
-	ASSERT(hash_algo);
+	ASSERT(digest_algo);
 
 	unsigned char *ret = NULL;
 	FILE *fp = NULL;
 	const EVP_MD *hash_fct;
 	EVP_MD_CTX *md_ctx = NULL;
 
-	if ((hash_fct = EVP_get_digestbyname(hash_algo)) == NULL) {
-		ERROR("Error in file hasing (unable to initialize hash function");
-		fclose(fp);
+	if ((hash_fct = EVP_get_digestbyname(digest_algo)) == NULL) {
+		ERROR("Error in file hasing (unable to initialize hash function %s)", digest_algo);
 		return NULL;
 	}
 
@@ -1704,7 +1683,8 @@ get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj)
 
 int
 ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t *sig_buf,
-			      size_t sig_len, const uint8_t *buf, size_t buf_len)
+			      size_t sig_len, const uint8_t *buf, size_t buf_len,
+			      const char *digest_algo)
 
 {
 	ASSERT(cert_buf);
@@ -1723,26 +1703,27 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 	cert = PEM_read_bio_X509(mem, NULL, 0, NULL);
 	BIO_free(mem);
 
-	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
-	if (!sig_alg) {
-		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
-		ret = -2;
-		goto error;
-	}
+	//	const X509_ALGOR *sig_alg = X509_get0_tbs_sigalg((const X509 *)cert);
+	//	if (!sig_alg) {
+	//		ERROR("Error in signature verification (Failed to parse hash-algorithm)");
+	//		ret = -2;
+	//		goto error;
+	//	}
 
-	const char *hash_algo = get_digest_name_by_sig_algo_obj(sig_alg->algorithm);
-	if (!hash_algo) {
-		ERROR("Error in signature verification (Unsupported hash function)");
-		ret = -2;
-		goto error;
-	}
-	DEBUG("Certificate uses hash algorithm %s", hash_algo);
+	//	const char *digest_algo = get_digest_name_by_sig_algo_obj(digest_algo);
+	//	if (!digest_algo) {
+	//		ERROR("Error in signature verification (Unsupported hash function)");
+	//		ret = -2;
+	//		goto error;
+	//	}
+	//	DEBUG("Certificate uses hash algorithm %s", digest_algo);
 
+	DEBUG("Hash algo: %s", digest_algo);
 	unsigned int hash_len = 0;
-	unsigned char *hash = ssl_hash_buf(buf, buf_len, &hash_len, hash_algo);
+	unsigned char *hash = ssl_hash_buf(buf, buf_len, &hash_len, digest_algo);
 
-	if (0 > (ret = ssl_verify_signature_from_digest((char *)cert_buf, sig_buf, sig_len, hash,
-							hash_len))) {
+	if (0 > (ret = ssl_verify_signature_from_digest((char *)cert_buf, cert_len, sig_buf,
+							sig_len, hash, hash_len, digest_algo))) {
 		ssl_print_err();
 		ERROR("Failed to verify signature");
 		ret = -2;
@@ -1758,7 +1739,7 @@ error:
 
 int
 ssl_verify_signature(const char *cert_file, const char *signature_file, const char *signed_file,
-		     const char *hash_algo)
+		     const char *digest_algo)
 {
 	ASSERT(cert_file);
 	ASSERT(signature_file);
@@ -1781,7 +1762,7 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	}
 
 	unsigned int hash_len;
-	unsigned char *hash = ssl_hash_file(signed_file, &hash_len, hash_algo);
+	unsigned char *hash = ssl_hash_file(signed_file, &hash_len, digest_algo);
 
 	DEBUG("Got file hash %s", hash);
 
@@ -1794,7 +1775,8 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 	//				 (const uint8_t*)hash, SHA256_DIGEST_LENGTH, RSA_PSS_PADDING);
 
 	//DEBUG("ssl_verify_signature_from_digest(cert_buf:%s, sig_buf, %d, "cert_buf, sig_buf, sig_len, hash, hash_len, rsa_padding)",
-	int ret = ssl_verify_signature_from_digest(cert_buf, sig_buf, sig_len, hash, hash_len);
+	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, sig_buf, sig_len, hash,
+						   hash_len, digest_algo);
 
 	return ret;
 }
