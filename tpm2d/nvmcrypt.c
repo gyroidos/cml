@@ -33,8 +33,6 @@
 #include "common/file.h"
 #include "common/cryptfs.h"
 
-#define FDE_KEY_LEN 64
-
 static nvmcrypt_fde_state_t fde_state = FDE_RESET;
 static bool secure_boot = false;
 static uint8_t *nvmcrypt_nvindex_policy = NULL;
@@ -101,7 +99,7 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 {
 	TPMI_SH_AUTH_SESSION se_handle;
 	int ret = 0;
-	size_t key_len = FDE_KEY_LEN;
+	size_t key_len = CRYPTFS_FDE_KEY_LEN;
 	uint8_t *fde_key;
 
 	// check if nv index exists by requesting size of index which does a nv_read_public
@@ -116,7 +114,7 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 			ret = TPM_RC_SUCCESS;
 		}
 		if (TPM_RC_SUCCESS == ret) {
-			fde_key = mem_new(uint8_t, FDE_KEY_LEN);
+			fde_key = mem_new(uint8_t, CRYPTFS_FDE_KEY_LEN);
 			ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key,
 					   &key_len);
 
@@ -150,8 +148,8 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 	// generate 64 byte random data as input for 512bit AES-XTS key
 	fde_key = tpm2_getrandom_new(key_len);
 
-	size_t verify_key_len = FDE_KEY_LEN;
-	uint8_t *verify_key = mem_new(uint8_t, FDE_KEY_LEN);
+	size_t verify_key_len = CRYPTFS_FDE_KEY_LEN;
+	uint8_t *verify_key = mem_new(uint8_t, CRYPTFS_FDE_KEY_LEN);
 
 	if (fde_key == NULL) {
 		ERROR("Failed to generate fde key!");
@@ -222,7 +220,7 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 	IF_NULL_RETVAL(key, fde_state);
 
 	// cryptfs_setup_volume_new expects an ascii string as key
-	char *ascii_key = convert_bin_to_hex_new(key, FDE_KEY_LEN);
+	char *ascii_key = convert_bin_to_hex_new(key, CRYPTFS_FDE_KEY_LEN);
 
 	INFO("Setting up crypto device mapping for %s to %s", device_path, dev_name);
 
