@@ -100,7 +100,7 @@ ssl_add_ext_cert(X509 *cert, int nid, char *value);
 
 /* creates a public key pair */
 static EVP_PKEY *
-ssl_mkkeypair(int key_type);
+ssl_mkkeypair(rsa_padding_t key_type);
 
 /* creates a CSR of a public key. If tpmkey is set true, openssl-tpm-engine
  * is used to create the request with a TPM-bound key */
@@ -251,14 +251,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 	int pass_len = 0;
 
 	if (!tpmkey) {
-		if (RSA_SSA_PADDING == rsa_padding) {
-			pkeyp = ssl_mkkeypair(EVP_PKEY_RSA);
-		} else if (RSA_PSS_PADDING == rsa_padding) {
-			pkeyp = ssl_mkkeypair(EVP_PKEY_RSA_PSS);
-		} else {
-			ERROR("Unknown RSA padding");
-			goto error;
-		}
+		pkeyp = ssl_mkkeypair(rsa_padding);
 
 		if (NULL == pkeyp) {
 			ERROR("Error creating public key pair");
@@ -462,16 +455,16 @@ error:
 }
 
 static EVP_PKEY *
-ssl_mkkeypair(int key_type)
+ssl_mkkeypair(rsa_padding_t key_type)
 {
 	//https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_keygen_init.html
 	EVP_PKEY_CTX *ctx = NULL;
 	EVP_PKEY *pkey = NULL;
 	//const EVP_MD *hash_fct = EVP_sha512();
 
-	if (EVP_PKEY_RSA == key_type) {
+	if (RSA_SSA_PADDING == key_type) {
 		ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
-	} else if (EVP_PKEY_RSA_PSS == key_type) {
+	} else if (RSA_PSS_PADDING == key_type) {
 		ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA_PSS, NULL);
 	} else {
 		ERROR("Unsupported key type");
@@ -1192,14 +1185,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 	PKCS12 *p12 = NULL;
 	char *passphr = mem_strdup(passphrase);
 
-	if (RSA_SSA_PADDING == rsa_padding) {
-		pkey = ssl_mkkeypair(EVP_PKEY_RSA);
-	} else if (RSA_PSS_PADDING == rsa_padding) {
-		pkey = ssl_mkkeypair(EVP_PKEY_RSA_PSS);
-	} else {
-		ERROR("Unkown RSA padding specified");
-		goto error;
-	}
+	pkey = ssl_mkkeypair(rsa_padding);
 
 	if (NULL == pkey) {
 		ERROR("Error creating public-key pair");
