@@ -34,6 +34,8 @@
 
 #include <stdbool.h>
 
+#define CRYPTFS_FDE_KEY_LEN 64
+
 char *
 cryptfs_get_device_path_new(const char *label);
 

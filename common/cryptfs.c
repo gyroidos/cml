@@ -563,7 +563,7 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 	bool initial_format = false;
 	char *crypto_blkdev = NULL;
 	char *integrity_dev_label = mem_printf("%s-%s", label, "integrity");
-	DEBUG("cryptfs_setup_volume_new");
+	TRACE("cryptfs_setup_volume_integrity_new");
 
 	/* check if meta device is initialized */
 	initial_format = get_provided_data_sectors(meta_blkdev) != fs_size;
@@ -651,9 +651,10 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	// do dmcrypt device setup only
 
 	/* Use only the first 64 hex digits of master key for 512 bit xts mode */
-	IF_TRUE_RETVAL(strlen(key) < 65, NULL);
-	char enc_key[65];
-	snprintf(enc_key, 65, "%s", key);
+	IF_TRUE_RETVAL(strlen(key) < CRYPTFS_FDE_KEY_LEN, NULL);
+	char enc_key[CRYPTFS_FDE_KEY_LEN + 1];
+	memcpy(enc_key, key, CRYPTFS_FDE_KEY_LEN);
+	enc_key[CRYPTFS_FDE_KEY_LEN] = '\0';
 
 	if (create_crypto_blk_dev(real_blkdev, enc_key, label, fs_size, false) < 0)
 		return NULL;
