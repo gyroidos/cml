@@ -37,6 +37,7 @@ test_read_certs(const char *cert, const char *sig, const char *data, char **cert
 	munit_assert(NULL != sig);
 	munit_assert(NULL != data);
 
+	DEBUG("Reading file %s", cert);
 	munit_assert(0 < (*cert_len = file_size(cert)));
 	*cert_buf = mem_alloc0(*cert_len);
 
@@ -45,6 +46,7 @@ test_read_certs(const char *cert, const char *sig, const char *data, char **cert
 		return -1;
 	}
 
+	DEBUG("Reading file %s", sig);
 	munit_assert(0 < (*sig_len = file_size(sig)));
 	*sig_buf = mem_alloc0(*sig_len);
 
@@ -53,7 +55,8 @@ test_read_certs(const char *cert, const char *sig, const char *data, char **cert
 		return -1;
 	}
 
-	*data_len = file_size(data);
+	DEBUG("Reading file %s", data);
+	munit_assert(0 <= (*data_len = file_size(data)));
 	*data_buf = mem_alloc0(*data_len);
 
 	if (0 > file_read(data, (char *)*data_buf, *data_len)) {
@@ -96,7 +99,7 @@ test_ssl_read_pkcs12_token_ssa(UNUSED const MunitParameter params[], UNUSED void
 	EVP_PKEY *pkey = NULL;
 	X509 *cert = NULL;
 	STACK_OF(X509) *ca = NULL;
-	int ret = ssl_read_pkcs12_token("testdata/token_ssa.p12", "trustme", &pkey, &cert, &ca);
+	int ret = ssl_read_pkcs12_token("testdata/token.p12", "trustme", &pkey, &cert, &ca);
 
 	// Check if verification was successful
 	munit_assert(0 == ret);
@@ -144,7 +147,7 @@ test_ssl_read_pkcs12_token_pss(UNUSED const MunitParameter params[], UNUSED void
 static UNUSED MunitResult
 test_ssl_verify_signature_ssa(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki_ssa/ssig.cert", "testdata/sigssa_ssacert",
+	int ret = ssl_verify_signature("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert",
 				       "testdata/test-quote", "SHA256");
 
 	munit_assert(0 == ret);
@@ -155,9 +158,9 @@ test_ssl_verify_signature_ssa(UNUSED const MunitParameter params[], UNUSED void 
 static UNUSED MunitResult
 test_ssl_verify_signature_ssa_sha512(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki_ssa/ssig.cert",
-				       "testdata/sigssa_ssacert_sha512", "testdata/test-quote",
-				       "SHA512");
+	int ret =
+		ssl_verify_signature("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert_sha512",
+				     "testdata/test-quote", "SHA512");
 
 	munit_assert(0 == ret);
 
@@ -167,7 +170,7 @@ test_ssl_verify_signature_ssa_sha512(UNUSED const MunitParameter params[], UNUSE
 static UNUSED MunitResult
 test_ssl_verify_signature_pss(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki_pss/ssig.cert", "testdata/sigpss_psscert",
+	int ret = ssl_verify_signature("testdata/testpki/ssig_cml.cert", "testdata/sigpss_psscert",
 				       "testdata/test-quote", "SHA256");
 
 	munit_assert(0 == ret);
@@ -178,7 +181,7 @@ test_ssl_verify_signature_pss(UNUSED const MunitParameter params[], UNUSED void 
 static UNUSED MunitResult
 test_ssl_verify_signature_pss_sha512(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki_pss/ssig.cert",
+	int ret = ssl_verify_signature("testdata/testpki/ssig_cml.cert",
 				       "testdata/sigpss_psscert_sha512", "testdata/test-quote",
 				       "SHA512");
 
@@ -196,10 +199,9 @@ test_ssl_verify_signature_from_buf_ssa_ssacert(UNUSED const MunitParameter param
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
-					  "testdata/sigssa_ssacert", "testdata/test-quote",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert",
+					  "testdata/test-quote", &cert_buf, &cert_len, &sig_buf,
+					  &sig_len, &buf, &buf_len));
 
 	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
 						sig_len, (unsigned char *)buf, buf_len, "SHA256");
@@ -225,7 +227,7 @@ test_ssl_verify_signature_from_buf_ssa_ssacert_sha512(UNUSED const MunitParamete
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
 					  "testdata/sigssa_ssacert_sha512", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -254,7 +256,7 @@ test_ssl_verify_signature_from_buf_ssa_psscert(UNUSED const MunitParameter param
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigssa_psscert", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -283,7 +285,7 @@ test_ssl_verify_signature_from_buf_ssa_psscert_sha512(UNUSED const MunitParamete
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigssa_psscert_sha512", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -312,7 +314,7 @@ test_ssl_verify_signature_from_buf_pss_psscert(UNUSED const MunitParameter param
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigpss_psscert", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -341,7 +343,7 @@ test_ssl_verify_signature_from_buf_pss_psscert_sha512(UNUSED const MunitParamete
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigpss_psscert_sha512", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -370,10 +372,9 @@ test_ssl_verify_signature_from_buf_pss_ssacert(UNUSED const MunitParameter param
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
-					  "testdata/sigpss_ssacert", "testdata/test-quote",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigpss_ssacert",
+					  "testdata/test-quote", &cert_buf, &cert_len, &sig_buf,
+					  &sig_len, &buf, &buf_len));
 
 	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
 						sig_len, (unsigned char *)buf, buf_len, "SHA256");
@@ -399,7 +400,7 @@ test_ssl_verify_signature_from_buf_pss_ssacert_sha512(UNUSED const MunitParamete
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
 					  "testdata/sigpss_ssacert_sha512", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -468,7 +469,7 @@ test_ssl_verify_signature_from_digest_pss_psscert(UNUSED const MunitParameter pa
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigpss_psscert", "testdata/test-quote-hash",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -499,7 +500,7 @@ test_ssl_verify_signature_from_digest_pss_psscert_sha512(UNUSED const MunitParam
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigpss_psscert_sha512",
 					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
@@ -530,10 +531,9 @@ test_ssl_verify_signature_from_digest_pss_ssacert(UNUSED const MunitParameter pa
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
-					  "testdata/sigpss_ssacert", "testdata/test-quote-hash",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigpss_ssacert",
+					  "testdata/test-quote-hash", &cert_buf, &cert_len,
+					  &sig_buf, &sig_len, &buf, &buf_len));
 
 	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
 						   sig_len, (const uint8_t *)buf,
@@ -561,7 +561,7 @@ test_ssl_verify_signature_from_digest_pss_ssacert_sha512(UNUSED const MunitParam
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
 					  "testdata/sigpss_ssacert_sha512",
 					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
@@ -592,7 +592,7 @@ test_ssl_verify_signature_from_digest_ssa_psscert(UNUSED const MunitParameter pa
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigssa_psscert", "testdata/test-quote-hash",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -623,7 +623,7 @@ test_ssl_verify_signature_from_digest_ssa_psscert_sha512(UNUSED const MunitParam
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_pss/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
 					  "testdata/sigssa_psscert_sha512",
 					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
@@ -654,10 +654,9 @@ test_ssl_verify_signature_from_digest_ssa_ssacert(UNUSED const MunitParameter pa
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
-					  "testdata/sigssa_ssacert", "testdata/test-quote-hash",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert",
+					  "testdata/test-quote-hash", &cert_buf, &cert_len,
+					  &sig_buf, &sig_len, &buf, &buf_len));
 
 	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
 						   sig_len, (const uint8_t *)buf,
@@ -685,7 +684,7 @@ test_ssl_verify_signature_from_digest_ssa_ssacert_sha512(UNUSED const MunitParam
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki_ssa/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
 					  "testdata/sigssa_ssacert_sha512",
 					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
