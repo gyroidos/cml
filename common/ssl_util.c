@@ -975,6 +975,10 @@ ssl_verify_signature_from_digest(const char *cert_buf, size_t cert_len, const ui
 	ASSERT(sig_buf);
 	ASSERT(hash);
 
+	IF_FALSE_RETVAL_ERROR(0 < cert_len, -1);
+	IF_FALSE_RETVAL_ERROR(0 < sig_len, -1);
+	IF_FALSE_RETVAL_ERROR(0 < hash_len, -1);
+
 	int ret = 0;
 	X509 *cert;
 	EVP_PKEY *key = NULL;
