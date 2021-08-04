@@ -5,6 +5,7 @@ set -e
 PROCESS_NAME="qemu-trustme-ci"
 SSH_PORT=2223
 BUILD_DIR="out-yocto"
+KILL_VM=false
 
 # Argument retrieval
 # -----------------------------------------------
@@ -184,7 +185,7 @@ then
   fi
 
 
-  BUILD_BRANCH=$(git -C tmp/work/core*/cmld/git*/git branch | tee /proc/self/fd/2 | grep '*' | awk '{ print $NF }')  # check if git repo found and correct branch used
+  BUILD_BRANCH=$(git -C tmp/work/core*/cmld/git*/git branch | tee /proc/self/fd/1 | grep '*' | awk '{ print $NF }')  # check if git repo found and correct branch used
   if [[ $BRANCH != $BUILD_BRANCH ]]
   then
     echo "ERROR: The specified branch \"$BRANCH\" does not match the build ($BUILD_BRANCH). Please recompile with flag -c."
@@ -200,10 +201,13 @@ then
   if [ ${KILL_VM} ];then
 	  echo "Kill current VM (--kill was given)"
 	  pgrep ${PROCESS_NAME} | xargs kill -SIGKILL
+	sleep 10
   else
 	  echo "WARNING: VM instance called \"$PROCESS_NAME\" already running. Please stop/kill it first."
 	  exit 1
   fi
+else
+	echo "VM not running"
 fi
 
 # Create image
@@ -260,31 +264,31 @@ assign_dev: "c 4:2 rwm"
 EOF
 
 echo "STATUS: Calling control list"
-ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/2 | grep -q -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/1 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control list_guestos"
-ssh ${SSH_OPTS} "/usr/sbin/control list_guestos" | tee /proc/self/fd/2 | grep -q -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control list_guestos" | tee /proc/self/fd/1 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control create"
-ssh ${SSH_OPTS} "/usr/sbin/control create /tmp/template" | tee /proc/self/fd/2 | grep -q -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control create /tmp/template" | tee /proc/self/fd/1 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control change_pin"
-ssh ${SSH_OPTS} 'echo -ne "trustme\npw\npw\n" | /usr/sbin/control change_pin test-container' | tee /proc/self/fd/2 | grep -q CONTAINER_CHANGE_PIN_SUCCESSFUL
+ssh ${SSH_OPTS} 'echo -ne "trustme\npw\npw\n" | /usr/sbin/control change_pin test-container' | tee /proc/self/fd/1 | grep -q CONTAINER_CHANGE_PIN_SUCCESSFUL
 sleep 2
 
 echo "STATUS: Calling control start"
-ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | tee /proc/self/fd/2 | grep -q CONTAINER_START_OK
+ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | tee /proc/self/fd/1 | grep -q CONTAINER_START_OK
 sleep 2
 
 echo "STATUS: Calling control list"
-ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/2 | grep -q test-container
+ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/1 | grep -q test-container
 sleep 2
 
 echo "STATUS: Calling control config"
-ssh ${SSH_OPTS} "/usr/sbin/control config test-container" | tee /proc/self/fd/2 | grep -q test-container
+ssh ${SSH_OPTS} "/usr/sbin/control config test-container" | tee /proc/self/fd/1 | grep -q test-container
 sleep 2
 
 echo "STATUS: Wait for container to start (Calling control state)"
@@ -293,32 +297,32 @@ sleep 2
 
 # below has no other way to verify command success
 echo "STATUS: Calling control ca_register"
-ssh ${SSH_OPTS} "/usr/sbin/control ca_register /tmp/ssig_rootca.cert" 2>&1 | tee /proc/self/fd/2 | grep -q -v Abort
+ssh ${SSH_OPTS} "/usr/sbin/control ca_register /tmp/ssig_rootca.cert" 2>&1 | tee /proc/self/fd/1 | grep -q -v Abort
 sleep 2
 
 echo "STATUS: Calling control stop"
-ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | tee /proc/self/fd/2 | grep -q CONTAINER_STOP_OK
+ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | tee /proc/self/fd/1 | grep -q CONTAINER_STOP_OK
 do_wait_stopped
 sleep 2
 
 # start container again to ensure cleanup code is working correctly
 echo "STATUS: Calling control start"
-ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | tee /proc/self/fd/2 | tee /proc/self/fd/2 | grep -q CONTAINER_START_OK
+ssh ${SSH_OPTS} "/usr/sbin/control start test-container --key=pw" | tee /proc/self/fd/1 | tee /proc/self/fd/1 | grep -q CONTAINER_START_OK
 do_wait_running
 sleep 2
 
 echo "STATUS: Calling control stop"
-ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | tee /proc/self/fd/2 | grep -q CONTAINER_STOP_OK
+ssh ${SSH_OPTS} "/usr/sbin/control stop test-container --key=pw" | tee /proc/self/fd/1 | grep -q CONTAINER_STOP_OK
 do_wait_stopped
 sleep 2
 
 echo "STATUS: Calling control remove"
-ssh ${SSH_OPTS} "/usr/sbin/control remove test-container --key=pw" 2>&1 | tee /proc/self/fd/2 | grep -q -v FATAL
+ssh ${SSH_OPTS} "/usr/sbin/control remove test-container --key=pw" 2>&1 | tee /proc/self/fd/1 | grep -q -v FATAL
 sleep 2
 
 # above command has no proper return value thus we check below if test-container no longer in list
 echo "STATUS: Calling control list"
-ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/2 | grep -q -v test-container
+ssh ${SSH_OPTS} "/usr/sbin/control list" | tee /proc/self/fd/1 | grep -q -v test-container
 sleep 2
 
 if [[ $KILL_VM == true ]]
