@@ -216,7 +216,7 @@ verify_template_data(struct event *template, const char *cert)
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert,
 					strlen(cert) +
-						1, //keep the NUL terminator to preserve previous behaviour
+						1, //keep the NULL terminator to preserve previous behaviour
 					sig->sig, field_len - sizeof(struct signature_v2_hdr),
 					digest, digest_len, "SHA256");
 				if (retssl != 0) {
@@ -257,7 +257,7 @@ verify_template_data(struct event *template, const char *cert)
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert,
 					strlen(cert) +
-						1, //keep the NUL terminator to preserve previous behaviour
+						1, //keep the NULL terminator to preserve previous behaviour
 					(const uint8_t *)sig_info->sig, sig_info->sig_len, digest,
 					digest_len, "SHA256");
 				if (retssl != 0) {
