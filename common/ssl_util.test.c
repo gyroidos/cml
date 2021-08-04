@@ -70,12 +70,64 @@ test_read_certs(const char *cert, const char *sig, const char *data, char **cert
 static UNUSED MunitResult
 test_ssl_create_pkcs12_token_ssa(UNUSED const MunitParameter params[], UNUSED void *data)
 {
+	EVP_PKEY *pkey = NULL;
+	X509 *cert = NULL;
+	STACK_OF(X509) *ca = NULL;
+
+	unlink("tmptoken_ssa.p12");
+
 	int ret = ssl_create_pkcs12_token("tmptoken_ssa.p12", NULL, "trustme", "testuser",
 					  RSA_SSA_PADDING);
 
 	munit_assert(0 == ret);
 
+	// read pkcs12 token
+	ret = ssl_read_pkcs12_token("tmptoken_ssa.p12", "trustme", &pkey, &cert, &ca);
+	munit_assert(0 == ret);
+
+	// read test key
+	int plain_key_len;
+	unsigned char *plain_key = NULL;
+	DEBUG("Reading unwrapped key from testdata/testpki/ssig.key");
+
+	munit_assert(0 <= (plain_key_len = file_size("testdata/testpki/ssig.key")));
+	plain_key = mem_alloc0(plain_key_len);
+
+	ret = file_read("testdata/testpki/ssig.key", (char *)plain_key, plain_key_len);
+
+	munit_assert(0 < ret);
+	munit_assert(NULL != plain_key);
+
+	// wrap key
+	DEBUG("Wrapping key");
+	int wrapped_key_len;
+	unsigned char *wrapped_key = NULL;
+
+	ret = ssl_wrap_key(pkey, plain_key, plain_key_len, &wrapped_key, &wrapped_key_len);
+
+	munit_assert(0 == ret);
+	munit_assert(NULL != wrapped_key);
+
+	// unwrap key
+	DEBUG("Unwrapping key");
+	int unwrapped_key_len;
+	unsigned char *unwrapped_key = NULL;
+
+	ret = ssl_unwrap_key(pkey, wrapped_key, wrapped_key_len, &unwrapped_key,
+			     &unwrapped_key_len);
+
+	munit_assert(0 == ret);
+	munit_assert(NULL != unwrapped_key);
+
+	// sanity checks
+	munit_assert(plain_key_len == unwrapped_key_len);
+	munit_assert(0 == memcmp(plain_key, unwrapped_key, plain_key_len));
+
 	unlink("tmptoken_ssa.p12");
+
+	EVP_PKEY_free(pkey);
+	X509_free(cert);
+	sk_X509_pop_free(ca, X509_free);
 
 	return MUNIT_OK;
 }
@@ -138,11 +190,11 @@ test_ssl_read_pkcs12_token_pss(UNUSED const MunitParameter params[], UNUSED void
 /*
  * These tests ensure, the signature verification results of ssl_verify_signature are as expected w.r.t different padding schemes
  *
- *           pss-sig  	ssa-sig
- * 
- * pss-cert     OK		   FAIL
- * 
- * ssa-cert     FAIL	   OK
+ *			 pss-sig	ssa-sig
+ *
+ * pss-cert	 OK			FAIL
+ *
+ * ssa-cert	 FAIL		OK
 */
 static UNUSED MunitResult
 test_ssl_verify_signature_ssa(UNUSED const MunitParameter params[], UNUSED void *data)
