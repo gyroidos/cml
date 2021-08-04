@@ -37,22 +37,6 @@
 
 #include "modsig.h"
 
-// static const char *
-// asn1_object_to_sig_algo(const ASN1_OBJECT *obj)
-// {
-// 	// TODO which algorithms shall be supported
-// 	switch (OBJ_obj2nid(obj)) {
-// 	case NID_ecdsa_with_SHA256:
-// 		return "ecdsa_with_SHA256";
-// 	case NID_rsaEncryption:
-// 		return "rsaEncryption";
-// 	case NID_RSA_SHA3_256:
-// 		return "RSA_SHA3_256";
-// 	default:
-// 		return "";
-// 	}
-// }
-
 static char *
 x509_get_common_name_new(X509_NAME *name)
 {
@@ -167,16 +151,16 @@ modsig_parse_new(const char *pkcs7_raw, size_t len)
 	X509_ALGOR_get0(&digest_algo_obj, NULL, NULL, digest_algo);
 	X509_ALGOR_get0(&sig_algo_obj, NULL, NULL, sig_algo);
 
-	char *hash_algo_name = (char *)malloc(100);
-	char *sig_algo_name = (char *)malloc(100);
+	char *hash_algo_name = mem_alloc0(100);
+	char *sig_algo_name = mem_alloc0(100);
 
 	OBJ_obj2txt(hash_algo_name, 100, digest_algo_obj, 0);
 	OBJ_obj2txt(sig_algo_name, 100, sig_algo_obj, 0);
 
 	sig_info->hash_algo = mem_strdup(hash_algo_name);
 	sig_info->sig_algo = mem_strdup(sig_algo_name);
-	mem_free(hash_algo_name);
-	mem_free(sig_algo_name);
+	mem_free0(hash_algo_name);
+	mem_free0(sig_algo_name);
 
 	INFO("XX HASH ALGO: %s", sig_info->hash_algo);
 	INFO("XX HASH ALGO: %s", sig_info->sig_algo);
