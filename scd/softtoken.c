@@ -57,7 +57,7 @@ softtoken_create_p12(const char *filename, const char *passwd, const char *name)
 		return -1;
 	}
 
-	if (ssl_create_pkcs12_token(filename, NULL, passwd, name, RSA_PSS_PADDING) != 0) {
+	if (ssl_create_pkcs12_token(filename, NULL, passwd, name, RSA_SSA_PADDING) != 0) {
 		ERROR("Unable to create pkcs12 token");
 		return -1;
 	}
