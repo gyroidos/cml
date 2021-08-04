@@ -224,7 +224,7 @@ provisioning_mode()
 			}
 
 			if (ssl_create_csr(DEVICE_CSR_FILE, dev_key_file, NULL, common_name, uid,
-					   use_tpm, RSA_PSS_PADDING) != 0) {
+					   use_tpm, RSA_SSA_PADDING) != 0) {
 				FATAL("Unable to create CSR");
 			}
 
@@ -270,7 +270,7 @@ provisioning_mode()
 		char *token_file =
 			mem_printf("%s/%s%s", SCD_TOKEN_DIR, TOKEN_DEFAULT_NAME, TOKEN_DEFAULT_EXT);
 		if (ssl_create_pkcs12_token(token_file, NULL, TOKEN_DEFAULT_PASS,
-					    TOKEN_DEFAULT_NAME, RSA_PSS_PADDING) != 0) {
+					    TOKEN_DEFAULT_NAME, RSA_SSA_PADDING) != 0) {
 			FATAL("Unable to create initial user token");
 		}
 		mem_free0(token_file);
