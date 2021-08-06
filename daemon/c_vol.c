@@ -1447,6 +1447,20 @@ error:
 	return -1;
 }
 
+static int
+c_vol_dev_get_tty_cb(UNUSED const char *path, const char *file, void *data)
+{
+	static bool found = false;
+	char **tty_name = data;
+
+	if (!found && strlen(file) >= 4 && strstr(file, "tty")) {
+		*tty_name = mem_strdup(file);
+		INFO("Found tty: %s", *tty_name);
+		found = true;
+	}
+	return 0;
+}
+
 int
 c_vol_start_pre_exec(c_vol_t *vol)
 {
@@ -1457,6 +1471,19 @@ c_vol_start_pre_exec(c_vol_t *vol)
 		mem_free0(dev_mnt);
 		return -1;
 	}
+
+	/* link first /dev/tty* to /dev/console for systemd containers */
+	char **tty = mem_new(char *, 1);
+	dir_foreach(dev_mnt, c_vol_dev_get_tty_cb, tty);
+	if (*tty != NULL) {
+		char *lnk_path = mem_printf("%s/console", dev_mnt);
+		if (symlink(*tty, lnk_path))
+			WARN_ERRNO("Could not link %s to /dev/console in container", *tty);
+		mem_free0(lnk_path);
+		mem_free0(*tty);
+	}
+	mem_free0(tty);
+
 	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
 		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
 
