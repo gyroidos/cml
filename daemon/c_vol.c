@@ -1196,6 +1196,10 @@ error:
 	return ret;
 }
 
+/**
+ * This Function verifes integrity of base images as part of
+ * TSF.CML.SecureCompartmentInit.
+ */
 static bool
 c_vol_verify_mount_entries(const c_vol_t *vol)
 {

@@ -84,6 +84,10 @@ guestos_mgr_purge_obsolete(void)
 	}
 }
 
+/**
+ * This function verifies the guestos configuration file at load time
+ * as part of TSF.CML.SecureCompartmentInit
+ */
 static int
 guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED void *data)
 {

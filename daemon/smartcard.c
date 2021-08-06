@@ -336,6 +336,10 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					     resp_fd);
 			done = true;
 		} break;
+
+		/*
+		 * This case handles key unwrapping as part of TSF.CML.CompartmentDataStorage.
+		 */
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
 			audit_log_event(container_get_uuid(startdata->container), SSA, CMLD,
 					TOKEN_MGMT, "unlock-successful",
@@ -445,6 +449,9 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 			}
 			mem_free0(keyfile);
 		} break;
+		/*
+		 * This case handles key unwrapping as part of TSF.CML.CompartmentDataStorage.
+		 */
 		case TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY: {
 			// lock token via scd
 			DaemonToToken out = DAEMON_TO_TOKEN__INIT;

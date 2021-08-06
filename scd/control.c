@@ -125,6 +125,11 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 	return ret;
 }
 
+/*
+ * This function mainly handles verify request as part of
+ * TSF.CML.SecureCompartmentInit and TSF.CML.Updates.
+ * It wraps the corresponding OpenSSL calls.
+ */
 static TokenToDaemon__Code
 scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_file,
 			  const char *verify_cert_file, const char *hash_algo)
@@ -429,6 +434,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
+	/*
+	 * This case handles hashing request as part of
+	 * TSF.CML.SecureCompartmentInit and TSF.CML.Updates
+	 * and wraps the corresponding OpenSSL calls.
+	 */
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE: {
 		TRACE("SCD: Handle messsage CRYPTO_HASH_FILE");
 		unsigned int hash_len;
@@ -454,6 +464,9 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		if (hash)
 			mem_free0(hash);
 	} break;
+	/*
+	 * This case handles verify requests as part of TSF.CML.Updates
+	 */
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF: {
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
@@ -485,6 +498,9 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 
 	} break;
+	/*
+	 * This case handles verify requests as part of TSF.CML.SecureCompartmentInit
+	 */
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE: {
 		TRACE("SCD: Handle messsage CRYPTO_VERIFY_FILE");
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
