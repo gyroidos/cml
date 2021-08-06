@@ -105,6 +105,10 @@ container_config_proto_to_usb_type(ContainerUsbType type)
 
 /******************************************************************************/
 
+/**
+ * This function verifies the container configuration file at load time
+ * as part of TSF.CML.SecureCompartmentInit
+ */
 static bool
 container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, uint8_t *sig_buf,
 			size_t sig_len, uint8_t *cert_buf, size_t cert_len)

@@ -53,18 +53,21 @@ c_net_free(c_net_t *net);
 /**
  * Before clone, initialize c_net structure,
  * create a veth pair and configure the root ns veth
+ * This Function is part of TSF.CML.CompartmentIsolation.
  */
 int
 c_net_start_pre_clone(c_net_t *net);
 
 /**
  * After the clone, move the container veth into its namespace
+ * This Function is part of TSF.CML.CompartmentIsolation.
  */
 int
 c_net_start_post_clone(c_net_t *net);
 
 /**
  * In the container's namespace, the container veth is configured
+ * This Function is part of TSF.CML.CompartmentIsolation.
  */
 int
 c_net_start_child(c_net_t *net);
@@ -115,6 +118,7 @@ c_net_get_interface_mapping_new(c_net_t *net);
 
 /**
  * Rejoin existing netns on reboots where netns is kept active
+ * This Function is part of TSF.CML.CompartmentIsolation.
  */
 int
 c_net_join_netns(const c_net_t *net);

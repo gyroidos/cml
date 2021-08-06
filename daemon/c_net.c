@@ -660,7 +660,9 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 }
 
 /*
- * used internally by c_net_new, than we already have grabbed the interface.
+ * This Funtion mainly implement TSF.CML.DeviceAccessControl for network devices.
+ *
+ * It is used internally by c_net_new, than we already have grabbed the interface.
  * also this function is used externally for new devices during runtime from control
  * or uevent handler. Then we have to grab the interface from cmld's list of available
  * interfaces and add the pnet_cfg to the internal c_net list.

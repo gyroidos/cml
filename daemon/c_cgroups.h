@@ -71,8 +71,14 @@ c_cgroups_devices_is_dev_allowed(c_cgroups_t *cgroups, int major, int minor);
 int
 c_cgroups_set_ram_limit(c_cgroups_t *cgroups);
 
-/*******************/
-/* Hooks */
+int
+c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid);
+
+/******************************/
+/*
+ * Container start hooks
+ * These Functions are part of TSF.CML.CompartmentIsolation.
+ */
 int
 c_cgroups_start_pre_clone(c_cgroups_t *cgroups);
 
@@ -86,10 +92,9 @@ int
 c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups);
 
 int
-c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid);
-
-int
 c_cgroups_start_child(c_cgroups_t *cgroups);
+
+/******************************/
 
 void
 c_cgroups_cleanup(c_cgroups_t *cgroups);

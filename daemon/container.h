@@ -398,6 +398,8 @@ container_write_exec_input(container_t *container, char *exec_input, int session
 /**
  * Start the given container using the given key to decrypt its filesystem
  * image(s).
+ * This is the main function which sets up isolation mechnsims as part of
+ * TSF.CML.Isolation
  *
  * @param container The container to be started.
  * @param key The key used for filesystem image decryption. Can be NULL.

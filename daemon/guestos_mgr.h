@@ -41,6 +41,9 @@ typedef struct guestos guestos_mgr_t;
 
 /**
  * Initialize the operating system list by loading all information from storage.
+ * This function verifies each guestos configuration file as part of
+ * TSF.CML.SecureCompartmentInit at boottime of the CML subsystem.
+ *
  * @param path The directory where operating systems are stored.
  * @param allow_locally_signed enable images which are signed by a locally generated CA
  */
