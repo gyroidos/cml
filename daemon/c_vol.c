@@ -1489,10 +1489,9 @@ c_vol_start_pre_exec(c_vol_t *vol)
 
 	if (c_vol_bind_token(vol) < 0) {
 		ERROR_ERRNO("Failed to bind token to container");
+		mem_free0(dev_mnt);
 		return -1;
 	}
-
-	return 0;
 
 	mem_free0(dev_mnt);
 	return 0;
