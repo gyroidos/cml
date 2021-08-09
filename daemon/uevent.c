@@ -902,7 +902,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
 			goto out;
 		}
-		uevent_device_node_and_forward(uevent, container);
+		uevent_device_node_and_forward(uev_fwd, container);
 		mem_free0(uev_fwd);
 		goto out;
 	}
