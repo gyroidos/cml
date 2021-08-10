@@ -71,12 +71,50 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 }
 
 static bool
+starts_with(const char *p, const char *s)
+{
+	return strncmp(p, s, strlen(p)) == 0;
+}
+
+static int
+convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen)
+{
+	char *pos = (char *)in;
+	size_t len = inlen;
+	if (starts_with("0x", in)) {
+		pos += 2;
+		len -= 2;
+	}
+	if ((len % 2) != 0) {
+		return -1;
+	}
+	if (outlen != (len / 2)) {
+		return -2;
+	}
+	for (size_t i = 0; i < outlen; i++) {
+		if ((uint8_t)*pos < 0x30 || (uint8_t)*pos > 0x66 ||
+		    ((uint8_t)*pos > 0x39 && (uint8_t)*pos < 0x40) ||
+		    ((uint8_t)*pos > 0x46 && (uint8_t)*pos < 0x61) ||
+		    (uint8_t) * (pos + 1) < 0x30 || (uint8_t) * (pos + 1) > 0x66 ||
+		    ((uint8_t) * (pos + 1) > 0x39 && (uint8_t) * (pos + 1) < 0x40) ||
+		    ((uint8_t) * (pos + 1) > 0x46 && (uint8_t) * (pos + 1) < 0x61)) {
+			return -3;
+		}
+		sscanf(pos, "%2hhx", &out[i]);
+		pos += 2;
+	}
+	return 0;
+}
+
+static bool
 attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t *nonce,
 			size_t nonce_len)
 {
 	ASSERT(config);
 	ASSERT(nonce);
 	ASSERT(resp);
+	ASSERT(resp->n_pcr_values < 24);
+	ASSERT((config->halg == SHA256_DIGEST_LENGTH) || (config->halg == SHA_DIGEST_LENGTH));
 
 	bool ret = false;
 	uint8_t quote[resp->quoted.len];
@@ -85,6 +123,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	uint8_t *s = sig;   // Required as TSS functions manipulate pointer
 	uint32_t quote_len = resp->quoted.len;
 	uint32_t sig_len = resp->signature.len;
+	uint8_t pcr[resp->n_pcr_values][config->halg];
 	char *pcr_strings[resp->n_pcr_values];
 
 	if (resp->has_quoted) {
@@ -111,19 +150,8 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	memcpy(quote, resp->quoted.data, resp->quoted.len);
 	memcpy(sig, resp->signature.data, resp->signature.len);
 
-	// Convert to hex string representation to directly compare with specified values
-	// in the configuration file
-	for (size_t i = 0; i < resp->n_pcr_values; i++) {
-		pcr_strings[i] = convert_bin_to_hex_new(resp->pcr_values[i]->value.data,
-							resp->pcr_values[i]->value.len);
-	}
-
 	DEBUG("Verifying Response...");
-
 	DEBUG("Hash Algorithm: SHA%d", config->halg * 8);
-
-	// The pcrs are configured as hex strings
-	size_t pcr_string_len = config->halg * 2;
 
 	if (resp->n_pcr_values != config->n_pcr_values) {
 		ERROR("Number of configured PCR values (%lu) does not match responded PCR values (%lu)",
@@ -134,9 +162,19 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 
 	bool ret_pcr = true;
 	for (size_t i = 0; i < config->n_pcr_values; i++) {
-		if (strlen(pcr_strings[i]) != pcr_string_len) {
-			ERROR("Length of configured PCR value %zu invalid (%zu,	must be %zu)", i,
-			      strlen(pcr_strings[i]), pcr_string_len);
+		pcr_strings[i] = convert_bin_to_hex_new(resp->pcr_values[i]->value.data,
+							resp->pcr_values[i]->value.len);
+		if (convert_hex_to_bin(config->pcr_values[i]->value,
+				       strlen(config->pcr_values[i]->value), pcr[i],
+				       config->halg)) {
+			ERROR("Failed to convert configured PCR value %s: Invalid hex string",
+			      config->pcr_values[i]->value);
+			ret_pcr = false;
+			continue;
+		}
+		if (resp->pcr_values[i]->value.len != config->halg) {
+			ERROR("Length of configured PCR value %zu invalid (%zu,	must be %u)", i,
+			      resp->pcr_values[i]->value.len, config->halg);
 			ret_pcr = false;
 			continue;
 		}
@@ -151,13 +189,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 			ret_pcr = false;
 			continue;
 		}
-		if (strlen(config->pcr_values[i]->value) != pcr_string_len) {
-			ERROR("Length of received PCR value %zu invalid (%zu, must be %zu)", i,
-			      strlen(config->pcr_values[i]->value), pcr_string_len);
-			ret_pcr = false;
-			continue;
-		}
-		if (strncmp(pcr_strings[i], config->pcr_values[i]->value, pcr_string_len)) {
+		if (memcmp(pcr[i], resp->pcr_values[i]->value.data, config->halg)) {
 			ERROR("PCR_%d: %s - VERIFICATION FAILED", resp->pcr_values[i]->number,
 			      pcr_strings[i]);
 			ret_pcr = false;

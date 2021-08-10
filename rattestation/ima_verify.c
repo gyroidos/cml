@@ -400,7 +400,7 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 		return -1;
 	}
 
-	INFO("Verify IMA TPM PCR (kernel modules) SUCCESSFUL");
+	INFO("Verify IMA TPM PCR SUCCESSFUL");
 
 	return 0;
 }

@@ -162,9 +162,6 @@ modsig_parse_new(const char *pkcs7_raw, size_t len)
 	mem_free0(hash_algo_name);
 	mem_free0(sig_algo_name);
 
-	INFO("XX HASH ALGO: %s", sig_info->hash_algo);
-	INFO("XX HASH ALGO: %s", sig_info->sig_algo);
-
 out:
 	PKCS7_free(pkcs7);
 	if (serial_bn) {
