@@ -27,7 +27,7 @@
 #include "hardware.h"
 #include "control.h"
 #include "audit.h"
-#include "scd_shared.h"
+#include "scd/scd_shared.h"
 
 #include "common/macro.h"
 #include "common/event.h"

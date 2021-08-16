@@ -154,7 +154,7 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	DEBUG("Hash Algorithm: SHA%d", config->halg * 8);
 
 	if (resp->n_pcr_values != config->n_pcr_values) {
-		ERROR("Number of configured PCR values (%lu) does not match responded PCR values (%lu)",
+		ERROR("Number of configured PCR values (%zu) does not match responded PCR values (%zu)",
 		      config->n_pcr_values, resp->n_pcr_values);
 		ret = false;
 		goto err;
