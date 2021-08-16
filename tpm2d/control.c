@@ -135,16 +135,6 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 	tss2_init();
 
 	switch (msg->code) {
-#ifndef TPM2D_NVMCRYPT_ONLY
-	case CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ: {
-		TpmToController out = TPM_TO_CONTROLLER__INIT;
-		INFO("Received deprected ATTESTATION_REQ!");
-		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
-		out.has_response = true;
-		out.response = tpm2d_control_resp_to_proto(CMD_FAILED);
-		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-	} break;
-#endif // ndef TPM2D_NVMCRYPT_ONLY
 	case CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP: {
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
 		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
