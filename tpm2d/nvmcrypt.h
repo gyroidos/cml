@@ -66,7 +66,7 @@ nvmcrypt_init(bool use_secure_boot_policy);
  * the TPM.
  *
  * This function will check if the encryption key already exist
- * in the TPM's nvram and then use the fde_pw to auroize the
+ * in the TPM's nvram and then use the fde_pw to authorize the
  * read access to the nvindex which contains the encryption key.
  * Otherwise it just creates a new random key, stores it the TPM's
  * nvram and binding the autorization to the given fde_pw.
@@ -93,7 +93,7 @@ nvmcrypt_dm_lock(const char *fde_pw);
 /**
  * This function deletes the nvm key from the TPM
  *
- * Internally the corresponding nvindex is idestroyed. Returns the fdestate
+ * Internally the corresponding nvindex is destroyed. Returns the fde_state
  * after executing the command.
  *
  * @param owner/platform password which will authorize the access to the
