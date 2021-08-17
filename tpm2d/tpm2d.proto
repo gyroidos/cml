@@ -29,14 +29,25 @@ import "attestation.proto";
 
 message ControllerToTpm {
 	enum Code {
+		// deprecated
 		INTERNAL_ATTESTATION_REQ = 1;
+		// setup a new dm mapping with a key that is stored in the TPM
+		// availability of the key is bound to correct UEFI secure boot state via PCR7
 		DMCRYPT_SETUP = 2;
+		// exit tpm2d
 		EXIT = 3;
+		// request random data from the TPM
 		RANDOM_REQ = 4;
+		// clear TPM using the lockout password
 		CLEAR = 5;
+		// locks the nvindex containing the FDE key so it cannot be read until reboot
 		DMCRYPT_LOCK = 6;
+		// change the TPM's owner hierachy's password
 		CHANGE_OWNER_PWD = 7;
+		// reset the nvindex containing the FDE key
 		DMCRYPT_RESET = 8;
+		// append a measurement to tpm2d's internal list and
+		// extend TPM PCR11 (used for container measurements)
 		ML_APPEND = 9;
 	}
 
@@ -66,29 +77,44 @@ message ControllerToTpm {
 
 	// file to be measured, e.g., the container readonly filesystem images
 	optional string ml_filename = 9;
+	// digest of the measured file using ml_hashalg
 	optional bytes ml_datahash = 10;
+	// hash algorithm used to create ml_datahash
 	optional HashAlgLen ml_hashalg = 11;
 }
 
 message TpmToController {
 	enum Code {
+		// deprecated
 		INTERNAL_ATTESTATION_RES = 1;
-		GENERIC_RESPONSE = 2;			// -> [response]
+		// message contains response field
+		GENERIC_RESPONSE = 2;
+		// message contains fde_response field
 		FDE_RESPONSE = 3;
+		// message contains rand_data field
 		RANDOM_RESPONSE = 4;
 	}
 
 	enum GenericResponse {
+		// operation succeeded
 		CMD_OK = 1;
+		// operation failed
 		CMD_FAILED = 2;
 	}
 	enum FdeResponse {
+		// operation succeeded
 		FDE_OK = 1;
+		// TPM authentication failed
 		FDE_AUTH_FAILED = 2;
+		// failed to generate a new key and store it in the TPM
 		FDE_KEYGEN_FAILED = 3;
+		// no TPM device available
 		FDE_NO_DEVICE = 4;
+		// access to key locked until reboot
 		FDE_KEY_ACCESS_LOCKED = 5;
+		// FDE key not set in TPM
 		FDE_RESET = 6;
+		// an unexpected error occured
 		FDE_UNEXPECTED_ERROR = 7;
 	}
 
