@@ -186,7 +186,7 @@ hardware_get_routing_table_radio(void)
 int
 hardware_get_random(unsigned char *buf, size_t len)
 {
-	const char *rnd = "/dev/hw_random";
+	const char *rnd = "/dev/hwrng";
 	const char *sw = "/dev/random";
 
 	int bytes_read = file_read(rnd, (char *)buf, len);
