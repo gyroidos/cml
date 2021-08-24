@@ -1423,6 +1423,11 @@ smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const ch
 	out.verify_cert_file = task->verify_cert_file;
 	out.has_hash_algo = true;
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
+
+	// disable certifcate time check if not yet provisioned
+	out.has_verify_ignore_time = true;
+	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
+
 	if (smartcard_send_crypto(&out, task) < 0) {
 		crypto_callback_task_free(task);
 		return -1;
@@ -1458,6 +1463,10 @@ smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsign
 	out.verify_cert_buf.len = cert_buf_len;
 	out.has_hash_algo = true;
 	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
+
+	// disable certifcate time check if not yet provisioned
+	out.has_verify_ignore_time = true;
+	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
 
 	if (smartcard_send_crypto(&out, task) < 0) {
 		crypto_callback_task_free(task);
