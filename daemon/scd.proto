@@ -106,6 +106,8 @@ message DaemonToToken {
 	optional bytes verify_data_buf = 70;	// buf with data to verify
 	optional bytes verify_sig_buf = 71;	// buf with signature for data file
 	optional bytes verify_cert_buf = 72;	// buf with certificate
+
+	optional bool verify_ignore_time = 80;	// ignore time during certificate check
 }
 
 message TokenToDaemon {
