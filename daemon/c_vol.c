@@ -1063,7 +1063,7 @@ c_vol_umount_all(c_vol_t *vol)
 		mem_free0(mount_dir);
 	}
 	if (rmdir(vol->root) < 0)
-		TRACE("Unable to remove %s", mount_dir);
+		TRACE("Unable to remove %s", vol->root);
 
 	// cleanup left-over overlay mounts in main cmld process
 	mount_dir =
