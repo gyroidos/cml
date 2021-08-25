@@ -1298,6 +1298,9 @@ c_cgroups_start_child(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
 
+	if (container_has_userns(cgroups->container))
+		return 0;
+
 	INFO("Trying to unmount cgroups in container");
 
 	/* We are doing our best to umount the cgroups related directories in child
