@@ -1451,16 +1451,20 @@ error:
 	return -1;
 }
 
+struct tty_cb_data {
+	bool found;
+	char *name;
+};
+
 static int
 c_vol_dev_get_tty_cb(UNUSED const char *path, const char *file, void *data)
 {
-	static bool found = false;
-	char **tty_name = data;
+	struct tty_cb_data *tty_data = data;
 
-	if (!found && strlen(file) >= 4 && strstr(file, "tty")) {
-		*tty_name = mem_strdup(file);
-		INFO("Found tty: %s", *tty_name);
-		found = true;
+	if (!tty_data->found && strlen(file) >= 4 && strstr(file, "tty")) {
+		tty_data->name = mem_strdup(file);
+		INFO("Found tty: %s", tty_data->name);
+		tty_data->found = true;
 	}
 	return 0;
 }
@@ -1477,16 +1481,15 @@ c_vol_start_pre_exec(c_vol_t *vol)
 	}
 
 	/* link first /dev/tty* to /dev/console for systemd containers */
-	char **tty = mem_new(char *, 1);
-	dir_foreach(dev_mnt, c_vol_dev_get_tty_cb, tty);
-	if (*tty != NULL) {
+	struct tty_cb_data tty_data = { .found = false, .name = NULL };
+	dir_foreach(dev_mnt, c_vol_dev_get_tty_cb, &tty_data);
+	if (tty_data.name != NULL) {
 		char *lnk_path = mem_printf("%s/console", dev_mnt);
-		if (symlink(*tty, lnk_path))
-			WARN_ERRNO("Could not link %s to /dev/console in container", *tty);
+		if (symlink(tty_data.name, lnk_path))
+			WARN_ERRNO("Could not link %s to /dev/console in container", tty_data.name);
 		mem_free0(lnk_path);
-		mem_free0(*tty);
+		mem_free0(tty_data.name);
 	}
-	mem_free0(tty);
 
 	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
 		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
