@@ -620,6 +620,7 @@ control_handle_container_start(control_t *control, container_t *container,
 			ERROR("Failed to start container %s", container_get_name(container));
 			control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
 		}
+		mem_memset0(key, strlen(key));
 	} else if (container_is_encrypted(container)) {
 		res = -1;
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG, fd);
@@ -655,8 +656,8 @@ control_handle_container_stop(control_t *control, container_t *container,
 							 CMLD_CONTAINER_CTRL_STOP);
 		if (res != 0) {
 			ERROR("Failed to stop container %s", container_get_name(container));
-			// TODO control_send_message required here? also check in start function
 		}
+		mem_memset0(key, strlen(key));
 	} else if (container_is_encrypted(container)) {
 		res = -1;
 		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, fd);
@@ -1380,6 +1381,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		res = cmld_container_change_pin(control, container, msg->device_pin,
 						msg->device_newpin);
+		mem_memset0(msg->device_pin, strlen(msg->device_pin));
+		mem_memset0(msg->device_newpin, strlen(msg->device_newpin));
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN: {

@@ -178,7 +178,7 @@ pin_entry_timeout_cb(event_timer_t *timer, void *data)
 
 	input_key_index = 0;
 	if (input_key) {
-		memset(input_key, 0x0, strlen(input_key));
+		mem_memset0(input_key, strlen(input_key));
 		mem_free0(input_key);
 	}
 	event_remove_timer(timer);
@@ -207,7 +207,7 @@ input_clean_pin_entry(void)
 
 	input_key_index = 0;
 	if (input_key) {
-		memset(input_key, 0x0, strlen(input_key));
+		mem_memset0(input_key, strlen(input_key));
 		mem_free0(input_key);
 	}
 	event_remove_timer(input_timer);
@@ -320,7 +320,7 @@ exit:
 
 	mem_free0(cb_data);
 	if (input_key) {
-		memset(input_key, 0x0, input_key_index);
+		mem_memset0(input_key, input_key_index);
 		mem_free0(input_key);
 	}
 	input_key_index = 0;

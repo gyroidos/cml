@@ -542,7 +542,7 @@ usbtoken_free_secrets(usbtoken_t *token)
 	ASSERT(token);
 	IF_NULL_RETURN(token->auth_code);
 
-	memset(token->auth_code, 0, token->auth_code_len);
+	mem_memset0(token->auth_code, token->auth_code_len);
 	mem_free0(token->auth_code);
 }
 
