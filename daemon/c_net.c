@@ -815,7 +815,7 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pn
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
 		TRACE("mv_name_list add ifname %s", if_name_macstr);
-		memset(&mac, 0, 6);
+		mem_memset(&mac, 0, 6);
 		// check if string is mac address
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
@@ -1368,9 +1368,9 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 		mem_free0(ni->subnet);
 		ni->subnet = NULL;
 	}
-	memset(&ni->ipv4_cmld_addr, 0, sizeof(struct in_addr));
-	memset(&ni->ipv4_cont_addr, 0, sizeof(struct in_addr));
-	memset(&ni->ipv4_bc_addr, 0, sizeof(struct in_addr));
+	mem_memset(&ni->ipv4_cmld_addr, 0, sizeof(struct in_addr));
+	mem_memset(&ni->ipv4_cont_addr, 0, sizeof(struct in_addr));
+	mem_memset(&ni->ipv4_bc_addr, 0, sizeof(struct in_addr));
 
 	if (ni->veth_cmld_name) {
 		mem_free0(ni->veth_cmld_name);

@@ -346,14 +346,14 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 	uint8_t pcr[hash_size];
 
 	// PCRs are initialized with zero's
-	memset(pcr, 0, hash_size);
+	mem_memset(pcr, 0, hash_size);
 
 	while (!buf_read(&template.header, &ptr, sizeof(template.header), &remain)) {
 		TRACE("PCR %02d Measurement:", template.header.pcr);
 
 		IF_TRUE_RETVAL(template.header.name_len > TCG_EVENT_NAME_LEN_MAX, -1);
 
-		memset(template.name, 0, sizeof template.name);
+		mem_memset(template.name, 0, sizeof template.name);
 		buf_read(template.name, &ptr, template.header.name_len, &remain);
 		TRACE("Template: %s", template.name);
 

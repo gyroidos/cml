@@ -103,7 +103,7 @@ int
 loopdev_setup_device(const char *img, const char *dev)
 {
 	struct loop_info64 info;
-	memset(&info, 0, sizeof(info));
+	mem_memset(&info, 0, sizeof(info));
 	int img_fd, dev_fd = -1;
 
 	img_fd = open(img, O_RDWR | O_EXCL);

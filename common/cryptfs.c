@@ -100,7 +100,7 @@ dm_ioctl(int fd, unsigned long int request, ...)
 static void
 ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
 {
-	memset(io, 0, dataSize);
+	mem_memset(io, 0, dataSize);
 	io->data_size = dataSize;
 	io->data_start = sizeof(struct dm_ioctl);
 	io->version[0] = 4;

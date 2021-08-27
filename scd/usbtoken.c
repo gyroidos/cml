@@ -436,7 +436,7 @@ provision_auth_code(usbtoken_t *token, const char *tpin, const char *newpass,
 
 	rc = changePIN(token->ctn, (unsigned char *)tpin, strlen(tpin), newcode, newcode_len);
 
-	memset(newcode, 0, sizeof(newcode));
+	mem_memset(newcode, 0, sizeof(newcode));
 
 	if (rc != USBTOKEN_SUCCESS) {
 		ERROR("Provisioning of usbtoken failed. Token rc: 0x%04x", rc);
@@ -499,8 +499,8 @@ change_user_pin(usbtoken_t *token, const char *oldpass, const char *newpass,
 
 	rc = changePIN(token->ctn, oldcode, oldcode_len, newcode, newcode_len);
 
-	memset(newcode, 0, sizeof(newcode));
-	memset(oldcode, 0, sizeof(oldcode));
+	mem_memset(newcode, 0, sizeof(newcode));
+	mem_memset(oldcode, 0, sizeof(oldcode));
 
 	if (rc != USBTOKEN_SUCCESS) {
 		ERROR("Changing user pin of usbtoken failed. Token rc: 0x%04x", rc);
@@ -710,7 +710,7 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 	if (rc != 0)
 		usbtoken_free_secrets(token); // just to be sure
 
-	memset(code, 0, sizeof(code));
+	mem_memset(code, 0, sizeof(code));
 
 	return rc;
 }
