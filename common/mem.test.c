@@ -281,6 +281,19 @@ test_integer_overflow_in_mem_renew_is_detected(UNUSED const MunitParameter param
 	return MUNIT_FAIL;
 }
 
+static MunitResult
+test_mem_memset0(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	char s[] = "deadbeef";
+	uint8_t p[sizeof(s)] = { 0 };
+
+	mem_memset0(s, sizeof(s));
+
+	munit_assert_memory_equal(sizeof(s), s, p);
+
+	return MUNIT_OK;
+}
+
 static MunitTest tests[] = {
 	{
 		"/allocate primitives and structs",	  /* name */
@@ -353,6 +366,14 @@ static MunitTest tests[] = {
 		tear_down,				     /* tear_down */
 		MUNIT_TEST_OPTION_NONE,			     /* options */
 		NULL					     /* parameters */
+	},
+	{
+		"/set memory to zero explicitely", /* name */
+		test_mem_memset0,		   /* test */
+		setup,				   /* setup */
+		tear_down,			   /* tear_down */
+		MUNIT_TEST_OPTION_NONE,		   /* options */
+		NULL				   /* parameters */
 	},
 
 	// Mark the end of the array with an entry where the test function is NULL
