@@ -387,7 +387,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 						      (ProtobufCMessage *)&out);
 
 				//delete wrapped key from RAM
-				memset(key, 0, sizeof(key));
+				mem_memset0(key, sizeof(key));
 				mem_free0(out.container_uuid);
 				mem_free0(out.token_uuid);
 			} else {
@@ -421,7 +421,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				char *ascii_key = bytes_to_string_new(key, keylen);
 				container_set_key(startdata->container, ascii_key);
 				// delete key from RAM
-				memset(ascii_key, 0, strlen(ascii_key));
+				mem_memset0(ascii_key, strlen(ascii_key));
 				mem_free0(ascii_key);
 				// wrap key via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
@@ -443,7 +443,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 						      (ProtobufCMessage *)&out);
 
 				// delete key from RAM
-				memset(key, 0, sizeof(key));
+				mem_memset0(key, sizeof(key));
 				mem_free0(out.container_uuid);
 				mem_free0(out.token_uuid);
 			}
@@ -485,8 +485,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 							      msg->unwrapped_key.len);
 			container_set_key(startdata->container, ascii_key);
 			//delete key from RAM
-			memset(ascii_key, 0, strlen(ascii_key));
-			memset(msg->unwrapped_key.data, 0, msg->unwrapped_key.len);
+			mem_memset0(ascii_key, strlen(ascii_key));
+			mem_memset0(msg->unwrapped_key.data, msg->unwrapped_key.len);
 			mem_free0(ascii_key);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__WRAPPED_KEY: {
@@ -535,7 +535,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			TRACE("Stored wrapped key on disk successfully");
 			// delete wrapped key from RAM
-			memset(msg->wrapped_key.data, 0, msg->wrapped_key.len);
+			mem_memset0(msg->wrapped_key.data, msg->wrapped_key.len);
 			mem_free0(keyfile);
 		} break;
 		default:
@@ -714,6 +714,7 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	}
 
 	protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+	mem_memset0(out.token_pin, strlen(out.token_pin));
 	mem_free0(out.token_pin);
 	mem_free0(out.pairing_secret.data);
 	mem_free0(out.token_uuid);
@@ -902,6 +903,9 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	out.pairing_secret.data = mem_memcpy(pair_sec, sizeof(pair_sec));
 
 	ret = protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+	mem_memset0(out.token_pin, strlen(out.token_pin));
+	mem_memset0(out.token_newpin, strlen(out.token_newpin));
+	mem_memset0(pair_sec, sizeof(pair_sec));
 	mem_free0(out.token_pin);
 	mem_free0(out.token_newpin);
 	mem_free0(out.pairing_secret.data);
