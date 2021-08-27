@@ -386,6 +386,14 @@ event_io_free(event_io_t *io)
 	mem_free0(io);
 }
 
+int
+event_io_get_fd(const event_io_t *io)
+{
+	IF_NULL_RETVAL(io, -1);
+
+	return io->fd;
+}
+
 void
 event_add_io(event_io_t *io)
 {
