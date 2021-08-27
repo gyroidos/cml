@@ -26,7 +26,6 @@
 
 #include "cmld.h"
 #include "container.h"
-#include "control.h"
 #include "stdbool.h"
 
 typedef struct smartcard smartcard_t;
@@ -73,14 +72,14 @@ smartcard_update_token_state(container_t *container);
  * Control a container, e.g. start or stop it with the specified token pin
  *
  * @param smartcard smartcard struct representing the connection to the scd
- * @param control struct which should be used for responses
  * @param container the container to be controlled (started or stopped)
+ * @param resp_fd client fd to control session which should be used for responses
  * @param passwd passphrase/pin of the token
  * @param container_ctrl enum indicating the action (start, stop) to be carried out
  * @return 0 on success else -1
  */
 int
-smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_ctrl_handler(smartcard_t *smartcard, container_t *container, int resp_fd,
 				 const char *passwd, cmld_container_ctrl_t container_ctrl);
 
 /**
@@ -94,13 +93,13 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
  * Else, only the user part of the authentication code is changed.
  *
  * @param smartcard smartcard struct representing the connection to the scd
- * @param control struct which should be used for responses
+ * @param resp_fd client fd to control session which should be used for responses
  * @param passwd passphrase/pin of the token
  * @param newpasswd the new passphrase/pin for the token to which will be changed
  * return -1 on message transmission failure, 0 if message was sent to SCD
  */
 int
-smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_change_pin(smartcard_t *smartcard, container_t *container, int resp_fd,
 			       const char *passwd, const char *newpasswd);
 
 /**
@@ -268,15 +267,15 @@ smartcard_pull_csr_new(size_t *csr_len);
 /**
  * Pushes back the certificate (the sigend CSR). Which may
  * be used during ssl client auth, to identify the device in a backend.
- * responses are made to client socket of corresponding control struct.
+ * responses are made to the client socket of corresponding control session.
  *
  * @param smartcard smartcard struct representing the device token
- * @param control control struct which should be used for responses
+ * @param resp_fd client fd to control session which should be used for responses
  * @param cert a pointer to the buffer which holds the certificate
  * @param cert_len the size of the cert
  */
 void
-smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len);
+smartcard_push_cert(smartcard_t *smartcard, int resp_fd, uint8_t *cert, size_t cert_len);
 
 /**
  * Checks whether the certificate is not null, of sufficient length and

@@ -95,7 +95,6 @@ static const char *cmld_path = DEFAULT_BASE_PATH;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
 
-static control_t *cmld_control_mdm = NULL;
 static control_t *cmld_control_gui = NULL;
 static control_t *cmld_control_cml = NULL;
 
@@ -669,40 +668,32 @@ cmld_container_start(container_t *container)
 }
 
 int
-cmld_container_change_pin(control_t *control, container_t *container, const char *passwd,
+cmld_container_change_pin(container_t *container, int resp_fd, const char *passwd,
 			  const char *newpasswd)
 {
 	ASSERT(container);
-	ASSERT(control);
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
-	return smartcard_container_change_pin(cmld_smartcard, control, container, passwd,
+	return smartcard_container_change_pin(cmld_smartcard, container, resp_fd, passwd,
 					      newpasswd);
 }
 
 int
-cmld_container_ctrl_with_smartcard(control_t *control, container_t *container, const char *passwd,
+cmld_container_ctrl_with_smartcard(container_t *container, int resp_fd, const char *passwd,
 				   cmld_container_ctrl_t container_ctrl)
 {
 	ASSERT(container);
-	ASSERT(control);
 	ASSERT(passwd);
 
-	return smartcard_container_ctrl_handler(cmld_smartcard, control, container, passwd,
+	return smartcard_container_ctrl_handler(cmld_smartcard, container, resp_fd, passwd,
 						container_ctrl);
 }
 
 void
-cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len)
+cmld_push_device_cert(int resp_fd, uint8_t *cert, size_t cert_len)
 {
-	smartcard_push_cert(cmld_smartcard, control, cert, cert_len);
-}
-
-int
-cmld_get_control_gui_sock(void)
-{
-	return control_get_client_sock(cmld_control_gui);
+	smartcard_push_cert(cmld_smartcard, resp_fd, cert, cert_len);
 }
 
 /******************************************************************************/
@@ -1098,20 +1089,6 @@ cmld_init(const char *path)
 	}
 	INFO("created control socket.");
 
-	// TODO: we should implement a callback for inet connectivity and
-	// reconnect the MDM socket automatically
-	const char *mdm_node = device_config_get_mdm_node(device_config);
-	const char *mdm_service = device_config_get_mdm_service(device_config);
-	INFO("got MDM node and service %s and %s.", mdm_node, mdm_service);
-	if (mdm_node && mdm_service) {
-		cmld_control_mdm = control_remote_new(mdm_node, mdm_service);
-		if (!cmld_control_mdm) {
-			WARN_ERRNO("Could not init MDM control socket");
-		}
-	} else {
-		WARN("Could not get a valid MDM configuration from config file");
-	}
-
 	char *tokens_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	cmld_smartcard = smartcard_new(tokens_path);
 	mem_free0(tokens_path);
@@ -1473,8 +1450,6 @@ cmld_cleanup(void)
 	}
 	list_delete(cmld_containers_list);
 
-	if (cmld_control_mdm)
-		control_free(cmld_control_mdm);
 	if (cmld_control_gui)
 		control_free(cmld_control_gui);
 	if (cmld_control_cml)

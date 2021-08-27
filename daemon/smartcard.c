@@ -72,7 +72,7 @@ struct smartcard {
 typedef struct smartcard_startdata {
 	smartcard_t *smartcard;
 	container_t *container;
-	control_t *control;
+	int resp_fd;
 } smartcard_startdata_t;
 
 typedef struct smartcard_scdtoken_data {
@@ -239,13 +239,13 @@ smartcard_start_container_internal(smartcard_startdata_t *startdata)
 		FATAL("No container key is set.");
 	}
 
-	int resp_fd = control_get_client_sock(startdata->control);
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
 	DEBUG("SCD:Container  %s: Starting...", container_get_name(startdata->container));
 	if (-1 == cmld_container_start(startdata->container))
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
+				     startdata->resp_fd);
 	else
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, startdata->resp_fd);
 }
 
 static void
@@ -253,17 +253,16 @@ smartcard_stop_container_internal(smartcard_startdata_t *startdata)
 {
 	ASSERT(startdata);
 
-	int resp_fd = control_get_client_sock(startdata->control);
-
 	int res = cmld_container_stop(startdata->container);
 
 	// TODO if the modules cannot be stopped successfully, the container is killed. The return
 	// value in this case is CONTAINER_ERROR, even if the container was killed. This is
 	// ignored atm and just STOP_OK is returned. How should we treat this?
 	if (res == -1) {
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING,
+				     startdata->resp_fd);
 	} else {
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, startdata->resp_fd);
 	}
 }
 
@@ -271,7 +270,6 @@ static void
 smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
-	int resp_fd = control_get_client_sock(startdata->control);
 	bool done = false;
 
 	if (events & EVENT_IO_EXCEPT) {
@@ -301,7 +299,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "lock",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			WARN("Locking the token failed.");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED, resp_fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED,
+					     startdata->resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
@@ -315,7 +314,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			WARN("Unlocking the token failed.");
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED,
-					     resp_fd);
+					     startdata->resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
@@ -324,7 +323,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "unlock-wrong-pin",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
-					     resp_fd);
+					     startdata->resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
@@ -333,7 +332,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "locked-until-reboot",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
-					     resp_fd);
+					     startdata->resp_fd);
 			done = true;
 		} break;
 
@@ -473,7 +472,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "unwrap-container-key",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 				control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
-						     resp_fd);
+						     startdata->resp_fd);
 				break;
 			}
 			// set the key
@@ -557,7 +556,6 @@ static void
 smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
-	int resp_fd = control_get_client_sock(startdata->control);
 
 	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit);
 
@@ -575,7 +573,8 @@ smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__LOCK_FAILED: {
 		WARN("Locking the token failed.");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
@@ -584,17 +583,20 @@ smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 	} break;
 	case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
 		WARN("Unlocking the token failed.");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
 		WARN("Unlocking the token failed (wrong PIN/passphrase).");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
 		WARN("Unlocking the token failed (locked till reboot).");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
@@ -626,11 +628,10 @@ exit:
 }
 
 int
-smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_ctrl_handler(smartcard_t *smartcard, container_t *container, int resp_fd,
 				 const char *passwd, cmld_container_ctrl_t container_ctrl)
 {
 	ASSERT(smartcard);
-	ASSERT(control);
 	ASSERT(container);
 	ASSERT(passwd);
 
@@ -641,10 +642,9 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	}
 	startdata->smartcard = smartcard;
 	startdata->container = container;
-	startdata->control = control;
+	startdata->resp_fd = resp_fd;
 
 	int pair_sec_len;
-	int resp_fd = control_get_client_sock(startdata->control);
 
 	if (!container_get_token_is_init(container)) {
 		audit_log_event(container_get_uuid(startdata->container), FSA, CMLD, TOKEN_MGMT,
@@ -730,8 +730,7 @@ smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
 
-	control_t *control = data;
-	int resp_fd = control_get_client_sock(control);
+	int *resp_fd = data;
 
 	if (events & EVENT_IO_READ) {
 		// use protobuf for communication with scd
@@ -745,16 +744,16 @@ smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 		}
 		switch (msg->code) {
 		case TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR: {
-			control_send_message(CONTROL_RESPONSE_DEVICE_PROVISIONING_ERROR, resp_fd);
+			control_send_message(CONTROL_RESPONSE_DEVICE_PROVISIONING_ERROR, *resp_fd);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR: {
-			control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, resp_fd);
+			control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, *resp_fd);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__DEVICE_CERT_OK: {
-			control_send_message(CONTROL_RESPONSE_DEVICE_CERT_OK, resp_fd);
+			control_send_message(CONTROL_RESPONSE_DEVICE_CERT_OK, *resp_fd);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__CMD_UNKNOWN: {
-			control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, resp_fd);
+			control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, *resp_fd);
 		} break;
 		default:
 			ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
@@ -763,6 +762,12 @@ smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
 		protobuf_free_message((ProtobufCMessage *)msg);
 		event_remove_io(io);
 		event_io_free(io);
+		mem_free0(resp_fd);
+	} else {
+		ERROR("Failed to receive message: EVENT_IO_EXCEPT. Aborting smartcard generic");
+		event_remove_io(io);
+		event_io_free(io);
+		mem_free0(resp_fd);
 	}
 }
 
@@ -770,7 +775,6 @@ static void
 smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
-	int resp_fd = control_get_client_sock(startdata->control);
 	int rc = -1;
 	bool command_state = false;
 
@@ -784,7 +788,8 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
 					CONTAINER_MGMT, "container-change-pin",
 					uuid_string(container_get_uuid(startdata->container)), 0);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
+					     startdata->resp_fd);
 			mem_free0(startdata);
 			return;
 		}
@@ -827,7 +832,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 		control_send_message(command_state ?
 					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL :
 					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
-				     resp_fd);
+				     startdata->resp_fd);
 
 		protobuf_free_message((ProtobufCMessage *)msg);
 		event_remove_io(io);
@@ -842,18 +847,16 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 }
 
 int
-smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_change_pin(smartcard_t *smartcard, container_t *container, int resp_fd,
 			       const char *passwd, const char *newpasswd)
 {
 	ASSERT(smartcard);
 	ASSERT(container);
-	ASSERT(control);
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
 	int ret = -1;
 	unsigned char pair_sec[MAX_PAIR_SEC_LEN];
-	int resp_fd = control_get_client_sock(control);
 	bool is_provisioning;
 
 	smartcard_startdata_t *startdata = mem_alloc0(sizeof(smartcard_startdata_t));
@@ -863,7 +866,7 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	}
 	startdata->smartcard = smartcard;
 	startdata->container = container;
-	startdata->control = control;
+	startdata->resp_fd = resp_fd;
 
 	DEBUG("SCD: Received new password from UI");
 
@@ -1639,18 +1642,20 @@ smartcard_pull_csr_new(size_t *csr_len)
 }
 
 void
-smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len)
+smartcard_push_cert(smartcard_t *smartcard, int resp_fd, uint8_t *cert, size_t cert_len)
 {
 	ASSERT(smartcard);
-	ASSERT(control);
+	int *fd = NULL;
 
 	if (!smartcard_cert_has_valid_format(cert, cert_len)) {
 		WARN("PUSH_DEVICE_CERT with invalid certificate");
 		goto error;
 	}
 
-	event_io_t *event =
-		event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, control);
+	fd = mem_new0(int, 1);
+	*fd = resp_fd;
+
+	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, fd);
 	event_add_io(event);
 	DEBUG("SCD: Registered generic callback for scd (push_cert)");
 
@@ -1663,7 +1668,8 @@ smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, s
 	if (protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out) > 0)
 		return;
 error:
-	control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, control_get_client_sock(control));
+	control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, *fd);
+	mem_free0(fd);
 }
 
 bool
