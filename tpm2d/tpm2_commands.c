@@ -828,7 +828,7 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 
 	// pad and set data
 	in.digests.digests[0].hashAlg = hash_alg;
-	memset((uint8_t *)&in.digests.digests[0].digest, 0, sizeof(TPMU_HA));
+	mem_memset((uint8_t *)&in.digests.digests[0].digest, 0, sizeof(TPMU_HA));
 	memcpy((uint8_t *)&in.digests.digests[0].digest, data, data_len);
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PCR_Extend,

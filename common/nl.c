@@ -430,7 +430,7 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 		.msg_name = &nladdr, .msg_namelen = sizeof(nladdr), .msg_iov = &iov, .msg_iovlen = 1
 	};
 
-	memset(&nladdr, 0, sizeof(nladdr));
+	mem_memset(&nladdr, 0, sizeof(nladdr));
 	nladdr.nl_family = AF_NETLINK;
 	nladdr.nl_pid = 0;    /* Kernel has port id 0*/
 	nladdr.nl_groups = 0; /* Unicast, no groups */
@@ -544,7 +544,7 @@ nl_msg_receive(const nl_sock_t *nl, char *buf, const size_t len, bool receive_ue
 
 error:
 	TRACE("Purged netlink message, as it did not pass sanity checks");
-	memset(buf, 0, len);
+	mem_memset(buf, 0, len);
 	errno = EIO;
 	return -1;
 }

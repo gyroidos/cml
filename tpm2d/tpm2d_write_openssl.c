@@ -34,6 +34,7 @@
 
 #include "tpm2-asn.h"
 #include "tpm2d_write_openssl.h"
+#include "common/mem.h"
 
 static int
 openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey,
@@ -47,7 +48,7 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *priv
 	BIO *outb;
 
 	/* clear structure so as not to have to set optional parameters */
-	memset(&k, 0, sizeof(k));
+	mem_memset(&k, 0, sizeof(k));
 	if ((outb = BIO_new_file(file, "w")) == NULL) {
 		fprintf(stderr, "Error opening file for write: %s\n", file);
 		return 1;

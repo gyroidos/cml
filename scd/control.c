@@ -308,7 +308,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_wrapped_key) {
-			memset(wrapped_key, 0, wrapped_key_len);
+			mem_memset(wrapped_key, 0, wrapped_key_len);
 			mem_free0(wrapped_key);
 		}
 	} break;
@@ -338,7 +338,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_unwrapped_key) {
-			memset(unwrapped_key, 0, unwrapped_key_len);
+			mem_memset(unwrapped_key, 0, unwrapped_key_len);
 			mem_free0(unwrapped_key);
 		}
 	} break;

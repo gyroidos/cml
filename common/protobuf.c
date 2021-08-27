@@ -250,7 +250,7 @@ protobuf_message_new_from_textfile(const char *filename,
 	      descriptor->name ? descriptor->name : "UNKNOWN", filename);
 
 	ProtobufCTextError res;
-	memset(&res, 0, sizeof(res));
+	mem_memset(&res, 0, sizeof(res));
 	FILE *file = fopen(filename, "r");
 	if (!file) {
 		WARN_ERRNO("Could not open file \"%s\" for reading.", filename);
@@ -284,7 +284,7 @@ protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor 
 	      descriptor->name ? descriptor->name : "UNKNOWN");
 
 	ProtobufCTextError res;
-	memset(&res, 0, sizeof(res));
+	mem_memset(&res, 0, sizeof(res));
 	ProtobufCMessage *msg = protobuf_c_text_from_string(descriptor, string, &res, NULL);
 	if (!msg) {
 		ERROR("Failed to parse text protobuf message (%s) from string. Reason: %s.",
