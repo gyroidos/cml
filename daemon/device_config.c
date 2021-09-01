@@ -103,24 +103,6 @@ device_config_write(const device_config_t *config)
 // hardcode some restricted config otpions in CC Mode
 #ifdef CC_MODE
 const char *
-device_config_get_mdm_node(UNUSED const device_config_t *config)
-{
-	return NULL;
-}
-
-const char *
-device_config_get_mdm_service(UNUSED const device_config_t *config)
-{
-	return NULL;
-}
-
-const char *
-device_config_get_telephony_uuid(UNUSED const device_config_t *config)
-{
-	return NULL;
-}
-
-const char *
 device_config_get_c0os(UNUSED const device_config_t *config)
 {
 	return "trustx-coreos";
@@ -151,33 +133,6 @@ device_config_get_tpm_enabled(UNUSED const device_config_t *config)
 }
 
 #else
-const char *
-device_config_get_mdm_node(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->mdm_node;
-}
-
-const char *
-device_config_get_mdm_service(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->mdm_service;
-}
-
-const char *
-device_config_get_telephony_uuid(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->telephony_uuid;
-}
-
 bool
 device_config_get_locally_signed_images(const device_config_t *config)
 {
