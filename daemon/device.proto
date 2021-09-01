@@ -26,17 +26,10 @@ syntax = "proto2";
 option java_package = "de.fraunhofer.aisec.trustme";
 
 message DeviceConfig {
-	reserved 6;
+	reserved 2 to 4, 6;
 	// unique uuid. may change due to user change.
 	// may be generated if no uuid is available.
 	required string uuid = 1;
-
-	// IP and port of backend (MDM)
-	optional string mdm_node = 2;
-	optional string mdm_service = 3;
-
-	// UUID of the container receiving phone calls (TODO currently unused)
-	optional string telephony_uuid = 4;
 
 	// base url for fetching updates (image files, etc.)
 	optional string update_base_url = 5;
