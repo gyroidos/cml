@@ -587,6 +587,9 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 
 	res = 0;
 cleanup:
+	mem_memset0(tmpkey, tmpkeylen);
+	mem_memset0(iv_buf, iv_len);
+	mem_memset0(out, max_out_len);
 	mem_free0(tmpkey);
 	mem_free0(iv_buf);
 	mem_free0(out);
