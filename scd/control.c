@@ -308,8 +308,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_wrapped_key) {
-			mem_memset(wrapped_key, 0, wrapped_key_len);
+			mem_memset0(wrapped_key, wrapped_key_len);
 			mem_free0(wrapped_key);
+		}
+		if (msg->has_unwrapped_key) {
+			mem_memset0(msg->unwrapped_key.data, msg->unwrapped_key.len);
 		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
@@ -338,8 +341,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_unwrapped_key) {
-			mem_memset(unwrapped_key, 0, unwrapped_key_len);
+			mem_memset0(unwrapped_key, unwrapped_key_len);
 			mem_free0(unwrapped_key);
+		}
+		if (msg->has_wrapped_key) {
+			mem_memset0(msg->wrapped_key.data, msg->wrapped_key.len);
 		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CHANGE_PIN: {
@@ -352,6 +358,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("No token loaded, change pass failed");
 		} else if (!msg->token_pin) {
 			ERROR("Token passphrase not specified");
+		} else if (!msg->token_newpin) {
+			ERROR("Token new passphrase not specified");
+		} else if (msg->has_pairing_secret) {
+			ERROR("Pairing secret not specified");
 		} else if (token->is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 		} else {
@@ -360,11 +370,18 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 							   msg->pairing_secret.len, false);
 			if (ret == 0)
 				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
-			else
-				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (msg->token_pin) {
+			mem_memset0(msg->token_pin, strlen(msg->token_pin));
+		}
+		if (msg->token_newpin) {
+			mem_memset0(msg->token_newpin, strlen(msg->token_newpin));
+		}
+		if (msg->has_pairing_secret) {
+			mem_memset0(msg->pairing_secret.data, msg->pairing_secret.len);
+		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__PROVISION_PIN: {
 		TRACE("SCD: Handle messsage PROVISION_PIN");
@@ -392,6 +409,15 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (msg->token_pin) {
+			mem_memset0(msg->token_pin, strlen(msg->token_pin));
+		}
+		if (msg->token_newpin) {
+			mem_memset0(msg->token_newpin, strlen(msg->token_newpin));
+		}
+		if (msg->has_pairing_secret) {
+			mem_memset0(msg->pairing_secret.data, msg->pairing_secret.len);
+		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__PULL_DEVICE_CSR: {
 		TRACE("SCD: Handle messsage PULL_DEV_CSR");

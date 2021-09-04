@@ -224,7 +224,7 @@ initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin
 
 	rc = processAPDU(ctn, 0, 0x80, 0x50, 0x00, 0x00, len, cdata, 0, NULL, 0, &SW1SW2);
 
-	mem_memset(cdata, 0, sizeof(cdata));
+	mem_memset0(cdata, sizeof(cdata));
 
 	if (rc < 0) {
 		return rc;
@@ -313,7 +313,7 @@ changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, 
 	rc = processAPDU(ctn, 0, 0x00, 0x24, 0x00, 0x81, oldpinlen + newpinlen, cdata, 0, NULL, 0,
 			 &SW1SW2);
 
-	mem_memset(cdata, 0, sizeof(cdata));
+	mem_memset0(cdata, sizeof(cdata));
 
 	if (rc < 0) {
 		return rc;
