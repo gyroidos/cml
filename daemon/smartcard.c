@@ -679,8 +679,12 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, container_t *container,
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(startdata->container)));
 
 	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
-		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)&out, NULL);
-		TRACE("Sending DaemonToToken message:\n%s", msg_text ? msg_text : "NULL");
+		char *msg_text;
+
+		size_t msg_len =
+			protobuf_string_from_message(&msg_text, (ProtobufCMessage *)&out, NULL);
+
+		TRACE("Sending DaemonToToken message:\n%s", msg_len > 0 ? msg_text : "NULL");
 		if (msg_text)
 			free(msg_text);
 	}

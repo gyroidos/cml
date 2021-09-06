@@ -208,10 +208,11 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
 		ERROR("Failed to create audit log directory");
 	} else if (msg->audit_record) {
-		char *record =
-			protobuf_c_text_to_string((ProtobufCMessage *)msg->audit_record, NULL);
+		char *record;
+		size_t msg_len = protobuf_string_from_message(
+			&record, (ProtobufCMessage *)msg->audit_record, NULL);
 		TRACE("Storing audit record %s", record);
-		file_write_append(AUDIT_LOGDIR "/audit.log", record, strlen(record));
+		file_write_append(AUDIT_LOGDIR "/audit.log", record, msg_len);
 
 		mem_free0(LAST_AUDIT_HASH);
 		LAST_AUDIT_HASH = hash_buf;

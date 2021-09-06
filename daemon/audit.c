@@ -376,11 +376,11 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 
 	char *file = audit_log_file_new(uuid_string(uuid));
 
-	char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
+	char *msg_text;
+	size_t msg_len = protobuf_string_from_message(&msg_text, (ProtobufCMessage *)msg, NULL);
 
 	//TODO send error message
-	if (audit_remaining_storage(uuid_string(uuid)) <
-	    (strlen(msg_text) + strlen(AUDIT_DELIMITER))) {
+	if (audit_remaining_storage(uuid_string(uuid)) < (msg_len + strlen(AUDIT_DELIMITER))) {
 		container_t *c = cmld_container_get_by_uuid(uuid);
 
 		TRACE("Trying to notify container %s about stored audit events,"
@@ -403,7 +403,7 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 		}
 	}
 
-	if (0 > file_write_append(file, msg_text, strlen(msg_text))) {
+	if (0 > file_write_append(file, msg_text, msg_len)) {
 		ERROR("Failed to log audit message to file: %s", file);
 		goto out;
 	}
@@ -686,7 +686,15 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		goto out;
 	}
 
-	char *record_text = protobuf_c_text_to_string((ProtobufCMessage *)record, NULL);
+	char *record_text;
+	size_t msg_len =
+		protobuf_string_from_message(&record_text, (ProtobufCMessage *)record, NULL);
+
+	if (msg_len < 1) {
+		ERROR("Could not cast protobuf message to string");
+		mem_free0(record_text);
+		goto out;
+	}
 	DEBUG("Logging audit message %s", record_text ? record_text : "");
 	mem_free0(record_text);
 

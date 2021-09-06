@@ -126,8 +126,10 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 	}
 
 	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
-		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
-		TRACE("Handling ControllerToTpm message:\n%s", msg_text ? msg_text : "NULL");
+		char *msg_text;
+		size_t msg_len =
+			protobuf_string_from_message(&msg_text, (ProtobufCMessage *)msg, NULL);
+		TRACE("Handling ControllerToTpm message:\n%s", msg_len > 0 ? msg_text : "NULL");
 		if (msg_text)
 			free(msg_text);
 	}

@@ -90,7 +90,8 @@ static int
 audit_kernel_log_record(const AuditRecord *msg)
 {
 	int ret = 0;
-	char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
+	char *msg_text;
+	size_t msg_len = protobuf_string_from_message(&msg_text, (ProtobufCMessage *)msg, NULL);
 
 	IF_NULL_RETVAL(msg_text, -1);
 
@@ -104,8 +105,7 @@ audit_kernel_log_record(const AuditRecord *msg)
 		return -1;
 	}
 	/* send msg to kernel framwork */
-	if (-1 ==
-	    audit_kernel_send(audit_sock, AUDIT_TRUSTED_APP, msg_text, strlen(msg_text) + 1)) {
+	if (-1 == audit_kernel_send(audit_sock, AUDIT_TRUSTED_APP, msg_text, msg_len + 1)) {
 		ERROR("Failed to send log record to kernel!");
 		ret = -1;
 	}
