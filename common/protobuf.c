@@ -228,12 +228,13 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
-	char *string = protobuf_c_text_to_string((ProtobufCMessage *)message, NULL);
+	char *string;
+	size_t msg_len = protobuf_string_from_message(&string, (ProtobufCMessage *)message, NULL);
 	if (NULL == string) {
 		WARN("Failed to serialize text protobuf message to string.");
 		return -1;
 	}
-	ssize_t bytes_written = write(fd, string, strlen(string));
+	ssize_t bytes_written = write(fd, string, msg_len);
 	mem_free0(string);
 	if (-1 == bytes_written)
 		WARN_ERRNO("Failed to write text protobuf message to fd %d.", fd);
@@ -332,17 +333,49 @@ protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message)
 	ASSERT(filename);
 	ASSERT(message);
 
-	char *string = protobuf_c_text_to_string(message, NULL);
+	char *string;
+	size_t msg_len = protobuf_string_from_message(&string, message, NULL);
 	if (!string) {
 		ERROR("Failed to serialize text protobuf message to string.");
 		return -1;
 	}
-	size_t len = strlen(string);
-	int res = file_write(filename, string, len);
+
+	int res = file_write(filename, string, msg_len);
 	free(string);
 	if (res < 0) {
 		ERROR("Failed to write serialized text protobuf message to file \"%s\".", filename);
 		return -1;
 	}
-	return len;
+	return msg_len;
+}
+
+size_t
+protobuf_string_from_message(char **buffer_proto_string, ProtobufCMessage *message,
+			     ProtobufCAllocator *allocator)
+{
+	ASSERT(message);
+	size_t proto_len = -1;
+
+	char *tmp_string = protobuf_c_text_to_string(message, allocator);
+	if (!tmp_string) {
+		ERROR("Failed to serialize text protobuf message to string.");
+		goto error;
+	}
+	proto_len = strlen(tmp_string);
+
+	// if length less than 1,
+	// something was wrong with the protobuf message
+	if (proto_len < 1) {
+		ERROR("Failed to read length of serialized protobuf message.");
+		goto error;
+	}
+
+	// set message buffer from caller to new message buffer
+	*buffer_proto_string = tmp_string;
+	goto success;
+
+error:
+	free(tmp_string);
+success:
+	return proto_len;
 }

@@ -743,8 +743,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	}
 
 	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
-		char *msg_text = protobuf_c_text_to_string((ProtobufCMessage *)msg, NULL);
-		TRACE("Handling ControllerToDaemon message:\n%s", msg_text ? msg_text : "NULL");
+		char *msg_text;
+
+		size_t msg_len =
+			protobuf_string_from_message(&msg_text, (ProtobufCMessage *)msg, NULL);
+
+		TRACE("Handling ControllerToDaemon message:\n%s", msg_len > 0 ? msg_text : "NULL");
 		if (msg_text)
 			free(msg_text);
 	}
