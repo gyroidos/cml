@@ -28,7 +28,7 @@
 #include "audit.h"
 
 #include "cmld.h"
-#include "smartcard.h"
+#include "crypto.h"
 
 #include "common/audit.h"
 #include "common/mem.h"
@@ -154,7 +154,7 @@ audit_remaining_storage(const char *uuid)
 
 static void
 audit_send_record_cb(const char *hash_string, const char *hash_file,
-		     UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
+		     UNUSED crypto_hashalgo_t hash_algo, void *data)
 {
 	uint8_t *buf = NULL;
 	const container_t *c = (const container_t *)data;
@@ -489,7 +489,7 @@ audit_do_send_record(const container_t *c)
 	// do not lead to multiple transmissions of the same record
 	container_audit_set_processing_ack(c, true);
 
-	if (smartcard_crypto_hash_file(tmpfile, AUDIT_HASH_ALGO, audit_send_record_cb, (void *)c)) {
+	if (crypto_hash_file(tmpfile, AUDIT_HASH_ALGO, audit_send_record_cb, (void *)c)) {
 		container_audit_set_processing_ack(c, false);
 		str_t *dump = str_hexdump_new((unsigned char *)packed, (int)packed_len);
 		ERROR("Failed to request hashing of record to be sent with length %u: %s.",
@@ -571,7 +571,7 @@ audit_process_ack(const container_t *c, const char *ack)
 	TRACE("Last ack for container %s: %s", uuid_string(container_get_uuid(c)),
 	      container_audit_get_last_ack(c));
 
-	if (match_hash(AUDIT_HASH_ALGO_LEN, container_audit_get_last_ack(c), ack)) {
+	if (crypto_match_hash(AUDIT_HASH_ALGO_LEN, container_audit_get_last_ack(c), ack)) {
 		TRACE("ACK hash matched last sent record %s", container_audit_get_last_ack(c));
 
 		AuditRecord *record = audit_next_record_new(c, true);

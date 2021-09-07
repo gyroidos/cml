@@ -91,6 +91,7 @@ SRC_FILES := main.c \
 	guestos_config.c \
 	common/protobuf.c \
 	download.c \
+	crypto.c \
 	smartcard.c \
 	tss.c \
 	common/sock.c \

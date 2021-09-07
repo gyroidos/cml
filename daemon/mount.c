@@ -25,7 +25,7 @@
 #include <sched.h>
 
 #include "mount.h"
-#include "smartcard.h"
+#include "crypto.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -249,7 +249,7 @@ mount_entry_match_sha1(const mount_entry_t *e, const char *hash)
 
 	DEBUG("Checking image %s.img with expected SHA1 hash %s, actual hash: %s", img_name,
 	      expected, hash);
-	return match_hash(20, expected, hash);
+	return crypto_match_hash(20, expected, hash);
 }
 
 bool
@@ -261,7 +261,7 @@ mount_entry_match_sha256(const mount_entry_t *e, const char *hash)
 	const char *expected = mount_entry_get_sha256(e);
 	DEBUG("Checking image %s.img with expected SHA256 hash %s, actual hash: %s", img_name,
 	      expected, hash);
-	return match_hash(32, expected, hash);
+	return crypto_match_hash(32, expected, hash);
 }
 
 bool

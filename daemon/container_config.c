@@ -37,12 +37,12 @@
 #include <inttypes.h>
 
 #include "cmld.h"
+#include "crypto.h"
 #include "guestos.h"
 #include "guestos_mgr.h"
 #include "hardware.h"
 #include "network.h"
 #include "uevent.h"
-#include "smartcard.h"
 
 struct container_config {
 	char *file;
@@ -162,7 +162,7 @@ container_config_verify(const char *prefix, uint8_t *conf_buf, size_t conf_len, 
 	// check cert and signature buffers
 	IF_TRUE_GOTO(cert_size <= 0 || sig_size <= 0 || cert == NULL || sig == NULL, out);
 
-	smartcard_crypto_verify_result_t verify_result = smartcard_crypto_verify_buf_block(
+	crypto_verify_result_t verify_result = crypto_verify_buf_block(
 		conf_buf, conf_len, sig, sig_size, cert, cert_size, C_CONFIG_VERIFY_HASH_ALGO);
 
 	ret = (verify_result == VERIFY_GOOD) ? true : false;

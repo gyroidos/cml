@@ -251,17 +251,6 @@ cmld_container_change_pin(container_t *container, int resp_fd, const char *passw
 			  const char *newpasswd);
 
 /**
- * Change the device cert during provisioning.
- * The request is sent asynchronously through lower communication layer.
- *
- * @param resp_fd client fd to control session which should be used for responses
- * @param cert buffer holding the device certificate
- * @param cert_len size of the certificate buffer
- */
-void
-cmld_push_device_cert(int resp_fd, uint8_t *cert, size_t cert_len);
-
-/**
  * Delete a GuestOS by given name
  * Try to delete the latest GuestOS by the given name. This Function silently
  * rejects attempts to delete the GuestOS of the management container c0.
