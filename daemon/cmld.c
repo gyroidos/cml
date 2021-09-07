@@ -690,12 +690,6 @@ cmld_container_ctrl_with_smartcard(container_t *container, int resp_fd, const ch
 						container_ctrl);
 }
 
-void
-cmld_push_device_cert(int resp_fd, uint8_t *cert, size_t cert_len)
-{
-	smartcard_push_cert(cmld_smartcard, resp_fd, cert, cert_len);
-}
-
 /******************************************************************************/
 
 static void
