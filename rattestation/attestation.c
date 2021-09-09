@@ -275,23 +275,71 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 
 	// PCR10 kernel module verification (from /sys/kernel/security/ima/binary_runtime_measuremts)
 	hash_algo_t hash_algo = size_to_hash_algo((int)resp->halg);
-	int ret_ima = ima_verify_binary_runtime_measurements(resp->ml_ima_entry.data,
-							     resp->ml_ima_entry.len,
-							     config->kmod_sign_cert, hash_algo,
-							     resp->pcr_values[10]->value.data);
-	if (ret_ima != 0) {
-		ERROR("Failed to verify measurement list");
-		goto err;
+
+	if (config->verify_ima) {
+		// Check if response has IMA entries
+		if (!resp->has_ml_ima_entry) {
+			ERROR("Response does not contain IMA entries");
+			ret = false;
+			goto err;
+		}
+
+		// Find the PCR containing the IMA measurements
+		int ima_index = -1;
+		for (int i = 0; i < (int)resp->n_pcr_values; i++) {
+			if (resp->pcr_values[i]->number == config->ima_pcr) {
+				ima_index = i;
+				break;
+			}
+		}
+
+		if (ima_index < 0) {
+			ERROR("Configured IMA PCR %d not present", config->ima_pcr);
+			ret = false;
+			goto err;
+		}
+
+		int ret_ima = ima_verify_binary_runtime_measurements(
+			resp->ml_ima_entry.data, resp->ml_ima_entry.len, config->kmod_sign_cert,
+			hash_algo, resp->pcr_values[ima_index]->value.data);
+		if (ret_ima != 0) {
+			ERROR("Failed to verify measurement list");
+			ret = false;
+			goto err;
+		}
 	}
 
 	// PCR11 container verification
-	int ret_container =
-		container_verify_runtime_measurements(resp->ml_container_entry,
-						      resp->n_ml_container_entry, hash_algo,
-						      resp->pcr_values[11]->value.data);
-	if (ret_container != 0) {
-		ERROR("Failed to verify container measurement list");
-		goto err;
+	if (config->verify_containers) {
+		// Check if response has container entries
+		if (resp->n_ml_container_entry == 0) {
+			ERROR("Response does not contain container entries");
+			ret = false;
+			goto err;
+		}
+
+		// Find the PCR containing the container measurements
+		int container_index = -1;
+		for (int i = 0; i < (int)resp->n_pcr_values; i++) {
+			if (resp->pcr_values[i]->number == config->container_pcr) {
+				container_index = i;
+				break;
+			}
+		}
+
+		if (container_index < 0) {
+			ERROR("Configured IMA PCR %d not present", config->ima_pcr);
+			ret = false;
+			goto err;
+		}
+		int ret_container = container_verify_runtime_measurements(
+			resp->ml_container_entry, resp->n_ml_container_entry, hash_algo,
+			resp->pcr_values[container_index]->value.data);
+		if (ret_container != 0) {
+			ERROR("Failed to verify container measurement list");
+			ret = false;
+			goto err;
+		}
 	}
 
 	ret = true;
@@ -384,6 +432,8 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 		msg.has_pcrs = true;
 		msg.pcrs = config->pcrs;
 	}
+	msg.attest_ima = config->verify_ima;
+	msg.attest_containers = config->verify_containers;
 
 	int sock = sock_inet_create_and_connect(SOCK_STREAM, host, TPM2D_SERVICE_PORT);
 	IF_TRUE_RETVAL(sock < 0, -1);

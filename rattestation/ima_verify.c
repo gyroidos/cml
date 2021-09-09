@@ -108,7 +108,7 @@ print_module_name(uint8_t *buffer, size_t len)
 	IF_NULL_RETVAL_ERROR(str, -1);
 	memcpy(str, buffer, len);
 	INFO("Parsing Module %s", str);
-	free(str);
+	mem_free(str);
 	return 0;
 }
 
@@ -248,6 +248,7 @@ verify_template_data(struct event *template, const char *cert)
 				if (!sig_info) {
 					ERROR("Failed to parse module signature");
 					ret = -1;
+					modsig_free(sig_info);
 					goto out;
 				}
 
@@ -262,6 +263,7 @@ verify_template_data(struct event *template, const char *cert)
 					digest_len, "SHA256");
 				if (retssl != 0) {
 					ERROR("Signature verification FAILED for %s", f);
+					modsig_free(sig_info);
 					ret = -1;
 					goto out;
 				} else {
@@ -368,7 +370,7 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 		}
 
 		if (verify_template_data(&template, cert) != 0) {
-			ERROR("Failed to parse measurement entry %s", template.name);
+			ERROR("Failed to verify measurement entry %s", template.name);
 			return -1;
 		}
 
@@ -396,7 +398,7 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 	}
 
 	if (memcmp(pcr, pcr_tpm, hash_size) != 0) {
-		ERROR("Failed to verify the TPM PCR");
+		ERROR("Failed to verify IMA TPM PCR");
 		return -1;
 	}
 
