@@ -224,16 +224,25 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		out.certificate.data = attestation_cert;
 		out.certificate.len = att_cert_len;
 
-		out.ml_ima_entry.data = ml_get_ima_list_new(&out.ml_ima_entry.len);
-		if (!out.ml_ima_entry.data) {
-			WARN("Failed to retrieve IMA measurement list");
-			goto err_att_req;
+		if (msg->attest_ima) {
+			out.has_ml_ima_entry = true;
+			out.ml_ima_entry.data = ml_get_ima_list_new(&out.ml_ima_entry.len);
+			if (!out.ml_ima_entry.data) {
+				WARN("Failed to retrieve IMA measurement list");
+				goto err_att_req;
+			}
+		} else {
+			out.has_ml_ima_entry = false;
 		}
 
-		out.ml_container_entry = ml_get_container_list_new(&out.n_ml_container_entry);
-		if (!out.ml_container_entry) {
-			WARN("Failed to retrieve container measurement list");
-			goto err_att_req;
+		if (msg->attest_containers) {
+			out.ml_container_entry = ml_get_container_list_new(&out.n_ml_container_entry);
+			if (!out.ml_container_entry) {
+				WARN("Failed to retrieve container measurement list");
+				goto err_att_req;
+			}
+		} else {
+			out.n_ml_container_entry = 0;
 		}
 
 		DEBUG("Received INTERNAL_ATTESTATION_RES, now sending reply");

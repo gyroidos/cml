@@ -89,6 +89,10 @@ message RemoteToTpm2d {
 	//  - for BASIC, the default PCRs are PCRs 0 to 11
 	//  - for ALL  , the default PCRs are PCRs 0 to 23
 	optional int32 pcrs = 4;
+
+	optional bool attest_ima = 5 [default = true];
+
+	optional bool attest_containers = 6 [default = true];
 }
 
 message Tpm2dToRemote {
@@ -118,7 +122,7 @@ message Tpm2dToRemote {
 	optional bytes certificate = 7;
 
 	// the IMA measurement list in ima binary format
-	required bytes ml_ima_entry = 11;
+	optional bytes ml_ima_entry = 11;
 
 	// the container measurement list
 	repeated MlContainerEntry ml_container_entry = 12;
