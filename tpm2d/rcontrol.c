@@ -236,7 +236,8 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		}
 
 		if (msg->attest_containers) {
-			out.ml_container_entry = ml_get_container_list_new(&out.n_ml_container_entry);
+			out.ml_container_entry =
+				ml_get_container_list_new(&out.n_ml_container_entry);
 			if (!out.ml_container_entry) {
 				WARN("Failed to retrieve container measurement list");
 				goto err_att_req;
