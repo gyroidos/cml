@@ -40,6 +40,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdint.h>
 
 // TODO: we should not include this in production builds...
 #ifndef LOGF_FILE_STRIP
@@ -138,6 +139,70 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 
 	if (n < 0)
 		return;
+
+	logf_write(prio, buf);
+}
+
+void
+logf_message_hexdump(logf_prio_t prio, const void *b, size_t len, const char *fmt, ...)
+{
+	char buf[4096 * 4];
+	va_list ap;
+	size_t i;
+	int n;
+
+	va_start(ap, fmt);
+	n = vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+
+	if (n < 0)
+		return;
+
+	n += snprintf(buf + n, sizeof(buf) - n, "[%zu]", len);
+
+	if (n < 0)
+		return;
+
+	for (i = 0; i < len; i++) {
+		n += snprintf(buf + n, sizeof(buf) - n, " %02x", ((uint8_t *)b)[i]);
+		if (n < 0)
+			return;
+	}
+
+	logf_write(prio, buf);
+}
+
+void
+logf_message_file_hexdump(logf_prio_t prio, const char *file, int line, const void *b, size_t len,
+			  const char *fmt, ...)
+{
+	char buf[4096 * 4];
+	va_list ap;
+	size_t i;
+	int n;
+
+	n = snprintf(buf, sizeof(buf), "%s+%d: ", file, line);
+
+	if (n < 0)
+		return;
+
+	va_start(ap, fmt);
+	n += vsnprintf(buf + n, sizeof(buf) - n, fmt, ap);
+	va_end(ap);
+
+	if (n < 0)
+		return;
+
+	n += snprintf(buf + n, sizeof(buf) - n, "[%zu]", len);
+
+	if (n < 0)
+		return;
+
+	for (i = 0; i < len; i++) {
+		n += snprintf(buf + n, sizeof(buf) - n, " %02x", ((uint8_t *)b)[i]);
+		if (n < 0)
+			return;
+	}
 
 	logf_write(prio, buf);
 }

@@ -57,6 +57,10 @@
 		logf_fatal("%s", "Aborting...");                                                   \
 		abort();                                                                           \
 	} while (0) //!< Non-recoverable error, process will abort.
+#define ERROR_HEXDUMP(...) logf_error_hexdump(__VA_ARGS__)
+#define INFO_HEXDUMP(...) logf_info_hexdump(__VA_ARGS__)
+#define DEBUG_HEXDUMP(...) logf_debug_hexdump(__VA_ARGS__)
+#define TRACE_HEXDUMP(...) logf_trace_hexdump(__VA_ARGS__)
 
 // logging with errno
 #define TRACE_ERRNO(...) logf_trace_errno(__VA_ARGS__)
