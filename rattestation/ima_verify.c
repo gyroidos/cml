@@ -112,21 +112,6 @@ print_module_name(uint8_t *buffer, size_t len)
 	return 0;
 }
 
-static void
-print_data(uint8_t *buf, size_t len, const char *info)
-{
-	uint32_t l = 2 * len + strlen(info) + 3;
-	char s[l];
-	uint32_t count = 0;
-	if (info) {
-		count += snprintf(s + count, sizeof(s) - count, "%s: ", info);
-	}
-	for (uint32_t i = 0; i < len; i++) {
-		count += snprintf(s + count, sizeof(s) - count, "%02x", buf[i]);
-	}
-	TRACE("%s", s);
-}
-
 static int
 buf_read(void *dest, uint8_t **ptr, size_t size, size_t *remain)
 {
@@ -209,9 +194,9 @@ verify_template_data(struct event *template, const char *cert)
 					(struct signature_v2_hdr *)(template->template_data +
 								    offset);
 
-				print_data(digest, digest_len, "Digest");
-				print_data(sig->sig, field_len - sizeof(struct signature_v2_hdr),
-					   "Signature");
+				TRACE_HEXDUMP(digest, digest_len, "Digest");
+				TRACE_HEXDUMP(sig->sig, field_len - sizeof(struct signature_v2_hdr),
+					      "Signature");
 
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert,
@@ -252,8 +237,8 @@ verify_template_data(struct event *template, const char *cert)
 					goto out;
 				}
 
-				print_data(digest, digest_len, "Digest");
-				print_data(sig_info->sig, sig_info->sig_len, "Signature");
+				TRACE_HEXDUMP(digest, digest_len, "Digest");
+				TRACE_HEXDUMP(sig_info->sig, sig_info->sig_len, "Signature");
 
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert,
