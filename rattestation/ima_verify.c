@@ -108,7 +108,7 @@ print_module_name(uint8_t *buffer, size_t len)
 	IF_NULL_RETVAL_ERROR(str, -1);
 	memcpy(str, buffer, len);
 	INFO("Parsing Module %s", str);
-	mem_free(str);
+	mem_free0(str);
 	return 0;
 }
 
@@ -268,7 +268,7 @@ verify_template_data(struct event *template, const char *cert)
 	ret = 0;
 
 out:
-	free(template_fmt);
+	mem_free0(template_fmt);
 	return ret;
 }
 
@@ -346,16 +346,19 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 
 		if (read_template_data(&template, &ptr, &remain) < 0) {
 			ERROR("Failed to read measurement entry %s", template.name);
+			mem_free0(template.template_data);
 			return -1;
 		}
 
 		if (verify_template_hash(&template) != 0) {
 			ERROR("Failed to verify template hash for %s", template.name);
+			mem_free0(template.template_data);
 			return -1;
 		}
 
 		if (verify_template_data(&template, cert) != 0) {
 			ERROR("Failed to verify measurement entry %s", template.name);
+			mem_free0(template.template_data);
 			return -1;
 		}
 
@@ -376,10 +379,11 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 
 		} else {
 			ERROR("Hash algorithm not supported");
+			mem_free0(template.template_data);
 			return -1;
 		}
 
-		free(template.template_data);
+		mem_free0(template.template_data);
 	}
 
 	if (memcmp(pcr, pcr_tpm, hash_size) != 0) {

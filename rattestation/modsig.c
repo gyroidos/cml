@@ -74,6 +74,8 @@ modsig_free(sig_info_t *s)
 	mem_free0(s->key_id);
 	mem_free0(s->sig);
 	mem_free0(s->signer);
+	mem_free0(s->hash_algo);
+	mem_free0(s->sig_algo);
 	mem_free0(s);
 }
 
