@@ -30,8 +30,8 @@ typedef struct {
 	size_t sig_len;
 	uint8_t *sig;
 	char *signer;
-	const char *hash_algo;
-	const char *sig_algo;
+	char *hash_algo;
+	char *sig_algo;
 } sig_info_t;
 
 sig_info_t *
