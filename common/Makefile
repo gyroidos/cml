@@ -83,11 +83,22 @@ OBJS_COMMON_FULL := \
 	audit.pb-c.o \
 	audit.o \
 
+OBJS_COMMON_EXT := \
+	$(OBJS_COMMON_FULL) \
+	cryptfs.o \
+	hex.o \
+	reboot.o \
+	ssl_util.o \
+	uuid.o
+
 libcommon: $(OBJS_COMMON)
 	ar rcs libcommon.a $^
 
 libcommon_full: $(OBJS_COMMON_FULL)
 	ar rcs libcommon_full.a $^
+
+libcommon_ext: $(OBJS_COMMON_EXT)
+	ar rcs libcommon_ext.a $^
 
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
@@ -99,21 +110,20 @@ logf.pb-c.c: logf.proto
 	protoc-c --c_out=. $<
 
 LFLAGS_TEST := \
+	-L. -lcommon_ext \
 	-lssl \
 	-lcrypto
 
 TEST_SUITES := \
 	mem.test.c \
 	macro.test.c \
-	uuid.c \
-	ssl_util.c \
 	ssl_util.test.c
 
 common.test: $(TEST_SUITES) munit.h munit.c common.test.c
 	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c $(LFLAGS_TEST)
 
 .PHONY: test
-test: libcommon_full common.test
+test: libcommon_ext common.test
 	./common.test
 
 .PHONY: clean
