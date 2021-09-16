@@ -65,12 +65,7 @@ PROTO_SRC := \
 
 SRC_FILES := \
 	common/protobuf.c \
-	common/fd.c \
-	common/sock.c \
-	common/file.c \
-	common/uuid.c \
 	attestation.c \
-	common/ssl_util.c \
 	hash.c \
 	ima_verify.c \
 	container_verify.c \
@@ -88,13 +83,10 @@ protobuf: attestation.proto
 $(PROTO_SRC): protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_ext
 
 rattestation: libcommon $(SRC_FILES) $(PROTO_SRC)
-	$(CC) $(STATIC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -lssl -lcrypto -libmtss -o $@
-
-
-
+	$(CC) $(STATIC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon_ext -lssl -lcrypto -libmtss -o $@
 
 .PHONY: clean
 clean:

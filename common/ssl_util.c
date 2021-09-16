@@ -1700,10 +1700,9 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		ssl_print_err();
 		ERROR("Failed to verify signature");
 		ret = -2;
-		goto error;
 	}
 
-error:
+	mem_free0(hash);
 	if (cert)
 		X509_free(cert);
 

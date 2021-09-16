@@ -48,26 +48,8 @@
 #define LOGFILE_DIR "/data/logs"
 #define LOGFILE_PATH LOGFILE_DIR "/rattestation"
 
-static logf_handler_t *ipagent_logfile_handler = NULL;
-static logf_handler_t *ipagent_logfile_handler_stdout = NULL;
-
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
-{
-	IF_TRUE_RETVAL(0 > length, NULL);
-
-	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
-	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
-	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
-	char *hex = mem_alloc0(len);
-
-	for (int i = 0; i < length; ++i) {
-		// remember snprintf additionally writs a '0' byte
-		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
-	}
-
-	return hex;
-}
+static logf_handler_t *logfile_handler = NULL;
+static logf_handler_t *logfile_handler_stdout = NULL;
 
 static void
 main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
@@ -86,11 +68,11 @@ main_return_result_and_exit(bool validated)
 int
 main(int argc, char **argv)
 {
-	ipagent_logfile_handler = logf_register(&logf_file_write, logf_file_new(LOGFILE_PATH));
-	ipagent_logfile_handler_stdout = logf_register(&logf_file_write, stdout);
+	logfile_handler = logf_register(&logf_file_write, logf_file_new(LOGFILE_PATH));
+	logfile_handler_stdout = logf_register(&logf_file_write, stdout);
 
-	logf_handler_set_prio(ipagent_logfile_handler, LOGF_PRIO_TRACE);
-	logf_handler_set_prio(ipagent_logfile_handler_stdout, LOGF_PRIO_TRACE);
+	logf_handler_set_prio(logfile_handler, LOGF_PRIO_TRACE);
+	logf_handler_set_prio(logfile_handler_stdout, LOGF_PRIO_TRACE);
 
 	char *rhost = (argc < 2) ? "127.0.0.1" : argv[1];
 	char *config_file = (argc < 3) ? "rattestation.conf" : argv[2];

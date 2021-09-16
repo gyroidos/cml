@@ -35,6 +35,7 @@
 #include "common/sock.h"
 #include "common/fd.h"
 #include "common/ssl_util.h"
+#include "common/hex.h"
 
 #include "attestation.pb-c.h"
 #include "config.pb-c.h"
@@ -54,58 +55,6 @@ struct attestation_resp_cb_data {
 	RAttestationConfig *config;
 };
 
-static char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
-{
-	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
-	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
-	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
-	char *hex = mem_alloc0(len);
-
-	for (int i = 0; i < length; ++i) {
-		// remember snprintf additionally writes a '0' byte
-		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
-	}
-
-	return hex;
-}
-
-static bool
-starts_with(const char *p, const char *s)
-{
-	return strncmp(p, s, strlen(p)) == 0;
-}
-
-static int
-convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen)
-{
-	char *pos = (char *)in;
-	size_t len = inlen;
-	if (starts_with("0x", in)) {
-		pos += 2;
-		len -= 2;
-	}
-	if ((len % 2) != 0) {
-		return -1;
-	}
-	if (outlen != (len / 2)) {
-		return -2;
-	}
-	for (size_t i = 0; i < outlen; i++) {
-		if ((uint8_t)*pos < 0x30 || (uint8_t)*pos > 0x66 ||
-		    ((uint8_t)*pos > 0x39 && (uint8_t)*pos < 0x40) ||
-		    ((uint8_t)*pos > 0x46 && (uint8_t)*pos < 0x61) ||
-		    (uint8_t) * (pos + 1) < 0x30 || (uint8_t) * (pos + 1) > 0x66 ||
-		    ((uint8_t) * (pos + 1) > 0x39 && (uint8_t) * (pos + 1) < 0x40) ||
-		    ((uint8_t) * (pos + 1) > 0x46 && (uint8_t) * (pos + 1) < 0x61)) {
-			return -3;
-		}
-		sscanf(pos, "%2hhx", &out[i]);
-		pos += 2;
-	}
-	return 0;
-}
-
 static bool
 attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t *nonce,
 			size_t nonce_len)
@@ -124,12 +73,10 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	uint32_t quote_len = resp->quoted.len;
 	uint32_t sig_len = resp->signature.len;
 	uint8_t pcr[resp->n_pcr_values][config->halg];
-	char *pcr_strings[resp->n_pcr_values];
 
 	if (resp->has_quoted) {
-		char *quote_str = convert_bin_to_hex_new(resp->quoted.data, resp->quoted.len);
-		DEBUG("Quote (Length %zu): %s", resp->quoted.len, quote_str);
-		mem_free0(quote_str);
+		INFO("Response contains quote (Length %zu)", resp->quoted.len);
+		DEBUG_HEXDUMP(resp->quoted.data, resp->quoted.len, "Quote");
 	} else {
 		ERROR("Response does not contain quote to be verified");
 		ret = false;
@@ -137,9 +84,8 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	}
 
 	if (resp->has_signature) {
-		char *sig_str = convert_bin_to_hex_new(resp->signature.data, resp->signature.len);
-		DEBUG("Signature (Length %zu): %s\n", resp->signature.len, sig_str);
-		mem_free0(sig_str);
+		DEBUG("Response contains signature (Length %zu)", resp->signature.len);
+		DEBUG_HEXDUMP(resp->signature.data, resp->signature.len, "Signature");
 	} else {
 		ERROR("Response does not contain signature");
 		goto err;
@@ -162,8 +108,6 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 
 	bool ret_pcr = true;
 	for (size_t i = 0; i < config->n_pcr_values; i++) {
-		pcr_strings[i] = convert_bin_to_hex_new(resp->pcr_values[i]->value.data,
-							resp->pcr_values[i]->value.len);
 		if (convert_hex_to_bin(config->pcr_values[i]->value,
 				       strlen(config->pcr_values[i]->value), pcr[i],
 				       config->halg)) {
@@ -190,14 +134,15 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 			continue;
 		}
 		if (memcmp(pcr[i], resp->pcr_values[i]->value.data, config->halg)) {
-			ERROR("PCR_%d: %s - VERIFICATION FAILED", resp->pcr_values[i]->number,
-			      pcr_strings[i]);
+			ERROR_HEXDUMP(resp->pcr_values[i]->value.data,
+				      resp->pcr_values[i]->value.len, "PCR_%d VERIFICATION FAILED",
+				      resp->pcr_values[i]->number);
 			ret_pcr = false;
 			continue;
 		}
 
-		DEBUG("PCR_%d: %s - VERIFICATION SUCCESSFUL", resp->pcr_values[i]->number,
-		      pcr_strings[i]);
+		DEBUG_HEXDUMP(resp->pcr_values[i]->value.data, resp->pcr_values[i]->value.len,
+			      "PCR_%d VERIFICATION SUCCESSFUL", resp->pcr_values[i]->number);
 	}
 
 	if (!ret_pcr) {
@@ -217,18 +162,14 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 
 	// Nonce verification
 	int ret_nonce = memcmp(tpms_attest.extraData.t.buffer, nonce, nonce_len);
-
-	char *nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
-	char *rcv_nonce_str = convert_bin_to_hex_new(tpms_attest.extraData.t.buffer,
-						     tpms_attest.extraData.t.size);
-	DEBUG("Nonce (sent %s, received %s) - %s", nonce_str, rcv_nonce_str,
-	      ret_nonce ? "VERIFICATION FAILED" : "VERIFICATION SUCCESSFUL");
-	mem_free0(nonce_str);
-	mem_free0(rcv_nonce_str);
+	DEBUG_HEXDUMP(nonce, nonce_len, "Nonce sent");
+	DEBUG_HEXDUMP(tpms_attest.extraData.t.buffer, tpms_attest.extraData.t.size, "Nonce rcvd");
 	if (ret_nonce) {
+		ERROR("Nonce VERIFICATION FAILED");
 		ret = false;
 		goto err;
 	}
+	DEBUG("Nonce VERIFICATION SUCCESSFUL");
 
 	// The signature is sent as a TPMT_SIGNATURE and has to be unmarshalled
 	TPMT_SIGNATURE tpmt_signature;
@@ -255,10 +196,8 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	}
 
 	// Verify aggregated PCR value
-	char *pcr_digest = convert_bin_to_hex_new(tpms_attest.attested.quote.pcrDigest.t.buffer,
-						  tpms_attest.attested.quote.pcrDigest.t.size);
-	DEBUG("Quote PCR Digest: %s", pcr_digest);
-	mem_free0(pcr_digest);
+	DEBUG_HEXDUMP(tpms_attest.attested.quote.pcrDigest.t.buffer,
+		      tpms_attest.attested.quote.pcrDigest.t.size, "Quote PCR Digest");
 	SHA256_CTX ctx;
 	SHA256_Init(&ctx);
 	uint8_t pcr_calc[SHA256_DIGEST_LENGTH] = { 0 };
@@ -275,23 +214,71 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 
 	// PCR10 kernel module verification (from /sys/kernel/security/ima/binary_runtime_measuremts)
 	hash_algo_t hash_algo = size_to_hash_algo((int)resp->halg);
-	int ret_ima = ima_verify_binary_runtime_measurements(resp->ml_ima_entry.data,
-							     resp->ml_ima_entry.len,
-							     config->kmod_sign_cert, hash_algo,
-							     resp->pcr_values[10]->value.data);
-	if (ret_ima != 0) {
-		ERROR("Failed to verify measurement list");
-		goto err;
+
+	if (config->verify_ima) {
+		// Check if response has IMA entries
+		if (!resp->has_ml_ima_entry) {
+			ERROR("Response does not contain IMA entries");
+			ret = false;
+			goto err;
+		}
+
+		// Find the PCR containing the IMA measurements
+		int ima_index = -1;
+		for (int i = 0; i < (int)resp->n_pcr_values; i++) {
+			if (resp->pcr_values[i]->number == config->ima_pcr) {
+				ima_index = i;
+				break;
+			}
+		}
+
+		if (ima_index < 0) {
+			ERROR("Configured IMA PCR %d not present", config->ima_pcr);
+			ret = false;
+			goto err;
+		}
+
+		int ret_ima = ima_verify_binary_runtime_measurements(
+			resp->ml_ima_entry.data, resp->ml_ima_entry.len, config->kmod_sign_cert,
+			hash_algo, resp->pcr_values[ima_index]->value.data);
+		if (ret_ima != 0) {
+			ERROR("Failed to verify measurement list");
+			ret = false;
+			goto err;
+		}
 	}
 
 	// PCR11 container verification
-	int ret_container =
-		container_verify_runtime_measurements(resp->ml_container_entry,
-						      resp->n_ml_container_entry, hash_algo,
-						      resp->pcr_values[11]->value.data);
-	if (ret_container != 0) {
-		ERROR("Failed to verify container measurement list");
-		goto err;
+	if (config->verify_containers) {
+		// Check if response has container entries
+		if (resp->n_ml_container_entry == 0) {
+			ERROR("Response does not contain container entries");
+			ret = false;
+			goto err;
+		}
+
+		// Find the PCR containing the container measurements
+		int container_index = -1;
+		for (int i = 0; i < (int)resp->n_pcr_values; i++) {
+			if (resp->pcr_values[i]->number == config->container_pcr) {
+				container_index = i;
+				break;
+			}
+		}
+
+		if (container_index < 0) {
+			ERROR("Configured IMA PCR %d not present", config->ima_pcr);
+			ret = false;
+			goto err;
+		}
+		int ret_container = container_verify_runtime_measurements(
+			resp->ml_container_entry, resp->n_ml_container_entry, hash_algo,
+			resp->pcr_values[container_index]->value.data);
+		if (ret_container != 0) {
+			ERROR("Failed to verify container measurement list");
+			ret = false;
+			goto err;
+		}
 	}
 
 	ret = true;
@@ -302,9 +289,6 @@ err:
 	DEBUG("---------------------------");
 
 	// Free resources
-	for (size_t i = 0; i < resp->n_pcr_values; i++) {
-		mem_free0(pcr_strings[i]);
-	}
 	ssl_free();
 
 	return ret;
@@ -384,6 +368,8 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 		msg.has_pcrs = true;
 		msg.pcrs = config->pcrs;
 	}
+	msg.attest_ima = config->verify_ima;
+	msg.attest_containers = config->verify_containers;
 
 	int sock = sock_inet_create_and_connect(SOCK_STREAM, host, TPM2D_SERVICE_PORT);
 	IF_TRUE_RETVAL(sock < 0, -1);
@@ -394,10 +380,7 @@ attestation_do_request(const char *host, char *config_file, void (*resp_verified
 	IF_TRUE_RETVAL(msg_size < 0, -1);
 
 	INFO("Send message with size %zd", msg_size);
-
-	char *nonce_str = convert_bin_to_hex_new(nonce, nonce_len);
-	INFO("Request with Nonce %s, Request size=%zd", nonce_str, msg_size);
-	mem_free0(nonce_str);
+	DEBUG_HEXDUMP(nonce, nonce_len, "Request with Nonce");
 
 	struct attestation_resp_cb_data *resp_cb_data =
 		mem_new0(struct attestation_resp_cb_data, 1);
