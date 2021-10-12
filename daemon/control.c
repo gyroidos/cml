@@ -32,6 +32,7 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "smartcard.h"
+#include "crypto.h"
 #include "input.h"
 #include "uevent.h"
 #include "audit.h"
@@ -1007,7 +1008,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {
 		uint8_t *csr = NULL;
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-		csr = smartcard_pull_csr_new(&out.device_csr.len);
+		csr = crypto_pull_device_csr_new(&out.device_csr.len);
 		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR;
 		out.has_device_csr = csr ? true : false;
 		out.device_csr.data = csr;
@@ -1026,7 +1027,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			cert = msg->device_cert.data;
 			cert_len = msg->device_cert.len;
 		}
-		cmld_push_device_cert(fd, cert, cert_len);
+		crypto_push_device_cert(fd, cert, cert_len);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED: {

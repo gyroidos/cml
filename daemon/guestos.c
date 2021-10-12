@@ -27,7 +27,7 @@
 #include "hardware.h"
 #include "download.h"
 #include "cmld.h"
-#include "smartcard.h"
+#include "crypto.h"
 #include "tss.h"
 #include "audit.h"
 
@@ -195,7 +195,7 @@ check_mount_image_free(check_mount_image_t *task)
 
 static void
 check_mount_image_cb_sha256(const char *hash_string, UNUSED const char *hash_file,
-			    UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
+			    UNUSED crypto_hashalgo_t hash_algo, void *data)
 {
 	check_mount_image_t *task = data;
 	ASSERT(task);
@@ -209,7 +209,7 @@ check_mount_image_cb_sha256(const char *hash_string, UNUSED const char *hash_fil
 
 static void
 check_mount_image_cb_sha1(const char *hash_string, UNUSED const char *hash_file,
-			  UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
+			  UNUSED crypto_hashalgo_t hash_algo, void *data)
 {
 	check_mount_image_t *task = data;
 	ASSERT(task);
@@ -217,8 +217,7 @@ check_mount_image_cb_sha1(const char *hash_string, UNUSED const char *hash_file,
 	bool match = mount_entry_match_sha1(task->e, hash_string);
 	if (match) {
 		// compute next hash
-		smartcard_crypto_hash_file(task->img_path, SHA256, check_mount_image_cb_sha256,
-					   task);
+		crypto_hash_file(task->img_path, SHA256, check_mount_image_cb_sha256, task);
 		return;
 	}
 	task->cb(CHECK_IMAGE_HASH_MISMATCH, task->os, task->e, task->data);
@@ -281,11 +280,11 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 	if (thorough) {
 		bool match = false;
 		if (mount_entry_get_sha256(e) == NULL) { // fallback to sha1
-			char *sha1 = smartcard_crypto_hash_file_block_new(img_path, SHA1);
+			char *sha1 = crypto_hash_file_block_new(img_path, SHA1);
 			match = mount_entry_match_sha1(e, sha1);
 			mem_free0(sha1);
 		} else {
-			char *sha256 = smartcard_crypto_hash_file_block_new(img_path, SHA256);
+			char *sha256 = crypto_hash_file_block_new(img_path, SHA256);
 			match = mount_entry_match_sha256(e, sha256);
 			if (match) { // will only be executed if hash matches to signed config
 				int sha256_bin_len;
@@ -361,7 +360,7 @@ guestos_check_mount_image(guestos_t *os, mount_entry_t *e, check_mount_image_com
 	DEBUG("Checking image %s (thorough, non-blocking)", img_path);
 
 	check_mount_image_t *task = check_mount_image_new(os, e, img_path, cb, data);
-	smartcard_crypto_hash_file(img_path, SHA1, check_mount_image_cb_sha1, task);
+	crypto_hash_file(img_path, SHA1, check_mount_image_cb_sha1, task);
 
 	mem_free0(img_path);
 }
