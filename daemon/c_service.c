@@ -49,13 +49,13 @@
 struct c_service {
 	container_t *container; // weak reference
 	int sock;
-	int sock_connected;
+	int sock_connected; // socket to client which will get events
 	event_io_t *event_io_sock;
-	event_io_t *event_io_sock_connected;
+	list_t *event_io_sock_connected_list; // list of clients
 };
 
 static int
-c_service_send_container_cfg_name_proto(c_service_t *service)
+c_service_send_container_cfg_name_proto(c_service_t *service, int sock_client)
 {
 	ASSERT(service);
 	int ret = -1;
@@ -69,14 +69,14 @@ c_service_send_container_cfg_name_proto(c_service_t *service)
 
 	message_proto.container_cfg_name = mem_strdup(container_get_name(service->container));
 
-	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
+	ret = protobuf_send_message(sock_client, (ProtobufCMessage *)&message_proto);
 
 	mem_free0(message_proto.container_cfg_name);
 	return ret;
 }
 
 static int
-c_service_send_container_cfg_dns_proto(c_service_t *service)
+c_service_send_container_cfg_dns_proto(c_service_t *service, int sock_client)
 {
 	ASSERT(service);
 	int ret = -1;
@@ -91,7 +91,7 @@ c_service_send_container_cfg_dns_proto(c_service_t *service)
 
 	message_proto.container_cfg_dns = mem_strdup(container_get_dns_server(service->container));
 
-	ret = protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
+	ret = protobuf_send_message(sock_client, (ProtobufCMessage *)&message_proto);
 
 	mem_free0(message_proto.container_cfg_dns);
 	return ret;
@@ -102,10 +102,9 @@ c_service_send_container_cfg_dns_proto(c_service_t *service)
  * functions on the associated container.
  */
 static void
-c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessage *message)
+c_service_handle_received_message(c_service_t *service, int sock_client,
+				  const ServiceToCmldMessage *message)
 {
-	//int wallpaper_len;
-
 	if (!message) {
 		WARN("ServiceToCmldMessage is NULL, ignoring");
 		return;
@@ -118,17 +117,17 @@ c_service_handle_received_message(c_service_t *service, const ServiceToCmldMessa
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_NAME_REQ:
-		INFO("Received a reqest for the container name from container %s",
+		INFO("Received a request for the container name from container %s",
 		     container_get_description(service->container));
-		if (c_service_send_container_cfg_name_proto(service))
-			INFO("sent reply to conatiner");
+		if (c_service_send_container_cfg_name_proto(service, sock_client))
+			INFO("sent reply to container");
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_DNS_REQ:
-		INFO("Received a reqest for the container name from container %s",
+		INFO("Received a request for the container name from container %s",
 		     container_get_description(service->container));
-		if (c_service_send_container_cfg_dns_proto(service))
-			INFO("sent reply to conatiner");
+		if (c_service_send_container_cfg_dns_proto(service, sock_client))
+			INFO("sent reply to container");
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__EXEC_CAP_SYSTIME_PRIV: {
@@ -179,7 +178,7 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 		// close connection if client EOF, or protocol parse error
 		IF_NULL_GOTO_TRACE(message, connection_err);
 
-		c_service_handle_received_message(service, message);
+		c_service_handle_received_message(service, fd, message);
 		protobuf_c_message_free_unpacked((ProtobufCMessage *)message, NULL);
 	}
 
@@ -192,12 +191,16 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 	return;
 
 connection_err:
+	service->event_io_sock_connected_list =
+		list_remove(service->event_io_sock_connected_list, io);
 	event_remove_io(io);
 	event_io_free(io);
-	service->event_io_sock_connected = NULL;
+	// check if we are/were the main service event receiver
+	// and give up our slot for new clients
+	if (fd == service->sock_connected)
+		service->sock_connected = -1;
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected service socket");
-	service->sock_connected = -1;
 	return;
 }
 
@@ -216,23 +219,33 @@ c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 
 	IF_FALSE_RETURN(events & EVENT_IO_READ);
 
-	if ((service->sock_connected = sock_unix_accept(fd)) < 0)
-		goto error;
+	int client_sock = sock_unix_accept(fd);
+	IF_TRUE_GOTO_ERROR(client_sock < 0, error);
+
+	// We can only have one target service for events
+	if (service->sock_connected < 0)
+		service->sock_connected = client_sock;
+	else
+		INFO("Service socket already in use, create a command receiving socket only!");
 
 	TRACE("Accepted connection %d from %s", service->sock_connected,
 	      container_get_description(service->container));
 
-	service->event_io_sock_connected = event_io_new(service->sock_connected, EVENT_IO_READ,
-							&c_service_cb_receive_message, service);
-	event_add_io(service->event_io_sock_connected);
+	event_io_t *event =
+		event_io_new(client_sock, EVENT_IO_READ, &c_service_cb_receive_message, service);
 
-	// We leave service->sock open so the TrustmeService could connect
-	// again in the future in case service->sock_connected gets closed.
+	event_add_io(event);
+	service->event_io_sock_connected_list =
+		list_append(service->event_io_sock_connected_list, event);
+
+	// We leave service->sock open so the TrustmeService instances could connect
+	// again in the future
 
 	return;
 
 error:
-	WARN("Exception on socket while waiting for TrustmeService to connect; closing socket and deregistering c_service_cb_accept");
+	WARN("Exception on socket while waiting for TrustmeService to connect;"
+	     " closing socket and deregistering c_service_cb_accept");
 	event_remove_io(io);
 	event_io_free(io);
 	service->event_io_sock = NULL;
@@ -252,7 +265,7 @@ c_service_new(container_t *container)
 	service->sock = -1;
 	service->sock_connected = -1;
 	service->event_io_sock = NULL;
-	service->event_io_sock_connected = NULL;
+	service->event_io_sock_connected_list = NULL;
 
 	return service;
 }
@@ -262,23 +275,26 @@ c_service_cleanup(c_service_t *service)
 {
 	ASSERT(service);
 
-	if (service->sock_connected > 0) {
-		if (close(service->sock_connected) < 0) {
-			WARN_ERRNO("Failed to close connected service socket");
-		}
-		service->sock_connected = -1;
-	}
 	if (service->sock > 0) {
 		if (close(service->sock) < 0) {
 			WARN_ERRNO("Failed to close service socket");
 		}
 		service->sock = -1;
 	}
-	if (service->event_io_sock_connected) {
-		event_remove_io(service->event_io_sock_connected);
-		event_io_free(service->event_io_sock_connected);
-		service->event_io_sock_connected = NULL;
+	for (list_t *l = service->event_io_sock_connected_list; l; l = l->next) {
+		event_io_t *event_io_sock_connected = l->data;
+		event_remove_io(event_io_sock_connected);
+		if (close(event_io_get_fd(event_io_sock_connected) < 0)) {
+			WARN_ERRNO("Failed to close connected service socket");
+		}
+		event_io_free(event_io_sock_connected);
 	}
+	list_delete(service->event_io_sock_connected_list);
+	service->event_io_sock_connected_list = NULL;
+
+	if (service->sock_connected > 0)
+		service->sock_connected = -1;
+
 	if (service->event_io_sock) {
 		event_remove_io(service->event_io_sock);
 		event_io_free(service->event_io_sock);

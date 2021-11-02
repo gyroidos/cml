@@ -47,7 +47,6 @@ print_usage(const char *cmd)
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("\tattestation_test\n\t\tTest TPM attestation request\n");
 	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, password for corresponding nvindex\n");
 	printf("\tdmcrypt_lock <passwd>\n\t\tLocks further dmsetup attampts by locking tpm2d's internal disk encryption key, password for corresponding nvindex\n");
 	printf("\texit\n\t\tStop TPM2D daemon\n");
@@ -123,13 +122,6 @@ main(int argc, char *argv[])
 	ControllerToTpm msg = CONTROLLER_TO_TPM__INIT;
 
 	const char *command = argv[optind++];
-	if (!strcasecmp(command, "attestation_test")) {
-		DEBUG("Sending test command to TPM");
-		msg.code = CONTROLLER_TO_TPM__CODE__INTERNAL_ATTESTATION_REQ;
-		msg.qualifyingdata = "deadbeef";
-		has_response = true;
-		goto send_message;
-	}
 	if (!strcasecmp(command, "dmcrypt_setup")) {
 		has_response = true;
 		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP;

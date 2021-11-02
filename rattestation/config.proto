@@ -61,4 +61,20 @@ message RAttestationConfig {
 	// as it can be sent together with the quote in the remote attestation protocol. The
 	// certificate must be in PEM format
 	optional string tpm_cert = 8;
+
+	// Specify if the Integrity Measurement Architecture (IMA) measurement list
+	// should be verified
+	optional bool verify_ima = 9 [default = true];
+
+	// Specify the PCR the IMA stores the measurements in. This must correspond
+	// to the kernel configuration CONFIG_IMA_MEASURE_PCR_IDX (default: 10) of the
+	// attested system
+	optional int32 ima_pcr = 10 [default = 10];
+
+	optional bool verify_containers = 11 [default = true];
+
+	// Specify the PCR the container measurements are stored in. Different components
+	// can measure the containers. In the default trustme setup, the cmld measures the
+	// containers and stores them into PCR11.
+	optional int32 container_pcr = 12 [default = 11];
 }

@@ -49,14 +49,8 @@ device_config_new(const char *path);
 void
 device_config_free(device_config_t *config);
 
-//int
-//device_config_read_from_fd(device_config_t *config, int fd);
-
 int
 device_config_write(const device_config_t *config);
-
-//int
-//device_config_write_to_fd(const device_config_t *config, int fd);
 
 /*************************/
 /* GETTER + SETTER       */
@@ -64,15 +58,6 @@ device_config_write(const device_config_t *config);
 
 const char *
 device_config_get_uuid(const device_config_t *config);
-
-const char *
-device_config_get_mdm_node(const device_config_t *config);
-
-const char *
-device_config_get_mdm_service(const device_config_t *config);
-
-const char *
-device_config_get_telephony_uuid(const device_config_t *config);
 
 const char *
 device_config_get_update_base_url(const device_config_t *config);

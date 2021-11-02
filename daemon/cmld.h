@@ -128,11 +128,8 @@ int
 cmld_container_start(container_t *container);
 
 int
-cmld_container_ctrl_with_smartcard(control_t *control, container_t *container, const char *passwd,
+cmld_container_ctrl_with_smartcard(container_t *container, int resp_fd, const char *passwd,
 				   cmld_container_ctrl_t container_ctrl);
-
-int
-cmld_get_control_gui_sock(void);
 
 int
 cmld_container_stop(container_t *container);
@@ -243,26 +240,15 @@ cmld_get_c0os(void);
 /**
  * Change the pin of the token associated to a container.
  *
- * @parma control link to control for responses
  * @param container whose token's pin should be changed
+ * @param resp_fd client fd to control session which should be used for responses
  * @param passwd old passphrase/pin
  * @param newpasswd new passphrase/pin which is to be set
  * @return 0 on message delivered to lower levels, -1 message delivery failed
  */
 int
-cmld_container_change_pin(control_t *control, container_t *container, const char *passwd,
+cmld_container_change_pin(container_t *container, int resp_fd, const char *passwd,
 			  const char *newpasswd);
-
-/**
- * Change the device cert during provisioning.
- * The request is sent asynchronously through lower communication layer.
- *
- * @parma control link to control for responses
- * @param cert buffer holding the device certificate
- * @param cert_len size of the certificate buffer
- */
-void
-cmld_push_device_cert(control_t *control, uint8_t *cert, size_t cert_len);
 
 /**
  * Delete a GuestOS by given name

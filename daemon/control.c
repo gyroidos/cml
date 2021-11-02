@@ -32,6 +32,7 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "smartcard.h"
+#include "crypto.h"
 #include "input.h"
 #include "uevent.h"
 #include "audit.h"
@@ -65,19 +66,11 @@
 
 struct control {
 	int sock; // listen socket fd
-	int sock_client;
-	int type;
-	char *hostip;	// remote host for inet (MDM) connection
-	int port;	// remote port
-	bool connected; // FIXME: we should reconsider this...
-	event_timer_t *reconnect_timer;
 	bool privileged;
+	list_t *event_io_sock_connected_list; // list of clients
 };
 
 static list_t *control_list = NULL;
-
-static int
-control_remote_reconnect(control_t *control);
 
 static void UNUSED
 control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool send_last_line_info)
@@ -382,12 +375,6 @@ control_build_container_list_from_uuids(size_t n_uuids, char **uuids)
 }
 
 int
-control_get_client_sock(control_t *control)
-{
-	return control->sock_client;
-}
-
-int
 control_send_message(control_message_t message, int fd)
 {
 	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
@@ -592,8 +579,7 @@ control_handle_cmd_register_localca(const ControllerToDaemon *msg, UNUSED int fd
  * Starts a container with pre-specified keys or user supplied keys
  */
 static int
-control_handle_container_start(control_t *control, container_t *container,
-			       ContainerStartParams *start_params, int fd)
+control_handle_container_start(container_t *container, ContainerStartParams *start_params, int fd)
 {
 	TRACE("Starting container");
 	int res = -1;
@@ -606,20 +592,20 @@ control_handle_container_start(control_t *control, container_t *container,
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container start with pin entry chosen. Starting");
-		res = input_register_container_ctrl_cb(control, container,
-						       CMLD_CONTAINER_CTRL_START);
+		res = input_register_container_ctrl_cb(container, fd, CMLD_CONTAINER_CTRL_START);
 		if (res != 0) {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
 		}
 	} else if (start_params) {
 		char *key = start_params->key;
 		TRACE("Default container start without pin entry chosen. Starting");
-		res = cmld_container_ctrl_with_smartcard(control, container, key,
+		res = cmld_container_ctrl_with_smartcard(container, fd, key,
 							 CMLD_CONTAINER_CTRL_START);
 		if (res != 0) {
 			ERROR("Failed to start container %s", container_get_name(container));
 			control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
 		}
+		mem_memset0(key, strlen(key));
 	} else if (container_is_encrypted(container)) {
 		res = -1;
 		control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG, fd);
@@ -635,28 +621,26 @@ control_handle_container_start(control_t *control, container_t *container,
 }
 
 static int
-control_handle_container_stop(control_t *control, container_t *container,
-			      ContainerStartParams *start_params, int fd)
+control_handle_container_stop(container_t *container, ContainerStartParams *start_params, int fd)
 {
 	int res = -1;
 
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container stop with pin entry chosen. Stopping");
-		res = input_register_container_ctrl_cb(control, container,
-						       CMLD_CONTAINER_CTRL_STOP);
+		res = input_register_container_ctrl_cb(container, fd, CMLD_CONTAINER_CTRL_STOP);
 		if (res != 0) {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
 		}
 	} else if (start_params) {
 		char *key = start_params->key;
 		TRACE("Default container stop without pin entry chosen. Stopping");
-		res = cmld_container_ctrl_with_smartcard(control, container, key,
+		res = cmld_container_ctrl_with_smartcard(container, fd, key,
 							 CMLD_CONTAINER_CTRL_STOP);
 		if (res != 0) {
 			ERROR("Failed to stop container %s", container_get_name(container));
-			// TODO control_send_message required here? also check in start function
 		}
+		mem_memset0(key, strlen(key));
 	} else if (container_is_encrypted(container)) {
 		res = -1;
 		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, fd);
@@ -781,7 +765,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			NULL;
 
 	// Trace user for audit
-	if (container && (control->type == AF_UNIX)) {
+	if (container) {
 		uint32_t uid;
 		if (sock_unix_get_peer_uid(fd, &uid) != 0) {
 			WARN_ERRNO("Could not set login uid for control connection!");
@@ -1020,7 +1004,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {
 		uint8_t *csr = NULL;
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-		csr = smartcard_pull_csr_new(&out.device_csr.len);
+		csr = crypto_pull_device_csr_new(&out.device_csr.len);
 		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_CSR;
 		out.has_device_csr = csr ? true : false;
 		out.device_csr.data = csr;
@@ -1039,7 +1023,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			cert = msg->device_cert.data;
 			cert_len = msg->device_cert.len;
 		}
-		cmld_push_device_cert(control, cert, cert_len);
+		crypto_push_device_cert(fd, cert, cert_len);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED: {
@@ -1219,13 +1203,13 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		ContainerStartParams *start_params = msg->container_start_params;
-		res = control_handle_container_start(control, container, start_params, fd);
+		res = control_handle_container_start(container, start_params, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
 		IF_NULL_RETURN(container);
 		ContainerStartParams *start_params = msg->container_start_params;
-		res = control_handle_container_stop(control, container, start_params, fd);
+		res = control_handle_container_stop(container, start_params, fd);
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE:
@@ -1378,8 +1362,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			ERROR("Current PIN or new PIN not specified");
 			break;
 		}
-		res = cmld_container_change_pin(control, container, msg->device_pin,
-						msg->device_newpin);
+		res = cmld_container_change_pin(container, fd, msg->device_pin, msg->device_newpin);
+		mem_memset0(msg->device_pin, strlen(msg->device_pin));
+		mem_memset0(msg->device_newpin, strlen(msg->device_newpin));
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN: {
@@ -1397,117 +1382,6 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
 		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))
 			WARN("Could not send response to fd=%d", fd);
-	}
-}
-
-/**
- * Event callback for incoming data that receives a ControllerToDaemon message (remote)
- *
- * The handle_message function will be called to handle the received message.
- *
- * @param fd	    file descriptor of the client connection
- *		    from which the incoming message is read
- * @param events    event flags
- * @param io	    pointer to associated event_io_t struct
- * @param data	    pointer to this control_t struct
- */
-static void
-control_cb_recv_message(int fd, unsigned events, event_io_t *io, void *data)
-{
-	bool connection_error = false;
-	control_t *control = data;
-
-	if ((events & EVENT_IO_WRITE) && control->type == AF_INET) {
-		int res;
-		socklen_t res_len = sizeof(int);
-		if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &res, &res_len) < 0) {
-			TRACE_ERRNO("getsockopt failed for socket %d", fd);
-			connection_error = true;
-		}
-		if (res != 0) {
-			TRACE("res of getsockopt for %d says error %s", fd, strerror(res));
-			connection_error = true;
-		} else {
-			DEBUG("Connected to remote host %s:%d", control->hostip, control->port);
-			control->connected = true;
-			container_t *container_c0 = cmld_containers_get_c0();
-			char *imei = container_get_imei(container_c0);
-			char *mac_address = container_get_mac_address(container_c0);
-			char *phone_number = container_get_phone_number(container_c0);
-
-			/* send LOGON_DEVICE message */
-			DEBUG("Sending LOGON_DEVICE message to remote host %s:%d", control->hostip,
-			      control->port);
-			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-			out.code = DAEMON_TO_CONTROLLER__CODE__LOGON_DEVICE;
-			if (cmld_get_device_uuid()) {
-				DEBUG("Setting uuid: %s", cmld_get_device_uuid());
-				out.device_uuid = mem_strdup(cmld_get_device_uuid());
-			}
-			if (hardware_get_name()) {
-				DEBUG("Setting hardware name: %s", hardware_get_name());
-				out.logon_hardware_name = mem_strdup(hardware_get_name());
-			}
-			if (hardware_get_serial_number()) {
-				DEBUG("Setting hardware serial number: %s",
-				      hardware_get_serial_number());
-				out.logon_hardware_serial =
-					mem_strdup(hardware_get_serial_number());
-			}
-			if (imei) {
-				DEBUG("Setting imei: %s", imei);
-				out.logon_imei = mem_strdup(imei);
-			}
-			if (mac_address) {
-				DEBUG("Setting MAC address: %s", mac_address);
-				out.logon_mac_address = mem_strdup(mac_address);
-			}
-			if (phone_number) {
-				DEBUG("Setting phone_number: %s", phone_number);
-				out.logon_phone_number = mem_strdup(phone_number);
-			}
-			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
-				WARN("Could not send LOGON message");
-			}
-			DEBUG("Sent LOGON message");
-			mem_free0(out.device_uuid);
-			mem_free0(out.logon_hardware_name);
-			mem_free0(out.logon_hardware_serial);
-			mem_free0(out.logon_imei);
-			mem_free0(out.logon_mac_address);
-			mem_free0(out.logon_phone_number);
-
-			/* remove write watch */
-			event_remove_io(io);
-			event_io_free(io);
-			io = event_io_new(control->sock_client, EVENT_IO_READ,
-					  control_cb_recv_message, control);
-			event_add_io(io);
-		}
-	} else if (events & EVENT_IO_READ) {
-		ControllerToDaemon *msg = (ControllerToDaemon *)protobuf_recv_message(
-			fd, &controller_to_daemon__descriptor);
-		if (msg != NULL) {
-			control_handle_message(control, msg, fd);
-			TRACE("Handled control connection %d", fd);
-			protobuf_free_message((ProtobufCMessage *)msg);
-			return;
-		}
-		if (!(events & EVENT_IO_EXCEPT)) {
-			WARN("Failed to receive and decode ControllerToDaemon protobuf message!");
-			if (control->type == AF_INET)
-				connection_error = true;
-		}
-	}
-	if ((events & EVENT_IO_EXCEPT) || connection_error) {
-		TRACE("MDM Connection Error: %d", (int)connection_error);
-		event_remove_io(io);
-		event_io_free(io);
-		close(fd);
-		control->sock_client = -1;
-		if (control->type == AF_INET)
-			control_remote_reconnect(control);
-		return;
 	}
 }
 
@@ -1553,7 +1427,8 @@ connection_err:
 	event_io_free(io);
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected control socket");
-	control->sock_client = -1;
+	control->event_io_sock_connected_list =
+		list_remove(control->event_io_sock_connected_list, io);
 	return;
 }
 
@@ -1572,7 +1447,6 @@ control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 	control_t *control = (control_t *)data;
 	ASSERT(control);
 	ASSERT(control->sock == fd);
-	ASSERT(control->type == AF_UNIX);
 
 	if (events & EVENT_IO_EXCEPT) {
 		TRACE("EVENT_IO_EXCEPT on socket %d, closing...", fd);
@@ -1589,7 +1463,6 @@ control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 		WARN("Could not accept control connection");
 		return;
 	}
-	control->sock_client = cfd;
 	DEBUG("Accepted control connection %d", cfd);
 
 	fd_make_non_blocking(cfd);
@@ -1599,64 +1472,6 @@ control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 	DEBUG("local control client connected on fd=%d", cfd);
 
 	event_add_io(event);
-}
-
-/**
- * Timer callback to retry connection to remote socket till success
- */
-static void
-control_remote_reconnect_cb(UNUSED event_timer_t *timer, void *data)
-{
-	control_t *control = data;
-
-	ASSERT(control);
-
-	control->sock_client = sock_inet_create(SOCK_STREAM);
-	if (control->sock_client < 0) {
-		WARN("Could not create AF_INET socket");
-		return;
-	}
-	fd_make_non_blocking(control->sock_client);
-
-	int res = sock_inet_connect(control->sock_client, control->hostip, control->port);
-	if (-1 == res) {
-		DEBUG_ERRNO("Connecting failed to remote host %s:%d", control->hostip,
-			    control->port);
-		return;
-	}
-
-	event_remove_timer(control->reconnect_timer);
-	event_timer_free(control->reconnect_timer);
-	control->reconnect_timer = NULL;
-
-	/* connection succeeded so register socket for receiving data */
-	fd_make_non_blocking(control->sock_client);
-
-	event_io_t *event = event_io_new(control->sock_client, EVENT_IO_READ | EVENT_IO_WRITE,
-					 control_cb_recv_message, control);
-	event_add_io(event);
-}
-/**
- * helper function to register timer for reconnect handler
- */
-static int
-control_remote_reconnect(control_t *control)
-{
-	ASSERT(control->type == AF_INET);
-	ASSERT(control->hostip);
-	ASSERT(control->port);
-	control->connected = false;
-
-	/* try to reconnect every CONTROL_REMOTE_RECONNECT_INTERVAL ms */
-	if (control->reconnect_timer) {
-		event_remove_timer(control->reconnect_timer);
-		event_timer_free(control->reconnect_timer);
-	}
-	control->reconnect_timer = event_timer_new(CONTROL_REMOTE_RECONNECT_INTERVAL, -1,
-						   control_remote_reconnect_cb, control);
-	event_add_timer(control->reconnect_timer);
-
-	return 0;
 }
 
 control_t *
@@ -1669,8 +1484,6 @@ control_new(int sock, bool privileged)
 
 	control_t *control = mem_new0(control_t, 1);
 	control->sock = sock;
-	control->sock_client = -1;
-	control->type = AF_UNIX;
 	control->privileged = privileged;
 
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, control_cb_accept, control);
@@ -1683,8 +1496,6 @@ control_t *
 control_local_new(const char *path)
 {
 	control_t *control;
-	// TODO support giraffe bind?!? (needs to be done before registering event!)
-	// Alternatively: shared mount (+symlink for transparent location)?
 	int sock = sock_unix_create_and_bind(SOCK_STREAM, path);
 	if (sock < 0) {
 		WARN("Could not create and bind UNIX domain socket");
@@ -1695,79 +1506,21 @@ control_local_new(const char *path)
 	return control;
 }
 
-control_t *
-control_remote_new(const char *hostip, const char *service)
-{
-	control_t *control = mem_new0(control_t, 1);
-	control->type = AF_INET;
-	control->hostip = mem_strdup(hostip);
-	control->port = atoi(service); // FIXME we should use getaddrinfo
-	control->connected = false;
-	control->sock = -1;
-	control->sock_client = -1;
-	control->privileged = true;
-
-	control->reconnect_timer = NULL;
-
-	control_list = list_append(control_list, control);
-
-	return control;
-}
-
-int
-control_remote_connect(control_t *control)
-{
-	/* handle connection to remote host asynchronously */
-	if (!control->connected && !control->reconnect_timer)
-		return control_remote_reconnect(control);
-	else {
-		DEBUG("Tried to connect remote control socket which already attempts a connection");
-		return -1;
-	}
-}
-
-bool
-control_remote_connecting(control_t *control)
-{
-	return (control->connected || control->reconnect_timer);
-}
-
-void
-control_remote_disconnect(control_t *control)
-{
-	if (control->reconnect_timer) {
-		event_remove_timer(control->reconnect_timer);
-		event_timer_free(control->reconnect_timer);
-		control->reconnect_timer = NULL;
-	}
-	if (control->sock_client >= 0) {
-		DEBUG("Shutting down control socket");
-		if (shutdown(control->sock_client, SHUT_RDWR) == -1) {
-			WARN_ERRNO("Shutting down the control socket failed");
-		}
-		if (close(control->sock_client) == -1) {
-			WARN_ERRNO("Closing the control socket failed");
-		}
-	}
-	control->connected = false;
-}
-
 void
 control_free(control_t *control)
 {
 	ASSERT(control);
-	if (control->sock_client >= 0) {
-		shutdown(control->sock_client, SHUT_RDWR);
-		close(control->sock_client);
+	for (list_t *l = control->event_io_sock_connected_list; l; l = l->next) {
+		event_io_t *event_io_sock_connected = l->data;
+		event_remove_io(event_io_sock_connected);
+		shutdown(event_io_get_fd(event_io_sock_connected), SHUT_RDWR);
+		if (close(event_io_get_fd(event_io_sock_connected) < 0)) {
+			WARN_ERRNO("Failed to close connected control socket");
+		}
+		event_io_free(event_io_sock_connected);
 	}
-	if (control->hostip)
-		mem_free0(control->hostip);
-
-	if (control->reconnect_timer) {
-		event_remove_timer(control->reconnect_timer);
-		event_timer_free(control->reconnect_timer);
-		control->reconnect_timer = NULL;
-	}
+	list_delete(control->event_io_sock_connected_list);
+	control->event_io_sock_connected_list = NULL;
 
 	control_list = list_remove(control_list, control);
 

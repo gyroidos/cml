@@ -686,7 +686,7 @@ network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
 
 	IF_NULL_RETVAL(mac_str, -1);
 
-	memset(mac, 0, 6);
+	mem_memset(mac, 0, 6);
 	int ret = network_str_to_mac_addr(mac_str, mac);
 
 	mem_free0(mac_str);
@@ -712,7 +712,7 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 		if (mac_str == NULL)
 			continue;
 
-		memset(mac_i, 0, 6);
+		mem_memset(mac_i, 0, 6);
 
 		if ((0 == network_str_to_mac_addr(mac_str, mac_i)) &&
 		    (0 == memcmp(mac, mac_i, 6))) {

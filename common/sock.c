@@ -26,6 +26,7 @@
 #include "sock.h"
 
 #include "macro.h"
+#include "mem.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -234,7 +235,7 @@ sock_inet_create_and_connect(int type, const char *node, const char *service)
 	struct addrinfo hints, *res = NULL;
 	int sock = -1;
 
-	memset(&hints, 0, sizeof hints);
+	mem_memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC; // allow for ipv6 and ipv4
 	hints.ai_socktype = type;
 	hints.ai_flags |= AI_CANONNAME;

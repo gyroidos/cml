@@ -109,6 +109,27 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 #endif
 	;
 
+/**
+ * This function is only implicitly used by the logging macros defined in macro.h
+ */
+void
+logf_message_hexdump(logf_prio_t prio, const void *buf, size_t len, const char *fmt, ...)
+#if defined(__GNUC__)
+	__attribute__((format(printf, 4, 5)))
+#endif
+	;
+
+/**
+ * This function is only implicitly used by the logging macros defined in macro.h
+ */
+void
+logf_message_file_hexdump(logf_prio_t prio, const char *file, int line, const void *buf, size_t len,
+			  const char *fmt, ...)
+#if defined(__GNUC__)
+	__attribute__((format(printf, 6, 7)))
+#endif
+	;
+
 #ifndef DEBUG_BUILD
 // RELEASE BUILD: log INFO level and higher, include NEITHER file name NOR line number
 #ifndef LOGF_LOG_MIN_PRIO
@@ -124,6 +145,11 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 	do {                                                                                       \
 		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
 			logf_message_errno(level, __VA_ARGS__);                                    \
+	} while (0)
+#define logf_message_hexdump_guard(level, buf, len, ...)                                           \
+	do {                                                                                       \
+		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
+			logf_message_hexdump(level, buf, len, __VA_ARGS__);                        \
 	} while (0)
 
 #else /* DEBUG_BUILD */
@@ -147,6 +173,12 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
 			logf_message_file_errno(level, __FILE__, __LINE__, __VA_ARGS__);           \
 	} while (0)
+#define logf_message_hexdump_guard(level, buf, len, ...)                                           \
+	do {                                                                                       \
+		if (level >= LOGF_LOG_MIN_PRIO)                                                    \
+			logf_message_file_hexdump(level, __FILE__, __LINE__, buf, len,             \
+						  __VA_ARGS__);                                    \
+	} while (0)
 
 #endif /* DEBUG_BUILD */
 
@@ -167,6 +199,14 @@ logf_message_file_errno(logf_prio_t prio, const char *file, int line, const char
 
 #define logf_trace(...) logf_message_guard(LOGF_PRIO_TRACE, __VA_ARGS__)
 #define logf_trace_errno(...) logf_message_errno_guard(LOGF_PRIO_TRACE, __VA_ARGS__)
+
+#define logf_error_hexdump(...) logf_message_hexdump_guard(LOGF_PRIO_ERROR, __VA_ARGS__)
+
+#define logf_info_hexdump(...) logf_message_hexdump_guard(LOGF_PRIO_INFO, __VA_ARGS__)
+
+#define logf_debug_hexdump(...) logf_message_hexdump_guard(LOGF_PRIO_DEBUG, __VA_ARGS__)
+
+#define logf_trace_hexdump(...) logf_message_hexdump_guard(LOGF_PRIO_TRACE, __VA_ARGS__)
 
 /**
  * Logs to all registered log writers (logf_*_write).

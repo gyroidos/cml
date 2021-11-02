@@ -587,6 +587,9 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 
 	res = 0;
 cleanup:
+	mem_memset0(tmpkey, tmpkeylen);
+	mem_memset0(iv_buf, iv_len);
+	mem_memset0(out, max_out_len);
 	mem_free0(tmpkey);
 	mem_free0(iv_buf);
 	mem_free0(out);
@@ -1697,10 +1700,9 @@ ssl_verify_signature_from_buf(uint8_t *cert_buf, size_t cert_len, const uint8_t 
 		ssl_print_err();
 		ERROR("Failed to verify signature");
 		ret = -2;
-		goto error;
 	}
 
-error:
+	mem_free0(hash);
 	if (cert)
 		X509_free(cert);
 

@@ -47,7 +47,7 @@ container_verify_runtime_measurements(MlContainerEntry **entries, size_t len,
 	uint8_t pcr_calculated[hash_size];
 
 	// Static PCRs are initialized with zero's
-	memset(pcr_calculated, 0, hash_size);
+	mem_memset(pcr_calculated, 0, hash_size);
 
 	for (size_t i = 0; i < len; i++) {
 		if (strcmp(entries[i]->template_hash_alg, hash_algo_to_string(pcr_hash_algo))) {

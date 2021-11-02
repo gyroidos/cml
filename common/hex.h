@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2019 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,23 +21,16 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#ifndef MODSIG_H_
-#define MODSIG_H_
+#ifndef HEX_H_
+#define HEX_H_
 
-typedef struct {
-	size_t key_id_len;
-	uint8_t *key_id;
-	size_t sig_len;
-	uint8_t *sig;
-	char *signer;
-	char *hash_algo;
-	char *sig_algo;
-} sig_info_t;
+int
+convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen);
 
-sig_info_t *
-modsig_parse_new(const char *pkcs7_raw, size_t len);
+int
+convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
-void
-modsig_free(sig_info_t *s);
+char *
+convert_bin_to_hex_new(const uint8_t *bin, int length);
 
-#endif // MODSIG_H_
+#endif // HEX_H_

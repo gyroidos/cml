@@ -717,6 +717,7 @@ main(int argc, char *argv[])
 		if (strcmp(msg.device_newpin, newpin_verify) != 0)
 			FATAL("Passwords don't match!");
 
+		mem_memset0(newpin_verify, strlen(newpin_verify));
 		mem_free0(newpin_verify);
 	} else
 		print_usage(argv[0]);
@@ -876,12 +877,18 @@ exit:
 	if (msg.has_device_cert)
 		mem_free0(msg.device_cert.data);
 
-	if (has_container_start_params_key)
+	if (has_container_start_params_key) {
+		mem_memset0(container_start_params.key, strlen(container_start_params.key));
 		mem_free0(container_start_params.key);
-	if (msg.device_pin)
+	}
+	if (msg.device_pin) {
+		mem_memset0(msg.device_pin, strlen(msg.device_pin));
 		mem_free0(msg.device_pin);
-	if (msg.device_newpin)
+	}
+	if (msg.device_newpin) {
+		mem_memset0(msg.device_newpin, strlen(msg.device_newpin));
 		mem_free0(msg.device_newpin);
+	}
 
 	for (size_t i = 0; i < msg.n_container_uuids; ++i)
 		mem_free0(msg.container_uuids[i]);

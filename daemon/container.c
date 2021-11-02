@@ -203,7 +203,7 @@ container_free_key(container_t *container)
 
 	IF_NULL_RETURN(container->key);
 
-	memset(container->key, 0, strlen(container->key));
+	mem_memset0(container->key, strlen(container->key));
 	mem_free0(container->key);
 
 	INFO("Key of container %s was freed", container->name);
@@ -1649,7 +1649,7 @@ error_post_clone:
 }
 
 int
-container_start(container_t *container) //, const char *key)
+container_start(container_t *container)
 {
 	ASSERT(container);
 

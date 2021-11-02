@@ -72,7 +72,7 @@ struct smartcard {
 typedef struct smartcard_startdata {
 	smartcard_t *smartcard;
 	container_t *container;
-	control_t *control;
+	int resp_fd;
 } smartcard_startdata_t;
 
 typedef struct smartcard_scdtoken_data {
@@ -182,34 +182,6 @@ smartcard_send_recv_block(const DaemonToToken *out)
 	return msg;
 }
 
-bool
-smartcard_cert_has_valid_format(unsigned char *cert_buf, size_t cert_buf_len)
-{
-	const char *begin_cert_str = "-----BEGIN CERTIFICATE-----\n";
-	const char *end_cert_str = "-----END CERTIFICATE-----\n";
-	size_t begin_cert_str_len = strlen(begin_cert_str);
-	size_t end_cert_str_len = strlen(end_cert_str);
-
-	if (cert_buf == NULL || cert_buf_len == 0) {
-		ERROR("Given certificate is empty.");
-		return false;
-	}
-	if (cert_buf_len < end_cert_str_len + begin_cert_str_len) {
-		ERROR("Invalid certificate length %zu.", cert_buf_len);
-		return false;
-	}
-	if (memcmp(cert_buf, begin_cert_str, begin_cert_str_len)) {
-		ERROR("Invalid certificate: begin string not found.");
-		return false;
-	}
-	if (memcmp(cert_buf + sizeof(char) * (cert_buf_len - end_cert_str_len), end_cert_str,
-		   end_cert_str_len)) {
-		ERROR("Invalid certificate: end string not found.");
-		return false;
-	}
-	return true;
-}
-
 /**
  * checks whether the token associated to @param container has been provisioned
  * with a device bound authentication code yet.
@@ -239,13 +211,13 @@ smartcard_start_container_internal(smartcard_startdata_t *startdata)
 		FATAL("No container key is set.");
 	}
 
-	int resp_fd = control_get_client_sock(startdata->control);
 	// backward compatibility: convert binary key to ascii (to have it converted back later)
 	DEBUG("SCD:Container  %s: Starting...", container_get_name(startdata->container));
 	if (-1 == cmld_container_start(startdata->container))
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
+				     startdata->resp_fd);
 	else
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, startdata->resp_fd);
 }
 
 static void
@@ -253,17 +225,16 @@ smartcard_stop_container_internal(smartcard_startdata_t *startdata)
 {
 	ASSERT(startdata);
 
-	int resp_fd = control_get_client_sock(startdata->control);
-
 	int res = cmld_container_stop(startdata->container);
 
 	// TODO if the modules cannot be stopped successfully, the container is killed. The return
 	// value in this case is CONTAINER_ERROR, even if the container was killed. This is
 	// ignored atm and just STOP_OK is returned. How should we treat this?
 	if (res == -1) {
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING,
+				     startdata->resp_fd);
 	} else {
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, startdata->resp_fd);
 	}
 }
 
@@ -271,7 +242,6 @@ static void
 smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
-	int resp_fd = control_get_client_sock(startdata->control);
 	bool done = false;
 
 	if (events & EVENT_IO_EXCEPT) {
@@ -301,7 +271,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "lock",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			WARN("Locking the token failed.");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED, resp_fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED,
+					     startdata->resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
@@ -315,7 +286,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			WARN("Unlocking the token failed.");
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED,
-					     resp_fd);
+					     startdata->resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
@@ -324,7 +295,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "unlock-wrong-pin",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
-					     resp_fd);
+					     startdata->resp_fd);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
@@ -333,7 +304,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "locked-until-reboot",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
-					     resp_fd);
+					     startdata->resp_fd);
 			done = true;
 		} break;
 
@@ -387,7 +358,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 						      (ProtobufCMessage *)&out);
 
 				//delete wrapped key from RAM
-				memset(key, 0, sizeof(key));
+				mem_memset0(key, sizeof(key));
 				mem_free0(out.container_uuid);
 				mem_free0(out.token_uuid);
 			} else {
@@ -421,7 +392,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 				char *ascii_key = bytes_to_string_new(key, keylen);
 				container_set_key(startdata->container, ascii_key);
 				// delete key from RAM
-				memset(ascii_key, 0, strlen(ascii_key));
+				mem_memset0(ascii_key, strlen(ascii_key));
 				mem_free0(ascii_key);
 				// wrap key via scd
 				DaemonToToken out = DAEMON_TO_TOKEN__INIT;
@@ -443,7 +414,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 						      (ProtobufCMessage *)&out);
 
 				// delete key from RAM
-				memset(key, 0, sizeof(key));
+				mem_memset0(key, sizeof(key));
 				mem_free0(out.container_uuid);
 				mem_free0(out.token_uuid);
 			}
@@ -473,7 +444,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					TOKEN_MGMT, "unwrap-container-key",
 					uuid_string(container_get_uuid(startdata->container)), 0);
 				control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
-						     resp_fd);
+						     startdata->resp_fd);
 				break;
 			}
 			// set the key
@@ -485,8 +456,8 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 							      msg->unwrapped_key.len);
 			container_set_key(startdata->container, ascii_key);
 			//delete key from RAM
-			memset(ascii_key, 0, strlen(ascii_key));
-			memset(msg->unwrapped_key.data, 0, msg->unwrapped_key.len);
+			mem_memset0(ascii_key, strlen(ascii_key));
+			mem_memset0(msg->unwrapped_key.data, msg->unwrapped_key.len);
 			mem_free0(ascii_key);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__WRAPPED_KEY: {
@@ -535,7 +506,7 @@ smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data
 					uuid_string(container_get_uuid(startdata->container)), 0);
 			TRACE("Stored wrapped key on disk successfully");
 			// delete wrapped key from RAM
-			memset(msg->wrapped_key.data, 0, msg->wrapped_key.len);
+			mem_memset0(msg->wrapped_key.data, msg->wrapped_key.len);
 			mem_free0(keyfile);
 		} break;
 		default:
@@ -557,7 +528,6 @@ static void
 smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
-	int resp_fd = control_get_client_sock(startdata->control);
 
 	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit);
 
@@ -575,7 +545,8 @@ smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__LOCK_FAILED: {
 		WARN("Locking the token failed.");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
@@ -584,17 +555,20 @@ smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
 	} break;
 	case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
 		WARN("Unlocking the token failed.");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
 		WARN("Unlocking the token failed (wrong PIN/passphrase).");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
 		WARN("Unlocking the token failed (locked till reboot).");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT, resp_fd);
+		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
+				     startdata->resp_fd);
 		goto exit;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
@@ -626,11 +600,10 @@ exit:
 }
 
 int
-smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_ctrl_handler(smartcard_t *smartcard, container_t *container, int resp_fd,
 				 const char *passwd, cmld_container_ctrl_t container_ctrl)
 {
 	ASSERT(smartcard);
-	ASSERT(control);
 	ASSERT(container);
 	ASSERT(passwd);
 
@@ -641,10 +614,9 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	}
 	startdata->smartcard = smartcard;
 	startdata->container = container;
-	startdata->control = control;
+	startdata->resp_fd = resp_fd;
 
 	int pair_sec_len;
-	int resp_fd = control_get_client_sock(startdata->control);
 
 	if (!container_get_token_is_init(container)) {
 		audit_log_event(container_get_uuid(startdata->container), FSA, CMLD, TOKEN_MGMT,
@@ -714,6 +686,7 @@ smartcard_container_ctrl_handler(smartcard_t *smartcard, control_t *control, con
 	}
 
 	protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+	mem_memset0(out.token_pin, strlen(out.token_pin));
 	mem_free0(out.token_pin);
 	mem_free0(out.pairing_secret.data);
 	mem_free0(out.token_uuid);
@@ -725,51 +698,9 @@ err:
 }
 
 static void
-smartcard_cb_generic(int fd, unsigned events, event_io_t *io, void *data)
-{
-	ASSERT(data);
-
-	control_t *control = data;
-	int resp_fd = control_get_client_sock(control);
-
-	if (events & EVENT_IO_READ) {
-		// use protobuf for communication with scd
-		TokenToDaemon *msg =
-			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
-		if (!msg) {
-			ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard generic callback.");
-			event_remove_io(io);
-			event_io_free(io);
-			return;
-		}
-		switch (msg->code) {
-		case TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR: {
-			control_send_message(CONTROL_RESPONSE_DEVICE_PROVISIONING_ERROR, resp_fd);
-		} break;
-		case TOKEN_TO_DAEMON__CODE__DEVICE_CERT_ERROR: {
-			control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, resp_fd);
-		} break;
-		case TOKEN_TO_DAEMON__CODE__DEVICE_CERT_OK: {
-			control_send_message(CONTROL_RESPONSE_DEVICE_CERT_OK, resp_fd);
-		} break;
-		case TOKEN_TO_DAEMON__CODE__CMD_UNKNOWN: {
-			control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, resp_fd);
-		} break;
-		default:
-			ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
-			break;
-		}
-		protobuf_free_message((ProtobufCMessage *)msg);
-		event_remove_io(io);
-		event_io_free(io);
-	}
-}
-
-static void
 smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void *data)
 {
 	smartcard_startdata_t *startdata = data;
-	int resp_fd = control_get_client_sock(startdata->control);
 	int rc = -1;
 	bool command_state = false;
 
@@ -783,7 +714,8 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 			audit_log_event(container_get_uuid(startdata->container), FSA, CMLD,
 					CONTAINER_MGMT, "container-change-pin",
 					uuid_string(container_get_uuid(startdata->container)), 0);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
+					     startdata->resp_fd);
 			mem_free0(startdata);
 			return;
 		}
@@ -826,7 +758,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 		control_send_message(command_state ?
 					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL :
 					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
-				     resp_fd);
+				     startdata->resp_fd);
 
 		protobuf_free_message((ProtobufCMessage *)msg);
 		event_remove_io(io);
@@ -841,18 +773,16 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 }
 
 int
-smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, container_t *container,
+smartcard_container_change_pin(smartcard_t *smartcard, container_t *container, int resp_fd,
 			       const char *passwd, const char *newpasswd)
 {
 	ASSERT(smartcard);
 	ASSERT(container);
-	ASSERT(control);
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
 	int ret = -1;
 	unsigned char pair_sec[MAX_PAIR_SEC_LEN];
-	int resp_fd = control_get_client_sock(control);
 	bool is_provisioning;
 
 	smartcard_startdata_t *startdata = mem_alloc0(sizeof(smartcard_startdata_t));
@@ -862,7 +792,7 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	}
 	startdata->smartcard = smartcard;
 	startdata->container = container;
-	startdata->control = control;
+	startdata->resp_fd = resp_fd;
 
 	DEBUG("SCD: Received new password from UI");
 
@@ -902,6 +832,9 @@ smartcard_container_change_pin(smartcard_t *smartcard, control_t *control, conta
 	out.pairing_secret.data = mem_memcpy(pair_sec, sizeof(pair_sec));
 
 	ret = protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+	mem_memset0(out.token_pin, strlen(out.token_pin));
+	mem_memset0(out.token_newpin, strlen(out.token_newpin));
+	mem_memset0(pair_sec, sizeof(pair_sec));
 	mem_free0(out.token_pin);
 	mem_free0(out.token_newpin);
 	mem_free0(out.pairing_secret.data);
@@ -1140,541 +1073,4 @@ smartcard_free(smartcard_t *smartcard)
 
 	mem_free0(smartcard->path);
 	mem_free0(smartcard);
-}
-
-/// *** CRYPTO *** ///
-
-static HashAlgo
-smartcard_hashalgo_to_proto(smartcard_crypto_hashalgo_t hashalgo)
-{
-	switch (hashalgo) {
-	case SHA1:
-		return HASH_ALGO__SHA1;
-	case SHA256:
-		return HASH_ALGO__SHA256;
-	case SHA512:
-		return HASH_ALGO__SHA512;
-	default:
-		FATAL("Invalid smartcard_hashalgo_t value: %d", hashalgo);
-	}
-}
-
-static smartcard_crypto_verify_result_t
-smartcard_crypto_verify_result_from_proto(TokenToDaemon__Code code)
-{
-	switch (code) {
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
-		return VERIFY_GOOD;
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
-		return VERIFY_ERROR;
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
-		return VERIFY_BAD_SIGNATURE;
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
-		return VERIFY_BAD_CERTIFICATE;
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-		return VERIFY_LOCALLY_SIGNED;
-	default:
-		FATAL("Cannot convert %d to valid smartcard_verify_result_t value", code);
-	}
-}
-
-typedef struct crypto_callback_task {
-	smartcard_crypto_hash_callback_t hash_complete;
-	smartcard_crypto_verify_callback_t verify_complete;
-	smartcard_crypto_verify_buf_callback_t verify_buf_complete;
-	void *data;
-	char *hash_file;
-	smartcard_crypto_hashalgo_t hash_algo;
-	char *verify_data_file;
-	char *verify_sig_file;
-	char *verify_cert_file;
-	unsigned char *verify_data_buf;
-	unsigned char *verify_sig_buf;
-	unsigned char *verify_cert_buf;
-	size_t verify_data_buf_len;
-	size_t verify_sig_buf_len;
-	size_t verify_cert_buf_len;
-} crypto_callback_task_t;
-
-static crypto_callback_task_t *
-crypto_callback_hash_task_new(smartcard_crypto_hash_callback_t cb, void *data,
-			      const char *hash_file, smartcard_crypto_hashalgo_t hash_algo)
-{
-	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
-	task->hash_complete = cb;
-	task->data = data;
-	task->hash_file = mem_strdup(hash_file);
-	task->hash_algo = hash_algo;
-	return task;
-}
-
-static crypto_callback_task_t *
-crypto_callback_verify_task_new(smartcard_crypto_verify_callback_t cb, void *data,
-				const char *data_file, const char *sig_file, const char *cert_file,
-				smartcard_crypto_hashalgo_t hash_algo)
-{
-	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
-	task->verify_complete = cb;
-	task->data = data;
-	task->hash_algo = hash_algo;
-	task->verify_data_file = mem_strdup(data_file);
-	task->verify_sig_file = mem_strdup(sig_file);
-	task->verify_cert_file = mem_strdup(cert_file);
-	return task;
-}
-
-static crypto_callback_task_t *
-crypto_callback_verify_buf_task_new(smartcard_crypto_verify_buf_callback_t cb, void *data,
-				    const unsigned char *data_buf, size_t data_buf_len,
-				    const unsigned char *sig_buf, size_t sig_buf_len,
-				    const unsigned char *cert_buf, size_t cert_buf_len,
-				    smartcard_crypto_hashalgo_t hash_algo)
-{
-	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
-	task->verify_buf_complete = cb;
-	task->data = data;
-	task->hash_algo = hash_algo;
-	task->verify_data_buf = mem_new0(unsigned char, data_buf_len);
-	task->verify_sig_buf = mem_new0(unsigned char, sig_buf_len);
-	task->verify_cert_buf = mem_new0(unsigned char, cert_buf_len);
-	memcpy(task->verify_data_buf, data_buf, data_buf_len);
-	memcpy(task->verify_sig_buf, sig_buf, sig_buf_len);
-	memcpy(task->verify_cert_buf, cert_buf, cert_buf_len);
-	task->verify_data_buf_len = data_buf_len;
-	task->verify_sig_buf_len = sig_buf_len;
-	task->verify_cert_buf_len = cert_buf_len;
-	return task;
-}
-
-static void
-crypto_callback_task_free(crypto_callback_task_t *task)
-{
-	IF_NULL_RETURN(task);
-	if (task->hash_file)
-		mem_free0(task->hash_file);
-	if (task->verify_data_file)
-		mem_free0(task->verify_data_file);
-	if (task->verify_sig_file)
-		mem_free0(task->verify_sig_file);
-	if (task->verify_cert_file)
-		mem_free0(task->verify_cert_file);
-	if (task->verify_data_buf)
-		mem_free0(task->verify_data_buf);
-	if (task->verify_sig_buf)
-		mem_free0(task->verify_sig_buf);
-	if (task->verify_cert_buf)
-		mem_free0(task->verify_cert_buf);
-	mem_free0(task);
-}
-
-static void
-smartcard_cb_crypto(int fd, unsigned events, event_io_t *io, void *data)
-{
-	crypto_callback_task_t *task = data;
-	ASSERT(task);
-
-	TRACE("Received message from SCD");
-
-	// TODO outsource socket/fd/events handling
-	if (events & EVENT_IO_READ) {
-		// use protobuf for communication with scd
-		TokenToDaemon *msg =
-			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
-		if (!msg) {
-			ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting smartcard crypto.");
-			goto cleanup;
-		}
-		switch (msg->code) {
-		// deal with CRYPTO_HASH_* cases
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK:
-			TRACE("Received HASH_OK message, ");
-			if (msg->has_hash_value) {
-				char *hash = bytes_to_string_new(msg->hash_value.data,
-								 msg->hash_value.len);
-
-				TRACE("Received hash for file %s: %s",
-				      task->hash_file ? task->hash_file : "<empty>", hash);
-				task->hash_complete(hash, task->hash_file, task->hash_algo,
-						    task->data);
-				if (hash != NULL) {
-					mem_free0(hash);
-				}
-				break;
-			}
-			ERROR("Missing hash_value in CRYPTO_HASH_OK response!"); // fallthrough
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR:
-			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
-			break;
-
-		// deal with CRYPTO_VERIFY_* cases
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-			if (task->verify_complete) {
-				task->verify_complete(
-					smartcard_crypto_verify_result_from_proto(msg->code),
-					task->verify_data_file, task->verify_sig_file,
-					task->verify_cert_file, task->hash_algo, task->data);
-			} else if (task->verify_buf_complete) {
-				task->verify_buf_complete(
-					smartcard_crypto_verify_result_from_proto(msg->code),
-					task->verify_data_buf, task->verify_data_buf_len,
-					task->verify_sig_buf, task->verify_sig_buf_len,
-					task->verify_cert_buf, task->verify_cert_buf_len,
-					task->hash_algo, task->data);
-			}
-			break;
-		default:
-			ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
-			break;
-		}
-		protobuf_free_message((ProtobufCMessage *)msg);
-	} else if (events & EVENT_IO_EXCEPT) {
-		WARN("Got EVENT_IO_EXCEPT in smartcard_cb_crypto().");
-		// TODO
-	} else {
-		WARN("Got other event %x in smartcard_cb_crypto(), ignoring.", events);
-		return; // do nothing (i.e. do not free resources) for other kinds of events
-	}
-
-cleanup:
-	event_remove_io(io);
-	event_io_free(io);
-	crypto_callback_task_free(task);
-	close(fd);
-}
-
-static int
-smartcard_send_crypto(const DaemonToToken *out, crypto_callback_task_t *task)
-{
-	ASSERT(out);
-	ASSERT(task);
-
-	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET | SOCK_NONBLOCK, SCD_CONTROL_SOCKET);
-	if (sock < 0) {
-		ERROR_ERRNO("Failed to connect to scd control socket %s for crypto",
-			    SCD_CONTROL_SOCKET);
-		return -1;
-	}
-
-	DEBUG("smartcard_send_crypto: connected to sock %d", sock);
-	event_io_t *event = event_io_new(sock, EVENT_IO_READ, smartcard_cb_crypto, task);
-	event_add_io(event);
-
-	/*
-	char *string = protobuf_c_text_to_string((ProtobufCMessage *) out, NULL);
-	if (!string)
-		string = mem_printf("%d", out->code);
-	DEBUG("smartcard_send_crypto: sending crypto command {%s}", string);
-	mem_free0(string);
-	*/
-
-	if (protobuf_send_message(sock, (ProtobufCMessage *)out) < 0) {
-		event_remove_io(event);
-		event_io_free(event);
-		return -1;
-	}
-	return 0;
-}
-
-int
-smartcard_crypto_hash_file(const char *file, smartcard_crypto_hashalgo_t hashalgo,
-			   smartcard_crypto_hash_callback_t cb, void *data)
-{
-	ASSERT(file);
-	ASSERT(cb);
-
-	crypto_callback_task_t *task = crypto_callback_hash_task_new(cb, data, file, hashalgo);
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE;
-	out.has_hash_algo = true;
-	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
-	out.hash_file = task->hash_file;
-
-	TRACE("Requesting scd to hash file at %s", task->hash_file);
-
-	if (smartcard_send_crypto(&out, task) < 0) {
-		crypto_callback_task_free(task);
-		return -1;
-	}
-	return 0;
-}
-
-int
-smartcard_crypto_verify_file(const char *datafile, const char *sigfile, const char *certfile,
-			     smartcard_crypto_hashalgo_t hashalgo,
-			     smartcard_crypto_verify_callback_t cb, void *data)
-{
-	ASSERT(datafile);
-	ASSERT(sigfile);
-	ASSERT(certfile);
-	ASSERT(cb);
-
-	crypto_callback_task_t *task =
-		crypto_callback_verify_task_new(cb, data, datafile, sigfile, certfile, hashalgo);
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE;
-	out.verify_data_file = task->verify_data_file;
-	out.verify_sig_file = task->verify_sig_file;
-	out.verify_cert_file = task->verify_cert_file;
-	out.has_hash_algo = true;
-	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
-	if (smartcard_send_crypto(&out, task) < 0) {
-		crypto_callback_task_free(task);
-		return -1;
-	}
-	return 0;
-}
-
-int
-smartcard_crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsigned char *sig_buf,
-			    size_t sig_buf_len, unsigned char *cert_buf, size_t cert_buf_len,
-			    smartcard_crypto_hashalgo_t hashalgo,
-			    smartcard_crypto_verify_buf_callback_t cb, void *data)
-{
-	ASSERT(data_buf);
-	ASSERT(sig_buf);
-	ASSERT(cert_buf);
-	ASSERT(cb);
-
-	crypto_callback_task_t *task =
-		crypto_callback_verify_buf_task_new(cb, data, data_buf, data_buf_len, sig_buf,
-						    sig_buf_len, cert_buf, cert_buf_len, hashalgo);
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF;
-	out.has_verify_data_buf = true;
-	out.verify_data_buf.data = data_buf;
-	out.verify_data_buf.len = data_buf_len;
-	out.has_verify_sig_buf = true;
-	out.verify_sig_buf.data = sig_buf;
-	out.verify_sig_buf.len = sig_buf_len;
-	out.has_verify_cert_buf = true;
-	out.verify_cert_buf.data = cert_buf;
-	out.verify_cert_buf.len = cert_buf_len;
-	out.has_hash_algo = true;
-	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
-
-	if (smartcard_send_crypto(&out, task) < 0) {
-		crypto_callback_task_free(task);
-		return -1;
-	}
-	return 0;
-}
-
-char *
-smartcard_crypto_hash_file_block_new(const char *file, smartcard_crypto_hashalgo_t hashalgo)
-{
-	ASSERT(file);
-	char *ret = NULL;
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE;
-	out.has_hash_algo = true;
-	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
-	out.hash_file = mem_strdup(file);
-
-	TokenToDaemon *msg = smartcard_send_recv_block(&out);
-	mem_free0(out.hash_file);
-
-	IF_NULL_RETVAL(msg, NULL);
-
-	switch (msg->code) {
-	// deal with CRYPTO_HASH_* cases
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK:
-		if (msg->has_hash_value) {
-			ret = bytes_to_string_new(msg->hash_value.data, msg->hash_value.len);
-		} else {
-			ERROR("Missing hash_value in CRYPTO_HASH_OK response for file %s", file);
-		}
-		break;
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR:
-		ERROR("Hashing file %s failed!", file);
-		break;
-	default:
-		ERROR("Invalid TokenToDaemon command %d when hashing file %s", msg->code, file);
-	}
-	protobuf_free_message((ProtobufCMessage *)msg);
-	return ret;
-}
-
-smartcard_crypto_verify_result_t
-smartcard_crypto_verify_file_block(const char *datafile, const char *sigfile, const char *certfile,
-				   smartcard_crypto_hashalgo_t hashalgo)
-{
-	ASSERT(datafile);
-	ASSERT(sigfile);
-	ASSERT(certfile);
-
-	smartcard_crypto_verify_result_t ret = VERIFY_ERROR;
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE;
-	out.verify_data_file = mem_strdup(datafile);
-	out.verify_sig_file = mem_strdup(sigfile);
-	out.verify_cert_file = mem_strdup(certfile);
-	out.has_hash_algo = true;
-	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
-
-	TokenToDaemon *msg = smartcard_send_recv_block(&out);
-	mem_free0(out.verify_data_file);
-	mem_free0(out.verify_sig_file);
-	mem_free0(out.verify_cert_file);
-
-	IF_NULL_RETVAL(msg, VERIFY_ERROR);
-
-	switch (msg->code) {
-	// deal with CRYPTO_VERIFY_* cases
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-		ret = smartcard_crypto_verify_result_from_proto(msg->code);
-		break;
-	default:
-		ERROR("Invalid TokenToDaemon command %d when verifying file %s with signature %s and certificate %s",
-		      msg->code, datafile, sigfile, certfile);
-	}
-	protobuf_free_message((ProtobufCMessage *)msg);
-	return ret;
-}
-
-smartcard_crypto_verify_result_t
-smartcard_crypto_verify_buf_block(unsigned char *data_buf, size_t data_buf_len,
-				  unsigned char *sig_buf, size_t sig_buf_len,
-				  unsigned char *cert_buf, size_t cert_buf_len,
-				  smartcard_crypto_hashalgo_t hashalgo)
-{
-	ASSERT(data_buf);
-	ASSERT(sig_buf);
-	ASSERT(cert_buf);
-
-	smartcard_crypto_verify_result_t ret = VERIFY_ERROR;
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF;
-	out.has_verify_data_buf = true;
-	out.verify_data_buf.data = data_buf;
-	out.verify_data_buf.len = data_buf_len;
-	out.has_verify_sig_buf = true;
-	out.verify_sig_buf.data = sig_buf;
-	out.verify_sig_buf.len = sig_buf_len;
-	out.has_verify_cert_buf = true;
-	out.verify_cert_buf.data = cert_buf;
-	out.verify_cert_buf.len = cert_buf_len;
-	out.has_hash_algo = true;
-	out.hash_algo = smartcard_hashalgo_to_proto(hashalgo);
-
-	TokenToDaemon *msg = smartcard_send_recv_block(&out);
-	IF_NULL_RETVAL(msg, VERIFY_ERROR);
-
-	switch (msg->code) {
-	// deal with CRYPTO_VERIFY_* cases
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-		ret = smartcard_crypto_verify_result_from_proto(msg->code);
-		break;
-	default:
-		ERROR("Invalid TokenToDaemon command %d when verifying buffer", msg->code);
-	}
-	protobuf_free_message((ProtobufCMessage *)msg);
-	return ret;
-}
-
-uint8_t *
-smartcard_pull_csr_new(size_t *csr_len)
-{
-	ASSERT(csr_len);
-	uint8_t *csr = NULL;
-	*csr_len = 0;
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__PULL_DEVICE_CSR;
-
-	TokenToDaemon *msg = smartcard_send_recv_block(&out);
-	IF_NULL_RETVAL(msg, NULL);
-
-	switch (msg->code) {
-	case TOKEN_TO_DAEMON__CODE__DEVICE_CSR:
-		if (msg->has_device_csr) {
-			csr = mem_new0(uint8_t, msg->device_csr.len);
-			memcpy(csr, msg->device_csr.data, msg->device_csr.len);
-			*csr_len = msg->device_csr.len;
-		} else {
-			ERROR("Missing csr in response to PULL_DEVICE_CSR");
-		}
-		break;
-	case TOKEN_TO_DAEMON__CODE__DEVICE_CSR_ERROR:
-		ERROR("Error on reading csr in SCD");
-		break;
-	case TOKEN_TO_DAEMON__CODE__DEVICE_PROV_ERROR:
-		ERROR("Device not in provsioning mode!");
-		break;
-	default:
-		ERROR("Invalid TokenToDaemon command %d when pulling csr!", msg->code);
-	}
-	protobuf_free_message((ProtobufCMessage *)msg);
-	return csr;
-}
-
-void
-smartcard_push_cert(smartcard_t *smartcard, control_t *control, uint8_t *cert, size_t cert_len)
-{
-	ASSERT(smartcard);
-	ASSERT(control);
-
-	if (!smartcard_cert_has_valid_format(cert, cert_len)) {
-		WARN("PUSH_DEVICE_CERT with invalid certificate");
-		goto error;
-	}
-
-	event_io_t *event =
-		event_io_new(smartcard->sock, EVENT_IO_READ, smartcard_cb_generic, control);
-	event_add_io(event);
-	DEBUG("SCD: Registered generic callback for scd (push_cert)");
-
-	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-	out.code = DAEMON_TO_TOKEN__CODE__PUSH_DEVICE_CERT;
-	out.has_device_cert = true;
-	out.device_cert.data = cert;
-	out.device_cert.len = cert_len;
-
-	if (protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out) > 0)
-		return;
-error:
-	control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, control_get_client_sock(control));
-}
-
-bool
-match_hash(size_t hash_len, const char *expected_hash, const char *hash)
-{
-	if (!hash) {
-		ERROR("Empty hash value");
-		return false;
-	}
-	if (!expected_hash) {
-		ERROR("Reference hash value for image is missing");
-		return false;
-	}
-
-	//TODO harden against hash algorithms with NULL bytes in digest
-	size_t len = strlen(expected_hash);
-	if (len != 2 * hash_len) {
-		ERROR("Invalid hash length %zu/2, expected %zu/2 bytes", len, 2 * hash_len);
-		return false;
-	}
-	if (strncasecmp(expected_hash, hash, len + 1)) {
-		DEBUG("Hash mismatch");
-		return false;
-	}
-	DEBUG("Hashes match");
-	return true;
 }

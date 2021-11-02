@@ -37,6 +37,8 @@
 
 #include <ctapi.h>
 
+#include "common/mem.h"
+
 static unsigned char aid[] = { 0xE8, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x81, 0xC3, 0x1F, 0x02, 0x01 };
 static unsigned char inittemplate[] = {
 	0x80, 0x02, 0x00, 0x02,					    // Option Transport PIN
@@ -144,7 +146,7 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 	rc = CT_data(ctn, &dad, &sad, po - scr, scr, &lenr, scr);
 
 	if (rc < 0) {
-		memset(scr, 0, sizeof(scr));
+		mem_memset(scr, 0, sizeof(scr));
 		return rc;
 	}
 
@@ -165,7 +167,7 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 
 	*SW1SW2 = (scr[lenr - 2] << 8) + scr[lenr - 1];
 
-	memset(scr, 0, sizeof(scr));
+	mem_memset(scr, 0, sizeof(scr));
 	return (rv);
 }
 
@@ -224,7 +226,7 @@ initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin
 
 	rc = processAPDU(ctn, 0, 0x80, 0x50, 0x00, 0x00, len, cdata, 0, NULL, 0, &SW1SW2);
 
-	memset(cdata, 0, sizeof(cdata));
+	mem_memset0(cdata, sizeof(cdata));
 
 	if (rc < 0) {
 		return rc;
@@ -313,7 +315,7 @@ changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, 
 	rc = processAPDU(ctn, 0, 0x00, 0x24, 0x00, 0x81, oldpinlen + newpinlen, cdata, 0, NULL, 0,
 			 &SW1SW2);
 
-	memset(cdata, 0, sizeof(cdata));
+	mem_memset0(cdata, sizeof(cdata));
 
 	if (rc < 0) {
 		return rc;

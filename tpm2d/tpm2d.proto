@@ -28,9 +28,9 @@ option java_package = "de.fraunhofer.aisec.trustme";
 import "attestation.proto";
 
 message ControllerToTpm {
+	reserved 2 to 4; // legacy
 	enum Code {
-		// deprecated
-		INTERNAL_ATTESTATION_REQ = 1;
+		reserved 1; // legacy
 		// setup a new dm mapping with a key that is stored in the TPM
 		// availability of the key is bound to correct UEFI secure boot state via PCR7
 		DMCRYPT_SETUP = 2;
@@ -53,17 +53,6 @@ message ControllerToTpm {
 
 	required Code code = 1;
 
-	// type of attestation in the IDS context
-	optional IdsAttestationType atype = 2 [default = BASIC];
-
-	// qualifingData (i.e. external data provided by the caller, such as a nonce)
-	optional string qualifyingData = 3;
-
-	// pcr bitmask for AttestationType ADVANCED only
-	//  - for BASIC, the default PCRs are PCRs 0 to 11
-	//  - for ALL  , the default PCRs are PCRs 0 to 23
-	optional int32 pcrs = 4;
-
 	// if command FDE_DM_SETUP this is the blk device which is used
 	// as pysical device for the mapping
 	optional string dmcrypt_device = 5;
@@ -75,7 +64,7 @@ message ControllerToTpm {
 	// new passphrase for auth changing commands, e.g., change owner auth of tpm
 	optional string password_new = 8;
 
-	// file to be measured, e.g., the container readonly filesystem images
+	// file to be measured, e.g., the container read-only file system images
 	optional string ml_filename = 9;
 	// digest of the measured file using ml_hashalg
 	optional bytes ml_datahash = 10;
@@ -84,9 +73,9 @@ message ControllerToTpm {
 }
 
 message TpmToController {
+	reserved 2 to 7; // legacy
 	enum Code {
-		// deprecated
-		INTERNAL_ATTESTATION_RES = 1;
+		reserved 1; // legacy
 		// message contains response field
 		GENERIC_RESPONSE = 2;
 		// message contains fde_response field
@@ -114,29 +103,11 @@ message TpmToController {
 		FDE_KEY_ACCESS_LOCKED = 5;
 		// FDE key not set in TPM
 		FDE_RESET = 6;
-		// an unexpected error occured
+		// an unexpected error occurred
 		FDE_UNEXPECTED_ERROR = 7;
 	}
 
 	required Code code = 1;
-
-	// type of attestation in the IDS context
-	optional IdsAttestationType atype = 2 [default = BASIC];
-
-	// the hash algorith used to sign the quoted information
-	optional string halg = 3;
-
-	// the quoted information (a TPM2B_ATTEST data structure)
-	optional string quoted = 4;
-
-	// the signature over 'quoted' (a TPMT_SIGNATURE data structure)
-	optional string signature = 5;
-
-	// the explicit PCR values
-	repeated Pcr pcr_values = 6;
-
-	// an _optional_ URI to a certificate that includes the public key
-	optional string certificate_uri = 7;
 
 	optional GenericResponse response = 8;
 

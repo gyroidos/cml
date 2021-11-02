@@ -136,7 +136,7 @@ mem_free(void *ptr);
 /**
  * Frees the allocated memory.
  * This is a wrapper for free(3).
- * If we seccessfully free a pointer,
+ * If we successfully free a pointer,
  * the wrapper sets it to NULL to prevent use-after-free,
  * double-free and similar exploitable issues.
  * @param mem Memory pointer to be freed.
@@ -197,5 +197,18 @@ mem_free_array(void **array, size_t size);
 		}                                                                                  \
 		(struct_type *)mem_realloc((mem), _total_len);                                     \
 	})
+
+static inline void
+mem_memset0(void *ptr, size_t num)
+{
+	static void *(*const volatile memset_v)(void *, int, size_t) = &memset;
+	memset_v(ptr, 0, num);
+}
+
+static inline void
+mem_memset(void *ptr, int value, size_t num)
+{
+	memset(ptr, value, num);
+}
 
 #endif /* MEM_H */

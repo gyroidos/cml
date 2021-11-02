@@ -25,10 +25,10 @@
 #include "guestos.h"
 #include "guestos_config.h"
 
-#include "cmld.h"
-#include "download.h"
-#include "smartcard.h"
 #include "audit.h"
+#include "cmld.h"
+#include "crypto.h"
+#include "download.h"
 
 #include "common/macro.h"
 #include "common/list.h"
@@ -103,7 +103,7 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	char *sig_file = guestos_get_sig_file_new(dir);
 	char *cert_file = guestos_get_cert_file_new(dir);
 
-	smartcard_crypto_verify_result_t verify_result = smartcard_crypto_verify_file_block(
+	crypto_verify_result_t verify_result = crypto_verify_file_block(
 		cfg_file, sig_file, cert_file, GUESTOS_MGR_VERIFY_HASH_ALGO);
 
 	switch (verify_result) {
@@ -367,10 +367,10 @@ write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 }
 
 static void
-push_config_verify_buf_cb(smartcard_crypto_verify_result_t verify_result, unsigned char *cfg_buf,
+push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *cfg_buf,
 			  size_t cfg_buf_len, unsigned char *sig_buf, size_t sig_buf_len,
 			  unsigned char *cert_buf, size_t cert_buf_len,
-			  UNUSED smartcard_crypto_hashalgo_t hash_algo, void *data)
+			  UNUSED crypto_hashalgo_t hash_algo, void *data)
 {
 	INFO("Push GuestOS config (Phase 2)");
 	int *resp_fd = data;
@@ -518,9 +518,9 @@ guestos_mgr_push_config(unsigned char *cfg, size_t cfglen, unsigned char *sig, s
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-missing-certificate",
 				guestos_basepath, 0);
 	} else {
-		res = smartcard_crypto_verify_buf(cfg, cfglen, sig, siglen, cert, certlen,
-						  GUESTOS_MGR_VERIFY_HASH_ALGO,
-						  push_config_verify_buf_cb, cb_resp_fd);
+		res = crypto_verify_buf(cfg, cfglen, sig, siglen, cert, certlen,
+					GUESTOS_MGR_VERIFY_HASH_ALGO, push_config_verify_buf_cb,
+					cb_resp_fd);
 	}
 	if (res < 0) {
 		if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, resp_fd) < 0)
@@ -559,7 +559,7 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 	if (!file_is_dir(TRUSTED_CA_STORE))
 		IF_TRUE_RETVAL(dir_mkdir_p(TRUSTED_CA_STORE, 0600), ret);
 
-	if (!smartcard_cert_has_valid_format(cacert, cacertlen)) {
+	if (!crypto_cert_has_valid_format(cacert, cacertlen)) {
 		ERROR("Sanity check failed. provided data is not an encoded certificate");
 		return ret;
 	}
@@ -567,7 +567,7 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen)
 	char *tmp_cacert_file = write_to_tmpfile_new(cacert, cacertlen);
 	IF_NULL_RETVAL(tmp_cacert_file, ret);
 
-	char *cacert_hash = smartcard_crypto_hash_file_block_new(tmp_cacert_file, SHA1);
+	char *cacert_hash = crypto_hash_file_block_new(tmp_cacert_file, SHA1);
 	char *cacert_file = mem_printf("%s/%s", TRUSTED_CA_STORE, cacert_hash);
 	if (file_exists(cacert_file)) {
 		INFO("Certificate with hash %s already installed!", cacert_hash);

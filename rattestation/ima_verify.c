@@ -108,23 +108,8 @@ print_module_name(uint8_t *buffer, size_t len)
 	IF_NULL_RETVAL_ERROR(str, -1);
 	memcpy(str, buffer, len);
 	INFO("Parsing Module %s", str);
-	free(str);
+	mem_free0(str);
 	return 0;
-}
-
-static void
-print_data(uint8_t *buf, size_t len, const char *info)
-{
-	uint32_t l = 2 * len + strlen(info) + 3;
-	char s[l];
-	uint32_t count = 0;
-	if (info) {
-		count += snprintf(s + count, sizeof(s) - count, "%s: ", info);
-	}
-	for (uint32_t i = 0; i < len; i++) {
-		count += snprintf(s + count, sizeof(s) - count, "%02x", buf[i]);
-	}
-	TRACE("%s", s);
 }
 
 static int
@@ -209,9 +194,9 @@ verify_template_data(struct event *template, const char *cert)
 					(struct signature_v2_hdr *)(template->template_data +
 								    offset);
 
-				print_data(digest, digest_len, "Digest");
-				print_data(sig->sig, field_len - sizeof(struct signature_v2_hdr),
-					   "Signature");
+				TRACE_HEXDUMP(digest, digest_len, "Digest");
+				TRACE_HEXDUMP(sig->sig, field_len - sizeof(struct signature_v2_hdr),
+					      "Signature");
 
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert,
@@ -248,11 +233,12 @@ verify_template_data(struct event *template, const char *cert)
 				if (!sig_info) {
 					ERROR("Failed to parse module signature");
 					ret = -1;
+					modsig_free(sig_info);
 					goto out;
 				}
 
-				print_data(digest, digest_len, "Digest");
-				print_data(sig_info->sig, sig_info->sig_len, "Signature");
+				TRACE_HEXDUMP(digest, digest_len, "Digest");
+				TRACE_HEXDUMP(sig_info->sig, sig_info->sig_len, "Signature");
 
 				int retssl = ssl_verify_signature_from_digest(
 					(const char *)cert,
@@ -262,6 +248,7 @@ verify_template_data(struct event *template, const char *cert)
 					digest_len, "SHA256");
 				if (retssl != 0) {
 					ERROR("Signature verification FAILED for %s", f);
+					modsig_free(sig_info);
 					ret = -1;
 					goto out;
 				} else {
@@ -281,7 +268,7 @@ verify_template_data(struct event *template, const char *cert)
 	ret = 0;
 
 out:
-	free(template_fmt);
+	mem_free0(template_fmt);
 	return ret;
 }
 
@@ -346,29 +333,32 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 	uint8_t pcr[hash_size];
 
 	// PCRs are initialized with zero's
-	memset(pcr, 0, hash_size);
+	mem_memset(pcr, 0, hash_size);
 
 	while (!buf_read(&template.header, &ptr, sizeof(template.header), &remain)) {
 		TRACE("PCR %02d Measurement:", template.header.pcr);
 
 		IF_TRUE_RETVAL(template.header.name_len > TCG_EVENT_NAME_LEN_MAX, -1);
 
-		memset(template.name, 0, sizeof template.name);
+		mem_memset(template.name, 0, sizeof template.name);
 		buf_read(template.name, &ptr, template.header.name_len, &remain);
 		TRACE("Template: %s", template.name);
 
 		if (read_template_data(&template, &ptr, &remain) < 0) {
 			ERROR("Failed to read measurement entry %s", template.name);
+			mem_free0(template.template_data);
 			return -1;
 		}
 
 		if (verify_template_hash(&template) != 0) {
 			ERROR("Failed to verify template hash for %s", template.name);
+			mem_free0(template.template_data);
 			return -1;
 		}
 
 		if (verify_template_data(&template, cert) != 0) {
-			ERROR("Failed to parse measurement entry %s", template.name);
+			ERROR("Failed to verify measurement entry %s", template.name);
+			mem_free0(template.template_data);
 			return -1;
 		}
 
@@ -389,14 +379,15 @@ ima_verify_binary_runtime_measurements(uint8_t *buf, size_t size, const char *ce
 
 		} else {
 			ERROR("Hash algorithm not supported");
+			mem_free0(template.template_data);
 			return -1;
 		}
 
-		free(template.template_data);
+		mem_free0(template.template_data);
 	}
 
 	if (memcmp(pcr, pcr_tpm, hash_size) != 0) {
-		ERROR("Failed to verify the TPM PCR");
+		ERROR("Failed to verify IMA TPM PCR");
 		return -1;
 	}
 

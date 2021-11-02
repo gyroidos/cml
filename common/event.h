@@ -109,6 +109,15 @@ void
 event_io_free(event_io_t *io);
 
 /**
+ * Get the associated fd of the I/O event.
+ *
+ * @param io The I/O event to which we get the fd.
+ * @return The associated fd of the I/O event.
+ */
+int
+event_io_get_fd(const event_io_t *io);
+
+/**
  * Adds the I/O event to the event loop.
  *
  * @param io The I/O event to be added to the event loop.

@@ -858,7 +858,7 @@ c_cgroups_devices_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event
 	}
 
 	struct stat dev_stat;
-	memset(&dev_stat, 0, sizeof(dev_stat));
+	mem_memset(&dev_stat, 0, sizeof(dev_stat));
 
 	if (stat(path, &dev_stat) == -1) {
 		WARN_ERRNO("Could not stat %s", path);
@@ -1297,6 +1297,9 @@ int
 c_cgroups_start_child(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
+
+	if (container_has_userns(cgroups->container))
+		return 0;
 
 	INFO("Trying to unmount cgroups in container");
 

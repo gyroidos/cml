@@ -101,6 +101,7 @@ write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 
 struct verify_cert_ca_cb_data {
 	const char *cert_file;
+	bool ignore_time;
 	bool verified;
 };
 
@@ -111,7 +112,7 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 	struct verify_cert_ca_cb_data *cb_data = data;
 	char *ca_file = mem_printf("%s/%s", path, file);
 
-	if (ssl_verify_certificate(cb_data->cert_file, ca_file, true) != 0) {
+	if (ssl_verify_certificate(cb_data->cert_file, ca_file, cb_data->ignore_time) != 0) {
 		ERROR("Error during certificate validation using ca: %s", ca_file);
 		cb_data->verified = false;
 		ret = 1;
@@ -132,7 +133,7 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
  */
 static TokenToDaemon__Code
 scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_file,
-			  const char *verify_cert_file, const char *hash_algo)
+			  const char *verify_cert_file, bool ignore_time, const char *hash_algo)
 {
 	int ret;
 	TokenToDaemon__Code out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
@@ -141,11 +142,12 @@ scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_f
 	bool verified = false;
 	// At first, we explicitly assume that the file to be verified is a software update file,
 	// and we thus use the software signing root CA.
-	if ((ret = ssl_verify_certificate(verify_cert_file, SSIG_ROOT_CERT, true)) == 0) {
+	if ((ret = ssl_verify_certificate(verify_cert_file, SSIG_ROOT_CERT, ignore_time)) == 0) {
 		verified = true;
 	} else {
 		// Try all CA files in trusted CA store
 		struct verify_cert_ca_cb_data cb_data = { .cert_file = verify_cert_file,
+							  .ignore_time = ignore_time,
 							  .verified = false };
 
 		dir_foreach(TRUSTED_CA_STORE, scd_control_verify_cert_ca_cb, &cb_data);
@@ -163,7 +165,7 @@ scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_f
 	IF_TRUE_GOTO(verified, do_signature);
 
 	// Retry with Local CA
-	if ((ret = ssl_verify_certificate(verify_cert_file, LOCALCA_ROOT_CERT, true)) == 0) {
+	if ((ret = ssl_verify_certificate(verify_cert_file, LOCALCA_ROOT_CERT, ignore_time)) == 0) {
 		goto do_signature;
 	} else if (ret == -1) {
 		ERROR("Certificate not a valid local ssig cert");
@@ -306,8 +308,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_wrapped_key) {
-			memset(wrapped_key, 0, wrapped_key_len);
+			mem_memset0(wrapped_key, wrapped_key_len);
 			mem_free0(wrapped_key);
+		}
+		if (msg->has_unwrapped_key) {
+			mem_memset0(msg->unwrapped_key.data, msg->unwrapped_key.len);
 		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
@@ -336,8 +341,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		if (out.has_unwrapped_key) {
-			memset(unwrapped_key, 0, unwrapped_key_len);
+			mem_memset0(unwrapped_key, unwrapped_key_len);
 			mem_free0(unwrapped_key);
+		}
+		if (msg->has_wrapped_key) {
+			mem_memset0(msg->wrapped_key.data, msg->wrapped_key.len);
 		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__CHANGE_PIN: {
@@ -350,6 +358,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("No token loaded, change pass failed");
 		} else if (!msg->token_pin) {
 			ERROR("Token passphrase not specified");
+		} else if (!msg->token_newpin) {
+			ERROR("Token new passphrase not specified");
+		} else if (msg->has_pairing_secret) {
+			ERROR("Pairing secret not specified");
 		} else if (token->is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 		} else {
@@ -358,11 +370,18 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 							   msg->pairing_secret.len, false);
 			if (ret == 0)
 				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
-			else
-				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (msg->token_pin) {
+			mem_memset0(msg->token_pin, strlen(msg->token_pin));
+		}
+		if (msg->token_newpin) {
+			mem_memset0(msg->token_newpin, strlen(msg->token_newpin));
+		}
+		if (msg->has_pairing_secret) {
+			mem_memset0(msg->pairing_secret.data, msg->pairing_secret.len);
+		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__PROVISION_PIN: {
 		TRACE("SCD: Handle messsage PROVISION_PIN");
@@ -390,6 +409,15 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (msg->token_pin) {
+			mem_memset0(msg->token_pin, strlen(msg->token_pin));
+		}
+		if (msg->token_newpin) {
+			mem_memset0(msg->token_newpin, strlen(msg->token_newpin));
+		}
+		if (msg->has_pairing_secret) {
+			mem_memset0(msg->pairing_secret.data, msg->pairing_secret.len);
+		}
 	} break;
 	case DAEMON_TO_TOKEN__CODE__PULL_DEVICE_CSR: {
 		TRACE("SCD: Handle messsage PULL_DEV_CSR");
@@ -476,10 +504,13 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			write_to_tmpfile_new(msg->verify_sig_buf.data, msg->verify_sig_buf.len);
 		char *tmp_cert_file =
 			write_to_tmpfile_new(msg->verify_cert_buf.data, msg->verify_cert_buf.len);
+		bool ignore_time = (msg->has_verify_ignore_time && msg->verify_ignore_time) ?
+					   msg->verify_ignore_time :
+					   false;
 		if (tmp_data_file && tmp_sig_file && tmp_cert_file) {
 			out.code =
 				scd_control_handle_verify(tmp_data_file, tmp_sig_file,
-							  tmp_cert_file,
+							  tmp_cert_file, ignore_time,
 							  switch_proto_hash_algo(msg->hash_algo));
 		}
 
@@ -504,8 +535,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE: {
 		TRACE("SCD: Handle messsage CRYPTO_VERIFY_FILE");
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		bool ignore_time = (msg->has_verify_ignore_time && msg->verify_ignore_time) ?
+					   msg->verify_ignore_time :
+					   false;
 		out.code = scd_control_handle_verify(msg->verify_data_file, msg->verify_sig_file,
-						     msg->verify_cert_file,
+						     msg->verify_cert_file, ignore_time,
 						     switch_proto_hash_algo(msg->hash_algo));
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
