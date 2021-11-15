@@ -84,6 +84,8 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
+#define CMLD_USB_TOKEN_ATTACH_TIMEOUT 500
+
 /*
  * dummy key used for unecnrypted c0 and for reboots where the real key
  * is already in kernel
@@ -1388,6 +1390,23 @@ cmld_is_shiftfs_supported(void)
 	return ret;
 }
 
+static void
+cmld_token_attach_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+	container_t *c = data;
+
+	// initialize the USB token
+	int block_return = cmld_container_token_init(c);
+
+	if (block_return) {
+		ERROR("Failed to initialize token(might already be initialized)");
+	}
+
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
 int
 cmld_token_attach(const char *serial, char *devpath)
 {
@@ -1398,16 +1417,14 @@ cmld_token_attach(const char *serial, char *devpath)
 
 	IF_NULL_RETVAL_TRACE(container, -1);
 
-	TRACE("Handling attachment of token with serial %s at %s", serial, devpath);
-
 	container_set_usbtoken_devpath(container, mem_strdup(devpath));
 
-	// initialize the USB token
-	int block_return = cmld_container_token_init(container);
+	TRACE("Registering callback to handle attachment of token with serial %s at %s", serial, devpath);
 
-	if (block_return) {
-		DEBUG("Failed to initialize token, already initialized?");
-	}
+	// give libusb some time to settle
+	event_timer_t *e = event_timer_new(CMLD_USB_TOKEN_ATTACH_TIMEOUT, 1,
+						cmld_token_attach_cb, container);
+	event_add_timer(e);
 
 	return 0;
 }
