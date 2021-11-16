@@ -1104,7 +1104,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER:
 		if (NULL == container) {
 			INFO("Container does not exist, nothing to destroy!");
-			res = control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
 			break;
 		}
 		res = cmld_container_destroy(container);
@@ -1190,7 +1190,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT,
 					"container-start-not-existing", NULL, 0);
 			WARN("Container does not exist!");
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
 		container_state_t container_state = container_get_state(container);
@@ -1203,17 +1203,23 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"container-start-already-running",
 					uuid_string(container_get_uuid(container)), 0);
-			res = control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
 		ContainerStartParams *start_params = msg->container_start_params;
 		res = control_handle_container_start(container, start_params, fd);
+		if (!res) {
+			WARN("Starting container failed!");
+		}
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
 		IF_NULL_RETURN(container);
 		ContainerStartParams *start_params = msg->container_start_params;
 		res = control_handle_container_stop(container, start_params, fd);
+		if (!res) {
+			WARN("Stoping container failed!");
+		}
 		break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_FREEZE:
@@ -1367,6 +1373,9 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		res = cmld_container_change_pin(container, fd, msg->device_pin, msg->device_newpin);
+		if (!res) {
+			WARN("Changing the container PIN failed!");
+		}
 		mem_memset0(msg->device_pin, strlen(msg->device_pin));
 		mem_memset0(msg->device_newpin, strlen(msg->device_newpin));
 	} break;
