@@ -303,13 +303,13 @@ cmld_is_shiftfs_supported(void);
  * @return 0 if the given USB serial belongs to a container token and the attachment procedure could be performed properly, -1 otherwise
 */
 int
-cmld_token_attach(const char *serial, char *devpath);
+cmld_token_attach(container_t *container);
 
 /**
  * Handles detachment of a container token.
  * @return 0 if the given USB serial belongs to a container token and the detachment procedure could be performed properly, -1 otherwise
 */
 int
-cmld_token_detach(char *usb_serial_short);
+cmld_token_detach(container_t *container);
 
 #endif /* CMLD_H */

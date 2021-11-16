@@ -88,6 +88,7 @@ uevent_usbdev_new(uevent_usbdev_type_t type, uint16_t id_vendor, uint16_t id_pro
 	usbdev->assign = assign;
 	usbdev->major = -1;
 	usbdev->minor = -1;
+	// usbdev->devpath = NULL;
 	return usbdev;
 }
 
@@ -198,6 +199,20 @@ uevent_usbdev_set_minor(uevent_usbdev_t *usbdev, int minor)
 	usbdev->minor = minor;
 }
 
+int
+uevent_usbedv_get_major(uevent_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->major;
+}
+
+int
+uevent_usbdev_get_minor(uevent_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->minor;
+}
+
 static uevent_container_dev_mapping_t *
 uevent_container_dev_mapping_new(container_t *container, uevent_usbdev_t *usbdev)
 {
@@ -210,6 +225,7 @@ uevent_container_dev_mapping_new(container_t *container, uevent_usbdev_t *usbdev
 	mapping->usbdev->major = usbdev->major;
 	mapping->usbdev->minor = usbdev->minor;
 	mapping->usbdev->assign = usbdev->assign;
+	mapping->usbdev->type = usbdev->type;
 
 	return mapping;
 }
@@ -780,6 +796,90 @@ uevent_device_node_and_forward(struct uevent *uevent, container_t *container)
 	mem_free0(devname);
 }
 
+static int
+uevent_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data)
+{
+	uint16_t id_product, id_vendor;
+	char buf[256];
+	int len;
+	bool found;
+	int dev[2];
+
+	uevent_usbdev_t *usbdev = data;
+	IF_NULL_RETVAL(usbdev, -1);
+
+	char *id_product_file = mem_printf("%s/%s/idProduct", path, name);
+	char *id_vendor_file = mem_printf("%s/%s/idVendor", path, name);
+	char *i_serial_file = mem_printf("%s/%s/serial", path, name);
+	char *dev_file = mem_printf("%s/%s/dev", path, name);
+
+	TRACE("id_product_file: %s", id_product_file);
+	TRACE("id_vendor_file: %s", id_vendor_file);
+	TRACE("i_serial_file: %s", i_serial_file);
+
+	IF_FALSE_GOTO_TRACE(file_exists(id_product_file), out);
+	IF_FALSE_GOTO_TRACE(file_exists(id_vendor_file), out);
+	IF_FALSE_GOTO_TRACE(file_exists(dev_file), out);
+
+	len = file_read(id_product_file, buf, sizeof(buf));
+	IF_TRUE_GOTO((len < 4), out);
+	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_product) < 0), out);
+	found = (id_product == uevent_usbdev_get_id_product(usbdev));
+	TRACE("found: %d", found);
+
+	len = file_read(id_vendor_file, buf, sizeof(buf));
+	IF_TRUE_GOTO((len < 4), out);
+	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_vendor) < 0), out);
+	found &= (id_vendor == uevent_usbdev_get_id_vendor(usbdev));
+	TRACE("found: %d", found);
+
+	if (file_exists(i_serial_file)) {
+		len = file_read(i_serial_file, buf, sizeof(buf));
+		TRACE("%s len=%d", buf, len);
+		TRACE("%s len=%zu", uevent_usbdev_get_i_serial(usbdev),
+		      strlen(uevent_usbdev_get_i_serial(usbdev)));
+		found &= (0 == strncmp(buf, uevent_usbdev_get_i_serial(usbdev),
+				       strlen(uevent_usbdev_get_i_serial(usbdev))));
+		TRACE("found: %d", found);
+	} else {
+		buf[0] = '\0';
+	}
+	IF_FALSE_GOTO_TRACE(found, out);
+
+	// major = minor = -1;
+	dev[0] = dev[1] = -1;
+	len = file_read(dev_file, buf, sizeof(buf));
+	IF_TRUE_GOTO((sscanf(buf, "%d:%d", &dev[0], &dev[1]) < 0), out);
+	IF_FALSE_GOTO((dev[0] > -1 && dev[1] > -1), out);
+
+	uevent_usbdev_set_major(usbdev, dev[0]);
+	uevent_usbdev_set_minor(usbdev, dev[1]);
+
+	return 0; /* Shouldn't this be -1 to avoid further calls by dir_foreach()? */
+
+out:
+	mem_free0(id_product_file);
+	mem_free0(id_vendor_file);
+	mem_free0(i_serial_file);
+	mem_free0(dev_file);
+	return 0;
+}
+
+int
+uevent_usbdev_set_sysfs_props(uevent_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	const char *sysfs_path = "/sys/bus/usb/devices";
+
+	// for the first time iterate through sysfs to find device
+	if (0 > dir_foreach(sysfs_path, &uevent_usbdev_sysfs_foreach_cb, usbdev)) {
+		WARN("Could not open %s to find usb device!", sysfs_path);
+		return -1;
+	}
+
+	return 0;
+}
+
 /*
  * return true if uevent is handled completely, false if uevent should process further
  * in calling funtion
@@ -793,22 +893,18 @@ uevent_handle_usb_device(struct uevent *uevent)
 
 	if (0 == strncmp(uevent->action, "remove", 6)) {
 		TRACE("remove");
-		if (uevent->devpath) {
-			TRACE("Checking possible token detachment with devpath %s",
-			      uevent->devpath);
-
-			if (!cmld_token_detach(uevent->devpath)) {
-				TRACE("uevent was triggered by container token, finished handling kernel uevent");
-				return true;
-			}
-		}
-
 		for (list_t *l = uevent_container_dev_mapping_list; l; l = l->next) {
 			uevent_container_dev_mapping_t *mapping = l->data;
 			if ((uevent->major == mapping->usbdev->major) &&
 			    (uevent->minor == mapping->usbdev->minor)) {
-				container_device_deny(mapping->container, mapping->usbdev->major,
-						      mapping->usbdev->minor);
+				if (UEVENT_USBDEV_TYPE_TOKEN == mapping->usbdev->type) {
+					INFO("UEVENT USB TOKEN removed");
+					cmld_token_detach(mapping->container);
+				} else {
+					container_device_deny(mapping->container,
+							      mapping->usbdev->major,
+							      mapping->usbdev->minor);
+				}
 				INFO("Denied access to unbound device node %d:%d mapped in container %s",
 				     mapping->usbdev->major, mapping->usbdev->minor,
 				     container_get_name(mapping->container));
@@ -836,17 +932,6 @@ uevent_handle_usb_device(struct uevent *uevent)
 			serial[strlen(serial) - 1] = 0;
 		}
 
-		TRACE("Checking possible token attachment with serial %s and devpath %s", serial,
-		      uevent->devpath);
-
-		if (uevent->devpath) {
-			if (!cmld_token_attach(serial, uevent->devpath)) {
-				TRACE("Uevent was triggered by container token, finished handling kernel uevent");
-				mem_free0(serial);
-				return true;
-			}
-		}
-
 		for (list_t *l = uevent_container_dev_mapping_list; l; l = l->next) {
 			uevent_container_dev_mapping_t *mapping = l->data;
 			uint16_t vendor_id = uevent_get_usb_vendor(uevent);
@@ -865,7 +950,10 @@ uevent_handle_usb_device(struct uevent *uevent)
 				     (mapping->assign) ? "assign" : "allow", mapping->usbdev->major,
 				     mapping->usbdev->minor,
 				     container_get_name(mapping->container));
-
+				if (UEVENT_USBDEV_TYPE_TOKEN == mapping->usbdev->type) {
+					INFO("UEVENT USB TOKEN added");
+					cmld_token_attach(mapping->container);
+				}
 				container_device_allow(mapping->container, mapping->usbdev->major,
 						       mapping->usbdev->minor, mapping->assign);
 			}
@@ -874,7 +962,6 @@ uevent_handle_usb_device(struct uevent *uevent)
 	}
 	return false;
 }
-
 static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
