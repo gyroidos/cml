@@ -1042,7 +1042,7 @@ smartcard_new(const char *path)
 
 	size_t retries = 0;
 	do {
-		usleep(500000);
+		NANOSLEEP(0, 500000000)
 		smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
 		retries++;
 		TRACE("Retry %zu connecting to scd", retries);

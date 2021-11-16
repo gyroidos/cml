@@ -209,7 +209,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 			DEBUG("DM_TABLE_LOAD successfully returned %d", ioctl_ret);
 			break;
 		}
-		usleep(500000);
+		NANOSLEEP(0, 500000000)
 	}
 
 	// Check that loading the table worked
@@ -269,7 +269,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 			DEBUG("Loading device table successfull.");
 			break;
 		}
-		usleep(500000);
+		NANOSLEEP(0, 500000000)
 	}
 
 	if (i == TABLE_LOAD_RETRIES) {
@@ -332,7 +332,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 			break;
 		}
 
-		usleep(500000);
+		NANOSLEEP(0, 500000000)
 	}
 
 	if (create_counter >= TABLE_LOAD_RETRIES) {
@@ -399,7 +399,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 			DEBUG("Cryptp DM_DEV_CREATE worked!");
 			break;
 		}
-		usleep(500000);
+		NANOSLEEP(0, 500000000)
 	}
 
 	if (i == TABLE_LOAD_RETRIES) {

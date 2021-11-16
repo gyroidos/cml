@@ -807,7 +807,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 		// TODO: timeout?
 		while (access(dev, F_OK) < 0) {
-			usleep(1000 * 10);
+			NANOSLEEP(0, 10000000)
 			DEBUG("Waiting for %s", dev);
 		}
 	}

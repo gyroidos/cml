@@ -124,7 +124,7 @@ tss_init(void)
 	// Connect to tpm2d
 	size_t retries = 0;
 	do {
-		usleep(500000);
+		NANOSLEEP(0, 500000000)
 		tss_sock = sock_unix_create_and_connect(SOCK_STREAM, TPM2D_SOCKET);
 		retries++;
 		TRACE("Retry %zu connecting to tpm2d", retries);
