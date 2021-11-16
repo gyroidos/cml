@@ -929,6 +929,8 @@ cmld_start_c0(container_t *new_c0)
 				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;
 	}
+	/* check that time is in trusted range after start */
+	time_register_clock_check();
 
 	audit_log_event(container_get_uuid(new_c0), SSA, CMLD, CONTAINER_MGMT, "c0-start",
 			uuid_string(container_get_uuid(new_c0)), 0);
