@@ -41,8 +41,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include "logf.h"
+
+//sleep
+#define NANOSLEEP(sec, nsec)                                                                       \
+	{                                                                                          \
+		struct timespec ts;                                                                \
+		ts.tv_sec = sec;                                                                   \
+		ts.tv_nsec = nsec;                                                                 \
+		nanosleep(&ts, &ts);                                                               \
+	}
 
 // logging
 #define TRACE(...) logf_trace(__VA_ARGS__) //!< Trace logging (enabled only in debug builds).

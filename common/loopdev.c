@@ -86,7 +86,7 @@ loopdev_wait(const char *dev, unsigned timeout)
 
 		DEBUG("Checking loop device %s (%i/%i)", dev, i, timeout);
 		if (stat(dev, &st) || !S_ISBLK(st.st_mode))
-			usleep(1000);
+			NANOSLEEP(0, 1000000)
 		else
 			return 0;
 	}
