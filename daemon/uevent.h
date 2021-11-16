@@ -79,6 +79,15 @@ uevent_usbdev_set_major(uevent_usbdev_t *usbdev, int major);
 void
 uevent_usbdev_set_minor(uevent_usbdev_t *usbdev, int minor);
 
+int
+uevent_usbedv_get_major(uevent_usbdev_t *usbdev);
+
+int
+uevent_usbdev_get_minor(uevent_usbdev_t *usbdev);
+
+int
+uevent_usbdev_set_sysfs_props(uevent_usbdev_t *usbdev);
+
 /**
  * Global setup for the uevent handler
  *

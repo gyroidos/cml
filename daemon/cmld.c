@@ -387,6 +387,8 @@ cmld_container_token_init(container_t *container)
 		return 0;
 	}
 
+	DEBUG("Invoking smartcard_scd_token_add_block() for container %s",
+	      container_get_name(container));
 	if (smartcard_scd_token_add_block(container) != 0) {
 		ERROR("Requesting SCD to init token failed");
 		return -1;
@@ -1408,41 +1410,26 @@ cmld_token_attach_cb(event_timer_t *timer, void *data)
 }
 
 int
-cmld_token_attach(const char *serial, char *devpath)
+cmld_token_attach(container_t *container)
 {
-	IF_NULL_RETVAL_TRACE(serial, -1);
-	IF_NULL_RETVAL_TRACE(devpath, -1);
+	ASSERT(container);
+	TRACE("Registering callback to handle attachment of token with serial %s",
+	      container_get_usbtoken_serial(container));
 
-	container_t *container = cmld_container_get_by_token_serial(serial);
-
-	IF_NULL_RETVAL_TRACE(container, -1);
-
-	container_set_usbtoken_devpath(container, mem_strdup(devpath));
-
-	TRACE("Registering callback to handle attachment of token with serial %s at %s", serial, devpath);
-
-	// give libusb some time to settle
-	event_timer_t *e = event_timer_new(CMLD_USB_TOKEN_ATTACH_TIMEOUT, 1,
-						cmld_token_attach_cb, container);
+	// give usb device some time to register
+	event_timer_t *e =
+		event_timer_new(CMLD_USB_TOKEN_ATTACH_TIMEOUT, 1, cmld_token_attach_cb, container);
 	event_add_timer(e);
 
 	return 0;
 }
 
 int
-cmld_token_detach(char *devpath)
+cmld_token_detach(container_t *container)
 {
-	IF_NULL_RETVAL_TRACE(devpath, -1);
+	ASSERT(container);
 
-	container_t *container = cmld_container_get_by_devpath(devpath);
-
-	IF_NULL_RETVAL_TRACE(container, -1);
-
-	DEBUG("Handling detachment of token at %s", devpath);
-
-	container_set_usbtoken_devpath(container, NULL);
-
-	DEBUG("Stopping Container");
+	DEBUG("USB token has been detached, stopping Container %s", container_get_name(container));
 	if (cmld_container_stop(container)) {
 		ERROR("Could not stop container after token detachment.");
 	}

@@ -389,6 +389,10 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			if (uevent_usbdev_get_type(ud) == UEVENT_USBDEV_TYPE_TOKEN) {
 				container->token.serial =
 					mem_strdup(uevent_usbdev_get_i_serial(ud));
+				DEBUG("container %s configured to use usb token reader with serial %s",
+				      container->name, container->token.serial);
+				uevent_usbdev_set_sysfs_props(ud);
+				uevent_register_usbdevice(container, ud);
 				break; // TODO: handle misconfiguration with several usbtoken?
 			}
 		}
