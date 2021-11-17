@@ -100,7 +100,7 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_unregister(cml_daemon_logfile_handler);
 	cml_daemon_logfile_handler =
 		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-daemon"));
-	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_WARN);
+	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 }
 
 /******************************************************************************/
