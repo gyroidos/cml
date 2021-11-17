@@ -29,6 +29,7 @@
 #include "common/proc.h"
 #include "common/sock.h"
 #include "common/fd.h"
+#include "audit.h"
 
 #include <errno.h>
 #include <time.h>
@@ -113,7 +114,6 @@ time_system_clock_has_changed(void)
 		return true;
 	}
 	if (fabs(difftime(btime, btime_cml)) < TIME_MINUTES(1)) {
-		INFO("System clock still in trusted range.");
 		return false;
 	}
 	return true;
@@ -125,7 +125,7 @@ time_check_and_reset_clock_cb(event_timer_t *timer, UNUSED void *data)
 	ASSERT(timer == time_clock_check_timer);
 
 	if (!time_system_clock_has_changed()) {
-		INFO("System clock not changed.");
+		TRACE("System clock not changed.");
 		return;
 	}
 
@@ -136,14 +136,16 @@ time_check_and_reset_clock_cb(event_timer_t *timer, UNUSED void *data)
 	IF_TRUE_RETURN(system_now == (time_t)-1);
 
 	if (fabs(difftime(ntp_now, system_now)) > TIME_SYSTEM_OFF_ALLOW) {
-		INFO("System clock out of trusted range. updating internal btime according to NTP");
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT, "time-out-of-trusted-range",
+				"btime_cml", 0);
+		WARN("System clock out of trusted range. Updating internal btime according to NTP");
 		btime_cml = ntp_now - btime_cml;
 		event_remove_timer(timer);
 		event_timer_free(timer);
 		time_clock_check_timer = NULL;
 		time_out_of_sync = true;
 	} else {
-		INFO("System clock still in trusted range.");
+		TRACE("System clock still in trusted range.");
 	}
 }
 

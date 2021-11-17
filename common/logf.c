@@ -245,7 +245,13 @@ logf_register(void (*func)(logf_prio_t prio, const char *msg, void *data), void 
 void
 logf_unregister(logf_handler_t *handler)
 {
+	IF_NULL_RETURN(handler);
 	logf_handler_list = list_remove(logf_handler_list, handler);
+
+	if (handler->data)
+		mem_free0(handler->data);
+
+	mem_free0(handler);
 }
 
 void
