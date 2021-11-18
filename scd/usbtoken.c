@@ -315,7 +315,7 @@ usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_le
  * reaquired using the correct usb port or not at all
  * @param token the usbtoken which the ctapi interface should be initilized to
  * @param brsp the buffer to hold the response from the ICC
- * @param brsp_len length of æparam brsp
+ * @param brsp_len length of @param brsp
  * @return 0 on success or -1 else
  */
 static int
@@ -324,14 +324,18 @@ usbtoken_init_ctapi_int(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 	ASSERT(token);
 
 	int rc = -1;
-	unsigned short lr, port;
-	unsigned char *readers = mem_alloc0(MAX_CT_READERS_SIZE);
+	unsigned short lr = MAX_CT_READERS_SIZE;
+	unsigned short port = 0;
+	unsigned char *readers = mem_alloc0(lr);
 
-	lr = MAX_CT_READERS_SIZE;
-	CT_list(readers, &lr, 0);
+	rc = CT_list(readers, &lr, 0);
+	if (0 != rc) {
+		ERROR("CT_list failed with code: %d", rc);
+		goto err;
+	}
 
 	if (lr <= 0) {
-		ERROR("No usb token reader found.");
+		ERROR("USB_Enumerate returned illegal lr: %d", lr);
 		goto err;
 	}
 
