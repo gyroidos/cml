@@ -1154,10 +1154,8 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 			audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
 					"container-create-token-uninit",
 					uuid_string(container_get_uuid(c)), 0);
-			ERROR("Could not initialize token associated with container %s (uuid=%s). Aborting creation",
-			      container_get_name(c), uuid_string(container_get_uuid(c)));
-			cmld_container_destroy(c);
-			c = NULL;
+			WARN("Could not initialize token associated with container %s (uuid=%s).",
+			     container_get_name(c), uuid_string(container_get_uuid(c)));
 		} else {
 			cmld_containers_list = list_append(cmld_containers_list, c);
 			audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
