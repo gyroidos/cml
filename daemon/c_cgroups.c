@@ -959,11 +959,6 @@ c_cgroups_devices_chardev_deny(c_cgroups_t *cgroups, int major, int minor)
 	return ret;
 }
 
-typedef struct {
-	c_cgroups_t *cgroups;
-	uevent_usbdev_t *usbdev;
-} c_cgroups_usb_description_t;
-
 static int
 c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
 {
