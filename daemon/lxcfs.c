@@ -72,7 +72,7 @@ lxcfs_daemon_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	pid_t pid;
 	int status = 0;
 
-	DEBUG("lxcfs SIGCHLD handler called for PID %d", *lxcfs_pid);
+	TRACE("lxcfs SIGCHLD handler called for PID %d", *lxcfs_pid);
 	if ((pid = waitpid(*lxcfs_pid, &status, WNOHANG)) > 0) {
 		TRACE("Reaped lxcfs process: %d", pid);
 		/* remove the sigchld callback for the lxcfs daemon from the event loop */
