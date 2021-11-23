@@ -296,7 +296,7 @@ scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_unregister(scd_logfile_handler);
 	scd_logfile_handler =
 		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-scd"));
-	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_WARN);
+	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 }
 
 int

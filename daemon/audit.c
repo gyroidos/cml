@@ -52,8 +52,11 @@
 //TODO implement ACK mechanism fpr all service messages inside c-service.c?
 #include "c_service.pb-c.h"
 
-#ifndef AUDIT_DM_INTEGRITY
-#define AUDIT_DM_INTEGRITY 1600
+#ifndef AUDIT_DM_CTRL
+#define AUDIT_DM_CTRL 1338
+#endif
+#ifndef AUDIT_DM_EVENT
+#define AUDIT_DM_EVENT 1339
 #endif
 
 #define AUDIT_HASH_ALGO SHA512
@@ -748,7 +751,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		audit_record_log(cmld_container_get_by_uid(uid), record);
 		protobuf_free_message((ProtobufCMessage *)record);
 		TRACE("audit: type=%d %s", type, log_record);
-	} else if (type == AUDIT_USER || type == AUDIT_LOGIN ||
+	} else if (type == AUDIT_USER || type == AUDIT_LOGIN || type == AUDIT_DM_CTRL ||
 		   (type >= AUDIT_FIRST_USER_MSG && type <= AUDIT_LAST_USER_MSG) ||
 		   (type >= AUDIT_FIRST_USER_MSG2 && type <= AUDIT_LAST_USER_MSG2)) {
 		log_record = NLMSG_DATA(nlmsg);
@@ -766,7 +769,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 				log_record);
 		mem_free0(record_type);
 		TRACE("audit: type=%d %s", type, log_record);
-	} else if (type == AUDIT_DM_INTEGRITY) {
+	} else if (type == AUDIT_DM_EVENT) {
 		log_record = NLMSG_DATA(nlmsg);
 		uuid_t *uuid = NULL;
 		char *dev_file = NULL;

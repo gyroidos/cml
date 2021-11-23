@@ -72,7 +72,7 @@ tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_unregister(tpm2d_logfile_handler);
 	tpm2d_logfile_handler =
 		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-tpm2d"));
-	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_WARN);
+	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_TRACE);
 }
 
 static void

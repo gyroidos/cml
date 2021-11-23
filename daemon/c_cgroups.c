@@ -965,108 +965,25 @@ typedef struct {
 } c_cgroups_usb_description_t;
 
 static int
-c_cgroups_sys_usb_devices_dir_foreach_cb(const char *path, const char *name, void *data)
-{
-	uint16_t id_product, id_vendor;
-	char buf[256];
-	int len;
-	bool found;
-	int dev[2];
-
-	c_cgroups_usb_description_t *cgusbd = data;
-	IF_NULL_RETVAL(cgusbd, -1);
-	uevent_usbdev_t *usbdev = cgusbd->usbdev;
-	IF_NULL_RETVAL(usbdev, -1);
-
-	char *id_product_file = mem_printf("%s/%s/idProduct", path, name);
-	char *id_vendor_file = mem_printf("%s/%s/idVendor", path, name);
-	char *i_serial_file = mem_printf("%s/%s/serial", path, name);
-	char *dev_file = mem_printf("%s/%s/dev", path, name);
-
-	TRACE("id_product_file: %s", id_product_file);
-	TRACE("id_vendor_file: %s", id_vendor_file);
-	TRACE("i_serial_file: %s", i_serial_file);
-
-	IF_FALSE_GOTO_TRACE(file_exists(id_product_file), out);
-	IF_FALSE_GOTO_TRACE(file_exists(id_vendor_file), out);
-	IF_FALSE_GOTO_TRACE(file_exists(dev_file), out);
-
-	len = file_read(id_product_file, buf, sizeof(buf));
-	IF_TRUE_GOTO((len < 4), out);
-	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_product) < 0), out);
-	found = (id_product == uevent_usbdev_get_id_product(usbdev));
-	TRACE("found: %d", found);
-
-	len = file_read(id_vendor_file, buf, sizeof(buf));
-	IF_TRUE_GOTO((len < 4), out);
-	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_vendor) < 0), out);
-	found &= (id_vendor == uevent_usbdev_get_id_vendor(usbdev));
-	TRACE("found: %d", found);
-
-	if (file_exists(i_serial_file)) {
-		len = file_read(i_serial_file, buf, sizeof(buf));
-		TRACE("%s len=%d", buf, len);
-		TRACE("%s len=%zu", uevent_usbdev_get_i_serial(usbdev),
-		      strlen(uevent_usbdev_get_i_serial(usbdev)));
-		found &= (0 == strncmp(buf, uevent_usbdev_get_i_serial(usbdev),
-				       strlen(uevent_usbdev_get_i_serial(usbdev))));
-		TRACE("found: %d", found);
-	} else {
-		buf[0] = '\0';
-	}
-	IF_FALSE_GOTO_TRACE(found, out);
-
-	// major = minor = -1;
-	dev[0] = dev[1] = -1;
-	len = file_read(dev_file, buf, sizeof(buf));
-	IF_TRUE_GOTO((sscanf(buf, "%d:%d", &dev[0], &dev[1]) < 0), out);
-	IF_FALSE_GOTO((dev[0] > -1 && dev[1] > -1), out);
-
-	uevent_usbdev_set_major(usbdev, dev[0]);
-	uevent_usbdev_set_minor(usbdev, dev[1]);
-
-	char *rule = mem_printf("c %d:%d rwm", dev[0], dev[1]);
-	INFO("Going to %s usb device %04hx:%04hx serial \"%s\" rule %s",
-	     uevent_usbdev_is_assigned(usbdev) ? "assign" : "allow", id_product, id_vendor,
-	     uevent_usbdev_get_i_serial(usbdev), rule);
-
-	if (-1 == c_cgroups_devices_chardev_allow(cgusbd->cgroups, dev[0], dev[1],
-						  uevent_usbdev_is_assigned(usbdev))) {
-		WARN("Could not %s char device %d:%d !",
-		     uevent_usbdev_is_assigned(usbdev) ? "assign" : "allow", dev[0], dev[1]);
-	}
-
-	return 0;
-
-out:
-	mem_free0(id_product_file);
-	mem_free0(id_vendor_file);
-	mem_free0(i_serial_file);
-	mem_free0(dev_file);
-	return 0;
-}
-
-static int
 c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
 {
-	int ret = 0;
-	const char *sysfs_path = "/sys/bus/usb/devices";
-
-	c_cgroups_usb_description_t *cgusbd = mem_new0(c_cgroups_usb_description_t, 1);
-	cgusbd->cgroups = cgroups;
-	cgusbd->usbdev = usbdev;
-
-	// for the first time iterate through sysfs to find device
-	if (0 > dir_foreach(sysfs_path, &c_cgroups_sys_usb_devices_dir_foreach_cb, cgusbd)) {
-		WARN("Could not open %s to find usb device!", sysfs_path);
-		ret = -1;
+	ASSERT(cgroups);
+	ASSERT(usbdev);
+	if (0 != uevent_usbdev_set_sysfs_props(usbdev)) {
+		ERROR("Failed to find usbedv in sysfs");
+		return -1;
 	}
 
-	// for hotplug events register the device at uevent subsystem
-	uevent_register_usbdevice(cgroups->container, usbdev);
+	if (-1 == c_cgroups_devices_chardev_allow(cgroups, uevent_usbedv_get_major(usbdev),
+						  uevent_usbdev_get_minor(usbdev),
+						  uevent_usbdev_is_assigned(usbdev))) {
+		WARN("Could not %s char device %d:%d !",
+		     uevent_usbdev_is_assigned(usbdev) ? "assign" : "allow",
+		     uevent_usbedv_get_major(usbdev), uevent_usbdev_get_minor(usbdev));
+		return -1;
+	}
 
-	mem_free0(cgusbd);
-	return ret;
+	return 0;
 }
 
 bool
@@ -1179,8 +1096,16 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 		if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
 			TRACE("Device of type pin reader is not mapped into the container");
 			continue;
+		} else if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_TOKEN) {
+			// token devices are previously registered to the uevent subsystem
+			c_cgroups_devices_usbdev_allow(cgroups, usbdev);
+		} else if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_GENERIC) {
+			c_cgroups_devices_usbdev_allow(cgroups, usbdev);
+			// for hotplug events register the device at uevent subsystem
+			uevent_register_usbdevice(cgroups->container, usbdev);
+		} else {
+			ERROR("Unknown UEVENT_USBDEV_TYPE. Device has not been configured!");
 		}
-		c_cgroups_devices_usbdev_allow(cgroups, usbdev);
 	}
 
 	// temporarily add systemd to list
@@ -1384,7 +1309,10 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 	/* unregister usbdevs from uevent subsystem for hotplugging */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
 		uevent_usbdev_t *usbdev = l->data;
-		uevent_unregister_usbdevice(cgroups->container, usbdev);
+		if (UEVENT_USBDEV_TYPE_TOKEN !=
+		    uevent_usbdev_get_type(
+			    usbdev)) // keep token registered so it can be reinitialized on hotplug
+			uevent_unregister_usbdevice(cgroups->container, usbdev);
 	}
 
 	/* free assigned devices */

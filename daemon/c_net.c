@@ -1342,7 +1342,7 @@ c_net_start_child(c_net_t *net)
 }
 
 static void
-c_net_cleanup_interface(c_net_interface_t *ni)
+c_net_interface_down(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
@@ -1358,7 +1358,10 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 		if (network_delete_link(ni->veth_cmld_name))
 			WARN("network interface %s could not be destroyed", ni->veth_cmld_name);
 	}
-
+}
+static void
+c_net_cleanup_interface(c_net_interface_t *ni)
+{
 	TRACE("cleanup c_net_t structure");
 
 	/* Release the offset, as the ip addresses are no more occupied */
@@ -1417,13 +1420,13 @@ c_net_cleanup_c0(c_net_t *net)
 			c_net_interface_t *ni = l->data;
 
 			if (!ni->configure) {
-				c_net_cleanup_interface(ni);
+				c_net_interface_down(ni);
 				continue;
 			}
 			if (network_setup_masquerading(ni->subnet, false))
 				WARN("Failed to remove masquerading from %s", ni->subnet);
 
-			c_net_cleanup_interface(ni);
+			c_net_interface_down(ni);
 		}
 		DEBUG("Cleanup of net ifs in netns of %s done, exiting netns child!", hostns);
 		exit(0);
@@ -1480,6 +1483,12 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 
 	if (c_net_cleanup_c0(net) == -1)
 		WARN("Failed to create helper child for cleanup in c0's netns");
+
+	/* release ip offsets and names of veths */
+	for (list_t *l = net->interface_list; l; l = l->next) {
+		c_net_interface_t *ni = l->data;
+		c_net_cleanup_interface(ni);
+	}
 }
 
 /**

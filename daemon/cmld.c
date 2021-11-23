@@ -84,6 +84,8 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
+#define CMLD_USB_TOKEN_ATTACH_TIMEOUT 500
+
 /*
  * dummy key used for unecnrypted c0 and for reboots where the real key
  * is already in kernel
@@ -385,6 +387,8 @@ cmld_container_token_init(container_t *container)
 		return 0;
 	}
 
+	DEBUG("Invoking smartcard_scd_token_add_block() for container %s",
+	      container_get_name(container));
 	if (smartcard_scd_token_add_block(container) != 0) {
 		ERROR("Requesting SCD to init token failed");
 		return -1;
@@ -929,6 +933,8 @@ cmld_start_c0(container_t *new_c0)
 				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;
 	}
+	/* check that time is in trusted range after start */
+	time_register_clock_check();
 
 	audit_log_event(container_get_uuid(new_c0), SSA, CMLD, CONTAINER_MGMT, "c0-start",
 			uuid_string(container_get_uuid(new_c0)), 0);
@@ -1148,10 +1154,8 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 			audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
 					"container-create-token-uninit",
 					uuid_string(container_get_uuid(c)), 0);
-			ERROR("Could not initialize token associated with container %s (uuid=%s). Aborting creation",
-			      container_get_name(c), uuid_string(container_get_uuid(c)));
-			cmld_container_destroy(c);
-			c = NULL;
+			WARN("Could not initialize token associated with container %s (uuid=%s).",
+			     container_get_name(c), uuid_string(container_get_uuid(c)));
 		} else {
 			cmld_containers_list = list_append(cmld_containers_list, c);
 			audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
@@ -1386,44 +1390,44 @@ cmld_is_shiftfs_supported(void)
 	return ret;
 }
 
-int
-cmld_token_attach(const char *serial, char *devpath)
+static void
+cmld_token_attach_cb(event_timer_t *timer, void *data)
 {
-	IF_NULL_RETVAL_TRACE(serial, -1);
-	IF_NULL_RETVAL_TRACE(devpath, -1);
-
-	container_t *container = cmld_container_get_by_token_serial(serial);
-
-	IF_NULL_RETVAL_TRACE(container, -1);
-
-	TRACE("Handling attachment of token with serial %s at %s", serial, devpath);
-
-	container_set_usbtoken_devpath(container, mem_strdup(devpath));
+	ASSERT(data);
+	container_t *c = data;
 
 	// initialize the USB token
-	int block_return = cmld_container_token_init(container);
+	int block_return = cmld_container_token_init(c);
 
 	if (block_return) {
-		DEBUG("Failed to initialize token, already initialized?");
+		ERROR("Failed to initialize token(might already be initialized)");
 	}
+
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
+int
+cmld_token_attach(container_t *container)
+{
+	ASSERT(container);
+	TRACE("Registering callback to handle attachment of token with serial %s",
+	      container_get_usbtoken_serial(container));
+
+	// give usb device some time to register
+	event_timer_t *e =
+		event_timer_new(CMLD_USB_TOKEN_ATTACH_TIMEOUT, 1, cmld_token_attach_cb, container);
+	event_add_timer(e);
 
 	return 0;
 }
 
 int
-cmld_token_detach(char *devpath)
+cmld_token_detach(container_t *container)
 {
-	IF_NULL_RETVAL_TRACE(devpath, -1);
+	ASSERT(container);
 
-	container_t *container = cmld_container_get_by_devpath(devpath);
-
-	IF_NULL_RETVAL_TRACE(container, -1);
-
-	DEBUG("Handling detachment of token at %s", devpath);
-
-	container_set_usbtoken_devpath(container, NULL);
-
-	DEBUG("Stopping Container");
+	DEBUG("USB token has been detached, stopping Container %s", container_get_name(container));
 	if (cmld_container_stop(container)) {
 		ERROR("Could not stop container after token detachment.");
 	}

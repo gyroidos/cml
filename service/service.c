@@ -101,7 +101,8 @@ service_set_hostname(int fd)
 	rc += file_write_append("/etc/hosts", line, strlen(line));
 
 	// write hostname to kernel
-	rc += file_write("/proc/sys/kernel/hostname", name, strlen(name));
+	if (sethostname(name, strlen(name)) == -1)
+		WARN_ERRNO("Failed to set '%s' as hostname in kernel", name);
 
 	mem_free0(line);
 	if (resp)
