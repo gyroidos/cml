@@ -312,4 +312,10 @@ cmld_token_attach(container_t *container);
 int
 cmld_token_detach(container_t *container);
 
+/*
+ * Reboot device by trying to gracfully stop or killing containers otherwise.
+ */
+void
+cmld_reboot_device(void);
+
 #endif /* CMLD_H */
