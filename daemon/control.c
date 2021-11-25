@@ -1000,9 +1000,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE: {
-		res = reboot_reboot(REBOOT);
-		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
-				     fd);
+		cmld_reboot_device();
+		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR: {
