@@ -117,6 +117,8 @@ static bool cmld_signed_configs = false;
 
 static bool cmld_device_provisioned = false;
 
+static enum command cmld_device_reboot = POWER_OFF;
+
 /******************************************************************************/
 
 static int
@@ -740,6 +742,21 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 	}
 }
 
+static void
+cmld_handle_device_shutdown(void)
+{
+#ifdef TRUSTME_DEBUG
+	if (cmld_device_reboot == POWER_OFF) {
+		DEBUG("Device shutdown: keep CML running, just exit cmld for debugging.");
+		exit(0);
+	}
+#endif /* TRUSTME_DEBUG */
+
+	reboot_reboot(cmld_device_reboot);
+	// should never arrive here, but in case the shutdown fails somehow, we exit
+	exit(0);
+}
+
 /**
  * This observer callback is attached to each container in order to check for other running containers.
  * It ensures that as soon as the last container went down, the device is shut down.
@@ -774,11 +791,7 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "shutdown",
 			uuid_string(container_get_uuid(container)), 0);
 
-#ifndef TRUSTME_DEBUG
-	reboot_reboot(POWER_OFF);
-	// should never arrive here, but in case the shutdown fails somehow, we exit
-	exit(0);
-#endif /* TRUSTME_DEBUG */
+	cmld_handle_device_shutdown();
 }
 
 /**
@@ -832,11 +845,8 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 		DEBUG("Device shutdown: all containers already down; shutdown now");
 		audit_log_event(container_get_uuid(c0), SSA, CMLD, CONTAINER_MGMT, "shutdown",
 				uuid_string(container_get_uuid(c0)), 0);
-#ifndef TRUSTME_DEBUG
-		reboot_reboot(POWER_OFF);
-		// should never arrive here, but in case the shutdown fails somehow, we exit
-		exit(0);
-#endif /* TRUSTME_DEBUG */
+
+		cmld_handle_device_shutdown();
 	}
 }
 
@@ -1477,4 +1487,18 @@ cmld_cleanup(void)
 		mem_free0(name);
 	}
 	list_delete(cmld_netif_phys_list);
+}
+
+void
+cmld_reboot_device(void)
+{
+	// just set internal state variable and let container shutdown callbacks
+	// handle the actual reboot, after all containers are down
+	cmld_device_reboot = REBOOT;
+
+	container_t *c0 = cmld_containers_get_c0();
+	IF_NULL_RETURN(c0);
+
+	// stopping c0 also stops other containers.
+	cmld_container_stop(c0);
 }
