@@ -1829,11 +1829,15 @@ container_stop(container_t *container)
 	if (c_service_stop(container->service) < 0) {
 		ret = CONTAINER_ERROR;
 
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"request-clean-shutdown",
-				uuid_string(container_get_uuid(container)), 0);
-		goto error_stop;
+		char *argv[] = { "halt", NULL };
+		if (c_run_exec_process(container->run, false, argv[0], 1, argv, -1)) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"request-clean-shutdown",
+					uuid_string(container_get_uuid(container)), 0);
+			goto error_stop;
+		}
 	}
+
 	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
 			"request-clean-shutdown", uuid_string(container_get_uuid(container)), 0);
 
