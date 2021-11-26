@@ -37,6 +37,13 @@ test_read_certs(const char *cert, const char *sig, const char *data, char **cert
 	munit_assert(NULL != sig);
 	munit_assert(NULL != data);
 
+	munit_assert(NULL != cert_buf);
+	munit_assert(NULL != cert_len);
+	munit_assert(NULL != sig_buf);
+	munit_assert(NULL != sig_len);
+	munit_assert(NULL != data_buf);
+	munit_assert(NULL != data_len);
+
 	DEBUG("Reading file %s", cert);
 	munit_assert(0 < (*cert_len = file_size(cert)));
 	*cert_buf = mem_alloc0(*cert_len);
@@ -758,6 +765,201 @@ test_ssl_verify_signature_from_digest_ssa_ssacert_sha512(UNUSED const MunitParam
 	return MUNIT_OK;
 }
 
+// Test with valid SubCA
+static MunitResult
+test_ssl_verify_certificate_trusted_subca(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test with untrusted SubCA
+static MunitResult
+test_ssl_verify_certificate_untrusted_subca(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test with correct RootCA inside testcert
+static MunitResult
+test_ssl_verify_certificate_combined_correct_root(UNUSED const MunitParameter params[],
+						  UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_correct_rootca.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test with untrusted RootCA inside testcert
+static MunitResult
+test_ssl_verify_certificate_combined_untrusted_root(UNUSED const MunitParameter params[],
+						    UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_untrusted_rootca.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test with untrusted SubCA appended to ssig_cml.cert
+static MunitResult
+test_ssl_verify_certificate_ssig_cml_untrusted_subca_appended(UNUSED const MunitParameter params[],
+							      UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_untrusted_subca.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test with valid SubCA appended to untrusted software signing certificate
+static MunitResult
+test_ssl_verify_certificate_valid_subca_with_untrusted_signing_cert(
+	UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	int ret = ssl_verify_certificate(
+		"testdata/testpki/valid_subca_with_untrusted_signing_cert.cert",
+		"testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test with SubCA removed from ssig_cml.cert
+static MunitResult
+test_ssl_verify_certificate_ssig_cml_cert_without_subca(UNUSED const MunitParameter params[],
+							UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_without_subca.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test with duplicate certificate chains
+static MunitResult
+test_ssl_verify_certificate_ssig_cml_duplicate_chain(UNUSED const MunitParameter params[],
+						     UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_duplicate_chains.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test ssig cml cert signed directly with trusted RootCA
+static MunitResult
+test_ssl_verify_certificate_ssig_cml_rootsigned(UNUSED const MunitParameter params[],
+						UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_rootsigned.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test ssig cml cert signed directly with untrusted RootCA
+static MunitResult
+test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted(UNUSED const MunitParameter params[],
+							  UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_rootsigned.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test trusted ssig cml cert with appended self-signed cert
+static MunitResult
+test_ssl_verify_certificate_trusted_ssig_cml_with_selfsigned(UNUSED const MunitParameter params[],
+							     UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_selfsigned.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test untrusted ssig cml cert with appended self-signed cert
+static MunitResult
+test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned(UNUSED const MunitParameter params[],
+							       UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_with_selfsigned.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test complete untrusted chain against trusted root CA
+static MunitResult
+test_ssl_verify_certificate_untrusted_complete_chain(UNUSED const MunitParameter params[],
+						     UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_complete_chain.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == -1);
+
+	return MUNIT_OK;
+}
+
+// Test complete untrusted chain against trusted root CA
+static MunitResult
+test_ssl_verify_certificate_untrusted_complete_chain_null(UNUSED const MunitParameter params[],
+							  UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_complete_chain.cert",
+					 NULL, false);
+
+	// Check if verification was successful
+	munit_assert(ret == -2);
+
+	return MUNIT_OK;
+}
+
 static MunitTest tests[] = {
 	{ "test_ssl_verify_signature_from_buf_ssa_ssacert",
 	  test_ssl_verify_signature_from_buf_ssa_ssacert, setup, tear_down, MUNIT_TEST_OPTION_NONE,
@@ -825,8 +1027,48 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_create_pkcs12_token_ssa", test_ssl_create_pkcs12_token_ssa, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_create_pkcs12_token_pss", test_ssl_create_pkcs12_token_pss, setup, tear_down,
+	{ "test_ssl_verify_certificate_trusted_subca", test_ssl_verify_certificate_trusted_subca,
+	  setup, tear_down, MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_untrusted_subca",
+	  test_ssl_verify_certificate_untrusted_subca, setup, tear_down, MUNIT_TEST_OPTION_NONE,
+	  NULL },
+	{ "test_ssl_verify_certificate_combined_correct_root",
+	  test_ssl_verify_certificate_combined_correct_root, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_combined_untrusted_root",
+	  test_ssl_verify_certificate_combined_untrusted_root, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_ssig_cml_untrusted_subca_appended",
+	  test_ssl_verify_certificate_ssig_cml_untrusted_subca_appended, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_valid_subca_with_untrusted_signing_cert",
+	  test_ssl_verify_certificate_valid_subca_with_untrusted_signing_cert, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_ssig_cml_cert_without_subca",
+	  test_ssl_verify_certificate_ssig_cml_cert_without_subca, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_ssig_cml_duplicate_chain",
+	  test_ssl_verify_certificate_ssig_cml_duplicate_chain, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_ssig_cml_rootsigned",
+	  test_ssl_verify_certificate_ssig_cml_rootsigned, setup, tear_down, MUNIT_TEST_OPTION_NONE,
+	  NULL },
+	{ "test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted",
+	  test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_trusted_ssig_cml_with_selfsigned",
+	  test_ssl_verify_certificate_trusted_ssig_cml_with_selfsigned, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned",
+	  test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_untrusted_complete_chain",
+	  test_ssl_verify_certificate_untrusted_complete_chain, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_certificate_untrusted_complete_chain_null",
+	  test_ssl_verify_certificate_untrusted_complete_chain_null, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+
 	// Mark the end of the array with an entry where the test function is NULL
 	{ NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
