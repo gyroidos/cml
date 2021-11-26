@@ -4,3 +4,4 @@ cscope.out
 *.swp
 tags
 /**/compile_commands.json
+.vscode/

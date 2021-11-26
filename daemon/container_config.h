@@ -229,6 +229,9 @@ container_config_get_fifos(const container_config_t *config);
 container_token_type_t
 container_config_get_token_type(const container_config_t *config);
 
+char *
+container_config_get_usbtoken_serial(const container_config_t *config);
+
 bool
 container_config_get_usb_pin_entry(const container_config_t *config);
 
