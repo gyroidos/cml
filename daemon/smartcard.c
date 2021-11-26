@@ -60,8 +60,7 @@
 #define MAX_PAIR_SEC_LEN 8
 #define PAIR_SEC_FILE_NAME "device_pairing_secret"
 
-//#undef LOGF_LOG_MIN_PRIO
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+#define TOKEN_IS_PAIRED_FILE_NAME "token_is_paired"
 
 struct smartcard {
 	int sock;
@@ -183,6 +182,16 @@ smartcard_send_recv_block(const DaemonToToken *out)
 }
 
 /**
+ * Returns the path to a container specific flag file, that indicates, that the
+ * token has been provisioned with a platform bound authentication code
+ */
+static char *
+smartcard_token_paired_file_new(const container_t *container)
+{
+	return mem_printf("%s/%s", container_get_images_dir(container), TOKEN_IS_PAIRED_FILE_NAME);
+}
+
+/**
  * checks whether the token associated to @param container has been provisioned
  * with a device bound authentication code yet.
  * TODO: this should actually query the SCD. Functionality in SCD not yet implemented.
@@ -194,7 +203,7 @@ smartcard_container_token_is_provisioned(const container_t *container)
 
 	bool ret;
 
-	char *token_init_file = container_token_paired_file_new(container);
+	char *token_init_file = smartcard_token_paired_file_new(container);
 
 	ret = file_exists(token_init_file);
 
@@ -731,7 +740,7 @@ smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void 
 			command_state = false;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL: {
-			char *path = container_token_paired_file_new(startdata->container);
+			char *path = smartcard_token_paired_file_new(startdata->container);
 			rc = file_touch(path);
 			if (rc != 0) { //should never happen
 				ERROR("Could not write file %s to flag that container %s's token has been initialized\n \
@@ -1077,4 +1086,16 @@ smartcard_free(smartcard_t *smartcard)
 
 	mem_free0(smartcard->path);
 	mem_free0(smartcard);
+}
+
+int
+smartcard_release_pairing(container_t *container)
+{
+	char *path = smartcard_token_paired_file_new(container);
+	int ret = unlink(path);
+	if (ret != 0) {
+		ERROR_ERRNO("Failed to remove file %s", path);
+	}
+	mem_free0(path);
+	return ret;
 }

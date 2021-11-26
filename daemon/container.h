@@ -813,13 +813,6 @@ uuid_t *
 container_get_token_uuid(const container_t *container);
 
 /**
- * Returns the path to a container specific flag file, that indicates, that the
- * token has been provisioned with a platform bound authentication code
- */
-char *
-container_token_paired_file_new(const container_t *container);
-
-/**
  * Sets the flag whether the token the container is associated with has been initialized in the scd.
  */
 void

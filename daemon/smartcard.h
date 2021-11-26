@@ -118,4 +118,13 @@ smartcard_container_token_is_provisioned(const container_t *container);
 int
 smartcard_remove_keyfile(smartcard_t *smartcard, const container_t *container);
 
+/**
+ * Removes the container specific flag file, that indicates, that the
+ * token has been provisioned with a platform bound authentication code
+ * @param container
+ * @return 0 on success, else -1. Additionally, errno is set.
+ */
+int
+smartcard_release_pairing(container_t *container);
+
 #endif /* SMARTCARD_H */

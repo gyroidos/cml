@@ -647,6 +647,20 @@ container_config_get_token_type(const container_config_t *config)
 	return container_config_proto_to_token_type(config->cfg->token_type);
 }
 
+char *
+container_config_get_usbtoken_serial(const container_config_t *config)
+{
+	if (container_config_get_token_type(config) != CONTAINER_TOKEN_TYPE_USB) {
+		return NULL;
+	}
+	for (size_t i = 0; i < config->cfg->n_usb_configs; i++) {
+		if (config->cfg->usb_configs[i]->type == CONTAINER_USB_TYPE__TOKEN) {
+			return config->cfg->usb_configs[i]->serial;
+		}
+	}
+	return NULL;
+}
+
 bool
 container_config_get_usb_pin_entry(const container_config_t *config)
 {

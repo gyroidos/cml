@@ -26,7 +26,7 @@
 
 #include "container.h"
 
-//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/uuid.h"
@@ -57,6 +57,7 @@
 #include "hardware.h"
 #include "uevent.h"
 #include "audit.h"
+#include "smartcard.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -97,8 +98,6 @@
 #define CONTAINER_START_TIMEOUT 800000
 /* Timeout until a container to be stopped gets killed if not yet down */
 #define CONTAINER_STOP_TIMEOUT 45000
-
-#define TOKEN_IS_PAIRED_FILE_NAME "token_is_paired"
 
 struct container {
 	container_state_t state;
@@ -2066,9 +2065,9 @@ container_destroy(container_t *container)
 		}
 	mem_free0(file_name_created);
 
-	char *path = container_token_paired_file_new(container);
-	unlink(path);
-	mem_free0(path);
+	if (smartcard_release_pairing(container)) {
+		ERROR("Can't remove token paired file!");
+	}
 
 	if ((ret = unlink(container_get_config_filename(container))))
 		ERROR_ERRNO("Can't delete config file!");
@@ -2518,6 +2517,41 @@ container_get_vnet_runtime_cfg_new(container_t *container)
 	return c_net_get_interface_mapping_new(container->net);
 }
 
+static bool
+container_has_token_changed(container_t *container, container_config_t *conf)
+{
+	if (container_config_get_token_type(conf) != container->token.type) {
+		TRACE("Container token type changed: %d -> %d", container->token.type,
+		      container_config_get_token_type(conf));
+		return true;
+	}
+
+	if (container->token.type != CONTAINER_TOKEN_TYPE_USB) {
+		TRACE("Token did not change: Container is not a USB token container");
+		return false;
+	}
+
+	char *serial_new = container_config_get_usbtoken_serial(conf);
+	if (!serial_new) {
+		ERROR("Failed to retrieve container config USB token serial");
+		return true;
+	}
+
+	char *serial_old = container_get_usbtoken_serial(container);
+	if (!serial_old) {
+		ERROR("Failed to retrieve container USB token serial");
+		return true;
+	}
+
+	if (strcmp(serial_new, serial_old)) {
+		TRACE("Container USB token serial changed");
+		return true;
+	}
+
+	TRACE("Container USB token serial did not change");
+	return false;
+}
+
 int
 container_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
 			size_t sig_len, uint8_t *cert_buf, size_t cert_len)
@@ -2530,6 +2564,20 @@ container_update_config(container_t *container, uint8_t *buf, size_t buf_len, ui
 		ret = container_config_write(conf);
 		container_config_free(conf);
 	}
+
+	// Wipe container if USB token serial changed
+	if (container_has_token_changed(container, conf)) {
+		if (container_wipe(container)) {
+			ERROR("Failed to wipe user data. Setting container state to ZOMBIE");
+			container_set_state(container, CONTAINER_STATE_ZOMBIE);
+		}
+		if ((container->token.type == CONTAINER_TOKEN_TYPE_USB) &&
+		    smartcard_release_pairing(container)) {
+			ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
+			container_set_state(container, CONTAINER_STATE_ZOMBIE);
+		}
+	}
+
 	return ret;
 }
 
@@ -2638,12 +2686,6 @@ container_get_token_uuid(const container_t *container)
 {
 	ASSERT(container);
 	return container->token.uuid;
-}
-
-char *
-container_token_paired_file_new(const container_t *container)
-{
-	return mem_printf("%s/%s", container->images_dir, TOKEN_IS_PAIRED_FILE_NAME);
 }
 
 void
