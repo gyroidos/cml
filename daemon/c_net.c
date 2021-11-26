@@ -1231,7 +1231,7 @@ c_net_start_post_clone(c_net_t *net)
 			      ni->veth_cmld_name, hostns);
 		}
 		DEBUG("Setup of net ifs in netns of %s done, exiting netns child!", hostns);
-		exit(0);
+		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
 		DEBUG("Setup of nis should be done by pid=%d", *c0_netns_pid);
 		// register new sigchild handler for helper clone in netns of c0
@@ -1429,7 +1429,7 @@ c_net_cleanup_c0(c_net_t *net)
 			c_net_interface_down(ni);
 		}
 		DEBUG("Cleanup of net ifs in netns of %s done, exiting netns child!", hostns);
-		exit(0);
+		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
 		DEBUG("Cleanup of ni ifs should be done by pid=%d", *c0_netns_pid);
 		// register new sigchild handler for helper clone in netns of c0

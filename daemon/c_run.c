@@ -372,11 +372,11 @@ do_exec(c_run_session_t *session)
 	 * in the new ns.
 	 */
 	IF_TRUE_GOTO(proc_fork_and_execvp((const char *const *)session->argv) < 0, error);
-	exit(EXIT_SUCCESS);
+	_exit(EXIT_SUCCESS);
 
 error:
 	ERROR_ERRNO("An error occured while trying to execute command. Giving up...");
-	exit(EXIT_FAILURE);
+	_exit(EXIT_FAILURE);
 }
 
 static int
@@ -417,7 +417,7 @@ do_pty_exec(void *data)
 	do_exec(session);
 error:
 	TRACE("An error occurred. Exiting...");
-	exit(EXIT_FAILURE);
+	_exit(EXIT_FAILURE);
 }
 
 static int

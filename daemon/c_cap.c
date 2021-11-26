@@ -126,16 +126,16 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 	// keep caps during uid switch
 	if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0) < 0) {
 		ERROR_ERRNO("Could not set KEEPCAPS");
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 	// switch to uid and gid of mapped userns root user
 	if (setgid(uid) < 0) {
 		ERROR_ERRNO("Could not set gid to '%d' in root userns", uid);
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 	if (setuid(uid) < 0) {
 		ERROR_ERRNO("Could not become user '%d' in root userns", uid);
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 
 	struct __user_cap_header_struct hdr = { 0 };
@@ -153,15 +153,15 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 
 	if (capset(&hdr, &data[0]) < 0) {
 		ERROR_ERRNO("capset failed!");
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 	if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_SYS_TIME, 0, 0) < 0) {
 		ERROR_ERRNO("Could not preserve CAP_SYS_TIME");
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 	if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_NET_BIND_SERVICE, 0, 0) < 0) {
 		ERROR_ERRNO("Could not preserve CAP_NET_BIND_SERVICE");
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 
 	if (strstr(argv[0], "ntpd")) {
@@ -236,20 +236,20 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 		// join container namespace but maintain root user ns
 		if (ns_join_all(container_get_pid(container), false) < 0) {
 			ERROR("Could not join namesapces");
-			exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		}
 
 		// double fork for to join pidns
 		int pid_2 = fork();
 		if (pid_2 == 0) {
 			c_cap_do_exec_cap_systime(container, argv);
-			exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		} else if (pid < 0) {
 			ERROR("double fork faild!");
-			exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		} else {
 			// exit parent to handover child to init of container
-			exit(0);
+			_exit(0);
 		}
 	} else if (pid < 0) {
 		ERROR_ERRNO("Failed to exec %s with CAP_SYS_TIME!", argv[0]);

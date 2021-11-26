@@ -599,7 +599,7 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 			FATAL_ERRNO("Could not verify resp to injected uevent!");
 		nl_sock_free(target);
 		nl_msg_free(nl_msg);
-		exit(0);
+		_exit(0);
 	} else {
 		if (waitpid(pid, &status, 0) != pid) {
 			ERROR_ERRNO("Could not waitpid for '%d'", pid);

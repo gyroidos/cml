@@ -120,7 +120,7 @@ lxcfs_daemon_start(const char *rt_path)
 		}
 		execvp(lxcfs_bin_path, (char *const *)lxcfs_argv);
 		WARN_ERRNO("Could not exec '%s'!", lxcfs_argv[0]);
-		exit(-1);
+		_exit(-1);
 	} else {
 		INFO("lxcfs daemon start done");
 		event_signal_t *sigchld =
