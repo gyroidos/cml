@@ -171,7 +171,7 @@ container_t *
 cmld_container_get_by_uid(int uid);
 
 int
-cmld_containers_stop(void (*on_all_stopped)(void));
+cmld_containers_stop(void (*on_all_stopped)(int), int value);
 
 /* state as parameter? */
 //void

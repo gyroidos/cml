@@ -44,6 +44,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 
 static logf_handler_t *cml_daemon_logfile_handler = NULL;
@@ -64,15 +65,6 @@ main_core_dump_enable(void)
 }
 
 static void
-main_exit(void)
-{
-	lxcfs_cleanup();
-	tss_cleanup();
-	cmld_cleanup();
-	exit(0);
-}
-
-static void
 main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	if (is_handling_sigint)
@@ -81,7 +73,7 @@ main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 		INFO("Received SIGINT..");
 
 	is_handling_sigint = true;
-	if (cmld_containers_stop(&main_exit) < 0)
+	if (cmld_containers_stop(&exit, 0) < 0)
 		ERROR("Could not stop all containers");
 }
 
@@ -89,7 +81,7 @@ static void
 main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	INFO("Received SIGTERM..");
-	if (cmld_containers_stop(&main_exit) < 0)
+	if (cmld_containers_stop(&exit, 0) < 0)
 		ERROR("Could not stop all containers");
 }
 
@@ -145,6 +137,9 @@ main(int argc, char **argv)
 
 	if (cmld_init(path) < 0)
 		FATAL("Could not init cmld");
+
+	if (atexit(&cmld_cleanup))
+		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
 
 	event_loop();
 

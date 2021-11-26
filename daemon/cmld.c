@@ -64,6 +64,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 // clang-format off
 #define CMLD_CONTROL_SOCKET SOCK_PATH(control)
@@ -231,7 +232,8 @@ cmld_containers_are_all_stopped(void)
 }
 
 typedef struct cmld_container_stop_data {
-	void (*on_all_stopped)(void);
+	void (*on_all_stopped)(int);
+	int value;
 } cmld_container_stop_data_t;
 
 static void
@@ -255,22 +257,24 @@ cmld_container_stop_cb(container_t *container, container_callback_t *cb, void *d
 	/* execute on_all_stopped, if all containers are stopped now */
 	if (cmld_containers_are_all_stopped()) {
 		INFO("all containers are stopped now, execution of on_all_stopped()");
-		stop_data->on_all_stopped();
+		stop_data->on_all_stopped(stop_data->value);
+		mem_free0(stop_data);
 	}
 }
 
 int
-cmld_containers_stop(void (*on_all_stopped)(void))
+cmld_containers_stop(void (*on_all_stopped)(int), int value)
 {
 	/* execute on_all_stopped, if all containers are stopped now */
 	if (cmld_containers_are_all_stopped()) {
 		INFO("all containers are stopped now, execution of on_all_stopped()");
-		on_all_stopped();
+		on_all_stopped(value);
 		return 0;
 	}
 
 	cmld_container_stop_data_t *stop_data = mem_new0(cmld_container_stop_data_t, 1);
 	stop_data->on_all_stopped = on_all_stopped;
+	stop_data->value = value;
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
@@ -1055,16 +1059,22 @@ cmld_init(const char *path)
 		INFO("ksm initialized.");
 
 	if (device_config_get_tpm_enabled(device_config)) {
-		if (tss_init() < 0)
+		if (tss_init() < 0) {
 			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
-		else
+		} else {
 			INFO("tss initialized.");
+			if (atexit(&tss_cleanup))
+				WARN("could not register on exit cleanup method 'tss_cleanup()'");
+		}
 	}
 
-	if (lxcfs_init() < 0)
+	if (lxcfs_init() < 0) {
 		WARN("Plattform does not support LXCFS");
-	else
+	} else {
 		INFO("lxcfs initialized.");
+		if (atexit(&lxcfs_cleanup))
+			WARN("could not register on exit cleanup method 'lxcfs_cleanup()'");
+	}
 
 	// Read the provision-status-file to set provisioned flag of control structs accordingly
 	char *provisioned_file = mem_printf("%s/%s", DEFAULT_BASE_PATH, PROVISIONED_FILE_NAME);
