@@ -344,26 +344,31 @@ error:
 }
 
 static int
-do_exec(c_run_session_t *session)
+do_exec(void *data)
 {
+	ASSERT(data);
+	c_run_session_t *session = data;
+
 	IF_TRUE_GOTO(-1 == c_run_join_container(session->run), error);
 
 	TRACE("[EXEC]: Executing command %s in process with PID: %d, PGID: %d, PPID: %d",
 	      session->cmd, getpid(), getpgid(getpid()), getppid());
 
-	if (-1 == dup2(session->pty_slave_fd, STDIN_FILENO)) {
-		ERROR("Failed to redirect stdin to cmld socket. Exiting...");
-		goto error;
-	}
+	if (session->create_pty) {
+		if (-1 == dup2(session->pty_slave_fd, STDIN_FILENO)) {
+			ERROR("Failed to redirect stdin to cmld socket. Exiting...");
+			goto error;
+		}
 
-	if (-1 == dup2(session->pty_slave_fd, STDOUT_FILENO)) {
-		ERROR("Failed to redirect stdout to cmld socket. Exiting...");
-		goto error;
-	}
+		if (-1 == dup2(session->pty_slave_fd, STDOUT_FILENO)) {
+			ERROR("Failed to redirect stdout to cmld socket. Exiting...");
+			goto error;
+		}
 
-	if (-1 == dup2(session->pty_slave_fd, STDERR_FILENO)) {
-		ERROR("Failed to redirect stderr to cmld. Exiting...");
-		goto error;
+		if (-1 == dup2(session->pty_slave_fd, STDERR_FILENO)) {
+			ERROR("Failed to redirect stderr to cmld. Exiting...");
+			goto error;
+		}
 	}
 
 	/*
@@ -556,7 +561,7 @@ c_run_prepare_exec(c_run_session_t *session)
 
 		//clone child to execute command
 		TRACE("Clone child process to execute command without PTY");
-		session->active_exec_pid = do_clone(do_pty_exec, SIGCHLD, (void *)session);
+		session->active_exec_pid = do_clone(do_exec, SIGCHLD, (void *)session);
 
 		if (session->active_exec_pid == -1) {
 			TRACE("Failed to fork() ...\n");
