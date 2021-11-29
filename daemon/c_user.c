@@ -286,11 +286,11 @@ c_user_cleanup(c_user_t *user, bool is_rebooting)
 		return;
 
 	// remove bound to filesystem
-	ns_unbind(user->ns_path);
 	if (user->fd_userns > 0) {
 		close(user->fd_userns);
 		user->fd_userns = -1;
 	}
+	ns_unbind(user->ns_path);
 
 	c_user_unset_offset(user->offset);
 
