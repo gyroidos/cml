@@ -1464,11 +1464,11 @@ c_net_cleanup(c_net_t *net, bool is_rebooting)
 		return;
 
 	// remove bound to filesystem
-	ns_unbind(net->ns_path);
 	if (net->fd_netns > 0) {
 		close(net->fd_netns);
 		net->fd_netns = -1;
 	}
+	ns_unbind(net->ns_path);
 
 	/* remove phys network intrefaces from container */
 	uint8_t if_mac[6];
