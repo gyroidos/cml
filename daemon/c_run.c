@@ -594,7 +594,7 @@ c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char *
 	event_signal_t *sig = event_signal_new(SIGCHLD, c_run_sigchld_cb, session);
 	event_add_signal(sig);
 
-	return session->fd;
+	return 0;
 
 error:
 	TRACE("An error occurred.");
