@@ -876,10 +876,18 @@ static void
 c_net_udhcpd_stop(c_net_interface_t *ni)
 {
 	ASSERT(ni);
-	if (ni->dhcpd_pid > 0) {
-		DEBUG("Stopping dhcpd process with pid=%d!", ni->dhcpd_pid);
-		kill(ni->dhcpd_pid, SIGTERM);
+	int dhcpd_pid;
+	const char *run_dir = "/run/udhcpd";
+	char *pid_file = mem_printf("%s/%s.pid", run_dir, ni->veth_cmld_name);
+	IF_NULL_RETURN(pid_file);
+
+	char *pid_str = file_read_new(pid_file, file_size(pid_file));
+	if (pid_str && sscanf(pid_str, "%d", &dhcpd_pid) == 1) {
+		DEBUG("Stopping dhcpd process with pid=%d!", dhcpd_pid);
+		kill(dhcpd_pid, SIGTERM);
+		mem_free0(pid_str);
 	}
+	mem_free0(pid_file);
 }
 
 static int
@@ -889,7 +897,7 @@ c_net_udhcpd_start(c_net_interface_t *ni)
 
 	int bytes_written = -1;
 
-	char *run_dir = mem_printf("/run/udhcpd");
+	const char *run_dir = "/run/udhcpd";
 	char *conf_file = mem_printf("%s/%s.conf", run_dir, ni->veth_cmld_name);
 	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
 	char *ipv4_end = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
@@ -934,7 +942,6 @@ c_net_udhcpd_start(c_net_interface_t *ni)
 out:
 	mem_free0(lease_file);
 	mem_free0(pid_file);
-	mem_free0(run_dir);
 	mem_free0(conf_file);
 	mem_free0(ipv4_start);
 	mem_free0(ipv4_end);
@@ -1346,9 +1353,6 @@ c_net_interface_down(c_net_interface_t *ni)
 {
 	ASSERT(ni);
 
-	DEBUG("shut network interface %s down", ni->veth_cont_name);
-	c_net_udhcpd_stop(ni);
-
 	/* shut the network interface down */
 	// check if iface was allready destroyed by kernel
 	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
@@ -1363,6 +1367,9 @@ static void
 c_net_cleanup_interface(c_net_interface_t *ni)
 {
 	TRACE("cleanup c_net_t structure");
+
+	DEBUG("shut network interface %s down", ni->veth_cont_name);
+	c_net_udhcpd_stop(ni);
 
 	/* Release the offset, as the ip addresses are no more occupied */
 	c_net_unset_offset(ni->cont_offset);
