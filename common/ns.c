@@ -313,7 +313,7 @@ ns_bind(char *ns, pid_t pid, char *ns_path)
 	ns_proc_path = mem_printf("/proc/%d/ns/%s", pid, ns);
 
 	if (mount(ns_proc_path, ns_path, NULL, MS_BIND, NULL) < 0) {
-		ERROR_ERRNO("Could bind mount ns file %s on %s", ns_proc_path, ns_path);
+		ERROR_ERRNO("Could not bind mount ns file %s on %s", ns_proc_path, ns_path);
 		ret = -1;
 	}
 
@@ -325,11 +325,11 @@ int
 ns_unbind(const char *ns_path)
 {
 	if (umount(ns_path) < 0) {
-		ERROR_ERRNO("Could unbind mount ns file %s", ns_path);
+		ERROR_ERRNO("Could not unbind mount ns file %s", ns_path);
 		return -1;
 	}
 	if (unlink(ns_path) < 0) {
-		ERROR_ERRNO("Could rmove ns file %s", ns_path);
+		ERROR_ERRNO("Could not remove ns file %s", ns_path);
 		return -1;
 	}
 	return 0;
