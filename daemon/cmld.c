@@ -1170,6 +1170,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	container_t *c =
 		container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
+		cmld_containers_list = list_append(cmld_containers_list, c);
 		if (0 != cmld_container_token_init(c)) {
 			audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
 					"container-create-token-uninit",
@@ -1177,7 +1178,6 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 			WARN("Could not initialize token associated with container %s (uuid=%s).",
 			     container_get_name(c), uuid_string(container_get_uuid(c)));
 		} else {
-			cmld_containers_list = list_append(cmld_containers_list, c);
 			audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
 					"container-create", uuid_string(container_get_uuid(c)), 0);
 			INFO("Created container %s (uuid=%s).", container_get_name(c),
