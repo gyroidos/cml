@@ -26,7 +26,7 @@
 
 #include "container.h"
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/uuid.h"
@@ -171,6 +171,9 @@ struct container {
 	container_token_config_t token;
 
 	bool usb_pin_entry;
+
+	// indicate if the container is synced with its config
+	bool is_synced;
 };
 
 struct container_callback {
@@ -402,6 +405,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	}
 
 	container->usb_pin_entry = usb_pin_entry;
+	container->is_synced = true;
 
 	return container;
 
@@ -592,6 +596,13 @@ void
 container_free(container_t *container)
 {
 	ASSERT(container);
+
+	/* unregister usb tokens from uevent subsystem */
+	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
+		uevent_usbdev_t *usbdev = l->data;
+		if (UEVENT_USBDEV_TYPE_TOKEN == uevent_usbdev_get_type(usbdev))
+			uevent_unregister_usbdevice(container, usbdev);
+	}
 
 	container_free_key(container);
 
@@ -809,6 +820,20 @@ container_setuid0(const container_t *container)
 {
 	ASSERT(container);
 	return c_user_setuid0(container->user);
+}
+
+bool
+container_get_sync_state(const container_t *container)
+{
+	ASSERT(container);
+	return container->is_synced;
+}
+
+void
+container_set_sync_state(container_t *container, bool state)
+{
+	ASSERT(container);
+	container->is_synced = state;
 }
 
 int
@@ -1049,6 +1074,15 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			if (errno == ECHILD) {
 				DEBUG("Process group of container %s terminated completely",
 				      container_get_description(container));
+
+				if (!container_get_sync_state(container)) {
+					DEBUG("Container is out of sync with its config. Reloading..");
+					if (cmld_reload_container(container_get_uuid(container),
+								  cmld_get_containers_dir()) != 0) {
+						ERROR("Failed to reload container on config update");
+					}
+				}
+
 			} else {
 				audit_log_event(container_get_uuid(container), FSA, CMLD,
 						CONTAINER_MGMT, "container-observer-error",
@@ -2515,70 +2549,6 @@ list_t *
 container_get_vnet_runtime_cfg_new(container_t *container)
 {
 	return c_net_get_interface_mapping_new(container->net);
-}
-
-static bool
-container_has_token_changed(container_t *container, container_config_t *conf)
-{
-	if (container_config_get_token_type(conf) != container->token.type) {
-		TRACE("Container token type changed: %d -> %d", container->token.type,
-		      container_config_get_token_type(conf));
-		return true;
-	}
-
-	if (container->token.type != CONTAINER_TOKEN_TYPE_USB) {
-		TRACE("Token did not change: Container is not a USB token container");
-		return false;
-	}
-
-	char *serial_new = container_config_get_usbtoken_serial(conf);
-	if (!serial_new) {
-		ERROR("Failed to retrieve container config USB token serial");
-		return true;
-	}
-
-	char *serial_old = container_get_usbtoken_serial(container);
-	if (!serial_old) {
-		ERROR("Failed to retrieve container USB token serial");
-		return true;
-	}
-
-	if (strcmp(serial_new, serial_old)) {
-		TRACE("Container USB token serial changed");
-		return true;
-	}
-
-	TRACE("Container USB token serial did not change");
-	return false;
-}
-
-int
-container_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
-			size_t sig_len, uint8_t *cert_buf, size_t cert_len)
-{
-	ASSERT(container);
-	int ret = -1;
-	container_config_t *conf = container_config_new(container->config_filename, buf, buf_len,
-							sig_buf, sig_len, cert_buf, cert_len);
-	if (conf) {
-		ret = container_config_write(conf);
-		container_config_free(conf);
-	}
-
-	// Wipe container if USB token serial changed
-	if (container_has_token_changed(container, conf)) {
-		if (container_wipe(container)) {
-			ERROR("Failed to wipe user data. Setting container state to ZOMBIE");
-			container_set_state(container, CONTAINER_STATE_ZOMBIE);
-		}
-		if ((container->token.type == CONTAINER_TOKEN_TYPE_USB) &&
-		    smartcard_release_pairing(container)) {
-			ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
-			container_set_state(container, CONTAINER_STATE_ZOMBIE);
-		}
-	}
-
-	return ret;
 }
 
 int

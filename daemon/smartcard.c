@@ -1091,10 +1091,13 @@ smartcard_free(smartcard_t *smartcard)
 int
 smartcard_release_pairing(container_t *container)
 {
+	int ret = 0;
 	char *path = smartcard_token_paired_file_new(container);
-	int ret = unlink(path);
-	if (ret != 0) {
-		ERROR_ERRNO("Failed to remove file %s", path);
+	if (file_exists(path)) {
+		ret = unlink(path);
+		if (ret != 0) {
+			ERROR_ERRNO("Failed to remove file %s", path);
+		}
 	}
 	mem_free0(path);
 	return ret;

@@ -56,6 +56,8 @@
 #include "lxcfs.h"
 #include "audit.h"
 #include "time.h"
+#include "container_config.h"
+#include "container.h"
 
 #include <stdio.h>
 #include <dirent.h>
@@ -95,6 +97,7 @@
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
+static const char *cmld_container_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
 
@@ -407,6 +410,56 @@ cmld_container_token_init(container_t *container)
 	return 0;
 }
 
+int
+cmld_reload_container(const uuid_t *uuid, const char *path)
+{
+	ASSERT(uuid);
+	ASSERT(path);
+
+	int ret = -1;
+
+	// Will be destroyed on container_free
+	uuid_t *uuid_tmp = uuid_new(uuid_string(uuid));
+
+	container_t *c = cmld_container_get_by_uuid(uuid);
+	if (c) {
+		container_state_t state = container_get_state(c);
+		if (state != CONTAINER_STATE_STOPPED) {
+			DEBUG("Refusing to reload already created and not stopped container %s.",
+			      container_get_name(c));
+			goto cleanup;
+		}
+		DEBUG("Removing outdated created container %s for config update",
+		      container_get_name(c));
+
+		if (smartcard_scd_token_remove_block(c)) {
+			ERROR("Reloading container %s failed, cannot remove token",
+			      uuid_string(uuid_tmp));
+			goto cleanup;
+		}
+
+		cmld_containers_list = list_remove(cmld_containers_list, c);
+		container_free(c);
+	}
+	c = container_new(path, uuid_tmp, NULL, 0, NULL, 0, NULL, 0);
+	if (!c) {
+		WARN("Could not create new container object");
+		goto cleanup;
+	}
+
+	DEBUG("Loaded config for container %s", container_get_name(c));
+	cmld_container_token_init(c);
+	cmld_containers_list = list_append(cmld_containers_list, c);
+
+	container_set_sync_state(c, true);
+	ret = 0;
+
+cleanup:
+	mem_free0(uuid_tmp);
+
+	return ret;
+}
+
 static int
 cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 {
@@ -432,31 +485,17 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 	}
 
 	uuid = uuid_new(prefix);
-	if (uuid) {
-		container_t *c = cmld_container_get_by_uuid(uuid);
-		if (c) {
-			container_state_t state = container_get_state(c);
-			if (state != CONTAINER_STATE_STOPPED) {
-				DEBUG("Not loading %s for already created and not stopped container %s.",
-				      name, container_get_name(c));
-				goto cleanup;
-			}
-			DEBUG("Removing outdated created container %s for config update",
-			      container_get_name(c));
-			cmld_containers_list = list_remove(cmld_containers_list, c);
-			container_free(c);
-		}
-		c = container_new(path, uuid, NULL, 0, NULL, 0, NULL, 0);
-		if (c) {
-			DEBUG("Loaded config for container %s from %s", container_get_name(c),
-			      name);
-			cmld_container_token_init(c);
-			cmld_containers_list = list_append(cmld_containers_list, c);
-			res = 1;
-			goto cleanup;
-		}
+	if (!uuid) {
+		WARN("Failed to retrieve uuid for container");
+		goto cleanup;
 	}
-	WARN("Could not create new container object from %s", name);
+
+	if (cmld_reload_container((const uuid_t *)uuid, path) != 0) {
+		WARN("Failed to reload container");
+		goto cleanup;
+	}
+
+	res = 1;
 
 cleanup:
 	if (uuid)
@@ -991,6 +1030,7 @@ cmld_init(const char *path)
 {
 	INFO("Storage path is %s", path);
 	cmld_path = path;
+	cmld_container_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
 
 	if (mount_private_tmp())
 		FATAL("Could not setup private tmp!");
@@ -1501,4 +1541,80 @@ cmld_reboot_device(void)
 
 	// stopping c0 also stops other containers.
 	cmld_container_stop(c0);
+}
+
+static bool
+cmld_container_has_token_changed(container_t *container, container_config_t *conf)
+{
+	ASSERT(container);
+
+	container_token_type_t token_type = container_get_token_type(container);
+
+	if (container_config_get_token_type(conf) != token_type) {
+		TRACE("Container token type changed: %d -> %d", token_type,
+		      container_config_get_token_type(conf));
+		return true;
+	}
+
+	if (token_type != CONTAINER_TOKEN_TYPE_USB) {
+		TRACE("Token did not change: Container is not a USB token container");
+		return false;
+	}
+
+	char *serial_new = container_config_get_usbtoken_serial(conf);
+	if (!serial_new) {
+		ERROR("Failed to retrieve container config USB token serial");
+		return true;
+	}
+
+	char *serial_old = container_get_usbtoken_serial(container);
+	if (!serial_old) {
+		ERROR("Failed to retrieve container USB token serial");
+		return true;
+	}
+
+	if (strcmp(serial_new, serial_old)) {
+		TRACE("Container USB token serial changed");
+		return true;
+	}
+
+	TRACE("Container USB token serial did not change");
+	return false;
+}
+
+int
+cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
+		   size_t sig_len, uint8_t *cert_buf, size_t cert_len)
+{
+	ASSERT(container);
+	int ret = -1;
+	container_config_t *conf =
+		container_config_new(container_get_config_filename(container), buf, buf_len,
+				     sig_buf, sig_len, cert_buf, cert_len);
+	if (conf) {
+		ret = container_config_write(conf);
+		container_set_sync_state(container, false);
+
+		// Wipe container if USB token serial changed
+		if (cmld_container_has_token_changed(container, conf)) {
+			if (container_wipe(container)) {
+				ERROR("Failed to wipe user data. Setting container state to ZOMBIE");
+				container_set_state(container, CONTAINER_STATE_ZOMBIE);
+			}
+			if ((container_get_token_type(container) == CONTAINER_TOKEN_TYPE_USB) &&
+			    smartcard_release_pairing(container)) {
+				ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
+				container_set_state(container, CONTAINER_STATE_ZOMBIE);
+			}
+		}
+
+		container_config_free(conf);
+	}
+	return ret;
+}
+
+const char *
+cmld_get_containers_dir(void)
+{
+	return cmld_container_path;
 }
