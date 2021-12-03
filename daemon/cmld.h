@@ -79,6 +79,16 @@ int
 cmld_reload_containers(void);
 
 /**
+ * Reloads the specified container
+ *
+ * @param uuid The uuid of the container
+ * @param path  The path of the container
+ * @return 0 on success, -1 on error
+ */
+int
+cmld_reload_container(const uuid_t *uuid, const char *path);
+
+/**
  * Create a container by cloning from another one.
  *
  * @param container The container object to clone from.
@@ -317,5 +327,17 @@ cmld_token_detach(container_t *container);
  */
 void
 cmld_reboot_device(void);
+/**
+ * This function updates the containers config on storage with the provided
+ * protobuf config in buf. A reload is triggerd if the container is stopped
+ * to update cmld's view. If the container is not in stopped state a manual
+ * reload is necessary.
+ */
+int
+cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
+		   size_t sig_len, uint8_t *cert_buf, size_t cert_len);
+
+const char *
+cmld_get_containers_dir(void);
 
 #endif /* CMLD_H */

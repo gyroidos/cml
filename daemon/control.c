@@ -1134,16 +1134,15 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		if (msg->has_container_config_signature && msg->has_container_config_certificate) {
-			res = container_update_config(container, msg->container_config_file.data,
-						      msg->container_config_file.len,
-						      msg->container_config_signature.data,
-						      msg->container_config_signature.len,
-						      msg->container_config_certificate.data,
-						      msg->container_config_certificate.len);
+			res = cmld_update_config(container, msg->container_config_file.data,
+						 msg->container_config_file.len,
+						 msg->container_config_signature.data,
+						 msg->container_config_signature.len,
+						 msg->container_config_certificate.data,
+						 msg->container_config_certificate.len);
 		} else {
-			res = container_update_config(container, msg->container_config_file.data,
-						      msg->container_config_file.len, NULL, 0, NULL,
-						      0);
+			res = cmld_update_config(container, msg->container_config_file.data,
+						 msg->container_config_file.len, NULL, 0, NULL, 0);
 		}
 		if (res) {
 			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
@@ -1168,8 +1167,16 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		// reload configs if container is in state
 		container_state_t state = container_get_state(container);
-		if (state == CONTAINER_STATE_STOPPED)
-			cmld_reload_containers();
+		if (state == CONTAINER_STATE_STOPPED) {
+			// Reload container to make changes effective
+			TRACE("Update: Reloading container %s from %s",
+			      uuid_string(container_get_uuid(container)),
+			      cmld_get_containers_dir());
+			if (cmld_reload_container(container_get_uuid(container),
+						  cmld_get_containers_dir()) != 0) {
+				ERROR("Failed to reload container on config update");
+			}
+		}
 
 		// build and send response message to controller
 		out.n_container_configs = 1;

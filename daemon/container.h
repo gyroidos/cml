@@ -663,6 +663,12 @@ container_has_setup_mode(const container_t *container);
 int
 container_setuid0(const container_t *container);
 
+bool
+container_get_sync_state(const container_t *container);
+
+void
+container_set_sync_state(container_t *container, bool state);
+
 /**
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory
  */
@@ -698,16 +704,6 @@ container_pnet_cfg_new(const char *if_name, bool mac_filter, list_t *mac_whiteli
  */
 void
 container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg);
-
-/**
- * This function updates the containers config on storage with the provided
- * protobuf config in buf. A reload is triggerd if the container is stopped
- * to update cmld's view. If the container is not in stopped state a manual
- * reload is necessary.
- */
-int
-container_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t *sig_buf,
-			size_t sig_len, uint8_t *cert_buf, size_t cert_len);
 
 /**
  * Get the list of usb devices which are set in container config.
