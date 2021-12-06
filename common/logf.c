@@ -299,6 +299,13 @@ logf_file_new(const char *name)
 	return f;
 }
 
+void
+logf_file_close(void *file)
+{
+	FILE *f = file;
+	fclose(f);
+}
+
 static void
 logf_file_write_timestamp(FILE *stream)
 {
