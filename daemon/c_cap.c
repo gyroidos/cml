@@ -179,6 +179,7 @@ c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
 				 symlink("/lib/libc.so.6", "/usr/lib/libc.so"))
 				WARN_ERRNO("symlink to libc.so failed!");
 			mem_free0(multiarch_dir);
+			close(fd);
 		}
 		execve(argv[0], argv, env_ntp);
 		ERROR_ERRNO("exec with uid_wrapper of '%s' failed!", argv[0]);
