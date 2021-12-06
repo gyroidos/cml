@@ -48,6 +48,7 @@
 #include <string.h>
 
 static logf_handler_t *cml_daemon_logfile_handler = NULL;
+static void *main_logfile_p = NULL;
 static bool is_handling_sigint = false;
 
 /******************************************************************************/
@@ -90,8 +91,10 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	DEBUG("Logfile will be closed and a new file opened");
 	logf_unregister(cml_daemon_logfile_handler);
-	cml_daemon_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-daemon"));
+	logf_file_close(main_logfile_p);
+
+	main_logfile_p = logf_file_new(LOGFILE_DIR "/cml-daemon");
+	cml_daemon_logfile_handler = logf_register(&logf_file_write, main_logfile_p);
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 }
 
@@ -105,10 +108,8 @@ main(int argc, char **argv)
 	logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
-	// TODO: where should we store the log files?
-	// TODO: disable for non developer builds?
-	cml_daemon_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-daemon"));
+	main_logfile_p = logf_file_new(LOGFILE_DIR "/cml-daemon");
+	cml_daemon_logfile_handler = logf_register(&logf_file_write, main_logfile_p);
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 
 	main_core_dump_enable();
@@ -122,7 +123,7 @@ main(int argc, char **argv)
 		path = DEFAULT_BASE_PATH;
 
 	event_init();
-	// TODO: remove for production builds?
+
 	event_signal_t *sig_int = event_signal_new(SIGINT, &main_sigint_cb, NULL);
 	event_add_signal(sig_int);
 
