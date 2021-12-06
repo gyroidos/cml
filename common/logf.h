@@ -259,6 +259,14 @@ void *
 logf_file_new(const char *name);
 
 /**
+ * Closes the log file ireturned by logf_file_new.
+ *
+ * @param file A pointer to the log file.
+ */
+void
+logf_file_close(void *file);
+
+/**
  * Logs to stdout/stderr or to a file.
  * Cannot be used in conjunction with unit tests; use logf_test_write instead.
  *
