@@ -229,6 +229,7 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 
 	if (0 > size) {
 		ERROR("Failed to retrieve size of audit record log '%s'", filename);
+		fclose(file);
 		return NULL;
 	}
 
