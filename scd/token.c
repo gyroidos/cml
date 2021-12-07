@@ -271,6 +271,7 @@ scd_tokencontrol_new(scd_token_t *token)
 
 	token->token_data->tctrl = mem_new0(tctrl_t, 1);
 	IF_NULL_GOTO_ERROR(token->token_data->tctrl, err);
+	token->token_data->tctrl->cfd = -1; // preset to signal unconnected client
 
 	token->token_data->tctrl->lsock_path = mem_printf(
 		"%s/%s.sock", SCD_TOKENCONTROL_SOCKET, uuid_string(token->token_data->token_uuid));
@@ -308,19 +309,20 @@ scd_tokencontrol_free(scd_token_t *token)
 
 	list_foreach(token->token_data->tctrl->events, wrapped_remove_event_io);
 
-	TRACE("Closing accepted tokencontrol socket for token %s",
-	      uuid_string(token->token_data->token_uuid));
-	if (sock_unix_close(token->token_data->tctrl->cfd) != 0) {
-		WARN("Could not close accepted tokencontrol socket");
+	if (token->token_data->tctrl->cfd != -1) {
+		TRACE("Closing accepted tokencontrol socket for token %s",
+		      uuid_string(token->token_data->token_uuid));
+		TRACE("Closing tokencontrol fd: %d", token->token_data->tctrl->cfd);
+		if (sock_unix_close(token->token_data->tctrl->cfd) != 0) {
+			WARN("Could not close accepted tokencontrol socket");
+		}
 	}
 	TRACE("Closing listening tokencontrol socket");
-	token->token_data->tctrl->cfd = -1;
 	if (sock_unix_close_and_unlink(token->token_data->tctrl->lsock,
 				       token->token_data->tctrl->lsock_path) != 0) {
 		WARN_ERRNO("Could not close listening tokencontrol socket for token %s",
 			   uuid_string(token->token_data->token_uuid));
-	};
-	token->token_data->tctrl->lsock = -1;
+	}
 	mem_free0(token->token_data->tctrl->lsock_path);
 
 	mem_free0(token->token_data->tctrl);
