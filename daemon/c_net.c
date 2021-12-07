@@ -1193,6 +1193,7 @@ c_net_start_post_clone(c_net_t *net)
 				FATAL_ERRNO("Could not open netns file of c0");
 			if (setns(netns_fd, CLONE_NEWNET) == -1)
 				FATAL_ERRNO("Could not join network namespace of c0");
+			close(netns_fd);
 		}
 
 		// enable forwarding for container conectivity
