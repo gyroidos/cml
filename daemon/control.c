@@ -1207,7 +1207,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 		ContainerStartParams *start_params = msg->container_start_params;
 		res = control_handle_container_start(container, start_params, fd);
-		if (!res) {
+		if (res) {
 			WARN("Starting container failed!");
 		}
 	} break;
@@ -1216,7 +1216,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		IF_NULL_RETURN(container);
 		ContainerStartParams *start_params = msg->container_start_params;
 		res = control_handle_container_stop(container, start_params, fd);
-		if (!res) {
+		if (res) {
 			WARN("Stoping container failed!");
 		}
 		break;
@@ -1372,7 +1372,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		res = cmld_container_change_pin(container, fd, msg->device_pin, msg->device_newpin);
-		if (!res) {
+		if (res) {
 			WARN("Changing the container PIN failed!");
 		}
 		mem_memset0(msg->device_pin, strlen(msg->device_pin));
