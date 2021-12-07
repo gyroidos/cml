@@ -51,6 +51,7 @@ static bool no_setup_keys = false;
 static tpm2d_control_t *tpm2d_control_cmld = NULL;
 static tpm2d_rcontrol_t *tpm2d_rcontrol_attest = NULL;
 static logf_handler_t *tpm2d_logfile_handler = NULL;
+static void *tpm2d_logfile_p = NULL;
 
 static uint32_t tpm2d_salt_key_handle = TPM_RH_NULL;
 
@@ -70,8 +71,10 @@ tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(tpm2d_logfile_handler);
-	tpm2d_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-tpm2d"));
+	logf_file_close(tpm2d_logfile_p);
+
+	tpm2d_logfile_p = logf_file_new(LOGFILE_DIR "/cml-tpm2d");
+	tpm2d_logfile_handler = logf_register(&logf_file_write, tpm2d_logfile_p);
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_TRACE);
 }
 
@@ -313,8 +316,8 @@ main(UNUSED int argc, char **argv)
 		}
 	}
 
-	tpm2d_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-tpm2d"));
+	tpm2d_logfile_p = logf_file_new(LOGFILE_DIR "/cml-tpm2d");
+	tpm2d_logfile_handler = logf_register(&logf_file_write, tpm2d_logfile_p);
 	logf_handler_set_prio(tpm2d_logfile_handler, LOGF_PRIO_TRACE);
 
 	INFO("Starting tpm2d ...");
