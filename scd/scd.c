@@ -74,6 +74,7 @@ static list_t *scd_token_list = NULL;
 
 static scd_control_t *scd_control_cmld = NULL;
 static logf_handler_t *scd_logfile_handler = NULL;
+static void *scd_logfile_p = NULL;
 
 static void
 scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
@@ -294,8 +295,10 @@ scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 {
 	INFO("Logfile must be closed and a new file opened");
 	logf_unregister(scd_logfile_handler);
-	scd_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-scd"));
+	logf_file_close(scd_logfile_p);
+
+	scd_logfile_p = logf_file_new(LOGFILE_DIR "/cml-scd");
+	scd_logfile_handler = logf_register(&logf_file_write, scd_logfile_p);
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 }
 
@@ -310,8 +313,8 @@ main(int argc, char **argv)
 		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
-	scd_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "/cml-scd"));
+	scd_logfile_p = logf_file_new(LOGFILE_DIR "/cml-scd");
+	scd_logfile_handler = logf_register(&logf_file_write, scd_logfile_p);
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 
 	event_timer_t *logfile_timer = event_timer_new(
