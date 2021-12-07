@@ -104,9 +104,11 @@ do_join_namespace(const char *namespace, const int pid)
 
 	if (setns(ns_fd, 0) == -1) {
 		TRACE_ERRNO("Could not join %s namespace of pid %d!", target_namespace_path, pid);
-
+		close(ns_fd);
 		goto error;
 	}
+
+	close(ns_fd);
 
 	mem_free0(target_namespace_path);
 	mem_free0(target_namespace_id);
@@ -286,8 +288,10 @@ ns_join_all(pid_t pid, bool userns)
 	for (int j = 0; j < i; j++) {
 		if (setns(fd[j], 0) == -1) { /* Join that namespace */
 			ERROR_ERRNO("Could not join namespace");
+			close(fd[j]);
 			goto error;
 		}
+		close(fd[j]);
 	}
 
 	TRACE("Successfully joined all namespaces");
