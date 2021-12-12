@@ -881,6 +881,12 @@ c_net_udhcpd_stop(c_net_interface_t *ni)
 	char *pid_file = mem_printf("%s/%s.pid", run_dir, ni->veth_cmld_name);
 	IF_NULL_RETURN(pid_file);
 
+	// no pid_file -> udhcpd not running, skip
+	if (!file_exists(pid_file)) {
+		mem_free0(pid_file);
+		return;
+	}
+
 	char *pid_str = file_read_new(pid_file, file_size(pid_file));
 	if (pid_str && sscanf(pid_str, "%d", &dhcpd_pid) == 1) {
 		DEBUG("Stopping dhcpd process with pid=%d!", dhcpd_pid);
