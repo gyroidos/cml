@@ -22,7 +22,8 @@
  */
 
 #define _GNU_SOURCE
-#include "c_user.h"
+
+#define MOD_NAME "c_user"
 
 #include <fcntl.h>
 #include <grp.h>
@@ -62,16 +63,15 @@ struct c_user_shift {
 };
 
 /* User structure with specific usernamespace mappings */
-struct c_user {
+typedef struct c_user {
 	container_t *container; //!< container which the c_user struct is associated to
-	bool ns_usr;		//!< indicates if the c_user structure has an user namespace
 	int offset;		//!< gives information about the uid mapping to be set
 	int uid_start;		//!< this is the start of uids and gids in the root namespace
 	list_t *marks;		//marks to be mounted in userns
 	int mark_index;
 	int fd_userns;
 	char *ns_path;
-};
+} c_user_t;
 
 /**
  * bool array, which globally holds assigend ranges in order to
@@ -193,14 +193,13 @@ c_user_shift_free(struct c_user_shift *s)
  * This function allocates a new c_user_t instance, associated to a specific container object.
  * @return the c_user_t user structure which holds user namespace information for a container.
  */
-c_user_t *
-c_user_new(container_t *container, bool user_ns)
+static void *
+c_user_new(container_t *container)
 {
 	ASSERT(container);
 
 	c_user_t *user = mem_new0(c_user_t, 1);
 	user->container = container;
-	user->ns_usr = user_ns;
 	user->uid_start = 0;
 
 	// path to bind userns (used for reboots)
@@ -272,13 +271,14 @@ c_user_cleanup_marks_cb(const char *path, const char *file, UNUSED void *data)
 /**
  * Cleans up the c_user_t struct.
  */
-void
-c_user_cleanup(c_user_t *user, bool is_rebooting)
+static void
+c_user_cleanup(void *usr, bool is_rebooting)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 
 	/* We can skip this in case the container has no user ns */
-	if (!user->ns_usr)
+	if (!container_has_userns(user->container))
 		return;
 
 	/* skip on reboots of c0 */
@@ -307,17 +307,19 @@ c_user_cleanup(c_user_t *user, bool is_rebooting)
 /**
  * Frees the c_user_t structure
  */
-void
-c_user_free(c_user_t *user)
+static void
+c_user_free(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 	mem_free0(user->ns_path);
 	mem_free0(user);
 }
 
-int
-c_user_get_uid(const c_user_t *user)
+static int
+c_user_get_uid(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 	return user->uid_start;
 }
@@ -372,23 +374,27 @@ c_user_chown_dev_cb(const char *path, const char *file, void *data)
 /**
  * Become root in new userns
  */
-int
-c_user_setuid0(const c_user_t *user)
+static int
+c_user_setuid0(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 
 	/* Skip this, if the container doesn't have a user namespace */
-	if (!user->ns_usr)
+	if (!container_has_userns(user->container))
 		return 0;
 
 	return namespace_setuid0();
 }
 
-int
-c_user_start_child(const c_user_t *user)
+static int
+c_user_start_child(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
-	return c_user_setuid0(user);
+	if (c_user_setuid0(user) < 0)
+		return -CONTAINER_ERROR_USER;
+	return 0;
 }
 
 /**
@@ -396,13 +402,14 @@ c_user_start_child(const c_user_t *user)
  *
  * Call this inside the parent user_ns.
  */
-int
-c_user_shift_ids(c_user_t *user, const char *path, bool is_root)
+static int
+c_user_shift_ids(void *usr, const char *path, bool is_root)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 
 	/* We can skip this in case the container has no user ns */
-	if (!user->ns_usr)
+	if (!container_has_userns(user->container))
 		return 0;
 
 	TRACE("uid %d, euid %d", getuid(), geteuid());
@@ -492,13 +499,14 @@ error:
 /**
  * Reserves a mapping for uids and gids of the user namespace in rootns
  */
-int
-c_user_start_pre_clone(c_user_t *user)
+static int
+c_user_start_pre_clone(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 
 	/* Skip this, if the container doesn't have a user namespace */
-	if (!user->ns_usr)
+	if (!container_has_userns(user->container))
 		return 0;
 
 	/* skip on reboots of c0 */
@@ -509,18 +517,22 @@ c_user_start_pre_clone(c_user_t *user)
 	// reserve a new mapping
 	if (c_user_set_next_uid_range_start(user)) {
 		ERROR("Reserving uid range for userns");
-		return -1;
+		return -CONTAINER_ERROR_USER;
 	}
 	return 0;
 }
 
-int
-c_user_start_post_clone(c_user_t *user)
+/**
+ * Setup mapping for uids and gids of the user namespace in rootns
+ */
+static int
+c_user_start_post_clone(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 
 	/* Skip this, if the container doesn't have a user namespace */
-	if (!user->ns_usr)
+	if (!container_has_userns(user->container))
 		return 0;
 
 	/* skip on reboots of c0 */
@@ -537,16 +549,20 @@ c_user_start_post_clone(c_user_t *user)
 	if (user->fd_userns < 0)
 		WARN("Could not keep userns active for reboot!");
 
-	return c_user_setup_mapping(user);
+	if (c_user_setup_mapping(user) < 0)
+		return -CONTAINER_ERROR_USER;
+
+	return 0;
 }
 
-int
-c_user_shift_mounts(const c_user_t *user)
+static int
+c_user_shift_mounts(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 
 	/* Skip this, if the container doesn't have a user namespace */
-	if (!user->ns_usr)
+	if (!container_has_userns(user->container))
 		return 0;
 
 	char *target_dev, *saved_dev;
@@ -604,11 +620,45 @@ error:
 	return -1;
 }
 
-int
-c_user_join_userns(const c_user_t *user)
+static int
+c_user_join_userns(void *usr)
 {
+	c_user_t *user = usr;
 	ASSERT(user);
 	IF_FALSE_RETVAL(file_exists(user->ns_path), -1);
 
-	return ns_join_by_path(user->ns_path);
+	if (ns_join_by_path(user->ns_path) < 0)
+		return -CONTAINER_ERROR_USER;
+
+	return 0;
+}
+
+static container_module_t c_user_module = {
+	.name = MOD_NAME,
+	.container_new = c_user_new,
+	.container_free = c_user_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = c_user_start_pre_clone,
+	.start_post_clone = c_user_start_post_clone,
+	.start_pre_exec = NULL,
+	.start_post_exec = NULL,
+	.start_child = c_user_start_child,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = c_user_cleanup,
+	.join_ns = c_user_join_userns,
+};
+
+static void INIT
+c_user_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_user_module);
+
+	// register relevant handlers implemented by this module
+	container_register_setuid0_handler(MOD_NAME, c_user_setuid0);
+	container_register_get_uid_handler(MOD_NAME, c_user_get_uid);
+	container_register_shift_ids_handler(MOD_NAME, c_user_shift_ids);
+	container_register_shift_mounts_handler(MOD_NAME, c_user_shift_mounts);
 }
