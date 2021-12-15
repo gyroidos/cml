@@ -40,7 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "c_user.h"
 #include "c_cgroups.h"
 #include "c_net.h"
 #include "c_vol.h"
@@ -142,7 +141,6 @@ struct container {
 	// Submodules
 	list_t *module_instance_list;
 
-	c_user_t *user;
 	c_cgroups_t *cgroups;
 	c_net_t *net; /* encapsulates given network interfaces*/
 	c_fifo_t *fifo;
@@ -370,6 +368,16 @@ container_module_get_instance_by_name(const container_t *container, const char *
 	return NULL;
 }
 
+/* Functions usually implemented and registered by c_user module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(setuid0, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(setuid0, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(shift_ids, int, void *, const char *, bool)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(shift_ids, int, 0, const char *, bool)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(shift_mounts, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(shift_mounts, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_uid, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uid, int, 0)
+
 void
 container_free_key(container_t *container)
 {
@@ -468,13 +476,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->user = c_user_new(container, ns_usr);
-	if (!container->user) {
-		WARN("Could not initialize user subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	container->cgroups = c_cgroups_new(container);
@@ -836,8 +837,6 @@ container_free(container_t *container)
 	}
 	list_delete(container->module_instance_list);
 
-	if (container->user)
-		c_user_free(container->user);
 	if (container->cgroups)
 		c_cgroups_free(container->cgroups);
 	if (container->net)
@@ -1010,13 +1009,6 @@ container_get_console_sock_cmld(const container_t *container, int session_fd)
 {
 	ASSERT(container);
 	return c_run_get_console_sock_cmld(container->run, session_fd);
-}
-
-int
-container_setuid0(const container_t *container)
-{
-	ASSERT(container);
-	return c_user_setuid0(container->user);
 }
 
 bool
@@ -1208,7 +1200,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 	 * encrypted volumes is cleared from cmld's memory after initial use.
 	 */
 	c_net_cleanup(container->net, is_rebooting);
-	c_user_cleanup(container->user, is_rebooting);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol, is_rebooting);
 
@@ -1401,11 +1392,6 @@ container_start_child(void *data)
 		if ((ret = module->start_child(c_mod->instance)) < 0) {
 			goto error;
 		}
-	}
-
-	if (c_user_start_child(container->user) < 0) {
-		ret = CONTAINER_ERROR_USER;
-		goto error;
 	}
 
 	if (c_net_start_child(container->net) < 0) {
@@ -1623,19 +1609,20 @@ container_start_child_early(void *data)
 	if (container->ns_ipc)
 		clone_flags |= CLONE_NEWIPC;
 
+	container_module_instance_t *c_user =
+		container_module_get_instance_by_name(container, "c_user");
 	// on reboots of c0 rejoin existing userns and netns
 	if (cmld_containers_get_c0() == container &&
 	    container->prev_state == CONTAINER_STATE_REBOOTING) {
-		if (c_user_join_userns(container->user) < 0) {
-			ret = CONTAINER_ERROR_USER;
-			goto error;
+		if (c_user && c_user->module && c_user->module->join_ns) {
+			IF_TRUE_GOTO((ret = c_user->module->join_ns(c_user->instance)) < 0, error);
 		}
 		if (c_net_join_netns(container->net) < 0) {
 			ret = CONTAINER_ERROR_NET;
 			goto error;
 		}
 	} else {
-		if (container->ns_usr)
+		if (c_user && container->ns_usr)
 			clone_flags |= CLONE_NEWUSER;
 		if (container->ns_net)
 			clone_flags |= CLONE_NEWNET;
@@ -1919,11 +1906,6 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 		goto error_post_clone;
 	}
 
-	if (c_user_start_post_clone(container->user)) {
-		ret = CONTAINER_ERROR_USER;
-		goto error_post_clone;
-	}
-
 	if (c_fifo_start_post_clone(container->fifo)) {
 		ret = CONTAINER_ERROR_FIFO;
 		goto error_post_clone;
@@ -1984,11 +1966,6 @@ container_start(container_t *container)
 		if ((ret = module->start_pre_clone(c_mod->instance)) < 0) {
 			goto error_pre_clone;
 		}
-	}
-
-	if (c_user_start_pre_clone(container->user) < 0) {
-		ret = CONTAINER_ERROR_USER;
-		goto error_pre_clone;
 	}
 
 	if (c_cgroups_start_pre_clone(container->cgroups) < 0) {
@@ -2890,33 +2867,6 @@ char *
 container_get_rootdir(const container_t *container)
 {
 	return c_vol_get_rootdir(container->vol);
-}
-
-int
-container_shift_ids(const container_t *container, const char *path, bool is_root)
-{
-	ASSERT(container);
-	if (!container->ns_usr)
-		return 0;
-
-	return c_user_shift_ids(container->user, path, is_root);
-}
-
-int
-container_shift_mounts(const container_t *container)
-{
-	ASSERT(container);
-	if (!container->ns_usr)
-		return 0;
-
-	return c_user_shift_mounts(container->user);
-}
-
-int
-container_get_uid(const container_t *container)
-{
-	ASSERT(container);
-	return c_user_get_uid(container->user);
 }
 
 container_token_type_t

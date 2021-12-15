@@ -683,6 +683,12 @@ container_has_setup_mode(const container_t *container);
 int
 container_setuid0(const container_t *container);
 
+/**
+ * Registers the corresponding handler for container_setuid0
+ */
+void
+container_register_setuid0_handler(const char *mod_name, int (*handler)(void *data));
+
 bool
 container_get_sync_state(const container_t *container);
 
@@ -752,28 +758,47 @@ container_is_device_allowed(const container_t *container, int major, int minor);
 /**
  * Prepares a mount for shifted uid and gids of directory/file for the container's userns.
  *
- * Needs to be called in rootns for each filesystem image which should be mounted
+ * Needs to be called in rootns for each file system image which should be mounted
  * with shifted ids in child. This is also be used to shift single files in the
- * in uevent module for conatiner allowed devices.
+ * in uevent module for container allowed devices.
  */
 int
 container_shift_ids(const container_t *container, const char *path, bool is_root);
 
 /**
- * Mounts all directories with shiftied uid and gids inside the container's userns.
+ * Registers the corresponding handler for container_shift_ids
+ */
+void
+container_register_shift_ids_handler(const char *mod_name,
+				     int (*handler)(void *data, const char *path, bool is_root));
+
+/**
+ * Mounts all directories with shifted uid and gids inside the container's userns.
  *
- * Needs to be called bevore exec usually in a start_child handler.
+ * Needs to be called before exec usually in a start_child handler.
  */
 int
 container_shift_mounts(const container_t *container);
 
 /**
- * Returns the uid which is mapped to the rootuser inside the container
+ * Registers the corresponding handler for container_shift_mounts
+ */
+void
+container_register_shift_mounts_handler(const char *mod_name, int (*handler)(void *data));
+
+/**
+ * Returns the uid which is mapped to the root user inside the container
  *
- * if userns is enabled this whould be a uid grater than 0.
+ * if userns is enabled this would be a uid grater than 0.
  */
 int
 container_get_uid(const container_t *container);
+
+/**
+ * Registers the corresponding handler for container_get_uid
+ */
+void
+container_register_get_uid_handler(const char *mod_name, int (*handler)(void *data));
 
 /**
  * Returns the directory where the container's file system tree
