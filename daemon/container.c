@@ -140,6 +140,8 @@ struct container {
 	int sync_sock_child;  /* child sock for start synchronization */
 
 	// Submodules
+	list_t *module_instance_list;
+
 	c_user_t *user;
 	c_cgroups_t *cgroups;
 	c_net_t *net; /* encapsulates given network interfaces*/
@@ -197,6 +199,66 @@ enum container_start_sync_msg {
 	CONTAINER_START_SYNC_MSG_SUCCESS,
 	CONTAINER_START_SYNC_MSG_ERROR,
 };
+
+static list_t *container_module_list = NULL;
+
+void
+container_register_module(container_module_t *mod)
+{
+	ASSERT(mod);
+
+	container_module_list = list_append(container_module_list, mod);
+	DEBUG("Container module %s registered, nr of hooks: %d)", mod->name,
+	      list_length(container_module_list));
+}
+
+typedef struct {
+	container_module_t *module;
+	void *instance;
+} container_module_instance_t;
+
+static container_module_instance_t *
+container_module_instance_new(container_t *container, container_module_t *module)
+{
+	IF_NULL_RETVAL(module->container_new, NULL);
+
+	void *instance = module->container_new(container);
+	IF_NULL_RETVAL(instance, NULL);
+
+	container_module_instance_t *c_mod = mem_new0(container_module_instance_t, 1);
+	c_mod->module = module;
+	c_mod->instance = instance;
+
+	return c_mod;
+}
+
+static void
+container_module_instance_free(container_module_instance_t *c_mod)
+{
+	IF_NULL_RETURN(c_mod);
+
+	container_module_t *module = c_mod->module;
+
+	if (module->container_free)
+		module->container_free(c_mod->instance);
+
+	mem_free0(c_mod);
+}
+
+static void *
+container_module_get_instance_by_name(const container_t *container, const char *mod_name)
+{
+	ASSERT(container);
+	ASSERT(mod_name);
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (!strcmp(module->name, mod_name))
+			return c_mod->instance;
+	}
+	return NULL;
+}
 
 void
 container_free_key(container_t *container)
@@ -280,6 +342,24 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->cpus_allowed = (cpus_allowed) ? mem_strdup(cpus_allowed) : NULL;
 
 	/* Create submodules */
+	for (list_t *l = container_module_list; l; l = l->next) {
+		container_module_t *module = l->data;
+		if (module->container_new) {
+			container_module_instance_t *c_mod =
+				container_module_instance_new(container, module);
+			if (!c_mod) {
+				WARN("Could not initialize %s subsystem for container %s (UUID: %s)",
+				     module->name, container->name, uuid_string(container->uuid));
+				goto error;
+			}
+			container->module_instance_list =
+				list_append(container->module_instance_list, c_mod);
+
+			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
+			     container->name, uuid_string(container->uuid));
+		}
+	}
+
 	container->user = c_user_new(container, ns_usr);
 	if (!container->user) {
 		WARN("Could not initialize user subsystem for container %s (UUID: %s)",
@@ -639,6 +719,13 @@ container_free(container_t *container)
 	if (container->mnt_setup)
 		mount_free(container->mnt_setup);
 
+	/* free module instances */
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_instance_free(c_mod);
+	}
+	list_delete(container->module_instance_list);
+
 	if (container->user)
 		c_user_free(container->user);
 	if (container->cgroups)
@@ -991,6 +1078,15 @@ container_audit_get_loginuid(const container_t *container)
 static void
 container_cleanup(container_t *container, bool is_rebooting)
 {
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->cleanup)
+			continue;
+
+		module->cleanup(c_mod->instance, is_rebooting);
+	}
+
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
 	c_run_cleanup(container->run);
@@ -1186,6 +1282,17 @@ container_start_child(void *data)
 		goto error;
 	}
 
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_child)
+			continue;
+
+		if ((ret = module->start_child(c_mod->instance)) < 0) {
+			goto error;
+		}
+	}
+
 	if (c_user_start_child(container->user) < 0) {
 		ret = CONTAINER_ERROR_USER;
 		goto error;
@@ -1253,6 +1360,17 @@ container_start_child(void *data)
 	if (msg == CONTAINER_START_SYNC_MSG_STOP) {
 		DEBUG("Received stop message, exiting...");
 		return 0;
+	}
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_pre_exec_child)
+			continue;
+
+		if ((ret = module->start_pre_exec_child(c_mod->instance)) < 0) {
+			goto error;
+		}
 	}
 
 	if (c_cgroups_start_pre_exec_child(container->cgroups) < 0) {
@@ -1359,6 +1477,17 @@ container_start_child_early(void *data)
 	container_t *container = data;
 
 	close(container->sync_sock_parent);
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_child_early)
+			continue;
+
+		if ((ret = module->start_child_early(c_mod->instance)) < 0) {
+			goto error;
+		}
+	}
 
 	if (c_audit_start_child_early(container->audit) < 0) {
 		ret = CONTAINER_ERROR_AUDIT;
@@ -1489,6 +1618,16 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 
 	/********************************************************/
 	/* on success call all c_<module>_start_pre_exec hooks */
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_pre_exec)
+			continue;
+
+		IF_TRUE_GOTO_WARN((module->start_pre_exec(c_mod->instance) < 0), error_pre_exec);
+	}
+
 	if (c_time_start_pre_exec(container->time) < 0) {
 		WARN("c_time_start_pre_exec failed");
 		goto error_pre_exec;
@@ -1527,6 +1666,16 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 	}
 
 	/* Call all c_<module>_start_post_exec hooks */
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_post_exec)
+			continue;
+
+		IF_TRUE_GOTO_WARN(module->start_post_exec(c_mod->instance) < 0, error);
+	}
+
 	if (c_time_start_post_exec(container->time) < 0) {
 		WARN("c_time_start_post_exec failed");
 		goto error;
@@ -1638,6 +1787,18 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 	/* POST CLONE HOOKS */
 	// execute all necessary c_<module>_start_post_clone hooks
 	// goto error_post_clone on an error
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_post_clone)
+			continue;
+
+		if ((ret = module->start_post_clone(c_mod->instance)) < 0) {
+			goto error_post_clone;
+		}
+	}
+
 	if (c_cgroups_start_post_clone(container->cgroups)) {
 		ret = CONTAINER_ERROR_CGROUPS;
 		goto error_post_clone;
@@ -1703,6 +1864,17 @@ container_start(container_t *container)
 
 	/*********************************************************/
 	/* PRE CLONE HOOKS */
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_pre_clone)
+			continue;
+
+		if ((ret = module->start_pre_clone(c_mod->instance)) < 0) {
+			goto error_pre_clone;
+		}
+	}
 
 	if (c_user_start_pre_clone(container->user) < 0) {
 		ret = CONTAINER_ERROR_USER;
@@ -1782,6 +1954,17 @@ container_start(container_t *container)
 	event_signal_t *sig = event_signal_new(SIGCHLD, container_sigchld_early_cb, container);
 	event_add_signal(sig);
 
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->start_post_clone_early)
+			continue;
+
+		if ((ret = module->start_post_clone_early(c_mod->instance)) < 0) {
+			goto error_post_clone;
+		}
+	}
+
 	if (c_audit_start_post_clone_early(container->audit)) {
 		ERROR("c_audit_start_post_clone");
 	}
@@ -1792,6 +1975,16 @@ error_pre_clone:
 	container_cleanup(container, false);
 	audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 			"error-preparing-container", uuid_string(container_get_uuid(container)), 0);
+	return ret;
+
+error_post_clone:
+	if (ret == 0)
+		ret = CONTAINER_ERROR;
+	char msg_stop = CONTAINER_START_SYNC_MSG_STOP;
+	if (write(container->sync_sock_parent, &msg_stop, 1) < 0) {
+		WARN_ERRNO("write to sync socket failed");
+	}
+	container_kill(container);
 	return ret;
 }
 
@@ -1858,6 +2051,17 @@ container_stop(container_t *container)
 
 	/* call stop hooks for c_* modules */
 	DEBUG("Call stop hooks for modules");
+
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->stop)
+			continue;
+
+		if ((ret = module->stop(c_mod->instance)) < 0) {
+			goto error_stop;
+		}
+	}
 
 	if (c_service_stop(container->service) < 0) {
 		ret = CONTAINER_ERROR;

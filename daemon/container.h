@@ -160,6 +160,26 @@ enum container_error {
 	CONTAINER_ERROR_AUDIT
 };
 
+typedef struct container_module {
+	const char *name;
+	void *(*container_new)(container_t *container);
+	void (*container_free)(void *data);
+	int (*start_post_clone_early)(void *data);
+	int (*start_child_early)(void *data);
+	int (*start_pre_clone)(void *data);
+	int (*start_post_clone)(void *data);
+	int (*start_pre_exec)(void *data);
+	int (*start_post_exec)(void *data);
+	int (*start_child)(void *data);
+	int (*start_pre_exec_child)(void *data);
+	int (*stop)(void *data);
+	void (*cleanup)(void *data, bool rebooting);
+	int (*join_ns)(void *data);
+} container_module_t;
+
+void
+container_register_module(container_module_t *mod);
+
 /**
  * Low-level constructor that creates a new container instance
  * with the given parameters.
