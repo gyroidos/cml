@@ -21,33 +21,12 @@
 # Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
 #
 
-.PHONY: all
-all:
-	$(MAKE) -C control -f Makefile_lsb
-	$(MAKE) -C daemon -f Makefile_lsb
-	$(MAKE) -C scd -f Makefile_lsb
-	$(MAKE) -C service service-static -f Makefile_lsb
+include Makefile
 
-.PHONY: tpm2d
-tpm2d:
-	$(MAKE) -C tpm2d -f Makefile_lsb
-	$(MAKE) -C tpm2_control -f Makefile_lsb
+LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" -DLOGFILE_PATH=\"/var/log\"
 
-.PHONY: install
+BINDIR := /usr/bin
+
 install:
-	$(MAKE) -C control -f Makefile_lsb install
-	$(MAKE) -C daemon -f Makefile_lsb install
-	$(MAKE) -C scd -f Makefile_lsb install
-	$(MAKE) -C service service-static -f Makefile_lsb install
-
-.PHONY: tpm2d_install
-tpm2d_install:
-	$(MAKE) -C tpm2d -f Makefile_lsb install
-	$(MAKE) -C tpm2_control -f Makefile_lsb install
-
-.PHONY: clean
-clean:
-	$(MAKE) -C control clean
-	$(MAKE) -C daemon clean
-	$(MAKE) -C scd clean
-	$(MAKE) -C service clean
+	install -d ${DESTDIR}${BINDIR}
+	install tpm2_control ${DESTDIR}${BINDIR}
