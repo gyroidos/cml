@@ -98,14 +98,9 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 }
 
-/******************************************************************************/
-
-int
-main(int argc, char **argv)
+static void INIT
+main_init(void)
 {
-	const char *path;
-
-	logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
 	main_logfile_p = logf_file_new(LOGFILE_DIR "/cml-daemon");
@@ -113,6 +108,14 @@ main(int argc, char **argv)
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 
 	main_core_dump_enable();
+}
+
+/******************************************************************************/
+
+int
+main(int argc, char **argv)
+{
+	const char *path;
 
 	INFO("Starting...");
 	INFO("Device hardware is %s", hardware_get_name());
