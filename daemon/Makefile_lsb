@@ -31,10 +31,13 @@ LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" \
 
 SBINDIR := /usr/sbin
 install:
-	mkdir -p ${DESTDIR}${SBINDIR}
-	cp cmld ${DESTDIR}${SBINDIR}/
-	cp init.d/cmld ${DESTDIR}/etc/init.d/
-	mkdir -p ${DESTDIR}/var/lib/cml
-	mkdir -p ${DESTDIR}/etc/cml
+	install -d ${DESTDIR}${SBINDIR}
+	install cmld ${DESTDIR}${SBINDIR}/
+	install -d ${DESTDIR}/etc/init.d
+	install init.d/cmld ${DESTDIR}/etc/init.d/
+	install -d ${DESTDIR}/var/lib/cml
+	install -d ${DESTDIR}/etc/cml
 	echo "uuid: \"$(shell cat /proc/sys/kernel/random/uuid)\"" > ${DESTDIR}/etc/cml/device.conf
 	echo "hostedmode: true" >> ${DESTDIR}/etc/cml/device.conf
+	install -d ${DESTDIR}/usr/share/doc/cml
+	install guestos.proto ${DESTDIR}/usr/share/doc/cml/
