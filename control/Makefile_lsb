@@ -27,5 +27,5 @@ LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" -DLOGFILE_PATH=\"/var/log\"
 
 BINDIR := /usr/bin
 install:
-	mkdir -p ${DESTDIR}${BINDIR}
-	cp control ${DESTDIR}${BINDIR}/cml-control
+	install -d ${DESTDIR}${BINDIR}
+	install control ${DESTDIR}${BINDIR}/cml-control

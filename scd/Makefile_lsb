@@ -29,6 +29,7 @@ LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" \
 
 SBINDIR := /usr/sbin
 install:
-	mkdir -p ${DESTDIR}${SBINDIR}
-	cp scd ${DESTDIR}${SBINDIR}/cml-scd
-	cp init.d/cml-scd ${DESTDIR}/etc/init.d/
+	install -d ${DESTDIR}${SBINDIR}
+	install scd ${DESTDIR}${SBINDIR}/cml-scd
+	install -d ${DESTDIR}/etc/init.d
+	install init.d/cml-scd ${DESTDIR}/etc/init.d/
