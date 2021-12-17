@@ -21,9 +21,18 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+/**
+ * @file c_net.c
+ *
+ * This module is responsible for the network setup of containers. It
+ * provides interfaces to such networking tasks that have to be executed
+ * at the startup of containers. It is e.g. responsible for moving interfaces to different network namespaces,
+ * or to set ipv4/gateway/mac addresses. It makes heavy usage of the netlink module.
+ */
+
 #define _GNU_SOURCE
 
-#include "c_net.h"
+#define MOD_NAME "c_net"
 
 #include <sched.h>
 #include <netinet/in.h>
@@ -102,14 +111,13 @@ typedef struct {
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
-struct c_net {
+typedef struct c_net {
 	container_t *container; //!< container which the c_net struct is associated to
-	bool ns_net;		//!< indicates if the c_net structure has a network namespace
 	list_t *interface_list; //!< contains list of settings for different nw interfaces
 	list_t *pnet_mv_list; //!< contains list of phyiscal NICs to be bridged via a veth or moved into a container. MAC adress filtering may be applied
 	char *ns_path;	      //!< path for binding netns into filesystem
 	int fd_netns;	      //!< fd to keep netns active during reboots
-};
+} c_net_t;
 
 /**
  * bool array, which globally holds assigend offsets in order to
@@ -659,7 +667,9 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 	return 0;
 }
 
-/*
+/**
+ * This function moves/bridges the network interface to the corresponding net
+ * namespace of a container.
  * This Funtion mainly implement TSF.CML.DeviceAccessControl for network devices.
  *
  * It is used internally by c_net_new, than we already have grabbed the interface.
@@ -667,9 +677,10 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
  * or uevent handler. Then we have to grab the interface from cmld's list of available
  * interfaces and add the pnet_cfg to the internal c_net list.
  */
-int
-c_net_add_interface(c_net_t *net, container_pnet_cfg_t *pnet_cfg)
+static int
+c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 	IF_NULL_RETVAL(pnet_cfg, -1);
 
@@ -712,10 +723,16 @@ err:
 	return -1;
 }
 
-int
-c_net_remove_interface(c_net_t *net, const char *if_name_mac)
+/**
+ * This function removes the network interface from the corresponding net
+ * namespace of a container, according to the name or mac address.
+ */
+static int
+c_net_remove_interface(void *netp, const char *if_name_mac)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
+
 	IF_NULL_RETVAL(if_name_mac, -1);
 
 	container_pnet_cfg_t *cfg = NULL;
@@ -768,18 +785,17 @@ err:
  * This function allocates a new c_net_t instance, associated to a specific container object.
  * @return the c_net_t network structure which holds networking information for a container.
  */
-c_net_t *
-c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pnet_cfg_list)
+static void *
+c_net_new(container_t *container)
 {
 	ASSERT(container);
 
 	c_net_t *net = mem_new0(c_net_t, 1);
 	net->container = container;
-	net->ns_net = net_ns;
 
 	/* if the container does not have a network namespace, we don't execute any of this,
 	 * i.e. we always return at the start of the functions  */
-	if (!net_ns) {
+	if (!container_has_netns(container)) {
 		return net;
 	}
 
@@ -798,7 +814,7 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pn
 		net->interface_list = list_append(net->interface_list, ni_cml);
 	}
 
-	for (list_t *l = vnet_cfg_list; l; l = l->next) {
+	for (list_t *l = container_get_vnet_cfg_list(container); l; l = l->next) {
 		container_vnet_cfg_t *cfg = l->data;
 
 		c_net_interface_t *ni =
@@ -810,7 +826,7 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pn
 	}
 
 	uint8_t mac[6];
-	for (list_t *l = pnet_cfg_list; l; l = l->next) {
+	for (list_t *l = container_get_pnet_cfg_list(container); l; l = l->next) {
 		container_pnet_cfg_t *pnet_cfg = l->data;
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
@@ -853,7 +869,7 @@ c_net_new(container_t *container, bool net_ns, list_t *vnet_cfg_list, list_t *pn
 	return net;
 }
 
-void
+static void
 c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	c_net_interface_t *ni = data;
@@ -1037,20 +1053,25 @@ err:
 }
 
 /**
-  * First part: get currently free ipv4 and veth addresses/names for the network setup.
-  * Second part: Create a veth pair and configure the root namespace veth
-  * Third part: Setup routing and filtering/nat.
-  * by setting its ipv4 and bringing up the interface.
-  * @return: 0 on success, -1 in case of failure.
-  */
-int
-c_net_start_pre_clone(c_net_t *net)
+ * Before clone, initialize c_net structure, create a veth pair and configure the root ns veth
+ * This Function is part of TSF.CML.CompartmentIsolation.
+ *
+ * First part: get currently free ipv4 and veth addresses/names for the network setup.
+ * Second part: Create a veth pair and configure the root namespace veth
+ * Third part: Setup routing and filtering/nat.
+ * by setting its ipv4 and bringing up the interface.
+ *
+ * @return: 0 on success, -CONTAINER_ERROR_NET in case of failure.
+ */
+static int
+c_net_start_pre_clone(void *netp)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 
 	/* If container has no network namespace, we can just skip, as every networking
 	 * operation will be skipped */
-	if (!net->ns_net)
+	if (!container_has_netns(net->container))
 		return 0;
 
 	/* skip on reboots of c0 */
@@ -1062,7 +1083,7 @@ c_net_start_pre_clone(c_net_t *net)
 		c_net_interface_t *ni = l->data;
 
 		if (c_net_start_pre_clone_interface(ni) == -1)
-			return -1;
+			return -CONTAINER_ERROR_NET;
 		if (!ni->configure)
 			continue;
 	}
@@ -1095,7 +1116,7 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 	return 0;
 }
 
-void
+static void
 c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	pid_t *c0_netns_pid = data;
@@ -1118,20 +1139,24 @@ c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
 
 /**
  * This function is responsible for moving the container interface to its corresponding namespace.
+ * This Function is part of TSF.CML.CompartmentIsolation.
  *
  * It moves physical interfaces to its configured containers. Furher it creates a new child from
  * cmld and joins this to c0's netns for configuring the network endpoint of container virtual
  * veth's there.
  * If mac filter is applied do not move physical interfaces but rather a veth so that iptables
  * can be applied in the CML context.
+ *
+ * @return: 0 on success, -CONTAINER_ERROR_NET in case of failure.
  */
-int
-c_net_start_post_clone(c_net_t *net)
+static int
+c_net_start_post_clone(void *netp)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 
 	/* Skip, if the container doesn't have a network ns */
-	if (!net->ns_net)
+	if (!container_has_netns(net->container))
 		return 0;
 
 	/* skip on reboots of c0 */
@@ -1156,7 +1181,7 @@ c_net_start_post_clone(c_net_t *net)
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
 		if (c_net_add_interface(net, cfg) < 0)
-			return -1;
+			return -CONTAINER_ERROR_NET;
 	}
 
 	// nothing to be configured
@@ -1167,13 +1192,13 @@ c_net_start_post_clone(c_net_t *net)
 		c_net_interface_t *ni = l->data;
 
 		if (c_net_start_post_clone_interface(pid, ni) == -1)
-			return -1;
+			return -CONTAINER_ERROR_NET;
 		if (pid == pid_c0) //skip moving interfaces defined for c0 (e.g. uplink iiff)
 			continue;
 		if (cmld_containers_get_c0()) {
 			DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
 			if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
-				return -1;
+				return -CONTAINER_ERROR_NET;
 		}
 	}
 
@@ -1183,7 +1208,7 @@ c_net_start_post_clone(c_net_t *net)
 	if (*c0_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to c0's netns");
 		mem_free0(c0_netns_pid);
-		return -1;
+		return -CONTAINER_ERROR_NET;
 	} else if (*c0_netns_pid == 0) {
 		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
 
@@ -1318,16 +1343,22 @@ c_net_start_child_interface(c_net_interface_t *ni)
 }
 
 /**
+ * In the container's namespace, the container veth is configured
+ * This Function is part of TSF.CML.CompartmentIsolation.
+ *
  * In the container namespace, rename the interface to net->nw_name,
  * set the ipv4 container address and bring the interfaces up.
+ *
+ * @return: 0 on success, -CONTAINER_ERROR_NET in case of failure.
  */
-int
-c_net_start_child(c_net_t *net)
+static int
+c_net_start_child(void *netp)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 
 	/* Skip this, if the container doesn't have a network namespace */
-	if (!net->ns_net || !(list_length(net->interface_list) > 0))
+	if (!container_has_netns(net->container) || !(list_length(net->interface_list) > 0))
 		return 0;
 
 	/* skip on reboots of c0 */
@@ -1337,13 +1368,13 @@ c_net_start_child(c_net_t *net)
 
 	// shrink subnet reserverd for loopback device
 	if (network_setup_loopback())
-		return -1;
+		return -CONTAINER_ERROR_NET;
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
 		if (c_net_start_child_interface(ni) == -1)
-			return -1;
+			return -CONTAINER_ERROR_NET;
 	}
 	/* default inet uplink through first configured iif */
 	c_net_interface_t *ni = list_nth_data(net->interface_list, 0);
@@ -1370,6 +1401,7 @@ c_net_interface_down(c_net_interface_t *ni)
 			WARN("network interface %s could not be destroyed", ni->veth_cmld_name);
 	}
 }
+
 static void
 c_net_cleanup_interface(c_net_interface_t *ni)
 {
@@ -1457,13 +1489,14 @@ c_net_cleanup_c0(c_net_t *net)
 /**
  * Cleans up the c_net_t struct and shuts down the network interface.
  */
-void
-c_net_cleanup(c_net_t *net, bool is_rebooting)
+static void
+c_net_cleanup(void *netp, bool is_rebooting)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 
 	/* We can skip this in case the container has no network ns */
-	if (!net->ns_net || !(list_length(net->interface_list)))
+	if (!container_has_netns(net->container) || !(list_length(net->interface_list)))
 		return;
 
 	/* skip on reboots of c0 */
@@ -1524,9 +1557,10 @@ c_net_free_interface(c_net_interface_t *ni)
 /**
  * Frees the c_net_t structure
  */
-void
-c_net_free(c_net_t *net)
+static void
+c_net_free(void *netp)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
@@ -1543,29 +1577,17 @@ c_net_free(c_net_t *net)
 	mem_free0(net);
 }
 
-char *
-c_net_get_ip_new(c_net_t *net)
+/**
+ * This funtion provides a list of conatiner_net_cfg_t* objects
+ * which contain the name of an interface inside the container and the
+ * corresponding interface name of the endpoint in the root network namespace.
+ */
+static list_t *
+c_net_get_interface_mapping_new(void *netp)
 {
-	IF_FALSE_RETVAL_TRACE(net->ns_net, NULL);
+	c_net_t *net = netp;
+	ASSERT(net);
 
-	c_net_interface_t *ni0 = list_nth_data(net->interface_list, 0);
-	IF_NULL_RETVAL(ni0, NULL);
-	return mem_strdup(inet_ntoa(ni0->ipv4_cont_addr));
-}
-
-char *
-c_net_get_subnet_new(c_net_t *net)
-{
-	IF_FALSE_RETVAL_TRACE(net->ns_net, NULL);
-
-	c_net_interface_t *ni0 = list_nth_data(net->interface_list, 0);
-	IF_NULL_RETVAL(ni0, NULL);
-	return mem_strdup(ni0->subnet);
-}
-
-list_t *
-c_net_get_interface_mapping_new(c_net_t *net)
-{
 	list_t *mapping = NULL;
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
@@ -1576,12 +1598,49 @@ c_net_get_interface_mapping_new(c_net_t *net)
 	return mapping;
 }
 
-/* rejoin existing netns on reboots where netns is kept active */
-int
-c_net_join_netns(const c_net_t *net)
+/**
+ * Rejoin existing netns on reboots where netns is kept active
+ * This Function is part of TSF.CML.CompartmentIsolation.
+ */
+static int
+c_net_join_netns(void *netp)
 {
+	c_net_t *net = netp;
 	ASSERT(net);
 	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
 
-	return ns_join_by_path(net->ns_path);
+	if (ns_join_by_path(net->ns_path) < 0)
+		return -CONTAINER_ERROR_NET;
+
+	return 0;
+}
+
+static container_module_t c_net_module = {
+	.name = MOD_NAME,
+	.container_new = c_net_new,
+	.container_free = c_net_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = c_net_start_pre_clone,
+	.start_post_clone = c_net_start_post_clone,
+	.start_pre_exec = NULL,
+	.start_post_exec = NULL,
+	.start_child = c_net_start_child,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = c_net_cleanup,
+	.join_ns = c_net_join_netns,
+};
+
+static void INIT
+c_net_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_net_module);
+
+	// register relevant handlers implemented by this module
+	container_register_add_net_interface_handler(MOD_NAME, c_net_add_interface);
+	container_register_remove_net_interface_handler(MOD_NAME, c_net_remove_interface);
+	container_register_get_vnet_runtime_cfg_new_handler(MOD_NAME,
+							    c_net_get_interface_mapping_new);
 }

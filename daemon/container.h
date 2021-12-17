@@ -639,28 +639,31 @@ bool
 container_has_userns(const container_t *container);
 
 /**
- * Returns the ip of the first interface set inside the container
- */
-char *
-container_get_first_ip_new(container_t *container);
-
-/**
- * Returns the subnet of the first interface set inside the container
- */
-char *
-container_get_first_subnet_new(container_t *container);
-
-/**
  * Adds a network interface to the container. If persistent is true, the config file will be modified accordingly
  */
 int
 container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg, bool persistent);
 
 /**
+ * Registers the corresponding handler for container_add_net_interface
+ */
+void
+container_register_add_net_interface_handler(const char *mod_name,
+					     int (*handler)(void *data,
+							    container_pnet_cfg_t *pnet_cfg));
+
+/**
  * Removes a network interface from the container. If persistent is true, the config file will be modified accordingly
  */
 int
 container_remove_net_iface(container_t *container, const char *iface, bool persistent);
+
+/**
+ * Registers the corresponding handler for container_remove_net_interface
+ */
+void
+container_register_remove_net_interface_handler(const char *mod_name,
+						int (*handler)(void *data, const char *iface));
 
 const char **
 container_get_dev_allow_list(const container_t *container);
@@ -715,7 +718,14 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
  * the runtime generated interface name of the rootns endpoint.
  */
 list_t *
-container_get_vnet_runtime_cfg_new(container_t *container);
+container_get_vnet_runtime_cfg_new(const container_t *container);
+
+/**
+ * Registers the corresponding handler for container_get_vnet_runtime_cfg_new
+ */
+void
+container_register_get_vnet_runtime_cfg_new_handler(const char *mod_name,
+						    list_t *(*handler)(void *data));
 
 /**
  * Initialize a container_pnet_cfg_t data structure and allocate needed memory.
@@ -951,5 +961,11 @@ container_audit_set_loginuid(container_t *container, uint32_t uid);
 
 uint32_t
 container_audit_get_loginuid(const container_t *container);
+
+list_t *
+container_get_pnet_cfg_list(const container_t *container);
+
+list_t *
+container_get_vnet_cfg_list(const container_t *container);
 
 #endif /* CONTAINER_H */
