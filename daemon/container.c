@@ -41,7 +41,6 @@
 
 #include "cmld.h"
 #include "c_cgroups.h"
-#include "c_net.h"
 #include "c_vol.h"
 #include "c_cap.h"
 #include "c_fifo.h"
@@ -142,7 +141,6 @@ struct container {
 	list_t *module_instance_list;
 
 	c_cgroups_t *cgroups;
-	c_net_t *net; /* encapsulates given network interfaces*/
 	c_fifo_t *fifo;
 
 	c_vol_t *vol;
@@ -174,6 +172,11 @@ struct container {
 
 	// indicate if the container is synced with its config
 	bool is_synced;
+
+	// virtual network interfaces from container config
+	list_t *vnet_cfg_list;
+	// network interfaces from container config
+	list_t *pnet_cfg_list;
 };
 
 struct container_callback {
@@ -378,6 +381,14 @@ CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(shift_mounts, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_uid, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uid, int, 0)
 
+/* Functions usually implemented and registered by c_net module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(add_net_interface, int, void *, container_pnet_cfg_t *)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(add_net_interface, int, 0, container_pnet_cfg_t *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(remove_net_interface, int, void *, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(remove_net_interface, int, 0, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_vnet_runtime_cfg_new, list_t *, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_vnet_runtime_cfg_new, list_t *, NULL)
+
 void
 container_free_key(container_t *container)
 {
@@ -396,7 +407,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 		       bool ns_net, const guestos_t *os, const char *config_filename,
 		       const char *images_dir, mount_t *mnt, unsigned int ram_limit,
 		       const char *cpus_allowed, uint32_t color, bool allow_autostart,
-		       const char *dns_server, list_t *net_ifaces, char **allowed_devices,
+		       const char *dns_server, list_t *pnet_cfg_list, char **allowed_devices,
 		       char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list,
 		       char **init_env, size_t init_env_len, list_t *fifo_list,
 		       container_token_type_t ttype, bool usb_pin_entry)
@@ -459,6 +470,21 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->ram_limit = ram_limit;
 	container->cpus_allowed = (cpus_allowed) ? mem_strdup(cpus_allowed) : NULL;
 
+	// virtual network interfaces from container config
+	for (list_t *elem = vnet_cfg_list; elem != NULL; elem = elem->next) {
+		container_vnet_cfg_t *vnet_cfg = elem->data;
+		DEBUG("vnet: %s will be added to conatiner (%s)", vnet_cfg->vnet_name,
+		      (vnet_cfg->configure) ? "configured" : "unconfigured");
+	}
+	container->vnet_cfg_list = vnet_cfg_list;
+
+	// network interfaces from container config
+	for (list_t *elem = pnet_cfg_list; elem != NULL; elem = elem->next) {
+		container_pnet_cfg_t *pnet_cfg = elem->data;
+		DEBUG("List element in net_ifaces: %s", pnet_cfg->pnet_name);
+	}
+	container->pnet_cfg_list = pnet_cfg_list;
+
 	/* Create submodules */
 	for (list_t *l = container_module_list; l; l = l->next) {
 		container_module_t *module = l->data;
@@ -481,26 +507,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->cgroups = c_cgroups_new(container);
 	if (!container->cgroups) {
 		WARN("Could not initialize cgroups subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
-	}
-
-	// virtual network interfaces from container config
-	for (list_t *elem = vnet_cfg_list; elem != NULL; elem = elem->next) {
-		container_vnet_cfg_t *vnet_cfg = elem->data;
-		DEBUG("vnet: %s will be added to conatiner (%s)", vnet_cfg->vnet_name,
-		      (vnet_cfg->configure) ? "configured" : "unconfigured");
-	}
-
-	// network interfaces from container config
-	for (list_t *elem = net_ifaces; elem != NULL; elem = elem->next) {
-		container_pnet_cfg_t *pnet_cfg = elem->data;
-		DEBUG("List element in net_ifaces: %s", pnet_cfg->pnet_name);
-	}
-
-	container->net = c_net_new(container, ns_net, vnet_cfg_list, net_ifaces);
-	if (!container->net) {
-		WARN("Could not initialize net subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
@@ -722,7 +728,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_type_t type = container_config_get_type(conf);
 
-	list_t *net_ifaces = container_config_get_net_ifaces_list_new(conf);
+	list_t *pnet_cfg_list = container_config_get_net_ifaces_list_new(conf);
 
 	const char *dns_server = (container_config_get_dns_server(conf)) ?
 					 container_config_get_dns_server(conf) :
@@ -756,7 +762,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	container_t *c =
 		container_new_internal(uuid, name, type, ns_usr, ns_net, os, config_filename,
 				       images_dir, mnt, ram_limit, cpus_allowed, color,
-				       allow_autostart, dns_server, net_ifaces, allowed_devices,
+				       allow_autostart, dns_server, pnet_cfg_list, allowed_devices,
 				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
 				       init_env_len, fifo_list, ttype, usb_pin_entry);
 	if (c)
@@ -765,19 +771,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	uuid_free(uuid);
 	mem_free0(images_dir);
 	mem_free0(config_filename);
-
-	for (list_t *l = vnet_cfg_list; l; l = l->next) {
-		container_vnet_cfg_t *vnet_cfg = l->data;
-		mem_free0(vnet_cfg->vnet_name);
-		mem_free0(vnet_cfg);
-	}
-	list_delete(vnet_cfg_list);
-
-	for (list_t *l = net_ifaces; l; l = l->next) {
-		container_pnet_cfg_t *pnet_cfg = l->data;
-		container_pnet_cfg_free(pnet_cfg);
-	}
-	list_delete(net_ifaces);
 
 	container_config_free(conf);
 	return c;
@@ -839,8 +832,6 @@ container_free(container_t *container)
 
 	if (container->cgroups)
 		c_cgroups_free(container->cgroups);
-	if (container->net)
-		c_net_free(container->net);
 	if (container->vol)
 		c_vol_free(container->vol);
 	if (container->run)
@@ -864,6 +855,19 @@ container_free(container_t *container)
 		mem_free0(l->data);
 	}
 	list_delete(container->usbdev_list);
+
+	for (list_t *l = container->vnet_cfg_list; l; l = l->next) {
+		container_vnet_cfg_t *vnet_cfg = l->data;
+		mem_free0(vnet_cfg->vnet_name);
+		mem_free0(vnet_cfg);
+	}
+	list_delete(container->vnet_cfg_list);
+
+	for (list_t *l = container->pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_t *pnet_cfg = l->data;
+		container_pnet_cfg_free(pnet_cfg);
+	}
+	list_delete(container->pnet_cfg_list);
 
 	if (container->token.uuid)
 		uuid_free(container->token.uuid);
@@ -1199,7 +1203,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 	 * states in case of rebooting. We need this, since the volume key for
 	 * encrypted volumes is cleared from cmld's memory after initial use.
 	 */
-	c_net_cleanup(container->net, is_rebooting);
 	/* cleanup c_vol last, as it removes partitions */
 	c_vol_cleanup(container->vol, is_rebooting);
 
@@ -1392,11 +1395,6 @@ container_start_child(void *data)
 		if ((ret = module->start_child(c_mod->instance)) < 0) {
 			goto error;
 		}
-	}
-
-	if (c_net_start_child(container->net) < 0) {
-		ret = CONTAINER_ERROR_NET;
-		goto error;
 	}
 
 	if (c_cgroups_start_child(container->cgroups) < 0) {
@@ -1611,20 +1609,21 @@ container_start_child_early(void *data)
 
 	container_module_instance_t *c_user =
 		container_module_get_instance_by_name(container, "c_user");
+	container_module_instance_t *c_net =
+		container_module_get_instance_by_name(container, "c_net");
 	// on reboots of c0 rejoin existing userns and netns
 	if (cmld_containers_get_c0() == container &&
 	    container->prev_state == CONTAINER_STATE_REBOOTING) {
 		if (c_user && c_user->module && c_user->module->join_ns) {
 			IF_TRUE_GOTO((ret = c_user->module->join_ns(c_user->instance)) < 0, error);
 		}
-		if (c_net_join_netns(container->net) < 0) {
-			ret = CONTAINER_ERROR_NET;
-			goto error;
+		if (c_net && c_net->module && c_net->module->join_ns) {
+			IF_TRUE_GOTO((ret = c_net->module->join_ns(c_net->instance)) < 0, error);
 		}
 	} else {
 		if (c_user && container->ns_usr)
 			clone_flags |= CLONE_NEWUSER;
-		if (container->ns_net)
+		if (c_net && container->ns_net)
 			clone_flags |= CLONE_NEWNET;
 	}
 
@@ -1901,11 +1900,6 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 		goto error_post_clone;
 	}
 
-	if (c_net_start_post_clone(container->net)) {
-		ret = CONTAINER_ERROR_NET;
-		goto error_post_clone;
-	}
-
 	if (c_fifo_start_post_clone(container->fifo)) {
 		ret = CONTAINER_ERROR_FIFO;
 		goto error_post_clone;
@@ -1970,11 +1964,6 @@ container_start(container_t *container)
 
 	if (c_cgroups_start_pre_clone(container->cgroups) < 0) {
 		ret = CONTAINER_ERROR_CGROUPS;
-		goto error_pre_clone;
-	}
-
-	if (c_net_start_pre_clone(container->net) < 0) {
-		ret = CONTAINER_ERROR_NET;
 		goto error_pre_clone;
 	}
 
@@ -2656,20 +2645,6 @@ container_has_userns(const container_t *container)
 	return container->ns_usr;
 }
 
-char *
-container_get_first_ip_new(container_t *container)
-{
-	ASSERT(container);
-	return c_net_get_ip_new(container->net);
-}
-
-char *
-container_get_first_subnet_new(container_t *container)
-{
-	ASSERT(container);
-	return c_net_get_subnet_new(container->net);
-}
-
 time_t
 container_get_uptime(const container_t *container)
 {
@@ -2698,7 +2673,7 @@ container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg, 
 
 	if (c0 == container) {
 		if (c0_is_up)
-			res = c_net_add_interface(container->net, pnet_cfg);
+			res = container_add_net_interface(container, pnet_cfg);
 		return res;
 	}
 
@@ -2706,9 +2681,9 @@ container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg, 
 	 * to take it back to cml first.
 	 */
 	if (c0_is_up)
-		res = c_net_remove_interface(c0->net, pnet_cfg->pnet_name);
+		res = container_remove_net_interface(c0, pnet_cfg->pnet_name);
 
-	res |= c_net_add_interface(container->net, pnet_cfg);
+	res |= container_add_net_interface(container, pnet_cfg);
 	if (res || !persistent)
 		return res;
 
@@ -2724,7 +2699,7 @@ int
 container_remove_net_iface(container_t *container, const char *iface, bool persistent)
 {
 	ASSERT(container);
-	int res = c_net_remove_interface(container->net, iface);
+	int res = container_remove_net_interface(container, iface);
 	if (res || !persistent)
 		return res;
 
@@ -2834,12 +2809,6 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
 	if (vnet_cfg->rootns_name)
 		mem_free0(vnet_cfg->rootns_name);
 	mem_free0(vnet_cfg);
-}
-
-list_t *
-container_get_vnet_runtime_cfg_new(container_t *container)
-{
-	return c_net_get_interface_mapping_new(container->net);
 }
 
 int
@@ -2962,4 +2931,18 @@ container_get_usb_pin_entry(const container_t *container)
 {
 	ASSERT(container);
 	return container->usb_pin_entry;
+}
+
+list_t *
+container_get_pnet_cfg_list(const container_t *container)
+{
+	ASSERT(container);
+	return container->pnet_cfg_list;
+}
+
+list_t *
+container_get_vnet_cfg_list(const container_t *container)
+{
+	ASSERT(container);
+	return container->vnet_cfg_list;
 }
