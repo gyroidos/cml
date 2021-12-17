@@ -771,6 +771,12 @@
 #define UNUSED __attribute__((unused))
 
 /**
+ * Indicates that a funtion is executed in constructor context before main.
+ * We use this to handle optional modules during build
+ */
+#define INIT __attribute__((constructor))
+
+/**
  * Helper macro to cast a function pointer to a void pointer.
  */
 #ifdef __GNUC__
