@@ -200,6 +200,116 @@ enum container_start_sync_msg {
 	CONTAINER_START_SYNC_MSG_ERROR,
 };
 
+/*
+ * Module macro magic to avoid code duplication
+ */
+// clang-format off
+#define CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(name, type, ...) \
+	typedef struct { \
+		const char *mod_name; \
+		type (*handler_func)(__VA_ARGS__); \
+	} container_## name ##_handler_t; \
+	static container_## name ##_handler_t *container_## name ##_handler = NULL; \
+	void container_register_## name ##_handler(const char *mod_name, type (*h)(__VA_ARGS__)) \
+	{ \
+		if (container_## name ##_handler) { \
+			WARN("%s_handler allready registered, skip", #name); \
+			return; \
+		} \
+		container_## name ##_handler = mem_new0(container_## name ##_handler_t, 1); \
+		container_## name ##_handler->mod_name = mod_name; \
+		container_## name ##_handler->handler_func = h; \
+		INFO("%s_handler registerd by module '%s'.", #name, mod_name); \
+	}
+
+#define CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(name, type, unimpl) \
+	type container_## name(const container_t *container) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance); \
+	}
+
+#define CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(name, type, unimpl, type_a1) \
+	type container_## name(const container_t *container, type_a1 a1) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1); \
+	}
+
+#define CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(name, type, unimpl, type_a1, type_a2) \
+	type container_## name(const container_t *container, type_a1 a1, type_a2 a2) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1, a2); \
+	}
+
+#define CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(name, type, unimpl, type_a1, type_a2, type_a3) \
+	type container_## name(const container_t *container, type_a1 a1, type_a2 a2, type_a3 a3) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1, a2, a3); \
+	}
+
+#define CONTAINER_MODULE_FUNCTION_WRAPPER5_IMPL(name, type, unimpl, type_a1, type_a2, type_a3, type_a4) \
+	type container_## name(const container_t *container, type_a1 a1, type_a2 a2, type_a3 a3, type_a4 a4) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1, a2, a3, a4); \
+	}
+
+#define CONTAINER_MODULE_FUNCTION_WRAPPER6_IMPL(name, type, unimpl, type_a1, type_a2, type_a3, type_a4, type_a5) \
+	type container_## name(const container_t *container, type_a1 a1, type_a2 a2, type_a3 a3, type_a4 a4, type_a5 a5) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1, a2, a3, a4, a5); \
+	}
+// clang-format on
+/*
+ * End of module macro magic
+ */
+
 static list_t *container_module_list = NULL;
 
 void
