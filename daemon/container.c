@@ -40,7 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "c_cgroups.h"
 #include "c_vol.h"
 #include "c_cap.h"
 #include "c_fifo.h"
@@ -140,7 +139,6 @@ struct container {
 	// Submodules
 	list_t *module_instance_list;
 
-	c_cgroups_t *cgroups;
 	c_fifo_t *fifo;
 
 	c_vol_t *vol;
@@ -389,6 +387,24 @@ CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(remove_net_interface, int, 0, const char
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_vnet_runtime_cfg_new, list_t *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_vnet_runtime_cfg_new, list_t *, NULL)
 
+/* Functions usually implemented and registered by c_cgroups module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(freeze, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(freeze, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(unfreeze, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(unfreeze, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(allow_audio, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(allow_audio, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(deny_audio, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(deny_audio, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(device_allow, int, void *, int, int, bool)
+CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(device_allow, int, 0, int, int, bool)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(device_deny, int, void *, int, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(device_deny, int, 0, int, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_device_allowed, bool, void *, int, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(is_device_allowed, bool, true, int, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(add_pid_to_cgroups, int, void *, pid_t)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(add_pid_to_cgroups, int, 0, pid_t)
+
 void
 container_free_key(container_t *container)
 {
@@ -502,13 +518,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->cgroups = c_cgroups_new(container);
-	if (!container->cgroups) {
-		WARN("Could not initialize cgroups subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	container->vol = c_vol_new(container);
@@ -830,8 +839,6 @@ container_free(container_t *container)
 	}
 	list_delete(container->module_instance_list);
 
-	if (container->cgroups)
-		c_cgroups_free(container->cgroups);
 	if (container->vol)
 		c_vol_free(container->vol);
 	if (container->run)
@@ -985,20 +992,6 @@ container_oom_protect_service(const container_t *container)
 	if (ret < 0)
 		ERROR_ERRNO("Failed to write to %s", path);
 	mem_free0(path);
-}
-
-c_cgroups_t *
-container_get_cgroups(const container_t *container)
-{
-	ASSERT(container);
-	return container->cgroups;
-}
-
-int
-container_add_pid_to_cgroups(const container_t *container, pid_t pid)
-{
-	ASSERT(container);
-	return c_cgroups_add_pid(container->cgroups, pid);
 }
 
 int
@@ -1193,7 +1186,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 		module->cleanup(c_mod->instance, is_rebooting);
 	}
 
-	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
 	c_run_cleanup(container->run);
 	c_time_cleanup(container->time);
@@ -1397,11 +1389,6 @@ container_start_child(void *data)
 		}
 	}
 
-	if (c_cgroups_start_child(container->cgroups) < 0) {
-		ret = CONTAINER_ERROR_CGROUPS;
-		goto error;
-	}
-
 	if (c_vol_start_child(container->vol) < 0) {
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
@@ -1465,11 +1452,6 @@ container_start_child(void *data)
 		if ((ret = module->start_pre_exec_child(c_mod->instance)) < 0) {
 			goto error;
 		}
-	}
-
-	if (c_cgroups_start_pre_exec_child(container->cgroups) < 0) {
-		ret = CONTAINER_ERROR_CGROUPS;
-		goto error;
 	}
 
 	if (c_time_start_pre_exec_child(container->time) < 0) {
@@ -1729,10 +1711,6 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		goto error_pre_exec;
 	}
 
-	if (c_cgroups_start_pre_exec(container->cgroups) < 0) {
-		WARN("c_cgroups_start_pre_exec failed");
-		goto error_pre_exec;
-	}
 	// during reboot c_vol state is not cleared, thus skip pre_exec here
 	if (c_vol_start_pre_exec(container->vol) < 0) {
 		WARN("c_vol_start_pre_exec failed");
@@ -1895,11 +1873,6 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 		}
 	}
 
-	if (c_cgroups_start_post_clone(container->cgroups)) {
-		ret = CONTAINER_ERROR_CGROUPS;
-		goto error_post_clone;
-	}
-
 	if (c_fifo_start_post_clone(container->fifo)) {
 		ret = CONTAINER_ERROR_FIFO;
 		goto error_post_clone;
@@ -1960,11 +1933,6 @@ container_start(container_t *container)
 		if ((ret = module->start_pre_clone(c_mod->instance)) < 0) {
 			goto error_pre_clone;
 		}
-	}
-
-	if (c_cgroups_start_pre_clone(container->cgroups) < 0) {
-		ret = CONTAINER_ERROR_CGROUPS;
-		goto error_pre_clone;
 	}
 
 	if (c_service_start_pre_clone(container->service) < 0) {
@@ -2219,48 +2187,6 @@ container_bind_socket_after_start(UNUSED container_t *container, UNUSED const ch
 	//        close(fd[1]);
 	//    }
 	return 0;
-}
-
-int
-container_freeze(container_t *container)
-{
-	ASSERT(container);
-
-	container_state_t state = container_get_state(container);
-	if (state == CONTAINER_STATE_FROZEN || state == CONTAINER_STATE_FREEZING) {
-		DEBUG("Container already frozen or freezing, doing nothing...");
-		return 0;
-	} else if (state == CONTAINER_STATE_RUNNING) {
-		return c_cgroups_freeze(container->cgroups);
-	} else {
-		WARN("Container not running");
-		return -1;
-	}
-	return 0;
-}
-
-int
-container_unfreeze(container_t *container)
-{
-	ASSERT(container);
-	// TODO state checking
-	return c_cgroups_unfreeze(container->cgroups);
-}
-
-int
-container_allow_audio(container_t *container)
-{
-	ASSERT(container);
-	// TODO state checking
-	return c_cgroups_devices_allow_audio(container->cgroups);
-}
-
-int
-container_deny_audio(container_t *container)
-{
-	ASSERT(container);
-	// TODO state checking
-	return c_cgroups_devices_deny_audio(container->cgroups);
 }
 
 int
@@ -2533,20 +2459,6 @@ container_get_cpus_allowed(const container_t *container)
 	return container->cpus_allowed;
 }
 
-int
-container_set_ram_limit(container_t *container, unsigned int ram_limit)
-{
-	ASSERT(container);
-
-	if (container->ram_limit == ram_limit)
-		return 0;
-
-	container->ram_limit = ram_limit;
-
-	/* Note that the c_cgroups submodule gets the ram_limit value from its container reference */
-	return c_cgroups_set_ram_limit(container->cgroups);
-}
-
 void
 container_set_imei(container_t *container, char *imei)
 {
@@ -2809,27 +2721,6 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
 	if (vnet_cfg->rootns_name)
 		mem_free0(vnet_cfg->rootns_name);
 	mem_free0(vnet_cfg);
-}
-
-int
-container_device_allow(container_t *container, int major, int minor, bool assign)
-{
-	ASSERT(container);
-	return c_cgroups_devices_chardev_allow(container->cgroups, major, minor, assign);
-}
-
-int
-container_device_deny(container_t *container, int major, int minor)
-{
-	ASSERT(container);
-	return c_cgroups_devices_chardev_deny(container->cgroups, major, minor);
-}
-
-bool
-container_is_device_allowed(const container_t *container, int major, int minor)
-{
-	ASSERT(container);
-	return c_cgroups_devices_is_dev_allowed(container->cgroups, major, minor);
 }
 
 char *

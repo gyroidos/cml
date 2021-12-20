@@ -21,11 +21,19 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+/**
+ * @file c_cgroups.c
+ *
+ * This submodule provides functionality to setup control groups for containers.
+ * This includes configurations like the max ram for a container and  the functionality
+ * to freeze and unfreeze a container.
+ */
+
+#define MOD_NAME "c_cgroups"
+
 // for gnu version of basename
 #define _GNU_SOURCE
 #include <string.h>
-
-#include "c_cgroups.h"
 
 #include "hardware.h"
 #include "uevent.h"
@@ -77,7 +85,7 @@ list_t *global_allowed_devs_list = NULL;
   * wildcard '*' is mapped to -1 */
 list_t *global_assigned_devs_list = NULL;
 
-struct c_cgroups {
+typedef struct c_cgroups {
 	container_t *container; // weak reference
 	char *cgroup_path;
 	list_t *active_cgroups;
@@ -90,11 +98,13 @@ struct c_cgroups {
 	list_t *allowed_devs; /* list of 2 element int arrays, representing maj:min of devices allowed to be accessed.
 				  wildcard '*' is mapped to -1 */
 	bool ns_cgroup;
-};
+} c_cgroups_t;
 
-c_cgroups_t *
+static void *
 c_cgroups_new(container_t *container)
 {
+	ASSERT(container);
+
 	c_cgroups_t *cgroups = mem_new0(c_cgroups_t, 1);
 	cgroups->container = container;
 	//cgroups->cgroup_path = mem_printf("%s/%s", CONTAINER_HIERARCHY, uuid_string(container_get_uuid(cgroups->container)));
@@ -108,10 +118,12 @@ c_cgroups_new(container_t *container)
 	return cgroups;
 }
 
-void
-c_cgroups_free(c_cgroups_t *cgroups)
+static void
+c_cgroups_free(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
+
 	mem_free0(cgroups->cgroup_path);
 	mem_free0(cgroups);
 }
@@ -318,9 +330,10 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 	return 0;
 }
 
-int
-c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
+static int
+c_cgroups_devices_allow(void *cgroupsp, const char *rule)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 	ASSERT(rule);
 
@@ -336,9 +349,10 @@ c_cgroups_devices_allow(c_cgroups_t *cgroups, const char *rule)
 	return c_cgroups_allow_rule(cgroups, rule);
 }
 
-int
-c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
+static int
+c_cgroups_devices_assign(void *cgroupsp, const char *rule)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 	ASSERT(rule);
 
@@ -361,9 +375,10 @@ c_cgroups_devices_assign(c_cgroups_t *cgroups, const char *rule)
 	return 0;
 }
 
-int
-c_cgroups_devices_deny(c_cgroups_t *cgroups, const char *rule)
+static int
+c_cgroups_devices_deny(void *cgroupsp, const char *rule)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 	ASSERT(rule);
 
@@ -384,9 +399,10 @@ error:
 	return -1;
 }
 
-int
-c_cgroups_devices_allow_list(c_cgroups_t *cgroups, const char **list)
+static int
+c_cgroups_devices_allow_list(void *cgroupsp, const char **list)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	/* if the list is null, do nothing */
@@ -402,9 +418,10 @@ c_cgroups_devices_allow_list(c_cgroups_t *cgroups, const char **list)
 	return 0;
 }
 
-int
-c_cgroups_devices_deny_list(c_cgroups_t *cgroups, const char **list)
+static int
+c_cgroups_devices_deny_list(void *cgroupsp, const char **list)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	/* if the list is null, do nothing */
@@ -434,25 +451,19 @@ c_cgroups_devices_assign_list(c_cgroups_t *cgroups, const char **list)
 	return 0;
 }
 
-int
-c_cgroups_devices_allow_all(c_cgroups_t *cgroups)
+static int
+c_cgroups_devices_deny_all(void *cgroupsp)
 {
-	ASSERT(cgroups);
-
-	return c_cgroups_devices_allow(cgroups, "a");
-}
-
-int
-c_cgroups_devices_deny_all(c_cgroups_t *cgroups)
-{
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	return c_cgroups_devices_deny(cgroups, "a");
 }
 
-int
-c_cgroups_devices_allow_audio(c_cgroups_t *cgroups)
+static int
+c_cgroups_devices_allow_audio(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	DEBUG("Allow audio access for container %s", container_get_description(cgroups->container));
@@ -465,9 +476,10 @@ c_cgroups_devices_allow_audio(c_cgroups_t *cgroups)
 	return 0;
 }
 
-int
-c_cgroups_devices_deny_audio(c_cgroups_t *cgroups)
+static int
+c_cgroups_devices_deny_audio(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	DEBUG("Deny audio access for container %s", container_get_description(cgroups->container));
@@ -576,12 +588,25 @@ c_cgroups_cleanup_freeze_timer(c_cgroups_t *cgroups)
 	cgroups->freezer_retries = 0;
 }
 
-int
-c_cgroups_freeze(c_cgroups_t *cgroups)
+static int
+c_cgroups_freeze(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
-	// TODO think about where to check for unnecessary state changes, currently done in container.c
+	container_state_t state = container_get_state(cgroups->container);
+	switch (state) {
+	case CONTAINER_STATE_FROZEN:
+	case CONTAINER_STATE_FREEZING:
+		DEBUG("Container already frozen or freezing, doing nothing...");
+		return 0;
+	case CONTAINER_STATE_RUNNING:
+	case CONTAINER_STATE_SETUP:
+		break; // actually do freeze
+	default:
+		WARN("Container not running");
+		return -1;
+	}
 
 	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
 					      uuid_string(container_get_uuid(cgroups->container)));
@@ -594,9 +619,10 @@ c_cgroups_freeze(c_cgroups_t *cgroups)
 	return 0;
 }
 
-int
-c_cgroups_unfreeze(c_cgroups_t *cgroups)
+static int
+c_cgroups_unfreeze(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	// TODO think about where to check for unnecessary state changes
@@ -693,7 +719,7 @@ c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask,
 	mem_free0(state);
 }
 
-int
+static int
 c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
@@ -933,9 +959,12 @@ c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 	mem_free0(dev_path);
 }
 
-int
-c_cgroups_devices_chardev_allow(c_cgroups_t *cgroups, int major, int minor, bool assign)
+static int
+c_cgroups_devices_chardev_allow(void *cgroupsp, int major, int minor, bool assign)
 {
+	c_cgroups_t *cgroups = cgroupsp;
+	ASSERT(cgroups);
+
 	int ret;
 
 	char *rule = mem_printf("c %d:%d rwm", major, minor);
@@ -947,9 +976,13 @@ c_cgroups_devices_chardev_allow(c_cgroups_t *cgroups, int major, int minor, bool
 	mem_free0(rule);
 	return ret;
 }
-int
-c_cgroups_devices_chardev_deny(c_cgroups_t *cgroups, int major, int minor)
+
+static int
+c_cgroups_devices_chardev_deny(void *cgroupsp, int major, int minor)
 {
+	c_cgroups_t *cgroups = cgroupsp;
+	ASSERT(cgroups);
+
 	int ret;
 
 	char *rule = mem_printf("c %d:%d rwm", major, minor);
@@ -981,9 +1014,10 @@ c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
 	return 0;
 }
 
-bool
-c_cgroups_devices_is_dev_allowed(c_cgroups_t *cgroups, int major, int minor)
+static bool
+c_cgroups_devices_is_dev_allowed(void *cgroupsp, int major, int minor)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 	IF_TRUE_RETVAL_TRACE(major < 0 || minor < 0, false);
 
@@ -1003,16 +1037,22 @@ c_cgroups_devices_is_dev_allowed(c_cgroups_t *cgroups, int major, int minor)
 /*******************/
 /* Hooks */
 
-int
-c_cgroups_start_pre_clone(c_cgroups_t *cgroups)
+static int
+c_cgroups_start_pre_clone(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
-	return mount_cgroups(cgroups->active_cgroups);
+
+	if (mount_cgroups(cgroups->active_cgroups))
+		return -CONTAINER_ERROR_CGROUPS;
+
+	return 0;
 }
 
-int
-c_cgroups_start_post_clone(c_cgroups_t *cgroups)
+static int
+c_cgroups_start_post_clone(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	// temporarily add systemd to list
@@ -1064,12 +1104,13 @@ c_cgroups_start_post_clone(c_cgroups_t *cgroups)
 error:
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
-	return -1;
+	return -CONTAINER_ERROR_CGROUPS;
 }
 
-int
-c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
+static int
+c_cgroups_start_pre_exec(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	/* For analyzation purposes, start watching the devices of the container */
@@ -1079,7 +1120,7 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 	/* initialize devices subsystem */
 	if (c_cgroups_devices_init(cgroups) < 0) {
 		ERROR_ERRNO("devices init failed!");
-		return -1;
+		return -CONTAINER_ERROR_CGROUPS;
 	}
 	/* append usb devices to devices_subsystem */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
@@ -1156,12 +1197,13 @@ c_cgroups_start_pre_exec(c_cgroups_t *cgroups)
 error:
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
-	return -1;
+	return -CONTAINER_ERROR_CGROUPS;
 }
 
-int
-c_cgroups_add_pid(c_cgroups_t *cgroups, pid_t pid)
+static int
+c_cgroups_add_pid(void *cgroupsp, pid_t pid)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	// temporarily add systemd to list
@@ -1195,9 +1237,10 @@ error:
 	return -1;
 }
 
-int
-c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups)
+static int
+c_cgroups_start_pre_exec_child(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	/* check if cgroupns is supported else do nothing */
@@ -1205,7 +1248,7 @@ c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups)
 
 	if (unshare(CLONE_NEWCGROUP) == -1) {
 		WARN_ERRNO("Could not unshare cgroup namespace!");
-		return -1;
+		return -CONTAINER_ERROR_CGROUPS;
 	}
 
 	INFO("Successfully created new cgroup namespace for container %s",
@@ -1213,9 +1256,10 @@ c_cgroups_start_pre_exec_child(c_cgroups_t *cgroups)
 	return 0;
 }
 
-int
-c_cgroups_start_child(c_cgroups_t *cgroups)
+static int
+c_cgroups_start_child(void *cgroupsp)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	if (container_has_userns(cgroups->container))
@@ -1239,6 +1283,7 @@ c_cgroups_start_child(c_cgroups_t *cgroups)
 
 	return 0;
 }
+
 static int
 c_cgroups_cleanup_subsys_remove_cb(const char *path, const char *name, UNUSED void *data)
 {
@@ -1261,9 +1306,10 @@ c_cgroups_cleanup_subsys_remove_cb(const char *path, const char *name, UNUSED vo
 	return ret;
 }
 
-void
-c_cgroups_cleanup(c_cgroups_t *cgroups)
+static void
+c_cgroups_cleanup(void *cgroupsp, UNUSED bool is_rebooting)
 {
+	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	/* unregister and free the inotify event on the freezer state */
@@ -1325,4 +1371,38 @@ c_cgroups_cleanup(c_cgroups_t *cgroups)
 	}
 	list_delete(cgroups->allowed_devs);
 	cgroups->allowed_devs = NULL;
+}
+
+static container_module_t c_cgroups_module = {
+	.name = MOD_NAME,
+	.container_new = c_cgroups_new,
+	.container_free = c_cgroups_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = c_cgroups_start_pre_clone,
+	.start_post_clone = c_cgroups_start_post_clone,
+	.start_pre_exec = c_cgroups_start_pre_exec,
+	.start_post_exec = NULL,
+	.start_child = c_cgroups_start_child,
+	.start_pre_exec_child = c_cgroups_start_pre_exec_child,
+	.stop = NULL,
+	.cleanup = c_cgroups_cleanup,
+	.join_ns = NULL,
+};
+
+static void INIT
+c_cgroups_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_cgroups_module);
+
+	// register relevant handlers implemented by this module
+	container_register_freeze_handler(MOD_NAME, c_cgroups_freeze);
+	container_register_unfreeze_handler(MOD_NAME, c_cgroups_unfreeze);
+	container_register_allow_audio_handler(MOD_NAME, c_cgroups_devices_allow_audio);
+	container_register_deny_audio_handler(MOD_NAME, c_cgroups_devices_deny_audio);
+	container_register_device_allow_handler(MOD_NAME, c_cgroups_devices_chardev_allow);
+	container_register_device_deny_handler(MOD_NAME, c_cgroups_devices_chardev_deny);
+	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_devices_is_dev_allowed);
+	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
 }
