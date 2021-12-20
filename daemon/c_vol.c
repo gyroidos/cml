@@ -21,6 +21,15 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+/**
+  * @file c_vol.c
+  *
+  * This module is responsible for mounting images (for a container, at its startup) into the filesystem.
+  * It is capable of utilizing a decryption key for mounting encrypted images. When a new container thread
+  * gets cloned, the root directory of the images filesystem (and e.g. the proc, sys, dev directories) is/are
+  * created and the image is mounted there together with a chroot.
+  */
+
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #define _LARGEFILE64_SOURCE
@@ -29,7 +38,7 @@
 #define _GNU_SOURCE
 #endif
 
-#include "c_vol.h"
+#define MOD_NAME "c_vol"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -74,11 +83,11 @@
 #define FALLOC_FL_ZERO_RANGE 0x10
 #endif
 
-struct c_vol {
+typedef struct c_vol {
 	const container_t *container;
 	char *root;
 	int overlay_count;
-};
+} c_vol_t;
 
 /******************************************************************************/
 
@@ -1225,8 +1234,8 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 
 /******************************************************************************/
 
-c_vol_t *
-c_vol_new(const container_t *container)
+static void *
+c_vol_new(container_t *container)
 {
 	ASSERT(container);
 
@@ -1238,9 +1247,10 @@ c_vol_new(const container_t *container)
 	return vol;
 }
 
-void
-c_vol_free(c_vol_t *vol)
+static void
+c_vol_free(void *volp)
 {
+	c_vol_t *vol = volp;
 	ASSERT(vol);
 
 	mem_free0(vol->root);
@@ -1310,9 +1320,10 @@ err:
 	return -1;
 }
 
-char *
-c_vol_get_rootdir(c_vol_t *vol)
+static char *
+c_vol_get_rootdir(void *volp)
 {
+	c_vol_t *vol = volp;
 	ASSERT(vol);
 	return vol->root;
 }
@@ -1382,9 +1393,10 @@ err:
 	return ret;
 }
 
-int
-c_vol_start_child_early(c_vol_t *vol)
+static int
+c_vol_start_child_early(void *volp)
 {
+	c_vol_t *vol = volp;
 	ASSERT(vol);
 
 	INFO("Mounting rootfs to %s", vol->root);
@@ -1448,7 +1460,7 @@ c_vol_start_child_early(c_vol_t *vol)
 	return 0;
 error:
 	ERROR("Failed to execute post clone hook for c_vol");
-	return -1;
+	return -CONTAINER_ERROR_VOL;
 }
 
 struct tty_cb_data {
@@ -1469,15 +1481,18 @@ c_vol_dev_get_tty_cb(UNUSED const char *path, const char *file, void *data)
 	return 0;
 }
 
-int
-c_vol_start_pre_exec(c_vol_t *vol)
+static int
+c_vol_start_pre_exec(void *volp)
 {
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
 	INFO("Populating container's /dev.");
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
 	if (dir_copy_folder("/dev", dev_mnt, &c_vol_populate_dev_filter_cb, vol) < 0) {
 		ERROR_ERRNO("Could not populate /dev!");
 		mem_free0(dev_mnt);
-		return -1;
+		return -CONTAINER_ERROR_VOL;
 	}
 
 	/* link first /dev/tty* to /dev/console for systemd containers */
@@ -1497,7 +1512,7 @@ c_vol_start_pre_exec(c_vol_t *vol)
 	if (c_vol_bind_token(vol) < 0) {
 		ERROR_ERRNO("Failed to bind token to container");
 		mem_free0(dev_mnt);
-		return -1;
+		return -CONTAINER_ERROR_VOL;
 	}
 
 	mem_free0(dev_mnt);
@@ -1635,9 +1650,10 @@ error:
 	return -1;
 }
 
-int
-c_vol_start_child(c_vol_t *vol)
+static int
+c_vol_start_child(void *volp)
 {
+	c_vol_t *vol = volp;
 	ASSERT(vol);
 
 	// check image integrity (this is blocking that is why we do this
@@ -1731,13 +1747,14 @@ c_vol_start_child(c_vol_t *vol)
 	return 0;
 
 error:
-	return -1;
+	return -CONTAINER_ERROR_VOL;
 }
 
-bool
-c_vol_is_encrypted(c_vol_t *vol)
+static bool
+c_vol_is_encrypted(void *volp)
 {
 	size_t i, n;
+	c_vol_t *vol = volp;
 
 	ASSERT(vol);
 	ASSERT(vol->container);
@@ -1752,9 +1769,10 @@ c_vol_is_encrypted(c_vol_t *vol)
 	return false;
 }
 
-void
-c_vol_cleanup(c_vol_t *vol, bool is_rebooting)
+static void
+c_vol_cleanup(void *volp, bool is_rebooting)
 {
+	c_vol_t *vol = volp;
 	ASSERT(vol);
 
 	if (c_vol_umount_all(vol))
@@ -1763,4 +1781,32 @@ c_vol_cleanup(c_vol_t *vol, bool is_rebooting)
 	// keep dm crypt/integrity device up for reboot
 	if (!is_rebooting && c_vol_cleanup_dm(vol))
 		WARN("Could not remove mounts properly");
+}
+
+static container_module_t c_vol_module = {
+	.name = MOD_NAME,
+	.container_new = c_vol_new,
+	.container_free = c_vol_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = c_vol_start_child_early,
+	.start_pre_clone = NULL,
+	.start_post_clone = NULL,
+	.start_pre_exec = c_vol_start_pre_exec,
+	.start_post_exec = NULL,
+	.start_child = c_vol_start_child,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = c_vol_cleanup,
+	.join_ns = NULL,
+};
+
+static void INIT
+c_vol_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_vol_module);
+
+	// register relevant handlers implemented by this module
+	container_register_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);
+	container_register_is_encrypted_handler(MOD_NAME, c_vol_is_encrypted);
 }

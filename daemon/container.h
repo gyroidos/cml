@@ -399,6 +399,12 @@ bool
 container_is_encrypted(const container_t *container);
 
 /**
+ * Registers the corresponding handler for container_is_encrypted
+ */
+void
+container_register_is_encrypted_handler(const char *mod_name, bool (*handler)(void *data));
+
+/**
  * Suspends the container before moving it into background
  */
 int
@@ -866,6 +872,12 @@ container_register_get_uid_handler(const char *mod_name, int (*handler)(void *da
  */
 char *
 container_get_rootdir(const container_t *container);
+
+/**
+ * Registers the corresponding handler for container_get_rootdir
+ */
+void
+container_register_get_rootdir_handler(const char *mod_name, char *(*handler)(void *data));
 
 /**
  * Checks if the containers uuid is the all zero uuid which
