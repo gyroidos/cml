@@ -42,7 +42,6 @@
 #include "cmld.h"
 #include "c_cap.h"
 #include "c_fifo.h"
-#include "c_service.h"
 #include "c_time.h"
 #include "c_run.h"
 #include "c_run.h"
@@ -140,7 +139,6 @@ struct container {
 
 	c_fifo_t *fifo;
 
-	c_service_t *service;
 	c_run_t *run;
 	c_audit_t *audit;
 	c_time_t *time;
@@ -409,6 +407,14 @@ CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_rootdir, char *, NULL)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_encrypted, bool, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(is_encrypted, bool, false)
 
+/* Functions usually implemented and registered by c_service module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_record_send, int, void *, const uint8_t *, uint32_t)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(audit_record_send, int, 0, const uint8_t *, uint32_t)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_record_notify, int, void *, uint64_t)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_record_notify, int, 0, uint64_t)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_notify_complete, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_notify_complete, int, 0)
+
 void
 container_free_key(container_t *container)
 {
@@ -522,13 +528,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->service = c_service_new(container);
-	if (!container->service) {
-		WARN("Could not initialize service subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	container->fifo = c_fifo_new(container, fifo_list);
@@ -840,8 +839,6 @@ container_free(container_t *container)
 		c_run_free(container->run);
 	if (container->time)
 		c_time_free(container->time);
-	if (container->service)
-		c_service_free(container->service);
 	if (container->imei)
 		mem_free0(container->imei);
 	if (container->mac_address)
@@ -1073,18 +1070,6 @@ container_is_privileged(const container_t *container)
 	return container_uuid_is_c0id(container->uuid);
 }
 
-int
-container_suspend(container_t *container)
-{
-	return c_service_send_message(container->service, C_SERVICE_MESSAGE_SUSPEND);
-}
-
-int
-container_resume(container_t *container)
-{
-	return c_service_send_message(container->service, C_SERVICE_MESSAGE_RESUME);
-}
-
 const char *
 container_audit_get_last_ack(const container_t *container)
 {
@@ -1111,27 +1096,6 @@ container_audit_set_processing_ack(const container_t *container, bool processing
 {
 	ASSERT(container);
 	c_audit_set_processing_ack(container->audit, processing_ack);
-}
-
-int
-container_audit_record_notify(const container_t *container, uint64_t remaining_storage)
-{
-	ASSERT(container);
-	return c_service_audit_notify(container->service, remaining_storage);
-}
-
-int
-container_audit_record_send(const container_t *container, const uint8_t *buf, uint32_t buflen)
-{
-	ASSERT(container);
-	return c_service_audit_send_record(container->service, buf, buflen);
-}
-
-int
-container_audit_notify_complete(const container_t *container)
-{
-	ASSERT(container);
-	return c_service_send_message(container->service, C_SERVICE_MESSAGE_AUDIT_COMPLETE);
 }
 
 int
@@ -1174,7 +1138,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 		module->cleanup(c_mod->instance, is_rebooting);
 	}
 
-	c_service_cleanup(container->service);
 	c_run_cleanup(container->run);
 	c_time_cleanup(container->time);
 
@@ -1371,11 +1334,6 @@ container_start_child(void *data)
 
 	if (c_time_start_child(container->time) < 0) {
 		ret = CONTAINER_ERROR_TIME;
-		goto error;
-	}
-
-	if (c_service_start_child(container->service) < 0) {
-		ret = CONTAINER_ERROR_SERVICE;
 		goto error;
 	}
 
@@ -1682,11 +1640,6 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		goto error_pre_exec;
 	}
 
-	if (c_service_start_pre_exec(container->service) < 0) {
-		WARN("c_service_start_pre_exec failed");
-		goto error_pre_exec;
-	}
-
 	// skip setup of start timer and maintain SETUP state if in SETUP mode
 	if (container_get_state(container) != CONTAINER_STATE_SETUP) {
 		container_set_state(container, CONTAINER_STATE_BOOTING);
@@ -1719,6 +1672,12 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		WARN("c_time_start_post_exec failed");
 		goto error;
 	}
+
+	// if no service module is registered diretcly switch to state running
+	container_module_instance_t *c_service =
+		container_module_get_instance_by_name(container, "c_service");
+	if (!c_service)
+		container_set_state(container, CONTAINER_STATE_RUNNING);
 
 	event_remove_io(io);
 	event_io_free(io);
@@ -1900,13 +1859,6 @@ container_start(container_t *container)
 		}
 	}
 
-	if (c_service_start_pre_clone(container->service) < 0) {
-		ret = CONTAINER_ERROR_SERVICE;
-		goto error_pre_clone;
-	}
-
-	// Wifi module?
-
 	/*********************************************************/
 	/* PREPARE CLONE */
 
@@ -2068,15 +2020,6 @@ container_stop(container_t *container)
 			continue;
 
 		if ((ret = module->stop(c_mod->instance)) < 0) {
-			goto error_stop;
-		}
-	}
-
-	if (c_service_stop(container->service) < 0) {
-		ret = CONTAINER_ERROR;
-
-		char *argv[] = { "halt", NULL };
-		if (c_run_exec_process(container->run, false, argv[0], 1, argv, -1)) {
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"request-clean-shutdown",
 					uuid_string(container_get_uuid(container)), 0);

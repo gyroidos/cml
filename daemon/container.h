@@ -967,12 +967,6 @@ bool
 container_get_usb_pin_entry(const container_t *container);
 
 /**
- * Send audit record to container
- */
-int
-container_audit_record_notify(const container_t *container, uint64_t remaining_storage);
-
-/**
  * Returns the last ACK hash that has been received from this container
  */
 const char *
@@ -1004,10 +998,26 @@ int
 container_audit_record_notify(const container_t *container, uint64_t remaining_storage);
 
 /**
+ * Registers the corresponding handler for container_audit_record_notify
+ */
+void
+container_register_audit_record_notify_handler(const char *mod_name,
+					       int (*handler)(void *data,
+							      uint64_t remaining_storage));
+
+/**
  * Send audit event to container
  */
 int
 container_audit_record_send(const container_t *container, const uint8_t *buf, uint32_t buflen);
+
+/**
+ * Registers the corresponding handler for container_audit_record_send
+ */
+void
+container_register_audit_record_send_handler(const char *mod_name,
+					     int (*handler)(void *data, const uint8_t *buf,
+							    uint32_t buflen));
 
 /**
  * Process audit record ACK received from a container
@@ -1017,6 +1027,12 @@ container_audit_process_ack(const container_t *container, const char *ack);
 
 int
 container_audit_notify_complete(const container_t *container);
+
+/**
+ * Registers the corresponding handler for container_audit_notify_complete
+ */
+void
+container_register_audit_notify_complete_handler(const char *mod_name, int (*handler)(void *data));
 
 void
 container_audit_set_loginuid(container_t *container, uint32_t uid);
