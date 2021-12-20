@@ -21,7 +21,17 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "c_service.h"
+/**
+ * @file c_service.c
+ *
+ * Submodule for communicating with the Java Trustme Service located in the
+ * associated container. It is possible to either send commands to the
+ * Trustme Service and wait for asynchronous responses or to receive commands
+ * from the Trustme Service.
+ */
+
+#define MOD_NAME "c_service"
+
 #include "c_service.pb-c.h"
 
 #include "container.h"
@@ -46,13 +56,13 @@
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
-struct c_service {
+typedef struct c_service {
 	container_t *container; // weak reference
 	int sock;
 	int sock_connected; // socket to client which will get events
 	event_io_t *event_io_sock;
 	list_t *event_io_sock_connected_list; // list of clients
-};
+} c_service_t;
 
 static int
 c_service_send_container_cfg_name_proto(c_service_t *service, int sock_client)
@@ -255,7 +265,13 @@ error:
 	return;
 }
 
-c_service_t *
+/**
+ * Creates a new service object and associates it with a container.
+ *
+ * @param container A pointer to the associated container.
+ * return The service object of the associated container as generic void pointer
+ */
+static void *
 c_service_new(container_t *container)
 {
 	ASSERT(container);
@@ -270,9 +286,16 @@ c_service_new(container_t *container)
 	return service;
 }
 
-void
-c_service_cleanup(c_service_t *service)
+/**
+ * Resets the service to a defined state. The function may be called multiple
+ * times.
+ *
+ * @param servicep The generic service object of the associated container.
+ */
+static void
+c_service_cleanup(void *servicep, UNUSED bool is_rebooting)
 {
+	c_service_t *service = servicep;
 	ASSERT(service);
 
 	if (service->sock > 0) {
@@ -302,50 +325,99 @@ c_service_cleanup(c_service_t *service)
 	}
 }
 
-int
-c_service_stop(c_service_t *service)
+/**
+ * Stop hook, which calls the container shutdown routine
+ * @param servicep The generic service object of the associated container.
+ * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ */
+static int
+c_service_stop(void *servicep)
 {
+	c_service_t *service = servicep;
 	ASSERT(service);
 
 	INFO("Send container stop command to TrustmeService");
 
-	return c_service_send_message(service, C_SERVICE_MESSAGE_SHUTDOWN);
+	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
+	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__SHUTDOWN;
+
+	if (service->sock_connected >= 0 &&
+	    protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto) >= 0)
+		return 0;
+
+	char *argv[] = { "halt", NULL };
+	if (container_run(service->container, false, argv[0], 1, argv, -1))
+		return -CONTAINER_ERROR_SERVICE;
+
+	return 0;
 }
 
-void
-c_service_free(c_service_t *service)
+/**
+ * Frees the service object.
+ *
+ * @param servicep The generic service object of the associated container to be freed.
+ */
+static void
+c_service_free(void *servicep)
 {
+	c_service_t *service = servicep;
 	ASSERT(service);
 
-	c_service_cleanup(service);
 	mem_free0(service);
 }
 
-int
-c_service_start_pre_clone(c_service_t *service)
+/**
+ * Pre-clone hook.
+ *
+ * @param servicep The generic service object of the associated container.
+ * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ */
+static int
+c_service_start_pre_clone(void *servicep)
 {
+	c_service_t *service = servicep;
 	ASSERT(service);
 
 	service->sock = sock_unix_create(SOCK_STREAM);
 
-	return service->sock;
+	if (service->sock < 0)
+		return CONTAINER_ERROR_SERVICE;
+
+	return 0;
 }
 
-int
-c_service_start_child(c_service_t *service)
+/**
+ * Start-child hook.
+ *
+ * @param servicep The generic service object of the associated container.
+ * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ */
+static int
+c_service_start_child(void *servicep)
 {
+	c_service_t *service = servicep;
 	ASSERT(service);
 
-	return sock_unix_bind(service->sock, C_SERVICE_SOCKET);
+	if (sock_unix_bind(service->sock, C_SERVICE_SOCKET) < 0)
+		return -CONTAINER_ERROR_SERVICE;
+
+	return 0;
 }
 
-int
-c_service_start_pre_exec(c_service_t *service)
+/**
+ * Pre-exec hook.
+ *
+ * @param servicep The generic service object of the associated container.
+ * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ */
+static int
+c_service_start_pre_exec(void *servicep)
 {
+	c_service_t *service = servicep;
 	ASSERT(service);
 
 	if (sock_unix_listen(service->sock) < 0)
-		return -1;
+		return -CONTAINER_ERROR_SERVICE;
 
 	// Now wait for initial connect from TrustmeService to socket.
 	service->event_io_sock =
@@ -356,25 +428,16 @@ c_service_start_pre_exec(c_service_t *service)
 }
 
 /**
- * Helper function that generates and sends a protobuf message to the Trustme Service.
- */
+ * Send packed audit record to service.
+ * @param service The service object of the associated container.
+ * @param buf packed protobuf message to be send
+ * @param buf_len length of the packed protobuf message
+ * @return 0 on success, -1 otherwise
+*/
 static int
-c_service_send_message_proto(c_service_t *service, unsigned int code)
+c_service_audit_send_record(void *servicep, const uint8_t *buf, uint32_t buf_len)
 {
-	ASSERT(service);
-
-	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
-	message_proto.code = code;
-
-	int ret =
-		protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
-
-	return ret;
-}
-
-int
-c_service_audit_send_record(c_service_t *service, const uint8_t *buf, uint32_t buf_len)
-{
+	c_service_t *service = servicep;
 	ASSERT(service);
 
 	TRACE("Trying to send packed audit record of size %u to container %s", buf_len,
@@ -389,9 +452,18 @@ c_service_audit_send_record(c_service_t *service, const uint8_t *buf, uint32_t b
 	return 0;
 }
 
-int
-c_service_audit_notify(c_service_t *service, uint64_t remaining_storage)
+/**
+ * Notify container about stored audit events.
+ * @param service The service object of the associated container.
+ * @param remaining_audit storage capacity
+ * @return the length of the serialized message (without length prefix)
+*/
+static int
+c_service_audit_notify(void *servicep, uint64_t remaining_storage)
 {
+	c_service_t *service = servicep;
+	ASSERT(service);
+
 	TRACE("Notifying container %s about stored audit events, remaining storage: %" PRIu64,
 	      uuid_string(container_get_uuid(service->container)), remaining_storage);
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
@@ -402,49 +474,51 @@ c_service_audit_notify(c_service_t *service, uint64_t remaining_storage)
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
-int
-c_service_send_message(c_service_t *service, c_service_message_t message)
+static int
+c_service_audit_notify_complete(void *servicep)
 {
-	DEBUG("Sending message");
+	c_service_t *service = servicep;
 	ASSERT(service);
 
 	if (service->sock_connected < 0) {
-		WARN("Trying to send message `%d' to Trustme Service but socket is not connected. "
-		     "We ignore this for now because the Trustme Service is probably still booting...",
-		     message);
-		// TODO in the future, we should maybe buffer 'message' and try to resend
-		// it once the Trustme Service has connected.
-
-		// If we want to shut the container down, return -1
-		// to have it killed immediately, not waiting for the timeout
-		if (message == C_SERVICE_MESSAGE_SHUTDOWN)
-			return -1;
-
+		WARN("Trying to send AUDIT_COMPLETE, but service socket is not connected.");
 		return 0;
 	}
 
-	int ret = -1;
-	switch (message) {
-	case C_SERVICE_MESSAGE_SHUTDOWN:
-		ret = c_service_send_message_proto(service,
-						   CMLD_TO_SERVICE_MESSAGE__CODE__SHUTDOWN);
-		break;
+	TRACE("Notifying container %s that all stored audit events were delivered",
+	      uuid_string(container_get_uuid(service->container)));
 
-	case C_SERVICE_MESSAGE_AUDIT_COMPLETE:
+	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
+	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_COMPLETE;
 
-		TRACE("Notifying container %s that all stored audit events were delivered",
-		      uuid_string(container_get_uuid(service->container)));
-		ret = c_service_send_message_proto(service,
-						   CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_COMPLETE);
-		break;
+	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
+}
 
-	default:
-		WARN("Unknown message `%d' (not sent)", message);
-		return -1;
-	}
+static container_module_t c_service_module = {
+	.name = MOD_NAME,
+	.container_new = c_service_new,
+	.container_free = c_service_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = c_service_start_pre_clone,
+	.start_post_clone = NULL,
+	.start_pre_exec = c_service_start_pre_exec,
+	.start_post_exec = NULL,
+	.start_child = c_service_start_child,
+	.start_pre_exec_child = NULL,
+	.stop = c_service_stop,
+	.cleanup = c_service_cleanup,
+	.join_ns = NULL,
+};
 
-	if (ret < 0)
-		WARN("Failed to send message `%d' to TrustmeService", message);
+static void INIT
+c_service_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_service_module);
 
-	return ret;
+	// register relevant handlers implemented by this module
+	container_register_audit_record_send_handler(MOD_NAME, c_service_audit_send_record);
+	container_register_audit_record_notify_handler(MOD_NAME, c_service_audit_notify);
+	container_register_audit_notify_complete_handler(MOD_NAME, c_service_audit_notify_complete);
 }

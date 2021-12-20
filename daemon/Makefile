@@ -100,6 +100,7 @@ SRC_FILES := main.c \
 	c_net.c \
 	c_user.c \
 	c_vol.c \
+	c_service.c \
 	common/network.c \
 	common/proc.c \
 	common/loopdev.c \
