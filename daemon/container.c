@@ -40,7 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "c_vol.h"
 #include "c_cap.h"
 #include "c_fifo.h"
 #include "c_service.h"
@@ -141,7 +140,6 @@ struct container {
 
 	c_fifo_t *fifo;
 
-	c_vol_t *vol;
 	c_service_t *service;
 	c_run_t *run;
 	c_audit_t *audit;
@@ -405,6 +403,12 @@ CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(is_device_allowed, bool, true, int, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(add_pid_to_cgroups, int, void *, pid_t)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(add_pid_to_cgroups, int, 0, pid_t)
 
+/* Functions usually implemented and registered by c_vol module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_rootdir, char *, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_rootdir, char *, NULL)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_encrypted, bool, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(is_encrypted, bool, false)
+
 void
 container_free_key(container_t *container)
 {
@@ -518,13 +522,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->vol = c_vol_new(container);
-	if (!container->vol) {
-		WARN("Could not initialize volume subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	container->service = c_service_new(container);
@@ -839,8 +836,6 @@ container_free(container_t *container)
 	}
 	list_delete(container->module_instance_list);
 
-	if (container->vol)
-		c_vol_free(container->vol);
 	if (container->run)
 		c_run_free(container->run);
 	if (container->time)
@@ -1078,13 +1073,6 @@ container_is_privileged(const container_t *container)
 	return container_uuid_is_c0id(container->uuid);
 }
 
-bool
-container_is_encrypted(const container_t *container)
-{
-	ASSERT(container);
-	return c_vol_is_encrypted(container->vol);
-}
-
 int
 container_suspend(container_t *container)
 {
@@ -1189,14 +1177,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 	c_service_cleanup(container->service);
 	c_run_cleanup(container->run);
 	c_time_cleanup(container->time);
-
-	/*
-	 * maintain some state concerning mounts and corresponding shifted uid
-	 * states in case of rebooting. We need this, since the volume key for
-	 * encrypted volumes is cleared from cmld's memory after initial use.
-	 */
-	/* cleanup c_vol last, as it removes partitions */
-	c_vol_cleanup(container->vol, is_rebooting);
 
 	container->pid = -1;
 	container->pid_early = -1;
@@ -1389,11 +1369,6 @@ container_start_child(void *data)
 		}
 	}
 
-	if (c_vol_start_child(container->vol) < 0) {
-		ret = CONTAINER_ERROR_VOL;
-		goto error;
-	}
-
 	if (c_time_start_child(container->time) < 0) {
 		ret = CONTAINER_ERROR_TIME;
 		goto error;
@@ -1570,10 +1545,6 @@ container_start_child_early(void *data)
 		goto error;
 	}
 
-	if (c_vol_start_child_early(container->vol) < 0) {
-		ret = CONTAINER_ERROR_VOL;
-		goto error;
-	}
 	void *container_stack = NULL;
 	/* Allocate node stack */
 	if (!(container_stack = alloca(CLONE_STACK_SIZE))) {
@@ -1708,12 +1679,6 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 
 	if (c_time_start_pre_exec(container->time) < 0) {
 		WARN("c_time_start_pre_exec failed");
-		goto error_pre_exec;
-	}
-
-	// during reboot c_vol state is not cleared, thus skip pre_exec here
-	if (c_vol_start_pre_exec(container->vol) < 0) {
-		WARN("c_vol_start_pre_exec failed");
 		goto error_pre_exec;
 	}
 
@@ -2721,12 +2686,6 @@ container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg)
 	if (vnet_cfg->rootns_name)
 		mem_free0(vnet_cfg->rootns_name);
 	mem_free0(vnet_cfg);
-}
-
-char *
-container_get_rootdir(const container_t *container)
-{
-	return c_vol_get_rootdir(container->vol);
 }
 
 container_token_type_t
