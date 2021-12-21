@@ -1058,4 +1058,7 @@ container_get_pnet_cfg_list(const container_t *container);
 list_t *
 container_get_vnet_cfg_list(const container_t *container);
 
+list_t *
+container_get_fifo_list(const container_t *container);
+
 #endif /* CONTAINER_H */
