@@ -40,7 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "c_cap.h"
 #include "c_run.h"
 #include "c_run.h"
 #include "c_audit.h"
@@ -417,6 +416,12 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_creation_time, time_t, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_creation_time, time_t, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_uptime, time_t, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uptime, time_t, 0)
+
+/* Functions usually implemented and registered by c_cap module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_cap_current_process, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(set_cap_current_process, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_cap_systime, int, void *, char *const *)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(exec_cap_systime, int, -1, char *const *)
 
 void
 container_free_key(container_t *container)
@@ -981,13 +986,6 @@ container_oom_protect_service(const container_t *container)
 }
 
 int
-container_set_cap_current_process(const container_t *container)
-{
-	ASSERT(container);
-	return c_cap_set_current_process(container);
-}
-
-int
 container_get_console_sock_cmld(const container_t *container, int session_fd)
 {
 	ASSERT(container);
@@ -1323,11 +1321,6 @@ container_start_child(void *data)
 		if ((ret = module->start_child(c_mod->instance)) < 0) {
 			goto error;
 		}
-	}
-
-	if (c_cap_start_child(container) < 0) {
-		//ret = 1; // FIXME
-		goto error;
 	}
 
 	char *root = (container->type == CONTAINER_TYPE_KVM) ? kvm_root : "/";
@@ -2664,13 +2657,6 @@ container_get_token_is_linked_to_device(const container_t *container)
 {
 	ASSERT(container);
 	return container->token.is_paired_with_device;
-}
-
-int
-container_exec_cap_systime(const container_t *container, char *const *argv)
-{
-	ASSERT(container);
-	return c_cap_exec_cap_systime(container, argv);
 }
 
 bool

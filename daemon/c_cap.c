@@ -21,7 +21,7 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "c_cap.h"
+#define MOD_NAME "c_cap"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -29,6 +29,7 @@
 #include "common/event.h"
 #include "common/proc.h"
 #include "common/file.h"
+#include "container.h"
 
 #include <linux/capability.h>
 #include <sys/prctl.h>
@@ -51,9 +52,38 @@
 		}                                                                                  \
 	} while (0)
 
-int
-c_cap_set_current_process(const container_t *container)
+typedef struct c_cap {
+	container_t *container;
+} c_cap_t;
+
+static void *
+c_cap_new(container_t *container)
 {
+	ASSERT(container);
+
+	c_cap_t *cap = mem_new0(c_cap_t, 1);
+	cap->container = container;
+
+	return cap;
+}
+
+static void
+c_cap_free(void *capp)
+{
+	c_cap_t *cap = capp;
+	ASSERT(cap);
+	mem_free0(cap);
+}
+
+static int
+c_cap_set_current_process(void *capp)
+{
+	c_cap_t *cap = capp;
+	ASSERT(cap);
+
+	// C_CAP_DROP macro needs variable container
+	container_t *container = cap->container;
+
 	///* 1 */ C_CAP_DROP(CAP_DAC_OVERRIDE); /* does NOT work properly */
 	///* 2 */ C_CAP_DROP(CAP_DAC_READ_SEARCH);
 	///* 3 */ C_CAP_DROP(CAP_FOWNER); /* does NOT work */
@@ -110,8 +140,13 @@ capset(cap_user_header_t hdrp, const cap_user_data_t datap)
 }
 
 static int
-c_cap_do_exec_cap_systime(const container_t *container, char *const *argv)
+c_cap_do_exec_cap_systime(c_cap_t *cap, char *const *argv)
 {
+	ASSERT(cap);
+
+	// C_CAP_DROP macro needs variable container
+	container_t *container = cap->container;
+
 	int uid = container_get_uid(container);
 
 	int last_cap = proc_cap_last_cap() < 0 ? CAP_LAST_CAP : proc_cap_last_cap();
@@ -207,11 +242,13 @@ c_cap_exec_cap_systime_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *
 	}
 }
 
-int
-c_cap_exec_cap_systime(const container_t *container, char *const *argv)
+static int
+c_cap_exec_cap_systime(void *capp, char *const *argv)
 {
-	ASSERT(container);
-	IF_FALSE_RETVAL(container_is_privileged(container), -1);
+	c_cap_t *cap = capp;
+	ASSERT(cap);
+
+	IF_FALSE_RETVAL(container_is_privileged(cap->container), -1);
 
 	int i = 1;
 	char *cmd = mem_strdup(argv[0]);
@@ -225,7 +262,7 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 	if (pid == 0) {
 		if (strstr(argv[0], "ntpd")) {
 			char *uid_wrapper_lib = mem_printf("%s/usr/lib/libuid_wrapper.so",
-							   container_get_rootdir(container));
+							   container_get_rootdir(cap->container));
 			if (-1 ==
 			    file_copy("/usr/lib/libuid_wrapper.so.0", uid_wrapper_lib, -1, 512, 0))
 				ERROR("Could not copy LD_PRELOAD lib '%s' for ntpd",
@@ -235,7 +272,7 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 			mem_free0(uid_wrapper_lib);
 		}
 		// join container namespace but maintain root user ns
-		if (ns_join_all(container_get_pid(container), false) < 0) {
+		if (ns_join_all(container_get_pid(cap->container), false) < 0) {
 			ERROR("Could not join namesapces");
 			_exit(EXIT_FAILURE);
 		}
@@ -243,7 +280,7 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 		// double fork for to join pidns
 		int pid_2 = fork();
 		if (pid_2 == 0) {
-			c_cap_do_exec_cap_systime(container, argv);
+			c_cap_do_exec_cap_systime(cap, argv);
 			_exit(EXIT_FAILURE);
 		} else if (pid < 0) {
 			ERROR("double fork faild!");
@@ -267,8 +304,42 @@ c_cap_exec_cap_systime(const container_t *container, char *const *argv)
 	return 0;
 }
 
-int
-c_cap_start_child(const container_t *container)
+static int
+c_cap_start_child(void *capp)
 {
-	return c_cap_set_current_process(container);
+	c_cap_t *cap = capp;
+	ASSERT(cap);
+
+	if (c_cap_set_current_process(cap))
+		return -CONTAINER_ERROR;
+
+	return 0;
+}
+
+static container_module_t c_cap_module = {
+	.name = MOD_NAME,
+	.container_new = c_cap_new,
+	.container_free = c_cap_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = NULL,
+	.start_post_clone = NULL,
+	.start_pre_exec = NULL,
+	.start_post_exec = NULL,
+	.start_child = c_cap_start_child,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = NULL,
+	.join_ns = NULL,
+};
+
+static void INIT
+c_cap_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_cap_module);
+
+	// register relevant handlers implemented by this module
+	container_register_set_cap_current_process_handler(MOD_NAME, c_cap_set_current_process);
+	container_register_exec_cap_systime_handler(MOD_NAME, c_cap_exec_cap_systime);
 }

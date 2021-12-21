@@ -325,6 +325,13 @@ int
 container_set_cap_current_process(const container_t *container);
 
 /**
+ * Registers the corresponding handler for container_set_cap_current_process
+ */
+void
+container_register_set_cap_current_process_handler(const char *mod_name,
+						   int (*handler)(void *data));
+
+/**
  * Gets the last exit_status of the container's init process.
  * Only valid if the container is stopped...
  */
@@ -970,6 +977,13 @@ container_get_token_is_linked_to_device(const container_t *container);
  */
 int
 container_exec_cap_systime(const container_t *container, char *const *argv);
+
+/**
+ * Registers the corresponding handler for container_exec_cap_systime
+ */
+void
+container_register_exec_cap_systime_handler(const char *mod_name,
+					    int (*handler)(void *data, char *const *argv));
 
 /**
  * Returns whether the pin should be requested interactively via a usb pin reader during
