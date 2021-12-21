@@ -25,33 +25,28 @@
 #define _GNU_SOURCE
 #endif
 
-#include "c_audit.h"
+#define MOD_NAME "c_audit"
 
-#include "cmld.h"
-#include "smartcard.h"
 #include "common/mem.h"
 #include "common/uuid.h"
-#include "common/str.h"
 #include "common/macro.h"
-#include "common/dir.h"
 #include "common/file.h"
-#include "common/protobuf.h"
+#include "common/audit.h"
+#include "container.h"
 
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 #include <inttypes.h>
-#include <google/protobuf-c/protobuf-c-text.h>
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
-struct c_audit {
+typedef struct c_audit {
 	const container_t *container;
 	char *last_ack;
 	bool processing_ack;
 	uint32_t loginuid;
-};
+} c_audit_t;
 
 static int
 c_audit_set_contid(c_audit_t *audit)
@@ -81,29 +76,35 @@ out:
 	return ret;
 }
 
-int
-c_audit_start_post_clone_early(c_audit_t *audit)
+static int
+c_audit_start_post_clone_early(void *auditp)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
+
 	// update kernel container id
-	return c_audit_set_contid(audit);
+	if (c_audit_set_contid(audit) < 0)
+		return -CONTAINER_ERROR_AUDIT;
+
+	return 0;
 }
 
-int
-c_audit_start_child_early(c_audit_t *audit)
+static int
+c_audit_start_child_early(void *auditp)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
 
 	// update kernel login uid with internal set loginuid
 	if (audit_kernel_write_loginuid(audit->loginuid)) {
 		ERROR("Could not set loginuid!");
-		return -1;
+		return -CONTAINER_ERROR_AUDIT;
 	}
 	return 0;
 }
 
-c_audit_t *
-c_audit_new(const container_t *container)
+static void *
+c_audit_new(container_t *container)
 {
 	ASSERT(container);
 
@@ -121,16 +122,30 @@ c_audit_new(const container_t *container)
 	return audit;
 }
 
-char *
-c_audit_get_last_ack(const c_audit_t *audit)
+static void
+c_audit_free(void *auditp)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
-	return audit->last_ack;
+
+	if (audit->last_ack)
+		mem_free0(audit->last_ack);
+
+	mem_free0(audit);
 }
 
-void
-c_audit_set_last_ack(c_audit_t *audit, const char *last_ack)
+static const char *
+c_audit_get_last_ack(void *auditp)
 {
+	c_audit_t *audit = auditp;
+	ASSERT(audit);
+	return (const char *)audit->last_ack;
+}
+
+static int
+c_audit_set_last_ack(void *auditp, const char *last_ack)
+{
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
 	ASSERT(last_ack);
 
@@ -138,32 +153,74 @@ c_audit_set_last_ack(c_audit_t *audit, const char *last_ack)
 		mem_free0(audit->last_ack);
 
 	audit->last_ack = mem_strdup(last_ack);
+
+	return 0;
 }
 
-bool
-c_audit_get_processing_ack(const c_audit_t *audit)
+static bool
+c_audit_get_processing_ack(void *auditp)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
 	return audit->processing_ack;
 }
 
-void
-c_audit_set_processing_ack(c_audit_t *audit, bool processing_ack)
+static int
+c_audit_set_processing_ack(void *auditp, bool processing_ack)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
 	audit->processing_ack = processing_ack;
+
+	return 0;
 }
 
-void
-c_audit_set_loginuid(c_audit_t *audit, uint32_t uid)
+static int
+c_audit_set_loginuid(void *auditp, uint32_t uid)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
 	audit->loginuid = uid;
+
+	return 0;
 }
 
 uint32_t
-c_audit_get_loginuid(const c_audit_t *audit)
+c_audit_get_loginuid(void *auditp)
 {
+	c_audit_t *audit = auditp;
 	ASSERT(audit);
 	return audit->loginuid;
+}
+
+static container_module_t c_audit_module = {
+	.name = MOD_NAME,
+	.container_new = c_audit_new,
+	.container_free = c_audit_free,
+	.start_post_clone_early = c_audit_start_post_clone_early,
+	.start_child_early = c_audit_start_child_early,
+	.start_pre_clone = NULL,
+	.start_post_clone = NULL,
+	.start_pre_exec = NULL,
+	.start_post_exec = NULL,
+	.start_child = NULL,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = NULL,
+	.join_ns = NULL,
+};
+
+static void INIT
+c_audit_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_audit_module);
+	//
+	// register relevant handlers implemented by this module
+	container_register_audit_get_last_ack_handler(MOD_NAME, c_audit_get_last_ack);
+	container_register_audit_set_last_ack_handler(MOD_NAME, c_audit_set_last_ack);
+	container_register_audit_get_processing_ack_handler(MOD_NAME, c_audit_get_processing_ack);
+	container_register_audit_set_processing_ack_handler(MOD_NAME, c_audit_set_processing_ack);
+	container_register_audit_get_loginuid_handler(MOD_NAME, c_audit_get_loginuid);
+	container_register_audit_set_loginuid_handler(MOD_NAME, c_audit_set_loginuid);
 }
