@@ -40,8 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "c_run.h"
-#include "c_run.h"
 #include "c_audit.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
@@ -134,7 +132,6 @@ struct container {
 	// Submodules
 	list_t *module_instance_list;
 
-	c_run_t *run;
 	c_audit_t *audit;
 	// Wifi module?
 
@@ -423,6 +420,14 @@ CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(set_cap_current_process, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_cap_systime, int, void *, char *const *)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(exec_cap_systime, int, -1, char *const *)
 
+/* Functions usually implemented and registered by c_run module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(run, int, void *, int, char *, ssize_t, char **, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER6_IMPL(run, int, -1, int, char *, ssize_t, char **, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(write_exec_input, int, void *, char *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(write_exec_input, int, -1, char *, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_console_sock_cmld, int, void *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(get_console_sock_cmld, int, -1, int)
+
 void
 container_free_key(container_t *container)
 {
@@ -538,13 +543,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->run = c_run_new(container);
-	if (!container->run) {
-		WARN("Could not initialize run subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	container->audit = c_audit_new(container);
@@ -831,8 +829,6 @@ container_free(container_t *container)
 	}
 	list_delete(container->module_instance_list);
 
-	if (container->run)
-		c_run_free(container->run);
 	if (container->imei)
 		mem_free0(container->imei);
 	if (container->mac_address)
@@ -985,13 +981,6 @@ container_oom_protect_service(const container_t *container)
 	mem_free0(path);
 }
 
-int
-container_get_console_sock_cmld(const container_t *container, int session_fd)
-{
-	ASSERT(container);
-	return c_run_get_console_sock_cmld(container->run, session_fd);
-}
-
 bool
 container_get_sync_state(const container_t *container)
 {
@@ -1129,8 +1118,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 
 		module->cleanup(c_mod->instance, is_rebooting);
 	}
-
-	c_run_cleanup(container->run);
 
 	container->pid = -1;
 	container->pid_early = -1;
@@ -1667,35 +1654,6 @@ error:
 	event_io_free(io);
 	close(fd);
 	container_kill(container);
-}
-
-int
-container_run(container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv,
-	      int session_fd)
-{
-	ASSERT(container);
-	ASSERT(cmd);
-
-	switch (container_get_state(container)) {
-	case CONTAINER_STATE_BOOTING:
-	case CONTAINER_STATE_RUNNING:
-	case CONTAINER_STATE_SETUP:
-		break;
-	default:
-		WARN("Container %s is not running thus no command could be exec'ed",
-		     container_get_description(container));
-		return -1;
-	}
-
-	TRACE("Forwarding request to c_run subsystem");
-	return c_run_exec_process(container->run, create_pty, cmd, argc, argv, session_fd);
-}
-
-int
-container_write_exec_input(container_t *container, char *exec_input, int session_fd)
-{
-	TRACE("Forwarding write request to c_run subsystem");
-	return c_run_write_exec_input(container->run, exec_input, session_fd);
 }
 
 static void

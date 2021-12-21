@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define MOD_NAME "c_run"
+
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/types.h>
@@ -46,11 +48,15 @@
 #include "common/ns.h"
 #include "hardware.h"
 #include "container.h"
-#include "c_run.h"
 #include "cmld.h"
 
 //TODO define in container.h?
 #define CLONE_STACK_SIZE 8192
+
+typedef struct c_run {
+	container_t *container;
+	list_t *sessions;
+} c_run_t;
 
 typedef struct c_run_session {
 	c_run_t *run;
@@ -67,12 +73,7 @@ typedef struct c_run_session {
 	char **argv;
 } c_run_session_t;
 
-struct c_run {
-	container_t *container;
-	list_t *sessions;
-};
-
-c_run_t *
+static void *
 c_run_new(container_t *container)
 {
 	c_run_t *run = mem_new0(c_run_t, 1);
@@ -81,7 +82,7 @@ c_run_new(container_t *container)
 	return run;
 }
 
-c_run_session_t *
+static c_run_session_t *
 c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv,
 		  int session_fd)
 {
@@ -133,7 +134,7 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 	return session;
 }
 
-void
+static void
 c_run_session_free(c_run_session_t *session)
 {
 	ASSERT(session);
@@ -145,9 +146,10 @@ c_run_session_free(c_run_session_t *session)
 	mem_free0(session);
 }
 
-void
-c_run_free(c_run_t *run)
+static void
+c_run_free(void *runp)
 {
+	c_run_t *run = runp;
 	ASSERT(run);
 	mem_free0(run);
 }
@@ -187,10 +189,12 @@ c_run_session_cleanup(c_run_session_t *session)
 	}
 }
 
-void
-c_run_cleanup(c_run_t *run)
+static void
+c_run_cleanup(void *runp, UNUSED bool is_rebooting)
 {
+	c_run_t *run = runp;
 	ASSERT(run);
+
 	TRACE("Called c_run cleanup");
 	for (list_t *l = run->sessions; l; l = l->next) {
 		c_run_session_t *session = l->data;
@@ -228,20 +232,24 @@ c_run_get_session_by_fd(const c_run_t *run, int session_fd)
 	return NULL;
 }
 
-int
-c_run_get_console_sock_cmld(const c_run_t *run, int session_fd)
+static int
+c_run_get_console_sock_cmld(void *runp, int session_fd)
 {
+	c_run_t *run = runp;
 	ASSERT(run);
+
 	c_run_session_t *session = c_run_get_session_by_fd(run, session_fd);
 	IF_NULL_RETVAL(session, -1);
 
 	return session->console_sock_cmld;
 }
 
-int
-c_run_write_exec_input(const c_run_t *run, char *exec_input, int session_fd)
+static int
+c_run_write_exec_input(void *runp, char *exec_input, int session_fd)
 {
+	c_run_t *run = runp;
 	ASSERT(run);
+
 	c_run_session_t *session = c_run_get_session_by_fd(run, session_fd);
 	IF_NULL_RETVAL(session, -1);
 
@@ -254,7 +262,7 @@ c_run_write_exec_input(const c_run_t *run, char *exec_input, int session_fd)
 	}
 }
 
-void
+static void
 c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 {
 	c_run_session_t *session = data;
@@ -576,12 +584,25 @@ error:
 	return -1;
 }
 
-int
-c_run_exec_process(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv,
-		   int session_fd)
+static int
+c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **argv, int session_fd)
 {
-	TRACE("Trying to excute command \"%s\" inside container", cmd);
+	c_run_t *run = runp;
+	ASSERT(run);
+
+	switch (container_get_state(run->container)) {
+	case CONTAINER_STATE_BOOTING:
+	case CONTAINER_STATE_RUNNING:
+	case CONTAINER_STATE_SETUP:
+		break;
+	default:
+		WARN("Container %s is not running thus no command could be exec'ed",
+		     container_get_description(run->container));
+		return -1;
+	}
+
 	ASSERT(cmd);
+	TRACE("Trying to excute command \"%s\" inside container", cmd);
 
 	c_run_session_t *session = c_run_session_new(run, create_pty, cmd, argc, argv, session_fd);
 	IF_NULL_RETVAL(session, -1);
@@ -602,4 +623,33 @@ error:
 	c_run_session_cleanup(session);
 	c_run_session_free(session);
 	return -1;
+}
+
+static container_module_t c_run_module = {
+	.name = MOD_NAME,
+	.container_new = c_run_new,
+	.container_free = c_run_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = NULL,
+	.start_post_clone = NULL,
+	.start_pre_exec = NULL,
+	.start_post_exec = NULL,
+	.start_child = NULL,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = c_run_cleanup,
+	.join_ns = NULL,
+};
+
+static void INIT
+c_run_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_run_module);
+
+	// register relevant handlers implemented by this module
+	container_register_run_handler(MOD_NAME, c_run_exec_process);
+	container_register_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
+	container_register_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
 }
