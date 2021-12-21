@@ -158,7 +158,7 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 		INFO("Got ACK from Container %s",
 		     uuid_string(container_get_uuid(service->container)));
 
-		if (0 > container_audit_process_ack(service->container, message->audit_ack)) {
+		if (0 > audit_process_ack(service->container, message->audit_ack)) {
 			ERROR("Failed to process audit ACK from container %s",
 			      uuid_string(container_get_uuid(service->container)));
 		}

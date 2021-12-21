@@ -40,7 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "c_audit.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
@@ -131,9 +130,6 @@ struct container {
 
 	// Submodules
 	list_t *module_instance_list;
-
-	c_audit_t *audit;
-	// Wifi module?
 
 	char *imei;
 	char *mac_address;
@@ -428,6 +424,20 @@ CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(write_exec_input, int, -1, char *, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_console_sock_cmld, int, void *, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(get_console_sock_cmld, int, -1, int)
 
+/* Functions usually implemented and registered by c_audit module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_get_last_ack, const char *, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_get_last_ack, const char *, "")
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_set_last_ack, int, void *, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_set_last_ack, int, 0, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_get_processing_ack, bool, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_get_processing_ack, bool, false)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_set_processing_ack, int, void *, bool)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_set_processing_ack, int, 0, bool)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_get_loginuid, uint32_t, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_get_loginuid, uint32_t, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_set_loginuid, int, void *, uint32_t)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_set_loginuid, int, 0, uint32_t)
+
 void
 container_free_key(container_t *container)
 {
@@ -543,13 +553,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->audit = c_audit_new(container);
-	if (!container->audit) {
-		WARN("Could not initialize audit subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	// construct an argv buffer for execve
@@ -1051,54 +1054,6 @@ container_is_privileged(const container_t *container)
 	return container_uuid_is_c0id(container->uuid);
 }
 
-const char *
-container_audit_get_last_ack(const container_t *container)
-{
-	ASSERT(container);
-	return c_audit_get_last_ack(container->audit);
-}
-
-void
-container_audit_set_last_ack(const container_t *container, const char *last_ack)
-{
-	ASSERT(container);
-	c_audit_set_last_ack(container->audit, last_ack);
-}
-
-int
-container_audit_get_processing_ack(const container_t *container)
-{
-	ASSERT(container);
-	return c_audit_get_processing_ack(container->audit);
-}
-
-void
-container_audit_set_processing_ack(const container_t *container, bool processing_ack)
-{
-	ASSERT(container);
-	c_audit_set_processing_ack(container->audit, processing_ack);
-}
-
-int
-container_audit_process_ack(const container_t *container, const char *ack)
-{
-	return audit_process_ack(container, ack);
-}
-
-void
-container_audit_set_loginuid(container_t *container, uint32_t uid)
-{
-	ASSERT(container);
-	c_audit_set_loginuid(container->audit, uid);
-}
-
-uint32_t
-container_audit_get_loginuid(const container_t *container)
-{
-	ASSERT(container);
-	return c_audit_get_loginuid(container->audit);
-}
-
 /**
  * This function should be called only on a (physically) not-running container and
  * should make sure that the container and all its submodules are in the same
@@ -1459,11 +1414,6 @@ container_start_child_early(void *data)
 		if ((ret = module->start_child_early(c_mod->instance)) < 0) {
 			goto error;
 		}
-	}
-
-	if (c_audit_start_child_early(container->audit) < 0) {
-		ret = CONTAINER_ERROR_AUDIT;
-		goto error;
 	}
 
 	void *container_stack = NULL;
@@ -1843,10 +1793,6 @@ container_start(container_t *container)
 		if ((ret = module->start_post_clone_early(c_mod->instance)) < 0) {
 			goto error_post_clone;
 		}
-	}
-
-	if (c_audit_start_post_clone_early(container->audit)) {
-		ERROR("c_audit_start_post_clone");
 	}
 
 	return 0;
