@@ -708,8 +708,20 @@ container_get_dev_assign_list(const container_t *container);
 time_t
 container_get_uptime(const container_t *container);
 
+/**
+ * Registers the corresponding handler for container_get_uptime
+ */
+void
+container_register_get_uptime_handler(const char *mod_name, time_t (*handler)(void *data));
+
 time_t
 container_get_creation_time(const container_t *container);
+
+/**
+ * Registers the corresponding handler for container_get_creation_time
+ */
+void
+container_register_get_creation_time_handler(const char *mod_name, time_t (*handler)(void *data));
 
 void
 container_set_setup_mode(container_t *container, bool setup);

@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,12 +21,31 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+/*
+ * @file c_time.c
+ *
+ * This module implements the new time namespace available since Linux 5.6.
+ * It resest the available clocks for boottime and monotonic by setting the
+ * corresponding offsets to the negated current system values.
+ * Thus, for instance uptime will show the time since a container was started
+ * and not the overall system uptime.
+ *
+ * Time namespace could not be activated by clone directly but only by a call
+ * to unshare. After unshare the calling process is not directly part of the
+ * new time namespace, to be allowed to set the new clock offsets. All
+ * children will be placed in the new time namespace. To put the later init
+ * process of a container also to the new time namespace, a call to setns
+ * using /proc/self/time_for_children does the trick.
+ */
+
 #define _GNU_SOURCE
-#include "c_time.h"
+
+#define MOD_NAME "c_time"
 
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"
+#include "container.h"
 
 #include <sched.h>
 #include <sys/types.h>
@@ -39,12 +58,12 @@
 #define CLONE_NEWTIME 0x00000080
 #endif
 
-struct c_time {
+typedef struct c_time {
 	const container_t *container;
 	bool ns_time;
 	time_t time_started;
 	time_t time_created;
-};
+} c_time_t;
 
 /*
  * if we create the container for the first time, we store its creation time
@@ -83,7 +102,7 @@ c_time_get_clock_secs(clockid_t clock)
 	return ts.tv_sec;
 }
 
-c_time_t *
+static void *
 c_time_new(container_t *container)
 {
 	c_time_t *time = mem_new0(c_time_t, 1);
@@ -94,16 +113,18 @@ c_time_new(container_t *container)
 	return time;
 }
 
-void
-c_time_free(c_time_t *time)
+static void
+c_time_free(void *timep)
 {
+	c_time_t *time = timep;
 	ASSERT(time);
 	mem_free0(time);
 }
 
-int
-c_time_start_child(const c_time_t *time)
+static int
+c_time_start_child(void *timep)
 {
+	c_time_t *time = timep;
 	ASSERT(time);
 
 	/* check if timens is supported else do nothing */
@@ -112,7 +133,7 @@ c_time_start_child(const c_time_t *time)
 	/* since timens can not be set with clone directly do it now in the child */
 	if (unshare(CLONE_NEWTIME) == -1) {
 		ERROR_ERRNO("Could not unshare time namespace!");
-		return -1;
+		return -CONTAINER_ERROR_TIME;
 	}
 
 	INFO("Successfully created new time namespace for container %s",
@@ -120,9 +141,10 @@ c_time_start_child(const c_time_t *time)
 	return 0;
 }
 
-int
-c_time_start_pre_exec(const c_time_t *time)
+static int
+c_time_start_pre_exec(void *timep)
 {
+	c_time_t *time = timep;
 	ASSERT(time);
 
 	/* check if timens is supported else do nothing */
@@ -148,20 +170,22 @@ c_time_start_pre_exec(const c_time_t *time)
 	return 0;
 error:
 	mem_free0(path_timens_offsets);
-	return -1;
+	return -CONTAINER_ERROR_TIME;
 }
 
-int
-c_time_start_post_exec(c_time_t *_time)
+static int
+c_time_start_post_exec(void *timep)
 {
+	c_time_t *_time = timep;
 	ASSERT(_time);
 	_time->time_started = time(NULL);
 	return 0;
 }
 
-int
-c_time_start_pre_exec_child(const c_time_t *time)
+static int
+c_time_start_pre_exec_child(void *timep)
 {
+	c_time_t *time = timep;
 	ASSERT(time);
 
 	/* check if timens is supported else do nothing */
@@ -170,7 +194,7 @@ c_time_start_pre_exec_child(const c_time_t *time)
 	int nsfd = -1;
 	if ((nsfd = open("/proc/self/ns/time_for_children", O_RDONLY)) < 0) {
 		ERROR_ERRNO("Could not open namespace file for timens");
-		return -1;
+		return -CONTAINER_ERROR_TIME;
 	}
 	if (setns(nsfd, 0) == -1) {
 		ERROR_ERRNO("Could not join time namespace");
@@ -182,21 +206,23 @@ c_time_start_pre_exec_child(const c_time_t *time)
 	return 0;
 error:
 	close(nsfd);
-	return -1;
+	return -CONTAINER_ERROR_TIME;
 }
 
-time_t
-c_time_get_creation_time(const c_time_t *time)
+static time_t
+c_time_get_creation_time(void *timep)
 {
+	c_time_t *time = timep;
 	ASSERT(time);
 	if (time->time_created < 0)
 		return 0;
 	return time->time_created;
 }
 
-time_t
-c_time_get_uptime(const c_time_t *_time)
+static time_t
+c_time_get_uptime(void *timep)
 {
+	c_time_t *_time = timep;
 	ASSERT(_time);
 	if (_time->time_started < 0)
 		return 0;
@@ -205,9 +231,38 @@ c_time_get_uptime(const c_time_t *_time)
 	return (uptime < 0) ? 0 : uptime;
 }
 
-void
-c_time_cleanup(c_time_t *time)
+static void
+c_time_cleanup(void *timep, UNUSED bool rebooting)
 {
+	c_time_t *time = timep;
 	ASSERT(time);
 	time->time_started = -1;
+}
+
+static container_module_t c_time_module = {
+	.name = MOD_NAME,
+	.container_new = c_time_new,
+	.container_free = c_time_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = NULL,
+	.start_post_clone = NULL,
+	.start_pre_exec = c_time_start_pre_exec,
+	.start_post_exec = c_time_start_post_exec,
+	.start_child = c_time_start_child,
+	.start_pre_exec_child = c_time_start_pre_exec_child,
+	.stop = NULL,
+	.cleanup = c_time_cleanup,
+	.join_ns = NULL,
+};
+
+static void INIT
+c_time_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_time_module);
+
+	// register relevant handlers implemented by this module
+	container_register_get_creation_time_handler(MOD_NAME, c_time_get_creation_time);
+	container_register_get_uptime_handler(MOD_NAME, c_time_get_uptime);
 }
