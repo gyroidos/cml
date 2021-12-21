@@ -95,29 +95,31 @@ SRC_FILES := main.c \
 	smartcard.c \
 	tss.c \
 	common/sock.c \
-	c_cgroups.c \
-	c_service.c \
-	c_net.c \
-	c_user.c \
-	c_vol.c \
-	c_service.c \
 	common/network.c \
 	common/proc.c \
 	common/loopdev.c \
 	ksm.c \
-	c_cap.c \
 	common/cryptfs.c \
 	common/reboot.c \
-	c_run.c \
-	c_fifo.c \
-	c_time.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
 	input.c \
 	common/audit.c \
-	audit.c \
-	c_audit.c
+	audit.c
+
+# module order is crucial
+SRC_CMODULES := \
+	c_user.c \
+	c_net.c \
+	c_cgroups.c \
+	c_vol.c \
+	c_service.c \
+	c_run.c \
+	c_fifo.c \
+	c_time.c \
+	c_audit.c \
+	c_cap.c
 
 ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
@@ -154,8 +156,8 @@ $(PROTO_SRC): protobuf
 libcommon:
 	$(MAKE) -C common libcommon
 
-cmld: libcommon $(PROTO_SRC) $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) $(LDLIBS) -o cmld
+cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
 
 
 .PHONY: clean
