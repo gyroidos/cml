@@ -29,6 +29,7 @@
 #ifndef NS_H
 #define NS_H
 
+#include <stdbool.h>
 #include <unistd.h>
 
 /**
