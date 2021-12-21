@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -42,7 +42,6 @@
 #include "cmld.h"
 #include "c_cap.h"
 #include "c_fifo.h"
-#include "c_time.h"
 #include "c_run.h"
 #include "c_run.h"
 #include "c_audit.h"
@@ -141,7 +140,6 @@ struct container {
 
 	c_run_t *run;
 	c_audit_t *audit;
-	c_time_t *time;
 	// Wifi module?
 
 	char *imei;
@@ -415,6 +413,12 @@ CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_record_notify, int, 0, uint64_t)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_notify_complete, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_notify_complete, int, 0)
 
+/* Functions usually implemented and registered by c_time module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_creation_time, time_t, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_creation_time, time_t, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_uptime, time_t, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uptime, time_t, 0)
+
 void
 container_free_key(container_t *container)
 {
@@ -540,13 +544,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->run = c_run_new(container);
 	if (!container->run) {
 		WARN("Could not initialize run subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
-	}
-
-	container->time = c_time_new(container);
-	if (!container->time) {
-		WARN("Could not initialize time subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
@@ -837,8 +834,6 @@ container_free(container_t *container)
 
 	if (container->run)
 		c_run_free(container->run);
-	if (container->time)
-		c_time_free(container->time);
 	if (container->imei)
 		mem_free0(container->imei);
 	if (container->mac_address)
@@ -1139,7 +1134,6 @@ container_cleanup(container_t *container, bool is_rebooting)
 	}
 
 	c_run_cleanup(container->run);
-	c_time_cleanup(container->time);
 
 	container->pid = -1;
 	container->pid_early = -1;
@@ -1332,11 +1326,6 @@ container_start_child(void *data)
 		}
 	}
 
-	if (c_time_start_child(container->time) < 0) {
-		ret = CONTAINER_ERROR_TIME;
-		goto error;
-	}
-
 	if (c_cap_start_child(container) < 0) {
 		//ret = 1; // FIXME
 		goto error;
@@ -1385,11 +1374,6 @@ container_start_child(void *data)
 		if ((ret = module->start_pre_exec_child(c_mod->instance)) < 0) {
 			goto error;
 		}
-	}
-
-	if (c_time_start_pre_exec_child(container->time) < 0) {
-		ret = CONTAINER_ERROR_TIME;
-		goto error;
 	}
 
 	DEBUG("Will start %s after closing filedescriptors of %s", guestos_get_init(container->os),
@@ -1635,11 +1619,6 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 		IF_TRUE_GOTO_WARN((module->start_pre_exec(c_mod->instance) < 0), error_pre_exec);
 	}
 
-	if (c_time_start_pre_exec(container->time) < 0) {
-		WARN("c_time_start_pre_exec failed");
-		goto error_pre_exec;
-	}
-
 	// skip setup of start timer and maintain SETUP state if in SETUP mode
 	if (container_get_state(container) != CONTAINER_STATE_SETUP) {
 		container_set_state(container, CONTAINER_STATE_BOOTING);
@@ -1666,11 +1645,6 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 			continue;
 
 		IF_TRUE_GOTO_WARN(module->start_post_exec(c_mod->instance) < 0, error);
-	}
-
-	if (c_time_start_post_exec(container->time) < 0) {
-		WARN("c_time_start_post_exec failed");
-		goto error;
 	}
 
 	// if no service module is registered diretcly switch to state running
@@ -2463,20 +2437,6 @@ container_has_userns(const container_t *container)
 {
 	ASSERT(container);
 	return container->ns_usr;
-}
-
-time_t
-container_get_uptime(const container_t *container)
-{
-	ASSERT(container);
-	return c_time_get_uptime(container->time);
-}
-
-time_t
-container_get_creation_time(const container_t *container)
-{
-	ASSERT(container);
-	return c_time_get_creation_time(container->time);
 }
 
 int
