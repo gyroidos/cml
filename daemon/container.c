@@ -41,7 +41,6 @@
 
 #include "cmld.h"
 #include "c_cap.h"
-#include "c_fifo.h"
 #include "c_run.h"
 #include "c_run.h"
 #include "c_audit.h"
@@ -136,8 +135,6 @@ struct container {
 	// Submodules
 	list_t *module_instance_list;
 
-	c_fifo_t *fifo;
-
 	c_run_t *run;
 	c_audit_t *audit;
 	// Wifi module?
@@ -169,6 +166,8 @@ struct container {
 	list_t *vnet_cfg_list;
 	// network interfaces from container config
 	list_t *pnet_cfg_list;
+
+	list_t *fifo_list;
 };
 
 struct container_callback {
@@ -515,6 +514,8 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	}
 	container->pnet_cfg_list = pnet_cfg_list;
 
+	container->fifo_list = fifo_list;
+
 	/* Create submodules */
 	for (list_t *l = container_module_list; l; l = l->next) {
 		container_module_t *module = l->data;
@@ -532,13 +533,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
 			     container->name, uuid_string(container->uuid));
 		}
-	}
-
-	container->fifo = c_fifo_new(container, fifo_list);
-	if (!container->fifo) {
-		WARN("Could not initialize fifo subsystem for container %s (UUID: %s)",
-		     container->name, uuid_string(container->uuid));
-		goto error;
 	}
 
 	container->run = c_run_new(container);
@@ -862,6 +856,11 @@ container_free(container_t *container)
 		container_pnet_cfg_free(pnet_cfg);
 	}
 	list_delete(container->pnet_cfg_list);
+
+	for (list_t *l = container->fifo_list; l; l = l->next) {
+		mem_free0(l->data);
+	}
+	list_delete(container->fifo_list);
 
 	if (container->token.uuid)
 		uuid_free(container->token.uuid);
@@ -1769,11 +1768,6 @@ container_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, voi
 		if ((ret = module->start_post_clone(c_mod->instance)) < 0) {
 			goto error_post_clone;
 		}
-	}
-
-	if (c_fifo_start_post_clone(container->fifo)) {
-		ret = CONTAINER_ERROR_FIFO;
-		goto error_post_clone;
 	}
 
 	/*********************************************************/
@@ -2698,4 +2692,11 @@ container_get_vnet_cfg_list(const container_t *container)
 {
 	ASSERT(container);
 	return container->vnet_cfg_list;
+}
+
+list_t *
+container_get_fifo_list(const container_t *container)
+{
+	ASSERT(container);
+	return container->fifo_list;
 }

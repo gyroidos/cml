@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2021 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -22,7 +22,9 @@
  */
 
 #define _GNU_SOURCE
-#include "c_fifo.h"
+
+#define MOD_NAME "c_fifo"
+
 #include "cmld.h"
 #include "container.h"
 #include "audit.h"
@@ -43,22 +45,30 @@
 
 #define FIFO_PATH "/dev/fifos"
 
-struct c_fifo {
+typedef struct c_fifo {
 	container_t *container;
 	list_t *fifo_list;
-};
+} c_fifo_t;
 
-c_fifo_t *
-c_fifo_new(container_t *container, list_t *fifo_list)
+void *
+c_fifo_new(container_t *container)
 {
 	ASSERT(container);
 
 	c_fifo_t *fifo = mem_new0(c_fifo_t, 1);
 
 	fifo->container = container;
-	fifo->fifo_list = fifo_list;
+	fifo->fifo_list = container_get_fifo_list(fifo->container);
 
 	return fifo;
+}
+
+static void
+c_fifo_free(void *fifop)
+{
+	c_fifo_t *fifo = fifop;
+	ASSERT(fifo);
+	mem_free0(fifo);
 }
 
 static int
@@ -192,9 +202,12 @@ c_fifo_loop(char *fifo_path_c0, char *fifo_path_container)
 	}
 }
 
-int
-c_fifo_start_post_clone(c_fifo_t *fifo)
+static int
+c_fifo_start_post_clone(void *fifop)
 {
+	c_fifo_t *fifo = fifop;
+	ASSERT(fifo);
+
 	int c0_pid = -1, target_pid = -1;
 	container_t *c0 = cmld_containers_get_c0();
 
@@ -204,14 +217,14 @@ c_fifo_start_post_clone(c_fifo_t *fifo)
 
 		if (-1 == c_fifo_create_fifos(fifo, c0)) {
 			ERROR("Failed to prepare container FIFOs in c0");
-			return -1;
+			return -CONTAINER_ERROR_FIFO;
 		}
 
 		DEBUG("Creating FIFOs in target container, ns_pid=%d", target_pid);
 
 		if (-1 == c_fifo_create_fifos(fifo, fifo->container)) {
 			ERROR("Failed to prepare container FIFOs in target container");
-			return -1;
+			return -CONTAINER_ERROR_FIFO;
 		}
 
 		//fork FIFO forwarding child
@@ -222,7 +235,7 @@ c_fifo_start_post_clone(c_fifo_t *fifo)
 
 			if (-1 == pid) {
 				ERROR("Failed to clone forwarding child");
-				return -1;
+				return -CONTAINER_ERROR_FIFO;
 			} else if (pid == 0) {
 				DEBUG("Preparing forwarding for FIFO \'%s\'", current_fifo);
 
@@ -251,4 +264,28 @@ c_fifo_start_post_clone(c_fifo_t *fifo)
 	}
 
 	return 0;
+}
+
+static container_module_t c_fifo_module = {
+	.name = MOD_NAME,
+	.container_new = c_fifo_new,
+	.container_free = c_fifo_free,
+	.start_post_clone_early = NULL,
+	.start_child_early = NULL,
+	.start_pre_clone = NULL,
+	.start_post_clone = c_fifo_start_post_clone,
+	.start_pre_exec = NULL,
+	.start_post_exec = NULL,
+	.start_child = NULL,
+	.start_pre_exec_child = NULL,
+	.stop = NULL,
+	.cleanup = NULL, // FIXME provide proper cleanup handling
+	.join_ns = NULL,
+};
+
+static void INIT
+c_fifo_init(void)
+{
+	// register this module in container.c
+	container_register_module(&c_fifo_module);
 }
