@@ -170,46 +170,6 @@ cmld_container_get_by_uuid(const uuid_t *uuid)
 	return NULL;
 }
 
-container_t *
-cmld_container_get_by_token_serial(const char *serial)
-{
-	IF_NULL_RETVAL_TRACE(serial, NULL);
-
-	TRACE("Looking for container with token serial %s", serial);
-
-	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(l->data))
-			continue;
-
-		char *s = container_get_usbtoken_serial(l->data);
-
-		if (s && !strcmp(s, serial))
-			return l->data;
-	}
-
-	return NULL;
-}
-
-container_t *
-cmld_container_get_by_devpath(const char *devpath)
-{
-	ASSERT(devpath);
-
-	TRACE("Looking for container with token devpath %s", devpath);
-
-	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(l->data))
-			continue;
-
-		char *p = container_get_usbtoken_devpath(l->data);
-
-		if (p && !strcmp(p, devpath))
-			return l->data;
-	}
-
-	return NULL;
-}
-
 #define UID_MAX 65535
 container_t *
 cmld_container_get_by_uid(int uid)
