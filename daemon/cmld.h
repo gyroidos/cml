@@ -340,4 +340,7 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 const char *
 cmld_get_containers_dir(void);
 
+const char *
+cmld_get_wrapped_keys_dir(void);
+
 #endif /* CMLD_H */

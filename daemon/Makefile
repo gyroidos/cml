@@ -92,7 +92,7 @@ SRC_FILES := main.c \
 	common/protobuf.c \
 	download.c \
 	crypto.c \
-	smartcard.c \
+	scd.c \
 	tss.c \
 	common/sock.c \
 	common/network.c \
@@ -110,6 +110,7 @@ SRC_FILES := main.c \
 
 # module order is crucial
 SRC_CMODULES := \
+	c_smartcard.c \
 	c_user.c \
 	c_net.c \
 	c_cgroups.c \
