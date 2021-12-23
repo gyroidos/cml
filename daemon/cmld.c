@@ -87,8 +87,6 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
-#define CMLD_USB_TOKEN_ATTACH_TIMEOUT 500
-
 /*
  * dummy key used for unecnrypted c0 and for reboots where the real key
  * is already in kernel
@@ -338,37 +336,6 @@ cmld_set_device_provisioned(void)
 	return 0;
 }
 
-/**
- * Requests the SCD to initialize a token associated to a container and queries whether that
- * token has been provisioned with a platform-bound authentication code.
- */
-static int
-cmld_container_token_init(container_t *container)
-{
-	ASSERT(container);
-
-	// container is configured to not use a token at all
-	if (CONTAINER_TOKEN_TYPE_NONE == container_get_token_type(container)) {
-		container_set_token_is_init(container, false);
-		DEBUG("Container %s is configured to use no token to hold encryption keys",
-		      uuid_string(container_get_uuid(container)));
-		return 0;
-	}
-
-	DEBUG("Invoking container_scd_token_add_block() for container %s",
-	      container_get_name(container));
-	if (container_scd_token_add_block(container) != 0) {
-		ERROR("Requesting SCD to init token failed");
-		return -1;
-	}
-
-	DEBUG("Initialized token for container %s", container_get_name(container));
-
-	container_update_token_state(container);
-
-	return 0;
-}
-
 int
 cmld_reload_container(const uuid_t *uuid, const char *path)
 {
@@ -391,14 +358,6 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 		DEBUG("Removing outdated created container %s for config update",
 		      container_get_name(c));
 
-		if (token_type == CONTAINER_TOKEN_TYPE_USB) {
-			if (container_scd_token_remove_block(c)) {
-				ERROR("Reloading container %s failed, cannot remove token",
-				      uuid_string(uuid_tmp));
-				goto cleanup;
-			}
-		}
-
 		cmld_containers_list = list_remove(cmld_containers_list, c);
 		container_free(c);
 	}
@@ -409,7 +368,6 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 	}
 
 	DEBUG("Loaded config for container %s", container_get_name(c));
-	cmld_container_token_init(c);
 	cmld_containers_list = list_append(cmld_containers_list, c);
 
 	container_set_sync_state(c, true);
@@ -1173,18 +1131,10 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 		container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
 		cmld_containers_list = list_append(cmld_containers_list, c);
-		if (0 != cmld_container_token_init(c)) {
-			audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
-					"container-create-token-uninit",
-					uuid_string(container_get_uuid(c)), 0);
-			WARN("Could not initialize token associated with container %s (uuid=%s).",
-			     container_get_name(c), uuid_string(container_get_uuid(c)));
-		} else {
-			audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
-					"container-create", uuid_string(container_get_uuid(c)), 0);
-			INFO("Created container %s (uuid=%s).", container_get_name(c),
-			     uuid_string(container_get_uuid(c)));
-		}
+		audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
+				"container-create", uuid_string(container_get_uuid(c)), 0);
+		INFO("Created container %s (uuid=%s).", container_get_name(c),
+		     uuid_string(container_get_uuid(c)));
 	} else {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT, "container-create", NULL, 0);
 		WARN("Could not create new container object from config");
@@ -1204,22 +1154,6 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	/* unregister observer */
 	if (cb)
 		container_unregister_observer(container, cb);
-
-	if (container_get_token_is_init(container)) {
-		container_scd_token_remove_block(container);
-	}
-
-	/* remove keyfile */
-	if (0 != container_remove_keyfile(container)) {
-		ERROR("Failed to remove keyfile. Continuing to remove container anyway.");
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"container-remove-keyfile",
-				uuid_string(container_get_uuid(container)), 0);
-	} else {
-		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-				"container-remove-keyfile",
-				uuid_string(container_get_uuid(container)), 0);
-	}
 
 	/* destroy the container */
 	if (container_destroy(container) < 0) {
@@ -1410,55 +1344,6 @@ cmld_is_shiftfs_supported(void)
 	bool ret = strstr(fses, "shiftfs") ? true : false;
 	mem_free0(fses);
 	return ret;
-}
-
-static void
-cmld_token_attach_cb(event_timer_t *timer, void *data)
-{
-	ASSERT(data);
-	container_t *c = data;
-
-	// initialize the USB token
-	int block_return = cmld_container_token_init(c);
-
-	if (block_return) {
-		ERROR("Failed to initialize token(might already be initialized)");
-	}
-
-	event_remove_timer(timer);
-	event_timer_free(timer);
-}
-
-int
-cmld_token_attach(container_t *container)
-{
-	ASSERT(container);
-	TRACE("Registering callback to handle attachment of token with serial %s",
-	      container_get_usbtoken_serial(container));
-
-	// give usb device some time to register
-	event_timer_t *e =
-		event_timer_new(CMLD_USB_TOKEN_ATTACH_TIMEOUT, 1, cmld_token_attach_cb, container);
-	event_add_timer(e);
-
-	return 0;
-}
-
-int
-cmld_token_detach(container_t *container)
-{
-	ASSERT(container);
-
-	DEBUG("USB token has been detached, stopping Container %s", container_get_name(container));
-	if (cmld_container_stop(container)) {
-		ERROR("Could not stop container after token detachment.");
-	}
-
-	if (container_scd_token_remove_block(container)) {
-		ERROR("Failed to notify scd about token detachment");
-	}
-
-	return 0;
 }
 
 void

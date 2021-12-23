@@ -67,6 +67,8 @@
 
 #define TOKEN_IS_PAIRED_FILE_NAME "token_is_paired"
 
+#define USB_TOKEN_ATTACH_TIMEOUT 500
+
 typedef struct c_smartcard {
 	int sock;
 	const char *path;
@@ -807,8 +809,8 @@ c_smartcard_change_pin(void *smartcardp, int resp_fd, const char *passwd, const 
 	ret = c_smartcard_get_pairing_secret(smartcard, pair_sec, sizeof(pair_sec));
 	if (ret < 0) {
 		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, TOKEN_MGMT,
-				"read-pairing-secret", uuid_string(container_get_uuid(smartcard->container)),
-				0);
+				"read-pairing-secret",
+				uuid_string(container_get_uuid(smartcard->container)), 0);
 		ERROR("Could not retrieve pairing secret, ret code : %d", ret);
 		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
 		mem_free0(cbdata);
@@ -852,9 +854,8 @@ c_smartcard_change_pin(void *smartcardp, int resp_fd, const char *passwd, const 
 }
 
 static int
-c_smartcard_update_token_state(void *smartcardp)
+c_smartcard_update_token_state(c_smartcard_t *smartcard)
 {
-	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
 	/* TODO: query SCD whether a token has been initialized.
@@ -876,9 +877,8 @@ c_smartcard_update_token_state(void *smartcardp)
  * therefore, we use a blocking method to query the scd to initialize a token.
  */
 static int
-c_smartcard_scd_token_add_block(void *smartcardp)
+c_smartcard_scd_token_add_block(c_smartcard_t *smartcard)
 {
-	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 	container_t *container = smartcard->container;
 
@@ -934,9 +934,8 @@ err:
 }
 
 static int
-c_smartcard_scd_token_remove_block(void *smartcardp)
+c_smartcard_scd_token_remove_block(c_smartcard_t *smartcard)
 {
-	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 	container_t *container = smartcard->container;
 
@@ -973,6 +972,91 @@ c_smartcard_scd_token_remove_block(void *smartcardp)
 
 	mem_free0(out.token_uuid);
 	protobuf_free_message((ProtobufCMessage *)msg);
+	return 0;
+}
+
+/**
+ * Requests the SCD to initialize a token associated to a container and queries whether that
+ * token has been provisioned with a platform-bound authentication code.
+ */
+static int
+c_smartcard_token_init(c_smartcard_t *smartcard)
+{
+	ASSERT(smartcard);
+
+	// container is configured to not use a token at all
+	if (CONTAINER_TOKEN_TYPE_NONE == container_get_token_type(smartcard->container)) {
+		container_set_token_is_init(smartcard->container, false);
+		DEBUG("Container %s is configured to use no token to hold encryption keys",
+		      uuid_string(container_get_uuid(smartcard->container)));
+		return 0;
+	}
+
+	DEBUG("Invoking container_scd_token_add_block() for container %s",
+	      container_get_name(smartcard->container));
+	if (c_smartcard_scd_token_add_block(smartcard) != 0) {
+		ERROR("Requesting SCD to init token failed");
+		return -1;
+	}
+
+	DEBUG("Initialized token for container %s", container_get_name(smartcard->container));
+
+	c_smartcard_update_token_state(smartcard);
+
+	return 0;
+}
+
+static void
+c_smartcard_token_attach_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+	c_smartcard_t *smartcard = data;
+
+	// initialize the USB token
+	int block_return = c_smartcard_token_init(smartcard);
+
+	if (block_return) {
+		ERROR("Failed to initialize token (might already be initialized)");
+	}
+
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
+int
+c_smartcard_token_attach(void *smartcardp)
+{
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
+
+	TRACE("Registering callback to handle attachment of token with serial %s",
+	      container_get_usbtoken_serial(smartcard->container));
+
+	// give usb device some time to register
+	event_timer_t *e = event_timer_new(USB_TOKEN_ATTACH_TIMEOUT, 1, c_smartcard_token_attach_cb,
+					   smartcard);
+	event_add_timer(e);
+
+	return 0;
+}
+
+int
+c_smartcard_token_detach(void *smartcardp)
+{
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
+
+	DEBUG("USB token has been detached, stopping Container %s",
+	      container_get_name(smartcard->container));
+
+	if (container_stop(smartcard->container)) {
+		ERROR("Could not stop container after token detachment.");
+	}
+
+	if (c_smartcard_scd_token_remove_block(smartcard)) {
+		ERROR("Failed to notify scd about token detachment");
+	}
+
 	return 0;
 }
 
@@ -1013,7 +1097,8 @@ c_smartcard_container_start(void *smartcardp, int resp_fd, const char *passwd)
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
-	return c_smartcard_token_unlock_handler(smartcard, resp_fd, passwd, c_smartcard_cb_start_container);
+	return c_smartcard_token_unlock_handler(smartcard, resp_fd, passwd,
+						c_smartcard_cb_start_container);
 }
 
 static int
@@ -1022,7 +1107,26 @@ c_smartcard_container_stop(void *smartcardp, int resp_fd, const char *passwd)
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
-	return c_smartcard_token_unlock_handler(smartcard, resp_fd, passwd, c_smartcard_cb_stop_container);
+	return c_smartcard_token_unlock_handler(smartcard, resp_fd, passwd,
+						c_smartcard_cb_stop_container);
+}
+
+static int
+c_smartcard_scd_release_pairing(void *smartcardp)
+{
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
+
+	int ret = 0;
+	char *path = c_smartcard_token_paired_file_new(smartcard);
+	if (file_exists(path)) {
+		ret = unlink(path);
+		if (ret != 0) {
+			ERROR_ERRNO("Failed to remove file %s", path);
+		}
+	}
+
+	return ret;
 }
 
 static void *
@@ -1040,6 +1144,15 @@ c_smartcard_new(container_t *container)
 		ERROR("Failed to connect to scd");
 		return NULL;
 	}
+
+	if (0 != c_smartcard_token_init(smartcard)) {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-create-token-uninit",
+				uuid_string(container_get_uuid(container)), 0);
+		WARN("Could not initialize token associated with container %s (uuid=%s).",
+		     container_get_name(container), uuid_string(container_get_uuid(container)));
+	}
+
 	return smartcard;
 }
 
@@ -1057,11 +1170,18 @@ c_smartcard_free(void *smartcardp)
 {
 	c_smartcard_t *smartcard = smartcardp;
 	IF_NULL_RETURN(smartcard);
+
+	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
+		if (c_smartcard_scd_token_remove_block(smartcard)) {
+			WARN("Cannot remove USB token for container %s",
+					container_get_name(smartcard->container));
+		}
+	}
 	mem_free0(smartcard);
 }
 
-static int
-c_smartcard_container_destroy(void *smartcardp)
+static void
+c_smartcard_destroy(void *smartcardp)
 {
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
@@ -1074,8 +1194,30 @@ c_smartcard_container_destroy(void *smartcardp)
 			ERROR_ERRNO("Failed to remove file %s", path);
 		}
 	}
+
+	if (c_smartcard_scd_release_pairing(smartcard)) {
+		WARN("Can't remove token paired file!");
+	}
+
+	if (container_get_token_is_init(smartcard->container)) {
+		if (c_smartcard_scd_token_remove_block(smartcard))
+			WARN("Cannot remove token for container %s",
+			     container_get_name(smartcard->container));
+	}
+
+	/* remove keyfile */
+	if (0 != c_smartcard_remove_keyfile(smartcard)) {
+		ERROR("Failed to remove keyfile. Continuing to remove container anyway.");
+		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, CONTAINER_MGMT,
+				"container-remove-keyfile",
+				uuid_string(container_get_uuid(smartcard->container)), 0);
+	} else {
+		audit_log_event(container_get_uuid(smartcard->container), SSA, CMLD, CONTAINER_MGMT,
+				"container-remove-keyfile",
+				uuid_string(container_get_uuid(smartcard->container)), 0);
+	}
+
 	mem_free0(path);
-	return ret;
 }
 
 static int
@@ -1169,7 +1311,7 @@ static container_module_t c_smartcard_module = {
 	.name = MOD_NAME,
 	.container_new = c_smartcard_new,
 	.container_free = c_smartcard_free,
-	.container_destroy = NULL,
+	.container_destroy = c_smartcard_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
@@ -1192,11 +1334,8 @@ c_smartcard_init(void)
 	// register relevant handlers implemented by this module
 	container_register_start_with_smartcard_handler(MOD_NAME, c_smartcard_container_start);
 	container_register_stop_with_smartcard_handler(MOD_NAME, c_smartcard_container_stop);
-	container_register_scd_token_add_block_handler(MOD_NAME, c_smartcard_scd_token_add_block);
-	container_register_scd_token_remove_block_handler(MOD_NAME,
-							  c_smartcard_scd_token_remove_block);
-	container_register_scd_release_pairing_handler(MOD_NAME, c_smartcard_container_destroy);
-	container_register_update_token_state_handler(MOD_NAME, c_smartcard_update_token_state);
 	container_register_change_pin_handler(MOD_NAME, c_smartcard_change_pin);
-	container_register_remove_keyfile_handler(MOD_NAME, c_smartcard_remove_keyfile);
+	container_register_scd_release_pairing_handler(MOD_NAME, c_smartcard_scd_release_pairing);
+	container_register_token_attach_handler(MOD_NAME, c_smartcard_token_attach);
+	container_register_token_detach_handler(MOD_NAME, c_smartcard_token_detach);
 }
