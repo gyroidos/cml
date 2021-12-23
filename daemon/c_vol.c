@@ -53,7 +53,6 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "guestos.h"
-#include "smartcard.h"
 #include "lxcfs.h"
 #include "audit.h"
 
@@ -1329,71 +1328,6 @@ c_vol_get_rootdir(void *volp)
 }
 
 static int
-c_vol_bind_token(c_vol_t *vol)
-{
-	if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(vol->container)) {
-		DEBUG("Token type is not USB, not binding relay socket");
-		return 0;
-	}
-
-	int ret = -1;
-	uid_t uid = container_get_uid(vol->container);
-
-	char *src_path = mem_printf("%s/%s.sock", SCD_TOKENCONTROL_SOCKET,
-				    uuid_string(container_get_uuid(vol->container)));
-	char *dest_dir = mem_printf("%s/dev/tokens", vol->root);
-	char *dest_path = mem_printf("%s/token.sock", dest_dir);
-
-	DEBUG("Binding token socket to %s", dest_path);
-
-	if (!file_exists(dest_dir)) {
-		if (dir_mkdir_p(dest_dir, 0755)) {
-			ERROR_ERRNO("Failed to create containing directory for %s", dest_path);
-			goto err;
-		}
-
-		if (chown(dest_dir, uid, uid)) {
-			ERROR("Failed to chown token directory at %s to %d", dest_path, uid);
-			goto err;
-		} else {
-			DEBUG("Successfully chowned token directory at %s to %d", dest_path, uid);
-		}
-	} else if (!file_is_dir(dest_dir)) {
-		ERROR("Token path %s exists and is no directory", dest_dir);
-		goto err;
-	}
-
-	if (file_touch(dest_path)) {
-		ERROR_ERRNO("Failed to prepare target file for bind mount at %s", dest_path);
-		goto err;
-	}
-
-	DEBUG("Binding token socket from %s to %s", src_path, dest_path);
-	if (mount(src_path, dest_path, NULL, MS_BIND, NULL)) {
-		ERROR_ERRNO("Failed to bind socket from %s to %s", src_path, dest_path);
-		goto err;
-	} else {
-		DEBUG("Successfully bound token socket to %s", dest_path);
-	}
-
-	if (chown(dest_path, uid, uid)) {
-		ERROR("Failed to chown token socket at %s to %d", dest_path, uid);
-		goto err;
-	} else {
-		DEBUG("Successfully chowned token socket at %s to %d", dest_path, uid);
-	}
-
-	ret = 0;
-
-err:
-	mem_free0(src_path);
-	mem_free0(dest_dir);
-	mem_free0(dest_path);
-
-	return ret;
-}
-
-static int
 c_vol_start_child_early(void *volp)
 {
 	c_vol_t *vol = volp;
@@ -1508,12 +1442,6 @@ c_vol_start_pre_exec(void *volp)
 
 	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
 		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
-
-	if (c_vol_bind_token(vol) < 0) {
-		ERROR_ERRNO("Failed to bind token to container");
-		mem_free0(dev_mnt);
-		return -CONTAINER_ERROR_VOL;
-	}
 
 	mem_free0(dev_mnt);
 	return 0;

@@ -46,7 +46,6 @@
 #include "hardware.h"
 #include "uevent.h"
 #include "audit.h"
-#include "smartcard.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -437,6 +436,24 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_get_loginuid, uint32_t, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_get_loginuid, uint32_t, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_set_loginuid, int, void *, uint32_t)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_set_loginuid, int, 0, uint32_t)
+
+/* Functions usually implemented and registered by c_smartcard module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(start_with_smartcard, int, void *, int, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(start_with_smartcard, int, -1, int, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(stop_with_smartcard, int, void *, int, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(stop_with_smartcard, int, -1, int, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_token_add_block, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_token_add_block, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_token_remove_block, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_token_remove_block, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_release_pairing, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_release_pairing, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(update_token_state, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(update_token_state, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(change_pin, int, void *, int, const char *, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(change_pin, int, 0, int, const char *, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(remove_keyfile, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(remove_keyfile, int, 0)
 
 void
 container_free_key(container_t *container)
@@ -2078,7 +2095,7 @@ container_destroy(container_t *container)
 		}
 	mem_free0(file_name_uid);
 
-	if (smartcard_release_pairing(container)) {
+	if (container_scd_release_pairing(container)) {
 		ERROR("Can't remove token paired file!");
 	}
 

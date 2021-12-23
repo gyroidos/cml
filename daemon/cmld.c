@@ -48,7 +48,7 @@
 #include "control.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
-#include "smartcard.h"
+#include "scd.h"
 #include "tss.h"
 #include "ksm.h"
 #include "uevent.h"
@@ -98,13 +98,12 @@
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
 static const char *cmld_container_path = NULL;
+static const char *cmld_wrapped_keys_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
 
 static control_t *cmld_control_gui = NULL;
 static control_t *cmld_control_cml = NULL;
-
-static smartcard_t *cmld_smartcard = NULL;
 
 static char *cmld_device_uuid = NULL;
 static char *cmld_device_update_base_url = NULL;
@@ -396,16 +395,16 @@ cmld_container_token_init(container_t *container)
 		return 0;
 	}
 
-	DEBUG("Invoking smartcard_scd_token_add_block() for container %s",
+	DEBUG("Invoking container_scd_token_add_block() for container %s",
 	      container_get_name(container));
-	if (smartcard_scd_token_add_block(container) != 0) {
+	if (container_scd_token_add_block(container) != 0) {
 		ERROR("Requesting SCD to init token failed");
 		return -1;
 	}
 
 	DEBUG("Initialized token for container %s", container_get_name(container));
 
-	smartcard_update_token_state(container);
+	container_update_token_state(container);
 
 	return 0;
 }
@@ -433,7 +432,7 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 		      container_get_name(c));
 
 		if (token_type == CONTAINER_TOKEN_TYPE_USB) {
-			if (smartcard_scd_token_remove_block(c)) {
+			if (container_scd_token_remove_block(c)) {
 				ERROR("Reloading container %s failed, cannot remove token",
 				      uuid_string(uuid_tmp));
 				goto cleanup;
@@ -726,8 +725,7 @@ cmld_container_change_pin(container_t *container, int resp_fd, const char *passw
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
-	return smartcard_container_change_pin(cmld_smartcard, container, resp_fd, passwd,
-					      newpasswd);
+	return container_change_pin(container, resp_fd, passwd, newpasswd);
 }
 
 int
@@ -737,8 +735,14 @@ cmld_container_ctrl_with_smartcard(container_t *container, int resp_fd, const ch
 	ASSERT(container);
 	ASSERT(passwd);
 
-	return smartcard_container_ctrl_handler(cmld_smartcard, container, resp_fd, passwd,
-						container_ctrl);
+	if (container_ctrl == CMLD_CONTAINER_CTRL_START)
+		return container_start_with_smartcard(container, resp_fd, passwd);
+	else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
+		return container_stop_with_smartcard(container, resp_fd, passwd);
+
+	ERROR("Unknown container control command %u", container_ctrl);
+	control_send_message(CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL, resp_fd);
+	return -1;
 }
 
 /******************************************************************************/
@@ -1101,6 +1105,12 @@ cmld_init(const char *path)
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
 	mem_free0(btime);
 
+	if (scd_init() < 0)
+		FATAL("Could not init scd module");
+	INFO("scd initialized.");
+	if (atexit(&scd_cleanup))
+		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
+
 	if (uevent_init() < 0)
 		FATAL("Could not init uevent module");
 	INFO("uevent initialized.");
@@ -1151,10 +1161,6 @@ cmld_init(const char *path)
 	}
 	INFO("created control socket.");
 
-	char *tokens_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
-	cmld_smartcard = smartcard_new(tokens_path);
-	mem_free0(tokens_path);
-
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
@@ -1167,15 +1173,9 @@ cmld_init(const char *path)
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir containers directory %s", containers_path);
 
-	char *keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
+	cmld_wrapped_keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
-	mem_free0(keys_path);
-
-	if (cmld_smartcard == NULL)
-		FATAL("Could not connect to smartcard daemon");
-	else
-		INFO("Connected to smartcard daemon");
 
 	if (cmld_init_c0(containers_path, device_config_get_c0os(device_config)) < 0)
 		FATAL("Could not init c0");
@@ -1246,11 +1246,11 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 		container_unregister_observer(container, cb);
 
 	if (container_get_token_is_init(container)) {
-		smartcard_scd_token_remove_block(container);
+		container_scd_token_remove_block(container);
 	}
 
 	/* remove keyfile */
-	if (0 != smartcard_remove_keyfile(cmld_smartcard, container)) {
+	if (0 != container_remove_keyfile(container)) {
 		ERROR("Failed to remove keyfile. Continuing to remove container anyway.");
 		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 				"container-remove-keyfile",
@@ -1494,7 +1494,7 @@ cmld_token_detach(container_t *container)
 		ERROR("Could not stop container after token detachment.");
 	}
 
-	if (smartcard_scd_token_remove_block(container)) {
+	if (container_scd_token_remove_block(container)) {
 		ERROR("Failed to notify scd about token detachment");
 	}
 
@@ -1514,9 +1514,6 @@ cmld_cleanup(void)
 		control_free(cmld_control_gui);
 	if (cmld_control_cml)
 		control_free(cmld_control_cml);
-
-	if (cmld_smartcard)
-		smartcard_free(cmld_smartcard);
 
 	mem_free0(cmld_device_uuid);
 	mem_free0(cmld_device_update_base_url);
@@ -1604,7 +1601,7 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 				container_set_state(container, CONTAINER_STATE_ZOMBIE);
 			}
 			if ((container_get_token_type(container) == CONTAINER_TOKEN_TYPE_USB) &&
-			    smartcard_release_pairing(container)) {
+			    container_scd_release_pairing(container)) {
 				ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
 				container_set_state(container, CONTAINER_STATE_ZOMBIE);
 			}
@@ -1619,4 +1616,10 @@ const char *
 cmld_get_containers_dir(void)
 {
 	return cmld_container_path;
+}
+
+const char *
+cmld_get_wrapped_keys_dir(void)
+{
+	return cmld_wrapped_keys_path;
 }

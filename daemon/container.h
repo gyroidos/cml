@@ -157,7 +157,8 @@ enum container_error {
 	CONTAINER_ERROR_USER,
 	CONTAINER_ERROR_FIFO,
 	CONTAINER_ERROR_TIME,
-	CONTAINER_ERROR_AUDIT
+	CONTAINER_ERROR_AUDIT,
+	CONTAINER_ERROR_SMARTCARD
 };
 
 typedef struct container_module {
@@ -1024,7 +1025,8 @@ container_audit_get_last_ack(const container_t *container);
  * Registers the corresponding handler for container_audit_get_last_ack
  */
 void
-container_register_audit_get_last_ack_handler(const char *mod_name , const char * (*handler)(void *data));
+container_register_audit_get_last_ack_handler(const char *mod_name,
+					      const char *(*handler)(void *data));
 
 /**
  * Stores the last ACK hash that has been received for this container.
@@ -1036,7 +1038,8 @@ container_audit_set_last_ack(const container_t *container, const char *last_ack)
  * Registers the corresponding handler for container_audit_set_last_ack
  */
 void
-container_register_audit_set_last_ack_handler(const char *mod_name , int (*handler)(void *data, const char *last_ack));
+container_register_audit_set_last_ack_handler(const char *mod_name,
+					      int (*handler)(void *data, const char *last_ack));
 
 /**
  * Returns wether an ACK is currently being processed for this container
@@ -1048,7 +1051,8 @@ container_audit_get_processing_ack(const container_t *container);
  * Registers the corresponding handler for container_audit_get_processing_ack
  */
 void
-container_register_audit_get_processing_ack_handler(const char *mod_name , bool (*handler)(void *data));
+container_register_audit_get_processing_ack_handler(const char *mod_name,
+						    bool (*handler)(void *data));
 
 /**
  * Stores if an ACK hash is currently being processed for this container
@@ -1060,7 +1064,9 @@ container_audit_set_processing_ack(const container_t *container, bool processing
  * Registers the corresponding handler for container_audit_set_processing_ack
  */
 void
-container_register_audit_set_processing_ack_handler(const char *mod_name , int (*handler)(void *data, bool processing_ack));
+container_register_audit_set_processing_ack_handler(const char *mod_name,
+						    int (*handler)(void *data,
+								   bool processing_ack));
 
 /**
  * Send audit record to container
@@ -1106,7 +1112,8 @@ container_audit_set_loginuid(const container_t *container, uint32_t uid);
  * Registers the corresponding handler for container_audit_set_loginuid
  */
 void
-container_register_audit_set_loginuid_handler(const char *mod_name , int (*handler)(void *data, uint32_t uid));
+container_register_audit_set_loginuid_handler(const char *mod_name,
+					      int (*handler)(void *data, uint32_t uid));
 
 uint32_t
 container_audit_get_loginuid(const container_t *container);
@@ -1115,7 +1122,8 @@ container_audit_get_loginuid(const container_t *container);
  * Registers the corresponding handler for container_audit_get_loginuid
  */
 void
-container_register_audit_get_loginuid_handler(const char *mod_name , uint32_t (*handler)(void *data));
+container_register_audit_get_loginuid_handler(const char *mod_name,
+					      uint32_t (*handler)(void *data));
 
 list_t *
 container_get_pnet_cfg_list(const container_t *container);
@@ -1125,5 +1133,60 @@ container_get_vnet_cfg_list(const container_t *container);
 
 list_t *
 container_get_fifo_list(const container_t *container);
+
+int
+container_start_with_smartcard(const container_t *container, int resp_fd, const char *pw);
+
+int
+container_stop_with_smartcard(const container_t *container, int resp_fd, const char *pw);
+
+int
+container_scd_token_add_block(const container_t *container);
+
+int
+container_scd_token_remove_block(const container_t *container);
+
+int
+container_scd_release_pairing(const container_t *container);
+
+int
+container_update_token_state(const container_t *container);
+
+int
+container_change_pin(const container_t *container, int resp_fd, const char *pw, const char *newpw);
+
+int
+container_remove_keyfile(const container_t *container);
+
+void
+container_register_start_with_smartcard_handler(const char *mod_name,
+						int (*handler)(void *data, int resp_fd,
+							       const char *pw));
+
+void
+container_register_stop_with_smartcard_handler(const char *mod_name,
+					       int (*handler)(void *data, int resp_fd,
+							      const char *pw));
+
+void
+container_register_scd_token_add_block_handler(const char *mod_name, int (*handler)(void *data));
+
+void
+container_register_scd_token_remove_block_handler(const char *mod_name, int (*handler)(void *data));
+
+void
+container_register_scd_release_pairing_handler(const char *mod_name, int (*handler)(void *data));
+
+void
+container_register_update_token_state_handler(const char *mod_name, int (*handler)(void *data));
+
+void
+container_register_change_pin_handler(const char *mod_name,
+				      int (*handler)(void *data, int resp_fd, const char *pw,
+						     const char *newpw));
+
+void
+container_register_remove_keyfile_handler(const char *mod_name, int (*handler)(void *data));
+
 
 #endif /* CONTAINER_H */

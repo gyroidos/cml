@@ -31,7 +31,6 @@
 #include "guestos.h"
 #include "cmld.h"
 #include "hardware.h"
-#include "smartcard.h"
 #include "crypto.h"
 #include "input.h"
 #include "uevent.h"
