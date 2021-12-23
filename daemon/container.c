@@ -442,18 +442,14 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(start_with_smartcard, int, void *, int, c
 CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(start_with_smartcard, int, -1, int, const char *)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(stop_with_smartcard, int, void *, int, const char *)
 CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(stop_with_smartcard, int, -1, int, const char *)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_token_add_block, int, void *)
-CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_token_add_block, int, 0)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_token_remove_block, int, void *)
-CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_token_remove_block, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_release_pairing, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_release_pairing, int, 0)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(update_token_state, int, void *)
-CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(update_token_state, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(change_pin, int, void *, int, const char *, const char *)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(change_pin, int, 0, int, const char *, const char *)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(remove_keyfile, int, void *)
-CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(remove_keyfile, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(token_attach, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(token_attach, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(token_detach, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(token_detach, int, 0)
 
 void
 container_free_key(container_t *container)
@@ -2104,10 +2100,6 @@ container_destroy(container_t *container)
 			ERROR_ERRNO("Can't delete .uid file!");
 		}
 	mem_free0(file_name_uid);
-
-	if (container_scd_release_pairing(container)) {
-		ERROR("Can't remove token paired file!");
-	}
 
 	if ((ret = unlink(container_get_config_filename(container))))
 		ERROR_ERRNO("Can't delete config file!");

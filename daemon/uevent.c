@@ -899,7 +899,7 @@ uevent_handle_usb_device(struct uevent *uevent)
 			    (uevent->minor == mapping->usbdev->minor)) {
 				if (UEVENT_USBDEV_TYPE_TOKEN == mapping->usbdev->type) {
 					INFO("UEVENT USB TOKEN removed");
-					cmld_token_detach(mapping->container);
+					container_token_detach(mapping->container);
 				} else {
 					container_device_deny(mapping->container,
 							      mapping->usbdev->major,
@@ -952,7 +952,7 @@ uevent_handle_usb_device(struct uevent *uevent)
 				     container_get_name(mapping->container));
 				if (UEVENT_USBDEV_TYPE_TOKEN == mapping->usbdev->type) {
 					INFO("UEVENT USB TOKEN added");
-					cmld_token_attach(mapping->container);
+					container_token_attach(mapping->container);
 				}
 				container_device_allow(mapping->container, mapping->usbdev->major,
 						       mapping->usbdev->minor, mapping->assign);

@@ -1142,22 +1142,10 @@ int
 container_stop_with_smartcard(const container_t *container, int resp_fd, const char *pw);
 
 int
-container_scd_token_add_block(const container_t *container);
-
-int
-container_scd_token_remove_block(const container_t *container);
-
-int
 container_scd_release_pairing(const container_t *container);
 
 int
-container_update_token_state(const container_t *container);
-
-int
 container_change_pin(const container_t *container, int resp_fd, const char *pw, const char *newpw);
-
-int
-container_remove_keyfile(const container_t *container);
 
 void
 container_register_start_with_smartcard_handler(const char *mod_name,
@@ -1170,24 +1158,35 @@ container_register_stop_with_smartcard_handler(const char *mod_name,
 							      const char *pw));
 
 void
-container_register_scd_token_add_block_handler(const char *mod_name, int (*handler)(void *data));
-
-void
-container_register_scd_token_remove_block_handler(const char *mod_name, int (*handler)(void *data));
-
-void
 container_register_scd_release_pairing_handler(const char *mod_name, int (*handler)(void *data));
-
-void
-container_register_update_token_state_handler(const char *mod_name, int (*handler)(void *data));
 
 void
 container_register_change_pin_handler(const char *mod_name,
 				      int (*handler)(void *data, int resp_fd, const char *pw,
 						     const char *newpw));
 
-void
-container_register_remove_keyfile_handler(const char *mod_name, int (*handler)(void *data));
+/**
+ * Handles attachment of a container token.
+ *
+ * @return 0 if the given USB serial belongs to a container token and
+ *	the attachment procedure could be performed properly, -1 otherwise
+ */
+int
+container_token_attach(const container_t *container);
 
+void
+container_register_token_attach_handler(const char *mod_name, int (*handler)(void *data));
+
+/**
+ * Handles detachment of a container token.
+ *
+ * @return 0 if the given USB serial belongs to a container token and
+ * 	the detachment procedure could be performed properly, -1 otherwise
+ */
+int
+container_token_detach(const container_t *container);
+
+void
+container_register_token_detach_handler(const char *mod_name, int (*handler)(void *data));
 
 #endif /* CONTAINER_H */
