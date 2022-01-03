@@ -498,6 +498,7 @@ static container_module_t c_service_module = {
 	.name = MOD_NAME,
 	.container_new = c_service_new,
 	.container_free = c_service_free,
+	.container_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_service_start_pre_clone,
