@@ -2080,6 +2080,16 @@ container_destroy(container_t *container)
 			WARN("Could not delete leftover container dir");
 	}
 
+	/* call module hooks for destroy */
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_t *module = c_mod->module;
+		if (NULL == module->container_destroy)
+			continue;
+
+		module->container_destroy(c_mod->instance);
+	}
+
 	/* remove config files */
 	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
 	if (file_exists(file_name_created))

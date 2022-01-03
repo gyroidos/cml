@@ -165,6 +165,7 @@ typedef struct container_module {
 	const char *name;
 	void *(*container_new)(container_t *container);
 	void (*container_free)(void *data);
+	void (*container_destroy)(void *data);
 	int (*start_post_clone_early)(void *data);
 	int (*start_child_early)(void *data);
 	int (*start_pre_clone)(void *data);

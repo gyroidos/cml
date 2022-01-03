@@ -197,6 +197,7 @@ static container_module_t c_audit_module = {
 	.name = MOD_NAME,
 	.container_new = c_audit_new,
 	.container_free = c_audit_free,
+	.container_destroy = NULL,
 	.start_post_clone_early = c_audit_start_post_clone_early,
 	.start_child_early = c_audit_start_child_early,
 	.start_pre_clone = NULL,

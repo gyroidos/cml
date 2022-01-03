@@ -1377,6 +1377,7 @@ static container_module_t c_cgroups_module = {
 	.name = MOD_NAME,
 	.container_new = c_cgroups_new,
 	.container_free = c_cgroups_free,
+	.container_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_cgroups_start_pre_clone,

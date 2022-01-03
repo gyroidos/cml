@@ -637,6 +637,7 @@ static container_module_t c_user_module = {
 	.name = MOD_NAME,
 	.container_new = c_user_new,
 	.container_free = c_user_free,
+	.container_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_user_start_pre_clone,

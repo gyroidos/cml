@@ -1715,6 +1715,7 @@ static container_module_t c_vol_module = {
 	.name = MOD_NAME,
 	.container_new = c_vol_new,
 	.container_free = c_vol_free,
+	.container_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = c_vol_start_child_early,
 	.start_pre_clone = NULL,
