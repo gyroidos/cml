@@ -553,25 +553,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 
 	container->fifo_list = fifo_list;
 
-	/* Create submodules */
-	for (list_t *l = container_module_list; l; l = l->next) {
-		container_module_t *module = l->data;
-		if (module->container_new) {
-			container_module_instance_t *c_mod =
-				container_module_instance_new(container, module);
-			if (!c_mod) {
-				WARN("Could not initialize %s subsystem for container %s (UUID: %s)",
-				     module->name, container->name, uuid_string(container->uuid));
-				goto error;
-			}
-			container->module_instance_list =
-				list_append(container->module_instance_list, c_mod);
-
-			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
-			     container->name, uuid_string(container->uuid));
-		}
-	}
-
 	// construct an argv buffer for execve
 	container->init_argv = guestos_get_init_argv_new(os);
 
@@ -622,6 +603,25 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 
 	container->usb_pin_entry = usb_pin_entry;
 	container->is_synced = true;
+
+	/* Create submodules */
+	for (list_t *l = container_module_list; l; l = l->next) {
+		container_module_t *module = l->data;
+		if (module->container_new) {
+			container_module_instance_t *c_mod =
+				container_module_instance_new(container, module);
+			if (!c_mod) {
+				WARN("Could not initialize %s subsystem for container %s (UUID: %s)",
+				     module->name, container->name, uuid_string(container->uuid));
+				goto error;
+			}
+			container->module_instance_list =
+				list_append(container->module_instance_list, c_mod);
+
+			INFO("Initialized %s subsystem for container %s (UUID: %s)", module->name,
+			     container->name, uuid_string(container->uuid));
+		}
+	}
 
 	return container;
 
