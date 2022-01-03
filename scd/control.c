@@ -362,7 +362,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("Token passphrase not specified");
 		} else if (!msg->token_newpin) {
 			ERROR("Token new passphrase not specified");
-		} else if (msg->has_pairing_secret) {
+		} else if (!msg->has_pairing_secret) {
 			ERROR("Pairing secret not specified");
 		} else if (token->is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
