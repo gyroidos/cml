@@ -800,6 +800,13 @@ container_free(container_t *container)
 {
 	ASSERT(container);
 
+	/* free module instances */
+	for (list_t *l = container->module_instance_list; l; l = l->next) {
+		container_module_instance_t *c_mod = l->data;
+		container_module_instance_free(c_mod);
+	}
+	list_delete(container->module_instance_list);
+
 	/* unregister usb tokens from uevent subsystem */
 	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
 		uevent_usbdev_t *usbdev = l->data;
@@ -841,13 +848,6 @@ container_free(container_t *container)
 		mount_free(container->mnt);
 	if (container->mnt_setup)
 		mount_free(container->mnt_setup);
-
-	/* free module instances */
-	for (list_t *l = container->module_instance_list; l; l = l->next) {
-		container_module_instance_t *c_mod = l->data;
-		container_module_instance_free(c_mod);
-	}
-	list_delete(container->module_instance_list);
 
 	if (container->imei)
 		mem_free0(container->imei);
