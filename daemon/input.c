@@ -262,8 +262,7 @@ input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, voi
 			      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ? "STARTING" :
 										       "STOPPING",
 			      container_get_name(cb_data->container));
-			if (cmld_container_ctrl_with_smartcard(cb_data->container, cb_data->resp_fd,
-							       input_key,
+			if (cmld_container_ctrl_with_smartcard(cb_data->container, input_key,
 							       cb_data->container_ctrl) != 0) {
 				// the container start function will send a control message
 				// so we do not need to go to exit fail and send a message here

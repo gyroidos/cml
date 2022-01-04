@@ -247,6 +247,20 @@ enum container_start_sync_msg {
 		return container_## name ##_handler->handler_func(instance, a1, a2); \
 	}
 
+#define CONTAINER_MODULE_FUNCTION_WRAPPER3_1_IMPL(name, type, unimpl, type_a1, a1, type_a2, a2) \
+	type container_## name(const container_t *container, type_a1, type_a2) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = container_module_get_instance_by_name( \
+			container, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1, a2); \
+	}
+
 #define CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(name, type, unimpl, type_a1, type_a2, type_a3) \
 	type container_## name(const container_t *container, type_a1 a1, type_a2 a2, type_a3 a3) \
 	{ \
@@ -438,14 +452,18 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_set_loginuid, int, void *, uint32_t
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(audit_set_loginuid, int, 0, uint32_t)
 
 /* Functions usually implemented and registered by c_smartcard module */
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(start_with_smartcard, int, void *, int, const char *)
-CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(start_with_smartcard, int, -1, int, const char *)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(stop_with_smartcard, int, void *, int, const char *)
-CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(stop_with_smartcard, int, -1, int, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(ctrl_with_smartcard, int, void *, int (*)(container_t *),
+				       const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_1_IMPL(ctrl_with_smartcard, int, -1, int (*cb)(container_t *),
+					  cb, const char *pw, pw)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_smartcard_error_cb, int, void *, void (*)(int, void *),
+				       void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_1_IMPL(set_smartcard_error_cb, int, -1, void (*cb)(int, void *),
+					  cb, void *cbdata, cbdata)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_release_pairing, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_release_pairing, int, 0)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(change_pin, int, void *, int, const char *, const char *)
-CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(change_pin, int, 0, int, const char *, const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(change_pin, int, void *, const char *, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(change_pin, int, 0, const char *, const char *)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(token_attach, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(token_attach, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(token_detach, int, void *)

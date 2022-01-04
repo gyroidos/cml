@@ -632,35 +632,34 @@ cmld_container_start(container_t *container)
 
 	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "container-start",
 			uuid_string(container_get_uuid(container)), 0);
+
 	return 0;
 }
 
 int
-cmld_container_change_pin(container_t *container, int resp_fd, const char *passwd,
-			  const char *newpasswd)
+cmld_container_change_pin(container_t *container, const char *passwd, const char *newpasswd)
 {
 	ASSERT(container);
 	ASSERT(passwd);
 	ASSERT(newpasswd);
 
-	return container_change_pin(container, resp_fd, passwd, newpasswd);
+	return container_change_pin(container, passwd, newpasswd);
 }
 
 int
-cmld_container_ctrl_with_smartcard(container_t *container, int resp_fd, const char *passwd,
+cmld_container_ctrl_with_smartcard(container_t *container, const char *passwd,
 				   cmld_container_ctrl_t container_ctrl)
 {
 	ASSERT(container);
 	ASSERT(passwd);
 
 	if (container_ctrl == CMLD_CONTAINER_CTRL_START)
-		return container_start_with_smartcard(container, resp_fd, passwd);
+		return container_ctrl_with_smartcard(container, cmld_container_start, passwd);
 	else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
-		return container_stop_with_smartcard(container, resp_fd, passwd);
+		return container_ctrl_with_smartcard(container, cmld_container_stop, passwd);
 
 	ERROR("Unknown container control command %u", container_ctrl);
-	control_send_message(CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL, resp_fd);
-	return -1;
+	return -2;
 }
 
 /******************************************************************************/

@@ -161,6 +161,24 @@ enum container_error {
 	CONTAINER_ERROR_SMARTCARD
 };
 
+/**
+ * Represents an error that happened during smartcard handling of a container.
+ */
+enum container_smartcard_error {
+	CONTAINER_SMARTCARD_LOCK_FAILED = 1,
+	CONTAINER_SMARTCARD_UNLOCK_FAILED,
+	CONTAINER_SMARTCARD_PASSWD_WRONG,
+	CONTAINER_SMARTCARD_LOCKED_TILL_REBOOT,
+	CONTAINER_SMARTCARD_TOKEN_UNINITIALIZED,
+	CONTAINER_SMARTCARD_TOKEN_UNPAIRED,
+	CONTAINER_SMARTCARD_PAIRING_SECRET_FAILED,
+	CONTAINER_SMARTCARD_WRAPPING_ERROR,
+	CONTAINER_SMARTCARD_CHANGE_PIN_SUCCESSFUL,
+	CONTAINER_SMARTCARD_CHANGE_PIN_FAILED,
+	CONTAINER_SMARTCARD_CB_OK,
+	CONTAINER_SMARTCARD_CB_FAILED,
+};
+
 typedef struct container_module {
 	const char *name;
 	void *(*container_new)(container_t *container);
@@ -1136,33 +1154,36 @@ list_t *
 container_get_fifo_list(const container_t *container);
 
 int
-container_start_with_smartcard(const container_t *container, int resp_fd, const char *pw);
+container_ctrl_with_smartcard(const container_t *container, int (*success_cb)(container_t *),
+			      const char *pw);
 
 int
-container_stop_with_smartcard(const container_t *container, int resp_fd, const char *pw);
+container_set_smartcard_error_cb(const container_t *container,
+				 void (*err_cb)(int error, void *data), void *cbdata);
 
 int
 container_scd_release_pairing(const container_t *container);
 
 int
-container_change_pin(const container_t *container, int resp_fd, const char *pw, const char *newpw);
+container_change_pin(const container_t *container, const char *pw, const char *newpw);
 
 void
-container_register_start_with_smartcard_handler(const char *mod_name,
-						int (*handler)(void *data, int resp_fd,
-							       const char *pw));
-
-void
-container_register_stop_with_smartcard_handler(const char *mod_name,
-					       int (*handler)(void *data, int resp_fd,
+container_register_ctrl_with_smartcard_handler(const char *mod_name,
+					       int (*handler)(void *data,
+							      int (*success_cb)(container_t *),
 							      const char *pw));
+
+void
+container_register_set_smartcard_error_cb_handler(
+	const char *mod_name,
+	int (*handler)(void *data, void (*err_cb)(int error, void *data), void *cbdata));
 
 void
 container_register_scd_release_pairing_handler(const char *mod_name, int (*handler)(void *data));
 
 void
 container_register_change_pin_handler(const char *mod_name,
-				      int (*handler)(void *data, int resp_fd, const char *pw,
+				      int (*handler)(void *data, const char *pw,
 						     const char *newpw));
 
 /**

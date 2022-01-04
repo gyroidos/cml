@@ -574,6 +574,76 @@ control_handle_cmd_register_localca(const ControllerToDaemon *msg, UNUSED int fd
 	}
 }
 
+typedef struct {
+	cmld_container_ctrl_t container_ctrl;
+	int resp_fd;
+} control_csmartcard_resp_data_t;
+
+static void
+control_csmartcard_handle_error_cb(int err_code, void *data)
+{
+	control_csmartcard_resp_data_t *cbdata = data;
+	ASSERT(cbdata);
+
+	cmld_container_ctrl_t container_ctrl = cbdata->container_ctrl;
+	int fd = cbdata->resp_fd;
+
+	switch (err_code) {
+	case CONTAINER_SMARTCARD_LOCK_FAILED:
+		if (container_ctrl == CMLD_CONTAINER_CTRL_START)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED, fd);
+		else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED, fd);
+		break;
+	case CONTAINER_SMARTCARD_UNLOCK_FAILED:
+		if (container_ctrl == CMLD_CONTAINER_CTRL_START)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED, fd);
+		else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED, fd);
+		break;
+	case CONTAINER_SMARTCARD_PASSWD_WRONG:
+		if (container_ctrl == CMLD_CONTAINER_CTRL_START)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG, fd);
+		else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, fd);
+		break;
+	case CONTAINER_SMARTCARD_TOKEN_UNINITIALIZED:
+		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
+		break;
+	case CONTAINER_SMARTCARD_TOKEN_UNPAIRED:
+		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNPAIRED, fd);
+		break;
+	case CONTAINER_SMARTCARD_PAIRING_SECRET_FAILED:
+	case CONTAINER_SMARTCARD_WRAPPING_ERROR:
+		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, fd);
+		break;
+	case CONTAINER_SMARTCARD_CHANGE_PIN_FAILED:
+		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, fd);
+		break;
+	case CONTAINER_SMARTCARD_CHANGE_PIN_SUCCESSFUL:
+		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL, fd);
+		break;
+	case CONTAINER_SMARTCARD_LOCKED_TILL_REBOOT:
+		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT, fd);
+		break;
+	case CONTAINER_SMARTCARD_CB_OK:
+		if (container_ctrl == CMLD_CONTAINER_CTRL_START)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, fd);
+		else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, fd);
+		break;
+	case CONTAINER_SMARTCARD_CB_FAILED:
+		if (container_ctrl == CMLD_CONTAINER_CTRL_START)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, fd);
+		else if (container_ctrl == CMLD_CONTAINER_CTRL_STOP)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING,
+					     fd);
+		break;
+	}
+
+	mem_free0(cbdata);
+}
+
 /**
  * Starts a container with pre-specified keys or user supplied keys
  */
@@ -588,6 +658,18 @@ control_handle_container_start(container_t *container, ContainerStartParams *sta
 		container_set_setup_mode(container, start_params->setup);
 	}
 
+	// Setup smartcard response handling
+	if (start_params || container_get_usb_pin_entry(container)) {
+		control_csmartcard_resp_data_t *cbdata =
+			mem_new0(control_csmartcard_resp_data_t, 1);
+		cbdata->container_ctrl = CMLD_CONTAINER_CTRL_START;
+		cbdata->resp_fd = fd;
+
+		if (container_set_smartcard_error_cb(container, control_csmartcard_handle_error_cb,
+						     cbdata))
+			mem_free(cbdata);
+	}
+
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container start with pin entry chosen. Starting");
@@ -598,12 +680,13 @@ control_handle_container_start(container_t *container, ContainerStartParams *sta
 	} else if (start_params) {
 		char *key = start_params->key;
 		TRACE("Default container start without pin entry chosen. Starting");
-		res = cmld_container_ctrl_with_smartcard(container, fd, key,
-							 CMLD_CONTAINER_CTRL_START);
+		res = cmld_container_ctrl_with_smartcard(container, key, CMLD_CONTAINER_CTRL_START);
 		if (res != 0) {
 			ERROR("Failed to start container %s", container_get_name(container));
-			control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, fd);
 		}
+		if (res == -2)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL, fd);
+
 		mem_memset0(key, strlen(key));
 	} else if (container_is_encrypted(container)) {
 		res = -1;
@@ -624,6 +707,18 @@ control_handle_container_stop(container_t *container, ContainerStartParams *star
 {
 	int res = -1;
 
+	// Setup smartcard response handling
+	if (start_params || container_get_usb_pin_entry(container)) {
+		control_csmartcard_resp_data_t *cbdata =
+			mem_new0(control_csmartcard_resp_data_t, 1);
+		cbdata->container_ctrl = CMLD_CONTAINER_CTRL_STOP;
+		cbdata->resp_fd = fd;
+
+		if (container_set_smartcard_error_cb(container, control_csmartcard_handle_error_cb,
+						     cbdata))
+			mem_free(cbdata);
+	}
+
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container stop with pin entry chosen. Stopping");
@@ -634,11 +729,13 @@ control_handle_container_stop(container_t *container, ContainerStartParams *star
 	} else if (start_params) {
 		char *key = start_params->key;
 		TRACE("Default container stop without pin entry chosen. Stopping");
-		res = cmld_container_ctrl_with_smartcard(container, fd, key,
-							 CMLD_CONTAINER_CTRL_STOP);
+		res = cmld_container_ctrl_with_smartcard(container, key, CMLD_CONTAINER_CTRL_STOP);
 		if (res != 0) {
 			ERROR("Failed to stop container %s", container_get_name(container));
 		}
+		if (res == -2)
+			control_send_message(CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL, fd);
+
 		mem_memset0(key, strlen(key));
 	} else if (container_is_encrypted(container)) {
 		res = -1;
@@ -1377,7 +1474,15 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			ERROR("Current PIN or new PIN not specified");
 			break;
 		}
-		res = cmld_container_change_pin(container, fd, msg->device_pin, msg->device_newpin);
+		control_csmartcard_resp_data_t *cbdata =
+			mem_new0(control_csmartcard_resp_data_t, 1);
+		cbdata->resp_fd = fd;
+
+		if (container_set_smartcard_error_cb(container, control_csmartcard_handle_error_cb,
+						     cbdata))
+			mem_free(cbdata);
+
+		res = cmld_container_change_pin(container, msg->device_pin, msg->device_newpin);
 		if (res) {
 			WARN("Changing the container PIN failed!");
 		}

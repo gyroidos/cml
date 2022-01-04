@@ -138,7 +138,7 @@ int
 cmld_container_start(container_t *container);
 
 int
-cmld_container_ctrl_with_smartcard(container_t *container, int resp_fd, const char *passwd,
+cmld_container_ctrl_with_smartcard(container_t *container, const char *passwd,
 				   cmld_container_ctrl_t container_ctrl);
 
 int
@@ -248,14 +248,12 @@ cmld_get_c0os(void);
  * Change the pin of the token associated to a container.
  *
  * @param container whose token's pin should be changed
- * @param resp_fd client fd to control session which should be used for responses
  * @param passwd old passphrase/pin
  * @param newpasswd new passphrase/pin which is to be set
  * @return 0 on message delivered to lower levels, -1 message delivery failed
  */
 int
-cmld_container_change_pin(container_t *container, int resp_fd, const char *passwd,
-			  const char *newpasswd);
+cmld_container_change_pin(container_t *container, const char *passwd, const char *newpasswd);
 
 /**
  * Delete a GuestOS by given name

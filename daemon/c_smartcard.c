@@ -27,7 +27,6 @@
 
 #include "hardware.h"
 #include "cmld.h"
-#include "control.h"
 #include "audit.h"
 #include "scd_shared.h"
 
@@ -73,12 +72,10 @@ typedef struct c_smartcard {
 	int sock;
 	const char *path;
 	container_t *container;
+	void (*err_cb)(int error_code, void *data);
+	void *err_cbdata;
+	int (*success_cb)(container_t *container);
 } c_smartcard_t;
-
-typedef struct c_smartcard_cbdata {
-	c_smartcard_t *smartcard;
-	int resp_fd;
-} c_smartcard_cbdata_t;
 
 static char *
 bytes_to_string_new(unsigned char *data, size_t len)
@@ -213,54 +210,49 @@ c_smartcard_container_token_is_provisioned(c_smartcard_t *smartcard)
 	return ret;
 }
 
-static void
-c_smartcard_start_container_internal(c_smartcard_cbdata_t *cbdata)
+static int
+c_smartcard_set_error_cb(void *smartcardp, void (*cb)(int error_code, void *data), void *cbdata)
 {
-	ASSERT(cbdata);
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
 
-	c_smartcard_t *smartcard = cbdata->smartcard;
-	int resp_fd = cbdata->resp_fd;
+	smartcard->err_cb = cb;
+	smartcard->err_cbdata = cbdata;
 
-	if (NULL == container_get_key(smartcard->container)) {
-		FATAL("No container key is set.");
-	}
-
-	// backward compatibility: convert binary key to ascii (to have it converted back later)
-	DEBUG("SCD:Container  %s: Starting...", container_get_name(smartcard->container));
-	if (-1 == cmld_container_start(smartcard->container))
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
-	else
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_OK, resp_fd);
+	return 0;
 }
 
 static void
-c_smartcard_stop_container_internal(c_smartcard_cbdata_t *cbdata)
+c_smartcard_error(c_smartcard_t *smartcard, int error_code)
 {
-	ASSERT(cbdata);
+	ASSERT(smartcard);
+	IF_NULL_RETURN(smartcard->err_cb);
+	smartcard->err_cb(error_code, smartcard->err_cbdata);
+}
 
-	c_smartcard_t *smartcard = cbdata->smartcard;
-	int resp_fd = cbdata->resp_fd;
+void
+c_smartcard_send_token_lock_cmd(c_smartcard_t *smartcard)
+{
+	ASSERT(smartcard);
 
-	int res = cmld_container_stop(smartcard->container);
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__LOCK;
 
-	// TODO if the modules cannot be stopped successfully, the container is killed. The return
-	// value in this case is CONTAINER_ERROR, even if the container was killed. This is
-	// ignored atm and just STOP_OK is returned. How should we treat this?
-	if (res == -1) {
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING, resp_fd);
-	} else {
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_OK, resp_fd);
-	}
+	out.has_token_type = true;
+	out.token_type =
+		c_smartcard_tokentype_to_proto(container_get_token_type(smartcard->container));
+
+	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
+
+	protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
+	mem_free0(out.token_uuid);
 }
 
 static void
-c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *data)
+c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *data)
 {
-	c_smartcard_cbdata_t *cbdata = data;
-	ASSERT(cbdata);
-
-	c_smartcard_t *smartcard = cbdata->smartcard;
-	int resp_fd = cbdata->resp_fd;
+	c_smartcard_t *smartcard = data;
+	ASSERT(smartcard);
 
 	bool done = false;
 
@@ -269,7 +261,6 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 
 		event_remove_io(io);
 		event_io_free(io);
-		mem_free0(cbdata);
 		return;
 	} else if (events & EVENT_IO_READ) {
 		// use protobuf for communication with scd
@@ -281,7 +272,6 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 
 			event_remove_io(io);
 			event_io_free(io);
-			mem_free0(cbdata);
 			return;
 		}
 
@@ -291,12 +281,18 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 					TOKEN_MGMT, "lock",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
 			WARN("Locking the token failed.");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_LOCK_FAILED, resp_fd);
+			c_smartcard_error(smartcard, CONTAINER_SMARTCARD_LOCK_FAILED);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
-			if (container_get_key(smartcard->container))
-				c_smartcard_start_container_internal(cbdata);
+			/* after token has sucesfully locked again we can execute the corresponding
+			 * start, stop function */
+			if (smartcard->success_cb) {
+				if (-1 == smartcard->success_cb(smartcard->container))
+					c_smartcard_error(smartcard, CONTAINER_SMARTCARD_CB_FAILED);
+				else
+					c_smartcard_error(smartcard, CONTAINER_SMARTCARD_CB_OK);
+			}
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
@@ -304,8 +300,7 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 					TOKEN_MGMT, "unlock",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
 			WARN("Unlocking the token failed.");
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_UNLOCK_FAILED,
-					     resp_fd);
+			c_smartcard_error(smartcard, CONTAINER_SMARTCARD_UNLOCK_FAILED);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
@@ -313,8 +308,7 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 			audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD,
 					TOKEN_MGMT, "unlock-wrong-pin",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_START_PASSWD_WRONG,
-					     resp_fd);
+			c_smartcard_error(smartcard, CONTAINER_SMARTCARD_PASSWD_WRONG);
 			done = true;
 		} break;
 		case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
@@ -322,8 +316,7 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 			audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD,
 					TOKEN_MGMT, "locked-until-reboot",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT,
-					     resp_fd);
+			c_smartcard_error(smartcard, CONTAINER_SMARTCARD_LOCKED_TILL_REBOOT);
 			done = true;
 		} break;
 
@@ -334,6 +327,14 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 			audit_log_event(container_get_uuid(smartcard->container), SSA, CMLD,
 					TOKEN_MGMT, "unlock-successful",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
+
+			if (container_get_state(smartcard->container) == CONTAINER_STATE_RUNNING) {
+				/* in this case the token was checked to authorize container stop */
+				// just lock token again which triggers success_cb
+				c_smartcard_send_token_lock_cmd(smartcard);
+				break;
+			}
+
 			char *keyfile =
 				mem_printf("%s/%s.key", smartcard->path,
 					   uuid_string(container_get_uuid(smartcard->container)));
@@ -440,27 +441,16 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 		 * This case handles key unwrapping as part of TSF.CML.CompartmentDataStorage.
 		 */
 		case TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY: {
-			// lock token via scd
-			DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-			out.code = DAEMON_TO_TOKEN__CODE__LOCK;
-
-			out.has_token_type = true;
-			out.token_type = c_smartcard_tokentype_to_proto(
-				container_get_token_type(smartcard->container));
-
-			out.token_uuid =
-				mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
-
-			protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-			mem_free0(out.token_uuid);
 			if (!msg->has_unwrapped_key) {
 				WARN("Expected derived key, but none was returned!");
 				audit_log_event(
 					container_get_uuid(smartcard->container), FSA, CMLD,
 					TOKEN_MGMT, "unwrap-container-key",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
-				control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL,
-						     resp_fd);
+				c_smartcard_error(smartcard, CONTAINER_SMARTCARD_WRAPPING_ERROR);
+				// lock token via scd and unregister io callback to avoid to trigger success_cb
+				c_smartcard_send_token_lock_cmd(smartcard);
+				done = true;
 				break;
 			}
 			// set the key
@@ -475,6 +465,9 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 			mem_memset0(ascii_key, strlen(ascii_key));
 			mem_memset0(msg->unwrapped_key.data, msg->unwrapped_key.len);
 			mem_free0(ascii_key);
+
+			// lock token via scd which will trigger success_cb
+			c_smartcard_send_token_lock_cmd(smartcard);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__WRAPPED_KEY: {
 			// lock token via scd
@@ -497,6 +490,8 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 					TOKEN_MGMT, "wrap-key",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
 				WARN("Expected wrapped key, but none was returned!");
+				c_smartcard_error(smartcard, CONTAINER_SMARTCARD_WRAPPING_ERROR);
+				done = true;
 				break;
 			}
 			ASSERT(msg->wrapped_key.len < TOKEN_MAX_WRAPPED_KEY_LEN);
@@ -535,100 +530,16 @@ c_smartcard_cb_start_container(int fd, unsigned events, event_io_t *io, void *da
 		if (done) {
 			event_remove_io(io);
 			event_io_free(io);
-			mem_free0(cbdata);
 		}
 	}
 }
 
-static void
-c_smartcard_cb_stop_container(int fd, unsigned events, event_io_t *io, void *data)
-{
-	c_smartcard_cbdata_t *cbdata = data;
-	ASSERT(cbdata);
-
-	c_smartcard_t *smartcard = cbdata->smartcard;
-	int resp_fd = cbdata->resp_fd;
-
-	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit);
-
-	IF_FALSE_RETURN(events & EVENT_IO_READ);
-
-	// use protobuf for communication with scd
-	TokenToDaemon *msg =
-		(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
-
-	if (!msg) {
-		ERROR("Failed to receive message although EVENT_IO_READ was set. Aborting container stop.");
-		goto exit;
-	}
-
-	switch (msg->code) {
-	case TOKEN_TO_DAEMON__CODE__LOCK_FAILED: {
-		WARN("Locking the token failed.");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_LOCK_FAILED, resp_fd);
-		goto exit;
-	} break;
-	case TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL: {
-		c_smartcard_stop_container_internal(cbdata);
-		goto exit;
-	} break;
-	case TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED: {
-		WARN("Unlocking the token failed.");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_UNLOCK_FAILED, resp_fd);
-		goto exit;
-	} break;
-	case TOKEN_TO_DAEMON__CODE__PASSWD_WRONG: {
-		WARN("Unlocking the token failed (wrong PIN/passphrase).");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, resp_fd);
-		goto exit;
-	} break;
-	case TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT: {
-		WARN("Unlocking the token failed (locked till reboot).");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_LOCKED_TILL_REBOOT, resp_fd);
-		goto exit;
-	} break;
-	case TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL: {
-		// lock token via scd
-		DaemonToToken out = DAEMON_TO_TOKEN__INIT;
-		out.code = DAEMON_TO_TOKEN__CODE__LOCK;
-
-		out.has_token_type = true;
-		out.token_type = c_smartcard_tokentype_to_proto(
-			container_get_token_type(smartcard->container));
-
-		out.token_uuid = mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
-
-		protobuf_send_message(smartcard->sock, (ProtobufCMessage *)&out);
-		mem_free0(out.token_uuid);
-	} break;
-	default:
-		ERROR("TokenToDaemon command %d unknown or not implemented yet", msg->code);
-		goto exit;
-	}
-	protobuf_free_message((ProtobufCMessage *)msg);
-	return;
-
-exit:
-	event_remove_io(io);
-	event_io_free(io);
-	mem_free0(cbdata);
-	return;
-}
-
 static int
-c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, int resp_fd, const char *passwd,
+c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, const char *passwd,
 				 void (*cb)(int fd, unsigned events, event_io_t *io, void *data))
 {
 	ASSERT(smartcard);
 	ASSERT(passwd);
-
-	c_smartcard_cbdata_t *cbdata = mem_alloc(sizeof(c_smartcard_cbdata_t));
-	if (!cbdata) {
-		ERROR("Could not allocate memory for callback data");
-		return -1;
-	}
-	cbdata->smartcard = smartcard;
-	cbdata->resp_fd = resp_fd;
 
 	int pair_sec_len;
 
@@ -637,8 +548,8 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, int resp_fd, const ch
 				"token-uninitialized",
 				uuid_string(container_get_uuid(smartcard->container)), 0);
 		ERROR("The token that is associated with the container has not been initialized!");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNINITIALIZED, resp_fd);
-		goto err;
+		c_smartcard_error(smartcard, CONTAINER_SMARTCARD_TOKEN_UNINITIALIZED);
+		return -1;
 	}
 
 	if (!container_get_token_is_linked_to_device(smartcard->container)) {
@@ -646,8 +557,8 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, int resp_fd, const ch
 		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, TOKEN_MGMT,
 				"token-not-paired",
 				uuid_string(container_get_uuid(smartcard->container)), 0);
-		control_send_message(CONTROL_RESPONSE_CONTAINER_TOKEN_UNPAIRED, resp_fd);
-		goto err;
+		c_smartcard_error(smartcard, CONTAINER_SMARTCARD_TOKEN_UNPAIRED);
+		return -1;
 	}
 
 	unsigned char pair_sec[MAX_PAIR_SEC_LEN];
@@ -657,15 +568,15 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, int resp_fd, const ch
 				"read-pairing-secret",
 				uuid_string(container_get_uuid(smartcard->container)), 0);
 		ERROR("Could not retrieve pairing secret");
-		control_send_message(CONTROL_RESPONSE_CONTAINER_START_EINTERNAL, resp_fd);
-		goto err;
+		c_smartcard_error(smartcard, CONTAINER_SMARTCARD_PAIRING_SECRET_FAILED);
+		return -1;
 	}
 	audit_log_event(container_get_uuid(smartcard->container), SSA, CMLD, TOKEN_MGMT,
 			"read-pairing-secret",
 			uuid_string(container_get_uuid(smartcard->container)), 0);
 
 	// TODO register timer if socket does not respond
-	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ, cb, cbdata);
+	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ, cb, smartcard);
 
 	event_add_io(event);
 	DEBUG("SCD: Registered control container callback for key from scd");
@@ -698,21 +609,15 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, int resp_fd, const ch
 	mem_free0(out.token_pin);
 	mem_free0(out.pairing_secret.data);
 	mem_free0(out.token_uuid);
-	return 0;
 
-err:
-	mem_free0(cbdata);
-	return -1;
+	return 0;
 }
 
 static void
 c_smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, void *data)
 {
-	c_smartcard_cbdata_t *cbdata = data;
-	ASSERT(cbdata);
-
-	c_smartcard_t *smartcard = cbdata->smartcard;
-	int resp_fd = cbdata->resp_fd;
+	c_smartcard_t *smartcard = data;
+	ASSERT(smartcard);
 
 	int rc = -1;
 	bool command_state = false;
@@ -727,8 +632,7 @@ c_smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, voi
 			audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD,
 					CONTAINER_MGMT, "container-change-pin",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
-			control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
-			mem_free0(cbdata);
+			c_smartcard_error(smartcard, CONTAINER_SMARTCARD_CHANGE_PIN_FAILED);
 			return;
 		}
 		switch (msg->code) {
@@ -767,25 +671,22 @@ c_smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, voi
 		audit_log_event(container_get_uuid(smartcard->container), command_state ? SSA : FSA,
 				CMLD, CONTAINER_MGMT, "container-change-pin",
 				uuid_string(container_get_uuid(smartcard->container)), 0);
-		control_send_message(command_state ?
-					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_SUCCESSFUL :
-					     CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED,
-				     resp_fd);
+		c_smartcard_error(smartcard, command_state ?
+						     CONTAINER_SMARTCARD_CHANGE_PIN_SUCCESSFUL :
+						     CONTAINER_SMARTCARD_CHANGE_PIN_FAILED);
 
 		protobuf_free_message((ProtobufCMessage *)msg);
 		event_remove_io(io);
 		event_io_free(io);
-		mem_free0(cbdata);
 	} else {
 		ERROR("Failed to receive message: EVENT_IO_EXCEPT. Aborting smartcard change_pin.");
 		event_remove_io(io);
 		event_io_free(io);
-		mem_free0(cbdata);
 	}
 }
 
 static int
-c_smartcard_change_pin(void *smartcardp, int resp_fd, const char *passwd, const char *newpasswd)
+c_smartcard_change_pin(void *smartcardp, const char *passwd, const char *newpasswd)
 {
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
@@ -796,14 +697,6 @@ c_smartcard_change_pin(void *smartcardp, int resp_fd, const char *passwd, const 
 	unsigned char pair_sec[MAX_PAIR_SEC_LEN];
 	bool is_provisioning;
 
-	c_smartcard_cbdata_t *cbdata = mem_alloc0(sizeof(c_smartcard_cbdata_t));
-	if (!cbdata) {
-		ERROR("Could not allocate memory for cbdata");
-		return -1;
-	}
-	cbdata->smartcard = smartcard;
-	cbdata->resp_fd = resp_fd;
-
 	DEBUG("SCD: Received new password from UI");
 
 	ret = c_smartcard_get_pairing_secret(smartcard, pair_sec, sizeof(pair_sec));
@@ -812,15 +705,14 @@ c_smartcard_change_pin(void *smartcardp, int resp_fd, const char *passwd, const 
 				"read-pairing-secret",
 				uuid_string(container_get_uuid(smartcard->container)), 0);
 		ERROR("Could not retrieve pairing secret, ret code : %d", ret);
-		control_send_message(CONTROL_RESPONSE_CONTAINER_CHANGE_PIN_FAILED, resp_fd);
-		mem_free0(cbdata);
+		c_smartcard_error(smartcard, CONTAINER_SMARTCARD_PAIRING_SECRET_FAILED);
 		return -1;
 	}
 
 	is_provisioning = !c_smartcard_container_token_is_provisioned(smartcard);
 
 	event_io_t *event = event_io_new(smartcard->sock, EVENT_IO_READ,
-					 c_smartcard_cb_container_change_pin, cbdata);
+					 c_smartcard_cb_container_change_pin, smartcard);
 	event_add_io(event);
 	DEBUG("SCD: Registered smartcard_cb_container_change_pin container callback for scd");
 
@@ -1023,7 +915,7 @@ c_smartcard_token_attach_cb(event_timer_t *timer, void *data)
 	event_timer_free(timer);
 }
 
-int
+static int
 c_smartcard_token_attach(void *smartcardp)
 {
 	c_smartcard_t *smartcard = smartcardp;
@@ -1040,7 +932,7 @@ c_smartcard_token_attach(void *smartcardp)
 	return 0;
 }
 
-int
+static int
 c_smartcard_token_detach(void *smartcardp)
 {
 	c_smartcard_t *smartcard = smartcardp;
@@ -1092,23 +984,14 @@ out:
 }
 
 static int
-c_smartcard_container_start(void *smartcardp, int resp_fd, const char *passwd)
+c_smartcard_container_ctrl(void *smartcardp, int (*success_cb)(container_t *container),
+			   const char *passwd)
 {
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
-	return c_smartcard_token_unlock_handler(smartcard, resp_fd, passwd,
-						c_smartcard_cb_start_container);
-}
-
-static int
-c_smartcard_container_stop(void *smartcardp, int resp_fd, const char *passwd)
-{
-	c_smartcard_t *smartcard = smartcardp;
-	ASSERT(smartcard);
-
-	return c_smartcard_token_unlock_handler(smartcard, resp_fd, passwd,
-						c_smartcard_cb_stop_container);
+	smartcard->success_cb = success_cb;
+	return c_smartcard_token_unlock_handler(smartcard, passwd, c_smartcard_cb_ctrl_container);
 }
 
 static int
@@ -1137,6 +1020,10 @@ c_smartcard_new(container_t *container)
 	c_smartcard_t *smartcard = mem_new0(c_smartcard_t, 1);
 	smartcard->container = container;
 	smartcard->path = cmld_get_wrapped_keys_dir();
+
+	smartcard->success_cb = NULL;
+	smartcard->err_cb = NULL;
+	smartcard->err_cbdata = NULL;
 
 	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
 	if (smartcard->sock < 0) {
@@ -1332,8 +1219,8 @@ c_smartcard_init(void)
 	container_register_module(&c_smartcard_module);
 
 	// register relevant handlers implemented by this module
-	container_register_start_with_smartcard_handler(MOD_NAME, c_smartcard_container_start);
-	container_register_stop_with_smartcard_handler(MOD_NAME, c_smartcard_container_stop);
+	container_register_ctrl_with_smartcard_handler(MOD_NAME, c_smartcard_container_ctrl);
+	container_register_set_smartcard_error_cb_handler(MOD_NAME, c_smartcard_set_error_cb);
 	container_register_change_pin_handler(MOD_NAME, c_smartcard_change_pin);
 	container_register_scd_release_pairing_handler(MOD_NAME, c_smartcard_scd_release_pairing);
 	container_register_token_attach_handler(MOD_NAME, c_smartcard_token_attach);
