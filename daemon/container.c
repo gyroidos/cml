@@ -43,7 +43,6 @@
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
-#include "hardware.h"
 #include "audit.h"
 
 #include <inttypes.h>
@@ -397,7 +396,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 
 	container->ns_usr = ns_usr;
 	container->ns_net = ns_net;
-	container->ns_ipc = hardware_supports_systemv_ipc() ? true : false;
+	container->ns_ipc = file_exists("/proc/self/ns/ipc");
 
 	/* Allow config_filename to be NULL for "configless"/"anonymous" containers */
 	if (config_filename)
