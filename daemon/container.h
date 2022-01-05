@@ -115,11 +115,6 @@ typedef struct container_token_config {
 	container_token_type_t type;
 	// the iSerial of the usbtoken reader
 	char *serial;
-	// indicates whether the scd has succesfully initialized the token structure
-	bool is_init;
-	// indicates whether the token has already been provisioned with a platform-bound authentication code
-	bool is_paired_with_device;
-
 } container_token_config_t;
 
 /**
@@ -957,34 +952,6 @@ container_get_token_type(const container_t *container);
  */
 char *
 container_get_usbtoken_serial(const container_t *container);
-
-/**
- * Sets the flag whether the token the container is associated with has been initialized in the scd.
- */
-void
-container_set_token_is_init(container_t *container, const bool is_init);
-
-/**
- * Returns whether the token the container is associated with has been initialized in the scd.
- * If the container includes encrypted mounts it can only operate with the token being present in the scd.
- */
-bool
-container_get_token_is_init(const container_t *container);
-
-/**
- * Sets the flag whether the token the container is associated with has been provisioned with a platform-bound
- * authentication code (== paired to the device).
- */
-void
-container_set_token_is_linked_to_device(container_t *container, const bool is_paired);
-
-/**
- * Returns whether the token the container is associated with has been provisioned with a platform-bound
- * authentication code.
- * The token must be linked to the device prior to it being able to (un-)wrap encryption keys.
- */
-bool
-container_get_token_is_linked_to_device(const container_t *container);
 
 /**
  * Executes a binary of a priviliegd container with cap_sys_time in root userns.
