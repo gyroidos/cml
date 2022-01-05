@@ -962,112 +962,47 @@ container_get_usb_pin_entry(const container_t *container);
 /**
  * Returns the last ACK hash that has been received from this container
  */
-const char *
-container_audit_get_last_ack(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_audit_get_last_ack
- */
-void
-container_register_audit_get_last_ack_handler(const char *mod_name,
-					      const char *(*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_get_last_ack, const char *)
 
 /**
  * Stores the last ACK hash that has been received for this container.
  */
-int
-container_audit_set_last_ack(const container_t *container, const char *last_ack);
-
-/**
- * Registers the corresponding handler for container_audit_set_last_ack
- */
-void
-container_register_audit_set_last_ack_handler(const char *mod_name,
-					      int (*handler)(void *data, const char *last_ack));
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_set_last_ack, int, const char *last_ack)
 
 /**
  * Returns wether an ACK is currently being processed for this container
  */
-bool
-container_audit_get_processing_ack(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_audit_get_processing_ack
- */
-void
-container_register_audit_get_processing_ack_handler(const char *mod_name,
-						    bool (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_get_processing_ack, bool)
 
 /**
  * Stores if an ACK hash is currently being processed for this container
  */
-int
-container_audit_set_processing_ack(const container_t *container, bool processing_ack);
-
-/**
- * Registers the corresponding handler for container_audit_set_processing_ack
- */
-void
-container_register_audit_set_processing_ack_handler(const char *mod_name,
-						    int (*handler)(void *data,
-								   bool processing_ack));
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_set_processing_ack, int, bool processing_ack)
 
 /**
  * Send audit record to container
  */
-int
-container_audit_record_notify(const container_t *container, uint64_t remaining_storage);
-
-/**
- * Registers the corresponding handler for container_audit_record_notify
- */
-void
-container_register_audit_record_notify_handler(const char *mod_name,
-					       int (*handler)(void *data,
-							      uint64_t remaining_storage));
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_record_notify, int, uint64_t remaining_storage)
 
 /**
  * Send audit event to container
  */
-int
-container_audit_record_send(const container_t *container, const uint8_t *buf, uint32_t buflen);
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_record_send, int, const uint8_t *buf, uint32_t buflen)
 
 /**
- * Registers the corresponding handler for container_audit_record_send
+ * Declares the corresponding handler for container_audit_notify_complete
  */
-void
-container_register_audit_record_send_handler(const char *mod_name,
-					     int (*handler)(void *data, const uint8_t *buf,
-							    uint32_t buflen));
-
-int
-container_audit_notify_complete(const container_t *container);
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_notify_complete, int)
 
 /**
- * Registers the corresponding handler for container_audit_notify_complete
+ * Declares the corresponding handler for container_audit_set_loginuid
  */
-void
-container_register_audit_notify_complete_handler(const char *mod_name, int (*handler)(void *data));
-
-int
-container_audit_set_loginuid(const container_t *container, uint32_t uid);
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_set_loginuid, int, uint32_t uid)
 
 /**
- * Registers the corresponding handler for container_audit_set_loginuid
+ * Declares the corresponding handler for container_audit_get_loginuid
  */
-void
-container_register_audit_set_loginuid_handler(const char *mod_name,
-					      int (*handler)(void *data, uint32_t uid));
-
-uint32_t
-container_audit_get_loginuid(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_audit_get_loginuid
- */
-void
-container_register_audit_get_loginuid_handler(const char *mod_name,
-					      uint32_t (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(audit_get_loginuid, uint32_t)
 
 list_t *
 container_get_pnet_cfg_list(const container_t *container);
