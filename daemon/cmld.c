@@ -1391,38 +1391,8 @@ cmld_container_has_token_changed(container_t *container, container_config_t *con
 {
 	ASSERT(container);
 
-	container_token_type_t token_type = container_get_token_type(container);
-
-	if (container_config_get_token_type(conf) != token_type) {
-		TRACE("Container token type changed: %d -> %d", token_type,
-		      container_config_get_token_type(conf));
-		return true;
-	}
-
-	if (token_type != CONTAINER_TOKEN_TYPE_USB) {
-		TRACE("Token did not change: Container is not a USB token container");
-		return false;
-	}
-
-	char *serial_new = container_config_get_usbtoken_serial(conf);
-	if (!serial_new) {
-		ERROR("Failed to retrieve container config USB token serial");
-		return true;
-	}
-
-	char *serial_old = container_get_usbtoken_serial(container);
-	if (!serial_old) {
-		ERROR("Failed to retrieve container USB token serial");
-		return true;
-	}
-
-	if (strcmp(serial_new, serial_old)) {
-		TRACE("Container USB token serial changed");
-		return true;
-	}
-
-	TRACE("Container USB token serial did not change");
-	return false;
+	return container_has_token_changed(container, container_config_get_token_type(conf),
+					   container_config_get_usbtoken_serial(conf));
 }
 
 int
