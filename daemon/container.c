@@ -897,14 +897,9 @@ container_free(container_t *container)
 	}
 	list_delete(container->fifo_list);
 
-	if (container->token.uuid)
-		uuid_free(container->token.uuid);
-
 	if (container->token.serial)
 		mem_free0(container->token.serial);
 
-	if (container->token.devpath)
-		mem_free0(container->token.devpath);
 	mem_free0(container);
 }
 
@@ -2533,43 +2528,6 @@ container_get_usbtoken_serial(const container_t *container)
 	IF_FALSE_RETVAL_ERROR(CONTAINER_TOKEN_TYPE_USB == container->token.type, NULL);
 
 	return container->token.serial;
-}
-
-char *
-container_get_usbtoken_devpath(const container_t *container)
-{
-	ASSERT(container);
-	IF_FALSE_RETVAL_ERROR(CONTAINER_TOKEN_TYPE_USB == container->token.type, NULL);
-
-	return container->token.devpath;
-}
-
-void
-container_set_usbtoken_devpath(container_t *container, char *devpath)
-{
-	ASSERT(container);
-	IF_FALSE_RETURN(CONTAINER_TOKEN_TYPE_USB == container->token.type);
-
-	if (container->token.devpath)
-		mem_free0(container->token.devpath);
-
-	DEBUG("Setting token devpath for container %s to %s", container->name, devpath);
-
-	container->token.devpath = devpath;
-}
-
-void
-container_set_token_uuid(container_t *container, const char *tuuid)
-{
-	ASSERT(container);
-	container->token.uuid = uuid_new(tuuid);
-}
-
-uuid_t *
-container_get_token_uuid(const container_t *container)
-{
-	ASSERT(container);
-	return container->token.uuid;
 }
 
 void

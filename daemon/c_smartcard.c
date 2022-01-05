@@ -805,7 +805,6 @@ c_smartcard_scd_token_add_block(c_smartcard_t *smartcard)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL: {
 		TRACE("CMLD: smartcard_scd_token_block_new: token in scd created successfully");
-		container_set_token_uuid(container, out.token_uuid);
 		container_set_token_is_init(container, true);
 		rc = 0;
 	} break;
