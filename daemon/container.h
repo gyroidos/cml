@@ -111,8 +111,6 @@ typedef struct container_pnet_cfg {
  * Structure to define the configuration of the token associated with the container.
  */
 typedef struct container_token_config {
-	// the uuid of the token the container is associated with
-	uuid_t *uuid;
 	// the token's type
 	container_token_type_t type;
 	// the iSerial of the usbtoken reader
@@ -121,9 +119,7 @@ typedef struct container_token_config {
 	bool is_init;
 	// indicates whether the token has already been provisioned with a platform-bound authentication code
 	bool is_paired_with_device;
-	// the current DEVPATH of this token,
-	// this is needed as the remove/unbind kernel uevents do not contain the USB_SERIAL_SHORT
-	char *devpath;
+
 } container_token_config_t;
 
 /**
@@ -961,30 +957,6 @@ container_get_token_type(const container_t *container);
  */
 char *
 container_get_usbtoken_serial(const container_t *container);
-
-/**
- * Returns the current devpath of the container's token or NULL if the reader is currently not attached
- */
-char *
-container_get_usbtoken_devpath(const container_t *container);
-
-/**
- * Sets the current devpath of the container's token
- */
-void
-container_set_usbtoken_devpath(container_t *container, char *devpath);
-
-/**
- * Sets the uuid of the token the container is associated with.
- */
-void
-container_set_token_uuid(container_t *container, const char *tuuid);
-
-/**
- * Returns the uuid of the token the container is associated with.
- */
-uuid_t *
-container_get_token_uuid(const container_t *container);
 
 /**
  * Sets the flag whether the token the container is associated with has been initialized in the scd.
