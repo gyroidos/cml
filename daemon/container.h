@@ -1078,38 +1078,15 @@ container_get_vnet_cfg_list(const container_t *container);
 list_t *
 container_get_fifo_list(const container_t *container);
 
-int
-container_ctrl_with_smartcard(const container_t *container, int (*success_cb)(container_t *),
-			      const char *pw);
+CONTAINER_MODULE_WRAPPER_DECLARE(ctrl_with_smartcard, int, int (*success_cb)(container_t *),
+				 const char *pw)
 
-int
-container_set_smartcard_error_cb(const container_t *container,
-				 void (*err_cb)(int error, void *data), void *cbdata);
+CONTAINER_MODULE_WRAPPER_DECLARE(set_smartcard_error_cb, int, void (*err_cb)(int error, void *data),
+				 void *cbdata)
 
-int
-container_scd_release_pairing(const container_t *container);
+CONTAINER_MODULE_WRAPPER_DECLARE(scd_release_pairing, int)
 
-int
-container_change_pin(const container_t *container, const char *pw, const char *newpw);
-
-void
-container_register_ctrl_with_smartcard_handler(const char *mod_name,
-					       int (*handler)(void *data,
-							      int (*success_cb)(container_t *),
-							      const char *pw));
-
-void
-container_register_set_smartcard_error_cb_handler(
-	const char *mod_name,
-	int (*handler)(void *data, void (*err_cb)(int error, void *data), void *cbdata));
-
-void
-container_register_scd_release_pairing_handler(const char *mod_name, int (*handler)(void *data));
-
-void
-container_register_change_pin_handler(const char *mod_name,
-				      int (*handler)(void *data, const char *pw,
-						     const char *newpw));
+CONTAINER_MODULE_WRAPPER_DECLARE(change_pin, int, const char *pw, const char *newpw)
 
 /**
  * Handles attachment of a container token.
@@ -1117,11 +1094,7 @@ container_register_change_pin_handler(const char *mod_name,
  * @return 0 if the given USB serial belongs to a container token and
  *	the attachment procedure could be performed properly, -1 otherwise
  */
-int
-container_token_attach(const container_t *container);
-
-void
-container_register_token_attach_handler(const char *mod_name, int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(token_attach, int)
 
 /**
  * Handles detachment of a container token.
@@ -1129,19 +1102,9 @@ container_register_token_attach_handler(const char *mod_name, int (*handler)(voi
  * @return 0 if the given USB serial belongs to a container token and
  * 	the detachment procedure could be performed properly, -1 otherwise
  */
-int
-container_token_detach(const container_t *container);
+CONTAINER_MODULE_WRAPPER_DECLARE(token_detach, int)
 
-void
-container_register_token_detach_handler(const char *mod_name, int (*handler)(void *data));
-
-bool
-container_has_token_changed(const container_t *container, container_token_type_t,
-			    const char *serial);
-
-void
-container_register_has_token_changed_handler(const char *mod_name,
-					     bool (*handler)(void *data, container_token_type_t,
-							     const char *serial));
+CONTAINER_MODULE_WRAPPER_DECLARE(has_token_changed, bool, container_token_type_t type,
+				 const char *serial)
 
 #endif /* CONTAINER_H */
