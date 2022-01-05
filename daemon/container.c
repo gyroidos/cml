@@ -145,7 +145,7 @@ struct container {
 	char *dns_server;
 	bool setup_mode;
 
-	container_token_config_t token;
+	container_token_type_t token_type;
 
 	bool usb_pin_entry;
 
@@ -467,6 +467,10 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(token_attach, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(token_attach, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(token_detach, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(token_detach, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(has_token_changed, bool, void *, container_token_type_t,
+				       const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(has_token_changed, bool, false, container_token_type_t,
+					const char *)
 
 void
 container_free_key(container_t *container)
@@ -594,25 +598,7 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 
 	container->setup_mode = false;
 
-	container->token.type = ttype;
-	if (ttype == CONTAINER_TOKEN_TYPE_USB) {
-		for (list_t *l = container->usbdev_list; l; l = l->next) {
-			uevent_usbdev_t *ud = (uevent_usbdev_t *)l->data;
-			if (uevent_usbdev_get_type(ud) == UEVENT_USBDEV_TYPE_TOKEN) {
-				container->token.serial =
-					mem_strdup(uevent_usbdev_get_i_serial(ud));
-				DEBUG("container %s configured to use usb token reader with serial %s",
-				      container->name, container->token.serial);
-				uevent_usbdev_set_sysfs_props(ud);
-				uevent_register_usbdevice(container, ud);
-				break; // TODO: handle misconfiguration with several usbtoken?
-			}
-		}
-		if (NULL == container->token.serial) {
-			ERROR("Usbtoken reader serial missing in container config. Abort creation of container");
-			goto error;
-		}
-	}
+	container->token_type = ttype;
 
 	container->usb_pin_entry = usb_pin_entry;
 	container->is_synced = true;
@@ -888,9 +874,6 @@ container_free(container_t *container)
 		mem_free0(l->data);
 	}
 	list_delete(container->fifo_list);
-
-	if (container->token.serial)
-		mem_free0(container->token.serial);
 
 	mem_free0(container);
 }
@@ -2510,16 +2493,7 @@ container_token_type_t
 container_get_token_type(const container_t *container)
 {
 	ASSERT(container);
-	return container->token.type;
-}
-
-char *
-container_get_usbtoken_serial(const container_t *container)
-{
-	ASSERT(container);
-	IF_FALSE_RETVAL_ERROR(CONTAINER_TOKEN_TYPE_USB == container->token.type, NULL);
-
-	return container->token.serial;
+	return container->token_type;
 }
 
 bool

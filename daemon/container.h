@@ -108,16 +108,6 @@ typedef struct container_pnet_cfg {
 } container_pnet_cfg_t;
 
 /**
- * Structure to define the configuration of the token associated with the container.
- */
-typedef struct container_token_config {
-	// the token's type
-	container_token_type_t type;
-	// the iSerial of the usbtoken reader
-	char *serial;
-} container_token_config_t;
-
-/**
  * Represents the current container state.
  */
 typedef enum {
@@ -948,12 +938,6 @@ container_token_type_t
 container_get_token_type(const container_t *container);
 
 /**
- * Returns the i_serial number of the usb device that is the token reader
- */
-char *
-container_get_usbtoken_serial(const container_t *container);
-
-/**
  * Executes a binary of a priviliegd container with cap_sys_time in root userns.
  */
 int
@@ -1148,5 +1132,14 @@ container_token_detach(const container_t *container);
 
 void
 container_register_token_detach_handler(const char *mod_name, int (*handler)(void *data));
+
+bool
+container_has_token_changed(const container_t *container, container_token_type_t,
+			    const char *serial);
+
+void
+container_register_has_token_changed_handler(const char *mod_name,
+					     bool (*handler)(void *data, container_token_type_t,
+							     const char *serial));
 
 #endif /* CONTAINER_H */

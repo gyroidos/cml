@@ -28,6 +28,7 @@
 #include "hardware.h"
 #include "cmld.h"
 #include "audit.h"
+#include "uevent.h"
 #include "scd_shared.h"
 
 #include "common/macro.h"
@@ -72,6 +73,11 @@ typedef struct c_smartcard {
 	int sock;
 	const char *path;
 	container_t *container;
+
+	// the token's type
+	container_token_type_t token_type;
+	// the iSerial of the usbtoken reader
+	char *token_serial;
 
 	// indicates whether the scd has succesfully initialized the token structure
 	bool is_init;
@@ -245,8 +251,7 @@ c_smartcard_send_token_lock_cmd(c_smartcard_t *smartcard)
 	out.code = DAEMON_TO_TOKEN__CODE__LOCK;
 
 	out.has_token_type = true;
-	out.token_type =
-		c_smartcard_tokentype_to_proto(container_get_token_type(smartcard->container));
+	out.token_type = c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
 
@@ -374,8 +379,8 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					uuid_string(container_get_uuid(smartcard->container)));
 
 				out.has_token_type = true;
-				out.token_type = c_smartcard_tokentype_to_proto(
-					container_get_token_type(smartcard->container));
+				out.token_type =
+					c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 				out.token_uuid = mem_strdup(
 					uuid_string(container_get_uuid(smartcard->container)));
@@ -428,8 +433,8 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					uuid_string(container_get_uuid(smartcard->container)));
 
 				out.has_token_type = true;
-				out.token_type = c_smartcard_tokentype_to_proto(
-					container_get_token_type(smartcard->container));
+				out.token_type =
+					c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 				out.token_uuid = mem_strdup(
 					uuid_string(container_get_uuid(smartcard->container)));
@@ -481,8 +486,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 			out.code = DAEMON_TO_TOKEN__CODE__LOCK;
 
 			out.has_token_type = true;
-			out.token_type = c_smartcard_tokentype_to_proto(
-				container_get_token_type(smartcard->container));
+			out.token_type = c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 			out.token_uuid =
 				mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
@@ -594,8 +598,7 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, const char *passwd,
 	out.pairing_secret.len = pair_sec_len;
 	out.pairing_secret.data = mem_memcpy(pair_sec, sizeof(pair_sec));
 	out.has_token_type = true;
-	out.token_type =
-		c_smartcard_tokentype_to_proto(container_get_token_type(smartcard->container));
+	out.token_type = c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
 
@@ -728,8 +731,7 @@ c_smartcard_change_pin(void *smartcardp, const char *passwd, const char *newpass
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(smartcard->container)));
 
 	out.has_token_type = true;
-	out.token_type =
-		c_smartcard_tokentype_to_proto(container_get_token_type(smartcard->container));
+	out.token_type = c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 	out.token_pin = mem_strdup(passwd);
 	out.token_newpin = mem_strdup(newpasswd);
@@ -789,14 +791,14 @@ c_smartcard_scd_token_add_block(c_smartcard_t *smartcard)
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 
 	out.has_token_type = true;
-	out.token_type = c_smartcard_tokentype_to_proto(container_get_token_type(container));
+	out.token_type = c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 	if (out.token_type == TOKEN_TYPE__USB) {
-		out.usbtoken_serial = container_get_usbtoken_serial(container);
-		if (NULL == out.usbtoken_serial) {
+		if (NULL == smartcard->token_serial) {
 			ERROR("Could not retrive serial of usbtoken reader. Abort token init...");
 			goto err;
 		}
+		out.usbtoken_serial = smartcard->token_serial;
 	}
 
 	TokenToDaemon *msg = c_smartcard_send_recv_block(&out);
@@ -843,7 +845,7 @@ c_smartcard_scd_token_remove_block(c_smartcard_t *smartcard)
 	out.token_uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 
 	out.has_token_type = true;
-	out.token_type = c_smartcard_tokentype_to_proto(container_get_token_type(container));
+	out.token_type = c_smartcard_tokentype_to_proto(smartcard->token_type);
 
 	TokenToDaemon *msg = c_smartcard_send_recv_block(&out);
 	if (!msg) {
@@ -879,7 +881,7 @@ c_smartcard_token_init(c_smartcard_t *smartcard)
 	ASSERT(smartcard);
 
 	// container is configured to not use a token at all
-	if (CONTAINER_TOKEN_TYPE_NONE == container_get_token_type(smartcard->container)) {
+	if (CONTAINER_TOKEN_TYPE_NONE == smartcard->token_type) {
 		smartcard->is_init = false;
 		DEBUG("Container %s is configured to use no token to hold encryption keys",
 		      uuid_string(container_get_uuid(smartcard->container)));
@@ -924,7 +926,7 @@ c_smartcard_token_attach(void *smartcardp)
 	ASSERT(smartcard);
 
 	TRACE("Registering callback to handle attachment of token with serial %s",
-	      container_get_usbtoken_serial(smartcard->container));
+	      smartcard->token_serial);
 
 	// give usb device some time to register
 	event_timer_t *e = event_timer_new(USB_TOKEN_ATTACH_TIMEOUT, 1, c_smartcard_token_attach_cb,
@@ -952,6 +954,41 @@ c_smartcard_token_detach(void *smartcardp)
 	}
 
 	return 0;
+}
+
+static bool
+c_smartcard_has_token_changed(void *smartcardp, container_token_type_t ttype, const char *serial)
+{
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
+
+	if (ttype != smartcard->token_type) {
+		TRACE("Container token type changed: %d -> %d", smartcard->token_type, ttype);
+		return true;
+	}
+
+	if (smartcard->token_type != CONTAINER_TOKEN_TYPE_USB) {
+		TRACE("Token did not change: Container is not a USB token container");
+		return false;
+	}
+
+	if (!serial) {
+		ERROR("No serial for USB token");
+		return true;
+	}
+
+	if (!smartcard->token_serial) {
+		ERROR("Serial currently not set for USB token");
+		return true;
+	}
+
+	if (strcmp(serial, smartcard->token_serial)) {
+		TRACE("Container USB token serial changed");
+		return true;
+	}
+
+	TRACE("Container USB token serial did not change");
+	return false;
 }
 
 static int
@@ -1022,6 +1059,29 @@ c_smartcard_new(container_t *container)
 	c_smartcard_t *smartcard = mem_new0(c_smartcard_t, 1);
 	smartcard->container = container;
 	smartcard->path = cmld_get_wrapped_keys_dir();
+
+	smartcard->token_type = container_get_token_type(smartcard->container);
+
+	// Register at uevent subsystem for plug events if USB TOKEN
+	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
+		for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
+			uevent_usbdev_t *ud = (uevent_usbdev_t *)l->data;
+			if (uevent_usbdev_get_type(ud) == UEVENT_USBDEV_TYPE_TOKEN) {
+				smartcard->token_serial =
+					mem_strdup(uevent_usbdev_get_i_serial(ud));
+				DEBUG("container %s configured to use usb token reader with serial %s",
+				      container_get_name(container), smartcard->token_serial);
+				uevent_usbdev_set_sysfs_props(ud);
+				uevent_register_usbdevice(container, ud);
+				break; // TODO: handle misconfiguration with several usbtoken?
+			}
+		}
+		if (NULL == smartcard->token_serial) {
+			ERROR("Usbtoken reader serial missing in container config. Abort creation of container");
+			mem_free0(smartcard);
+			return NULL;
+		}
+	}
 
 	smartcard->success_cb = NULL;
 	smartcard->err_cb = NULL;
@@ -1116,7 +1176,7 @@ c_smartcard_bind_token(c_smartcard_t *smartcard)
 {
 	ASSERT(smartcard);
 
-	if (CONTAINER_TOKEN_TYPE_USB != container_get_token_type(smartcard->container)) {
+	if (CONTAINER_TOKEN_TYPE_USB != smartcard->token_type) {
 		DEBUG("Token type is not USB, not binding relay socket");
 		return 0;
 	}
@@ -1229,4 +1289,5 @@ c_smartcard_init(void)
 	container_register_scd_release_pairing_handler(MOD_NAME, c_smartcard_scd_release_pairing);
 	container_register_token_attach_handler(MOD_NAME, c_smartcard_token_attach);
 	container_register_token_detach_handler(MOD_NAME, c_smartcard_token_detach);
+	container_register_has_token_changed_handler(MOD_NAME, c_smartcard_has_token_changed);
 }
