@@ -37,6 +37,8 @@
 #ifndef CONTAINER_H
 #define CONTAINER_H
 
+#include "container_module.h"
+
 #include "common/uuid.h"
 #include "common/list.h"
 
