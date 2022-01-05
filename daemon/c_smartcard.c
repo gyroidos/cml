@@ -72,6 +72,12 @@ typedef struct c_smartcard {
 	int sock;
 	const char *path;
 	container_t *container;
+
+	// indicates whether the scd has succesfully initialized the token structure
+	bool is_init;
+	// indicates whether the token has already been provisioned with a platform-bound authentication code
+	bool is_paired_with_device;
+
 	void (*err_cb)(int error_code, void *data);
 	void *err_cbdata;
 	int (*success_cb)(container_t *container);
@@ -543,7 +549,7 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, const char *passwd,
 
 	int pair_sec_len;
 
-	if (!container_get_token_is_init(smartcard->container)) {
+	if (!smartcard->is_init) {
 		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, TOKEN_MGMT,
 				"token-uninitialized",
 				uuid_string(container_get_uuid(smartcard->container)), 0);
@@ -552,7 +558,7 @@ c_smartcard_token_unlock_handler(c_smartcard_t *smartcard, const char *passwd,
 		return -1;
 	}
 
-	if (!container_get_token_is_linked_to_device(smartcard->container)) {
+	if (!smartcard->is_paired_with_device) {
 		ERROR("The token that is associated with this container must be paired to the device first");
 		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, TOKEN_MGMT,
 				"token-not-paired",
@@ -649,17 +655,16 @@ c_smartcard_cb_container_change_pin(int fd, unsigned events, event_io_t *io, voi
 				ERROR("Could not write file %s to flag that container %s's token has been initialized\n \
 						This may leave the system in an inconsistent state!",
 				      path, uuid_string(container_get_uuid(smartcard->container)));
-				container_set_token_is_linked_to_device(smartcard->container,
-									false);
+				smartcard->is_paired_with_device = false;
 				command_state = false;
 			} else {
-				container_set_token_is_linked_to_device(smartcard->container, true);
+				smartcard->is_paired_with_device = true;
 				command_state = true;
 			}
 			mem_free0(path);
 		} break;
 		case TOKEN_TO_DAEMON__CODE__PROVISION_PIN_FAILED: {
-			container_set_token_is_linked_to_device(smartcard->container, false);
+			smartcard->is_paired_with_device = false;
 			command_state = false;
 		} break;
 		default:
@@ -755,11 +760,9 @@ c_smartcard_update_token_state(c_smartcard_t *smartcard)
 	 */
 	// container_set_token_is_init(container, smartcard_container_token_is_init(container));
 
-	container_set_token_is_linked_to_device(
-		smartcard->container, c_smartcard_container_token_is_provisioned(smartcard));
+	smartcard->is_paired_with_device = c_smartcard_container_token_is_provisioned(smartcard);
 
-	DEBUG("Updated Token state: %d",
-	      container_get_token_is_linked_to_device(smartcard->container));
+	DEBUG("Updated Token state: %d", smartcard->is_paired_with_device);
 
 	return 0;
 }
@@ -805,15 +808,15 @@ c_smartcard_scd_token_add_block(c_smartcard_t *smartcard)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL: {
 		TRACE("CMLD: smartcard_scd_token_block_new: token in scd created successfully");
-		container_set_token_is_init(container, true);
+		smartcard->is_init = true;
 		rc = 0;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__TOKEN_ADD_FAILED: {
-		container_set_token_is_init(container, false);
+		smartcard->is_init = false;
 		ERROR("Creating scd token structure failed");
 	} break;
 	default:
-		container_set_token_is_init(container, false);
+		smartcard->is_init = false;
 		ERROR("TokenToDaemon command %d not expected as answer to change_pin", msg->code);
 	}
 
@@ -852,7 +855,7 @@ c_smartcard_scd_token_remove_block(c_smartcard_t *smartcard)
 	switch (msg->code) {
 	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_SUCCESSFUL: {
 		TRACE("CMLD: smartcard_scd_token_block_remove: token in scd removed successfully");
-		container_set_token_is_init(container, false);
+		smartcard->is_init = false;
 	} break;
 	case TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED: {
 		ERROR("Removing scd token structure failed");
@@ -877,7 +880,7 @@ c_smartcard_token_init(c_smartcard_t *smartcard)
 
 	// container is configured to not use a token at all
 	if (CONTAINER_TOKEN_TYPE_NONE == container_get_token_type(smartcard->container)) {
-		container_set_token_is_init(smartcard->container, false);
+		smartcard->is_init = false;
 		DEBUG("Container %s is configured to use no token to hold encryption keys",
 		      uuid_string(container_get_uuid(smartcard->container)));
 		return 0;
@@ -1042,15 +1045,6 @@ c_smartcard_new(container_t *container)
 	return smartcard;
 }
 
-static int
-c_smartcard_stop(void *smartcardp)
-{
-	c_smartcard_t *smartcard = smartcardp;
-	ASSERT(smartcard);
-
-	return close(smartcard->sock);
-}
-
 static void
 c_smartcard_free(void *smartcardp)
 {
@@ -1060,9 +1054,20 @@ c_smartcard_free(void *smartcardp)
 	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
 		if (c_smartcard_scd_token_remove_block(smartcard)) {
 			WARN("Cannot remove USB token for container %s",
-					container_get_name(smartcard->container));
+			     container_get_name(smartcard->container));
 		}
 	}
+
+	/* unregister usb tokens from uevent subsystem */
+	for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
+		uevent_usbdev_t *usbdev = l->data;
+		if (UEVENT_USBDEV_TYPE_TOKEN == uevent_usbdev_get_type(usbdev))
+			uevent_unregister_usbdevice(smartcard->container, usbdev);
+	}
+
+	/* release scd connection */
+	close(smartcard->sock);
+
 	mem_free0(smartcard);
 }
 
@@ -1085,7 +1090,7 @@ c_smartcard_destroy(void *smartcardp)
 		WARN("Can't remove token paired file!");
 	}
 
-	if (container_get_token_is_init(smartcard->container)) {
+	if (smartcard->is_init) {
 		if (c_smartcard_scd_token_remove_block(smartcard))
 			WARN("Cannot remove token for container %s",
 			     container_get_name(smartcard->container));
@@ -1206,7 +1211,7 @@ static container_module_t c_smartcard_module = {
 	.start_post_exec = NULL,
 	.start_child = NULL,
 	.start_pre_exec_child = NULL,
-	.stop = c_smartcard_stop,
+	.stop = NULL,
 	.cleanup = NULL,
 	.join_ns = NULL,
 };

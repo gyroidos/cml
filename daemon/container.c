@@ -44,7 +44,6 @@
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "hardware.h"
-#include "uevent.h"
 #include "audit.h"
 
 #include <inttypes.h>
@@ -820,13 +819,6 @@ container_free(container_t *container)
 		container_module_instance_free(c_mod);
 	}
 	list_delete(container->module_instance_list);
-
-	/* unregister usb tokens from uevent subsystem */
-	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
-		uevent_usbdev_t *usbdev = l->data;
-		if (UEVENT_USBDEV_TYPE_TOKEN == uevent_usbdev_get_type(usbdev))
-			uevent_unregister_usbdevice(container, usbdev);
-	}
 
 	container_free_key(container);
 
@@ -2528,34 +2520,6 @@ container_get_usbtoken_serial(const container_t *container)
 	IF_FALSE_RETVAL_ERROR(CONTAINER_TOKEN_TYPE_USB == container->token.type, NULL);
 
 	return container->token.serial;
-}
-
-void
-container_set_token_is_init(container_t *container, const bool is_init)
-{
-	ASSERT(container);
-	container->token.is_init = is_init;
-}
-
-bool
-container_get_token_is_init(const container_t *container)
-{
-	ASSERT(container);
-	return container->token.is_init;
-}
-
-void
-container_set_token_is_linked_to_device(container_t *container, const bool is_paired)
-{
-	ASSERT(container);
-	container->token.is_paired_with_device = is_paired;
-}
-
-bool
-container_get_token_is_linked_to_device(const container_t *container)
-{
-	ASSERT(container);
-	return container->token.is_paired_with_device;
 }
 
 bool
