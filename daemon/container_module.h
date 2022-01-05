@@ -31,6 +31,10 @@
 #define CONTAINER_MODULE_H
 
 // clang-format off
+#define CONTAINER_MODULE_WRAPPER_DECLARE(name, type, ...) \
+	type container_## name(const container_t *container, ##__VA_ARGS__); \
+	void container_register_## name ##_handler(const char *mod_name, type (*h)(void *, ##__VA_ARGS__));
+
 #define CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(name, type, ...) \
 	typedef struct { \
 		const char *mod_name; \
@@ -146,6 +150,7 @@
 			return unimpl; \
 		return container_## name ##_handler->handler_func(instance, a1, a2, a3, a4, a5); \
 	}
+
 // clang-format on
 
 #endif /* CONTAINER_MODULE_H */
