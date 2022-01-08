@@ -177,7 +177,7 @@ guestos_mgr_is_guestos_used_by_containers(const char *os_name)
 	int n = cmld_containers_get_count();
 	for (int i = 0; i < n; i++) {
 		container_t *c = cmld_container_get_by_index(i);
-		const char *container_os_name = guestos_get_name(container_get_os(c));
+		const char *container_os_name = guestos_get_name(container_get_guestos(c));
 		if (!strcmp(container_os_name, os_name)) {
 			return true;
 		}
