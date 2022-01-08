@@ -53,6 +53,7 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "guestos.h"
+#include "guestos_mgr.h"
 #include "lxcfs.h"
 #include "audit.h"
 
@@ -86,6 +87,9 @@ typedef struct c_vol {
 	const container_t *container;
 	char *root;
 	int overlay_count;
+	const guestos_t *os;
+	mount_t *mnt;
+	mount_t *mnt_setup;
 } c_vol_t;
 
 /******************************************************************************/
@@ -108,7 +112,7 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 	case MOUNT_TYPE_SHARED_RW:
 	case MOUNT_TYPE_FLASH:
 	case MOUNT_TYPE_OVERLAY_RO:
-		dir = guestos_get_dir(container_get_os(vol->container));
+		dir = guestos_get_dir(vol->os);
 		break;
 	case MOUNT_TYPE_DEVICE:
 	case MOUNT_TYPE_DEVICE_RW:
@@ -286,7 +290,7 @@ c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mnte
 	char *src;
 	int ret;
 
-	dir = guestos_get_dir(container_get_os(vol->container));
+	dir = guestos_get_dir(vol->os);
 	if (!dir) {
 		ERROR("Could not get directory with operating system images");
 		return -1;
@@ -979,12 +983,12 @@ c_vol_cleanup_dm(c_vol_t *vol)
 {
 	size_t i, n;
 
-	n = mount_get_count(container_get_mount(vol->container));
+	n = mount_get_count(vol->mnt);
 	for (i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
 		char *label;
 
-		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mntent = mount_get_entry(vol->mnt, i);
 
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				   mount_entry_get_img(mntent));
@@ -1045,12 +1049,12 @@ c_vol_umount_all(c_vol_t *vol)
 
 	if (setup_mode) {
 		// umount setup in revers order
-		n = mount_get_count(container_get_mount_setup(vol->container));
+		n = mount_get_count(vol->mnt_setup);
 		TRACE("n setup: %d", n);
 		for (i = n - 1; i >= 0; i--) {
 			const mount_entry_t *mntent;
 			TRACE("i setup: %d", i);
-			mntent = mount_get_entry(container_get_mount_setup(vol->container), i);
+			mntent = mount_get_entry(vol->mnt_setup, i);
 			mount_dir = mem_printf("%s/%s", c_root, mount_entry_get_dir(mntent));
 			if (c_vol_umount_dir(mount_dir) < 0)
 				goto error;
@@ -1059,12 +1063,12 @@ c_vol_umount_all(c_vol_t *vol)
 	}
 
 	// umount root in revers order
-	n = mount_get_count(container_get_mount(vol->container));
+	n = mount_get_count(vol->mnt);
 	TRACE("n rootfs: %d", n);
 	for (i = n - 1; i >= 0; i--) {
 		const mount_entry_t *mntent;
 		TRACE("i rootfs: %d", i);
-		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mntent = mount_get_entry(vol->mnt, i);
 		mount_dir = mem_printf("%s/%s", vol->root, mount_entry_get_dir(mntent));
 		if (c_vol_umount_dir(mount_dir) < 0)
 			goto error;
@@ -1107,11 +1111,11 @@ c_vol_mount_images(c_vol_t *vol)
 	char *c_root = mem_printf("%s%s", vol->root, (setup_mode) ? "/setup" : "");
 
 	if (setup_mode) {
-		n = mount_get_count(container_get_mount_setup(vol->container));
+		n = mount_get_count(vol->mnt_setup);
 		for (i = 0; i < n; i++) {
 			const mount_entry_t *mntent;
 
-			mntent = mount_get_entry(container_get_mount_setup(vol->container), i);
+			mntent = mount_get_entry(vol->mnt_setup, i);
 
 			if (c_vol_mount_image(vol, vol->root, mntent) < 0) {
 				goto err;
@@ -1123,11 +1127,11 @@ c_vol_mount_images(c_vol_t *vol)
 			DEBUG_ERRNO("Could not mkdir %s", c_root);
 	}
 
-	n = mount_get_count(container_get_mount(vol->container));
+	n = mount_get_count(vol->mnt);
 	for (i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
 
-		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mntent = mount_get_entry(vol->mnt, i);
 
 		if (c_vol_mount_image(vol, c_root, mntent) < 0) {
 			goto err;
@@ -1213,15 +1217,15 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 {
 	ASSERT(vol);
 
-	int n = mount_get_count(container_get_mount(vol->container));
+	int n = mount_get_count(vol->mnt);
 	for (int i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
-		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mntent = mount_get_entry(vol->mnt, i);
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
-			if (guestos_check_mount_image_block(container_get_os(vol->container),
-							    mntent, true) != CHECK_IMAGE_GOOD) {
+			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
+			    CHECK_IMAGE_GOOD) {
 				ERROR("Cannot verify image %s: image file is corrupted",
 				      mount_entry_get_img(mntent));
 				return false;
@@ -1243,6 +1247,24 @@ c_vol_new(container_t *container)
 	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(container)));
 	vol->overlay_count = 0;
 
+	vol->os = container_get_guestos(container);
+	if (!vol->os) {
+		ERROR("Could not get GuestOS %s instance for container %s", guestos_get_name(vol->os),
+		      container_get_name(container));
+		return NULL;
+	}
+
+	vol->mnt = mount_new();
+	guestos_fill_mount(vol->os, vol->mnt);
+	//TODO container_config_fill_mount(conf, mnt);
+
+	vol->mnt_setup = mount_new();
+	guestos_fill_mount_setup(vol->os, vol->mnt_setup);
+
+	// prepend container init env with guestos specific values
+	container_init_env_prepend(container, guestos_get_init_env(vol->os),
+				   guestos_get_init_env_len(vol->os));
+
 	return vol;
 }
 
@@ -1252,7 +1274,14 @@ c_vol_free(void *volp)
 	c_vol_t *vol = volp;
 	ASSERT(vol);
 
-	mem_free0(vol->root);
+	if (vol->mnt)
+		mount_free(vol->mnt);
+	if (vol->mnt_setup)
+		mount_free(vol->mnt_setup);
+
+	if (vol->root)
+		mem_free0(vol->root);
+
 	mem_free0(vol);
 }
 
@@ -1265,10 +1294,10 @@ c_vol_do_shared_bind_mounts(const c_vol_t *vol)
 	int loop_fd = 0;
 	bool contains_bind = false;
 
-	int n = mount_get_count(container_get_mount(vol->container));
+	int n = mount_get_count(vol->mnt);
 	for (int i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
-		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mntent = mount_get_entry(vol->mnt, i);
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE) {
 			contains_bind = true;
@@ -1687,10 +1716,10 @@ c_vol_is_encrypted(void *volp)
 	ASSERT(vol);
 	ASSERT(vol->container);
 
-	n = mount_get_count(container_get_mount(vol->container));
+	n = mount_get_count(vol->mnt);
 	for (i = 0; i < n; i++) {
 		const mount_entry_t *mntent;
-		mntent = mount_get_entry(container_get_mount(vol->container), i);
+		mntent = mount_get_entry(vol->mnt, i);
 		if (mount_entry_is_encrypted(mntent))
 			return true;
 	}

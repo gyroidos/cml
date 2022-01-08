@@ -567,7 +567,7 @@ cmld_container_register_observers(container_t *container)
 		      container_get_description(container));
 	}
 
-	if (guestos_get_feature_install_guest(container_get_os(container))) {
+	if (guestos_get_feature_install_guest(container_get_guestos(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
 		int *control_sock_p = mem_new0(int, 1);
 		*control_sock_p =
@@ -844,17 +844,19 @@ cmld_init_c0(const char *path, const char *c0os)
 	}
 
 	char *c0_images_folder = mem_printf("%s/%s", path, "00000000-0000-0000-0000-000000000000");
-	mount_t *c0_mnt = mount_new();
-	guestos_fill_mount(c0_os, c0_mnt);
 	unsigned int c0_ram_limit = 1024;
 	bool c0_ns_net = true;
 
+	const char *init =
+		file_exists(guestos_get_init(c0_os)) ? guestos_get_init(c0_os) : CSERVICE_TARGET;
+	char **init_argv = guestos_get_init_argv_new(c0_os);
+
 	container_t *new_c0 =
 		container_new_internal(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net,
-				       c0_os, NULL, c0_images_folder, c0_mnt, c0_ram_limit, NULL,
-				       0xffffff00, false, cmld_get_device_host_dns(), NULL, NULL,
-				       NULL, NULL, NULL, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE,
-				       false);
+				       c0_os, NULL, c0_images_folder, c0_ram_limit, NULL, 0xffffff00,
+				       false, cmld_get_device_host_dns(), NULL, NULL, NULL, NULL,
+				       NULL, init, init_argv, NULL, 0, NULL,
+				       CONTAINER_TOKEN_TYPE_NONE, false);
 
 	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);

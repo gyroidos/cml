@@ -91,8 +91,6 @@ struct container {
 	uuid_t *uuid;
 	char *name;
 	container_type_t type;
-	mount_t *mnt;
-	mount_t *mnt_setup;
 	bool ns_net;
 	bool ns_usr;
 	bool ns_ipc;
@@ -106,14 +104,16 @@ struct container {
 
 	char *description;
 
-	list_t *csock_list;  /* List of sockets bound inside the container */
-	const guestos_t *os; /* weak reference */
-	pid_t pid;	     /* PID of the corresponding /init */
-	pid_t pid_early;     /* PID of the corresponding early start child */
-	int exit_status;     /* if the container's init exited, here we store its exit status */
+	list_t *csock_list; /* List of sockets bound inside the container */
+	const void *os;	    /* weak reference */
+	pid_t pid;	    /* PID of the corresponding /init */
+	pid_t pid_early;    /* PID of the corresponding early start child */
+	int exit_status;    /* if the container's init exited, here we store its exit status */
 
-	char **init_argv; /* command line parameters for init */
-	char **init_env;  /* environment variables passed to init */
+	char *init;	     /* init to be execed in container */
+	char **init_argv;    /* command line parameters for init */
+	char **init_env;     /* environment variables passed to init */
+	size_t init_env_len; /* len of init_env array */
 
 	list_t *observer_list; /* list of function callbacks to be called when the state changes */
 	event_timer_t *stop_timer;  /* timer to handle container stop timeout */
@@ -362,12 +362,12 @@ container_free_key(container_t *container)
 
 container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
-		       bool ns_net, const guestos_t *os, const char *config_filename,
-		       const char *images_dir, mount_t *mnt, unsigned int ram_limit,
-		       const char *cpus_allowed, uint32_t color, bool allow_autostart,
-		       const char *dns_server, list_t *pnet_cfg_list, char **allowed_devices,
-		       char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list,
-		       char **init_env, size_t init_env_len, list_t *fifo_list,
+		       bool ns_net, const void *os, const char *config_filename,
+		       const char *images_dir, unsigned int ram_limit, const char *cpus_allowed,
+		       uint32_t color, bool allow_autostart, const char *dns_server,
+		       list_t *pnet_cfg_list, char **allowed_devices, char **assigned_devices,
+		       list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
+		       char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
 		       container_token_type_t ttype, bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
@@ -378,10 +378,6 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->uuid = uuid_new(uuid_string(uuid));
 	container->name = mem_strdup(name);
 	container->type = type;
-	container->mnt = mnt;
-
-	container->mnt_setup = mount_new();
-	guestos_fill_mount_setup(os, container->mnt_setup);
 
 	/* do not forget to update container->description in the setters of uuid and name */
 	container->description =
@@ -446,25 +442,12 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->fifo_list = fifo_list;
 
 	// construct an argv buffer for execve
-	container->init_argv = guestos_get_init_argv_new(os);
+	container->init_argv = init_argv;
 
-	// construct a NULL terminated env buffer for execve
-	size_t total_len;
-	if (__builtin_add_overflow(guestos_get_init_env_len(os), init_env_len, &total_len)) {
-		WARN("Overflow detected when calculating buffer size for container's env");
-		goto error;
-	}
-	if (__builtin_add_overflow(total_len, 1, &total_len)) {
-		WARN("Overflow detected when calculating buffer size for container's env");
-		goto error;
-	}
-	container->init_env = mem_new0(char *, total_len);
-	size_t i = 0;
-	char **os_env = guestos_get_init_env(os);
-	for (; i < guestos_get_init_env_len(os); i++)
-		container->init_env[i] = mem_strdup(os_env[i]);
-	for (size_t j = 0; j < init_env_len; ++j)
-		container->init_env[i + j] = mem_strdup(init_env[j]);
+	container->init = mem_strdup(init);
+	// allocate and set init_env
+	container->init_env_len = 0;
+	container_init_env_prepend(container, init_env, init_env_len);
 
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
 	container->device_allowed_list = allowed_devices;
@@ -514,6 +497,39 @@ container_uuid_is_c0id(const uuid_t *uuid)
 	return ret;
 }
 
+void
+container_init_env_prepend(container_t *container, char **init_env, size_t init_env_len)
+{
+	IF_TRUE_RETURN(init_env == NULL || init_env_len <= 0);
+
+	// construct a NULL terminated env buffer for execve
+	size_t total_len;
+	if (__builtin_add_overflow(container->init_env_len, init_env_len, &total_len)) {
+		WARN("Overflow detected when calculating buffer size for container's env");
+		return;
+	}
+	if (__builtin_add_overflow(total_len, 1, &total_len)) {
+		WARN("Overflow detected when calculating buffer size for container's env");
+		return;
+	}
+	char **init_env_old = container->init_env;
+	container->init_env = mem_new0(char *, total_len);
+
+	size_t i = 0;
+	for (; i < init_env_len; i++)
+		container->init_env[i] = mem_strdup(init_env[i]);
+	for (size_t j = 0; j < container->init_env_len; ++j)
+		container->init_env[i + j] = mem_strdup(init_env_old[j]);
+
+	if (init_env_old) {
+		for (char **arg = init_env_old; *arg; arg++) {
+			mem_free0(*arg);
+		}
+		mem_free0(init_env_old);
+	}
+	container->init_env_len = total_len;
+}
+
 /* TODO Error handling */
 container_t *
 container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
@@ -525,10 +541,9 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	const char *name;
 	bool ns_usr;
 	bool ns_net;
-	const guestos_t *os;
+	const void *os;
 	char *config_filename;
 	char *images_dir;
-	mount_t *mnt;
 	unsigned int ram_limit;
 	const char *cpus_allowed;
 	uint32_t color;
@@ -538,6 +553,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	bool allow_autostart;
 	char **allowed_devices;
 	char **assigned_devices;
+	const char *init;
 
 	if (!existing_uuid) {
 		uuid = uuid_new(NULL);
@@ -569,6 +585,7 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	name = container_config_get_name(conf);
 
 	const char *os_name = container_config_get_guestos(conf);
+
 	DEBUG("New containers os name is %s", os_name);
 	os = guestos_mgr_get_latest_by_name(os_name, true);
 	if (!os) {
@@ -579,10 +596,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		container_config_free(conf);
 		return NULL;
 	}
-
-	mnt = mount_new();
-	guestos_fill_mount(os, mnt);
-	container_config_fill_mount(conf, mnt);
 
 	ram_limit = container_config_get_ram_limit(conf);
 	DEBUG("New containers max ram is %" PRIu32 "", ram_limit);
@@ -613,7 +626,6 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 		mem_free0(images_dir);
 		uuid_free(uuid);
 		container_config_free(conf);
-		mount_free(mnt);
 		return NULL;
 	}
 	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
@@ -635,6 +647,11 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 	allowed_devices = container_config_get_dev_allow_list_new(conf);
 	assigned_devices = container_config_get_dev_assign_list_new(conf);
 
+	// if init provided by guestos does not exists use mapped c_service as init
+	init = file_exists(guestos_get_init(os)) ? guestos_get_init(os) : CSERVICE_TARGET;
+
+	char **init_argv = guestos_get_init_argv_new(os);
+
 	char **init_env = container_config_get_init_env(conf);
 	size_t init_env_len = container_config_get_init_env_len(conf);
 
@@ -654,9 +671,9 @@ container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t
 
 	container_t *c =
 		container_new_internal(uuid, name, type, ns_usr, ns_net, os, config_filename,
-				       images_dir, mnt, ram_limit, cpus_allowed, color,
-				       allow_autostart, dns_server, pnet_cfg_list, allowed_devices,
-				       assigned_devices, vnet_cfg_list, usbdev_list, init_env,
+				       images_dir, ram_limit, cpus_allowed, color, allow_autostart,
+				       dns_server, pnet_cfg_list, allowed_devices, assigned_devices,
+				       vnet_cfg_list, usbdev_list, init, init_argv, init_env,
 				       init_env_len, fifo_list, ttype, usb_pin_entry);
 	if (c)
 		container_config_write(conf);
@@ -698,6 +715,7 @@ container_free(container_t *container)
 
 	mem_free0(container->cpus_allowed);
 
+	mem_free0(container->init);
 	if (container->init_argv) {
 		for (char **arg = container->init_argv; *arg; arg++) {
 			mem_free0(*arg);
@@ -710,11 +728,6 @@ container_free(container_t *container)
 		}
 		mem_free0(container->init_env);
 	}
-
-	if (container->mnt)
-		mount_free(container->mnt);
-	if (container->mnt_setup)
-		mount_free(container->mnt_setup);
 
 	if (container->imei)
 		mem_free0(container->imei);
@@ -760,22 +773,8 @@ container_get_uuid(const container_t *container)
 	return container->uuid;
 }
 
-const mount_t *
-container_get_mount(const container_t *container)
-{
-	ASSERT(container);
-	return container->mnt;
-}
-
-const mount_t *
-container_get_mount_setup(const container_t *container)
-{
-	ASSERT(container);
-	return container->mnt_setup;
-}
-
-const guestos_t *
-container_get_os(const container_t *container)
+const void *
+container_get_guestos(const container_t *container)
 {
 	ASSERT(container);
 	return container->os;
@@ -1186,7 +1185,7 @@ container_start_child(void *data)
 		}
 	}
 
-	DEBUG("Will start %s after closing filedescriptors of %s", guestos_get_init(container->os),
+	DEBUG("Will start %s after closing filedescriptors of %s", container->init,
 	      container_get_description(container));
 
 	DEBUG("init_argv:");
@@ -1232,11 +1231,7 @@ container_start_child(void *data)
 		}
 	}
 
-	// if init provided by guestos does not exists use mapped c_service as init
-	const char *container_init = file_exists(guestos_get_init(container->os)) ?
-					     guestos_get_init(container->os) :
-					     CSERVICE_TARGET;
-	execve(container_init, container->init_argv, container->init_env);
+	execve(container->init, container->init_argv, container->init_env);
 
 	/* handle possibly empty rootfs in setup_mode */
 	if (container_get_state(container) == CONTAINER_STATE_SETUP) {
@@ -2182,13 +2177,6 @@ container_get_allow_autostart(container_t *container)
 {
 	ASSERT(container);
 	return container->allow_autostart;
-}
-
-const guestos_t *
-container_get_guestos(const container_t *container)
-{
-	ASSERT(container);
-	return container->os;
 }
 
 const char *

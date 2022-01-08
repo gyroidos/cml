@@ -42,8 +42,6 @@
 #include "common/uuid.h"
 #include "common/list.h"
 
-#include "guestos.h"
-
 #include <sys/types.h>
 #include <stdint.h>
 #include <errno.h>
@@ -192,12 +190,12 @@ container_register_module(container_module_t *mod);
  */
 container_t *
 container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
-		       bool ns_net, const guestos_t *os, const char *config_filename,
-		       const char *images_folder, mount_t *mnt, unsigned int ram_limit,
-		       const char *cpus_allowed, uint32_t color, bool allow_autostart,
-		       const char *dns_server, list_t *net_ifaces, char **allowed_devices,
-		       char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list,
-		       char **init_env, size_t init_env_len, list_t *fifo_list,
+		       bool ns_net, const void *os, const char *config_filename,
+		       const char *images_folder, unsigned int ram_limit, const char *cpus_allowed,
+		       uint32_t color, bool allow_autostart, const char *dns_server,
+		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
+		       list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
+		       char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
 		       container_token_type_t ttype, bool usb_pin_entry);
 
 /**
@@ -256,25 +254,6 @@ container_get_name(const container_t *container);
  */
 const uuid_t *
 container_get_uuid(const container_t *container);
-
-/**
- * Return the partition table of the container.
- */
-const mount_t *
-container_get_mount(const container_t *container);
-
-/**
- * Return the partition table of additional mounts for the
- * container's root in setup mode.
- */
-const mount_t *
-container_get_mount_setup(const container_t *container);
-
-/**
- * Return the associated guest OS object for the container.
- */
-const guestos_t *
-container_get_os(const container_t *container);
 
 /**
  * Return the directory where the container stores its images.
@@ -661,6 +640,9 @@ container_get_ram_limit(const container_t *container);
 const char *
 container_get_cpus_allowed(const container_t *container);
 
+void
+container_init_env_prepend(container_t *container, char **init_env, size_t init_env_len);
+
 /***************************
  * Submodule Interfaces    *
  **************************/
@@ -687,9 +669,9 @@ bool
 container_get_allow_autostart(container_t *container);
 
 /*
- * Retrive the corresponding GuestOS which is running in this container
+ * Retrive the corresponding GuestOS (as generic object) which is running in this container
  */
-const guestos_t *
+const void *
 container_get_guestos(const container_t *container);
 
 /**
