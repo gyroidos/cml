@@ -720,6 +720,25 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 }
 
 /*
+ * This callback handles config updates during container start/stop cycle
+ */
+static void
+cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+{
+	if (container_get_state(container) == CONTAINER_STATE_REBOOTING ||
+	    container_get_state(container) == CONTAINER_STATE_STOPPED) {
+		if (!container_get_sync_state(container)) {
+			DEBUG("Container is out of sync with its config. Reloading..");
+			if (cmld_reload_container(container_get_uuid(container),
+						  cmld_get_containers_dir()) != 0) {
+				ERROR("Failed to reload container on config update");
+			}
+		}
+		container_unregister_observer(container, cb);
+	}
+}
+
+/*
  * This callback handles internal reboot of container
  */
 static void
@@ -759,6 +778,11 @@ cmld_container_register_observers(container_t *container)
 	/* register an observer to capture the reboot command */
 	if (!container_register_observer(container, &cmld_reboot_container_cb, NULL)) {
 		WARN("Could not register container reboot observer callback for %s",
+		     container_get_description(container));
+	}
+	/* register an observer for automatic config reload */
+	if (!container_register_observer(container, &cmld_container_config_sync_cb, NULL)) {
+		WARN("Could not register container config sync observer callback for %s",
 		     container_get_description(container));
 	}
 }
@@ -1083,6 +1107,13 @@ cmld_start_c0(container_t *new_c0)
 	/* register an observer to capture the reboot command for the special container c0 */
 	if (!container_register_observer(new_c0, &cmld_reboot_c0_cb, NULL)) {
 		WARN("Could not register observer reboot callback for c0");
+		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_c0)), 0);
+		return -1;
+	}
+	/* register an observer for automatic config reload of c0 */
+	if (!container_register_observer(new_c0, &cmld_container_config_sync_cb, NULL)) {
+		WARN("Could not register container config sync observer callback for c0");
 		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
 				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;

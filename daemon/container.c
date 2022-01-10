@@ -859,15 +859,6 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			if (errno == ECHILD) {
 				DEBUG("Process group of container %s terminated completely",
 				      container_get_description(container));
-
-				if (!container_get_sync_state(container)) {
-					DEBUG("Container is out of sync with its config. Reloading..");
-					if (cmld_reload_container(container_get_uuid(container),
-								  cmld_get_containers_dir()) != 0) {
-						ERROR("Failed to reload container on config update");
-					}
-				}
-
 			} else {
 				audit_log_event(container_get_uuid(container), FSA, CMLD,
 						CONTAINER_MGMT, "container-observer-error",
