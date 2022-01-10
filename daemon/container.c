@@ -39,7 +39,6 @@
 #include "common/proc.h"
 #include "common/ns.h"
 
-#include "cmld.h"
 #include "audit.h"
 
 #include <inttypes.h>
@@ -1119,7 +1118,7 @@ container_start_child_early(void *data)
 	container_module_instance_t *c_net =
 		container_module_get_instance_by_name(container, "c_net");
 	// on reboots of c0 rejoin existing userns and netns
-	if (cmld_containers_get_c0() == container &&
+	if (container_uuid_is_c0id(container_get_uuid(container)) &&
 	    container->prev_state == CONTAINER_STATE_REBOOTING) {
 		if (c_user && c_user->module && c_user->module->join_ns) {
 			IF_TRUE_GOTO((ret = c_user->module->join_ns(c_user->instance)) < 0, error);
