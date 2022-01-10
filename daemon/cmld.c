@@ -59,6 +59,7 @@
 #include "container_config.h"
 #include "container.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <dirent.h>
 #include <errno.h>
@@ -336,6 +337,182 @@ cmld_set_device_provisioned(void)
 	return 0;
 }
 
+/**
+ * Creates a new container container object. There are three different cases
+ * depending on the combination of the given parameters:
+ *
+ * TODO: Use doxygen style to document parameters
+ * uuid && !config: In this case, a container with the given UUID must be already
+ * present in the given store_path and is loaded from there.
+ *
+ * !uuid && config: In this case, the container does NOT yet exist and should be
+ * created in the given store_path using the given config buffer and a random
+ * UUID.
+ *
+ * uuid && config: In this case, the container does NOT yet exist and should be
+ * created in the given store_path using the given config buffer and the given
+ * UUID.
+ *
+ * Optionally sig, cert buffers and length paramters could be set to non zero/NULL
+ * values for signature verification of the corresponding configuration contained
+ * in config buffer.
+ *
+ * @return The new container object or NULL if something went wrong.
+ */
+static container_t *
+cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
+		   size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len)
+{
+	ASSERT(store_path);
+	ASSERT(existing_uuid || config);
+
+	const char *name;
+	bool ns_usr;
+	bool ns_net;
+	const void *os;
+	char *config_filename;
+	char *images_dir;
+	unsigned int ram_limit;
+	const char *cpus_allowed;
+	uint32_t color;
+	uuid_t *uuid;
+	uint64_t current_guestos_version;
+	uint64_t new_guestos_version;
+	bool allow_autostart;
+	char **allowed_devices;
+	char **assigned_devices;
+	const char *init;
+
+	if (!existing_uuid) {
+		uuid = uuid_new(NULL);
+	} else {
+		uuid = uuid_new(uuid_string(existing_uuid));
+	}
+
+	/* generate the container paths */
+	config_filename = mem_printf("%s/%s.conf", store_path, uuid_string(uuid));
+	images_dir = mem_printf("%s/%s", store_path, uuid_string(uuid));
+
+	DEBUG("New containers config filename is %s", config_filename);
+	DEBUG("New containers images directory is %s", images_dir);
+
+	/********************************
+	 * Translate High Level Config into low-level parameters for internal
+	 * constructor */
+	container_config_t *conf = container_config_new(config_filename, config, config_len, sig,
+							sig_len, cert, cert_len);
+
+	if (!conf) {
+		WARN("Could not read config file %s", config_filename);
+		mem_free0(config_filename);
+		mem_free0(images_dir);
+		uuid_free(uuid);
+		return NULL;
+	}
+
+	name = container_config_get_name(conf);
+
+	const char *os_name = container_config_get_guestos(conf);
+
+	DEBUG("New containers os name is %s", os_name);
+	os = guestos_mgr_get_latest_by_name(os_name, true);
+	if (!os) {
+		WARN("Could not get GuestOS %s instance for container %s", os_name, name);
+		mem_free0(config_filename);
+		mem_free0(images_dir);
+		uuid_free(uuid);
+		container_config_free(conf);
+		return NULL;
+	}
+
+	ram_limit = container_config_get_ram_limit(conf);
+	DEBUG("New containers max ram is %" PRIu32 "", ram_limit);
+
+	cpus_allowed = container_config_get_cpus_allowed(conf);
+	DEBUG("New containers allowed cpu cores are %s", cpus_allowed);
+
+	color = container_config_get_color(conf);
+
+	allow_autostart = container_config_get_allow_autostart(conf);
+
+	current_guestos_version = container_config_get_guestos_version(conf);
+	new_guestos_version = guestos_get_version(os);
+	if ((current_guestos_version < new_guestos_version) && !cmld_uses_signed_configs()) {
+		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
+		     current_guestos_version, new_guestos_version, name);
+		container_config_set_guestos_version(conf, new_guestos_version);
+		INFO("guestos_version is now: %" PRIu64 "",
+		     container_config_get_guestos_version(conf));
+	} else if (current_guestos_version == new_guestos_version) {
+		INFO("Keeping current guestos version %" PRIu64 " for container %s",
+		     current_guestos_version, name);
+	} else {
+		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low",
+		     new_guestos_version, name);
+		WARN("Current version is %" PRIu64 "; Aborting...", current_guestos_version);
+		mem_free0(config_filename);
+		mem_free0(images_dir);
+		uuid_free(uuid);
+		container_config_free(conf);
+		return NULL;
+	}
+	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
+	ns_net = container_config_has_netns(conf);
+
+	container_type_t type = container_config_get_type(conf);
+
+	list_t *pnet_cfg_list = container_config_get_net_ifaces_list_new(conf);
+
+	const char *dns_server = (container_config_get_dns_server(conf)) ?
+					 container_config_get_dns_server(conf) :
+					 cmld_get_device_host_dns();
+
+	list_t *vnet_cfg_list = (ns_net && !container_uuid_is_c0id(uuid)) ?
+					container_config_get_vnet_cfg_list_new(conf) :
+					NULL;
+	list_t *usbdev_list = container_config_get_usbdev_list_new(conf);
+
+	allowed_devices = container_config_get_dev_allow_list_new(conf);
+	assigned_devices = container_config_get_dev_assign_list_new(conf);
+
+	// if init provided by guestos does not exists use mapped c_service as init
+	init = file_exists(guestos_get_init(os)) ? guestos_get_init(os) : CSERVICE_TARGET;
+
+	char **init_argv = guestos_get_init_argv_new(os);
+
+	char **init_env = container_config_get_init_env(conf);
+	size_t init_env_len = container_config_get_init_env_len(conf);
+
+	// create FIFO list
+	char **fifos = container_config_get_fifos(conf);
+	list_t *fifo_list = NULL;
+
+	for (size_t i = 0; i < container_config_get_fifos_len(conf); i++) {
+		DEBUG("Adding FIFO \'%s\' to container's FIFO list", fifos[i]);
+
+		fifo_list = list_append(fifo_list, mem_strdup(fifos[i]));
+	}
+
+	container_token_type_t ttype = container_config_get_token_type(conf);
+
+	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
+
+	container_t *c = container_new(uuid, name, type, ns_usr, ns_net, os, config_filename,
+				       images_dir, ram_limit, cpus_allowed, color, allow_autostart,
+				       dns_server, pnet_cfg_list, allowed_devices, assigned_devices,
+				       vnet_cfg_list, usbdev_list, init, init_argv, init_env,
+				       init_env_len, fifo_list, ttype, usb_pin_entry);
+	if (c)
+		container_config_write(conf);
+
+	uuid_free(uuid);
+	mem_free0(images_dir);
+	mem_free0(config_filename);
+
+	container_config_free(conf);
+	return c;
+}
+
 int
 cmld_reload_container(const uuid_t *uuid, const char *path)
 {
@@ -361,7 +538,7 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 		cmld_containers_list = list_remove(cmld_containers_list, c);
 		container_free(c);
 	}
-	c = container_new(path, uuid_tmp, NULL, 0, NULL, 0, NULL, 0);
+	c = cmld_container_new(path, uuid_tmp, NULL, 0, NULL, 0, NULL, 0);
 	if (!c) {
 		WARN("Could not create new container object");
 		goto cleanup;
@@ -852,11 +1029,10 @@ cmld_init_c0(const char *path, const char *c0os)
 	char **init_argv = guestos_get_init_argv_new(c0_os);
 
 	container_t *new_c0 =
-		container_new_internal(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net,
-				       c0_os, NULL, c0_images_folder, c0_ram_limit, NULL, 0xffffff00,
-				       false, cmld_get_device_host_dns(), NULL, NULL, NULL, NULL,
-				       NULL, init, init_argv, NULL, 0, NULL,
-				       CONTAINER_TOKEN_TYPE_NONE, false);
+		container_new(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net, c0_os,
+			      NULL, c0_images_folder, c0_ram_limit, NULL, 0xffffff00, false,
+			      cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, init,
+			      init_argv, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
 
 	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);
@@ -1129,7 +1305,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	IF_NULL_RETVAL(path, NULL);
 
 	container_t *c =
-		container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
+		cmld_container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
 		cmld_containers_list = list_append(cmld_containers_list, c);
 		audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,

@@ -189,46 +189,14 @@ container_register_module(container_module_t *mod);
  * @return The new container instance.
  */
 container_t *
-container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
-		       bool ns_net, const void *os, const char *config_filename,
-		       const char *images_folder, unsigned int ram_limit, const char *cpus_allowed,
-		       uint32_t color, bool allow_autostart, const char *dns_server,
-		       list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
-		       list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
-		       char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
-		       container_token_type_t ttype, bool usb_pin_entry);
-
-/**
- * Creates a new container container object. There are three different cases
- * depending on the combination of the given parameters:
- *
- * TODO: Use doxygen style to document parameters
- * uuid && !config: In this case, a container with the given UUID must be already
- * present in the given store_path and is loaded from there.
- *
- * !uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config buffer and a random
- * UUID.
- *
- * uuid && config: In this case, the container does NOT yet exist and should be
- * created in the given store_path using the given config buffer and the given
- * UUID.
- *
- * Optionally sig, cert buffers and length paramters could be set to non zero/NULL
- * values for signature verification of the corresponding configuration contained
- * in config buffer.
- *
- *
- * @return The new container object or NULL if something went wrong.
- */
-container_t *
-container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
-	      size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len);
-
-/*
-container_t *
-container_new_clone(container_t *container);
-*/
+container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
+	      const void *os, const char *config_filename, const char *images_folder,
+	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
+	      bool allow_autostart, const char *dns_server, list_t *net_ifaces,
+	      char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
+	      list_t *usbdev_list, const char *init, char **init_argv, char **init_env,
+	      size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
+	      bool usb_pin_entry);
 
 /**
  * Free the container's key
