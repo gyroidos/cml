@@ -2033,58 +2033,6 @@ container_has_userns(const container_t *container)
 	return container->ns_usr;
 }
 
-int
-container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg, bool persistent)
-{
-	ASSERT(container);
-	IF_NULL_RETVAL(pnet_cfg, -1);
-
-	int res = 0;
-	container_t *c0 = cmld_containers_get_c0();
-	container_state_t state_c0 = container_get_state(c0);
-	bool c0_is_up = (state_c0 == CONTAINER_STATE_RUNNING ||
-			 state_c0 == CONTAINER_STATE_BOOTING || state_c0 == CONTAINER_STATE_SETUP);
-
-	if (c0 == container) {
-		if (c0_is_up)
-			res = container_add_net_interface(container, pnet_cfg);
-		return res;
-	}
-
-	/* if c0 is running the interface is occupied by c0, thus we have
-	 * to take it back to cml first.
-	 */
-	if (c0_is_up)
-		res = container_remove_net_interface(c0, pnet_cfg->pnet_name);
-
-	res |= container_add_net_interface(container, pnet_cfg);
-	if (res || !persistent)
-		return res;
-
-	container_config_t *conf =
-		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
-	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
-	container_config_write(conf);
-	container_config_free(conf);
-	return 0;
-}
-
-int
-container_remove_net_iface(container_t *container, const char *iface, bool persistent)
-{
-	ASSERT(container);
-	int res = container_remove_net_interface(container, iface);
-	if (res || !persistent)
-		return res;
-
-	container_config_t *conf =
-		container_config_new(container->config_filename, NULL, 0, NULL, 0, NULL, 0);
-	container_config_remove_net_ifaces(conf, iface);
-	container_config_write(conf);
-	container_config_free(conf);
-	return 0;
-}
-
 const char **
 container_get_dev_allow_list(const container_t *container)
 {

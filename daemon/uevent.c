@@ -699,7 +699,7 @@ uevent_netdev_move(struct uevent *uevent)
 	}
 
 	macstr = network_mac_addr_to_str_new(iface_mac);
-	if (container_add_net_iface(container, pnet_cfg, false)) {
+	if (cmld_container_add_net_iface(container, pnet_cfg, false)) {
 		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
 		goto error;
 	} else {
