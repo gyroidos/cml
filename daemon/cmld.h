@@ -324,4 +324,17 @@ cmld_get_containers_dir(void);
 const char *
 cmld_get_wrapped_keys_dir(void);
 
+/**
+ * Adds a network interface to the container. If persistent is true, the config file will be modified accordingly
+ */
+int
+cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg,
+			     bool persistent);
+
+/**
+ * Removes a network interface from the container. If persistent is true, the config file will be modified accordingly
+ */
+int
+cmld_container_remove_net_iface(container_t *container, const char *iface, bool persistent);
+
 #endif /* CMLD_H */
