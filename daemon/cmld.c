@@ -753,6 +753,44 @@ cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSE
 	}
 }
 
+/*
+ * This callback handles audit events concerning container states 
+ */
+static void
+cmld_audit_container_state_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+{
+	switch (container_get_state(container)) {
+	case CONTAINER_STATE_BOOTING:
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+				container == cmld_containers_get_c0() ? "c0-start" :
+									"container-start",
+				uuid_string(container_get_uuid(container)), 0);
+		break;
+	case CONTAINER_STATE_SHUTTING_DOWN:
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+				"shutting-down", uuid_string(container_get_uuid(container)), 0);
+		break;
+	case CONTAINER_STATE_STOPPED:
+		if (container_get_prev_state(container) == CONTAINER_STATE_STARTING ||
+		    container_get_prev_state(container) == CONTAINER_STATE_SETUP) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"error-preparing-container",
+					uuid_string(container_get_uuid(container)), 0);
+		} else {
+			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+					"stop", uuid_string(container_get_uuid(container)), 0);
+		}
+		container_unregister_observer(container, cb);
+		break;
+	case CONTAINER_STATE_REBOOTING:
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "reboot",
+				uuid_string(container_get_uuid(container)), 0);
+		container_unregister_observer(container, cb);
+		break;
+	default:;
+	}
+}
+
 static void
 cmld_container_register_observers(container_t *container)
 {
@@ -784,6 +822,14 @@ cmld_container_register_observers(container_t *container)
 	if (!container_register_observer(container, &cmld_container_config_sync_cb, NULL)) {
 		WARN("Could not register container config sync observer callback for %s",
 		     container_get_description(container));
+	}
+	/* register an observer for automatic config reload */
+	if (!container_register_observer(container, &cmld_audit_container_state_cb, NULL)) {
+		WARN("Could not register container audit sync observer callback for %s",
+		     container_get_description(container));
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"container-observer-error",
+				uuid_string(container_get_uuid(container)), 0);
 	}
 }
 
@@ -830,9 +876,6 @@ cmld_container_start(container_t *container)
 		DEBUG("Container %s has been already started",
 		      container_get_description(container));
 	}
-
-	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "container-start",
-			uuid_string(container_get_uuid(container)), 0);
 
 	return 0;
 }
@@ -1118,11 +1161,17 @@ cmld_start_c0(container_t *new_c0)
 				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;
 	}
+	/* register an observer for automatic config reload */
+	if (!container_register_observer(new_c0, &cmld_audit_container_state_cb, NULL)) {
+		WARN("Could not register container audit sync observer callback for %s",
+		     container_get_description(new_c0));
+		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
+				uuid_string(container_get_uuid(new_c0)), 0);
+		return -1;
+	}
 	/* check that time is in trusted range after start */
 	time_register_clock_check();
 
-	audit_log_event(container_get_uuid(new_c0), SSA, CMLD, CONTAINER_MGMT, "c0-start",
-			uuid_string(container_get_uuid(new_c0)), 0);
 	return 0;
 }
 
@@ -1425,7 +1474,22 @@ cmld_container_stop(container_t *container)
 		return -1;
 	}
 
-	return container_stop(container);
+	int ret = container_stop(container);
+	if (ret < 0) {
+		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+				"request-clean-shutdown",
+				uuid_string(container_get_uuid(container)), 0);
+		DEBUG("Some modules could not be stopped successfully, killing container.");
+		container_kill(container);
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+				"force-stop", uuid_string(container_get_uuid(container)), 0);
+	} else {
+		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+				"request-clean-shutdown",
+				uuid_string(container_get_uuid(container)), 0);
+	}
+
+	return ret;
 }
 
 int
@@ -1648,7 +1712,8 @@ cmld_get_wrapped_keys_dir(void)
 }
 
 int
-cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg, bool persistent)
+cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_cfg,
+			     bool persistent)
 {
 	ASSERT(container);
 	IF_NULL_RETVAL(pnet_cfg, -1);
@@ -1675,8 +1740,8 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 	if (res || !persistent)
 		return res;
 
-	container_config_t *conf =
-		container_config_new(container_get_config_filename(container), NULL, 0, NULL, 0, NULL, 0);
+	container_config_t *conf = container_config_new(container_get_config_filename(container),
+							NULL, 0, NULL, 0, NULL, 0);
 	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
 	container_config_write(conf);
 	container_config_free(conf);
@@ -1691,11 +1756,10 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	if (res || !persistent)
 		return res;
 
-	container_config_t *conf =
-		container_config_new(container_get_config_filename(container), NULL, 0, NULL, 0, NULL, 0);
+	container_config_t *conf = container_config_new(container_get_config_filename(container),
+							NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
 	container_config_write(conf);
 	container_config_free(conf);
 	return 0;
 }
-
