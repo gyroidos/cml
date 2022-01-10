@@ -40,7 +40,6 @@
 #include "common/ns.h"
 
 #include "cmld.h"
-#include "container_config.h"
 #include "audit.h"
 
 #include <inttypes.h>
@@ -735,26 +734,6 @@ container_get_color_rgb_string(const container_t *container)
 	ASSERT(container);
 	return mem_printf("#%02X%02X%02X", (container->color >> 24) & 0xff,
 			  (container->color >> 16) & 0xff, (container->color >> 8) & 0xff);
-}
-
-int
-container_write_config(container_t *container)
-{
-	ASSERT(container);
-
-	if (container->config_filename) {
-		ASSERT(0);
-		//container_config_t *conf = container_config_new(container->config_filename, NULL);
-		//container_config_set_ram_limit(conf, container->ram_limit);
-		/* TODO ... */
-		//container_config_write(conf);
-		//container_config_free(conf);
-		return 0;
-	} else {
-		WARN("Trying to write configless container to file... Try to set config"
-		     "filename first if you want to make the container config persistent");
-		return -1;
-	}
 }
 
 const char *
