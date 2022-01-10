@@ -41,8 +41,6 @@
 
 #include "cmld.h"
 #include "container_config.h"
-#include "guestos_mgr.h"
-#include "guestos.h"
 #include "audit.h"
 
 #include <inttypes.h>
@@ -361,14 +359,14 @@ container_free_key(container_t *container)
 }
 
 container_t *
-container_new_internal(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr,
-		       bool ns_net, const void *os, const char *config_filename,
-		       const char *images_dir, unsigned int ram_limit, const char *cpus_allowed,
-		       uint32_t color, bool allow_autostart, const char *dns_server,
-		       list_t *pnet_cfg_list, char **allowed_devices, char **assigned_devices,
-		       list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
-		       char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
-		       container_token_type_t ttype, bool usb_pin_entry)
+container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
+	      const void *os, const char *config_filename, const char *images_dir,
+	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
+	      bool allow_autostart, const char *dns_server, list_t *pnet_cfg_list,
+	      char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
+	      list_t *usbdev_list, const char *init, char **init_argv, char **init_env,
+	      size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
+	      bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -528,162 +526,6 @@ container_init_env_prepend(container_t *container, char **init_env, size_t init_
 		mem_free0(init_env_old);
 	}
 	container->init_env_len = total_len;
-}
-
-/* TODO Error handling */
-container_t *
-container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
-	      size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len)
-{
-	ASSERT(store_path);
-	ASSERT(existing_uuid || config);
-
-	const char *name;
-	bool ns_usr;
-	bool ns_net;
-	const void *os;
-	char *config_filename;
-	char *images_dir;
-	unsigned int ram_limit;
-	const char *cpus_allowed;
-	uint32_t color;
-	uuid_t *uuid;
-	uint64_t current_guestos_version;
-	uint64_t new_guestos_version;
-	bool allow_autostart;
-	char **allowed_devices;
-	char **assigned_devices;
-	const char *init;
-
-	if (!existing_uuid) {
-		uuid = uuid_new(NULL);
-	} else {
-		uuid = uuid_new(uuid_string(existing_uuid));
-	}
-
-	/* generate the container paths */
-	config_filename = mem_printf("%s/%s.conf", store_path, uuid_string(uuid));
-	images_dir = mem_printf("%s/%s", store_path, uuid_string(uuid));
-
-	DEBUG("New containers config filename is %s", config_filename);
-	DEBUG("New containers images directory is %s", images_dir);
-
-	/********************************
-	 * Translate High Level Config into low-level parameters for internal
-	 * constructor */
-	container_config_t *conf = container_config_new(config_filename, config, config_len, sig,
-							sig_len, cert, cert_len);
-
-	if (!conf) {
-		WARN("Could not read config file %s", config_filename);
-		mem_free0(config_filename);
-		mem_free0(images_dir);
-		uuid_free(uuid);
-		return NULL;
-	}
-
-	name = container_config_get_name(conf);
-
-	const char *os_name = container_config_get_guestos(conf);
-
-	DEBUG("New containers os name is %s", os_name);
-	os = guestos_mgr_get_latest_by_name(os_name, true);
-	if (!os) {
-		WARN("Could not get GuestOS %s instance for container %s", os_name, name);
-		mem_free0(config_filename);
-		mem_free0(images_dir);
-		uuid_free(uuid);
-		container_config_free(conf);
-		return NULL;
-	}
-
-	ram_limit = container_config_get_ram_limit(conf);
-	DEBUG("New containers max ram is %" PRIu32 "", ram_limit);
-
-	cpus_allowed = container_config_get_cpus_allowed(conf);
-	DEBUG("New containers allowed cpu cores are %s", cpus_allowed);
-
-	color = container_config_get_color(conf);
-
-	allow_autostart = container_config_get_allow_autostart(conf);
-
-	current_guestos_version = container_config_get_guestos_version(conf);
-	new_guestos_version = guestos_get_version(os);
-	if ((current_guestos_version < new_guestos_version) && !cmld_uses_signed_configs()) {
-		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
-		     current_guestos_version, new_guestos_version, name);
-		container_config_set_guestos_version(conf, new_guestos_version);
-		INFO("guestos_version is now: %" PRIu64 "",
-		     container_config_get_guestos_version(conf));
-	} else if (current_guestos_version == new_guestos_version) {
-		INFO("Keeping current guestos version %" PRIu64 " for container %s",
-		     current_guestos_version, name);
-	} else {
-		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low",
-		     new_guestos_version, name);
-		WARN("Current version is %" PRIu64 "; Aborting...", current_guestos_version);
-		mem_free0(config_filename);
-		mem_free0(images_dir);
-		uuid_free(uuid);
-		container_config_free(conf);
-		return NULL;
-	}
-	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
-	ns_net = container_config_has_netns(conf);
-
-	container_type_t type = container_config_get_type(conf);
-
-	list_t *pnet_cfg_list = container_config_get_net_ifaces_list_new(conf);
-
-	const char *dns_server = (container_config_get_dns_server(conf)) ?
-					 container_config_get_dns_server(conf) :
-					 cmld_get_device_host_dns();
-
-	list_t *vnet_cfg_list = (ns_net && !container_uuid_is_c0id(uuid)) ?
-					container_config_get_vnet_cfg_list_new(conf) :
-					NULL;
-	list_t *usbdev_list = container_config_get_usbdev_list_new(conf);
-
-	allowed_devices = container_config_get_dev_allow_list_new(conf);
-	assigned_devices = container_config_get_dev_assign_list_new(conf);
-
-	// if init provided by guestos does not exists use mapped c_service as init
-	init = file_exists(guestos_get_init(os)) ? guestos_get_init(os) : CSERVICE_TARGET;
-
-	char **init_argv = guestos_get_init_argv_new(os);
-
-	char **init_env = container_config_get_init_env(conf);
-	size_t init_env_len = container_config_get_init_env_len(conf);
-
-	// create FIFO list
-	char **fifos = container_config_get_fifos(conf);
-	list_t *fifo_list = NULL;
-
-	for (size_t i = 0; i < container_config_get_fifos_len(conf); i++) {
-		DEBUG("Adding FIFO \'%s\' to container's FIFO list", fifos[i]);
-
-		fifo_list = list_append(fifo_list, mem_strdup(fifos[i]));
-	}
-
-	container_token_type_t ttype = container_config_get_token_type(conf);
-
-	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
-
-	container_t *c =
-		container_new_internal(uuid, name, type, ns_usr, ns_net, os, config_filename,
-				       images_dir, ram_limit, cpus_allowed, color, allow_autostart,
-				       dns_server, pnet_cfg_list, allowed_devices, assigned_devices,
-				       vnet_cfg_list, usbdev_list, init, init_argv, init_env,
-				       init_env_len, fifo_list, ttype, usb_pin_entry);
-	if (c)
-		container_config_write(conf);
-
-	uuid_free(uuid);
-	mem_free0(images_dir);
-	mem_free0(config_filename);
-
-	container_config_free(conf);
-	return c;
 }
 
 void

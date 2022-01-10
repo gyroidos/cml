@@ -1249,8 +1249,8 @@ c_vol_new(container_t *container)
 
 	vol->os = container_get_guestos(container);
 	if (!vol->os) {
-		ERROR("Could not get GuestOS %s instance for container %s", guestos_get_name(vol->os),
-		      container_get_name(container));
+		ERROR("Could not get GuestOS %s instance for container %s",
+		      guestos_get_name(vol->os), container_get_name(container));
 		return NULL;
 	}
 
