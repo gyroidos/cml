@@ -432,10 +432,12 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 		DEBUG("Removing outdated created container %s for config update",
 		      container_get_name(c));
 
-		if (smartcard_scd_token_remove_block(c)) {
-			ERROR("Reloading container %s failed, cannot remove token",
-			      uuid_string(uuid_tmp));
-			goto cleanup;
+		if (token_type == CONTAINER_TOKEN_TYPE_USB) {
+			if (smartcard_scd_token_remove_block(c)) {
+				ERROR("Reloading container %s failed, cannot remove token",
+				      uuid_string(uuid_tmp));
+				goto cleanup;
+			}
 		}
 
 		cmld_containers_list = list_remove(cmld_containers_list, c);
