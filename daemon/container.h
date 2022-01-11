@@ -258,15 +258,7 @@ container_oom_protect_service(const container_t *container);
 /*
  * Add process with given PID to cgroups of given container
  */
-int
-container_add_pid_to_cgroups(const container_t *container, pid_t pid);
-
-/**
- * Registers the corresponding handler for container_device_allow
- */
-void
-container_register_add_pid_to_cgroups_handler(const char *mod_name,
-					      int (*handler)(void *data, pid_t pid));
+CONTAINER_MODULE_WRAPPER_DECLARE(add_pid_to_cgroups, int, pid_t pid)
 
 /*
  * Set capapilites for calling process as for given container's init
@@ -486,46 +478,24 @@ container_bind_socket_after_start(container_t *container, const char *path);
  *
  * @return 0 if ok, negative values indicate errors.
  */
-int
-container_freeze(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_freeze
- */
-void
-container_register_freeze_handler(const char *mod_name, int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(freeze, int)
 
 /**
  * Unfreeze a container.
  *
  * @return 0 if ok, negative values indicate errors.
  */
-int
-container_unfreeze(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_unfreeze
- */
-void
-container_register_unfreeze_handler(const char *mod_name, int (*handler)(void *data));
-
-int
-container_allow_audio(const container_t *container);
+CONTAINER_MODULE_WRAPPER_DECLARE(unfreeze, int)
 
 /**
  * Registers the corresponding handler for container_allow_audio
  */
-void
-container_register_allow_audio_handler(const char *mod_name, int (*handler)(void *data));
-
-int
-container_deny_audio(const container_t *container);
+CONTAINER_MODULE_WRAPPER_DECLARE(allow_audio, int)
 
 /**
  * Registers the corresponding handler for container_deny_audio
  */
-void
-container_register_deny_audio_handler(const char *mod_name, int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(deny_audio, int)
 
 /**
  * TODO Document 'snapshot' function.
@@ -728,42 +698,17 @@ container_get_usbdev_list(const container_t *container);
 /**
  * Allow device access by major, minor number of device.
  */
-int
-container_device_allow(const container_t *container, int major, int minor, bool assign);
-
-/**
- * Registers the corresponding handler for container_device_allow
- */
-void
-container_register_device_allow_handler(const char *mod_name,
-					int (*handler)(void *data, int major, int minor,
-						       bool assign));
+CONTAINER_MODULE_WRAPPER_DECLARE(device_allow, int, int major, int minor, bool assign)
 
 /**
  * Remove previously allowed device access by major, minor number of device.
  */
-int
-container_device_deny(const container_t *container, int major, int minor);
-
-/**
- * Registers the corresponding handler for container_device_allow
- */
-void
-container_register_device_deny_handler(const char *mod_name,
-				       int (*handler)(void *data, int major, int minor));
+CONTAINER_MODULE_WRAPPER_DECLARE(device_deny, int, int major, int minor)
 
 /**
  * Checks if the device specified by the major and minor is allowed in this container.
  */
-bool
-container_is_device_allowed(const container_t *container, int major, int minor);
-
-/**
- * Registers the corresponding handler for container_device_allow
- */
-void
-container_register_is_device_allowed_handler(const char *mod_name,
-					     bool (*handler)(void *data, int major, int minor));
+CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, int major, int minor)
 
 /**
  * Prepares a mount for shifted uid and gids of directory/file for the container's userns.
