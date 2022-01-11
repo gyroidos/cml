@@ -2097,7 +2097,7 @@ container_destroy(container_t *container)
 		if (0 != unlink(file_name_uid)) {
 			ERROR_ERRNO("Can't delete .uid file!");
 		}
-	mem_free0(file_name_created);
+	mem_free0(file_name_uid);
 
 	if (smartcard_release_pairing(container)) {
 		ERROR("Can't remove token paired file!");
