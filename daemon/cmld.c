@@ -502,8 +502,11 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 				       dns_server, pnet_cfg_list, allowed_devices, assigned_devices,
 				       vnet_cfg_list, usbdev_list, init, init_argv, init_env,
 				       init_env_len, fifo_list, ttype, usb_pin_entry);
-	if (c)
+	if (c) {
+		// overwrite image sizes of mount table
+		container_config_fill_mount(conf, container_get_mnt(c));
 		container_config_write(conf);
+	}
 
 	uuid_free(uuid);
 	mem_free0(images_dir);
