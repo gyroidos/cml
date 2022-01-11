@@ -122,10 +122,6 @@ struct container {
 	// Submodules
 	list_t *module_instance_list;
 
-	char *imei;
-	char *mac_address;
-	char *phone_number;
-
 	// list of allowed devices (rules)
 	char **device_allowed_list;
 
@@ -411,10 +407,6 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 	container->stop_timer = NULL;
 	container->start_timer = NULL;
 
-	container->imei = NULL;
-	container->mac_address = NULL;
-	container->phone_number = NULL;
-
 	container->ram_limit = ram_limit;
 	container->cpus_allowed = (cpus_allowed) ? mem_strdup(cpus_allowed) : NULL;
 
@@ -567,12 +559,6 @@ container_free(container_t *container)
 		mem_free0(container->init_env);
 	}
 
-	if (container->imei)
-		mem_free0(container->imei);
-	if (container->mac_address)
-		mem_free0(container->mac_address);
-	if (container->phone_number)
-		mem_free0(container->phone_number);
 	if (container->dns_server)
 		mem_free0(container->dns_server);
 	mem_free0(container->device_allowed_list);
@@ -1879,69 +1865,6 @@ container_get_cpus_allowed(const container_t *container)
 	ASSERT(container);
 
 	return container->cpus_allowed;
-}
-
-void
-container_set_imei(container_t *container, char *imei)
-{
-	ASSERT(container);
-	if (imei) {
-		DEBUG("Setting container imei to %s for container %s", imei,
-		      container_get_description(container));
-		if (container->imei)
-			mem_free0(container->imei);
-		container->imei = mem_strdup(imei);
-		container_notify_observers(container);
-	}
-}
-
-char *
-container_get_imei(container_t *container)
-{
-	ASSERT(container);
-	return container->imei;
-}
-
-void
-container_set_mac_address(container_t *container, char *mac_address)
-{
-	ASSERT(container);
-	if (mac_address) {
-		DEBUG("Setting container MAC address to %s for container %s", mac_address,
-		      container_get_description(container));
-		if (container->mac_address)
-			mem_free0(container->mac_address);
-		container->mac_address = mem_strdup(mac_address);
-		container_notify_observers(container);
-	}
-}
-
-char *
-container_get_mac_address(container_t *container)
-{
-	ASSERT(container);
-	return container->mac_address;
-}
-
-void
-container_set_phone_number(container_t *container, char *phone_number)
-{
-	ASSERT(container);
-	if (phone_number) {
-		DEBUG("Setting container phone number to %s for container %s", phone_number,
-		      container_get_description(container));
-		if (container->phone_number)
-			mem_free0(container->phone_number);
-		container->phone_number = mem_strdup(phone_number);
-		container_notify_observers(container);
-	}
-}
-
-char *
-container_get_phone_number(container_t *container)
-{
-	ASSERT(container);
-	return container->phone_number;
 }
 
 bool

@@ -615,24 +615,6 @@ container_init_env_prepend(container_t *container, char **init_env, size_t init_
  * Submodule Interfaces    *
  **************************/
 
-void
-container_set_imei(container_t *container, char *imei);
-
-char *
-container_get_imei(container_t *container);
-
-void
-container_set_mac_address(container_t *container, char *mac_address);
-
-char *
-container_get_mac_address(container_t *container);
-
-void
-container_set_phone_number(container_t *container, char *phone_number);
-
-char *
-container_get_phone_number(container_t *container);
-
 bool
 container_get_allow_autostart(container_t *container);
 
