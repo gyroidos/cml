@@ -631,14 +631,10 @@ container_set_setup_mode(container_t *container, bool setup);
 bool
 container_has_setup_mode(const container_t *container);
 
-int
-container_setuid0(const container_t *container);
-
 /**
  * Registers the corresponding handler for container_setuid0
  */
-void
-container_register_setuid0_handler(const char *mod_name, int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(setuid0, int)
 
 bool
 container_get_sync_state(const container_t *container);
@@ -717,43 +713,21 @@ CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, int major, int minor)
  * with shifted ids in child. This is also be used to shift single files in the
  * in uevent module for container allowed devices.
  */
-int
-container_shift_ids(const container_t *container, const char *path, bool is_root);
-
-/**
- * Registers the corresponding handler for container_shift_ids
- */
-void
-container_register_shift_ids_handler(const char *mod_name,
-				     int (*handler)(void *data, const char *path, bool is_root));
+CONTAINER_MODULE_WRAPPER_DECLARE(shift_ids, int, const char *path, bool is_root)
 
 /**
  * Mounts all directories with shifted uid and gids inside the container's userns.
  *
  * Needs to be called before exec usually in a start_child handler.
  */
-int
-container_shift_mounts(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_shift_mounts
- */
-void
-container_register_shift_mounts_handler(const char *mod_name, int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(shift_mounts, int)
 
 /**
  * Returns the uid which is mapped to the root user inside the container
  *
  * if userns is enabled this would be a uid grater than 0.
  */
-int
-container_get_uid(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_get_uid
- */
-void
-container_register_get_uid_handler(const char *mod_name, int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(get_uid, int)
 
 /**
  * Returns the directory where the container's file system tree
