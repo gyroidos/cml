@@ -359,14 +359,7 @@ container_is_privileged(const container_t *container);
 /**
  * Get the information if the conatiner has encrypted volumes.
  */
-bool
-container_is_encrypted(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_is_encrypted
- */
-void
-container_register_is_encrypted_handler(const char *mod_name, bool (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(is_encrypted, bool)
 
 /**
  * Suspends the container before moving it into background
@@ -829,14 +822,7 @@ container_register_get_uid_handler(const char *mod_name, int (*handler)(void *da
  * Returns the directory where the container's file system tree
  * is mounted in init mount namspace.
  */
-char *
-container_get_rootdir(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_get_rootdir
- */
-void
-container_register_get_rootdir_handler(const char *mod_name, char *(*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(get_rootdir, char *)
 
 /**
  * Checks if the containers uuid is the all zero uuid which
