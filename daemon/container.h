@@ -825,6 +825,11 @@ container_register_get_uid_handler(const char *mod_name, int (*handler)(void *da
 CONTAINER_MODULE_WRAPPER_DECLARE(get_rootdir, char *)
 
 /**
+ * Returns a generic pointer to the mount table
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(get_mnt, void *)
+
+/**
  * Checks if the containers uuid is the all zero uuid which
  * is assigned to c0.
  *

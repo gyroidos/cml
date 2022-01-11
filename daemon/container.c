@@ -270,6 +270,8 @@ CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(add_pid_to_cgroups, int, 0, pid_t)
 /* Functions usually implemented and registered by c_vol module */
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_rootdir, char *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_rootdir, char *, NULL)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_mnt, void *, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_mnt, void *, NULL)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_encrypted, bool, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(is_encrypted, bool, false)
 

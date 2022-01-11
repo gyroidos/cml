@@ -1256,7 +1256,6 @@ c_vol_new(container_t *container)
 
 	vol->mnt = mount_new();
 	guestos_fill_mount(vol->os, vol->mnt);
-	//TODO container_config_fill_mount(conf, mnt);
 
 	vol->mnt_setup = mount_new();
 	guestos_fill_mount_setup(vol->os, vol->mnt_setup);
@@ -1707,6 +1706,15 @@ error:
 	return -CONTAINER_ERROR_VOL;
 }
 
+static void *
+c_vol_get_mnt(void *volp)
+{
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
+	return vol->mnt;
+}
+
 static bool
 c_vol_is_encrypted(void *volp)
 {
@@ -1766,5 +1774,6 @@ c_vol_init(void)
 
 	// register relevant handlers implemented by this module
 	container_register_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);
+	container_register_get_mnt_handler(MOD_NAME, c_vol_get_mnt);
 	container_register_is_encrypted_handler(MOD_NAME, c_vol_is_encrypted);
 }
