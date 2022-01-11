@@ -271,15 +271,7 @@ container_register_add_pid_to_cgroups_handler(const char *mod_name,
 /*
  * Set capapilites for calling process as for given container's init
  */
-int
-container_set_cap_current_process(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_set_cap_current_process
- */
-void
-container_register_set_cap_current_process_handler(const char *mod_name,
-						   int (*handler)(void *data));
+CONTAINER_MODULE_WRAPPER_DECLARE(set_cap_current_process, int)
 
 /**
  * Gets the last exit_status of the container's init process.
@@ -848,15 +840,7 @@ container_get_token_type(const container_t *container);
 /**
  * Executes a binary of a priviliegd container with cap_sys_time in root userns.
  */
-int
-container_exec_cap_systime(const container_t *container, char *const *argv);
-
-/**
- * Registers the corresponding handler for container_exec_cap_systime
- */
-void
-container_register_exec_cap_systime_handler(const char *mod_name,
-					    int (*handler)(void *data, char *const *argv));
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_cap_systime, int, char *const *argv)
 
 /**
  * Returns whether the pin should be requested interactively via a usb pin reader during
