@@ -65,6 +65,13 @@ typedef struct c_time {
 	time_t time_created;
 } c_time_t;
 
+static char *
+c_time_created_file_new(c_time_t *time)
+{
+	ASSERT(time);
+	return mem_printf("%s.created", container_get_images_dir(time->container));
+}
+
 /*
  * if we create the container for the first time, we store its creation time
  * in a file, otherwise this functions reads the creation time from that file
@@ -73,8 +80,7 @@ static time_t
 c_time_get_creation_time_from_file(c_time_t *_time)
 {
 	time_t ret = -1;
-	char *file_name_created =
-		mem_printf("%s.created", container_get_images_dir(_time->container));
+	char *file_name_created = c_time_created_file_new(_time);
 	if (!file_exists(file_name_created)) {
 		ret = time(NULL);
 		if (file_write(file_name_created, (char *)&ret, sizeof(ret)) < 0) {
@@ -239,11 +245,25 @@ c_time_cleanup(void *timep, UNUSED bool rebooting)
 	time->time_started = -1;
 }
 
+static void
+c_time_destroy(void *timep)
+{
+	c_time_t *time = timep;
+	ASSERT(time);
+
+	char *file_name_created = c_time_created_file_new(time);
+	if (file_exists(file_name_created))
+		if (0 != unlink(file_name_created)) {
+			ERROR_ERRNO("Can't delete %s file!", file_name_created);
+		}
+	mem_free0(file_name_created);
+}
+
 static container_module_t c_time_module = {
 	.name = MOD_NAME,
 	.container_new = c_time_new,
 	.container_free = c_time_free,
-	.container_destroy = NULL,
+	.container_destroy = c_time_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
