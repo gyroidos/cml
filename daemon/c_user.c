@@ -141,6 +141,13 @@ c_user_set_offset(int offset)
 	return offset;
 }
 
+static char *
+c_user_uid_file_new(c_user_t *user)
+{
+	ASSERT(user);
+	return mem_printf("%s.uid", container_get_images_dir(user->container));
+}
+
 /**
  * This function determines and sets the next available uid range, depending on the container offset.
  */
@@ -149,7 +156,7 @@ c_user_set_next_uid_range_start(c_user_t *user)
 {
 	ASSERT(user);
 
-	char *file_name_uid = mem_printf("%s.uid", container_get_images_dir(user->container));
+	char *file_name_uid = c_user_uid_file_new(user);
 	int offset = -1;
 	if (file_exists(file_name_uid)) {
 		if (file_read(file_name_uid, (char *)&offset, sizeof(offset)) < 0) {
@@ -314,6 +321,20 @@ c_user_free(void *usr)
 	ASSERT(user);
 	mem_free0(user->ns_path);
 	mem_free0(user);
+}
+
+static void
+c_user_destroy(void *usr)
+{
+	c_user_t *user = usr;
+	ASSERT(user);
+
+	char *file_name_uid = c_user_uid_file_new(user);
+	if (file_exists(file_name_uid))
+		if (0 != unlink(file_name_uid)) {
+			ERROR_ERRNO("Can't delete %s file!", file_name_uid);
+		}
+	mem_free0(file_name_uid);
 }
 
 static int
@@ -637,7 +658,7 @@ static container_module_t c_user_module = {
 	.name = MOD_NAME,
 	.container_new = c_user_new,
 	.container_free = c_user_free,
-	.container_destroy = NULL,
+	.container_destroy = c_user_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_user_start_pre_clone,
