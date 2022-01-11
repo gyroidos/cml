@@ -1731,13 +1731,6 @@ container_destroy(container_t *container)
 	}
 
 	/* remove config files */
-	char *file_name_created = mem_printf("%s.created", container_get_images_dir(container));
-	if (file_exists(file_name_created))
-		if (0 != unlink(file_name_created)) {
-			ERROR_ERRNO("Can't delete .created file!");
-		}
-	mem_free0(file_name_created);
-
 	char *file_name_uid = mem_printf("%s.uid", container_get_images_dir(container));
 	if (file_exists(file_name_uid))
 		if (0 != unlink(file_name_uid)) {
