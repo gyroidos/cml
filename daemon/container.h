@@ -294,15 +294,7 @@ container_get_color_rgb_string(const container_t *container);
  * Get socket fd used to communicate with process executed in container context
  * by using the control run interface
  */
-int
-container_get_console_sock_cmld(const container_t *container, int session_fd);
-
-/**
- * Registers the corresponding handler for container_get_console_sock_cmld
- */
-void
-container_register_get_console_sock_cmld_handler(const char *mod_name,
-						 int (*handler)(void *data, int session_fd));
+CONTAINER_MODULE_WRAPPER_DECLARE(get_console_sock_cmld, int, int session_fd)
 
 /**
  * Remove a container persistently from disk, i.e. remove its configuration and
@@ -362,27 +354,13 @@ container_resume(container_t *container);
  *
  * @return session id of the running session in the container, -1 on error
  */
-int
-container_run(const container_t *container, int create_pty, char *cmd, ssize_t argc, char **argv,
-	      int session_fd);
-/**
- * Registers the corresponding handler for container_run
- */
-void
-container_register_run_handler(const char *mod_name,
-			       int (*handler)(void *data, int create_pty, char *cmd, ssize_t argc,
-					      char **argv, int session_fd));
-
-int
-container_write_exec_input(const container_t *container, char *exec_input, int session_fd);
+CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t argc, char **argv,
+				 int session_fd)
 
 /**
  * Registers the corresponding handler for container_write_exec_input
  */
-void
-container_register_write_exec_input_handler(const char *mod_name,
-					    int (*handler)(void *data, char *exec_input,
-							   int session_fd));
+CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, char *exec_input, int session_fd)
 
 /**
  * Start the given container using the given key to decrypt its filesystem
