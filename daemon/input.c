@@ -21,6 +21,7 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -28,15 +29,11 @@
 #include <linux/ioctl.h>
 #include <linux/input.h>
 #include <unistd.h>
-#include "fcntl.h"
+#include <fcntl.h>
 
-#include "cmld.h"
-#include "control.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/event.h"
-#include "container.h"
-#include "uevent.h"
 #include "input.h"
 
 // The following defines represent parts of the syntax of /proc/bus/input/devices
@@ -48,14 +45,9 @@
 #define MAX_PIN_LEN 64
 
 typedef struct {
-	container_t *container;
-	int resp_fd;
-	cmld_container_ctrl_t container_ctrl;
-} container_ctrl_cb_data_t;
-
-typedef struct {
-	int resp_fd;
-} pin_entry_timer_cb_data_t;
+	void (*exec_cb)(char *userinput, void *exec_cb_data);
+	void *exec_cb_data;
+} input_request_pin_cb_data_t;
 
 // TODO required global static because it needs to be freed in the
 // in the timer callback in case of pin entry timeout
@@ -163,10 +155,11 @@ pin_entry_timeout_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
 
-	pin_entry_timer_cb_data_t *timer_data = data;
+	input_request_pin_cb_data_t *cb_data = data;
+	ASSERT(cb_data && cb_data->exec_cb);
 
 	WARN("Pin entry failed: Timeout");
-	control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, timer_data->resp_fd);
+	cb_data->exec_cb(NULL, cb_data->exec_cb_data);
 
 	if (ioctl(input_fd, EVIOCGRAB, NULL) != 0) {
 		WARN("Failed to release exclusive access to pin reader");
@@ -218,21 +211,20 @@ input_clean_pin_entry(void)
 }
 
 static void
-input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, void *data)
+input_request_pin_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
-	ASSERT(data);
 	char c;
 	char *tmp_key = NULL;
-	container_ctrl_cb_data_t *cb_data = data;
+	input_request_pin_cb_data_t *cb_data = data;
+	ASSERT(cb_data && cb_data->exec_cb);
 
-	IF_TRUE_GOTO(events & EVENT_IO_EXCEPT, exit_fail);
+	if (events & EVENT_IO_EXCEPT) {
+		ERROR("Exeception on reading fd=%d reading", fd);
+		cb_data->exec_cb(NULL, cb_data->exec_cb_data);
+		goto exit;
+	}
 
 	IF_FALSE_RETURN(events & EVENT_IO_READ);
-
-	if (cb_data->resp_fd < 0 || !cb_data->container) {
-		WARN("Invalid parameters for container start callback");
-		goto exit_fail;
-	}
 
 	struct input_event keyboard_event;
 	TRACE("Reading pin from pin reader");
@@ -251,33 +243,25 @@ input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, voi
 
 		case KEY_ENTER:
 		case KEY_KPENTER:
-			// Enter was pressed, add trailing zero to pin and start container with pin
+			// Enter was pressed, add trailing zero to pin and execute processing callback
 			input_key_index++;
 			tmp_key = (char *)mem_realloc(input_key, input_key_index * sizeof(char));
-			IF_NULL_GOTO(tmp_key, exit_fail);
+			if (!tmp_key) {
+				cb_data->exec_cb(NULL, cb_data->exec_cb_data);
+				goto exit;
+			}
 			input_key = tmp_key;
 			input_key[input_key_index - 1] = '\0';
 
-			DEBUG("%s container %s with smartcard from callback",
-			      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ? "STARTING" :
-										       "STOPPING",
-			      container_get_name(cb_data->container));
-			if (cmld_container_ctrl_with_smartcard(cb_data->container, input_key,
-							       cb_data->container_ctrl) != 0) {
-				// the container start function will send a control message
-				// so we do not need to go to exit fail and send a message here
-				ERROR("Failed to %s container %s",
-				      (cb_data->container_ctrl == CMLD_CONTAINER_CTRL_START) ?
-					      "START" :
-					      "STOP",
-				      container_get_name(cb_data->container));
-			}
+			// input read done, call callback for processing input data
+			cb_data->exec_cb(input_key, cb_data->exec_cb_data);
 			goto exit;
 
 		case KEY_ESC:
 			// Escape was pressed, abort
 			WARN("The pin entry was aborted by the user (ESC)");
-			goto exit_fail;
+			cb_data->exec_cb(NULL, cb_data->exec_cb_data);
+			goto exit;
 
 		default:
 			// Another key was pressed, check if pressed key is a digit and store it
@@ -285,11 +269,15 @@ input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, voi
 				input_key_index++;
 				if (input_key_index > MAX_PIN_LEN) {
 					ERROR("Pin exceeds maximum pin length of %d", MAX_PIN_LEN);
-					goto exit_fail;
+					cb_data->exec_cb(NULL, cb_data->exec_cb_data);
+					goto exit;
 				}
 				tmp_key = (char *)mem_realloc(input_key,
 							      input_key_index * sizeof(char));
-				IF_NULL_GOTO(tmp_key, exit_fail);
+				if (!tmp_key) {
+					cb_data->exec_cb(NULL, cb_data->exec_cb_data);
+					goto exit;
+				}
 				input_key = tmp_key;
 				input_key[input_key_index - 1] = c;
 			}
@@ -299,11 +287,8 @@ input_cb_request_pin_ctrl_container(int fd, unsigned events, event_io_t *io, voi
 	// Pin entry is not yet finished, just return to wait for more keystrokes
 	return;
 
-exit_fail:
-	control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, cb_data->resp_fd);
-
 exit:
-	TRACE("Remove container pin entry timer for %s", container_get_name(cb_data->container));
+	TRACE("Remove pin entry timer");
 	event_remove_timer(input_timer);
 	event_timer_free(input_timer);
 	input_timer = NULL;
@@ -325,31 +310,12 @@ exit:
 }
 
 int
-input_register_container_ctrl_cb(container_t *container, int resp_fd,
-				 cmld_container_ctrl_t container_ctrl)
+input_read_exec(uint16_t vendor_id, uint16_t product_id,
+		void (*exec_cb)(char *userinput, void *exec_cb_data), void *exec_cb_data)
 {
 	char *input_file = NULL;
 
-	TRACE("Searching for USB pin reader for interactive pin entry");
-
-	// Iterate through usb-dev list and look for USB_PIN_ENTRY device
-	uevent_usbdev_t *usbdev_pinreader = NULL;
-	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
-		uevent_usbdev_t *usbdev = (uevent_usbdev_t *)l->data;
-		if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
-			usbdev_pinreader = usbdev;
-			break;
-		}
-	}
-	IF_FALSE_GOTO(usbdev_pinreader, err);
-
-	TRACE("Found USB pin reader. Device Serial: %s. Vendor:Product: %x:%x",
-	      uevent_usbdev_get_i_serial(usbdev_pinreader),
-	      uevent_usbdev_get_id_vendor(usbdev_pinreader),
-	      uevent_usbdev_get_id_product(usbdev_pinreader));
-
-	input_file = input_get_usb_input_event_file(uevent_usbdev_get_id_vendor(usbdev_pinreader),
-						    uevent_usbdev_get_id_product(usbdev_pinreader));
+	input_file = input_get_usb_input_event_file(vendor_id, product_id);
 	IF_FALSE_GOTO(input_file, err);
 
 	TRACE("Found USB pin reader input file: %s", input_file);
@@ -364,17 +330,14 @@ input_register_container_ctrl_cb(container_t *container, int resp_fd,
 	}
 
 	// Read in pin in asynchronous callback
-	container_ctrl_cb_data_t *cb_data = mem_new0(container_ctrl_cb_data_t, 1);
-	cb_data->resp_fd = resp_fd;
-	cb_data->container = container;
-	cb_data->container_ctrl = container_ctrl;
+	input_request_pin_cb_data_t *cb_data = mem_new0(input_request_pin_cb_data_t, 1);
+	cb_data->exec_cb = exec_cb;
+	cb_data->exec_cb_data = exec_cb_data;
 	input_event_io = event_io_new(input_fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
-				      input_cb_request_pin_ctrl_container, cb_data);
+				      input_request_pin_cb, cb_data);
 
 	// Start pin entry timeout timer
-	pin_entry_timer_cb_data_t *timer_data = mem_new0(pin_entry_timer_cb_data_t, 1);
-	timer_data->resp_fd = resp_fd;
-	input_timer = event_timer_new(PIN_ENTRY_TIMEOUT_MS, 1, &pin_entry_timeout_cb, timer_data);
+	input_timer = event_timer_new(PIN_ENTRY_TIMEOUT_MS, 1, &pin_entry_timeout_cb, cb_data);
 	event_add_timer(input_timer);
 
 	TRACE("Registering callback for pin entry");

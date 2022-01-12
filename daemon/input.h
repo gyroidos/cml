@@ -31,21 +31,23 @@
 #ifndef DAEMON_INPUT_H_
 #define DAEMON_INPUT_H_
 
-#include "cmld.h"
-#include "container.h"
-
 /**
- * Register callback to interactively read in container pin from USB
- * pin entry device and start/stop container afterwards
+ * Register callback to interactively read input from USB pin entry device
+ * and exeute a callback to handle that input afterwards. The userinput of
+ * the callback will contain the input done by the user or NULL in case of
+ * an error.
  *
- * @param container container wich should be started or stopped.
- * @param resp_fd client fd to control session which should be used for responses
- * @param container_ctrl CMLD_CONTAINER_CTRL_START or CMLD_CONTAINER_CTRL_STOP
+ * @param vendor_id vendor id of the usb device used for input
+ * @param product_id product id of the usb device used for input
+ * @param exec_cb callback called after input is handled
+ * 		  (ENTER pressed, aborted or timed out)
+ * @param exec_cb_data generic data pointer for data used in exec_cb
  * @return 0 on success, -1 on error
  */
 int
-input_register_container_ctrl_cb(container_t *container, int resp_fd,
-				 cmld_container_ctrl_t container_ctrl);
+input_read_exec(uint16_t vendor_id, uint16_t product_id,
+		void (*exec_cb)(char *userinput, void *exec_cb_data), void *exec_cb_data);
+
 void
 input_clean_pin_entry(void);
 

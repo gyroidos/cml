@@ -32,7 +32,6 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "crypto.h"
-#include "input.h"
 #include "uevent.h"
 #include "audit.h"
 
@@ -644,6 +643,25 @@ control_csmartcard_handle_error_cb(int err_code, void *data)
 	mem_free0(cbdata);
 }
 
+static void
+control_input_handle_error_cb(int err_code, void *data)
+{
+	int *fd = data;
+	ASSERT(fd);
+
+	if (!err_code) {
+		mem_free0(fd);
+		return;
+	}
+
+	if (err_code == -2)
+		control_send_message(CONTROL_RESPONSE_CONTAINER_CTRL_EINTERNAL, *fd);
+	else
+		control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, *fd);
+
+	mem_free0(fd);
+}
+
 /**
  * Starts a container with pre-specified keys or user supplied keys
  */
@@ -673,7 +691,10 @@ control_handle_container_start(container_t *container, ContainerStartParams *sta
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container start with pin entry chosen. Starting");
-		res = input_register_container_ctrl_cb(container, fd, CMLD_CONTAINER_CTRL_START);
+		int *resp_fd = mem_new0(int, 1);
+		*resp_fd = fd;
+		res = cmld_container_ctrl_with_input(container, CMLD_CONTAINER_CTRL_START,
+						     control_input_handle_error_cb, resp_fd);
 		if (res != 0) {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
 		}
@@ -722,7 +743,10 @@ control_handle_container_stop(container_t *container, ContainerStartParams *star
 	// Check if pin should be interactively requested via pin pad reader
 	if (container_get_usb_pin_entry(container)) {
 		TRACE("Container stop with pin entry chosen. Stopping");
-		res = input_register_container_ctrl_cb(container, fd, CMLD_CONTAINER_CTRL_STOP);
+		int *resp_fd = mem_new0(int, 1);
+		*resp_fd = fd;
+		res = cmld_container_ctrl_with_input(container, CMLD_CONTAINER_CTRL_STOP,
+						     control_input_handle_error_cb, resp_fd);
 		if (res != 0) {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_USB_PIN_ENTRY_FAIL, fd);
 		}
@@ -1545,7 +1569,7 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 	return;
 
 connection_err:
-	input_clean_pin_entry();
+	cmld_container_ctrl_with_input_abort();
 	event_remove_io(io);
 	event_io_free(io);
 	if (close(fd) < 0)
