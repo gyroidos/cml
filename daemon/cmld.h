@@ -142,6 +142,13 @@ cmld_container_ctrl_with_smartcard(container_t *container, const char *passwd,
 				   cmld_container_ctrl_t container_ctrl);
 
 int
+cmld_container_ctrl_with_input(container_t *container, cmld_container_ctrl_t container_ctrl,
+			       void (*err_cb)(int error, void *data), void *err_cb_data);
+
+void
+cmld_container_ctrl_with_input_abort(void);
+
+int
 cmld_container_stop(container_t *container);
 
 int

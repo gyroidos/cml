@@ -58,6 +58,7 @@
 #include "time.h"
 #include "container_config.h"
 #include "container.h"
+#include "input.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -891,6 +892,78 @@ cmld_container_change_pin(container_t *container, const char *passwd, const char
 	ASSERT(newpasswd);
 
 	return container_change_pin(container, passwd, newpasswd);
+}
+
+void
+cmld_container_ctrl_with_input_abort(void)
+{
+	input_clean_pin_entry();
+}
+
+typedef struct {
+	container_t *container;
+	cmld_container_ctrl_t container_ctrl;
+	void (*err_cb)(int error, void *err_cb_data);
+	void *err_cb_data;
+} cmld_container_ctrl_with_input_cb_data_t;
+
+static void
+cmld_container_ctrl_with_input_cb(char *userinput, void *exec_cb_data)
+{
+	int ret;
+
+	cmld_container_ctrl_with_input_cb_data_t *cb_data = exec_cb_data;
+	ASSERT(cb_data);
+	container_t *container = cb_data->container;
+	cmld_container_ctrl_t container_ctrl = cb_data->container_ctrl;
+
+	if (NULL == userinput) {
+		ERROR("No userinput, either input reading failed or timed out!");
+		ret = -1;
+	} else {
+		ret = cmld_container_ctrl_with_smartcard(container, userinput, container_ctrl);
+	}
+
+	if (cb_data->err_cb)
+		cb_data->err_cb(ret, cb_data->err_cb_data);
+
+	mem_free0(cb_data);
+}
+int
+cmld_container_ctrl_with_input(container_t *container, cmld_container_ctrl_t container_ctrl,
+			       void (*err_cb)(int error, void *data), void *err_cb_data)
+{
+	ASSERT(container);
+
+	TRACE("Searching for USB pin reader for interactive pin entry");
+
+	// Iterate through usb-dev list and look for USB_PIN_ENTRY device
+	uevent_usbdev_t *usbdev_pinreader = NULL;
+	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
+		uevent_usbdev_t *usbdev = (uevent_usbdev_t *)l->data;
+		if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
+			usbdev_pinreader = usbdev;
+			break;
+		}
+	}
+
+	IF_FALSE_RETVAL(usbdev_pinreader, -1);
+
+	TRACE("Found USB pin reader. Device Serial: %s. Vendor:Product: %x:%x",
+	      uevent_usbdev_get_i_serial(usbdev_pinreader),
+	      uevent_usbdev_get_id_vendor(usbdev_pinreader),
+	      uevent_usbdev_get_id_product(usbdev_pinreader));
+
+	cmld_container_ctrl_with_input_cb_data_t *cb_data =
+		mem_new0(cmld_container_ctrl_with_input_cb_data_t, 1);
+	cb_data->container = container;
+	cb_data->container_ctrl = container_ctrl;
+	cb_data->err_cb = err_cb;
+	cb_data->err_cb_data = err_cb_data;
+
+	return input_read_exec(uevent_usbdev_get_id_vendor(usbdev_pinreader),
+			       uevent_usbdev_get_id_product(usbdev_pinreader),
+			       cmld_container_ctrl_with_input_cb, cb_data);
 }
 
 int
