@@ -166,31 +166,31 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
  * The usual identity map between two corresponding C and protobuf enums.
  */
 ContainerState
-control_container_state_to_proto(container_state_t state)
+control_compartment_state_to_proto(compartment_state_t state)
 {
 	switch (state) {
-	case CONTAINER_STATE_STOPPED:
+	case COMPARTMENT_STATE_STOPPED:
 		return CONTAINER_STATE__STOPPED;
-	case CONTAINER_STATE_STARTING:
+	case COMPARTMENT_STATE_STARTING:
 		return CONTAINER_STATE__STARTING;
-	case CONTAINER_STATE_BOOTING:
+	case COMPARTMENT_STATE_BOOTING:
 		return CONTAINER_STATE__BOOTING;
-	case CONTAINER_STATE_RUNNING:
+	case COMPARTMENT_STATE_RUNNING:
 		return CONTAINER_STATE__RUNNING;
-	case CONTAINER_STATE_FREEZING:
+	case COMPARTMENT_STATE_FREEZING:
 		return CONTAINER_STATE__FREEZING;
-	case CONTAINER_STATE_FROZEN:
+	case COMPARTMENT_STATE_FROZEN:
 		return CONTAINER_STATE__FROZEN;
-	case CONTAINER_STATE_ZOMBIE:
+	case COMPARTMENT_STATE_ZOMBIE:
 		return CONTAINER_STATE__ZOMBIE;
-	case CONTAINER_STATE_SHUTTING_DOWN:
+	case COMPARTMENT_STATE_SHUTTING_DOWN:
 		return CONTAINER_STATE__SHUTDOWN;
-	case CONTAINER_STATE_SETUP:
+	case COMPARTMENT_STATE_SETUP:
 		return CONTAINER_STATE__SETUP;
-	case CONTAINER_STATE_REBOOTING:
+	case COMPARTMENT_STATE_REBOOTING:
 		return CONTAINER_STATE__REBOOTING;
 	default:
-		FATAL("Unhandled value for container_state_t: %d", state);
+		FATAL("Unhandled value for compartment_state_t: %d", state);
 	}
 }
 /**
@@ -198,15 +198,15 @@ control_container_state_to_proto(container_state_t state)
  * The usual identity map between two corresponding C and protobuf enums.
  */
 ContainerType
-control_container_type_to_proto(container_type_t type)
+control_compartment_type_to_proto(compartment_type_t type)
 {
 	switch (type) {
-	case CONTAINER_TYPE_CONTAINER:
+	case COMPARTMENT_TYPE_CONTAINER:
 		return CONTAINER_TYPE__CONTAINER;
-	case CONTAINER_TYPE_KVM:
+	case COMPARTMENT_TYPE_KVM:
 		return CONTAINER_TYPE__KVM;
 	default:
-		FATAL("Unhandled value for container_type_t: %d", type);
+		FATAL("Unhandled value for compartment_type_t: %d", type);
 	}
 }
 
@@ -224,8 +224,8 @@ control_container_status_new(const container_t *container)
 	container_status__init(c_status);
 	c_status->uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 	c_status->name = mem_strdup(container_get_name(container));
-	c_status->type = control_container_type_to_proto(container_get_type(container));
-	c_status->state = control_container_state_to_proto(container_get_state(container));
+	c_status->type = control_compartment_type_to_proto(container_get_type(container));
+	c_status->state = control_compartment_state_to_proto(container_get_state(container));
 	c_status->uptime = container_get_uptime(container);
 	c_status->created = container_get_creation_time(container);
 	c_status->guestos = mem_strdup(guestos_get_name(container_get_guestos(container)));
@@ -1286,8 +1286,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		// reload configs if container is in state
-		container_state_t state = container_get_state(container);
-		if (state == CONTAINER_STATE_STOPPED) {
+		compartment_state_t state = container_get_state(container);
+		if (state == COMPARTMENT_STATE_STOPPED) {
 			// Reload container to make changes effective
 			TRACE("Update: Reloading container %s from %s",
 			      uuid_string(container_get_uuid(container)),
@@ -1319,12 +1319,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
-		container_state_t container_state = container_get_state(container);
-		if ((container_state == CONTAINER_STATE_RUNNING) ||
-		    (container_state == CONTAINER_STATE_BOOTING) ||
-		    (container_state == CONTAINER_STATE_SETUP) ||
-		    (container_state == CONTAINER_STATE_REBOOTING) ||
-		    (container_state == CONTAINER_STATE_STARTING)) {
+		compartment_state_t compartment_state = container_get_state(container);
+		if ((compartment_state == COMPARTMENT_STATE_RUNNING) ||
+		    (compartment_state == COMPARTMENT_STATE_BOOTING) ||
+		    (compartment_state == COMPARTMENT_STATE_SETUP) ||
+		    (compartment_state == COMPARTMENT_STATE_REBOOTING) ||
+		    (compartment_state == COMPARTMENT_STATE_STARTING)) {
 			WARN("Container is already running or in the process of starting up!");
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"container-start-already-running",

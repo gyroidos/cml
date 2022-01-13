@@ -675,9 +675,9 @@ uevent_netdev_move(struct uevent *uevent)
 	if (!container)
 		container = cmld_containers_get_c0();
 
-	if ((!container) || (container_get_state(container) != CONTAINER_STATE_BOOTING) ||
-	    (container_get_state(container) != CONTAINER_STATE_RUNNING) ||
-	    (container_get_state(container) != CONTAINER_STATE_STARTING)) {
+	if ((!container) || (container_get_state(container) != COMPARTMENT_STATE_BOOTING) ||
+	    (container_get_state(container) != COMPARTMENT_STATE_RUNNING) ||
+	    (container_get_state(container) != COMPARTMENT_STATE_STARTING)) {
 		WARN("Target container is not running, skip moving %s", uevent->interface);
 		goto error;
 	}
@@ -758,9 +758,9 @@ uevent_device_node_and_forward(struct uevent *uevent, container_t *container)
 	IF_NULL_RETURN(uevent);
 	IF_NULL_RETURN(container);
 
-	IF_FALSE_RETURN_TRACE(((container_get_state(container) == CONTAINER_STATE_BOOTING) ||
-			       (container_get_state(container) == CONTAINER_STATE_RUNNING) ||
-			       (container_get_state(container) == CONTAINER_STATE_SETUP)));
+	IF_FALSE_RETURN_TRACE(((container_get_state(container) == COMPARTMENT_STATE_BOOTING) ||
+			       (container_get_state(container) == COMPARTMENT_STATE_RUNNING) ||
+			       (container_get_state(container) == COMPARTMENT_STATE_SETUP)));
 
 	if (!container_is_device_allowed(container, uevent->major, uevent->minor)) {
 		TRACE("Skipping device '%s' (%d,%d) which is forbidden by cgroup", uevent->devname,

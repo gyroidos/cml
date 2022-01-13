@@ -87,7 +87,6 @@ list_t *global_assigned_devs_list = NULL;
 
 typedef struct c_cgroups {
 	container_t *container; // weak reference
-	char *cgroup_path;
 	list_t *active_cgroups;
 
 	event_inotify_t *inotify_freezer_state;
@@ -101,13 +100,14 @@ typedef struct c_cgroups {
 } c_cgroups_t;
 
 static void *
-c_cgroups_new(container_t *container)
+c_cgroups_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_cgroups_t *cgroups = mem_new0(c_cgroups_t, 1);
-	cgroups->container = container;
-	//cgroups->cgroup_path = mem_printf("%s/%s", CONTAINER_HIERARCHY, uuid_string(container_get_uuid(cgroups->container)));
+	cgroups->container = compartment_get_extension_data(compartment);
+
 	cgroups->active_cgroups = hardware_get_active_cgroups_subsystems();
 
 	cgroups->inotify_freezer_state = NULL;
@@ -124,7 +124,6 @@ c_cgroups_free(void *cgroupsp)
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
-	mem_free0(cgroups->cgroup_path);
 	mem_free0(cgroups);
 }
 
@@ -537,7 +536,7 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 	}
 
 	/* allow to run a KVM VMM inside an unprivileged Namespace */
-	if (container_get_type(cgroups->container) == CONTAINER_TYPE_KVM) {
+	if (container_get_type(cgroups->container) == COMPARTMENT_TYPE_KVM) {
 		if (c_cgroups_devices_allow(cgroups, "c 10:232 rwm") < 0)
 			return -1;
 		INFO("Allowing acces to /dev/kvm for lkvm inside new namespace");
@@ -594,14 +593,14 @@ c_cgroups_freeze(void *cgroupsp)
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
-	container_state_t state = container_get_state(cgroups->container);
+	compartment_state_t state = container_get_state(cgroups->container);
 	switch (state) {
-	case CONTAINER_STATE_FROZEN:
-	case CONTAINER_STATE_FREEZING:
+	case COMPARTMENT_STATE_FROZEN:
+	case COMPARTMENT_STATE_FREEZING:
 		DEBUG("Container already frozen or freezing, doing nothing...");
 		return 0;
-	case CONTAINER_STATE_RUNNING:
-	case CONTAINER_STATE_SETUP:
+	case COMPARTMENT_STATE_RUNNING:
+	case COMPARTMENT_STATE_SETUP:
 		break; // actually do freeze
 	default:
 		WARN("Container not running");
@@ -656,8 +655,8 @@ c_cgroups_freeze_timeout_cb(UNUSED event_timer_t *timer, void *data)
 		return;
 	}
 
-	container_state_t container_state = container_get_state(cgroups->container);
-	if (container_state == CONTAINER_STATE_FREEZING) {
+	compartment_state_t compartment_state = container_get_state(cgroups->container);
+	if (compartment_state == COMPARTMENT_STATE_FREEZING) {
 		WARN("Hit timeout for freezing container %s, aborting freeze...",
 		     container_get_description(cgroups->container));
 
@@ -689,17 +688,17 @@ c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask,
 	DEBUG("State of freezer for container %s is %s",
 	      container_get_description(cgroups->container), state);
 
-	container_state_t container_state = container_get_state(cgroups->container);
+	compartment_state_t compartment_state = container_get_state(cgroups->container);
 
 	if (!strncmp(state, "THAWED", strlen("THAWED")) &&
-	    (container_state == CONTAINER_STATE_FREEZING ||
-	     container_state == CONTAINER_STATE_FROZEN)) {
+	    (compartment_state == COMPARTMENT_STATE_FREEZING ||
+	     compartment_state == COMPARTMENT_STATE_FROZEN)) {
 		INFO("Container %s thawed from freezing or frozen state",
 		     container_get_description(cgroups->container));
 		c_cgroups_cleanup_freeze_timer(cgroups);
-		container_set_state(cgroups->container, CONTAINER_STATE_RUNNING);
+		container_set_state(cgroups->container, COMPARTMENT_STATE_RUNNING);
 	} else if (!strncmp(state, "FREEZING", strlen("FREEZING")) &&
-		   container_state != CONTAINER_STATE_FREEZING) {
+		   compartment_state != COMPARTMENT_STATE_FREEZING) {
 		INFO("Container %s freezing", container_get_description(cgroups->container));
 
 		c_cgroups_cleanup_freeze_timer(cgroups);
@@ -708,12 +707,12 @@ c_cgroups_freezer_state_cb(UNUSED const char *path, UNUSED uint32_t mask,
 							&c_cgroups_freeze_timeout_cb, cgroups);
 		event_add_timer(cgroups->freeze_timer);
 
-		container_set_state(cgroups->container, CONTAINER_STATE_FREEZING);
+		container_set_state(cgroups->container, COMPARTMENT_STATE_FREEZING);
 	} else if (!strncmp(state, "FROZEN", strlen("FROZEN")) &&
-		   container_state != CONTAINER_STATE_FROZEN) {
+		   compartment_state != COMPARTMENT_STATE_FROZEN) {
 		INFO("Container %s frozen", container_get_description(cgroups->container));
 		c_cgroups_cleanup_freeze_timer(cgroups);
-		container_set_state(cgroups->container, CONTAINER_STATE_FROZEN);
+		container_set_state(cgroups->container, COMPARTMENT_STATE_FROZEN);
 	}
 
 	mem_free0(state);
@@ -1044,7 +1043,7 @@ c_cgroups_start_pre_clone(void *cgroupsp)
 	ASSERT(cgroups);
 
 	if (mount_cgroups(cgroups->active_cgroups))
-		return -CONTAINER_ERROR_CGROUPS;
+		return -COMPARTMENT_ERROR_CGROUPS;
 
 	return 0;
 }
@@ -1104,7 +1103,7 @@ c_cgroups_start_post_clone(void *cgroupsp)
 error:
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
-	return -CONTAINER_ERROR_CGROUPS;
+	return -COMPARTMENT_ERROR_CGROUPS;
 }
 
 static int
@@ -1120,7 +1119,7 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 	/* initialize devices subsystem */
 	if (c_cgroups_devices_init(cgroups) < 0) {
 		ERROR_ERRNO("devices init failed!");
-		return -CONTAINER_ERROR_CGROUPS;
+		return -COMPARTMENT_ERROR_CGROUPS;
 	}
 	/* append usb devices to devices_subsystem */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
@@ -1197,7 +1196,7 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 error:
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
-	return -CONTAINER_ERROR_CGROUPS;
+	return -COMPARTMENT_ERROR_CGROUPS;
 }
 
 static int
@@ -1248,7 +1247,7 @@ c_cgroups_start_pre_exec_child(void *cgroupsp)
 
 	if (unshare(CLONE_NEWCGROUP) == -1) {
 		WARN_ERRNO("Could not unshare cgroup namespace!");
-		return -CONTAINER_ERROR_CGROUPS;
+		return -COMPARTMENT_ERROR_CGROUPS;
 	}
 
 	INFO("Successfully created new cgroup namespace for container %s",
@@ -1373,11 +1372,11 @@ c_cgroups_cleanup(void *cgroupsp, UNUSED bool is_rebooting)
 	cgroups->allowed_devs = NULL;
 }
 
-static container_module_t c_cgroups_module = {
+static compartment_module_t c_cgroups_module = {
 	.name = MOD_NAME,
-	.container_new = c_cgroups_new,
-	.container_free = c_cgroups_free,
-	.container_destroy = NULL,
+	.compartment_new = c_cgroups_new,
+	.compartment_free = c_cgroups_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_cgroups_start_pre_clone,
@@ -1394,8 +1393,8 @@ static container_module_t c_cgroups_module = {
 static void INIT
 c_cgroups_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_cgroups_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_cgroups_module);
 
 	// register relevant handlers implemented by this module
 	container_register_freeze_handler(MOD_NAME, c_cgroups_freeze);

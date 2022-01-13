@@ -57,14 +57,14 @@ struct container_config {
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
-container_type_t
+compartment_type_t
 container_config_proto_to_type(ContainerType type)
 {
 	switch (type) {
 	case CONTAINER_TYPE__CONTAINER:
-		return CONTAINER_TYPE_CONTAINER;
+		return COMPARTMENT_TYPE_CONTAINER;
 	case CONTAINER_TYPE__KVM:
-		return CONTAINER_TYPE_KVM;
+		return COMPARTMENT_TYPE_KVM;
 	default:
 		FATAL("Unhandled value for ContainerType: %d", type);
 	}
@@ -685,10 +685,10 @@ container_config_get_color(UNUSED const container_config_t *config)
 	return 0;
 }
 
-container_type_t
+compartment_type_t
 container_config_get_type(UNUSED const container_config_t *config)
 {
-	return CONTAINER_TYPE_CONTAINER;
+	return COMPARTMENT_TYPE_CONTAINER;
 }
 
 bool
@@ -717,7 +717,7 @@ container_config_get_color(const container_config_t *config)
 	return config->cfg->color;
 }
 
-container_type_t
+compartment_type_t
 container_config_get_type(const container_config_t *config)
 {
 	ASSERT(config);

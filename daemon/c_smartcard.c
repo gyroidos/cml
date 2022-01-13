@@ -339,7 +339,8 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					TOKEN_MGMT, "unlock-successful",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
 
-			if (container_get_state(smartcard->container) == CONTAINER_STATE_RUNNING) {
+			if (container_get_state(smartcard->container) ==
+			    COMPARTMENT_STATE_RUNNING) {
 				/* in this case the token was checked to authorize container stop */
 				// just lock token again which triggers success_cb
 				c_smartcard_send_token_lock_cmd(smartcard);
@@ -1052,12 +1053,14 @@ c_smartcard_scd_release_pairing(void *smartcardp)
 }
 
 static void *
-c_smartcard_new(container_t *container)
+c_smartcard_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_smartcard_t *smartcard = mem_new0(c_smartcard_t, 1);
-	smartcard->container = container;
+	smartcard->container = compartment_get_extension_data(compartment);
+
 	smartcard->path = cmld_get_wrapped_keys_dir();
 
 	smartcard->token_type = container_get_token_type(smartcard->container);
@@ -1070,9 +1073,10 @@ c_smartcard_new(container_t *container)
 				smartcard->token_serial =
 					mem_strdup(uevent_usbdev_get_i_serial(ud));
 				DEBUG("container %s configured to use usb token reader with serial %s",
-				      container_get_name(container), smartcard->token_serial);
+				      container_get_name(smartcard->container),
+				      smartcard->token_serial);
 				uevent_usbdev_set_sysfs_props(ud);
-				uevent_register_usbdevice(container, ud);
+				uevent_register_usbdevice(smartcard->container, ud);
 				break; // TODO: handle misconfiguration with several usbtoken?
 			}
 		}
@@ -1095,11 +1099,12 @@ c_smartcard_new(container_t *container)
 	}
 
 	if (0 != c_smartcard_token_init(smartcard)) {
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, CONTAINER_MGMT,
 				"container-create-token-uninit",
-				uuid_string(container_get_uuid(container)), 0);
+				uuid_string(container_get_uuid(smartcard->container)), 0);
 		WARN("Could not initialize token associated with container %s (uuid=%s).",
-		     container_get_name(container), uuid_string(container_get_uuid(container)));
+		     container_get_name(smartcard->container),
+		     uuid_string(container_get_uuid(smartcard->container)));
 	}
 
 	return smartcard;
@@ -1242,7 +1247,7 @@ err:
  * Start-pre-exec hook.
  *
  * @param smartcardp The generic smartcard object of the associated container.
- * @return 0 on success, -CONTAINER_ERROR_SMARTCARD on error.
+ * @return 0 on success, -COMPARTMENT_ERROR_SMARTCARD on error.
  */
 static int
 c_smartcard_start_pre_exec(void *smartcardp)
@@ -1252,17 +1257,17 @@ c_smartcard_start_pre_exec(void *smartcardp)
 
 	if (c_smartcard_bind_token(smartcard) < 0) {
 		ERROR("Failed to bind token to container");
-		return -CONTAINER_ERROR_SERVICE;
+		return -COMPARTMENT_ERROR_SERVICE;
 	}
 
 	return 0;
 }
 
-static container_module_t c_smartcard_module = {
+static compartment_module_t c_smartcard_module = {
 	.name = MOD_NAME,
-	.container_new = c_smartcard_new,
-	.container_free = c_smartcard_free,
-	.container_destroy = c_smartcard_destroy,
+	.compartment_new = c_smartcard_new,
+	.compartment_free = c_smartcard_free,
+	.compartment_destroy = c_smartcard_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
@@ -1279,8 +1284,8 @@ static container_module_t c_smartcard_module = {
 static void INIT
 c_smartcard_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_smartcard_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_smartcard_module);
 
 	// register relevant handlers implemented by this module
 	container_register_ctrl_with_smartcard_handler(MOD_NAME, c_smartcard_container_ctrl);

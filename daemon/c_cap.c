@@ -57,12 +57,13 @@ typedef struct c_cap {
 } c_cap_t;
 
 static void *
-c_cap_new(container_t *container)
+c_cap_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_cap_t *cap = mem_new0(c_cap_t, 1);
-	cap->container = container;
+	cap->container = compartment_get_extension_data(compartment);
 
 	return cap;
 }
@@ -82,7 +83,7 @@ c_cap_set_current_process(void *capp)
 	ASSERT(cap);
 
 	// C_CAP_DROP macro needs variable container
-	container_t *container = cap->container;
+	const container_t *container = cap->container;
 
 	///* 1 */ C_CAP_DROP(CAP_DAC_OVERRIDE); /* does NOT work properly */
 	///* 2 */ C_CAP_DROP(CAP_DAC_READ_SEARCH);
@@ -124,7 +125,7 @@ c_cap_set_current_process(void *capp)
 
 	/* Use the following for dropping caps only in unprivileged containers */
 	if (!container_is_privileged(container) &&
-	    container_get_state(container) != CONTAINER_STATE_SETUP) {
+	    container_get_state(container) != COMPARTMENT_STATE_SETUP) {
 		/* 18 */ C_CAP_DROP(CAP_SYS_CHROOT);
 		/* 25 */ C_CAP_DROP(CAP_SYS_TIME);
 		/* 26 */ C_CAP_DROP(CAP_SYS_TTY_CONFIG);
@@ -145,7 +146,7 @@ c_cap_do_exec_cap_systime(c_cap_t *cap, char *const *argv)
 	ASSERT(cap);
 
 	// C_CAP_DROP macro needs variable container
-	container_t *container = cap->container;
+	const container_t *container = cap->container;
 
 	int uid = container_get_uid(container);
 
@@ -311,16 +312,16 @@ c_cap_start_child(void *capp)
 	ASSERT(cap);
 
 	if (c_cap_set_current_process(cap))
-		return -CONTAINER_ERROR;
+		return -COMPARTMENT_ERROR;
 
 	return 0;
 }
 
-static container_module_t c_cap_module = {
+static compartment_module_t c_cap_module = {
 	.name = MOD_NAME,
-	.container_new = c_cap_new,
-	.container_free = c_cap_free,
-	.container_destroy = NULL,
+	.compartment_new = c_cap_new,
+	.compartment_free = c_cap_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
@@ -337,8 +338,8 @@ static container_module_t c_cap_module = {
 static void INIT
 c_cap_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_cap_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_cap_module);
 
 	// register relevant handlers implemented by this module
 	container_register_set_cap_current_process_handler(MOD_NAME, c_cap_set_current_process);

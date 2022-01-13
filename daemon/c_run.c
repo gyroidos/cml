@@ -74,10 +74,14 @@ typedef struct c_run_session {
 } c_run_session_t;
 
 static void *
-c_run_new(container_t *container)
+c_run_new(compartment_t *compartment)
 {
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
+
 	c_run_t *run = mem_new0(c_run_t, 1);
-	run->container = container;
+	run->container = compartment_get_extension_data(compartment);
+
 	run->sessions = NULL;
 	return run;
 }
@@ -591,9 +595,9 @@ c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **a
 	ASSERT(run);
 
 	switch (container_get_state(run->container)) {
-	case CONTAINER_STATE_BOOTING:
-	case CONTAINER_STATE_RUNNING:
-	case CONTAINER_STATE_SETUP:
+	case COMPARTMENT_STATE_BOOTING:
+	case COMPARTMENT_STATE_RUNNING:
+	case COMPARTMENT_STATE_SETUP:
 		break;
 	default:
 		WARN("Container %s is not running thus no command could be exec'ed",
@@ -625,11 +629,11 @@ error:
 	return -1;
 }
 
-static container_module_t c_run_module = {
+static compartment_module_t c_run_module = {
 	.name = MOD_NAME,
-	.container_new = c_run_new,
-	.container_free = c_run_free,
-	.container_destroy = NULL,
+	.compartment_new = c_run_new,
+	.compartment_free = c_run_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
@@ -646,8 +650,8 @@ static container_module_t c_run_module = {
 static void INIT
 c_run_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_run_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_run_module);
 
 	// register relevant handlers implemented by this module
 	container_register_run_handler(MOD_NAME, c_run_exec_process);

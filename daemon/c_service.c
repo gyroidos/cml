@@ -123,7 +123,7 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 	TRACE("Received message code from Trustme Service: %d", message->code);
 	switch (message->code) {
 	case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
-		container_set_state(service->container, CONTAINER_STATE_RUNNING);
+		container_set_state(service->container, COMPARTMENT_STATE_RUNNING);
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_NAME_REQ:
@@ -272,12 +272,14 @@ error:
  * return The service object of the associated container as generic void pointer
  */
 static void *
-c_service_new(container_t *container)
+c_service_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_service_t *service = mem_new0(c_service_t, 1);
-	service->container = container;
+	service->container = compartment_get_extension_data(compartment);
+
 	service->sock = -1;
 	service->sock_connected = -1;
 	service->event_io_sock = NULL;
@@ -328,7 +330,7 @@ c_service_cleanup(void *servicep, UNUSED bool is_rebooting)
 /**
  * Stop hook, which calls the container shutdown routine
  * @param servicep The generic service object of the associated container.
- * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ * @return 0 on success, -COMPARTMENT_ERROR_SERVICE on error.
  */
 static int
 c_service_stop(void *servicep)
@@ -347,7 +349,7 @@ c_service_stop(void *servicep)
 
 	char *argv[] = { "halt", NULL };
 	if (container_run(service->container, false, argv[0], 1, argv, -1))
-		return -CONTAINER_ERROR_SERVICE;
+		return -COMPARTMENT_ERROR_SERVICE;
 
 	return 0;
 }
@@ -370,7 +372,7 @@ c_service_free(void *servicep)
  * Pre-clone hook.
  *
  * @param servicep The generic service object of the associated container.
- * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ * @return 0 on success, -COMPARTMENT_ERROR_SERVICE on error.
  */
 static int
 c_service_start_pre_clone(void *servicep)
@@ -381,7 +383,7 @@ c_service_start_pre_clone(void *servicep)
 	service->sock = sock_unix_create(SOCK_STREAM);
 
 	if (service->sock < 0)
-		return CONTAINER_ERROR_SERVICE;
+		return COMPARTMENT_ERROR_SERVICE;
 
 	return 0;
 }
@@ -390,7 +392,7 @@ c_service_start_pre_clone(void *servicep)
  * Start-child hook.
  *
  * @param servicep The generic service object of the associated container.
- * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ * @return 0 on success, -COMPARTMENT_ERROR_SERVICE on error.
  */
 static int
 c_service_start_child(void *servicep)
@@ -399,7 +401,7 @@ c_service_start_child(void *servicep)
 	ASSERT(service);
 
 	if (sock_unix_bind(service->sock, C_SERVICE_SOCKET) < 0)
-		return -CONTAINER_ERROR_SERVICE;
+		return -COMPARTMENT_ERROR_SERVICE;
 
 	return 0;
 }
@@ -408,7 +410,7 @@ c_service_start_child(void *servicep)
  * Pre-exec hook.
  *
  * @param servicep The generic service object of the associated container.
- * @return 0 on success, -CONTAINER_ERROR_SERVICE on error.
+ * @return 0 on success, -COMPARTMENT_ERROR_SERVICE on error.
  */
 static int
 c_service_start_pre_exec(void *servicep)
@@ -417,7 +419,7 @@ c_service_start_pre_exec(void *servicep)
 	ASSERT(service);
 
 	if (sock_unix_listen(service->sock) < 0)
-		return -CONTAINER_ERROR_SERVICE;
+		return -COMPARTMENT_ERROR_SERVICE;
 
 	// Now wait for initial connect from TrustmeService to socket.
 	service->event_io_sock =
@@ -494,11 +496,11 @@ c_service_audit_notify_complete(void *servicep)
 	return protobuf_send_message(service->sock_connected, (ProtobufCMessage *)&message_proto);
 }
 
-static container_module_t c_service_module = {
+static compartment_module_t c_service_module = {
 	.name = MOD_NAME,
-	.container_new = c_service_new,
-	.container_free = c_service_free,
-	.container_destroy = NULL,
+	.compartment_new = c_service_new,
+	.compartment_free = c_service_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_service_start_pre_clone,
@@ -515,8 +517,8 @@ static container_module_t c_service_module = {
 static void INIT
 c_service_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_service_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_service_module);
 
 	// register relevant handlers implemented by this module
 	container_register_audit_record_send_handler(MOD_NAME, c_service_audit_send_record);

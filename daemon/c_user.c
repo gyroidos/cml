@@ -201,18 +201,20 @@ c_user_shift_free(struct c_user_shift *s)
  * @return the c_user_t user structure which holds user namespace information for a container.
  */
 static void *
-c_user_new(container_t *container)
+c_user_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_user_t *user = mem_new0(c_user_t, 1);
-	user->container = container;
+	user->container = compartment_get_extension_data(compartment);
+
 	user->uid_start = 0;
 
 	// path to bind userns (used for reboots)
 	dir_mkdir_p("/var/run/userns", 00755);
 	user->ns_path =
-		mem_printf("/var/run/userns/%s", uuid_string(container_get_uuid(container)));
+		mem_printf("/var/run/userns/%s", uuid_string(container_get_uuid(user->container)));
 
 	TRACE("new c_user struct was allocated");
 
@@ -414,7 +416,7 @@ c_user_start_child(void *usr)
 	c_user_t *user = usr;
 	ASSERT(user);
 	if (c_user_setuid0(user) < 0)
-		return -CONTAINER_ERROR_USER;
+		return -COMPARTMENT_ERROR_USER;
 	return 0;
 }
 
@@ -532,13 +534,13 @@ c_user_start_pre_clone(void *usr)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == user->container) &&
-	    (container_get_prev_state(user->container) == CONTAINER_STATE_REBOOTING))
+	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
 
 	// reserve a new mapping
 	if (c_user_set_next_uid_range_start(user)) {
 		ERROR("Reserving uid range for userns");
-		return -CONTAINER_ERROR_USER;
+		return -COMPARTMENT_ERROR_USER;
 	}
 	return 0;
 }
@@ -558,7 +560,7 @@ c_user_start_post_clone(void *usr)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == user->container) &&
-	    (container_get_prev_state(user->container) == CONTAINER_STATE_REBOOTING))
+	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
 
 	// bind userns to file
@@ -571,7 +573,7 @@ c_user_start_post_clone(void *usr)
 		WARN("Could not keep userns active for reboot!");
 
 	if (c_user_setup_mapping(user) < 0)
-		return -CONTAINER_ERROR_USER;
+		return -COMPARTMENT_ERROR_USER;
 
 	return 0;
 }
@@ -649,16 +651,16 @@ c_user_join_userns(void *usr)
 	IF_FALSE_RETVAL(file_exists(user->ns_path), -1);
 
 	if (ns_join_by_path(user->ns_path) < 0)
-		return -CONTAINER_ERROR_USER;
+		return -COMPARTMENT_ERROR_USER;
 
 	return 0;
 }
 
-static container_module_t c_user_module = {
+static compartment_module_t c_user_module = {
 	.name = MOD_NAME,
-	.container_new = c_user_new,
-	.container_free = c_user_free,
-	.container_destroy = c_user_destroy,
+	.compartment_new = c_user_new,
+	.compartment_free = c_user_free,
+	.compartment_destroy = c_user_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_user_start_pre_clone,
@@ -675,8 +677,8 @@ static container_module_t c_user_module = {
 static void INIT
 c_user_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_user_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_user_module);
 
 	// register relevant handlers implemented by this module
 	container_register_setuid0_handler(MOD_NAME, c_user_setuid0);
