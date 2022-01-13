@@ -24,12 +24,16 @@
 /**
  * @file container_module.h
  *
- * Module macro magic to avoid code duplication
+ * Module macro magic to avoid code duplication and
+ * functions implementd by submodules using those macros
  */
 
 #ifndef CONTAINER_MODULE_H
 #define CONTAINER_MODULE_H
 
+/*
+ * Module macro magic to avoid code duplication
+ */
 // clang-format off
 #define CONTAINER_MODULE_WRAPPER_DECLARE(name, type, ...) \
 	type container_## name(const container_t *container, ##__VA_ARGS__); \
@@ -59,8 +63,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \
@@ -73,8 +77,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \
@@ -87,8 +91,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \
@@ -101,8 +105,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \
@@ -115,8 +119,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \
@@ -129,8 +133,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \
@@ -143,8 +147,8 @@
 		ASSERT(container); \
 		if (!container_## name ##_handler) \
 			return unimpl; \
-		void *instance = container_module_get_instance_by_name( \
-			container, container_## name ##_handler->mod_name); \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
 		/* no corresponding module registered and instantiated */ \
 		if (!instance) \
 			return unimpl; \

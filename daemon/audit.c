@@ -627,7 +627,7 @@ audit_record_log(container_t *c, AuditRecord *record)
 		goto out;
 	}
 
-	if (c && (CONTAINER_STATE_RUNNING == container_get_state(c))) {
+	if (c && (COMPARTMENT_STATE_RUNNING == container_get_state(c))) {
 		bool processing_ack = container_audit_get_processing_ack(c);
 		if (!processing_ack &&
 		    (-1 == container_audit_record_notify(c, audit_remaining_storage(uuid_string(

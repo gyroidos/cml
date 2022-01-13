@@ -109,10 +109,14 @@ c_time_get_clock_secs(clockid_t clock)
 }
 
 static void *
-c_time_new(container_t *container)
+c_time_new(compartment_t *compartment)
 {
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
+
 	c_time_t *time = mem_new0(c_time_t, 1);
-	time->container = container;
+	time->container = compartment_get_extension_data(compartment);
+
 	time->ns_time = file_exists("/proc/self/ns/time");
 	time->time_started = -1;
 	time->time_created = c_time_get_creation_time_from_file(time);
@@ -139,7 +143,7 @@ c_time_start_child(void *timep)
 	/* since timens can not be set with clone directly do it now in the child */
 	if (unshare(CLONE_NEWTIME) == -1) {
 		ERROR_ERRNO("Could not unshare time namespace!");
-		return -CONTAINER_ERROR_TIME;
+		return -COMPARTMENT_ERROR_TIME;
 	}
 
 	INFO("Successfully created new time namespace for container %s",
@@ -176,7 +180,7 @@ c_time_start_pre_exec(void *timep)
 	return 0;
 error:
 	mem_free0(path_timens_offsets);
-	return -CONTAINER_ERROR_TIME;
+	return -COMPARTMENT_ERROR_TIME;
 }
 
 static int
@@ -200,7 +204,7 @@ c_time_start_pre_exec_child(void *timep)
 	int nsfd = -1;
 	if ((nsfd = open("/proc/self/ns/time_for_children", O_RDONLY)) < 0) {
 		ERROR_ERRNO("Could not open namespace file for timens");
-		return -CONTAINER_ERROR_TIME;
+		return -COMPARTMENT_ERROR_TIME;
 	}
 	if (setns(nsfd, 0) == -1) {
 		ERROR_ERRNO("Could not join time namespace");
@@ -212,7 +216,7 @@ c_time_start_pre_exec_child(void *timep)
 	return 0;
 error:
 	close(nsfd);
-	return -CONTAINER_ERROR_TIME;
+	return -COMPARTMENT_ERROR_TIME;
 }
 
 static time_t
@@ -259,11 +263,11 @@ c_time_destroy(void *timep)
 	mem_free0(file_name_created);
 }
 
-static container_module_t c_time_module = {
+static compartment_module_t c_time_module = {
 	.name = MOD_NAME,
-	.container_new = c_time_new,
-	.container_free = c_time_free,
-	.container_destroy = c_time_destroy,
+	.compartment_new = c_time_new,
+	.compartment_free = c_time_free,
+	.compartment_destroy = c_time_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
@@ -281,7 +285,7 @@ static void INIT
 c_time_init(void)
 {
 	// register this module in container.c
-	container_register_module(&c_time_module);
+	compartment_register_module(&c_time_module);
 
 	// register relevant handlers implemented by this module
 	container_register_get_creation_time_handler(MOD_NAME, c_time_get_creation_time);

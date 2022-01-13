@@ -786,21 +786,22 @@ err:
  * @return the c_net_t network structure which holds networking information for a container.
  */
 static void *
-c_net_new(container_t *container)
+c_net_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_net_t *net = mem_new0(c_net_t, 1);
-	net->container = container;
+	net->container = compartment_get_extension_data(compartment);
 
 	/* if the container does not have a network namespace, we don't execute any of this,
 	 * i.e. we always return at the start of the functions  */
-	if (!container_has_netns(container)) {
+	if (!container_has_netns(net->container)) {
 		return net;
 	}
 
 	// add cml interface as uplink for cmld through c0
-	if (container_uuid_is_c0id(container_get_uuid(container))) {
+	if (container_uuid_is_c0id(container_get_uuid(net->container))) {
 		INFO("Generating uplink veth %s", CML_UPLINK_INTERFACE_NAME);
 		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
 		if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
@@ -814,7 +815,7 @@ c_net_new(container_t *container)
 		net->interface_list = list_append(net->interface_list, ni_cml);
 	}
 
-	for (list_t *l = container_get_vnet_cfg_list(container); l; l = l->next) {
+	for (list_t *l = container_get_vnet_cfg_list(net->container); l; l = l->next) {
 		container_vnet_cfg_t *cfg = l->data;
 
 		c_net_interface_t *ni =
@@ -826,7 +827,7 @@ c_net_new(container_t *container)
 	}
 
 	uint8_t mac[6];
-	for (list_t *l = container_get_pnet_cfg_list(container); l; l = l->next) {
+	for (list_t *l = container_get_pnet_cfg_list(net->container); l; l = l->next) {
 		container_pnet_cfg_t *pnet_cfg = l->data;
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
@@ -862,7 +863,8 @@ c_net_new(container_t *container)
 
 	// path to bind netns, compatible to ip netns tool
 	dir_mkdir_p("/var/run/netns", 00755);
-	net->ns_path = mem_printf("/var/run/netns/%s", uuid_string(container_get_uuid(container)));
+	net->ns_path =
+		mem_printf("/var/run/netns/%s", uuid_string(container_get_uuid(net->container)));
 
 	TRACE("new c_net struct was allocated");
 
@@ -1061,7 +1063,7 @@ err:
  * Third part: Setup routing and filtering/nat.
  * by setting its ipv4 and bringing up the interface.
  *
- * @return: 0 on success, -CONTAINER_ERROR_NET in case of failure.
+ * @return: 0 on success, -COMPARTMENT_ERROR_NET in case of failure.
  */
 static int
 c_net_start_pre_clone(void *netp)
@@ -1076,14 +1078,14 @@ c_net_start_pre_clone(void *netp)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == net->container) &&
-	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
+	    (container_get_prev_state(net->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
 		if (c_net_start_pre_clone_interface(ni) == -1)
-			return -CONTAINER_ERROR_NET;
+			return -COMPARTMENT_ERROR_NET;
 		if (!ni->configure)
 			continue;
 	}
@@ -1147,7 +1149,7 @@ c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
  * If mac filter is applied do not move physical interfaces but rather a veth so that iptables
  * can be applied in the CML context.
  *
- * @return: 0 on success, -CONTAINER_ERROR_NET in case of failure.
+ * @return: 0 on success, -COMPARTMENT_ERROR_NET in case of failure.
  */
 static int
 c_net_start_post_clone(void *netp)
@@ -1161,7 +1163,7 @@ c_net_start_post_clone(void *netp)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == net->container) &&
-	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
+	    (container_get_prev_state(net->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
 
 	/* Get container's pid */
@@ -1181,7 +1183,7 @@ c_net_start_post_clone(void *netp)
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
 		if (c_net_add_interface(net, cfg) < 0)
-			return -CONTAINER_ERROR_NET;
+			return -COMPARTMENT_ERROR_NET;
 	}
 
 	// nothing to be configured
@@ -1192,13 +1194,13 @@ c_net_start_post_clone(void *netp)
 		c_net_interface_t *ni = l->data;
 
 		if (c_net_start_post_clone_interface(pid, ni) == -1)
-			return -CONTAINER_ERROR_NET;
+			return -COMPARTMENT_ERROR_NET;
 		if (pid == pid_c0) //skip moving interfaces defined for c0 (e.g. uplink iiff)
 			continue;
 		if (cmld_containers_get_c0()) {
 			DEBUG("move %s to the ns of c0's pid: %d", ni->veth_cmld_name, pid_c0);
 			if (c_net_move_ifi(ni->veth_cmld_name, pid_c0) < 0)
-				return -CONTAINER_ERROR_NET;
+				return -COMPARTMENT_ERROR_NET;
 		}
 	}
 
@@ -1208,7 +1210,7 @@ c_net_start_post_clone(void *netp)
 	if (*c0_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to c0's netns");
 		mem_free0(c0_netns_pid);
-		return -CONTAINER_ERROR_NET;
+		return -COMPARTMENT_ERROR_NET;
 	} else if (*c0_netns_pid == 0) {
 		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
 
@@ -1349,7 +1351,7 @@ c_net_start_child_interface(c_net_interface_t *ni)
  * In the container namespace, rename the interface to net->nw_name,
  * set the ipv4 container address and bring the interfaces up.
  *
- * @return: 0 on success, -CONTAINER_ERROR_NET in case of failure.
+ * @return: 0 on success, -COMPARTMENT_ERROR_NET in case of failure.
  */
 static int
 c_net_start_child(void *netp)
@@ -1363,18 +1365,18 @@ c_net_start_child(void *netp)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == net->container) &&
-	    (container_get_prev_state(net->container) == CONTAINER_STATE_REBOOTING))
+	    (container_get_prev_state(net->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
 
 	// shrink subnet reserverd for loopback device
 	if (network_setup_loopback())
-		return -CONTAINER_ERROR_NET;
+		return -COMPARTMENT_ERROR_NET;
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
 		if (c_net_start_child_interface(ni) == -1)
-			return -CONTAINER_ERROR_NET;
+			return -COMPARTMENT_ERROR_NET;
 	}
 	/* default inet uplink through first configured iif */
 	c_net_interface_t *ni = list_nth_data(net->interface_list, 0);
@@ -1610,16 +1612,16 @@ c_net_join_netns(void *netp)
 	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
 
 	if (ns_join_by_path(net->ns_path) < 0)
-		return -CONTAINER_ERROR_NET;
+		return -COMPARTMENT_ERROR_NET;
 
 	return 0;
 }
 
-static container_module_t c_net_module = {
+static compartment_module_t c_net_module = {
 	.name = MOD_NAME,
-	.container_new = c_net_new,
-	.container_free = c_net_free,
-	.container_destroy = NULL,
+	.compartment_new = c_net_new,
+	.compartment_free = c_net_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_net_start_pre_clone,
@@ -1636,8 +1638,8 @@ static container_module_t c_net_module = {
 static void INIT
 c_net_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_net_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_net_module);
 
 	// register relevant handlers implemented by this module
 	container_register_add_net_interface_handler(MOD_NAME, c_net_add_interface);

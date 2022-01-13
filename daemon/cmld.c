@@ -187,7 +187,7 @@ cmld_containers_are_all_stopped(void)
 {
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *c = l->data;
-		if (container_get_state(c) != CONTAINER_STATE_STOPPED)
+		if (container_get_state(c) != COMPARTMENT_STATE_STOPPED)
 			return false;
 		else
 			continue;
@@ -210,7 +210,7 @@ cmld_container_stop_cb(container_t *container, container_callback_t *cb, void *d
 	ASSERT(stop_data);
 
 	/* skip if the container is not stopped */
-	IF_FALSE_RETURN_TRACE(container_get_state(container) == CONTAINER_STATE_STOPPED);
+	IF_FALSE_RETURN_TRACE(container_get_state(container) == COMPARTMENT_STATE_STOPPED);
 
 	/* unregister observer */
 	container_unregister_observer(container, cb);
@@ -242,7 +242,7 @@ cmld_containers_stop(void (*on_all_stopped)(int), int value)
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
-		if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
+		if (container_get_state(container) != COMPARTMENT_STATE_STOPPED) {
 			container_stop(container);
 			/* Register observer to wait for completed container_stop */
 			if (!container_register_observer(container, &cmld_container_stop_cb,
@@ -460,7 +460,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
 	ns_net = container_config_has_netns(conf);
 
-	container_type_t type = container_config_get_type(conf);
+	compartment_type_t type = container_config_get_type(conf);
 
 	list_t *pnet_cfg_list = container_config_get_net_ifaces_list_new(conf);
 
@@ -530,8 +530,8 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 
 	container_t *c = cmld_container_get_by_uuid(uuid);
 	if (c) {
-		container_state_t state = container_get_state(c);
-		if (state != CONTAINER_STATE_STOPPED) {
+		compartment_state_t state = container_get_state(c);
+		if (state != COMPARTMENT_STATE_STOPPED) {
 			DEBUG("Refusing to reload already created and not stopped container %s.",
 			      container_get_name(c));
 			goto cleanup;
@@ -681,8 +681,8 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 	ASSERT(container);
 	ASSERT(cb);
 
-	container_state_t state = container_get_state(container);
-	if (state == CONTAINER_STATE_RUNNING) {
+	compartment_state_t state = container_get_state(container);
+	if (state == COMPARTMENT_STATE_RUNNING) {
 		container_oom_protect_service(container);
 		// enable ipforwarding when the container in root netns has started
 		if (!container_has_netns(container))
@@ -691,9 +691,6 @@ cmld_container_boot_complete_cb(container_t *container, container_callback_t *cb
 		if (container_has_userns(container))
 			uevent_udev_trigger_coldboot(container);
 		container_unregister_observer(container, cb);
-
-		DEBUG("Freeing key of container %s", container_get_name(container));
-		container_free_key(container);
 
 		/* Make KSM aggressive to immmediately share as many pages as
 		 * possible */
@@ -706,9 +703,9 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 {
 	int *control_sock_p = data;
 
-	container_state_t state = container_get_state(container);
+	compartment_state_t state = container_get_state(container);
 	/* Check if the container got over the initial starting phase */
-	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
+	if (state == COMPARTMENT_STATE_BOOTING || state == COMPARTMENT_STATE_RUNNING) {
 		/* Initialize unpriv control interface on the socket previously bound into container */
 		if (!control_new(*control_sock_p, false)) {
 			WARN("Could not create unpriv control socket for %s",
@@ -729,8 +726,8 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 static void
 cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
-	if (container_get_state(container) == CONTAINER_STATE_REBOOTING ||
-	    container_get_state(container) == CONTAINER_STATE_STOPPED) {
+	if (container_get_state(container) == COMPARTMENT_STATE_REBOOTING ||
+	    container_get_state(container) == COMPARTMENT_STATE_STOPPED) {
 		if (!container_get_sync_state(container)) {
 			DEBUG("Container is out of sync with its config. Reloading..");
 			if (cmld_reload_container(container_get_uuid(container),
@@ -748,7 +745,7 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 static void
 cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
-	if (container_get_state(container) == CONTAINER_STATE_REBOOTING) {
+	if (container_get_state(container) == COMPARTMENT_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(container));
 		container_set_key(container, DUMMY_KEY); // set dummy key for reboot
 		if (cmld_container_start(container))
@@ -761,22 +758,22 @@ cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSE
  * This callback handles audit events concerning container states 
  */
 static void
-cmld_audit_container_state_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
+cmld_audit_compartment_state_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
 	switch (container_get_state(container)) {
-	case CONTAINER_STATE_BOOTING:
+	case COMPARTMENT_STATE_BOOTING:
 		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
 				container == cmld_containers_get_c0() ? "c0-start" :
 									"container-start",
 				uuid_string(container_get_uuid(container)), 0);
 		break;
-	case CONTAINER_STATE_SHUTTING_DOWN:
+	case COMPARTMENT_STATE_SHUTTING_DOWN:
 		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
 				"shutting-down", uuid_string(container_get_uuid(container)), 0);
 		break;
-	case CONTAINER_STATE_STOPPED:
-		if (container_get_prev_state(container) == CONTAINER_STATE_STARTING ||
-		    container_get_prev_state(container) == CONTAINER_STATE_SETUP) {
+	case COMPARTMENT_STATE_STOPPED:
+		if (container_get_prev_state(container) == COMPARTMENT_STATE_STARTING ||
+		    container_get_prev_state(container) == COMPARTMENT_STATE_SETUP) {
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"error-preparing-container",
 					uuid_string(container_get_uuid(container)), 0);
@@ -786,7 +783,7 @@ cmld_audit_container_state_cb(container_t *container, container_callback_t *cb, 
 		}
 		container_unregister_observer(container, cb);
 		break;
-	case CONTAINER_STATE_REBOOTING:
+	case COMPARTMENT_STATE_REBOOTING:
 		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "reboot",
 				uuid_string(container_get_uuid(container)), 0);
 		container_unregister_observer(container, cb);
@@ -828,7 +825,7 @@ cmld_container_register_observers(container_t *container)
 		     container_get_description(container));
 	}
 	/* register an observer for automatic config reload */
-	if (!container_register_observer(container, &cmld_audit_container_state_cb, NULL)) {
+	if (!container_register_observer(container, &cmld_audit_compartment_state_cb, NULL)) {
 		WARN("Could not register container audit sync observer callback for %s",
 		     container_get_description(container));
 		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
@@ -847,8 +844,8 @@ cmld_container_start(container_t *container)
 		return -1;
 	}
 
-	if ((container_get_state(container) == CONTAINER_STATE_STOPPED) ||
-	    (container_get_state(container) == CONTAINER_STATE_REBOOTING)) {
+	if ((container_get_state(container) == COMPARTMENT_STATE_STOPPED) ||
+	    (container_get_state(container) == COMPARTMENT_STATE_REBOOTING)) {
 		/* container is not running => start it */
 		DEBUG("Container %s is not running => start it",
 		      container_get_description(container));
@@ -989,9 +986,9 @@ cmld_init_c0_cb(container_t *container, container_callback_t *cb, void *data)
 {
 	int *control_sock_p = data;
 
-	container_state_t state = container_get_state(container);
+	compartment_state_t state = container_get_state(container);
 	/* Check if the container got over the initial starting phase */
-	if (state == CONTAINER_STATE_BOOTING || state == CONTAINER_STATE_RUNNING) {
+	if (state == COMPARTMENT_STATE_BOOTING || state == COMPARTMENT_STATE_RUNNING) {
 		/* Initialize control interface on the socket previously bound into c0 */
 		cmld_control_gui = control_new(*control_sock_p, true);
 		mem_free0(control_sock_p);
@@ -1003,8 +1000,8 @@ cmld_init_c0_cb(container_t *container, container_callback_t *cb, void *data)
 static void
 cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
-	container_state_t state = container_get_state(container);
-	if (state == CONTAINER_STATE_RUNNING) {
+	compartment_state_t state = container_get_state(container);
+	if (state == COMPARTMENT_STATE_RUNNING) {
 		DEBUG("c0 booted successfully!");
 		container_oom_protect_service(container);
 		cmld_rename_logfiles();
@@ -1046,9 +1043,9 @@ cmld_handle_device_shutdown(void)
 static void
 cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
-	container_state_t state = container_get_state(container);
+	compartment_state_t state = container_get_state(container);
 
-	if (!(state == CONTAINER_STATE_STOPPED || state == CONTAINER_STATE_ZOMBIE)) {
+	if (!(state == COMPARTMENT_STATE_STOPPED || state == COMPARTMENT_STATE_ZOMBIE)) {
 		return;
 	}
 
@@ -1058,8 +1055,8 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	      container_get_description(container));
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		if (!(container_get_state(l->data) == CONTAINER_STATE_STOPPED ||
-		      container_get_state(l->data) == CONTAINER_STATE_ZOMBIE)) {
+		if (!(container_get_state(l->data) == COMPARTMENT_STATE_STOPPED ||
+		      container_get_state(l->data) == COMPARTMENT_STATE_ZOMBIE)) {
 			DEBUG("Device shutdown: There are still running containers, can't shut down");
 			return;
 		}
@@ -1083,12 +1080,12 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 static void
 cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data)
 {
-	container_state_t c0_state = container_get_state(c0);
+	compartment_state_t c0_state = container_get_state(c0);
 	bool shutdown_now = true;
 
 	/* only execute the callback if c0 goes down */
-	if (!(c0_state == CONTAINER_STATE_SHUTTING_DOWN || c0_state == CONTAINER_STATE_STOPPED ||
-	      c0_state == CONTAINER_STATE_ZOMBIE)) {
+	if (!(c0_state == COMPARTMENT_STATE_SHUTTING_DOWN ||
+	      c0_state == COMPARTMENT_STATE_STOPPED || c0_state == COMPARTMENT_STATE_ZOMBIE)) {
 		return;
 	}
 	audit_log_event(container_get_uuid(c0), SSA, CMLD, CONTAINER_MGMT, "shutdown-c0-start",
@@ -1103,8 +1100,8 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 	 *   dead or in shutting down state
 	 */
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
-		if (!(container_get_state(l->data) == CONTAINER_STATE_STOPPED ||
-		      container_get_state(l->data) == CONTAINER_STATE_ZOMBIE)) {
+		if (!(container_get_state(l->data) == COMPARTMENT_STATE_STOPPED ||
+		      container_get_state(l->data) == COMPARTMENT_STATE_ZOMBIE)) {
 			shutdown_now = false;
 			if (!container_register_observer(l->data, &cmld_shutdown_container_cb,
 							 NULL)) {
@@ -1112,7 +1109,7 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 				      container_get_description(l->data));
 			}
 			if (l->data != c0 &&
-			    !(container_get_state(l->data) == CONTAINER_STATE_SHUTTING_DOWN)) {
+			    !(container_get_state(l->data) == COMPARTMENT_STATE_SHUTTING_DOWN)) {
 				DEBUG("Device shutdown: There is another running container:%s. Shut it down first",
 				      container_get_description(l->data));
 				cmld_container_stop(l->data);
@@ -1138,7 +1135,7 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 static void
 cmld_reboot_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data)
 {
-	if (container_get_state(c0) == CONTAINER_STATE_REBOOTING) {
+	if (container_get_state(c0) == COMPARTMENT_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(c0));
 		if (cmld_start_c0(c0))
 			WARN("Reboot of '%s' failed", container_get_description(c0));
@@ -1172,7 +1169,7 @@ cmld_init_c0(const char *path, const char *c0os)
 	char **init_argv = guestos_get_init_argv_new(c0_os);
 
 	container_t *new_c0 =
-		container_new(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net, c0_os,
+		container_new(c0_uuid, "c0", COMPARTMENT_TYPE_CONTAINER, false, c0_ns_net, c0_os,
 			      NULL, c0_images_folder, c0_ram_limit, NULL, 0xffffff00, false,
 			      cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, init,
 			      init_argv, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);
@@ -1238,7 +1235,7 @@ cmld_start_c0(container_t *new_c0)
 		return -1;
 	}
 	/* register an observer for automatic config reload */
-	if (!container_register_observer(new_c0, &cmld_audit_container_state_cb, NULL)) {
+	if (!container_register_observer(new_c0, &cmld_audit_compartment_state_cb, NULL)) {
 		WARN("Could not register container audit sync observer callback for %s",
 		     container_get_description(new_c0));
 		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
@@ -1482,7 +1479,7 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	ASSERT(container);
 
 	/* skip if the container is not stopped */
-	IF_FALSE_RETURN_TRACE(container_get_state(container) == CONTAINER_STATE_STOPPED);
+	IF_FALSE_RETURN_TRACE(container_get_state(container) == COMPARTMENT_STATE_STOPPED);
 
 	/* unregister observer */
 	if (cb)
@@ -1493,7 +1490,7 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 				"container-remove", uuid_string(container_get_uuid(container)), 0);
 		ERROR("Could not destroy container");
-		container_set_state(container, CONTAINER_STATE_ZOMBIE);
+		container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
 		return;
 	}
 
@@ -1513,7 +1510,7 @@ cmld_container_destroy(container_t *container)
 	container_t *c0 = cmld_containers_get_c0();
 	IF_TRUE_RETVAL(c0 == container, -1);
 
-	if (container_get_state(container) != CONTAINER_STATE_STOPPED) {
+	if (container_get_state(container) != COMPARTMENT_STATE_STOPPED) {
 		container_kill(container);
 
 		/* Register observer to wait for completed container_stop */
@@ -1539,8 +1536,8 @@ cmld_container_stop(container_t *container)
 
 	DEBUG("Trying to stop container %s", container_get_description(container));
 
-	if (!((container_get_state(container) == CONTAINER_STATE_RUNNING) ||
-	      (container_get_state(container) == CONTAINER_STATE_SETUP))) {
+	if (!((container_get_state(container) == COMPARTMENT_STATE_RUNNING) ||
+	      (container_get_state(container) == COMPARTMENT_STATE_SETUP))) {
 		ERROR("Container %s not running, unable to stop",
 		      container_get_description(container));
 
@@ -1761,12 +1758,12 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 		if (cmld_container_has_token_changed(container, conf)) {
 			if (container_wipe(container)) {
 				ERROR("Failed to wipe user data. Setting container state to ZOMBIE");
-				container_set_state(container, CONTAINER_STATE_ZOMBIE);
+				container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
 			}
 			if ((container_get_token_type(container) == CONTAINER_TOKEN_TYPE_USB) &&
 			    container_scd_release_pairing(container)) {
 				ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
-				container_set_state(container, CONTAINER_STATE_ZOMBIE);
+				container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
 			}
 		}
 
@@ -1796,9 +1793,10 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 
 	int res = 0;
 	container_t *c0 = cmld_containers_get_c0();
-	container_state_t state_c0 = container_get_state(c0);
-	bool c0_is_up = (state_c0 == CONTAINER_STATE_RUNNING ||
-			 state_c0 == CONTAINER_STATE_BOOTING || state_c0 == CONTAINER_STATE_SETUP);
+	compartment_state_t state_c0 = container_get_state(c0);
+	bool c0_is_up =
+		(state_c0 == COMPARTMENT_STATE_RUNNING || state_c0 == COMPARTMENT_STATE_BOOTING ||
+		 state_c0 == COMPARTMENT_STATE_SETUP);
 
 	if (c0 == container) {
 		if (c0_is_up)

@@ -84,7 +84,7 @@ c_audit_start_post_clone_early(void *auditp)
 
 	// update kernel container id
 	if (c_audit_set_contid(audit) < 0)
-		return -CONTAINER_ERROR_AUDIT;
+		return -COMPARTMENT_ERROR_AUDIT;
 
 	return 0;
 }
@@ -98,23 +98,22 @@ c_audit_start_child_early(void *auditp)
 	// update kernel login uid with internal set loginuid
 	if (audit_kernel_write_loginuid(audit->loginuid)) {
 		ERROR("Could not set loginuid!");
-		return -CONTAINER_ERROR_AUDIT;
+		return -COMPARTMENT_ERROR_AUDIT;
 	}
 	return 0;
 }
 
 static void *
-c_audit_new(container_t *container)
+c_audit_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_audit_t *audit = mem_new0(c_audit_t, 1);
+	audit->container = compartment_get_extension_data(compartment);
 
-	audit->container = container;
+	TRACE("Node ID test: %" PRIx64, uuid_get_node(container_get_uuid(audit->container)));
 
-	TRACE("Node ID test: %" PRIx64, uuid_get_node(container_get_uuid(container)));
-
-	audit->container = container;
 	audit->last_ack = mem_strdup("");
 	audit->processing_ack = false;
 	audit->loginuid = UINT32_MAX;
@@ -193,11 +192,11 @@ c_audit_get_loginuid(void *auditp)
 	return audit->loginuid;
 }
 
-static container_module_t c_audit_module = {
+static compartment_module_t c_audit_module = {
 	.name = MOD_NAME,
-	.container_new = c_audit_new,
-	.container_free = c_audit_free,
-	.container_destroy = NULL,
+	.compartment_new = c_audit_new,
+	.compartment_free = c_audit_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = c_audit_start_post_clone_early,
 	.start_child_early = c_audit_start_child_early,
 	.start_pre_clone = NULL,
@@ -214,9 +213,9 @@ static container_module_t c_audit_module = {
 static void INIT
 c_audit_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_audit_module);
-	//
+	// register this module in compartment.c
+	compartment_register_module(&c_audit_module);
+
 	// register relevant handlers implemented by this module
 	container_register_audit_get_last_ack_handler(MOD_NAME, c_audit_get_last_ack);
 	container_register_audit_set_last_ack_handler(MOD_NAME, c_audit_set_last_ack);

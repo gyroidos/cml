@@ -51,13 +51,15 @@ typedef struct c_fifo {
 } c_fifo_t;
 
 void *
-c_fifo_new(container_t *container)
+c_fifo_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_fifo_t *fifo = mem_new0(c_fifo_t, 1);
 
-	fifo->container = container;
+	fifo->container = compartment_get_extension_data(compartment);
+
 	fifo->fifo_list = container_get_fifo_list(fifo->container);
 
 	return fifo;
@@ -217,14 +219,14 @@ c_fifo_start_post_clone(void *fifop)
 
 		if (-1 == c_fifo_create_fifos(fifo, c0)) {
 			ERROR("Failed to prepare container FIFOs in c0");
-			return -CONTAINER_ERROR_FIFO;
+			return -COMPARTMENT_ERROR_FIFO;
 		}
 
 		DEBUG("Creating FIFOs in target container, ns_pid=%d", target_pid);
 
 		if (-1 == c_fifo_create_fifos(fifo, fifo->container)) {
 			ERROR("Failed to prepare container FIFOs in target container");
-			return -CONTAINER_ERROR_FIFO;
+			return -COMPARTMENT_ERROR_FIFO;
 		}
 
 		//fork FIFO forwarding child
@@ -235,7 +237,7 @@ c_fifo_start_post_clone(void *fifop)
 
 			if (-1 == pid) {
 				ERROR("Failed to clone forwarding child");
-				return -CONTAINER_ERROR_FIFO;
+				return -COMPARTMENT_ERROR_FIFO;
 			} else if (pid == 0) {
 				DEBUG("Preparing forwarding for FIFO \'%s\'", current_fifo);
 
@@ -266,11 +268,11 @@ c_fifo_start_post_clone(void *fifop)
 	return 0;
 }
 
-static container_module_t c_fifo_module = {
+static compartment_module_t c_fifo_module = {
 	.name = MOD_NAME,
-	.container_new = c_fifo_new,
-	.container_free = c_fifo_free,
-	.container_destroy = NULL,
+	.compartment_new = c_fifo_new,
+	.compartment_free = c_fifo_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
@@ -287,6 +289,6 @@ static container_module_t c_fifo_module = {
 static void INIT
 c_fifo_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_fifo_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_fifo_module);
 }

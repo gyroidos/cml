@@ -84,7 +84,7 @@
 #endif
 
 typedef struct c_vol {
-	const container_t *container;
+	container_t *container;
 	char *root;
 	int overlay_count;
 	const guestos_t *os;
@@ -1238,19 +1238,21 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 /******************************************************************************/
 
 static void *
-c_vol_new(container_t *container)
+c_vol_new(compartment_t *compartment)
 {
-	ASSERT(container);
+	ASSERT(compartment);
+	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
 	c_vol_t *vol = mem_new0(c_vol_t, 1);
-	vol->container = container;
-	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(container)));
+	vol->container = compartment_get_extension_data(compartment);
+
+	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
 	vol->overlay_count = 0;
 
-	vol->os = container_get_guestos(container);
+	vol->os = container_get_guestos(vol->container);
 	if (!vol->os) {
 		ERROR("Could not get GuestOS %s instance for container %s",
-		      guestos_get_name(vol->os), container_get_name(container));
+		      guestos_get_name(vol->os), container_get_name(vol->container));
 		return NULL;
 	}
 
@@ -1261,7 +1263,7 @@ c_vol_new(container_t *container)
 	guestos_fill_mount_setup(vol->os, vol->mnt_setup);
 
 	// prepend container init env with guestos specific values
-	container_init_env_prepend(container, guestos_get_init_env(vol->os),
+	container_init_env_prepend(vol->container, guestos_get_init_env(vol->os),
 				   guestos_get_init_env_len(vol->os));
 
 	return vol;
@@ -1422,7 +1424,7 @@ c_vol_start_child_early(void *volp)
 	return 0;
 error:
 	ERROR("Failed to execute post clone hook for c_vol");
-	return -CONTAINER_ERROR_VOL;
+	return -COMPARTMENT_ERROR_VOL;
 }
 
 struct tty_cb_data {
@@ -1454,7 +1456,7 @@ c_vol_start_pre_exec(void *volp)
 	if (dir_copy_folder("/dev", dev_mnt, &c_vol_populate_dev_filter_cb, vol) < 0) {
 		ERROR_ERRNO("Could not populate /dev!");
 		mem_free0(dev_mnt);
-		return -CONTAINER_ERROR_VOL;
+		return -COMPARTMENT_ERROR_VOL;
 	}
 
 	/* link first /dev/tty* to /dev/console for systemd containers */
@@ -1633,7 +1635,7 @@ c_vol_start_child(void *volp)
 		goto error;
 	}
 
-	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM)
+	if (container_get_type(vol->container) == COMPARTMENT_TYPE_KVM)
 		return 0;
 
 	INFO("Switching to new rootfs in '%s'", vol->root);
@@ -1706,7 +1708,7 @@ c_vol_start_child(void *volp)
 	return 0;
 
 error:
-	return -CONTAINER_ERROR_VOL;
+	return -COMPARTMENT_ERROR_VOL;
 }
 
 static void *
@@ -1751,11 +1753,11 @@ c_vol_cleanup(void *volp, bool is_rebooting)
 		WARN("Could not remove mounts properly");
 }
 
-static container_module_t c_vol_module = {
+static compartment_module_t c_vol_module = {
 	.name = MOD_NAME,
-	.container_new = c_vol_new,
-	.container_free = c_vol_free,
-	.container_destroy = NULL,
+	.compartment_new = c_vol_new,
+	.compartment_free = c_vol_free,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = c_vol_start_child_early,
 	.start_pre_clone = NULL,
@@ -1772,8 +1774,8 @@ static container_module_t c_vol_module = {
 static void INIT
 c_vol_init(void)
 {
-	// register this module in container.c
-	container_register_module(&c_vol_module);
+	// register this module in compartment.c
+	compartment_register_module(&c_vol_module);
 
 	// register relevant handlers implemented by this module
 	container_register_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);

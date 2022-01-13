@@ -81,6 +81,7 @@ SRC_FILES := main.c \
 	cmld.c \
 	uevent.c \
 	container.c \
+	compartment.c \
 	common/uuid.c \
 	control.c \
 	container_config.c \
