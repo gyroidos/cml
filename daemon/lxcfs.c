@@ -58,7 +58,7 @@ lxcfs_get_bin_path_if_supported(void)
 	const char *binary[] = { "/bin/lxcfs",	    "/sbin/lxcfs",	    "/usr/bin/lxcfs",
 				 "/usr/sbin/lxcfs", "/usr/local/bin/lxcfs", "/usr/local/bin/lxcfs" };
 
-	for (size_t i = 0; i < sizeof(binary); ++i) {
+	for (size_t i = 0; i < sizeof(binary) / sizeof(const char *); ++i) {
 		if (file_exists(binary[i]))
 			return binary[i];
 	}
