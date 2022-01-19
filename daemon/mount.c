@@ -359,6 +359,7 @@ mount_cgroups_create_and_mount_subsys(const char *subsys, const char *mount_path
 		if (ret == -1) {
 			if (errno == EBUSY) {
 				INFO("cgroup %s already mounted", subsys);
+				ret = 0;
 			} else {
 				ERROR_ERRNO("Error mounting cgroups subsystems %s", subsys);
 				return -1;
@@ -403,6 +404,7 @@ mount_cgroups(list_t *cgroups_subsystems)
 		char *subsys = l->data;
 		char *mount_path = mem_printf("%s/%s", MOUNT_CGROUPS_FOLDER, subsys);
 		if (mount_cgroups_create_and_mount_subsys(subsys, mount_path) < 0) {
+			ERROR("Failed to mount cgroups to %s", mount_path);
 			mem_free0(mount_path);
 			goto error;
 		}
@@ -412,6 +414,7 @@ mount_cgroups(list_t *cgroups_subsystems)
 	// create a named hierarchy for systemd containers
 	if (mount_cgroups_create_and_mount_subsys("none,name=systemd",
 						  MOUNT_CGROUPS_FOLDER "/systemd") < 0) {
+		ERROR("Failed to mount cgroups to %s/systemd", MOUNT_CGROUPS_FOLDER);
 		goto error;
 	}
 
