@@ -1,58 +1,59 @@
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          cml-scd
-# Required-Start:    $local_fs $remote_fs
-# Required-Stop:     $local_fs $remote_fs
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: control cml-scd start at boot time
-# Description:       control CML security helper daemon (cml-scd) start at
-#                    boot time needed for cmld
+# Provides:		  cml-scd
+# Required-Start:	$local_fs $remote_fs
+# Required-Stop:	 $local_fs $remote_fs
+# Default-Start:	 2 3 4 5
+# Default-Stop:	  0 1 6
+# Short-Description: CML security helper daemon
+# Description:	   Helper daemon wrapping cryptographic and token-related operations
 ### END INIT INFO
 
 DAEMON=/usr/sbin/cml-scd
 
-test -x $DAEMON || exit 0
+test -x $DAEMON || exit 1
 
 . /lib/lsb/init-functions
 
 start_scd_daemon() {
-	if [ ! -d /var/log/cml ]; then
-		mkdir -p /var/log/cml
-	fi
-	start-stop-daemon --start --quiet --oknodo -b --exec $DAEMON
+		# TODO Add option to make cml-scd detach itself
+		if ! [ -f /var/lib/cml/tokens/device.cert ];then
+			log_daemon_msg "Before running this service, execute $DAEMON as root once"
+			return 1
+		fi
+		start-stop-daemon --start --quiet -b --exec $DAEMON
+		log_end_msg $?
 }
 
 stop_scd_daemon() {
-	start-stop-daemon --stop --quiet --signal TERM --oknodo --exec $DAEMON
+		start-stop-daemon --stop --quiet --retry TERM/10/KILL/10 --oknodo --exec $DAEMON
+		rm -f /run/socket/cml-scd-control
 }
 
 case "$1" in
   start)
-        log_daemon_msg "Starting CML security helper daemon" "cml-scd"
-        start_scd_daemon
-        log_end_msg $?
-        ;;
+		log_daemon_msg "Starting CML security helper daemon" "cml-scd"
+		start_scd_daemon
+		;;
   stop)
-        log_daemon_msg "Stopping CML security helper daemon" "cml-scd"
-        stop_scd_daemon
-        log_end_msg $?
-        ;;
+		log_daemon_msg "Stopping CML security helper daemon" "cml-scd"
+		stop_scd_daemon
+		log_end_msg $?
+		;;
   restart|force-reload)
-        log_daemon_msg "Restarting CML security helper daemon" "cml-scd"
-        stop_scd_daemon
-        sleep 1
-        start_scd_daemon
-        log_end_msg $?
-        ;;
+		log_daemon_msg "Restarting CML security daemon" "cml-scd"
+		stop_scd_daemon
+		start_scd_daemon
+		log_end_msg $?
+		;;
   status)
-        status_of_proc "$DAEMON" "cml-scd" && exit 0 || exit $?
-        ;;
+		status_of_proc "$DAEMON" "scd" && exit 0 || exit $?
+		;;
   *)
-        N=/etc/init.d/cml-scd
-        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
-        exit 1
-        ;;
+		N=/etc/init.d/cml-scd
+		echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+		exit 1
+		;;
 esac
 
 exit 0

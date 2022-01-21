@@ -1,0 +1,65 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          tpm2d
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: CML TPM 2.0 helper daemon
+# Description:       Helper daemon for TPM 2.0 communication leveraged by the cmld
+### END INIT INFO
+
+DAEMON=/usr/sbin/tpm2d
+
+test -x $DAEMON || exit 1
+
+. /lib/lsb/init-functions
+
+start_tpm2d_daemon() {
+        if ! [ -z "$(grep "tpm_enabled: false" /etc/cml/device.conf)" ];then
+            log_daemon_msg "TPM support disabled in device.conf, not starting tpm2d"
+	    return 1
+        fi
+        start-stop-daemon --start --quiet -b --exec $DAEMON
+        ret=$?
+        #log_success_msg "tpm2d returned $ret"
+        if [ "0" != "$ret" ];then
+            log_failure_msg "tpm2d failed but tpm support is enabled" "tpm2d"
+	    return 1
+        fi
+}
+
+stop_tpm2d_daemon() {
+        start-stop-daemon --stop --quiet --retry TERM/10/KILL/10 --oknodo --exec $DAEMON
+        rm -f /run/socket/cml-scd-control
+}
+
+case "$1" in
+  start)
+        log_daemon_msg "Starting CML security helper daemon" "tpm2d"
+        start_tpm2d_daemon
+        log_end_msg $?
+        ;;
+  stop)
+        log_daemon_msg "Stopping CML security helper daemon" "tpm2d"
+        stop_tpm2d_daemon
+        log_end_msg $?
+        ;;
+  restart|force-reload)
+        log_daemon_msg "Restarting CML security daemon" "tpm2d"
+        stop_tpm2d_daemon
+        start_tpm2d_daemon
+        log_end_msg $?
+        ;;
+  status)
+        status_of_proc "$DAEMON" "tpm2d" && exit 0 || exit $?
+        ;;
+  *)
+        N=/etc/init.d/tpm2d
+        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
+
