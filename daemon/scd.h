@@ -24,12 +24,15 @@
 #ifndef CML_SCD_H
 #define CML_SCD_H
 
+#include <stdbool.h>
+
 /**
- * Initializies the scd subsystem (starts the corresponding daemon)
+ * Initializes the scd subsystem (starts the corresponding daemon)
+ * @param start_daemon Fork and execute the scd daemon
  * @return 0 on success, -1 on error
  */
 int
-scd_init(void);
+scd_init(bool start_daemon);
 
 /**
  * Cleans up the scd subsystem (stops the corresponding daemon)

@@ -109,7 +109,7 @@ fork_and_exec_tpm2d(void)
 }
 
 int
-tss_init(void)
+tss_init(bool start_daemon)
 {
 	// Check if the platform has a TPM module attached
 	if (!file_exists("/dev/tpm0") || !tss_is_tpm2d_installed()) {
@@ -118,8 +118,13 @@ tss_init(void)
 	}
 
 	// Start the tpm2d
-	tss_tpm2d_pid = fork_and_exec_tpm2d();
-	IF_TRUE_RETVAL_TRACE(tss_tpm2d_pid == -1, -1);
+	// In hosted mode this should be handled by the respective init scripts
+	if (start_daemon) {
+		tss_tpm2d_pid = fork_and_exec_tpm2d();
+		IF_TRUE_RETVAL_TRACE(tss_tpm2d_pid == -1, -1);
+	} else {
+		DEBUG("Skipping tpm2d launch as requested");
+	}
 
 	// Connect to tpm2d
 	size_t retries = 0;

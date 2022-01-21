@@ -74,21 +74,26 @@ scd_fork_and_exec(void)
 }
 
 int
-scd_init(void)
+scd_init(bool start_daemon)
 {
 	int sock = -1;
 
-	// if device.cert is not present, start scd to initialize device (provisioning mode)
-	if (!file_exists(DEVICE_CERT_FILE)) {
-		INFO("Starting scd in Provisioning / Installing Mode");
-		// Start the SCD in provisioning mode
-		const char *const args[] = { SCD_BINARY_NAME, NULL };
-		IF_FALSE_RETVAL_TRACE(proc_fork_and_execvp(args) == 0, -1);
-	}
+	// In hosted mode, the init scripts should take care of correct scd initialization and start-up
+	if (start_daemon) {
+		// if device.cert is not present, start scd to initialize device (provisioning mode)
+		if (!file_exists(DEVICE_CERT_FILE)) {
+			INFO("Starting scd in Provisioning / Installing Mode");
+			// Start the SCD in provisioning mode
+			const char *const args[] = { SCD_BINARY_NAME, NULL };
+			IF_FALSE_RETVAL_TRACE(proc_fork_and_execvp(args) == 0, -1);
+		}
 
-	// Start SCD and wait for control interface
-	scd_pid = scd_fork_and_exec();
-	IF_TRUE_RETVAL_TRACE(scd_pid == -1, -1);
+		// Start SCD and wait for control interface
+		scd_pid = scd_fork_and_exec();
+		IF_TRUE_RETVAL_TRACE(scd_pid == -1, -1);
+	} else {
+		DEBUG("Skipping tpm2d launch as requested");
+	}
 
 	size_t retries = 0;
 	do {

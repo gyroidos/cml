@@ -1356,7 +1356,7 @@ cmld_init(const char *path)
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
 	mem_free0(btime);
 
-	if (scd_init() < 0)
+	if (scd_init(!cmld_is_hostedmode_active()) < 0)
 		FATAL("Could not init scd module");
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))
@@ -1372,7 +1372,7 @@ cmld_init(const char *path)
 		INFO("ksm initialized.");
 
 	if (device_config_get_tpm_enabled(device_config)) {
-		if (tss_init() < 0) {
+		if (tss_init(!cmld_is_hostedmode_active()) < 0) {
 			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
 		} else {
 			INFO("tss initialized.");
