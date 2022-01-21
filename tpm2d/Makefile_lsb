@@ -32,3 +32,5 @@ SBINDIR := /usr/sbin
 install:
 	install -d ${DESTDIR}${SBINDIR}
 	install tpm2d ${DESTDIR}${SBINDIR}/
+	install -d ${DESTDIR}/etc/init.d
+	install init.d/tpm2d ${DESTDIR}/etc/init.d/

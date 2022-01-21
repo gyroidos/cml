@@ -1,12 +1,12 @@
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          cmld
-# Required-Start:    $local_fs $remote_fs cml-scd
-# Required-Stop:     $local_fs $remote_fs
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: control cmld start at boot time
-# Description:       control Container Management daemon (cmld) start at
+# Provides:		  cmld
+# Required-Start:	$local_fs $remote_fs
+# Required-Stop:	 $local_fs $remote_fs
+# Default-Start:	 2 3 4 5
+# Default-Stop:	  0 1 6
+# Short-Description: CML container management daemon (cmld)
+# Description:	   The CML's main daemon managing containers
 ### END INIT INFO
 
 DAEMON=/usr/sbin/cmld
@@ -17,44 +17,62 @@ test -x $DAEMON || exit 0
 . /lib/lsb/init-functions
 
 start_cml_daemon() {
-    start-stop-daemon --start --quiet -b --exec $DAEMON
+	# make sure cml-scd and tpm2d are stopped correctly
+	# on platforms not supporting Required-Stop
 
-    # allow group cml-control to use socket
-    if getent group cml-control >/dev/null 2>&1 ; then
-        chgrp cml-control "$CONTROL_SOCK_PATH"
-    fi
+	if ! [ -S "/run/socket/cml-scd-control" ]  ;then
+		log_daemon_msg "cml-scd is not running, aborting..."
+		return 1
+	fi
+
+	start-stop-daemon --start --quiet -b --exec $DAEMON
+
+	# allow group cml-control to use socket
+	if getent group cml-control >/dev/null 2>&1 ; then
+		while ! chgrp cml-control "$CONTROL_SOCK_PATH" ;do
+			echo "chgrp failed"
+			sleep 1
+		done
+		return 0
+	fi
 }
 
 stop_cml_daemon() {
-	start-stop-daemon --stop --quiet --signal TERM --exec $DAEMON
+	# make sure cml-scd and tpm2d are stopped correctly
+	# on platforms not supporting Required-Stop
+
+
+	start-stop-daemon --stop --quiet --retry TERM/10/KILL/10 --oknodo --exec $DAEMON
+	rm -fr /run/socket/cml-control /run/socket/cml-tokencontrol
+
 }
 
 case "$1" in
   start)
 	log_daemon_msg "Starting CML daemon" "cmld"
-        start_cml_daemon
-        log_end_msg $?
-        ;;
+		start_cml_daemon
+		log_end_msg $?
+		;;
   stop)
-        log_daemon_msg "Stopping CML daemon" "cmld"
-        stop_cml_daemon
-        log_end_msg $?
-        ;;
+		log_daemon_msg "Stopping CML daemon" "cmld"
+		stop_cml_daemon
+		log_end_msg $?
+		;;
   restart|force-reload)
-        log_daemon_msg "Restarting CML daemon" "cmld"
-        stop_cmld_daemon
-        sleep 1
-        start_cml_daemon
-        log_end_msg $?
-        ;;
+		log_daemon_msg "Restarting CML daemon" "cmld"
+		$0 stopstop_cmld_daemon
+		sleep 1
+		start_cml_daemon
+		log_end_msg $?
+		;;
   status)
-        status_of_proc "$DAEMON" "cmld" && exit 0 || exit $?
-        ;;
+		status_of_proc "$DAEMON" "cmld" && exit 0 || exit $?
+		;;
   *)
-        N=/etc/init.d/cmld
-        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
-        exit 1
-        ;;
+		N=/etc/init.d/cmld
+		echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+		exit 1
+		;;
 esac
 
 exit 0
