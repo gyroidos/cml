@@ -131,12 +131,15 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6]);
 /**
  * Trigger cold boot events to allow user namespaced containers to fixup
  * their device nodes by udevd in container.
- * Internally the uuid of the container is used for synthetic events
- * to allow directing events to corresponding container only.
+ * The uuid of a container can be used for synthetic events to allow directing
+ * events to corresponding container only.
  *
- * @param container container for which the cold boot is triggered.
+ * @param synth_uuid uuid used for syth event paramter in uevent.
+ * @param filter callback function which is called for each major:minor.
+ * @param data generic data pointer which is given to filter callback data.
  */
 void
-uevent_udev_trigger_coldboot(container_t *container);
+uevent_udev_trigger_coldboot(const uuid_t *synth_uuid,
+			     bool (*filter)(int major, int minor, void *data), void *data);
 
 #endif /* UEVENT_H */
