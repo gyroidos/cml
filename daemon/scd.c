@@ -118,6 +118,7 @@ scd_init(bool start_daemon)
 void
 scd_cleanup(void)
 {
+	IF_TRUE_RETURN_TRACE(scd_pid == -1);
 	DEBUG("Stopping %s process with pid=%d!", SCD_BINARY_NAME, scd_pid);
 	kill(scd_pid, SIGTERM);
 }
