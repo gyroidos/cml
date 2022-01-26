@@ -962,6 +962,7 @@ uevent_handle_usb_device(struct uevent *uevent)
 	}
 	return false;
 }
+
 static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
@@ -1224,6 +1225,12 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6])
 	return 0;
 }
 
+struct uevent_udev_coldboot_data {
+	const uuid_t *synth_uuid;
+	bool (*filter)(int major, int minor, void *data);
+	void *data;
+};
+
 static int
 uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *data)
 {
@@ -1231,14 +1238,14 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 	char buf[256];
 	int major, minor;
 
-	container_t *container = data;
-	IF_NULL_RETVAL(container, -1);
+	struct uevent_udev_coldboot_data *coldboot_data = data;
+	IF_NULL_RETVAL(coldboot_data, -1);
 
 	char *full_path = mem_printf("%s/%s", path, name);
 	char *dev_file = NULL;
 
 	if (file_is_dir(full_path)) {
-		if (0 > dir_foreach(full_path, &uevent_trigger_coldboot_foreach_cb, container)) {
+		if (0 > dir_foreach(full_path, &uevent_trigger_coldboot_foreach_cb, data)) {
 			WARN("Could not trigger coldboot uevents! No '%s'!", full_path);
 			ret--;
 		}
@@ -1253,9 +1260,11 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 		IF_FALSE_GOTO((major > -1 && minor > -1), out);
 
 		// only trigger for allowed devices
-		IF_FALSE_GOTO_TRACE(container_is_device_allowed(container, major, minor), out);
+		if (coldboot_data->filter)
+			IF_FALSE_GOTO_TRACE(
+				coldboot_data->filter(major, minor, coldboot_data->data), out);
 
-		char *trigger = mem_printf("add %s", uuid_string(container_get_uuid(container)));
+		char *trigger = mem_printf("add %s", uuid_string(coldboot_data->synth_uuid));
 		if (-1 == file_printf(full_path, trigger)) {
 			WARN("Could not trigger event %s <- %s", full_path, trigger);
 			ret--;
@@ -1271,11 +1280,15 @@ out:
 }
 
 void
-uevent_udev_trigger_coldboot(container_t *container)
+uevent_udev_trigger_coldboot(const uuid_t *synth_uuid,
+			     bool (*filter)(int major, int minor, void *data), void *data)
 {
 	const char *sysfs_devices = "/sys/devices";
+	struct uevent_udev_coldboot_data coldboot_data = { .synth_uuid = synth_uuid,
+							   .filter = filter,
+							   .data = data };
 	// for the first time iterate through sysfs to find device
-	if (0 > dir_foreach(sysfs_devices, &uevent_trigger_coldboot_foreach_cb, container)) {
+	if (0 > dir_foreach(sysfs_devices, &uevent_trigger_coldboot_foreach_cb, &coldboot_data)) {
 		WARN("Could not trigger coldboot uevents! No '%s'!", sysfs_devices);
 	}
 }

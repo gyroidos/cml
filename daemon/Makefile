@@ -121,7 +121,8 @@ SRC_CMODULES := \
 	c_fifo.c \
 	c_time.c \
 	c_audit.c \
-	c_cap.c
+	c_cap.c \
+	c_uevent.c
 
 ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
