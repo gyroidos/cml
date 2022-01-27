@@ -38,6 +38,16 @@
 
 #define UEVENT_BUF_LEN 64 * 1024
 
+#define UEVENT_ACTION_ADD (1 << 0)
+#define UEVENT_ACTION_BIND (1 << 1)
+#define UEVENT_ACTION_CHANGE (1 << 2)
+#define UEVENT_ACTION_REMOVE (1 << 3)
+#define UEVENT_ACTION_UNBIND (1 << 4)
+
+typedef struct uevent_uev uevent_uev_t;
+
+typedef enum { UEVENT_UEV_TYPE_KERNEL = 1, UEVENT_UEV_TYPE_UDEV } uevent_uev_type_t;
+
 typedef enum uevent_usbdev_type {
 	UEVENT_USBDEV_TYPE_GENERIC = 1,
 	UEVENT_USBDEV_TYPE_TOKEN,
@@ -141,5 +151,14 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6]);
 void
 uevent_udev_trigger_coldboot(const uuid_t *synth_uuid,
 			     bool (*filter)(int major, int minor, void *data), void *data);
+
+uevent_uev_t *
+uevent_uev_new(uevent_uev_type_t type, unsigned actions,
+	       void (*func)(unsigned actions, uevent_uev_t *uev, void *data), void *data);
+int
+uevent_add_uev(uevent_uev_t *uev);
+
+void
+uevent_remove_uev(uevent_uev_t *uev);
 
 #endif /* UEVENT_H */
