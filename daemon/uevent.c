@@ -31,11 +31,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/sysmacros.h>
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <grp.h>
-#include <libgen.h>
 
 #include "cmld.h"
 #include "container.h"
@@ -73,7 +71,7 @@ static list_t *uevent_container_netdev_mapping_list = NULL;
 struct uevent_uev {
 	uevent_uev_type_t type;
 	unsigned actions;
-	void (*func)(unsigned actions, uevent_uev_t *uev, void *data);
+	void (*func)(unsigned actions, uevent_event_t *event, void *data);
 	void *data;
 };
 
@@ -126,7 +124,7 @@ struct udev_monitor_netlink_header {
 	unsigned int filter_tag_bloom_lo;
 };
 
-struct uevent {
+struct uevent_event {
 	union {
 		struct udev_monitor_netlink_header nlh;
 		char raw[UEVENT_BUF_LEN]; //!< The raw string that we get from the kernel
@@ -275,7 +273,7 @@ uevent_container_netdev_mapping_new(container_t *container, container_pnet_cfg_t
 }
 
 static void
-uevent_trace(struct uevent *uevent, char *raw_p)
+uevent_trace(uevent_event_t *uevent, char *raw_p)
 {
 	int i = 0;
 	char *_raw_p = raw_p;
@@ -288,7 +286,7 @@ uevent_trace(struct uevent *uevent, char *raw_p)
 }
 
 static void
-uevent_parse(struct uevent *uevent, char *raw_p)
+uevent_parse(uevent_event_t *uevent, char *raw_p)
 {
 	ASSERT(uevent);
 
@@ -370,13 +368,13 @@ uevent_parse(struct uevent *uevent, char *raw_p)
 	      uevent->subsystem, uevent->devname, uevent->major, uevent->minor, uevent->interface);
 }
 
-static struct uevent *
-uevent_replace_member(const struct uevent *uevent, char *oldmember, char *newmember)
+static uevent_event_t *
+uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newmember)
 {
 	ASSERT(uevent);
 	ASSERT(oldmember > uevent->msg.raw && oldmember < uevent->msg.raw + uevent->msg_len);
 
-	struct uevent *newevent = mem_new(struct uevent, 1);
+	uevent_event_t *newevent = mem_new(uevent_event_t, 1);
 	//interface name is located in name and devpath members
 	int diff_len = strlen(newmember) - strlen(oldmember);
 
@@ -483,8 +481,8 @@ uevent_rename_ifi_new(const char *oldname, const char *infix)
 	return newname;
 }
 
-static struct uevent *
-uevent_rename_interface(const struct uevent *uevent)
+static uevent_event_t *
+uevent_rename_interface(const uevent_event_t *uevent)
 {
 	char *new_ifname = uevent_rename_ifi_new(uevent->interface, uevent->devtype);
 
@@ -502,7 +500,7 @@ uevent_rename_interface(const struct uevent *uevent)
 		return NULL;
 	}
 
-	struct uevent *uev_chname = uevent_replace_member(uevent, uevent->interface, new_ifname);
+	uevent_event_t *uev_chname = uevent_replace_member(uevent, uevent->interface, new_ifname);
 
 	if (!uev_chname) {
 		ERROR("Failed to rename interface name %s in uevent", uevent->interface);
@@ -511,7 +509,7 @@ uevent_rename_interface(const struct uevent *uevent)
 	DEBUG("Injected renamed interface name %s into uevent", new_ifname);
 	uevent_parse(uev_chname, uev_chname->msg.raw);
 
-	struct uevent *uev_chdevpath = uevent_replace_member(uevent, uevent->devpath, new_devpath);
+	uevent_event_t *uev_chdevpath = uevent_replace_member(uevent, uevent->devpath, new_devpath);
 
 	if (!uev_chdevpath) {
 		ERROR("Failed to rename devpath %s in uevent", uevent->devpath);
@@ -525,7 +523,7 @@ uevent_rename_interface(const struct uevent *uevent)
 }
 
 static uint16_t
-uevent_get_usb_vendor(struct uevent *uevent)
+uevent_get_usb_vendor(uevent_event_t *uevent)
 {
 	if (uevent->id_vendor_id != 0)
 		return (uint16_t)uevent->id_vendor_id;
@@ -538,7 +536,7 @@ uevent_get_usb_vendor(struct uevent *uevent)
 }
 
 static uint16_t
-uevent_get_usb_product(struct uevent *uevent)
+uevent_get_usb_product(uevent_event_t *uevent)
 {
 	if (uevent->id_model_id != 0)
 		return (uint16_t)uevent->id_model_id;
@@ -551,16 +549,63 @@ uevent_get_usb_product(struct uevent *uevent)
 	return id_product;
 }
 
+char *
+uevent_event_get_synth_uuid(uevent_event_t *event)
+{
+	ASSERT(event);
+	return event->synth_uuid;
+}
+
+char *
+uevent_event_get_devname(uevent_event_t *event)
+{
+	ASSERT(event);
+	return event->devname;
+}
+
+char *
+uevent_event_get_devtype(uevent_event_t *event)
+{
+	ASSERT(event);
+	return event->devtype;
+}
+
+int
+uevent_event_get_minor(uevent_event_t *event)
+{
+	ASSERT(event);
+	return event->minor;
+}
+
+int
+uevent_event_get_major(uevent_event_t *event)
+{
+	ASSERT(event);
+	return event->major;
+}
+
+uevent_event_t *
+uevent_event_replace_synth_uuid_new(uevent_event_t *event, char *uuid_string)
+{
+	ASSERT(event);
+	uevent_event_t *event_new = uevent_replace_member(event, event->synth_uuid, uuid_string);
+	return event_new;
+}
+
+
 /**
  * This function forks a new child in the target netns (and userns) of netns_pid
  * in which the uevents should be injected. In the child the UEVENT netlink socket
  * is connected and a new message containing the raw uevent will be created and
  * sent to that socket.
  */
-static int
-uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_userns)
+int
+uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join_userns)
 {
 	int status;
+	char *uevent = event->msg.raw;
+	size_t size = event->msg_len;
+
 	pid_t pid = fork();
 
 	if (pid == -1) {
@@ -584,6 +629,7 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 			if (setgroups(0, NULL) < 0)
 				FATAL_ERRNO("Could setgroups to root in user namespace of pid %d!",
 					    netns_pid);
+			//INFO("joined userns");
 		}
 		char *netns = mem_printf("/proc/%d/ns/net", netns_pid);
 		int netns_fd = open(netns, O_RDONLY);
@@ -624,44 +670,7 @@ uevent_inject_into_netns(char *uevent, size_t size, pid_t netns_pid, bool join_u
 }
 
 static int
-uevent_create_device_node(struct uevent *uevent, char *path, container_t *container)
-{
-	char *path_dirname = NULL;
-
-	if (file_exists(path)) {
-		TRACE("Node '%s' exits, just fixup uids", path);
-		goto shift;
-	}
-
-	// dirname may modify original string, thus strdup
-	path_dirname = mem_strdup(path);
-	if (dir_mkdir_p(dirname(path_dirname), 0755) < 0) {
-		ERROR("Could not create path for device node");
-		goto err;
-	}
-	dev_t dev = makedev(uevent->major, uevent->minor);
-	mode_t mode = strcmp(uevent->devtype, "disk") ? S_IFCHR : S_IFBLK;
-	INFO("Creating device node (%c %d:%d) in %s", S_ISBLK(mode) ? 'd' : 'c', uevent->major,
-	     uevent->minor, path);
-	if (mknod(path, mode, dev) < 0) {
-		ERROR_ERRNO("Could not create device node");
-		goto err;
-	}
-shift:
-	if (container_shift_ids(container, path, false) < 0) {
-		ERROR("Failed to fixup uids for '%s' in usernamspace of container %s", path,
-		      container_get_name(container));
-		goto err;
-	}
-	mem_free0(path_dirname);
-	return 0;
-err:
-	mem_free0(path_dirname);
-	return -1;
-}
-
-static int
-uevent_netdev_move(struct uevent *uevent)
+uevent_netdev_move(uevent_event_t *uevent)
 {
 	uint8_t iface_mac[6];
 	char *macstr = NULL;
@@ -698,23 +707,23 @@ uevent_netdev_move(struct uevent *uevent)
 
 	// rename network interface to avoid name clashes when moving to container
 	DEBUG("Renaming new interface we were notified about");
-	struct uevent *newevent = uevent_rename_interface(uevent);
+	uevent_event_t *newevent = uevent_rename_interface(uevent);
 
 	// uevent pointer is not freed inside this function, therefore we can safely drop it
 	if (newevent) {
-		DEBUG("Using renamed uevent");
+		DEBUG("using renamed uevent");
 		uevent = newevent;
 	} else {
-		ERROR("Failed to rename interface %s. Injecting uevent as it is",
+		ERROR("failed to rename interface %s. injecting uevent as it is",
 		      uevent->interface);
 	}
 
 	macstr = network_mac_addr_to_str_new(iface_mac);
 	if (cmld_container_add_net_iface(container, pnet_cfg, false)) {
-		ERROR("Cannot move '%s' to %s!", macstr, container_get_name(container));
+		ERROR("cannot move '%s' to %s!", macstr, container_get_name(container));
 		goto error;
 	} else {
-		INFO("Moved phys network interface '%s' (mac: %s) to %s", uevent->interface, macstr,
+		INFO("moved phys network interface '%s' (mac: %s) to %s", uevent->interface, macstr,
 		     container_get_name(container));
 	}
 
@@ -726,12 +735,12 @@ uevent_netdev_move(struct uevent *uevent)
 	}
 
 	// if moving was successful also inject uevent
-	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
+	if (uevent_event_inject_into_netns(uevent, container_get_pid(container),
 				     container_has_userns(container)) < 0) {
-		WARN("Could not inject uevent into netns of container %s!",
+		WARN("could not inject uevent into netns of container %s!",
 		     container_get_name(container));
 	} else {
-		TRACE("Successfully injected uevent into netns of container %s!",
+		TRACE("successfully injected uevent into netns of container %s!",
 		      container_get_name(container));
 	}
 
@@ -746,7 +755,7 @@ static void
 uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 {
 	ASSERT(data);
-	struct uevent *uevent_cb = data;
+	uevent_event_t *uevent_cb = data;
 	uevent_parse(uevent_cb, uevent_cb->msg.raw);
 
 	// if sysfs is not ready in case of wifi just return and retry.
@@ -761,50 +770,6 @@ uevent_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
 	mem_free0(uevent_cb);
 	event_remove_timer(timer);
 	event_timer_free(timer);
-}
-
-static void
-uevent_device_node_and_forward(struct uevent *uevent, container_t *container)
-{
-	IF_NULL_RETURN(uevent);
-	IF_NULL_RETURN(container);
-
-	IF_FALSE_RETURN_TRACE(((container_get_state(container) == COMPARTMENT_STATE_BOOTING) ||
-			       (container_get_state(container) == COMPARTMENT_STATE_RUNNING) ||
-			       (container_get_state(container) == COMPARTMENT_STATE_SETUP)));
-
-	if (!container_is_device_allowed(container, uevent->major, uevent->minor)) {
-		TRACE("Skipping device '%s' (%d,%d) which is forbidden by cgroup", uevent->devname,
-		      uevent->major, uevent->minor);
-		return;
-	}
-
-	// newer versions of udev prepends '/dev/' in DEVNAME
-	char *devname =
-		mem_printf("%s%s%s", container_get_rootdir(container),
-			   strncmp("/dev/", uevent->devname, 4) ? "/dev/" : "", uevent->devname);
-
-	if (!strncmp(uevent->action, "add", 3)) {
-		if (uevent_create_device_node(uevent, devname, container) < 0) {
-			ERROR("Could not create device node");
-			mem_free0(devname);
-			return;
-		}
-	} else if (!strncmp(uevent->action, "remove", 6)) {
-		if (unlink(devname) < 0 && errno != ENOENT) {
-			WARN_ERRNO("Could not remove device node");
-		}
-	}
-
-	if (uevent_inject_into_netns(uevent->msg.raw, uevent->msg_len, container_get_pid(container),
-				     container_has_userns(container)) < 0) {
-		WARN("Could not inject uevent into netns of container %s!",
-		     container_get_name(container));
-	} else {
-		TRACE("Sucessfully injected uevent into netns of container %s!",
-		      container_get_name(container));
-	}
-	mem_free0(devname);
 }
 
 static int
@@ -896,7 +861,7 @@ uevent_usbdev_set_sysfs_props(uevent_usbdev_t *usbdev)
  * in calling funtion
  */
 static bool
-uevent_handle_usb_device(struct uevent *uevent)
+uevent_handle_usb_device(uevent_event_t *uevent)
 {
 	IF_TRUE_RETVAL_TRACE(strncmp(uevent->subsystem, "usb", 3) ||
 				     strncmp(uevent->devtype, "usb_device", 10),
@@ -992,7 +957,7 @@ uevent_action_from_string(const char *action)
 }
 
 static void
-handle_kernel_event(struct uevent *uevent, char *raw_p)
+handle_kernel_event(uevent_event_t *uevent, char *raw_p)
 {
 	TRACE("handle_kernel_event");
 	uevent_parse(uevent, raw_p);
@@ -1002,7 +967,7 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		uevent_uev_t *uev = l->data;
 		unsigned action = uevent_action_from_string(uevent->action);
 		if (action & uev->actions)
-			uev->func(action, uev, uev->data);
+			uev->func(action, uevent, uev->data);
 	}
 
 	/* just handle add,remove or change events to containers */
@@ -1016,21 +981,6 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 	 */
 	IF_TRUE_RETURN_TRACE(uevent_handle_usb_device(uevent));
 
-	/* handle coldboot events just for target container */
-	uuid_t *uevent_uuid = uuid_new(uevent->synth_uuid);
-	container_t *container = (uevent_uuid) ? cmld_container_get_by_uuid(uevent_uuid) : NULL;
-	if (container) {
-		TRACE("Got synth add/remove/change uevent SYNTH_UUID=%s", uevent->synth_uuid);
-		struct uevent *uev_fwd = uevent_replace_member(uevent, uevent->synth_uuid, "0");
-		if (!uev_fwd) {
-			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
-			goto out;
-		}
-		uevent_device_node_and_forward(uev_fwd, container);
-		mem_free0(uev_fwd);
-		goto out;
-	}
-
 	TRACE("Got new add/remove/change uevent");
 
 	/* move network ifaces to containers */
@@ -1039,29 +989,18 @@ handle_kernel_event(struct uevent *uevent, char *raw_p)
 		// got new physical interface, initially add to cmld tracking list
 		cmld_netif_phys_add_by_name(uevent->interface);
 
-		struct uevent *uevent_cb = mem_new0(struct uevent, 1);
-		memcpy(uevent_cb, uevent, sizeof(struct uevent));
+		uevent_event_t *uevent_cb = mem_new0(uevent_event_t, 1);
+		memcpy(uevent_cb, uevent, sizeof(uevent_event_t));
 
 		// give sysfs some time to settle if iface is wifi
 		event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
 						   uevent_sysfs_netif_timer_cb, uevent_cb);
 		event_add_timer(e);
-		goto out;
 	}
-
-	/* handle new events targetting all containers */
-	for (int i = 0; i < cmld_containers_get_count(); i++) {
-		container_t *container = cmld_container_get_by_index(i);
-		uevent_device_node_and_forward(uevent, container);
-	}
-
-out:
-	if (uevent_uuid)
-		uuid_free(uevent_uuid);
 }
 
 static void
-handle_udev_event(struct uevent *uevent, char *raw_p)
+handle_udev_event(uevent_event_t *uevent, char *raw_p)
 {
 	TRACE("handle_udev_event");
 
@@ -1072,7 +1011,7 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 		uevent_uev_t *uev = l->data;
 		unsigned action = uevent_action_from_string(uevent->action);
 		if (action & uev->actions)
-			uev->func(action, uev, uev->data);
+			uev->func(action, uevent, uev->data);
 	}
 	return;
 }
@@ -1080,7 +1019,7 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 static void
 uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUSED void *data)
 {
-	struct uevent *uev = mem_new0(struct uevent, 1);
+	uevent_event_t *uev = mem_new0(uevent_event_t, 1);
 
 	// read uevent into raw buffer and assure that last char is '\0'
 	if ((uev->msg_len = nl_msg_receive_kernel(uevent_netlink_sock, uev->msg.raw,
@@ -1271,7 +1210,7 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6])
 
 uevent_uev_t *
 uevent_uev_new(uevent_uev_type_t type, unsigned actions,
-	       void (*func)(unsigned actions, uevent_uev_t *uev, void *data), void *data)
+	       void (*func)(unsigned actions, uevent_event_t *event, void *data), void *data)
 {
 	uevent_uev_t *uev;
 
@@ -1285,6 +1224,12 @@ uevent_uev_new(uevent_uev_type_t type, unsigned actions,
 	uev->data = data;
 
 	return uev;
+} 
+
+void
+uevent_uev_free(uevent_uev_t *uev)
+{
+	mem_free0(uev);
 }
 
 int

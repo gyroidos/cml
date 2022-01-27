@@ -46,6 +46,8 @@
 
 typedef struct uevent_uev uevent_uev_t;
 
+typedef struct uevent_event uevent_event_t;
+
 typedef enum { UEVENT_UEV_TYPE_KERNEL = 1, UEVENT_UEV_TYPE_UDEV } uevent_uev_type_t;
 
 typedef enum uevent_usbdev_type {
@@ -154,11 +156,41 @@ uevent_udev_trigger_coldboot(const uuid_t *synth_uuid,
 
 uevent_uev_t *
 uevent_uev_new(uevent_uev_type_t type, unsigned actions,
-	       void (*func)(unsigned actions, uevent_uev_t *uev, void *data), void *data);
+	       void (*func)(unsigned actions, uevent_event_t *event, void *data), void *data);
 int
 uevent_add_uev(uevent_uev_t *uev);
 
 void
 uevent_remove_uev(uevent_uev_t *uev);
+
+void
+uevent_uev_free(uevent_uev_t *uev);
+
+char *
+uevent_event_get_synth_uuid(uevent_event_t *event);
+
+char *
+uevent_event_get_devname(uevent_event_t *event);
+
+char *
+uevent_event_get_devtype(uevent_event_t *event);
+
+int
+uevent_event_get_major(uevent_event_t *event);
+
+int
+uevent_event_get_minor(uevent_event_t *event);
+
+uevent_event_t *
+uevent_event_replace_synth_uuid_new(uevent_event_t *event, char *uuid_string);
+
+/**
+ * This function forks a new child in the target netns (and userns) of netns_pid
+ * in which the uevents should be injected. In the child the UEVENT netlink socket
+ * is connected and a new message containing the raw uevent will be created and
+ * sent to that socket.
+ */
+int
+uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join_userns);
 
 #endif /* UEVENT_H */
