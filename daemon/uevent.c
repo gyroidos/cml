@@ -57,6 +57,10 @@
 static nl_sock_t *uevent_netlink_sock = NULL;
 static event_io_t *uevent_io_event = NULL;
 
+// registerd uev events
+static list_t *uevent_uev_kernel_list = NULL;
+static list_t *uevent_uev_udev_list = NULL;
+
 // track usb devices mapped to containers
 static list_t *uevent_container_dev_mapping_list = NULL;
 //
@@ -65,6 +69,13 @@ static list_t *uevent_container_netdev_mapping_list = NULL;
 
 #define UDEV_MONITOR_TAG "libudev"
 #define UDEV_MONITOR_MAGIC 0xfeedcafe
+
+struct uevent_uev {
+	uevent_uev_type_t type;
+	unsigned actions;
+	void (*func)(unsigned actions, uevent_uev_t *uev, void *data);
+	void *data;
+};
 
 struct uevent_usbdev {
 	char *i_serial;
@@ -963,11 +974,36 @@ uevent_handle_usb_device(struct uevent *uevent)
 	return false;
 }
 
+static unsigned
+uevent_action_from_string(const char *action)
+{
+	if (!strcmp(action, "add"))
+		return UEVENT_ACTION_ADD;
+	if (!strcmp(action, "bind"))
+		return UEVENT_ACTION_BIND;
+	if (!strcmp(action, "change"))
+		return UEVENT_ACTION_CHANGE;
+	if (!strcmp(action, "remove"))
+		return UEVENT_ACTION_REMOVE;
+	if (!strcmp(action, "unbind"))
+		return UEVENT_ACTION_UNBIND;
+
+	return 0;
+}
+
 static void
 handle_kernel_event(struct uevent *uevent, char *raw_p)
 {
 	TRACE("handle_kernel_event");
 	uevent_parse(uevent, raw_p);
+
+	/* handle registerd uev events */
+	for (list_t *l = uevent_uev_kernel_list; l; l = l->next) {
+		uevent_uev_t *uev = l->data;
+		unsigned action = uevent_action_from_string(uevent->action);
+		if (action & uev->actions)
+			uev->func(action, uev, uev->data);
+	}
 
 	/* just handle add,remove or change events to containers */
 	IF_TRUE_RETURN_TRACE(strncmp(uevent->action, "add", 3) &&
@@ -1030,6 +1066,14 @@ handle_udev_event(struct uevent *uevent, char *raw_p)
 	TRACE("handle_udev_event");
 
 	uevent_parse(uevent, raw_p);
+
+	/* handle registerd uev udev events */
+	for (list_t *l = uevent_uev_udev_list; l; l = l->next) {
+		uevent_uev_t *uev = l->data;
+		unsigned action = uevent_action_from_string(uevent->action);
+		if (action & uev->actions)
+			uev->func(action, uev, uev->data);
+	}
 	return;
 }
 
@@ -1223,6 +1267,63 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6])
 	mem_free0(macstr);
 
 	return 0;
+}
+
+uevent_uev_t *
+uevent_uev_new(uevent_uev_type_t type, unsigned actions,
+	       void (*func)(unsigned actions, uevent_uev_t *uev, void *data), void *data)
+{
+	uevent_uev_t *uev;
+
+	IF_FALSE_RETVAL(actions, NULL);
+	IF_NULL_RETVAL(func, NULL);
+
+	uev = mem_new0(uevent_uev_t, 1);
+	uev->type = type;
+	uev->actions = actions;
+	uev->func = func;
+	uev->data = data;
+
+	return uev;
+}
+
+int
+uevent_add_uev(uevent_uev_t *uev)
+{
+	IF_NULL_RETVAL(uev, -1);
+
+	if (uev->type == UEVENT_UEV_TYPE_KERNEL) {
+		uevent_uev_kernel_list = list_append(uevent_uev_kernel_list, uev);
+	} else if (uev->type == UEVENT_UEV_TYPE_UDEV) {
+		uevent_uev_udev_list = list_append(uevent_uev_udev_list, uev);
+	} else {
+		ERROR("Unknown type %d for uev", uev->type);
+		return -1;
+	}
+
+	TRACE("Added uev uevent %p (func=%p, data=%p, actions=0x%x)", (void *)uev,
+	      CAST_FUNCPTR_VOIDPTR uev->func, uev->data, uev->actions);
+
+	return 0;
+}
+
+void
+uevent_remove_uev(uevent_uev_t *uev)
+{
+	IF_NULL_RETURN(uev);
+	TRACE("Removing uev uevent %p", (void *)uev);
+
+	if (uev->type == UEVENT_UEV_TYPE_KERNEL) {
+		uevent_uev_kernel_list = list_remove(uevent_uev_kernel_list, uev);
+	} else if (uev->type == UEVENT_UEV_TYPE_UDEV) {
+		uevent_uev_udev_list = list_remove(uevent_uev_udev_list, uev);
+	} else {
+		ERROR("Unknown type %d for uev", uev->type);
+		return;
+	}
+
+	TRACE("Removed uev event %p (func=%p, data=%p, actions=0x%x)", (void *)uev,
+	      CAST_FUNCPTR_VOIDPTR uev->func, uev->data, uev->actions);
 }
 
 struct uevent_udev_coldboot_data {
