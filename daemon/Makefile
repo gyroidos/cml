@@ -79,6 +79,7 @@ PROTO_SRC := \
 
 SRC_FILES := main.c \
 	cmld.c \
+	common/uevent.c \
 	uevent.c \
 	container.c \
 	compartment.c \

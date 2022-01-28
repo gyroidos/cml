@@ -33,22 +33,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "common/uevent.h"
 #include "container.h"
-#include "uuid.h"
-
-#define UEVENT_BUF_LEN 64 * 1024
-
-#define UEVENT_ACTION_ADD (1 << 0)
-#define UEVENT_ACTION_BIND (1 << 1)
-#define UEVENT_ACTION_CHANGE (1 << 2)
-#define UEVENT_ACTION_REMOVE (1 << 3)
-#define UEVENT_ACTION_UNBIND (1 << 4)
-
-typedef struct uevent_uev uevent_uev_t;
-
-typedef struct uevent_event uevent_event_t;
-
-typedef enum { UEVENT_UEV_TYPE_KERNEL = 1, UEVENT_UEV_TYPE_UDEV } uevent_uev_type_t;
 
 typedef enum uevent_usbdev_type {
 	UEVENT_USBDEV_TYPE_GENERIC = 1,
@@ -101,12 +87,18 @@ int
 uevent_usbdev_set_sysfs_props(uevent_usbdev_t *usbdev);
 
 /**
- * Global setup for the uevent handler
+ * Global setup for the uevent handler for netdev and usbdevice handling
  *
  * @return 0 if successful. -1 indicates an error.
  */
 int
 uevent_init();
+
+/**
+ * Cleanup of uevent moduel, remove handler for netdev and usbdevices
+ */
+void
+uevent_cleanup();
 
 /**
   * Registers an usb device mapping for a container at the uevent subsystem
@@ -139,58 +131,5 @@ uevent_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg);
  */
 int
 uevent_unregister_netdev(container_t *container, uint8_t mac[6]);
-
-/**
- * Trigger cold boot events to allow user namespaced containers to fixup
- * their device nodes by udevd in container.
- * The uuid of a container can be used for synthetic events to allow directing
- * events to corresponding container only.
- *
- * @param synth_uuid uuid used for syth event paramter in uevent.
- * @param filter callback function which is called for each major:minor.
- * @param data generic data pointer which is given to filter callback data.
- */
-void
-uevent_udev_trigger_coldboot(const uuid_t *synth_uuid,
-			     bool (*filter)(int major, int minor, void *data), void *data);
-
-uevent_uev_t *
-uevent_uev_new(uevent_uev_type_t type, unsigned actions,
-	       void (*func)(unsigned actions, uevent_event_t *event, void *data), void *data);
-int
-uevent_add_uev(uevent_uev_t *uev);
-
-void
-uevent_remove_uev(uevent_uev_t *uev);
-
-void
-uevent_uev_free(uevent_uev_t *uev);
-
-char *
-uevent_event_get_synth_uuid(uevent_event_t *event);
-
-char *
-uevent_event_get_devname(uevent_event_t *event);
-
-char *
-uevent_event_get_devtype(uevent_event_t *event);
-
-int
-uevent_event_get_major(uevent_event_t *event);
-
-int
-uevent_event_get_minor(uevent_event_t *event);
-
-uevent_event_t *
-uevent_event_replace_synth_uuid_new(uevent_event_t *event, char *uuid_string);
-
-/**
- * This function forks a new child in the target netns (and userns) of netns_pid
- * in which the uevents should be injected. In the child the UEVENT netlink socket
- * is connected and a new message containing the raw uevent will be created and
- * sent to that socket.
- */
-int
-uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join_userns);
 
 #endif /* UEVENT_H */
