@@ -28,8 +28,9 @@
 #include "common/dir.h"
 #include "common/file.h"
 #include "common/uuid.h"
+#include "common/uevent.h"
+
 #include "container.h"
-#include "uevent.h"
 
 #include <unistd.h>
 #include <libgen.h>
