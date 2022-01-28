@@ -1356,6 +1356,8 @@ cmld_init(const char *path)
 	if (uevent_init() < 0)
 		FATAL("Could not init uevent module");
 	INFO("uevent initialized.");
+	if (atexit(&uevent_cleanup))
+		WARN("Could not register on exit cleanup method 'uevent_cleanup()'");
 
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");
