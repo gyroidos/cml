@@ -36,7 +36,7 @@
 #include <string.h>
 
 #include "hardware.h"
-#include "uevent.h"
+#include "hotplug.h"
 #include "cmld.h"
 #include "mount.h"
 
@@ -992,21 +992,21 @@ c_cgroups_devices_chardev_deny(void *cgroupsp, int major, int minor)
 }
 
 static int
-c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, uevent_usbdev_t *usbdev)
+c_cgroups_devices_usbdev_allow(c_cgroups_t *cgroups, hotplug_usbdev_t *usbdev)
 {
 	ASSERT(cgroups);
 	ASSERT(usbdev);
-	if (0 != uevent_usbdev_set_sysfs_props(usbdev)) {
+	if (0 != hotplug_usbdev_set_sysfs_props(usbdev)) {
 		ERROR("Failed to find usbedv in sysfs");
 		return -1;
 	}
 
-	if (-1 == c_cgroups_devices_chardev_allow(cgroups, uevent_usbedv_get_major(usbdev),
-						  uevent_usbdev_get_minor(usbdev),
-						  uevent_usbdev_is_assigned(usbdev))) {
+	if (-1 == c_cgroups_devices_chardev_allow(cgroups, hotplug_usbedv_get_major(usbdev),
+						  hotplug_usbdev_get_minor(usbdev),
+						  hotplug_usbdev_is_assigned(usbdev))) {
 		WARN("Could not %s char device %d:%d !",
-		     uevent_usbdev_is_assigned(usbdev) ? "assign" : "allow",
-		     uevent_usbedv_get_major(usbdev), uevent_usbdev_get_minor(usbdev));
+		     hotplug_usbdev_is_assigned(usbdev) ? "assign" : "allow",
+		     hotplug_usbedv_get_major(usbdev), hotplug_usbdev_get_minor(usbdev));
 		return -1;
 	}
 
@@ -1123,23 +1123,23 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 	}
 	/* append usb devices to devices_subsystem */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
-		uevent_usbdev_t *usbdev = l->data;
+		hotplug_usbdev_t *usbdev = l->data;
 		// USB devices of type PIN_READER are only required outside the container to enter the pin
 		// before the container starts and should not be mapped into the container, as they can
 		// be used for multiple containers and a container should not be able to log the pin of
 		// another container
-		if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_PIN_ENTRY) {
+		if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_PIN_ENTRY) {
 			TRACE("Device of type pin reader is not mapped into the container");
 			continue;
-		} else if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_TOKEN) {
-			// token devices are previously registered to the uevent subsystem
+		} else if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_TOKEN) {
+			// token devices are previously registered to the hotplug subsystem
 			c_cgroups_devices_usbdev_allow(cgroups, usbdev);
-		} else if (uevent_usbdev_get_type(usbdev) == UEVENT_USBDEV_TYPE_GENERIC) {
+		} else if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_GENERIC) {
 			c_cgroups_devices_usbdev_allow(cgroups, usbdev);
-			// for hotplug events register the device at uevent subsystem
-			uevent_register_usbdevice(cgroups->container, usbdev);
+			// for hotplug events register the device at hotplug subsystem
+			hotplug_register_usbdevice(cgroups->container, usbdev);
 		} else {
-			ERROR("Unknown UEVENT_USBDEV_TYPE. Device has not been configured!");
+			ERROR("Unknown HOTPLUG_USBDEV_TYPE. Device has not been configured!");
 		}
 	}
 
@@ -1346,13 +1346,13 @@ c_cgroups_cleanup(void *cgroupsp, UNUSED bool is_rebooting)
 	// remove temporarily added head
 	cgroups->active_cgroups = list_unlink(cgroups->active_cgroups, cgroups->active_cgroups);
 
-	/* unregister usbdevs from uevent subsystem for hotplugging */
+	/* unregister usbdevs from hotplug subsystem */
 	for (list_t *l = container_get_usbdev_list(cgroups->container); l; l = l->next) {
-		uevent_usbdev_t *usbdev = l->data;
-		if (UEVENT_USBDEV_TYPE_TOKEN !=
-		    uevent_usbdev_get_type(
+		hotplug_usbdev_t *usbdev = l->data;
+		if (HOTPLUG_USBDEV_TYPE_TOKEN !=
+		    hotplug_usbdev_get_type(
 			    usbdev)) // keep token registered so it can be reinitialized on hotplug
-			uevent_unregister_usbdevice(cgroups->container, usbdev);
+			hotplug_unregister_usbdevice(cgroups->container, usbdev);
 	}
 
 	/* free assigned devices */

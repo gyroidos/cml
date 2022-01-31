@@ -28,7 +28,7 @@
 #include "hardware.h"
 #include "cmld.h"
 #include "audit.h"
-#include "uevent.h"
+#include "hotplug.h"
 #include "scd_shared.h"
 
 #include "common/macro.h"
@@ -1065,18 +1065,18 @@ c_smartcard_new(compartment_t *compartment)
 
 	smartcard->token_type = container_get_token_type(smartcard->container);
 
-	// Register at uevent subsystem for plug events if USB TOKEN
+	// Register at hotplug subsystem for plug events if USB TOKEN
 	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
 		for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
-			uevent_usbdev_t *ud = (uevent_usbdev_t *)l->data;
-			if (uevent_usbdev_get_type(ud) == UEVENT_USBDEV_TYPE_TOKEN) {
+			hotplug_usbdev_t *ud = (hotplug_usbdev_t *)l->data;
+			if (hotplug_usbdev_get_type(ud) == HOTPLUG_USBDEV_TYPE_TOKEN) {
 				smartcard->token_serial =
-					mem_strdup(uevent_usbdev_get_i_serial(ud));
+					mem_strdup(hotplug_usbdev_get_i_serial(ud));
 				DEBUG("container %s configured to use usb token reader with serial %s",
 				      container_get_name(smartcard->container),
 				      smartcard->token_serial);
-				uevent_usbdev_set_sysfs_props(ud);
-				uevent_register_usbdevice(smartcard->container, ud);
+				hotplug_usbdev_set_sysfs_props(ud);
+				hotplug_register_usbdevice(smartcard->container, ud);
 				break; // TODO: handle misconfiguration with several usbtoken?
 			}
 		}
@@ -1123,11 +1123,11 @@ c_smartcard_free(void *smartcardp)
 		}
 	}
 
-	/* unregister usb tokens from uevent subsystem */
+	/* unregister usb tokens from hotplug subsystem */
 	for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
-		uevent_usbdev_t *usbdev = l->data;
-		if (UEVENT_USBDEV_TYPE_TOKEN == uevent_usbdev_get_type(usbdev))
-			uevent_unregister_usbdevice(smartcard->container, usbdev);
+		hotplug_usbdev_t *usbdev = l->data;
+		if (HOTPLUG_USBDEV_TYPE_TOKEN == hotplug_usbdev_get_type(usbdev))
+			hotplug_unregister_usbdevice(smartcard->container, usbdev);
 	}
 
 	/* release scd connection */

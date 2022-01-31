@@ -62,7 +62,7 @@
 #include "container.h"
 #include "cmld.h"
 #include "hardware.h"
-#include "uevent.h"
+#include "hotplug.h"
 
 /* Offset for ipv4/mac address allocation, e.g. 127.1.(IPV4_SUBNET_OFFS+x).2
  * Defines the start value for address allocation */
@@ -674,7 +674,7 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
  *
  * It is used internally by c_net_new, than we already have grabbed the interface.
  * also this function is used externally for new devices during runtime from control
- * or uevent handler. Then we have to grab the interface from cmld's list of available
+ * or hotplug handler. Then we have to grab the interface from cmld's list of available
  * interfaces and add the pnet_cfg to the internal c_net list.
  */
 static int
@@ -837,11 +837,11 @@ c_net_new(compartment_t *compartment)
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
 			if_name = network_get_ifname_by_addr_new(mac);
-			// if interface is not yet connected register at uevent subsys
+			// if interface is not yet connected register at hotplug subsys
 			if (NULL == if_name) {
-				INFO("Interface for mac '%s' is not yet connected register at uevent subsys",
+				INFO("Interface for mac '%s' is not yet connected register at hotplug subsys",
 				     if_name_macstr);
-				if (-1 == uevent_register_netdev(net->container, pnet_cfg)) {
+				if (-1 == hotplug_register_netdev(net->container, pnet_cfg)) {
 					WARN("Could not register Interface for moving");
 					container_pnet_cfg_free(pnet_cfg);
 				}
