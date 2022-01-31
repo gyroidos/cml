@@ -32,7 +32,6 @@
 #include "cmld.h"
 #include "hardware.h"
 #include "crypto.h"
-#include "uevent.h"
 #include "audit.h"
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
