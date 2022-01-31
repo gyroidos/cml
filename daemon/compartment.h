@@ -228,9 +228,8 @@ compartment_get_exit_status(const compartment_t *compartment);
  * seperately by the module that called compartment_new in the first place.
  *
  * @param compartment The compartment to be destroyed.
- * @return 0 if ok, negative values indicate errors.
  */
-int
+void
 compartment_destroy(compartment_t *compartment);
 
 /**
