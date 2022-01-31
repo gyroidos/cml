@@ -548,7 +548,10 @@ container_destroy(container_t *container)
 	if (unlink(container_get_config_filename(container)))
 		WARN_ERRNO("Can't delete config file!");
 
-	return compartment_destroy(container->compartment);
+	/* call destroy hooks of compartment modules */
+	compartment_destroy(container->compartment);
+
+	return ret;
 }
 
 const char *

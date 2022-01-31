@@ -1408,11 +1408,10 @@ compartment_snapshot(compartment_t *compartment)
 	return 0;
 }
 
-int
+void
 compartment_destroy(compartment_t *compartment)
 {
 	ASSERT(compartment);
-	int ret = -1;
 
 	INFO("Destroying compartment %s with uuid=%s", compartment_get_name(compartment),
 	     uuid_string(compartment_get_uuid(compartment)));
@@ -1426,8 +1425,6 @@ compartment_destroy(compartment_t *compartment)
 
 		module->compartment_destroy(c_mod->instance);
 	}
-
-	return ret;
 }
 
 static void
