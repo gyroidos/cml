@@ -1315,6 +1315,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			control_send_message(CONTROL_RESPONSE_CONTAINER_START_EEXIST, fd);
 			break;
 		}
+		if (cmld_containers_get_c0() == container) {
+			ERROR("CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START for c0!");
+			control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd);
+			break;
+		}
 		compartment_state_t compartment_state = container_get_state(container);
 		if ((compartment_state == COMPARTMENT_STATE_RUNNING) ||
 		    (compartment_state == COMPARTMENT_STATE_BOOTING) ||
@@ -1337,6 +1342,13 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP:
 		IF_NULL_RETURN(container);
+
+		if (cmld_containers_get_c0() == container) {
+			ERROR("CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP for c0!");
+			control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd);
+			break;
+		}
+
 		ContainerStartParams *start_params = msg->container_start_params;
 		res = control_handle_container_stop(container, start_params, fd);
 		if (res) {
@@ -1490,6 +1502,12 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN: {
 		IF_NULL_RETURN(container);
+		if (cmld_containers_get_c0() == container) {
+			ERROR("CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN for c0!");
+			control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd);
+			break;
+		}
+
 		if (msg->device_pin == NULL || msg->device_newpin == NULL) {
 			ERROR("Current PIN or new PIN not specified");
 			break;
