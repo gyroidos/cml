@@ -1288,6 +1288,12 @@ compartment_kill(compartment_t *compartment)
 		return;
 	}
 
+	if (compartment_get_pid(compartment) < 0) {
+		ERROR("No pid (%d) for container %s -> state missamatch, do not kill anything!",
+		      compartment_get_pid(compartment), compartment_get_description(compartment));
+		return;
+	}
+
 	// TODO kill compartment (possibly register callback and wait non-blocking)
 	DEBUG("Killing compartment %s with pid: %d", compartment_get_description(compartment),
 	      compartment_get_pid(compartment));
@@ -1347,8 +1353,9 @@ compartment_stop(compartment_t *compartment)
 		if (NULL == module->stop)
 			continue;
 
-		if ((ret = module->stop(c_mod->instance)) < 0) {
+		if (module->stop(c_mod->instance) < 0) {
 			DEBUG("Module '%s' could not be stopped successfully", module->name);
+			ret = -1;
 		}
 	}
 
@@ -1356,7 +1363,8 @@ compartment_stop(compartment_t *compartment)
 	// i.g. to terminate the compartment's init process.
 	// we need to wait for the SIGCHLD signal for which we have a callback registered, which
 	// does the cleanup and sets the state of the compartment to stopped.
-	DEBUG("Stop compartment successfully emitted. Wait for child process to terminate (SICHLD)");
+	if (ret == 0)
+		DEBUG("Stop compartment successfully emitted. Wait for child process to terminate (SICHLD)");
 
 	return ret;
 }
