@@ -195,8 +195,8 @@ compartment_module_instance_free(compartment_module_instance_t *c_mod)
 	mem_free0(c_mod);
 }
 
-void *
-compartment_module_get_instance_by_name(const compartment_t *compartment, const char *mod_name)
+static compartment_module_instance_t *
+compartment_module_get_mod_instance_by_name(const compartment_t *compartment, const char *mod_name)
 {
 	ASSERT(compartment);
 	ASSERT(mod_name);
@@ -205,9 +205,21 @@ compartment_module_get_instance_by_name(const compartment_t *compartment, const 
 		compartment_module_instance_t *c_mod = l->data;
 		compartment_module_t *module = c_mod->module;
 		if (!strcmp(module->name, mod_name))
-			return c_mod->instance;
+			return c_mod;
 	}
 	return NULL;
+}
+
+void *
+compartment_module_get_instance_by_name(const compartment_t *compartment, const char *mod_name)
+{
+	ASSERT(compartment);
+	ASSERT(mod_name);
+
+	compartment_module_instance_t *c_mod =
+		compartment_module_get_mod_instance_by_name(compartment, mod_name);
+
+	return c_mod ? c_mod->instance : NULL;
 }
 
 void
@@ -882,9 +894,9 @@ compartment_start_child_early(void *data)
 		clone_flags |= CLONE_NEWIPC;
 
 	compartment_module_instance_t *c_user =
-		compartment_module_get_instance_by_name(compartment, "c_user");
+		compartment_module_get_mod_instance_by_name(compartment, "c_user");
 	compartment_module_instance_t *c_net =
-		compartment_module_get_instance_by_name(compartment, "c_net");
+		compartment_module_get_mod_instance_by_name(compartment, "c_net");
 	// on reboots of c0 rejoin existing userns and netns
 	if (compartment_uuid_is_c0id(compartment_get_uuid(compartment)) &&
 	    compartment->prev_state == COMPARTMENT_STATE_REBOOTING) {
@@ -1032,7 +1044,7 @@ compartment_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *d
 
 	// if no service module is registered diretcly switch to state running
 	compartment_module_instance_t *c_service =
-		compartment_module_get_instance_by_name(compartment, "c_service");
+		compartment_module_get_mod_instance_by_name(compartment, "c_service");
 	if (!c_service)
 		compartment_set_state(compartment, COMPARTMENT_STATE_RUNNING);
 
