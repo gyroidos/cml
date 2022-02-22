@@ -764,9 +764,6 @@ control_handle_container_stop(container_t *container, ContainerStartParams *star
 		res = -1;
 		control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_PASSWD_WRONG, fd);
 	} else {
-		// TODO if the modules cannot be stopped successfully, the container is killed. The return
-		// value in this case is CONTAINER_ERROR, even if the container was killed. This is
-		// ignored atm and just STOP_OK is returned. How should we treat this?
 		res = cmld_container_stop(container);
 		if (res == -1) {
 			control_send_message(CONTROL_RESPONSE_CONTAINER_STOP_FAILED_NOT_RUNNING,

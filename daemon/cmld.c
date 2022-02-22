@@ -242,8 +242,7 @@ cmld_containers_stop(void (*on_all_stopped)(int), int value)
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
-		if (container_get_state(container) != COMPARTMENT_STATE_STOPPED) {
-			container_stop(container);
+		if (cmld_container_stop(container) > 0) {
 			/* Register observer to wait for completed container_stop */
 			if (!container_register_observer(container, &cmld_container_stop_cb,
 							 stop_data)) {
@@ -1532,8 +1531,7 @@ cmld_container_stop(container_t *container)
 
 	DEBUG("Trying to stop container %s", container_get_description(container));
 
-	if (!((container_get_state(container) == COMPARTMENT_STATE_RUNNING) ||
-	      (container_get_state(container) == COMPARTMENT_STATE_SETUP))) {
+	if (container_get_state(container) == COMPARTMENT_STATE_STOPPED) {
 		ERROR("Container %s not running, unable to stop",
 		      container_get_description(container));
 
@@ -1545,20 +1543,25 @@ cmld_container_stop(container_t *container)
 
 	int ret = container_stop(container);
 	if (ret < 0) {
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"request-clean-shutdown",
-				uuid_string(container_get_uuid(container)), 0);
-		DEBUG("Some modules could not be stopped successfully, killing container.");
-		container_kill(container);
-		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-				"force-stop", uuid_string(container_get_uuid(container)), 0);
-	} else {
-		audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-				"request-clean-shutdown",
-				uuid_string(container_get_uuid(container)), 0);
+		char *argv[] = { "halt", NULL };
+		if (container_run(container, false, argv[0], 1, argv, -1)) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"request-clean-shutdown",
+					uuid_string(container_get_uuid(container)), 0);
+			DEBUG("Some modules could not be stopped successfully, killing container.");
+			container_kill(container);
+			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+					"force-stop", uuid_string(container_get_uuid(container)),
+					0);
+			return 0;
+		}
+		return -1;
 	}
 
-	return ret;
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
+			"request-clean-shutdown", uuid_string(container_get_uuid(container)), 0);
+
+	return 0;
 }
 
 int
