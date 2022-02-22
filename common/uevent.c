@@ -251,6 +251,12 @@ uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newme
 		goto error;
 	}
 
+	// add termianting null char
+	if (newevent->msg_len > UEVENT_BUF_LEN)
+		newevent->msg.raw[UEVENT_BUF_LEN - 1] = '\0';
+	else
+		newevent->msg.raw[newevent->msg_len] = '\0';
+
 	uevent_parse(newevent, newevent->msg.raw);
 
 	return newevent;
