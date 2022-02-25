@@ -98,15 +98,22 @@ c_uevent_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 
 	/* handle coldboot events just for target container */
 	uuid_t *synth_uuid = uuid_new(uevent_event_get_synth_uuid(event));
-	if (uuid_equals(container_get_uuid(uevent->container), synth_uuid)) {
-		TRACE("Got synth add/remove/change uevent SYNTH_UUID=%s", uuid_string(synth_uuid));
-		event_coldboot = uevent_event_replace_synth_uuid_new(event, "0");
-		if (!event_coldboot) {
-			ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
+	if (synth_uuid) {
+		if (uuid_equals(container_get_uuid(uevent->container), synth_uuid)) {
+			TRACE("Got synth add/remove/change uevent SYNTH_UUID=%s",
+			      uuid_string(synth_uuid));
+			event_coldboot = uevent_event_replace_synth_uuid_new(event, "0");
+			if (!event_coldboot) {
+				ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
+				return;
+			}
+			event = event_coldboot;
+			goto send;
+		} else {
+			TRACE("Skip coldboot event's for other conainer");
+			uuid_free(synth_uuid);
 			return;
 		}
-		event = event_coldboot;
-		goto send;
 	}
 
 	// newer versions of udev prepends '/dev/' in DEVNAME
