@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sched.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -110,6 +111,7 @@ struct uevent_event {
 	char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)
 	char *interface;       //!< The uevent INTERFACE, points inside of raw
 	char *synth_uuid;      //!< The uevent SYNTH_UUID, points inside of raw (coldboot relevant)
+	unsigned long long seqnum; //!< The seuqunze number of the uevent
 };
 
 static void
@@ -193,6 +195,9 @@ uevent_parse(uevent_event_t *uevent, char *raw_p)
 		} else if (!strncmp(raw_p, "SYNTH_UUID=", 11)) {
 			raw_p += 11;
 			uevent->synth_uuid = raw_p;
+		} else if (!strncmp(raw_p, "SEQNUM=", 7)) {
+			raw_p += 7;
+			uevent->seqnum = strtoull(raw_p, NULL, 10);
 		}
 
 		/* advance to after the next \0 */
@@ -472,6 +477,7 @@ handle_kernel_event(uevent_event_t *uevent, char *raw_p)
 		if (action & uev->actions)
 			uev->func(action, uevent, uev->data);
 	}
+	TRACE("Handled uevent seqnum=%llu.", uevent->seqnum);
 }
 
 static void
