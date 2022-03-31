@@ -1258,23 +1258,19 @@ c_vol_new(compartment_t *compartment)
 	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
 	vol->overlay_count = 0;
 
-	vol->os = container_get_guestos(vol->container);
-	if (!vol->os) {
-		ERROR("Could not get GuestOS %s instance for container %s",
-		      guestos_get_name(vol->os), container_get_name(vol->container));
-		return NULL;
-	}
-
 	vol->mnt = mount_new();
-	guestos_fill_mount(vol->os, vol->mnt);
 
-	vol->mnt_setup = mount_new();
-	guestos_fill_mount_setup(vol->os, vol->mnt_setup);
+	vol->os = container_get_guestos(vol->container);
+	if (vol->os) {
+		guestos_fill_mount(vol->os, vol->mnt);
 
-	// prepend container init env with guestos specific values
-	container_init_env_prepend(vol->container, guestos_get_init_env(vol->os),
-				   guestos_get_init_env_len(vol->os));
+		vol->mnt_setup = mount_new();
+		guestos_fill_mount_setup(vol->os, vol->mnt_setup);
 
+		// prepend container init env with guestos specific values
+		container_init_env_prepend(vol->container, guestos_get_init_env(vol->os),
+					   guestos_get_init_env_len(vol->os));
+	}
 	return vol;
 }
 
