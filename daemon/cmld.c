@@ -801,7 +801,8 @@ cmld_container_register_observers(container_t *container)
 		      container_get_description(container));
 	}
 
-	if (guestos_get_feature_install_guest(container_get_guestos(container))) {
+	const guestos_t *os = container_get_guestos(container);
+	if (os && guestos_get_feature_install_guest(container_get_guestos(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
 		int *control_sock_p = mem_new0(int, 1);
 		*control_sock_p =
@@ -852,7 +853,8 @@ cmld_container_start(container_t *container)
 		cmld_container_register_observers(container);
 
 		// We only support "background-start"...
-		if (!guestos_get_feature_bg_booting(container_get_guestos(container))) {
+		const guestos_t *os = container_get_guestos(container);
+		if (os && !guestos_get_feature_bg_booting(os)) {
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"container-start",
 					uuid_string(container_get_uuid(container)), 0);
