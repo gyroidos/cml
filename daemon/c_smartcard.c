@@ -1142,6 +1142,8 @@ c_smartcard_destroy(void *smartcardp)
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
+	IF_TRUE_RETURN(CONTAINER_TOKEN_TYPE_NONE == smartcard->token_type);
+
 	int ret = 0;
 	char *path = c_smartcard_token_paired_file_new(smartcard);
 	if (file_exists(path)) {
