@@ -306,7 +306,7 @@ mount_private_tmp(void)
 		ERROR_ERRNO("Could not unshare host mount ns!");
 		return -1;
 	}
-	if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+	if (mount(NULL, "/", NULL, MS_REC | MS_SLAVE, NULL) < 0) {
 		ERROR_ERRNO("Could not mount / MS_PRIVATE");
 		return -1;
 	}
