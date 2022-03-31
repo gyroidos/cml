@@ -63,6 +63,7 @@ enum mount_type {
 				      as overlay to each container */
 	MOUNT_TYPE_BIND_FILE = 10,    /**< file is bind mounted to container (RO) */
 	MOUNT_TYPE_BIND_FILE_RW = 11, /**< file is bind mounted to container (RW) */
+	MOUNT_TYPE_BIND_DIR = 12,     /**< dir is bind mounted to container (RW) */
 };
 
 mount_t *
