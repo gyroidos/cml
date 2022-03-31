@@ -535,7 +535,7 @@ int
 container_destroy(container_t *container)
 {
 	ASSERT(container);
-	int ret = -1;
+	int ret = 0;
 
 	/* wipe the container */
 	if (file_is_dir(container_get_images_dir(container))) {
