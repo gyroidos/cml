@@ -741,17 +741,20 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 static void
 cmld_reboot_container_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
+	if (container_get_state(container) == COMPARTMENT_STATE_REBOOTING ||
+	    container_get_state(container) == COMPARTMENT_STATE_STOPPED) {
+		container_unregister_observer(container, cb);
+	}
 	if (container_get_state(container) == COMPARTMENT_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(container));
 		container_set_key(container, DUMMY_KEY); // set dummy key for reboot
 		if (cmld_container_start(container))
 			WARN("Reboot of '%s' failed", container_get_description(container));
-		container_unregister_observer(container, cb);
 	}
 }
 
 /*
- * This callback handles audit events concerning container states 
+ * This callback handles audit events concerning container states
  */
 static void
 cmld_audit_compartment_state_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
@@ -1128,11 +1131,14 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 static void
 cmld_reboot_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data)
 {
+	if (container_get_state(c0) == COMPARTMENT_STATE_REBOOTING ||
+	    container_get_state(c0) == COMPARTMENT_STATE_STOPPED) {
+		container_unregister_observer(c0, cb);
+	}
 	if (container_get_state(c0) == COMPARTMENT_STATE_REBOOTING) {
 		INFO("Rebooting container %s", container_get_description(c0));
 		if (cmld_start_c0(c0))
 			WARN("Reboot of '%s' failed", container_get_description(c0));
-		container_unregister_observer(c0, cb);
 	}
 }
 
