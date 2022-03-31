@@ -516,6 +516,12 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	return c;
 }
 
+void
+cmld_containers_add(container_t *container)
+{
+	cmld_containers_list = list_append(cmld_containers_list, container);
+}
+
 int
 cmld_reload_container(const uuid_t *uuid, const char *path)
 {
