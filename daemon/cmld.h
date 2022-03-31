@@ -71,6 +71,12 @@ void
 cmld_cleanup(void);
 
 /**
+ * Adds an externaly generated container, e.g. by oci module
+ */
+void
+cmld_containers_add(container_t *container);
+
+/**
  * Reloads all containers from storage path.
  *
  * @return 0 on success, -1 on error
