@@ -1710,11 +1710,16 @@ cmld_cleanup(void)
 	if (cmld_control_cml)
 		control_free(cmld_control_cml);
 
-	mem_free0(cmld_device_uuid);
-	mem_free0(cmld_device_update_base_url);
-	mem_free0(cmld_device_host_dns);
-	mem_free0(cmld_c0os_name);
-	mem_free0(cmld_shared_data_dir);
+	if (cmld_device_uuid)
+		mem_free0(cmld_device_uuid);
+	if (cmld_device_update_base_url)
+		mem_free0(cmld_device_update_base_url);
+	if (cmld_device_host_dns)
+		mem_free0(cmld_device_host_dns);
+	if (cmld_c0os_name)
+		mem_free0(cmld_c0os_name);
+	if (cmld_shared_data_dir)
+		mem_free0(cmld_shared_data_dir);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
 		char *name = l->data;
