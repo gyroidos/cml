@@ -174,12 +174,16 @@ container_free(container_t *container)
 	if (container->images_dir)
 		mem_free0(container->images_dir);
 
-	mem_free0(container->cpus_allowed);
+	if (container->cpus_allowed)
+		mem_free0(container->cpus_allowed);
 
 	if (container->dns_server)
 		mem_free0(container->dns_server);
-	mem_free0(container->device_allowed_list);
-	mem_free0(container->device_assigned_list);
+
+	if (container->device_allowed_list)
+		mem_free0(container->device_allowed_list);
+	if (container->device_assigned_list)
+		mem_free0(container->device_assigned_list);
 
 	for (list_t *l = container->usbdev_list; l; l = l->next) {
 		mem_free0(l->data);
