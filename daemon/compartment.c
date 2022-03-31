@@ -301,6 +301,8 @@ compartment_new(const uuid_t *uuid, const char *name, compartment_type_t type, b
 	// allocate and set init_env
 	compartment->init_env_len = 0;
 	compartment_init_env_prepend(compartment, init_env, init_env_len);
+	if (!compartment->init_env)
+		compartment->init_env = mem_new0(char *, 1);
 
 	compartment->setup_mode = false;
 
