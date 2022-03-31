@@ -92,7 +92,8 @@ scd_init(bool start_daemon)
 		scd_pid = scd_fork_and_exec();
 		IF_TRUE_RETVAL_TRACE(scd_pid == -1, -1);
 	} else {
-		DEBUG("Skipping tpm2d launch as requested");
+		DEBUG("Skipping scd launch as requested");
+		scd_pid = -1;
 	}
 
 	size_t retries = 0;
