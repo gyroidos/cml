@@ -227,17 +227,23 @@ control_container_status_new(const container_t *container)
 	c_status->state = control_compartment_state_to_proto(container_get_state(container));
 	c_status->uptime = container_get_uptime(container);
 	c_status->created = container_get_creation_time(container);
-	c_status->guestos = mem_strdup(guestos_get_name(container_get_guestos(container)));
 
-	switch (guestos_get_verify_result(container_get_guestos(container))) {
-	case GUESTOS_SIGNED:
-		c_status->trust_level = CONTAINER_TRUST__SIGNED;
-		break;
-	case GUESTOS_LOCALLY_SIGNED:
-		c_status->trust_level = CONTAINER_TRUST__LOCALLY_SIGNED;
-		break;
-	default:
-		c_status->trust_level = CONTAINER_TRUST__UNSIGNED;
+	const guestos_t *os = container_get_guestos(container);
+	c_status->guestos = os ? mem_strdup(guestos_get_name(os)) : mem_strdup("none");
+
+	c_status->trust_level = CONTAINER_TRUST__UNSIGNED;
+
+	if (os) {
+		switch (guestos_get_verify_result(os)) {
+		case GUESTOS_SIGNED:
+			c_status->trust_level = CONTAINER_TRUST__SIGNED;
+			break;
+		case GUESTOS_LOCALLY_SIGNED:
+			c_status->trust_level = CONTAINER_TRUST__LOCALLY_SIGNED;
+			break;
+		default:
+			c_status->trust_level = CONTAINER_TRUST__UNSIGNED;
+		}
 	}
 
 	return c_status;
