@@ -59,6 +59,7 @@
 #include "container_config.h"
 #include "container.h"
 #include "input.h"
+#include "oci.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -120,6 +121,13 @@ static bool cmld_signed_configs = false;
 static bool cmld_device_provisioned = false;
 
 static enum command cmld_device_reboot = POWER_OFF;
+
+#ifdef OCI
+// clang-format off
+#define CMLD_OCI_CONTROL_SOCKET SOCK_PATH(oci-control)
+// clang-format on
+static oci_control_t *cmld_oci_control_cml = NULL;
+#endif
 
 /******************************************************************************/
 
@@ -1417,6 +1425,14 @@ cmld_init(const char *path)
 		FATAL("Could not init cmld_cli control socket");
 	}
 	INFO("created control socket.");
+
+#ifdef OCI
+	cmld_oci_control_cml = oci_control_new(CMLD_OCI_CONTROL_SOCKET);
+	if (!cmld_oci_control_cml) {
+		FATAL("Could not init cmld_oci control socket");
+	}
+	INFO("created oci control socket.");
+#endif
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
