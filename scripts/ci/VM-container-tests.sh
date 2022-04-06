@@ -113,7 +113,7 @@ do_test_complete() {
 
 	cmd_control_list_guestos "trustx-coreos"
 
-	cmd_control_remove_error_nonexistent "nonexistent-container"
+	cmd_control_remove_error_eexist "nonexistent-container"
 
 	cmd_control_start_error_eexist "test-container" "$TESTPW"
 
@@ -129,12 +129,17 @@ do_test_complete() {
 
 	cmd_control_stop "test-container" "$TESTPW"
 
-#TODO fix USB token container removal
 #	# Remove test container if in second VM run
-#	if [[ "$1" == "second_run" ]];then
-#		echo "Second test run, removing container"
-#		cmd_control_remove "test-container" "$TESTPW"
-#	fi
+	if [[ "$1" == "second_run" ]];then
+		echo "Second test run, removing container"
+		cmd_control_remove "test-container" "$TESTPW"
+
+		echo "STATUS: Check container has been removed"
+		cmd_control_list_ncontainer "test-container"
+
+		echo "STATUS: Removing non-existent container"
+		cmd_control_remove_error_eexist "test-container" "$TESTPW"
+	fi
 
 
 }
@@ -622,10 +627,6 @@ start_vm
 #ssh ${SSH_OPTS} 'echo "STATUS: VM USB Device: " && lsusb' 2>&1
 
 do_test_complete "second_run"
-
-# TODO fix USB token container removal
-#echo "STATUS: Check container has been removed"
-#cmd_control_list_ncontainer "test-container"
 
 force_stop_vm
 
