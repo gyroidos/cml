@@ -174,7 +174,7 @@ cmd_control_remove() {
 	do_test_cmd_noutput "/usr/sbin/control remove $1 --key=$2" "Abort"
 }
 
-cmd_control_remove_error_nonexistent() {
+cmd_control_remove_error_eexist() {
 	do_test_cmd_output "/usr/sbin/control remove $1 --key=$2" "Container with provided uuid/name does not exist!"
 }
 
