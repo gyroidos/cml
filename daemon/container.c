@@ -168,6 +168,13 @@ container_free(container_t *container)
 {
 	ASSERT(container);
 
+	/*
+	 * free compartment first, as c_*_free() may access
+	 * container resources through extension pointer
+	 */
+	if (container->compartment)
+		compartment_free(container->compartment);
+
 	if (container->config_filename)
 		mem_free0(container->config_filename);
 
@@ -207,9 +214,6 @@ container_free(container_t *container)
 		mem_free0(l->data);
 	}
 	list_delete(container->fifo_list);
-
-	if (container->compartment)
-		compartment_free(container->compartment);
 
 	mem_free0(container);
 }
