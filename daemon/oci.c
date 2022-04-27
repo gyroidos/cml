@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
+
 #include "oci.h"
 
 #include "container.h"
@@ -51,6 +53,8 @@
 #include <inttypes.h>
 #include <signal.h>
 #include <sys/inotify.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include <runtime_spec_schema_config_schema.h>
 #include <runtime_spec_schema_state_schema.h>
@@ -74,30 +78,28 @@ struct oci_container {
 	char *id;
 	char *bundle;
 	bool deleted; // we do not delete oci containers directly
+	list_t *hook_prestart_list;
+	list_t *hook_create_runtime_list;
+	list_t *hook_create_container_list;
+	list_t *hook_start_container_list;
+	list_t *hook_poststart_list;
+	list_t *hook_poststop_list;
 };
+
+typedef struct oci_hook {
+	char *path;
+	char **argv;
+	char **envp;
+} oci_hook_t;
 
 static list_t *oci_containers_list = NULL;
 static list_t *oci_control_list = NULL;
-
-void
-oci_container_free(oci_container_t *oci_container)
-{
-	IF_NULL_RETURN(oci_container);
-
-	oci_containers_list = list_remove(oci_containers_list, oci_container);
-
-	// do not free oci_container->container, this is done by cmld module
-
-	mem_free0(oci_container->id);
-	mem_free0(oci_container->bundle);
-	mem_free0(oci_container);
-}
 
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
 char *
-oci_control_compartment_state_to_status(compartment_state_t state)
+oci_compartment_state_to_status(compartment_state_t state)
 {
 	switch (state) {
 	case COMPARTMENT_STATE_STOPPED:
@@ -125,26 +127,15 @@ oci_control_compartment_state_to_status(compartment_state_t state)
 	}
 }
 
-oci_container_t *
-oci_get_oci_container_by_container(const container_t *container)
-{
-	for (list_t *l = oci_containers_list; l; l = l->next) {
-		oci_container_t *oci_container = l->data;
-		if (container == oci_container->container)
-			return oci_container;
-	}
-	return NULL;
-}
-
 /**
  * Get the ContainerStatus for the given container.
  *
  * @param container the container object from which to generate the ContainerStatus
  * @return  a new runtime_spec_schema_state_schema object with information about the given container;
- *          has to be free'd with oci_control_container_state_free()
+ *          has to be free'd with oci_container_state_free()
  */
 static runtime_spec_schema_state_schema *
-oci_control_container_state_new(const container_t *container)
+oci_container_state_new(const container_t *container)
 {
 	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
 	IF_NULL_RETVAL(oci_container, NULL);
@@ -153,7 +144,7 @@ oci_control_container_state_new(const container_t *container)
 
 	oci_state->oci_version = mem_strdup(OCI_VERSION);
 	oci_state->status =
-		mem_strdup(oci_control_compartment_state_to_status(container_get_state(container)));
+		mem_strdup(oci_compartment_state_to_status(container_get_state(container)));
 	oci_state->pid = container_get_pid(container);
 	oci_state->pid_present = container_get_pid(container) > 0 ? true : false;
 
@@ -165,12 +156,12 @@ oci_control_container_state_new(const container_t *container)
 
 /**
  * Free the given runtime_spec_schema_state_schema object that was previously allocated
- * by oci_control_container_state_new().
+ * by oci_container_state_new().
  *
  * @param c_status the previously allocated ContainerStatus object
  */
 static void
-oci_control_container_state_free(runtime_spec_schema_state_schema *oci_state)
+oci_container_state_free(runtime_spec_schema_state_schema *oci_state)
 {
 	IF_NULL_RETURN(oci_state);
 	mem_free0(oci_state->oci_version);
@@ -178,6 +169,208 @@ oci_control_container_state_free(runtime_spec_schema_state_schema *oci_state)
 	mem_free0(oci_state->bundle);
 	mem_free0(oci_state->status);
 	mem_free0(oci_state);
+}
+
+static int
+oci_control_dump_state(const container_t *container, int fd)
+{
+	runtime_spec_schema_state_schema *state = NULL;
+	char *json_buf = NULL;
+	parser_error err;
+
+	state = oci_container_state_new(container);
+	json_buf = runtime_spec_schema_state_schema_generate_json(state, NULL, &err);
+
+	int ret = fd_write(fd, json_buf, strlen(json_buf));
+
+	oci_container_state_free(state);
+	mem_free(json_buf);
+	return ret;
+}
+
+static oci_hook_t *
+oci_hook_new(char *path, char **args, size_t args_len, char **env, size_t env_len)
+{
+	ASSERT(path);
+
+	oci_hook_t *hook = mem_new0(oci_hook_t, 1);
+
+	hook->path = mem_strdup(path);
+
+	hook->argv = mem_new0(char *, args_len + 1);
+	for (size_t i = 0; i < args_len; i++)
+		hook->argv[i] = mem_strdup(args[i]);
+
+	hook->envp = mem_new0(char *, env_len + 1);
+	for (size_t i = 0; i < env_len; i++)
+		hook->envp[i] = mem_strdup(env[i]);
+
+	return hook;
+}
+
+static void
+oci_hook_free(oci_hook_t *hook)
+{
+	ASSERT(hook);
+
+	mem_free0(hook->path);
+
+	for (char **arg = hook->argv; *arg; arg++)
+		mem_free0(*arg);
+	mem_free0(hook->argv);
+
+	for (char **env = hook->envp; *env; env++)
+		mem_free0(*env);
+	mem_free0(hook->envp);
+
+	mem_free0(hook);
+}
+
+static int
+oci_do_hook(oci_hook_t *hook, const container_t *container)
+{
+	INFO("Executing hook: %s", hook->path);
+	for (char **arg = hook->argv; *arg; arg++)
+		INFO("\t %s", *arg);
+	for (char **env = hook->envp; *env; env++)
+		INFO("\t %s", *env);
+
+	// TODO timer based abortion
+
+	int status;
+	int stdin_pipe[2];
+
+	// oci container state needs to be provided through stdin
+	IF_TRUE_RETVAL(-1 == pipe(stdin_pipe), -1);
+
+	pid_t pid = fork();
+
+	switch (pid) {
+	case -1:
+		ERROR_ERRNO("Could not fork for %s", hook->path);
+		return -1;
+	case 0:
+		close(STDIN_FILENO);
+
+		// dup read end of pipe to stdin
+		if (-1 == dup2(stdin_pipe[0], STDIN_FILENO))
+			FATAL_ERRNO("Could not dup2 stdin!");
+
+		close(stdin_pipe[0]); // close read end of pipe
+		close(stdin_pipe[1]); // close write end of pipe
+
+		execvpe(hook->path, hook->argv, hook->envp);
+		FATAL_ERRNO("Could not execvpe %s", hook->path);
+		return -1;
+	default:
+		close(stdin_pipe[0]); // close read end of pipe
+
+		// forward oci container state to forked child!
+		if (oci_control_dump_state(container, stdin_pipe[1]) < 0)
+			return -1;
+
+		// done sending output (flush buffer)
+		close(stdin_pipe[1]);
+
+		if (waitpid(pid, &status, 0) != pid) {
+			ERROR_ERRNO("Could not waitpid for '%s'", hook->path);
+		} else if (!WIFEXITED(status)) {
+			ERROR("Child '%s' terminated abnormally", hook->path);
+		} else {
+			TRACE("%s terminated normally", hook->path);
+			return WEXITSTATUS(status) ? -1 : 0;
+		}
+	}
+	return -1;
+}
+
+int
+oci_do_hooks_prestart(const container_t *container)
+{
+	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
+
+	for (list_t *l = oci_container->hook_prestart_list; l; l = l->next) {
+		oci_hook_t *prestart_hook = l->data;
+		if (-1 == oci_do_hook(prestart_hook, container))
+			WARN("Failed to execute PRESTART hook!");
+	}
+	return 0;
+}
+
+int
+oci_do_hooks_create_runtime(const container_t *container)
+{
+	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
+
+	for (list_t *l = oci_container->hook_create_runtime_list; l; l = l->next) {
+		oci_hook_t *hook_create_runtime = l->data;
+		if (-1 == oci_do_hook(hook_create_runtime, container))
+			WARN("Failed to execute CREATE_RUNTIME hook!");
+	}
+	return 0;
+}
+
+int
+oci_do_hooks_create_container(const container_t *container)
+{
+	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
+
+	for (list_t *l = oci_container->hook_create_container_list; l; l = l->next) {
+		oci_hook_t *hook_create_container = l->data;
+		if (-1 == oci_do_hook(hook_create_container, container))
+			WARN("Failed to execute CREATE_CONTAINER hook!");
+	}
+	return 0;
+}
+
+int
+oci_do_hooks_start_container(const container_t *container)
+{
+	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
+
+	for (list_t *l = oci_container->hook_start_container_list; l; l = l->next) {
+		oci_hook_t *hook_start_container = l->data;
+		if (-1 == oci_do_hook(hook_start_container, container))
+			WARN("Failed to execute START_CONTAINER hook!");
+	}
+	return 0;
+}
+
+int
+oci_do_hooks_poststart(const container_t *container)
+{
+	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
+
+	for (list_t *l = oci_container->hook_poststart_list; l; l = l->next) {
+		oci_hook_t *hook_poststart = l->data;
+		if (-1 == oci_do_hook(hook_poststart, container))
+			WARN("Failed to execute POSTSTART hook!");
+	}
+	return 0;
+}
+
+int
+oci_do_hooks_poststop(const container_t *container)
+{
+	oci_container_t *oci_container = oci_get_oci_container_by_container(container);
+
+	for (list_t *l = oci_container->hook_poststop_list; l; l = l->next) {
+		oci_hook_t *hook_poststop = l->data;
+		if (-1 == oci_do_hook(hook_poststop, container))
+			WARN("Failed to execute POSTSTOP hook!");
+	}
+	return 0;
+}
+
+oci_container_t *
+oci_get_oci_container_by_container(const container_t *container)
+{
+	for (list_t *l = oci_containers_list; l; l = l->next) {
+		oci_container_t *oci_container = l->data;
+		if (container == oci_container->container)
+			return oci_container;
+	}
+	return NULL;
 }
 
 static container_t *
@@ -196,6 +389,39 @@ oci_control_get_container_by_id_string(const char *id_str)
 	}
 	uuid_free(uuid);
 	return container;
+}
+
+void
+oci_container_free(oci_container_t *oci_container)
+{
+	IF_NULL_RETURN(oci_container);
+
+	oci_containers_list = list_remove(oci_containers_list, oci_container);
+
+	// do not free oci_container->container, this is done by cmld module
+
+	mem_free0(oci_container->id);
+	mem_free0(oci_container->bundle);
+
+	for (list_t *l = oci_container->hook_prestart_list; l; l = l->next)
+		oci_hook_free(l->data);
+
+	for (list_t *l = oci_container->hook_create_runtime_list; l; l = l->next)
+		oci_hook_free(l->data);
+
+	for (list_t *l = oci_container->hook_create_container_list; l; l = l->next)
+		oci_hook_free(l->data);
+
+	for (list_t *l = oci_container->hook_start_container_list; l; l = l->next)
+		oci_hook_free(l->data);
+
+	for (list_t *l = oci_container->hook_poststart_list; l; l = l->next)
+		oci_hook_free(l->data);
+
+	for (list_t *l = oci_container->hook_poststop_list; l; l = l->next)
+		oci_hook_free(l->data);
+
+	mem_free0(oci_container);
 }
 
 static oci_container_t *
@@ -256,8 +482,6 @@ oci_container_new(const char *store_path, const char *bundle_path, const char *i
 	DEBUG("New containers max ram is %" PRIu32 "", ram_limit);
 
 	cpus_allowed = NULL;
-	DEBUG("New containers allowed cpu cores are %s", cpus_allowed);
-
 	color = 0;
 
 	allow_autostart = true;
@@ -325,6 +549,81 @@ oci_container_new(const char *store_path, const char *bundle_path, const char *i
 	oci_container->bundle = mem_strdup(bundle_path);
 	oci_container->deleted = false;
 
+	if (config_schema->hooks) {
+		if (config_schema->hooks->prestart_len) {
+			for (size_t i = 0; i < config_schema->hooks->prestart_len; i++) {
+				runtime_spec_schema_defs_hook *hook =
+					(runtime_spec_schema_defs_hook *)
+						config_schema->hooks->prestart[i];
+
+				oci_container->hook_prestart_list = list_append(
+					oci_container->hook_prestart_list,
+					oci_hook_new(hook->path, hook->args, hook->args_len,
+						     hook->env, hook->env_len));
+			}
+		}
+		if (config_schema->hooks->create_runtime_len) {
+			for (size_t i = 0; i < config_schema->hooks->create_runtime_len; i++) {
+				runtime_spec_schema_defs_hook *hook =
+					(runtime_spec_schema_defs_hook *)
+						config_schema->hooks->create_runtime[i];
+
+				oci_container->hook_create_runtime_list = list_append(
+					oci_container->hook_create_runtime_list,
+					oci_hook_new(hook->path, hook->args, hook->args_len,
+						     hook->env, hook->env_len));
+			}
+		}
+		if (config_schema->hooks->create_container_len) {
+			for (size_t i = 0; i < config_schema->hooks->create_container_len; i++) {
+				runtime_spec_schema_defs_hook *hook =
+					(runtime_spec_schema_defs_hook *)
+						config_schema->hooks->create_container[i];
+
+				oci_container->hook_create_container_list = list_append(
+					oci_container->hook_create_container_list,
+					oci_hook_new(hook->path, hook->args, hook->args_len,
+						     hook->env, hook->env_len));
+			}
+		}
+		if (config_schema->hooks->start_container_len) {
+			for (size_t i = 0; i < config_schema->hooks->start_container_len; i++) {
+				runtime_spec_schema_defs_hook *hook =
+					(runtime_spec_schema_defs_hook *)
+						config_schema->hooks->start_container[i];
+
+				oci_container->hook_start_container_list = list_append(
+					oci_container->hook_start_container_list,
+					oci_hook_new(hook->path, hook->args, hook->args_len,
+						     hook->env, hook->env_len));
+			}
+		}
+		if (config_schema->hooks->poststart_len) {
+			for (size_t i = 0; i < config_schema->hooks->poststart_len; i++) {
+				runtime_spec_schema_defs_hook *hook =
+					(runtime_spec_schema_defs_hook *)
+						config_schema->hooks->poststart[i];
+
+				oci_container->hook_poststart_list = list_append(
+					oci_container->hook_poststart_list,
+					oci_hook_new(hook->path, hook->args, hook->args_len,
+						     hook->env, hook->env_len));
+			}
+		}
+		if (config_schema->hooks->poststop_len) {
+			for (size_t i = 0; i < config_schema->hooks->poststop_len; i++) {
+				runtime_spec_schema_defs_hook *hook =
+					(runtime_spec_schema_defs_hook *)
+						config_schema->hooks->poststop[i];
+
+				oci_container->hook_poststop_list = list_append(
+					oci_container->hook_poststop_list,
+					oci_hook_new(hook->path, hook->args, hook->args_len,
+						     hook->env, hook->env_len));
+			}
+		}
+	}
+
 	oci_containers_list = list_append(oci_containers_list, oci_container);
 out:
 	uuid_free(uuid);
@@ -342,7 +641,7 @@ oci_control_send_state(container_t *container, int fd)
 	char *json_buf = NULL;
 	parser_error err;
 
-	state = oci_control_container_state_new(container);
+	state = oci_container_state_new(container);
 	json_buf = runtime_spec_schema_state_schema_generate_json(state, NULL, &err);
 
 	OciResponse out = OCI_RESPONSE__INIT;
@@ -352,14 +651,14 @@ oci_control_send_state(container_t *container, int fd)
 		out.has_pid = true;
 		out.pid = container_get_pid(container);
 	}
-	out.status = oci_control_compartment_state_to_status(container_get_state(container));
+	out.status = oci_compartment_state_to_status(container_get_state(container));
 
 	DEBUG("Send STATE RESPONSE with state '%s'.", out.status);
 
 	if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
 		WARN("Failed to send response to '%d'", fd);
 
-	oci_control_container_state_free(state);
+	oci_container_state_free(state);
 	mem_free(json_buf);
 }
 
@@ -385,6 +684,9 @@ oci_container_state_cb(container_t *container, container_callback_t *cb, void *d
 
 	/* unregister observer */
 	container_unregister_observer(container, cb);
+
+	if (state == COMPARTMENT_STATE_RUNNING)
+		oci_do_hooks_poststart(container);
 
 	oci_control_send_state(container, fd);
 
@@ -432,7 +734,7 @@ oci_container_mark_deleted(oci_container_t *oci_container)
 
 	mem_free0(oci_parent_dir);
 
-	return 0;
+	return oci_do_hooks_poststop(oci_container->container);
 }
 
 /**
@@ -513,7 +815,8 @@ oci_control_handle_message(UNUSED oci_control_t *oci_control, const OciCommand *
 				mem_new0(struct container_state_cb_data, 1);
 
 			if (oci_container->deleted) {
-				DEBUG("Start previosly created container %s, reuse previous state.");
+				DEBUG("Start previosly created container %s, reuse previous state.",
+				      container_get_name(oci_container->container));
 				oci_container->deleted = false;
 			}
 
