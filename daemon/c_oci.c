@@ -75,6 +75,15 @@ c_oci_start_pre_clone(void *ocip)
 }
 
 static int
+c_oci_start_child(void *ocip)
+{
+	c_oci_t *oci = ocip;
+	ASSERT(oci);
+
+	return oci_do_hooks_create_container(oci->container);
+}
+
+static int
 c_oci_start_pre_exec_child(void *ocip)
 {
 	c_oci_t *oci = ocip;
@@ -84,7 +93,26 @@ c_oci_start_pre_exec_child(void *ocip)
 	pause();
 
 	DEBUG("%s %s", CSERVICE_TARGET, file_exists(CSERVICE_TARGET) ? "exists" : "does not exist");
-	return 0;
+
+	return oci_do_hooks_start_container(oci->container);
+}
+
+static int
+c_oci_start_post_clone(void *ocip)
+{
+	c_oci_t *oci = ocip;
+	ASSERT(oci);
+
+	return oci_do_hooks_create_runtime(oci->container);
+}
+
+static int
+c_oci_start_post_exec(void *ocip)
+{
+	c_oci_t *oci = ocip;
+	ASSERT(oci);
+
+	return oci_do_hooks_prestart(oci->container);
 }
 
 /**
@@ -139,10 +167,10 @@ static compartment_module_t c_oci_module = {
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_oci_start_pre_clone,
-	.start_post_clone = NULL,
+	.start_post_clone = c_oci_start_post_clone,
 	.start_pre_exec = NULL,
-	.start_post_exec = NULL,
-	.start_child = NULL,
+	.start_post_exec = c_oci_start_post_exec,
+	.start_child = c_oci_start_child,
 	.start_pre_exec_child = c_oci_start_pre_exec_child,
 	.stop = NULL,
 	.cleanup = NULL,

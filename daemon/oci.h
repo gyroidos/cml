@@ -48,6 +48,55 @@ oci_container_t *
 oci_get_oci_container_by_container(const container_t *container);
 
 /**
+ * Run prestart hooks
+ *
+ * Call this function in host after OCT START has been triggerd but
+ * before exec of container process
+ */
+int
+oci_do_hooks_prestart(const container_t *container);
+
+/**
+ * Run create_runtime hooks
+ *
+ * Call this function in host during OCI CREATE before pivot root
+ */
+int
+oci_do_hooks_create_runtime(const container_t *container);
+
+/**
+ * Run create_container hooks
+ *
+ * Call this function in child during OCI CREATE before pivot root
+ */
+int
+oci_do_hooks_create_container(const container_t *container);
+
+/**
+ * Run start_container hooks
+ *
+ * Call this function in child during OCI START before exec of container init
+ */
+int
+oci_do_hooks_start_container(const container_t *container);
+
+/**
+ * Run poststart hooks
+ *
+ * Call this function in host after exec of container init
+ */
+int
+oci_do_hooks_poststart(const container_t *container);
+
+/**
+ * Run poststop hooks
+ *
+ * Call this function in host after stop during OCI DELETE
+ */
+int
+oci_do_hooks_poststop(const container_t *container);
+
+/**
  * Create a control socket receiving the OCI wrapper messages
  */
 oci_control_t *
