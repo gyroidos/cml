@@ -250,7 +250,7 @@ cmld_containers_stop(void (*on_all_stopped)(int), int value)
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
-		if (cmld_container_stop(container) > 0) {
+		if (cmld_container_stop(container) == 0) {
 			/* Register observer to wait for completed container_stop */
 			if (!container_register_observer(container, &cmld_container_stop_cb,
 							 stop_data)) {
