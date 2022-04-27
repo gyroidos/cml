@@ -114,15 +114,6 @@ static const struct option create_options[] = { { "bundle", required_argument, 0
 						{ "help", no_argument, 0, 'h' },
 						{ 0, 0, 0, 0 } };
 
-static void
-dummy_child_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
-{
-	INFO("Received SIGINT..");
-	//	char *state = data;
-	//printf("%s", state);
-	exit(0);
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -135,6 +126,7 @@ main(int argc, char *argv[])
 
 	const char *bundle_path = ".";
 	const char *pid_file = NULL;
+	const char *console_sock = NULL;
 
 	int sock = 0;
 
@@ -155,50 +147,15 @@ main(int argc, char *argv[])
 			break;
 		default: // includes cases 'h' and '?'
 			TRACE("option :%s\n", optarg);
-			print_usage(argv[0]);
+			//print_usage(argv[0]);
 		}
 	}
 
-	// build ControllerToDaemon message
-	OciCommand msg = OCI_COMMAND__INIT;
-
-	if (NULL == oci_control_log_file)
-		oci_control_log_file = mem_printf("%s/%s.log", OCI_CONTROL_ROOT, msg.container_id);
-
 	const char *command = argv[optind++];
 
-	// need at least one more argument (container id as string)
-	if (optind >= argc)
-		print_usage(argv[0]);
-
-	//msg.container_id = argv[argc-1];
-	//char *state_file = mem_printf("%s/state.json", state_path);
-
-	// dirname may modify original string, thus strdup
-	char *log_path_dirname = mem_strdup(oci_control_log_file);
-	if (dir_mkdir_p(dirname(log_path_dirname), 0755) < 0) {
-		ERROR("Could not create path for log_file node");
-		ret = -1;
-		goto out;
-	}
-
-	logf_register(&logf_file_write, logf_file_new(oci_control_log_file));
-
-	DEBUG("argc = %d", argc);
-	for (int i = 0; i < argc; ++i)
-		DEBUG("%s", argv[i]);
-
-	if (!strcasecmp(command, "state")) {
-		fprintf(stderr, "OCI_STATE");
-		msg.operation = OCI_COMMAND__OPERATION__STATE;
-		msg.container_id = argv[optind++];
-
-		goto send_message;
-	}
 	if (!strcasecmp(command, "create")) {
 		fprintf(stderr, "OCI_CREATE");
 
-		const char *console_sock = NULL;
 		if (optind >= argc)
 			print_usage(argv[0]);
 		for (int c, option_index = optind;
@@ -218,9 +175,56 @@ main(int argc, char *argv[])
 				break;
 			default: // includes cases 'h' and '?'
 				DEBUG("option :%s\n", optarg);
-				print_usage(argv[0]);
+				//print_usage(argv[0]);
 			}
 		}
+	}
+
+	// need at least one more argument (container id as string)
+	if (optind >= argc)
+		print_usage(argv[0]);
+
+	char *container_id = mem_strdup(argv[optind++]);
+
+	if (NULL == oci_control_log_file)
+		oci_control_log_file = mem_printf("%s/%s.log", OCI_CONTROL_ROOT, container_id);
+
+	char *state_path = mem_printf("%s/%s", oci_control_root, container_id);
+	if (dir_mkdir_p(state_path, 0755) < 0) {
+		ERROR("Could not create path for state file");
+		ret = -1;
+		goto out;
+	}
+
+	char *state_file = mem_printf("%s/state.json", state_path);
+	char *shim_pid_file = mem_printf("%s/dummy.pid", state_path);
+
+	// dirname may modify original string, thus strdup
+	char *log_path_dirname = mem_strdup(oci_control_log_file);
+	if (dir_mkdir_p(dirname(log_path_dirname), 0755) < 0) {
+		ERROR("Could not create path for log_file node");
+		ret = -1;
+		goto out;
+	}
+
+	logf_register(&logf_file_write, logf_file_new(oci_control_log_file));
+
+	DEBUG("argc = %d", argc);
+	for (int i = 0; i < argc; ++i)
+		DEBUG("%s", argv[i]);
+
+	// build ControllerToDaemon message
+	OciCommand msg = OCI_COMMAND__INIT;
+	msg.container_id = container_id;
+
+	if (!strcasecmp(command, "state")) {
+		fprintf(stderr, "OCI_STATE");
+		msg.operation = OCI_COMMAND__OPERATION__STATE;
+
+		goto send_message;
+	}
+	if (!strcasecmp(command, "create")) {
+		fprintf(stderr, "OCI_CREATE");
 
 		const char *cfgfile = mem_printf("%s/config.json", bundle_path);
 		off_t cfglen = file_size(cfgfile);
@@ -232,7 +236,6 @@ main(int argc, char *argv[])
 			FATAL("Error reading %s. Aborting.", cfgfile);
 
 		msg.operation = OCI_COMMAND__OPERATION__CREATE;
-		msg.container_id = argv[optind++];
 		msg.has_oci_config_file = true;
 		msg.oci_config_file.len = cfglen;
 		msg.oci_config_file.data = cfg;
@@ -241,28 +244,17 @@ main(int argc, char *argv[])
 		DEBUG("config: %s", (char *)msg.oci_config_file.data);
 
 		DEBUG("console_sock :%s", console_sock);
-		pid_t pid = fork();
-		if (pid == -1) {
-			return ret;
-		} else if (pid == 0) {
-			// dummy child for containerd shim
-			//char *state = mem_printf(state_fmt, msg.container_id,
-			//			 "stopped", msg.bundle_path);
-			event_init();
-			event_signal_t *sig_int =
-				event_signal_new(SIGINT, &dummy_child_sigint_cb, NULL);
-			event_add_signal(sig_int);
-			event_loop();
-		}
-		// store dummy pid
-		DEBUG("sorting pid %d in pid_file", pid);
-		file_printf(pid_file, "%d", pid);
+
+		// store shim process to be killed by force
+		pid_t shim_pid = getppid();
+		DEBUG("storing pid %d in shim_pid_file", shim_pid);
+		file_printf(shim_pid_file, "%d", shim_pid);
+		file_printf(pid_file, "%d", shim_pid);
 
 		goto send_message;
 	}
 	if (!strcasecmp(command, "start")) {
 		msg.operation = OCI_COMMAND__OPERATION__START;
-		msg.container_id = argv[optind++];
 		fprintf(stderr, "OCI_START");
 		goto send_message;
 	}
@@ -274,7 +266,6 @@ main(int argc, char *argv[])
 		if (optind >= argc)
 			print_usage(argv[0]);
 		msg.operation = OCI_COMMAND__OPERATION__KILL;
-		msg.container_id = argv[optind++];
 		msg.has_signal = true;
 		msg.signal = atoi(argv[optind++]);
 		goto send_message;
@@ -282,7 +273,6 @@ main(int argc, char *argv[])
 	if (!strcasecmp(command, "delete")) {
 		fprintf(stderr, "OCI_DELETE");
 		msg.operation = OCI_COMMAND__OPERATION__DELETE;
-		msg.container_id = argv[optind++];
 	} else {
 		FATAL("Command not supported!");
 	}
@@ -319,32 +309,20 @@ send_message:
 	case OCI_RESPONSE__CODE__STATE: {
 		printf("%s", resp->state);
 		DEBUG("recv state for id (%s) '%s'", msg.container_id, resp->state);
-		//NANOSLEEP(1, 0);
-		// store state created on response -> move code there
-		// file_printf(state_file, state_fmt, msg.container_id, "created",
-		//bundle_path);
-		char *state_path = mem_printf("%s/%s", oci_control_root, msg.container_id);
-		char *state_file = mem_printf("%s/state.json", state_path);
-		if (dir_mkdir_p(state_path, 0755) < 0) {
-			ERROR("Could not create path for state file");
-			ret = -1;
-			goto out;
-		}
 		file_printf(state_file, "%s", resp->state);
 		//if (resp->has_pid)
 		//	file_printf(pid_file, "%d", resp->pid);
 
-		//printf("%s", resp->state);
 		fflush(stdout);
 
 		if (resp->status && !strcmp(resp->status, "stopped")) {
-			int child_pid = -1;
-			char *child_str = file_read_new(pid_file, file_size(pid_file));
-			if (child_str && sscanf(child_str, "%d", &child_pid) == 1) {
-				if (child_pid > 0) {
-					DEBUG("killing shim dummy child process with pid %d",
-					      child_pid);
-					kill(child_pid, SIGINT);
+			int shim_pid = -1;
+			char *shim_str = file_read_new(shim_pid_file, file_size(shim_pid_file) + 1);
+
+			if (shim_str && sscanf(shim_str, "%d", &shim_pid) == 1) {
+				if (shim_pid > 0) {
+					DEBUG("killing shim process with pid %d", shim_pid);
+					kill(shim_pid, SIGTERM);
 				}
 			}
 		}
