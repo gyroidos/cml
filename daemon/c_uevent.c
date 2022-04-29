@@ -191,6 +191,25 @@ c_uevent_coldboot_dev_filter_cb(int major, int minor, void *data)
 	return true;
 }
 
+static void
+c_uevent_boot_complete_cb(container_t *container, container_callback_t *cb, void *data)
+{
+	ASSERT(container);
+	ASSERT(cb);
+	c_uevent_t *uevent = data;
+	ASSERT(uevent);
+
+	compartment_state_t state = container_get_state(container);
+	if (state == COMPARTMENT_STATE_RUNNING) {
+		// fixup device nodes in userns by triggering uevent forwarding of coldboot events
+		if (container_has_userns(uevent->container)) {
+			uevent_udev_trigger_coldboot(container_get_uuid(uevent->container),
+						     c_uevent_coldboot_dev_filter_cb, uevent);
+		}
+		container_unregister_observer(container, cb);
+	}
+}
+
 static int
 c_uevent_start_post_exec(void *ueventp)
 {
@@ -201,12 +220,11 @@ c_uevent_start_post_exec(void *ueventp)
 	if (uevent_add_uev(uevent->uev))
 		return -COMPARTMENT_ERROR;
 
-	// fixup device nodes in userns by triggering uevent forwarding of coldboot events
-	if (container_has_userns(uevent->container)) {
-		uevent_udev_trigger_coldboot(container_get_uuid(uevent->container),
-					     c_uevent_coldboot_dev_filter_cb, uevent);
+	/* register an observer to wait for the container to be running */
+	if (!container_register_observer(uevent->container, &c_uevent_boot_complete_cb, uevent)) {
+		WARN("Could not register c_uevent_boot_complete observer callback for %s",
+		     container_get_description(uevent->container));
 	}
-
 	return 0;
 }
 
