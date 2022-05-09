@@ -715,6 +715,7 @@ out:
 static void
 audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 {
+
 	nl_sock_t *audit_sock = data;
 	ASSERT(audit_sock);
 	ASSERT(fd == nl_sock_get_fd(audit_sock));
@@ -763,10 +764,18 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		res = res ? res + 4 : "failed";
 		container_t *c = cmld_container_get_by_uid(uid);
 		c = c ? c : cmld_containers_get_c0();
+
+		const uuid_t *uuid = NULL;
+		const char *uuid_str = NULL;
+		if (c) {
+			uuid = container_get_uuid(c);
+			uuid_str = uuid_string(uuid);
+		}
+
 		char *record_type = mem_printf("type=%hu", type);
-		audit_log_event(container_get_uuid(c),
+		audit_log_event(uuid,
 				(strstr(res, "success") || res[0] == '1') ? SSA : FSA, CMLD, KAUDIT,
-				record_type, uuid_string(container_get_uuid(c)), 2, "msg",
+				record_type, uuid_str, 2, "msg",
 				log_record);
 		mem_free0(record_type);
 		TRACE("audit: type=%d %s", type, log_record);
@@ -799,10 +808,17 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 			container_t *c = uuid ? cmld_container_get_by_uuid(uuid) : NULL;
 			c = c ? c : cmld_containers_get_c0();
 
+			const uuid_t *uuid = NULL;
+			const char *uuid_str = NULL;
+			if (c) {
+				uuid = container_get_uuid(c);
+				uuid_str = uuid_string(uuid);
+			}
+
 			sector_str = mem_printf("%llu", sector);
-			audit_log_event(container_get_uuid(c), (res == 1) ? SSA : FSA, CMLD,
+			audit_log_event(uuid, (res == 1) ? SSA : FSA, CMLD,
 					CONTAINER_MGMT, "dm-integrity",
-					uuid_string(container_get_uuid(c)), 6, "op", op_buf,
+					uuid_str, 6, "op", op_buf,
 					"label", dev_name, "sector", sector_str);
 
 			mem_free0(sector_str);
