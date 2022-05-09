@@ -281,8 +281,9 @@ pipeline {
 					sh label: 'Perform integration test with physical token', script: '''
 						echo "Running on node $(hostname)"
 						echo "$PATH"
+						echo "Physhsm: ${PHYSHSM}"
 	
-						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2230 --kill --enable-schsm 55511747601499 12345678'
+						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2230 --kill --enable-schsm ${PHYSHSM} 12345678'
 					'''
 				}
 			}
