@@ -96,6 +96,7 @@ SRC_FILES := main.c \
 	crypto.c \
 	scd.c \
 	tss.c \
+	common/hex.c \
 	common/sock.c \
 	common/network.c \
 	common/proc.c \
@@ -104,6 +105,7 @@ SRC_FILES := main.c \
 	common/dm.c \
 	common/cryptfs.c \
 	common/reboot.c \
+	common/verityfs.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
