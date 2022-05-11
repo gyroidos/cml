@@ -43,6 +43,7 @@
 #define UEVENT_ACTION_CHANGE (1 << 2)
 #define UEVENT_ACTION_REMOVE (1 << 3)
 #define UEVENT_ACTION_UNBIND (1 << 4)
+#define UEVENT_ACTION_MOVE (1 << 5)
 
 typedef struct uevent_uev uevent_uev_t;
 
