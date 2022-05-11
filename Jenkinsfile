@@ -179,36 +179,32 @@ pipeline {
 									}
 									lock ('sync-mirror') {
 										script {
-											def ret = sh returnStatus: true, label: 'Sync source and sstate mirrors', script: '''
-												if [ -z "${BUILDTYPE}" ];then
-													echo "Error: BUILDTYPE not set"
-													exit 1
-												fi
+											catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+												sh returnStatus: true, label: 'Sync source and sstate mirrors', script: '''
+													if [ -z "${BUILDTYPE}" ];then
+														echo "Error: BUILDTYPE not set"
+														exit 1
+													fi
 		
-												if [ -z "${CHANGE_TARGET}" ] && [ "dunfell" = ${BRANCH_NAME} ];then
-													if ! [ -d "/sstate_mirror/${BUILDTYPE}" ];then
-														echo "Error: sstate mirror directory does not exist at: /sstate_mirror/${BUILDTYPE}"
+													if [ -z "${CHANGE_TARGET}" ] && [ "dunfell" = ${BRANCH_NAME} ];then
+														if ! [ -d "/sstate_mirror/${BUILDTYPE}" ];then
+															echo "Error: sstate mirror directory does not exist at: /sstate_mirror/${BUILDTYPE}"
+															exit 1
+														fi
+
+														echo "syncing sstate-cache"
+														rsync -r out-${BUILDTYPE}/sstate-cache/ /sstate_mirror/${BUILDTYPE}
+													fi
+
+
+													if ! [ -d "/source_mirror/${BUILDTYPE}" ];then
+														echo "Error: sstate mirror directory does not exist at: /source_mirror/${BUILDTYPE}"
 														exit 1
 													fi
 
-													echo "syncing sstate-cache"
-													rsync -r out-${BUILDTYPE}/sstate-cache/ /sstate_mirror/${BUILDTYPE}
-												fi
-
-
-												if ! [ -d "/source_mirror/${BUILDTYPE}" ];then
-													echo "Error: sstate mirror directory does not exist at: /source_mirror/${BUILDTYPE}"
-													exit 1
-												fi
-
-												rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
-											'''
-
-											if (0 != ret) {
-												unstable 'An error occurred during sstate cache / source mirror sync'
-
+													rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
+												'''
 											}
-											
 										}
 									}
 									sh label: 'Compress trustmeimage.img', script: 'xz -T 0 -f out-${BUILDTYPE}/tmp/deploy/images/**/trustme_image/trustmeimage.img --keep'
