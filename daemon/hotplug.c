@@ -327,10 +327,16 @@ hotplug_netdev_move(uevent_event_t *event)
 	if (!container)
 		container = cmld_containers_get_c0();
 
-	if ((!container) || (container_get_state(container) != COMPARTMENT_STATE_BOOTING) ||
-	    (container_get_state(container) != COMPARTMENT_STATE_RUNNING) ||
+	if (!container) {
+		WARN("Target container not found, skip moving %s", event_ifname);
+		goto error;
+	}
+
+	if ((container_get_state(container) != COMPARTMENT_STATE_BOOTING) &&
+	    (container_get_state(container) != COMPARTMENT_STATE_RUNNING) &&
 	    (container_get_state(container) != COMPARTMENT_STATE_STARTING)) {
-		WARN("Target container is not running, skip moving %s", event_ifname);
+		WARN("Target container '%s' is not running, skip moving %s",
+		     container_get_description(container), event_ifname);
 		goto error;
 	}
 
