@@ -369,6 +369,10 @@ uevent_event_copy_new(const uevent_event_t *event)
 {
 	uevent_event_t *event_clone = mem_new0(uevent_event_t, 1);
 	memcpy(event_clone, event, sizeof(uevent_event_t));
+
+	// update internal pointers to cloned raw buffer
+	uevent_parse(event_clone, event_clone->msg.raw);
+
 	return event_clone;
 }
 
