@@ -464,6 +464,8 @@ uevent_action_from_string(const char *action)
 		return UEVENT_ACTION_REMOVE;
 	if (!strcmp(action, "unbind"))
 		return UEVENT_ACTION_UNBIND;
+	if (!strcmp(action, "move"))
+		return UEVENT_ACTION_MOVE;
 
 	return 0;
 }
