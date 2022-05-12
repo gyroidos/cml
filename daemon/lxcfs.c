@@ -148,6 +148,12 @@ lxcfs_proc_dir_foreach_cb(const char *path, const char *file, void *data)
 		return 0;
 	}
 
+	// seems to be to unstable if frequently accessed
+	if (0 == strcmp(file, "stat")) {
+		TRACE("Skipping 'stat'");
+		return 0;
+	}
+
 	char *dst = mem_printf("%s/%s", target_path, file);
 	char *src = mem_printf("%s/%s", path, file);
 
