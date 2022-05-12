@@ -836,15 +836,18 @@ c_net_new(compartment_t *compartment)
 		// check if string is mac address
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
-			if_name = network_get_ifname_by_addr_new(mac);
-			// if interface is not yet connected register at hotplug subsys
-			if (NULL == if_name) {
-				INFO("Interface for mac '%s' is not yet connected register at hotplug subsys",
+			// register at hotplug subsys
+			if (-1 == hotplug_register_netdev(net->container, pnet_cfg)) {
+				WARN("Could not register Interface for moving");
+			} else {
+				INFO("Registed Interface for mac '%s' at hotplug subsys",
 				     if_name_macstr);
-				if (-1 == hotplug_register_netdev(net->container, pnet_cfg)) {
-					WARN("Could not register Interface for moving");
-					container_pnet_cfg_free(pnet_cfg);
-				}
+			}
+
+			if_name = network_get_ifname_by_addr_new(mac);
+			if (NULL == if_name) {
+				INFO("Interface for mac '%s' is not yet connected.",
+				     if_name_macstr);
 				continue;
 			}
 		}
