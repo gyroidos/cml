@@ -278,6 +278,12 @@ void
 container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg);
 
 /**
+ * Update name attribute of pnet_cfg data structure
+ */
+void
+container_pnet_cfg_set_pnet_name(container_pnet_cfg_t *pnet_cfg, const char *pnet_name);
+
+/**
  * Get the list of usb devices which are set in container config.
  */
 list_t *
