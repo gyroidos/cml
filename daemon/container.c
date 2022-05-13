@@ -684,6 +684,7 @@ container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg)
 	}
 	list_delete(pnet_cfg->mac_whitelist);
 
+	mem_free0(pnet_cfg->pnet_name);
 	mem_free0(pnet_cfg);
 }
 
