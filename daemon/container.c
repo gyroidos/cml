@@ -683,7 +683,16 @@ container_pnet_cfg_free(container_pnet_cfg_t *pnet_cfg)
 		mem_free0(mac);
 	}
 	list_delete(pnet_cfg->mac_whitelist);
+
 	mem_free0(pnet_cfg);
+}
+
+void
+container_pnet_cfg_set_pnet_name(container_pnet_cfg_t *pnet_cfg, const char *pnet_name)
+{
+	IF_NULL_RETURN(pnet_cfg);
+
+	pnet_cfg->pnet_name = mem_strdup(pnet_name);
 }
 
 void
