@@ -265,7 +265,13 @@ hotplug_rename_interface(const uevent_event_t *event)
 {
 	char *event_ifname = uevent_event_get_interface(event);
 	char *event_devpath = uevent_event_get_devpath(event);
-	char *new_ifname = hotplug_rename_ifi_new(event_ifname, uevent_event_get_devtype(event));
+	const char *prefix = uevent_event_get_devtype(event);
+
+	// if no devtype is set in uevent prefix with eth by default
+	if (!*prefix)
+		prefix = "eth";
+
+	char *new_ifname = hotplug_rename_ifi_new(event_ifname, prefix);
 
 	IF_NULL_RETVAL(new_ifname, NULL);
 
