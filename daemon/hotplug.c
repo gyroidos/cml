@@ -351,6 +351,8 @@ hotplug_netdev_move(uevent_event_t *event)
 	if (newevent) {
 		DEBUG("using renamed uevent");
 		event = newevent;
+		event_ifname = uevent_event_get_interface(event);
+		container_pnet_cfg_set_pnet_name(pnet_cfg, event_ifname);
 	} else {
 		ERROR("failed to rename interface %s. injecting uevent as it is", event_ifname);
 	}
