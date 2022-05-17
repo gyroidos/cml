@@ -55,6 +55,21 @@ fd_write(const int fd, const char *buf, size_t len);
 int
 fd_read(int fd, char *buf, size_t len);
 
+/*
+ * Reads blockwise from the given file descriptor to the given buffer, calling fd_read
+ * internally.
+ *
+ * @param fd The file descriptor to read from
+ * @param buf The buffer to read into
+ * @param Number of bytes to read
+ * @param block_size Size of the blocks to read
+ * @param alignment Alignment to read with
+ *
+ * @return number of bytes read on success, otherwise -1
+ */
+ssize_t
+fd_read_blockwise(int fd, void *buf, size_t len, size_t block_size, size_t alignment);
+
 /**
  * Makes the given file descriptor non-blocking by setting the O_NONBLOCK flag.
  *

@@ -33,42 +33,23 @@
 #define LOOPDEV_H
 
 /**
- * Get a free loop device.
- * @return The path of the loop device or NULL in case of an error.
+ * Setup a loop device for an image file.
+ * @param loop_fd The file descriptor for the newly created loop device
+ * @param img The path to an image file.
+ * @param readonly 1 for readonly, 0 for read-write
+ * @param blocksize The blocksize of the device
+ *
+ * @return The path to the newly created loop device on success,
+ * otherwise NULL
  */
-
 char *
-loopdev_new(void);
+loopdev_create_new(int *loop_fd, const char *img, int readonly, size_t blocksize);
 
 /**
  * Free the device path of a loop device.
- * @param dev The device string, e.g. /dev/loop0 as returned by loopdev_new().
+ * @param dev The device string, e.g. /dev/loop0 as returned by loopdev_create_new().
  */
-
 void
 loopdev_free(char *dev);
-
-/**
- * Wait until the loop device appears in the dev file system.
- * @param dev The path for the loop device, e.g. /dev/loop0.
- * Call loopdev_new() to get one.
- * @param timeout The timeout in milliseconds.
- * @return 0 if the loop device appeared, else -1.
- */
-
-int
-loopdev_wait(const char *dev, unsigned timeout);
-
-/**
- * Setup a loop device for an image file.
- * @param img The path to an image file.
- * @param dev The path for the loop device, e.g. /dev/loop0.
- * Call loopdev_new() to get one.
- * @return A file descriptor for the loop device or -1 in case of an
- * error. The caller must close the file descriptor after calling mount.
- */
-
-int
-loopdev_setup_device(const char *img, const char *dev);
 
 #endif /* LOOPDEV_H */

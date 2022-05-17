@@ -1,6 +1,6 @@
 /*
  * This file is part of trust|me
- * Copyright(c) 2013 - 2021 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2022 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -39,20 +39,14 @@
 #include <sys/mount.h>
 #include <errno.h>
 #include <linux/kdev_t.h>
+#include <stdint.h>
 
 #include "cryptfs.h"
 #include "macro.h"
 #include "mem.h"
 #include "proc.h"
 #include "file.h"
-
-#ifdef ANDROID
-#define DEV_MAPPER "/dev/device-mapper"
-#define CRYPT_PATH_PREFIX "/dev/block/dm-"
-#else
-#define DEV_MAPPER "/dev/mapper/control"
-#define CRYPT_PATH_PREFIX "/dev/mapper/"
-#endif
+#include "dm.h"
 
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
@@ -74,59 +68,10 @@
 static unsigned long
 get_provided_data_sectors(const char *real_blk_name);
 
-#ifdef __GNU_LIBRARY__
-#define dm_ioctl(...) ioctl(__VA_ARGS__)
-#else
-/*
- * non glibc std libraries such as musl provide ioctl (int, int, ...)
- * wrapper. However, dm integrity requests are 'unsigned long int' and
- * would overflow on a cast to int. Thus, we directly provide a wrapper
- * here instead of using the ioctl wrapper of the std library.
- */
-static int
-dm_ioctl(int fd, unsigned long int request, ...)
-{
-	void *args;
-	va_list ap;
-	int result;
-	va_start(ap, request);
-	args = va_arg(ap, void *);
-	result = syscall(__NR_ioctl, fd, request, args);
-	va_end(ap);
-	return result;
-}
-#endif
-
-static void
-ioctl_init(struct dm_ioctl *io, size_t dataSize, const char *name, unsigned flags)
-{
-	mem_memset(io, 0, dataSize);
-	io->data_size = dataSize;
-	io->data_start = sizeof(struct dm_ioctl);
-	io->version[0] = 4;
-	io->version[1] = 0;
-	io->version[2] = 0;
-	io->flags = flags;
-
-	if (name)
-		strncpy(io->name, name, sizeof(io->name) - 1);
-}
-
-static unsigned long
-get_blkdev_size(int fd)
-{
-	unsigned long nr_sec;
-
-	if ((dm_ioctl(fd, BLKGETSIZE, &nr_sec)) == -1) {
-		nr_sec = 0;
-	}
-	return nr_sec;
-}
-
 char *
 cryptfs_get_device_path_new(const char *label)
 {
-	return mem_printf("%s%s", CRYPT_PATH_PREFIX, label);
+	return mem_printf("%s%s", DM_PATH_PREFIX, label);
 }
 
 #if 0
@@ -176,7 +121,8 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	tgt = (struct dm_target_spec *)&mapping_buffer[sizeof(struct dm_ioctl)];
 
 	// Configure parameters for ioctl
-	ioctl_init(mapping_io, DM_INTEGRITY_BUF_SIZE, name, 0);
+	dm_ioctl_init(mapping_io, INDEX_DM_TABLE_LOAD, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0,
+		      0);
 	mapping_io->target_count = 1;
 	tgt->status = 0;
 	tgt->sector_start = 0;
@@ -245,7 +191,8 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	/* Load the mapping table for this device */
 	tgt = (struct dm_target_spec *)&buffer[sizeof(struct dm_ioctl)];
 
-	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, DM_EXISTS_FLAG);
+	dm_ioctl_init(io, INDEX_DM_TABLE_LOAD, DM_CRYPT_BUF_SIZE, name, NULL, DM_EXISTS_FLAG, 0, 0,
+		      0);
 	io->target_count = 1;
 	tgt->status = 0;
 	tgt->sector_start = 0;
@@ -281,29 +228,15 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	}
 }
 
-// This function does:
-//		Create an integrity block device with IOCTL(DM_DEV_CREATE)
-//		Next load the mapping table of this device with IOCTL(DM_TABLE_LOAD)
-//		Lastly resume the device with IOCTL(DM_DEV_SUSPEND)
-//		Only then the crypto device can be mounted ontop of the integrity device
-//
-//	This general functionality is adapted from [1,2] and strace of the dmsetup setup
-//	When executing this functionality on its on (in a separate .c file), on a host system it works
-//	Verified by:
-//		user@host:~/$ dmsetup ls --tree
-//			00000000-0000-0000-0000-000000000000-etc (252:1)
-//			 └─00000000-0000-0000-0000-000000000000-etc-integrity (252:0)
-//			    └─ (7:3)
-
-//
-//	And:
-//      user@host:~/$ sudo dmsetup table
-//            dmsetup table
-//				0[...]0-etc-integrity: 0 1677721 integrity 7:3 0 32 J 5 journal_sectors:16368 interleave_sectors:32768 buffer_sectors:128 journal_watermark:50 commit_time:10000
-//				0[...]0-etc: 0 1677721 crypt capi:aegis128-random 00000000000000000000000000000000 0 252:0 0 1 integrity:32:aead
-//
-// [1] https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/dm-integrity.html
-// [2] https://wiki.gentoo.org/wiki/Device-mapper#Integrity
+/**
+ * Creates an integrity block device with DM_DEV_CREATE ioctl, reloads the mapping
+ * table with DM_TABLE_LOADE ioctl and resumes the device with DM_DEV_SUSPEND ioctl
+ *
+ * [1] https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/dm-integrity.html
+ * [2] https://wiki.gentoo.org/wiki/Device-mapper#Integrity
+ *
+ * @return int 0 if successful, otherwise -1
+ */
 static int
 create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *name,
 			 const unsigned long fs_size)
@@ -316,14 +249,15 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	int create_counter;
 
 	// Open device mapper
-	if ((fd = open(DEV_MAPPER, O_RDWR)) < 0) {
+	if ((fd = open(DM_CONTROL, O_RDWR)) < 0) {
 		ERROR_ERRNO("Cannot open device-mapper");
 	}
 
 	// Create blk device
 	// Initialize create_io struct
 	create_io = (struct dm_ioctl *)create_buffer;
-	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
+	dm_ioctl_init(create_io, INDEX_DM_DEV_CREATE, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0,
+		      0);
 
 	for (create_counter = 0; create_counter < TABLE_LOAD_RETRIES; create_counter++) {
 		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, create_io);
@@ -353,7 +287,8 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 
 	// Resume this device to activate it
 	DEBUG("Resuming the blk device");
-	ioctl_init(create_io, DM_INTEGRITY_BUF_SIZE, name, 0);
+	dm_ioctl_init(create_io, INDEX_DM_DEV_SUSPEND, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0,
+		      0);
 
 	ioctl_ret = dm_ioctl(fd, DM_DEV_SUSPEND, create_io);
 	if (ioctl_ret != 0) {
@@ -384,13 +319,13 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	int ioctl_ret;
 
 	DEBUG("Creating crypto blk device");
-	if ((fd = open(DEV_MAPPER, O_RDWR)) < 0) {
+	if ((fd = open(DM_CONTROL, O_RDWR)) < 0) {
 		ERROR("Cannot open device-mapper\n");
 		goto errout;
 	}
 
 	io = (struct dm_ioctl *)buffer;
-	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
+	dm_ioctl_init(io, INDEX_DM_DEV_CREATE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
 		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, io);
@@ -418,7 +353,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	}
 
 	/* Resume this device to activate it */
-	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
+	dm_ioctl_init(io, INDEX_DM_DEV_SUSPEND, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 
 	if (dm_ioctl(fd, DM_DEV_SUSPEND, io)) {
 		ERROR_ERRNO("Cannot resume the dm-crypt device\n");
@@ -435,14 +370,14 @@ errout:
 }
 
 /* TODO:
- * maybe we need to wait a bit before device is created 
+ * maybe we need to wait a bit before device is created
  */
 static char *
 create_device_node(const char *name)
 {
 	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
 
-	int fd = open(DEV_MAPPER, O_RDWR);
+	int fd = open(DM_CONTROL, O_RDWR);
 	if (fd < 0) {
 		ERROR_ERRNO("Error opening devmapper");
 		mem_free0(buffer);
@@ -451,7 +386,7 @@ create_device_node(const char *name)
 
 	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
 
-	ioctl_init(io, DEVMAPPER_BUFFER_SIZE, name, 0);
+	dm_ioctl_init(io, INDEX_DM_DEV_STATUS, DEVMAPPER_BUFFER_SIZE, name, NULL, 0, 0, 0, 0);
 	if (dm_ioctl(fd, DM_DEV_STATUS, io)) {
 		if (errno != ENXIO) {
 			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
@@ -486,7 +421,7 @@ delete_integrity_blk_dev(const char *name)
 	struct dm_ioctl *io;
 	int ret = -1;
 
-	fd = open(DEV_MAPPER, O_RDWR);
+	fd = open(DM_CONTROL, O_RDWR);
 	if (fd < 0) {
 		ERROR_ERRNO("Cannot open device-mapper");
 		goto error;
@@ -494,7 +429,7 @@ delete_integrity_blk_dev(const char *name)
 
 	io = (struct dm_ioctl *)buffer;
 
-	ioctl_init(io, DM_INTEGRITY_BUF_SIZE, name, 0);
+	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		if (errno != ENXIO)
@@ -627,22 +562,28 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 			 const char *meta_blkdev)
 {
 	int fd;
-	unsigned long fs_size;
+	// The file system size in sectors
+	uint64_t fs_size;
 
 	/* Update the fs_size field to be the size of the volume */
 	if ((fd = open(real_blkdev, O_RDONLY)) < 0) {
 		ERROR("Cannot open volume %s", real_blkdev);
 		return NULL;
 	}
-	fs_size = get_blkdev_size(fd);
+	// BLKGETSIZE64 returns size in bytes, we require size in sectors
+	int sector_size = dm_get_blkdev_sector_size(fd);
+	if (!(sector_size > 0)) {
+		ERROR("dm_get_blkdev_sector_size returned %d\n", sector_size);
+		return NULL;
+	}
+	fs_size = dm_get_blkdev_size64(fd) / sector_size;
 	close(fd);
 
 	if (fs_size == 0) {
 		ERROR("Cannot get size of volume %s", real_blkdev);
 		return NULL;
-	} else {
-		DEBUG("Crypto blk device size: %lu", fs_size);
 	}
+	DEBUG("Crypto blk device size: %lu", fs_size);
 
 	if (meta_blkdev)
 		return cryptfs_setup_volume_integrity_new(label, real_blkdev, meta_blkdev, key,
@@ -670,7 +611,7 @@ cryptfs_delete_blk_dev(const char *name)
 	struct dm_ioctl *io;
 	int ret = -1;
 
-	fd = open(DEV_MAPPER, O_RDWR);
+	fd = open(DM_CONTROL, O_RDWR);
 	if (fd < 0) {
 		ERROR("Cannot open device-mapper");
 		goto error;
@@ -678,7 +619,7 @@ cryptfs_delete_blk_dev(const char *name)
 
 	io = (struct dm_ioctl *)buffer;
 
-	ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
+	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		if (errno != ENXIO)

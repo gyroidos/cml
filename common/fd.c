@@ -21,13 +21,14 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
-#include "fd.h"
-
-#include "macro.h"
-
+#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+
+#include "mem.h"
+#include "macro.h"
+#include "fd.h"
 
 int
 fd_write(int fd, const char *buf, size_t len)
@@ -86,6 +87,59 @@ fd_read(int fd, char *buf, size_t len)
 	}
 
 	return len - remain;
+}
+
+ssize_t
+fd_read_blockwise(int fd, void *buf, size_t len, size_t block_size, size_t alignment)
+{
+	ASSERT(buf);
+	ASSERT(fd > 0);
+	ASSERT(block_size > 0);
+	ASSERT(alignment > 0);
+
+	void *fragment_buf = NULL;
+	void *p = NULL;
+	ssize_t ret = -1;
+
+	size_t fragment_len = len % block_size;
+	size_t blocks_len = len - fragment_len;
+
+	if ((size_t)buf & (alignment - 1)) {
+		int r = posix_memalign(&p, alignment, len);
+		if (r) {
+			ERROR("posix_memalign returned %d", r);
+			return -1;
+		}
+	} else {
+		p = buf;
+	}
+
+	if (fd_read(fd, p, blocks_len) != (int)blocks_len) {
+		goto out;
+	}
+
+	if (fragment_len) {
+		int r = posix_memalign(&fragment_buf, alignment, block_size);
+		if (r) {
+			ERROR("posix_memalign returned %d", r);
+			goto out;
+		}
+		if (fd_read(fd, fragment_buf, block_size) < (int)fragment_len) {
+			goto out;
+		}
+
+		memcpy((char *)p + blocks_len, fragment_buf, fragment_len);
+	}
+	ret = len;
+out:
+	mem_free(fragment_buf);
+	if (p != buf) {
+		if (ret != -1) {
+			memcpy(buf, p, len);
+		}
+		mem_free(p);
+	}
+	return ret;
 }
 
 int

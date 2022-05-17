@@ -182,35 +182,6 @@ c_vol_check_image(c_vol_t *vol, const char *img)
 	return ret;
 }
 
-static char *
-c_vol_create_loopdev_new(int *fd, const char *img)
-{
-	char *dev = loopdev_new();
-	if (!dev) {
-		ERROR("Could not get free loop device for %s", img);
-		return NULL;
-	}
-
-	// wait until the devie appears...
-	// TODO: how was this timeout chosen?
-	// TODO: maybe better wait for the uevent?
-	if (loopdev_wait(dev, 10) < 0) {
-		ERROR("Device %s for image %s was not created", dev, img);
-		goto error;
-	}
-
-	// TODO: there might be another process trying to setup a device for dev
-	*fd = loopdev_setup_device(img, dev);
-	if (*fd < 0) {
-		ERROR("Could not setup loop device %s for %s", dev, img);
-		goto error;
-	}
-	return dev;
-error:
-	mem_free0(dev);
-	return NULL;
-}
-
 static int
 c_vol_create_sparse_file(const char *img, off64_t storage_size)
 {
@@ -760,7 +731,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		}
 	}
 
-	dev = c_vol_create_loopdev_new(&fd, img);
+	dev = loopdev_create_new(&fd, img, 0, 0);
 	IF_NULL_GOTO(dev, error);
 
 	if (encrypted) {
@@ -786,7 +757,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
 
 			img_meta = c_vol_meta_image_path_new(vol, mntent);
-			dev_meta = c_vol_create_loopdev_new(&fd_meta, img_meta);
+			dev_meta = loopdev_create_new(&fd_meta, img_meta, 0, 0);
 
 			IF_NULL_GOTO(dev_meta, error);
 
@@ -1327,7 +1298,7 @@ c_vol_do_shared_bind_mounts(const c_vol_t *vol)
 		}
 		INFO("Succesfully created image for %s", SHARED_FILES_PATH);
 	}
-	bind_dev = c_vol_create_loopdev_new(&loop_fd, bind_img_path);
+	bind_dev = loopdev_create_new(&loop_fd, bind_img_path, 0, 0);
 	IF_NULL_GOTO(bind_dev, err);
 	if (mount(bind_dev, SHARED_FILES_PATH, "ext4", MS_NOATIME | MS_NODEV | MS_NOEXEC, NULL) <
 	    0) {

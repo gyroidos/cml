@@ -101,6 +101,7 @@ SRC_FILES := main.c \
 	common/proc.c \
 	common/loopdev.c \
 	ksm.c \
+	common/dm.c \
 	common/cryptfs.c \
 	common/reboot.c \
 	time.c \

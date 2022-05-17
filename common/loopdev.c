@@ -27,6 +27,7 @@
 #include <linux/loop.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <errno.h>
 
 #include "loopdev.h"
 
@@ -45,10 +46,19 @@
 
 #define LOOP_CONTROL "/dev/loop-control"
 
-char *
+#define SECTOR_SHIFT 9
+#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+
+/**
+ * Get a free loop device.
+ * @return The path of the loop device or NULL in case of an error.
+ */
+static char *
 loopdev_new(void)
 {
 	int fd, i;
+	char dev[64];
+	struct stat st;
 
 	fd = open(LOOP_CONTROL, O_RDONLY);
 	if (fd < 0) {
@@ -56,7 +66,6 @@ loopdev_new(void)
 		return NULL;
 	}
 
-	//i = ioctl(loop_fd, LOOP_CTL_ADD);
 	i = ioctl(fd, LOOP_CTL_GET_FREE);
 	close(fd);
 	if (i < 0) {
@@ -64,88 +73,107 @@ loopdev_new(void)
 		return NULL;
 	}
 
-	/* TODO: Handle creation of new loop devices dynamically?
-	 */
+	if (sprintf(dev, "%s%d", LOOP_DEV_PREFIX, i) < 0) {
+		ERROR("Failed to create loopdev name");
+		return NULL;
+	}
 
-	return mem_printf("%s%d", LOOP_DEV_PREFIX, i);
+	if (stat(dev, &st)) {
+		ERROR("Failed to check device info");
+		return NULL;
+	}
+
+	if (!S_ISBLK(st.st_mode)) {
+		ERROR("Device is not a block device");
+		return NULL;
+	}
+
+	return mem_strdup(dev);
+}
+
+char *
+loopdev_create_new(int *loop_fd, const char *img, int readonly, size_t blocksize)
+{
+	struct loop_info64 info;
+	mem_memset(&info, 0, sizeof(info));
+	int img_fd;
+	char *loop_dev = NULL;
+
+	img_fd = open(img, (readonly ? O_RDONLY : O_RDWR) | O_EXCL);
+	if (img_fd < 0) {
+		ERROR_ERRNO("Could not open image file %s with readonly = %d", img, readonly);
+		goto error;
+	}
+
+	// Set file name
+	strncpy((char *)info.lo_file_name, img, sizeof(info.lo_file_name) - 1);
+	// Do not require detach after umount
+	info.lo_flags |= LO_FLAGS_AUTOCLEAR;
+
+	do {
+		loop_dev = loopdev_new();
+		if (!loop_dev) {
+			ERROR("Could not get free loop device for %s", img);
+			goto error;
+		}
+
+		*loop_fd = open(loop_dev, readonly ? O_RDONLY : O_RDWR);
+		if (*loop_fd < 0) {
+			ERROR_ERRNO("Could not open device %s", loop_dev);
+			goto error;
+		}
+
+		if (ioctl(*loop_fd, LOOP_SET_FD, img_fd) < 0) {
+			if (errno != EBUSY) {
+				ERROR_ERRNO("LOOP_SET_FD ioctl failed");
+				goto error;
+			}
+			mem_free(loop_dev);
+			loop_dev = NULL;
+			close(*loop_fd);
+			*loop_fd = -1;
+		}
+	} while (*loop_fd < 0);
+
+	if (blocksize > SECTOR_SIZE) {
+		ioctl(*loop_fd, LOOP_SET_BLOCK_SIZE, (unsigned long)blocksize);
+	}
+
+	// TODO For kernel 5.8 and later, LOOP_CONFIGURE could be used instead
+	// (https://man7.org/linux/man-pages/man4/loop.4.html)
+	if (ioctl(*loop_fd, LOOP_SET_STATUS64, &info) < 0) {
+		ERROR_ERRNO("Failed to set AUTOCLEAR for loop device %s", loop_dev);
+		goto error;
+	}
+
+	memset(&info, 0x0, sizeof(info));
+	if (ioctl(*loop_fd, LOOP_GET_STATUS64, &info) < 0) {
+		ERROR_ERRNO("Failed to get status64 for loop device %s", loop_dev);
+		goto error;
+	}
+
+	// Verify that autoclear is set
+	if (!(info.lo_flags & LO_FLAGS_AUTOCLEAR)) {
+		ERROR("Autoclear not successfully set");
+		goto error;
+	}
+
+	close(img_fd);
+	return loop_dev;
+
+error:
+	if (img_fd >= 0)
+		close(img_fd);
+
+	if (*loop_fd >= 0) {
+		ioctl(*loop_fd, LOOP_CLR_FD, 0);
+		close(*loop_fd);
+	}
+	return NULL;
 }
 
 void
 loopdev_free(char *dev)
 {
 	mem_free0(dev);
-}
-
-int
-loopdev_wait(const char *dev, unsigned timeout)
-{
-	unsigned i;
-
-	for (i = 0; i < timeout; i++) {
-		struct stat st;
-
-		DEBUG("Checking loop device %s (%i/%i)", dev, i, timeout);
-		if (stat(dev, &st) || !S_ISBLK(st.st_mode))
-			NANOSLEEP(0, 1000000)
-		else
-			return 0;
-	}
-
-	return -1;
-}
-
-/*
- * Taken from:
- * http://stackoverflow.com/questions/11295154/how-do-i-loop-mount-programmatically
- */
-
-int
-loopdev_setup_device(const char *img, const char *dev)
-{
-	struct loop_info64 info;
-	mem_memset(&info, 0, sizeof(info));
-	int img_fd, dev_fd = -1;
-
-	img_fd = open(img, O_RDWR | O_EXCL);
-	if (img_fd < 0) {
-		ERROR_ERRNO("Could not open image file %s", img);
-		goto error;
-	}
-
-	dev_fd = open(dev, O_RDWR);
-	if (dev_fd < 0) {
-		ERROR_ERRNO("Could not open device %s", dev);
-		goto error;
-	}
-
-	if (ioctl(dev_fd, LOOP_SET_FD, img_fd) < 0) {
-		ERROR_ERRNO("Failed to set fd of loop device %s", dev);
-		goto error;
-	}
-
-	if (ioctl(dev_fd, LOOP_GET_STATUS64, &info) < 0) {
-		ERROR_ERRNO("Failed to get status64 for loop device %s", dev);
-		goto error;
-	}
-
-	/* so we do not need a detach of the loop device after umount */
-	info.lo_flags |= LO_FLAGS_AUTOCLEAR;
-
-	if (ioctl(dev_fd, LOOP_SET_STATUS64, &info) < 0) {
-		ERROR_ERRNO("Failed to set AUTOCLEAR for loop device %s", dev);
-		goto error;
-	}
-
-	close(img_fd);
-	return dev_fd;
-
-error:
-	if (img_fd >= 0)
-		close(img_fd);
-
-	if (dev_fd >= 0) {
-		ioctl(dev_fd, LOOP_CLR_FD, 0);
-		close(dev_fd);
-	}
-	return -1;
 }
