@@ -87,6 +87,7 @@ OBJS_COMMON_FULL := \
 OBJS_COMMON_EXT := \
 	$(OBJS_COMMON_FULL) \
 	cryptfs.o \
+	dm.o \
 	hex.o \
 	reboot.o \
 	ssl_util.o \
