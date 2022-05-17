@@ -146,7 +146,7 @@ loopdev_create_new(int *loop_fd, const char *img, int readonly, size_t blocksize
 		goto error;
 	}
 
-	memset(&info, 0x0, sizeof(info));
+	mem_memset0(&info, sizeof(info));
 	if (ioctl(*loop_fd, LOOP_GET_STATUS64, &info) < 0) {
 		ERROR_ERRNO("Failed to get status64 for loop device %s", loop_dev);
 		goto error;
