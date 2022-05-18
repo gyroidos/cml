@@ -48,6 +48,8 @@ c_oci_start_pre_clone(void *ocip)
 	c_oci_t *oci = ocip;
 	ASSERT(oci);
 
+	IF_NULL_RETVAL(oci_get_oci_container_by_container(oci->container), 0);
+
 	// TODO decide location of key e.g. in hardware TPM
 	char *ascii_key = NULL;
 	if (file_exists(oci->key_file)) {
@@ -80,6 +82,8 @@ c_oci_start_child(void *ocip)
 	c_oci_t *oci = ocip;
 	ASSERT(oci);
 
+	IF_NULL_RETVAL(oci_get_oci_container_by_container(oci->container), 0);
+
 	return oci_do_hooks_create_container(oci->container);
 }
 
@@ -88,6 +92,8 @@ c_oci_start_pre_exec_child(void *ocip)
 {
 	c_oci_t *oci = ocip;
 	ASSERT(oci);
+
+	IF_NULL_RETVAL(oci_get_oci_container_by_container(oci->container), 0);
 
 	// pause container after OCI_CREATE util OCI_START
 	pause();
@@ -103,6 +109,8 @@ c_oci_start_post_clone(void *ocip)
 	c_oci_t *oci = ocip;
 	ASSERT(oci);
 
+	IF_NULL_RETVAL(oci_get_oci_container_by_container(oci->container), 0);
+
 	return oci_do_hooks_create_runtime(oci->container);
 }
 
@@ -111,6 +119,8 @@ c_oci_start_post_exec(void *ocip)
 {
 	c_oci_t *oci = ocip;
 	ASSERT(oci);
+
+	IF_NULL_RETVAL(oci_get_oci_container_by_container(oci->container), 0);
 
 	return oci_do_hooks_prestart(oci->container);
 }
@@ -141,7 +151,8 @@ c_oci_free(void *ocip)
 
 	oci_container_t *oci_container = oci_get_oci_container_by_container(oci->container);
 	// free oci wrapping structure
-	oci_container_free(oci_container);
+	if (oci_container)
+		oci_container_free(oci_container);
 
 	if (oci->key_file)
 		mem_free0(oci->key_file);
@@ -155,7 +166,7 @@ c_oci_destroy(void *ocip)
 	c_oci_t *oci = ocip;
 	ASSERT(oci);
 
-	if (unlink(oci->key_file))
+	if (file_exists(oci->key_file) && unlink(oci->key_file))
 		WARN("Could not remove %s!", oci->key_file);
 }
 
