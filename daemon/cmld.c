@@ -728,13 +728,22 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 	/* Check if the container got over the initial starting phase */
 	if (state == COMPARTMENT_STATE_BOOTING || state == COMPARTMENT_STATE_RUNNING) {
 		/* Initialize unpriv control interface on the socket previously bound into container */
-		if (!control_new(*control_sock_p, false)) {
+		if (!control_new(control_sock_p[0], false)) {
 			WARN("Could not create unpriv control socket for %s",
 			     container_get_description(container));
 		} else {
 			INFO("Create unpriv control socket for %s",
 			     container_get_description(container));
 		}
+#ifdef OCI
+		if (!oci_control_new(control_sock_p[1])) {
+			WARN("Could not create oci control socket for %s",
+			     container_get_description(container));
+		} else {
+			INFO("Create oci control socket for %s",
+			     container_get_description(container));
+		}
+#endif
 		mem_free0(control_sock_p);
 		container_unregister_observer(container, cb);
 	}
@@ -829,9 +838,13 @@ cmld_container_register_observers(container_t *container)
 	const guestos_t *os = container_get_guestos(container);
 	if (os && guestos_get_feature_install_guest(container_get_guestos(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
-		int *control_sock_p = mem_new0(int, 1);
-		*control_sock_p =
+		int *control_sock_p = mem_new0(int, 2);
+		control_sock_p[0] =
 			container_bind_socket_before_start(container, CMLD_CONTROL_SOCKET);
+#ifdef OCI
+		control_sock_p[1] =
+			container_bind_socket_before_start(container, CMLD_OCI_CONTROL_SOCKET);
+#endif
 
 		if (!container_register_observer(container, &cmld_init_control_cb,
 						 control_sock_p)) {
@@ -1016,7 +1029,16 @@ cmld_init_c0_cb(container_t *container, container_callback_t *cb, void *data)
 	/* Check if the container got over the initial starting phase */
 	if (state == COMPARTMENT_STATE_BOOTING || state == COMPARTMENT_STATE_RUNNING) {
 		/* Initialize control interface on the socket previously bound into c0 */
-		cmld_control_gui = control_new(*control_sock_p, true);
+		cmld_control_gui = control_new(control_sock_p[0], true);
+#ifdef OCI
+		if (!oci_control_new(control_sock_p[1])) {
+			WARN("Could not create oci control socket for %s",
+			     container_get_description(container));
+		} else {
+			INFO("Create oci control socket for %s",
+			     container_get_description(container));
+		}
+#endif
 		mem_free0(control_sock_p);
 		container_unregister_observer(container, cb);
 	}
@@ -1219,8 +1241,11 @@ cmld_start_c0(container_t *new_c0)
 
 	INFO("Starting management container %s...", container_get_description(new_c0));
 
-	int *control_sock_p = mem_new0(int, 1);
-	*control_sock_p = container_bind_socket_before_start(new_c0, CMLD_CONTROL_SOCKET);
+	int *control_sock_p = mem_new0(int, 2);
+	control_sock_p[0] = container_bind_socket_before_start(new_c0, CMLD_CONTROL_SOCKET);
+#ifdef OCI
+	control_sock_p[1] = container_bind_socket_before_start(new_c0, CMLD_OCI_CONTROL_SOCKET);
+#endif
 
 	if (!container_register_observer(new_c0, &cmld_init_c0_cb, control_sock_p)) {
 		WARN("Could not register observer init callback on c0");
@@ -1438,7 +1463,7 @@ cmld_init(const char *path)
 	INFO("created control socket.");
 
 #ifdef OCI
-	cmld_oci_control_cml = oci_control_new(CMLD_OCI_CONTROL_SOCKET);
+	cmld_oci_control_cml = oci_control_local_new(CMLD_OCI_CONTROL_SOCKET);
 	if (!cmld_oci_control_cml) {
 		FATAL("Could not init cmld_oci control socket");
 	}

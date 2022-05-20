@@ -97,7 +97,17 @@ int
 oci_do_hooks_poststop(const container_t *container);
 
 /**
- * Create a control socket receiving the OCI wrapper messages
+ * Creates a new oci_control_t object listening on the specified socket.
+ *
+ * @param socket listening socket
  */
 oci_control_t *
-oci_control_new(char *path);
+oci_control_new(int socket);
+
+/**
+ * Creates a new oci_control_t object listening on a UNIX socket bound to the specified file.
+ *
+ * @param path path of the socket file to bind the socket to
+ */
+oci_control_t *
+oci_control_local_new(const char *path);

@@ -425,10 +425,11 @@ oci_container_free(oci_container_t *oci_container)
 }
 
 static oci_container_t *
-oci_container_new(const char *store_path, const char *bundle_path, const char *id,
-		  const uint8_t *config, size_t config_len)
+oci_container_new(const char *store_path, const char *peer_path, const char *bundle_path,
+		  const char *id, const uint8_t *config, size_t config_len)
 {
 	ASSERT(store_path);
+	ASSERT(peer_path);
 	ASSERT(bundle_path);
 	ASSERT(id);
 	ASSERT(config);
@@ -532,9 +533,10 @@ oci_container_new(const char *store_path, const char *bundle_path, const char *i
 		goto out;
 	}
 
-	char *root_path = config_schema->root->path[0] == '/' ?
-				  mem_strdup(config_schema->root->path) :
-				  mem_printf("%s/%s", bundle_path, config_schema->root->path);
+	char *root_path =
+		config_schema->root->path[0] == '/' ?
+			mem_printf("%s%s", peer_path, config_schema->root->path) :
+			mem_printf("%s/%s/%s", peer_path, bundle_path, config_schema->root->path);
 
 	mount_add_entry(container_get_mnt(c), MOUNT_TYPE_BIND_DIR, root_path, "/", "none", 0);
 	// confidential layer
@@ -803,11 +805,23 @@ oci_control_handle_message(UNUSED oci_control_t *oci_control, const OciCommand *
 
 		DEBUG("bundel path: %s", msg->bundle_path);
 		DEBUG("oci config: %s", (char *)msg->oci_config_file.data);
+		uint32_t pid;
+
+		// prepend container path if control request comes from a container
+		const char *peer_path = NULL;
+		if (sock_unix_get_peer_pid(fd, &pid) != 0) {
+			WARN_ERRNO("Could not get pid of controling peer connection!");
+			peer_path = "";
+		} else {
+			container_t *peer = cmld_container_get_by_pid(pid);
+			peer_path = peer ? container_get_rootdir(peer) : "";
+		}
 
 		oci_container_t *oci_container =
 			container ? oci_get_oci_container_by_container(container) :
-				    oci_container_new(cmld_get_containers_dir(), msg->bundle_path,
-						      msg->container_id, msg->oci_config_file.data,
+				    oci_container_new(cmld_get_containers_dir(), peer_path,
+						      msg->bundle_path, msg->container_id,
+						      msg->oci_config_file.data,
 						      msg->oci_config_file.len);
 
 		if (oci_container) {
@@ -991,7 +1005,24 @@ oci_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 }
 
 oci_control_t *
-oci_control_new(char *path)
+oci_control_new(int sock)
+{
+	if (listen(sock, OCI_CONTROL_SOCK_LISTEN_BACKLOG) < 0) {
+		WARN_ERRNO("Could not listen on new control sock");
+		return NULL;
+	}
+
+	oci_control_t *oci_control = mem_new0(oci_control_t, 1);
+	oci_control->sock = sock;
+
+	event_io_t *event = event_io_new(sock, EVENT_IO_READ, oci_control_cb_accept, oci_control);
+	event_add_io(event);
+
+	return oci_control;
+}
+
+oci_control_t *
+oci_control_local_new(const char *path)
 {
 	int sock = sock_unix_create_and_bind(SOCK_STREAM, path);
 	if (sock < 0) {
