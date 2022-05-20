@@ -190,6 +190,17 @@ cmld_container_get_by_uid(int uid)
 	return NULL;
 }
 
+container_t *
+cmld_container_get_by_pid(int pid)
+{
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *c = l->data;
+		if (container_contains_pid(c, pid))
+			return c;
+	}
+	return NULL;
+}
+
 static bool
 cmld_containers_are_all_stopped(void)
 {
