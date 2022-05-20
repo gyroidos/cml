@@ -380,6 +380,9 @@ container_set_setup_mode(container_t *container, bool setup);
 bool
 container_has_setup_mode(const container_t *container);
 
+bool
+container_contains_pid(const container_t *container, pid_t pid);
+
 // ##################################################################
 // end compartment wrappers
 // ##################################################################
