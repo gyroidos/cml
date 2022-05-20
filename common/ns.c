@@ -358,3 +358,22 @@ ns_join_by_path(const char *ns_path)
 	INFO("Sucessfully joined ns by path: '%s'.", ns_path);
 	return 0;
 }
+
+bool
+ns_cmp_pidns_by_pid(pid_t pid1, pid_t pid2)
+{
+	bool ret = false;
+	struct stat s1, s2;
+
+	char *ns_file1 = mem_printf("/proc/%d/ns/pid", pid1);
+	char *ns_file2 = mem_printf("/proc/%d/ns/pid", pid2);
+
+	IF_TRUE_GOTO_TRACE(stat(ns_file1, &s1) == -1, out);
+	IF_TRUE_GOTO_TRACE(stat(ns_file2, &s2) == -1, out);
+
+	ret = (s1.st_dev == s2.st_dev) && (s1.st_ino == s2.st_ino) ? true : false;
+out:
+	mem_free0(ns_file1);
+	mem_free0(ns_file2);
+	return ret;
+}
