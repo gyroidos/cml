@@ -98,4 +98,17 @@ ns_unbind(const char *ns_path);
 int
 ns_join_by_path(const char *ns_path);
 
+/**
+ * Compare the pidns refernce of two pids
+ *
+ * This function checks if the pidns reference in /proc/<pid>/ns/pidns
+ * are equal ore not. If so pid1 and pid2 are in the same pidns.
+ *
+ * @param pid1 pid of a process
+ * @param pid2 pid of another process
+ * @return true if pid1 and pid2 have the same reference, false otherwise.
+ */
+bool
+ns_cmp_pidns_by_pid(pid_t pid1, pid_t pid2);
+
 #endif //NS_H
