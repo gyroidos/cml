@@ -441,4 +441,14 @@ compartment_uuid_is_c0id(const uuid_t *uuid);
 void
 compartment_set_debug_log_dir(compartment_t *compartment, const char *dir);
 
+/**
+ * Check if a specific pid is part of the compartment
+ *
+ * This function checks if a pid is contained in this compartment.
+ * This is done by comparing the pidns references of the compartment's
+ * init and the pidns reference of the provided pid.
+ */
+bool
+compartment_contains_pid(const compartment_t *compartment, pid_t pid);
+
 #endif /* COMPARTMENT_H */
