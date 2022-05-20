@@ -190,6 +190,9 @@ cmld_container_get_by_uuid(const uuid_t *uuid);
 container_t *
 cmld_container_get_by_uid(int uid);
 
+container_t *
+cmld_container_get_by_pid(int pid);
+
 int
 cmld_containers_stop(void (*on_all_stopped)(int), int value);
 
