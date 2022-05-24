@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <linux/kdev_t.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #include "cryptfs.h"
 #include "macro.h"
@@ -583,7 +584,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		ERROR("Cannot get size of volume %s", real_blkdev);
 		return NULL;
 	}
-	DEBUG("Crypto blk device size: %lu", fs_size);
+	DEBUG("Crypto blk device size: %" PRIu64, fs_size);
 
 	if (meta_blkdev)
 		return cryptfs_setup_volume_integrity_new(label, real_blkdev, meta_blkdev, key,
