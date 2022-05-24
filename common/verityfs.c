@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include "macro.h"
 #include "mem.h"
@@ -127,7 +128,7 @@ generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, c
 	char *salt = convert_bin_to_hex_new(sb->salt, sb->salt_size);
 	uint32_t offset = 1;
 	snprintf(verity_params, len - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
-		 "%d %s %s %d %d %ld %d %s %s %s", sb->version, fs_dev, hash_dev,
+		 "%d %s %s %d %d %" PRIu64 " %d %s %s %s", sb->version, fs_dev, hash_dev,
 		 sb->data_block_size, sb->hash_block_size, sb->data_blocks, offset, sb->algorithm,
 		 root_hash, salt);
 
