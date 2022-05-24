@@ -272,6 +272,8 @@ out:
 int
 sock_unix_get_peer_uid(int sock, uint32_t *peer_uid)
 {
+	IF_NULL_RETVAL(peer_uid, -1);
+
 	struct ucred ucred;
 
 	uint32_t len = sizeof(struct ucred);
@@ -284,6 +286,8 @@ sock_unix_get_peer_uid(int sock, uint32_t *peer_uid)
 int
 sock_unix_get_peer_pid(int sock, uint32_t *peer_pid)
 {
+	IF_NULL_RETVAL(peer_pid, -1);
+
 	struct ucred ucred;
 
 	uint32_t len = sizeof(struct ucred);
