@@ -450,7 +450,7 @@ crypto_verify_file(const char *datafile, const char *sigfile, const char *certfi
 	out.has_hash_algo = true;
 	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
 
-	// disable certifcate time check if not yet provisioned
+	// disable certificate time check if not yet provisioned
 	out.has_verify_ignore_time = true;
 	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
 
@@ -489,7 +489,7 @@ crypto_verify_buf(unsigned char *data_buf, size_t data_buf_len, unsigned char *s
 	out.has_hash_algo = true;
 	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
 
-	// disable certifcate time check if not yet provisioned
+	// disable certificate time check if not yet provisioned
 	out.has_verify_ignore_time = true;
 	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
 
@@ -554,6 +554,10 @@ crypto_verify_file_block(const char *datafile, const char *sigfile, const char *
 	out.has_hash_algo = true;
 	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
 
+	// disable certificate time check if not yet provisioned
+	out.has_verify_ignore_time = true;
+	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
+
 	TokenToDaemon *msg = crypto_send_recv_block(&out);
 	mem_free0(out.verify_data_file);
 	mem_free0(out.verify_sig_file);
@@ -602,6 +606,10 @@ crypto_verify_buf_block(unsigned char *data_buf, size_t data_buf_len, unsigned c
 	out.verify_cert_buf.len = cert_buf_len;
 	out.has_hash_algo = true;
 	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
+
+	// disable certificate time check if not yet provisioned
+	out.has_verify_ignore_time = true;
+	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
 
 	TokenToDaemon *msg = crypto_send_recv_block(&out);
 	IF_NULL_RETVAL(msg, VERIFY_ERROR);
