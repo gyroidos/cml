@@ -27,6 +27,7 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 CC_MODE ?= n
 WCAST_ALIGN ?= y
+OCI ?= n
 
 TRUSTME_HARDWARE := x86
 
@@ -128,6 +129,15 @@ SRC_CMODULES := \
 	c_cap.c \
 	c_uevent.c
 
+ifeq ($(OCI),y)
+    LOCAL_CFLAGS += -DOCI -I${HOME}/rcs/libocispec/src
+    LDLIBS += -locispec -L${HOME}/rcs/libocispec/.libs -lyajl
+    PROTO_SRC += oci_control.pb-c.c
+    SRC_FILES += oci.c
+    SRC_CMODULES += c_oci.c
+endif
+
+
 ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
 	$(MAKE) -C cc_mode
@@ -145,7 +155,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	$(MAKE) -C common protobuf
 
 else
-protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
+protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto oci_control.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
 	protoc-c --c_out=. guestos.proto
@@ -154,6 +164,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	protoc-c --c_out=. attestation.proto
 	protoc-c --c_out=. tpm2d.proto
 	protoc-c --c_out=. c_service.proto
+	protoc-c --c_out=. oci_control.proto
 	$(MAKE) -C common protobuf
 
 endif

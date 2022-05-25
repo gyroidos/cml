@@ -59,6 +59,7 @@
 #include "container_config.h"
 #include "container.h"
 #include "input.h"
+#include "oci.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -121,6 +122,13 @@ static bool cmld_device_provisioned = false;
 
 static enum command cmld_device_reboot = POWER_OFF;
 
+#ifdef OCI
+// clang-format off
+#define CMLD_OCI_CONTROL_SOCKET SOCK_PATH(oci-control)
+// clang-format on
+static oci_control_t *cmld_oci_control_cml = NULL;
+#endif
+
 /******************************************************************************/
 
 static int
@@ -177,6 +185,17 @@ cmld_container_get_by_uid(int uid)
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *c = l->data;
 		if ((uid >= container_get_uid(c)) && (uid < container_get_uid(c) + UID_MAX))
+			return c;
+	}
+	return NULL;
+}
+
+container_t *
+cmld_container_get_by_pid(int pid)
+{
+	for (list_t *l = cmld_containers_list; l; l = l->next) {
+		container_t *c = l->data;
+		if (container_contains_pid(c, pid))
 			return c;
 	}
 	return NULL;
@@ -242,7 +261,7 @@ cmld_containers_stop(void (*on_all_stopped)(int), int value)
 
 	for (list_t *l = cmld_containers_list; l; l = l->next) {
 		container_t *container = l->data;
-		if (cmld_container_stop(container) > 0) {
+		if (cmld_container_stop(container) == 0) {
 			/* Register observer to wait for completed container_stop */
 			if (!container_register_observer(container, &cmld_container_stop_cb,
 							 stop_data)) {
@@ -516,6 +535,12 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	return c;
 }
 
+void
+cmld_containers_add(container_t *container)
+{
+	cmld_containers_list = list_append(cmld_containers_list, container);
+}
+
 int
 cmld_reload_container(const uuid_t *uuid, const char *path)
 {
@@ -703,13 +728,22 @@ cmld_init_control_cb(container_t *container, container_callback_t *cb, void *dat
 	/* Check if the container got over the initial starting phase */
 	if (state == COMPARTMENT_STATE_BOOTING || state == COMPARTMENT_STATE_RUNNING) {
 		/* Initialize unpriv control interface on the socket previously bound into container */
-		if (!control_new(*control_sock_p, false)) {
+		if (!control_new(control_sock_p[0], false)) {
 			WARN("Could not create unpriv control socket for %s",
 			     container_get_description(container));
 		} else {
 			INFO("Create unpriv control socket for %s",
 			     container_get_description(container));
 		}
+#ifdef OCI
+		if (!oci_control_new(control_sock_p[1])) {
+			WARN("Could not create oci control socket for %s",
+			     container_get_description(container));
+		} else {
+			INFO("Create oci control socket for %s",
+			     container_get_description(container));
+		}
+#endif
 		mem_free0(control_sock_p);
 		container_unregister_observer(container, cb);
 	}
@@ -801,11 +835,16 @@ cmld_container_register_observers(container_t *container)
 		      container_get_description(container));
 	}
 
-	if (guestos_get_feature_install_guest(container_get_guestos(container))) {
+	const guestos_t *os = container_get_guestos(container);
+	if (os && guestos_get_feature_install_guest(container_get_guestos(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
-		int *control_sock_p = mem_new0(int, 1);
-		*control_sock_p =
+		int *control_sock_p = mem_new0(int, 2);
+		control_sock_p[0] =
 			container_bind_socket_before_start(container, CMLD_CONTROL_SOCKET);
+#ifdef OCI
+		control_sock_p[1] =
+			container_bind_socket_before_start(container, CMLD_OCI_CONTROL_SOCKET);
+#endif
 
 		if (!container_register_observer(container, &cmld_init_control_cb,
 						 control_sock_p)) {
@@ -852,7 +891,8 @@ cmld_container_start(container_t *container)
 		cmld_container_register_observers(container);
 
 		// We only support "background-start"...
-		if (!guestos_get_feature_bg_booting(container_get_guestos(container))) {
+		const guestos_t *os = container_get_guestos(container);
+		if (os && !guestos_get_feature_bg_booting(os)) {
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"container-start",
 					uuid_string(container_get_uuid(container)), 0);
@@ -989,7 +1029,16 @@ cmld_init_c0_cb(container_t *container, container_callback_t *cb, void *data)
 	/* Check if the container got over the initial starting phase */
 	if (state == COMPARTMENT_STATE_BOOTING || state == COMPARTMENT_STATE_RUNNING) {
 		/* Initialize control interface on the socket previously bound into c0 */
-		cmld_control_gui = control_new(*control_sock_p, true);
+		cmld_control_gui = control_new(control_sock_p[0], true);
+#ifdef OCI
+		if (!oci_control_new(control_sock_p[1])) {
+			WARN("Could not create oci control socket for %s",
+			     container_get_description(container));
+		} else {
+			INFO("Create oci control socket for %s",
+			     container_get_description(container));
+		}
+#endif
 		mem_free0(control_sock_p);
 		container_unregister_observer(container, cb);
 	}
@@ -1192,8 +1241,11 @@ cmld_start_c0(container_t *new_c0)
 
 	INFO("Starting management container %s...", container_get_description(new_c0));
 
-	int *control_sock_p = mem_new0(int, 1);
-	*control_sock_p = container_bind_socket_before_start(new_c0, CMLD_CONTROL_SOCKET);
+	int *control_sock_p = mem_new0(int, 2);
+	control_sock_p[0] = container_bind_socket_before_start(new_c0, CMLD_CONTROL_SOCKET);
+#ifdef OCI
+	control_sock_p[1] = container_bind_socket_before_start(new_c0, CMLD_OCI_CONTROL_SOCKET);
+#endif
 
 	if (!container_register_observer(new_c0, &cmld_init_c0_cb, control_sock_p)) {
 		WARN("Could not register observer init callback on c0");
@@ -1409,6 +1461,14 @@ cmld_init(const char *path)
 		FATAL("Could not init cmld_cli control socket");
 	}
 	INFO("created control socket.");
+
+#ifdef OCI
+	cmld_oci_control_cml = oci_control_local_new(CMLD_OCI_CONTROL_SOCKET);
+	if (!cmld_oci_control_cml) {
+		FATAL("Could not init cmld_oci control socket");
+	}
+	INFO("created oci control socket.");
+#endif
 
 	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);

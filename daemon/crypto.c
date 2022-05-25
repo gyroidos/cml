@@ -27,6 +27,7 @@
 #include "cmld.h"
 
 #include "common/event.h"
+#include "common/hex.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
@@ -37,20 +38,6 @@
 // clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
 // clang-format on
-
-static char *
-bytes_to_string_new(unsigned char *data, size_t len)
-{
-	IF_NULL_RETVAL(data, NULL);
-	IF_TRUE_RETVAL(len == 0, NULL);
-	size_t len_chunk = MUL_WITH_OVERFLOW_CHECK(len, (size_t)2);
-	len_chunk = ADD_WITH_OVERFLOW_CHECK(len_chunk, 1);
-
-	char *str = mem_alloc(len_chunk);
-	for (size_t i = 0; i < len; i++)
-		snprintf(str + 2 * i, 3, "%02x", data[i]);
-	return str;
-}
 
 static TokenToDaemon *
 crypto_send_recv_block(const DaemonToToken *out)
@@ -250,8 +237,8 @@ crypto_cb(int fd, unsigned events, event_io_t *io, void *data)
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK:
 			TRACE("Received HASH_OK message, ");
 			if (msg->has_hash_value) {
-				char *hash = bytes_to_string_new(msg->hash_value.data,
-								 msg->hash_value.len);
+				char *hash = convert_bin_to_hex_new(msg->hash_value.data,
+								    msg->hash_value.len);
 
 				TRACE("Received hash for file %s: %s",
 				      task->hash_file ? task->hash_file : "<empty>", hash);
@@ -521,7 +508,7 @@ crypto_hash_file_block_new(const char *file, crypto_hashalgo_t hashalgo)
 	// deal with CRYPTO_HASH_* cases
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK:
 		if (msg->has_hash_value) {
-			ret = bytes_to_string_new(msg->hash_value.data, msg->hash_value.len);
+			ret = convert_bin_to_hex_new(msg->hash_value.data, msg->hash_value.len);
 		} else {
 			ERROR("Missing hash_value in CRYPTO_HASH_OK response for file %s", file);
 		}

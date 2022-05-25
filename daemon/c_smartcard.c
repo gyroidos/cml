@@ -37,6 +37,7 @@
 #include "common/fd.h"
 #include "common/file.h"
 #include "common/dir.h"
+#include "common/hex.h"
 #include "common/sock.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
@@ -88,20 +89,6 @@ typedef struct c_smartcard {
 	void *err_cbdata;
 	int (*success_cb)(container_t *container);
 } c_smartcard_t;
-
-static char *
-bytes_to_string_new(unsigned char *data, size_t len)
-{
-	IF_NULL_RETVAL(data, NULL);
-	IF_TRUE_RETVAL(len == 0, NULL);
-	size_t len_chunk = MUL_WITH_OVERFLOW_CHECK(len, (size_t)2);
-	len_chunk = ADD_WITH_OVERFLOW_CHECK(len_chunk, 1);
-
-	char *str = mem_alloc(len_chunk);
-	for (size_t i = 0; i < len; i++)
-		snprintf(str + 2 * i, 3, "%02x", data[i]);
-	return str;
-}
 
 static TokenType
 c_smartcard_tokentype_to_proto(container_token_type_t tokentype)
@@ -419,7 +406,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					TOKEN_MGMT, "gen-container-key",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
 				// set the key
-				char *ascii_key = bytes_to_string_new(key, keylen);
+				char *ascii_key = convert_bin_to_hex_new(key, keylen);
 				container_set_key(smartcard->container, ascii_key);
 				// delete key from RAM
 				mem_memset0(ascii_key, strlen(ascii_key));
@@ -470,8 +457,8 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					TOKEN_MGMT, "unwrap-container-key",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
 			TRACE("Successfully retrieved unwrapped key from SCD");
-			char *ascii_key = bytes_to_string_new(msg->unwrapped_key.data,
-							      msg->unwrapped_key.len);
+			char *ascii_key = convert_bin_to_hex_new(msg->unwrapped_key.data,
+								 msg->unwrapped_key.len);
 			container_set_key(smartcard->container, ascii_key);
 			//delete key from RAM
 			mem_memset0(ascii_key, strlen(ascii_key));

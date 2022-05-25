@@ -223,4 +223,14 @@ sock_inet_create_and_connect(int type, const char *node, const char *service);
 int
 sock_unix_get_peer_uid(int sock, uint32_t *peer_uid);
 
+/**
+ * Get pid of the foreign peer
+ *
+ * @param sock		the UNIX socket file descriptor
+ * @param peer_pid	the pid of the connected peer of the UNIX socket file descriptor
+ * @return		0 on success, -1 on error
+ */
+int
+sock_unix_get_peer_pid(int sock, uint32_t *peer_pid);
+
 #endif // SOCK_H

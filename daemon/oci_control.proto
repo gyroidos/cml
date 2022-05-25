@@ -1,0 +1,82 @@
+/*
+ * This file is part of GyroidOS
+ * Copyright(c) 2022 Fraunhofer AISEC
+ * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2 (GPL 2), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GPL 2 license for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, see <http://www.gnu.org/licenses/>
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
+ */
+
+syntax = "proto2";
+
+option java_package = "de.fraunhofer.aisec.gyroidos";
+
+/**
+ * OCI Command message sent to and processed by the cml-daemon on the device.
+ * mapped oci runtime commands to gyroidos oci forwarder (rung)
+ */
+message OciCommand {
+	enum Operation {
+		// query information of a container
+		STATE = 1;
+
+		// Creates a container, answers with CONTAINER_CONFIGS
+		CREATE = 2;
+
+		// Starts a container.
+		START = 3;
+
+		// Stops/Kills a container.
+		KILL = 4;
+
+		// Removes container config and destroys created container image files
+		DELETE = 5;
+	}
+	required Operation operation = 1;
+
+
+	/////////////////////////////
+	// Command-specific params //
+	/////////////////////////////
+
+	required string container_id = 10; // container id, may be used as input for cmld contaier UUID
+	optional int32 signal = 20;	// used for kill operation
+	optional string bundle_path = 30; // used for create (location of bundle, containing config.json)
+	optional bytes oci_config_file = 31; // config.json allready read to buffer
+}
+
+/**
+ * Control message sent from the cml-daemon on the device to the backend/cmdline tool/etc.
+ */
+message OciResponse {
+	enum Code {
+		RESPONSE = 1;		// -> [response]
+		STATE = 2;		// answer to state request
+
+	}
+	enum Response {
+		CMD_OK = 1;
+		CMD_FAILED = 2;
+	}
+
+	required Code code = 1;
+
+	optional Response response = 2; 	// generic response
+	optional string state = 3;		// container oci state as json string
+	optional int32 pid = 4;			// pid of corresponding container
+	optional string status = 5;		// status of corresponding container
+}

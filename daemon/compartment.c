@@ -1616,3 +1616,17 @@ compartment_set_debug_log_dir(compartment_t *compartment, const char *dir)
 	ASSERT(compartment);
 	compartment->debug_log_dir = mem_strdup(dir);
 }
+
+bool
+compartment_contains_pid(const compartment_t *compartment, pid_t pid)
+{
+	ASSERT(compartment);
+
+	/* Determine PID of compartment's init */
+	pid_t init = compartment_get_pid(compartment);
+
+	IF_TRUE_RETVAL_TRACE(init <= 0, false);
+
+	// check if pidns of pid and the pidns of init are the same
+	return ns_cmp_pidns_by_pid(init, pid);
+}

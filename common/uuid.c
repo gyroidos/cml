@@ -78,11 +78,63 @@ error:
 	return -1;
 }
 
+static int
+uuid_fill_from_hex_string(uuid_t *uuid, const char *string)
+{
+	int ret = 0;
+	char *str;
+	int offset = 0;
+
+	TRACE("Trying to fill UUID from string: %s", string);
+
+	if (strlen(string) < 32) {
+		goto error;
+	}
+
+	str = mem_strndup(string + offset, 8);
+	ret += sscanf(str, "%" SCNx32, &uuid->time_low);
+	mem_free(str);
+	offset += 8;
+
+	str = mem_strndup(string + offset, 4);
+	ret += sscanf(str, "%" SCNx16, &uuid->time_mid);
+	mem_free(str);
+	offset += 4;
+
+	str = mem_strndup(string + offset, 4);
+	ret += sscanf(str, "%" SCNx16, &uuid->time_hi_and_version);
+	mem_free(str);
+	offset += 4;
+
+	str = mem_strndup(string + offset, 4);
+	ret += sscanf(str, "%" SCNx16, &uuid->clock_seq);
+	mem_free(str);
+	offset += 4;
+
+	str = mem_strndup(string + offset, 12);
+	ret += sscanf(str, "%" SCNx64, &uuid->node);
+	mem_free0(str);
+
+	TRACE("Parsed %d values from string", ret);
+
+	if (ret != 5) {
+		goto error;
+	}
+
+	return 0;
+
+error:
+	TRACE("Could not parse UUID from hex string '%s' (not a valid hex string?)", string);
+	return -1;
+}
+
 uuid_t *
 uuid_new(char const *uuid)
 {
 	uuid_t *u = mem_new0(uuid_t, 1);
 	u->string = mem_new0(char, 37);
+
+	bool skip_check = false;
 
 	if (!uuid) {
 		/* No UUID string provided, generate it randomly */
@@ -122,7 +174,11 @@ uuid_new(char const *uuid)
 		/* UUID string provided, fill the structure from it */
 		int ret = uuid_fill_from_string(u, uuid);
 		if (ret < 0) {
-			goto error;
+			ret = uuid_fill_from_hex_string(u, uuid);
+			if (ret < 0) {
+				goto error;
+			}
+			skip_check = true;
 		}
 	}
 
@@ -132,7 +188,7 @@ uuid_new(char const *uuid)
 		 u->time_mid, u->time_hi_and_version, u->clock_seq, u->node);
 
 	/* final check if the input string and the generated string match */
-	if (uuid) {
+	if (uuid && !skip_check) {
 		if (strncasecmp(uuid, u->string, 37)) {
 			WARN("%s and %s are not equal! Final check for string equality failed, not generating an UUID",
 			     uuid, u->string);

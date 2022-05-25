@@ -272,11 +272,27 @@ out:
 int
 sock_unix_get_peer_uid(int sock, uint32_t *peer_uid)
 {
+	IF_NULL_RETVAL(peer_uid, -1);
+
 	struct ucred ucred;
 
 	uint32_t len = sizeof(struct ucred);
 	IF_TRUE_RETVAL((getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len) == -1), -1);
 
 	*peer_uid = ucred.uid;
+	return 0;
+}
+
+int
+sock_unix_get_peer_pid(int sock, uint32_t *peer_pid)
+{
+	IF_NULL_RETVAL(peer_pid, -1);
+
+	struct ucred ucred;
+
+	uint32_t len = sizeof(struct ucred);
+	IF_TRUE_RETVAL((getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len) == -1), -1);
+
+	*peer_pid = ucred.pid;
 	return 0;
 }

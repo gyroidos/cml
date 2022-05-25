@@ -125,6 +125,9 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 	case MOUNT_TYPE_BIND_FILE:
 	case MOUNT_TYPE_BIND_FILE_RW:
 		return mem_printf("%s/%s", SHARED_FILES_PATH, mount_entry_get_img(mntent));
+	case MOUNT_TYPE_BIND_DIR:
+		// Note: We just bind mount any absolut path of the host
+		return mem_strdup(mount_entry_get_img(mntent));
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
 		      mount_entry_get_type(mntent), mount_entry_get_img(mntent));
@@ -570,6 +573,37 @@ err:
 	return -1;
 }
 
+static int
+c_vol_mount_dir_bind(const char *src, const char *dst, unsigned long flags)
+{
+	if (!(flags & MS_BIND)) {
+		errno = EINVAL;
+		ERROR_ERRNO("bind mount flag is not set!");
+		return -1;
+	}
+
+	TRACE("Mounting path %s to %s", src, dst);
+	if (mount(src, dst, NULL, flags, NULL) < 0) {
+		ERROR_ERRNO("Could not bind mount path %s to %s", src, dst);
+		return -1;
+	}
+
+	/*
+	 * ro bind mounts do not work directly, so we need to remount it manually
+	 * see, https://lwn.net/Articles/281157/
+	 */
+	if (flags & MS_RDONLY) { // ro bind mounts do not work directly
+		if (mount("none", dst, "bind", flags | MS_RDONLY | MS_REMOUNT, NULL) < 0) {
+			ERROR_ERRNO("Failed to remount bind mount %s to %s read-only", src, dst);
+			if (umount(dst))
+				WARN("Could not umount writable bind mount");
+			return -1;
+		}
+	}
+	DEBUG("Sucessfully bind mounted path %s to %s", src, dst);
+	return 0;
+}
+
 static char *
 c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
 {
@@ -696,6 +730,10 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		break;
 	case MOUNT_TYPE_FLASH:
 		DEBUG("Skipping mounting of FLASH type image %s", mount_entry_get_img(mntent));
+		goto final;
+	case MOUNT_TYPE_BIND_DIR:
+		mountflags |= MS_BIND; // use bind mount
+		IF_TRUE_GOTO(-1 == c_vol_mount_dir_bind(img, dir, mountflags), error);
 		goto final;
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
@@ -1220,23 +1258,19 @@ c_vol_new(compartment_t *compartment)
 	vol->root = mem_printf("/tmp/%s", uuid_string(container_get_uuid(vol->container)));
 	vol->overlay_count = 0;
 
-	vol->os = container_get_guestos(vol->container);
-	if (!vol->os) {
-		ERROR("Could not get GuestOS %s instance for container %s",
-		      guestos_get_name(vol->os), container_get_name(vol->container));
-		return NULL;
-	}
-
 	vol->mnt = mount_new();
-	guestos_fill_mount(vol->os, vol->mnt);
 
-	vol->mnt_setup = mount_new();
-	guestos_fill_mount_setup(vol->os, vol->mnt_setup);
+	vol->os = container_get_guestos(vol->container);
+	if (vol->os) {
+		guestos_fill_mount(vol->os, vol->mnt);
 
-	// prepend container init env with guestos specific values
-	container_init_env_prepend(vol->container, guestos_get_init_env(vol->os),
-				   guestos_get_init_env_len(vol->os));
+		vol->mnt_setup = mount_new();
+		guestos_fill_mount_setup(vol->os, vol->mnt_setup);
 
+		// prepend container init env with guestos specific values
+		container_init_env_prepend(vol->container, guestos_get_init_env(vol->os),
+					   guestos_get_init_env_len(vol->os));
+	}
 	return vol;
 }
 

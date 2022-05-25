@@ -442,6 +442,13 @@ container_has_setup_mode(const container_t *container)
 	return compartment_has_setup_mode(container->compartment);
 }
 
+bool
+container_contains_pid(const container_t *container, pid_t pid)
+{
+	ASSERT(container);
+	return compartment_contains_pid(container->compartment, pid);
+}
+
 // ##################################################################
 // directly implemented in container
 // ##################################################################
