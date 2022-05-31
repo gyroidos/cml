@@ -15,7 +15,7 @@ pipeline {
 					if [ -z "${manifest_branch}" ]; then
 						manifest_branch=${BRANCH_NAME}
 					fi
-					repo init -u https://github.com/trustm3/trustme_main.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
+					repo init -u https://github.com/gyroidos/gyroidos.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
 				'''
 
 				sh label: 'Adapt manifest for jenkins', script: '''
@@ -24,7 +24,7 @@ pipeline {
 					echo "<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>" > .repo/local_manifests/jenkins.xml
 					echo "<manifest>" >> .repo/local_manifests/jenkins.xml
 					echo "<remote name=\\\"git-int\\\" fetch=\\\"https://git-int.aisec.fraunhofer.de\\\" />" >> .repo/local_manifests/jenkins.xml
-					echo "<remove-project name=\\\"device_fraunhofer_common_cml\\\" />" >> .repo/local_manifests/jenkins.xml
+					echo "<remove-project name=\\\"cml\\\" />" >> .repo/local_manifests/jenkins.xml
 					echo "</manifest>" >> .repo/local_manifests/jenkins.xml
 				'''
 				sh 'repo sync -j8'
