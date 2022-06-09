@@ -239,9 +239,10 @@ proc_fork_and_execvp(const char *const *argv)
 		FATAL_ERRNO("Could not execvp %s", argv[0]);
 		return -1;
 	default:
-		if (waitpid(pid, &status, 0) != pid) {
-			ERROR_ERRNO("Could not waitpid for '%s'", argv[0]);
-		} else if (!WIFEXITED(status)) {
+		while (waitpid(pid, &status, WNOHANG) != pid) {
+			continue;
+		}
+		if (!WIFEXITED(status)) {
 			ERROR("Child '%s' terminated abnormally", argv[0]);
 		} else {
 			TRACE("%s terminated normally", argv[0]);
