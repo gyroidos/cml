@@ -2,7 +2,7 @@
 # Container Management Layer
 
 This repository contains the daemons and tools of the trust|me Container Management Layer (CML).
-The project documentation can by found on [trustm3.github.io](https://trustm3.github.io).
+The project documentation can by found on [gyroidos.github.io](https://gyroidos.github.io).
 
 ## Contributing
 

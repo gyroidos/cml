@@ -15,7 +15,7 @@ pipeline {
 					if [ -z "${manifest_branch}" ]; then
 						manifest_branch=${BRANCH_NAME}
 					fi
-					repo init -u https://github.com/trustm3/trustme_main.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
+					repo init -u https://github.com/gyroidos/gyroidos.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
 				'''
 
 				sh label: 'Adapt manifest for jenkins', script: '''
@@ -24,7 +24,7 @@ pipeline {
 					echo "<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>" > .repo/local_manifests/jenkins.xml
 					echo "<manifest>" >> .repo/local_manifests/jenkins.xml
 					echo "<remote name=\\\"git-int\\\" fetch=\\\"https://git-int.aisec.fraunhofer.de\\\" />" >> .repo/local_manifests/jenkins.xml
-					echo "<remove-project name=\\\"device_fraunhofer_common_cml\\\" />" >> .repo/local_manifests/jenkins.xml
+					echo "<remove-project name=\\\"cml\\\" />" >> .repo/local_manifests/jenkins.xml
 					echo "</manifest>" >> .repo/local_manifests/jenkins.xml
 				'''
 				sh 'repo sync -j8'
@@ -185,7 +185,7 @@ pipeline {
 														echo "Error: BUILDTYPE not set"
 														exit 1
 													fi
-		
+
 													if [ -z "${CHANGE_TARGET}" ] && [ "dunfell" = ${BRANCH_NAME} ];then
 														if ! [ -d "/sstate_mirror/${BUILDTYPE}" ];then
 															echo "Error: sstate mirror directory does not exist at: /sstate_mirror/${BUILDTYPE}"
@@ -278,7 +278,7 @@ pipeline {
 						echo "Running on node $(hostname)"
 						echo "$PATH"
 						echo "Physhsm: ${PHYSHSM}"
-	
+
 						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2230 --kill --enable-schsm ${PHYSHSM} 12345678'
 					'''
 				}
