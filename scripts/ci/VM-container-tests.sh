@@ -158,7 +158,7 @@ while [[ $# > 0 ]]; do
       echo "options:"
       echo "-h, --help                  Show brief help"
       echo "-c, --compile               (Re-)compile images (e.g. if new changes were commited to the repository)"
-      echo "-b, --branch <branch>       Use this device_fraunhofer_common_cml git branch (if not default) during compilation"
+      echo "-b, --branch <branch>       Use this cml git branch (if not default) during compilation"
       echo "                            (see cmld recipe and init_ws.sh for details on branch name and repository location)"
       echo "-d, --dir <directory>       Use this path to workspace root directory if not current directory"
       echo "-d, --builddir <directory>       Use this path as build directory name"
@@ -456,7 +456,7 @@ if [[ -d "$PKI_DIR" ]];then
 		if [[ "$REPLY" == "y" ]];then
 			mkdir -p "$scripts_path"
 			echo "STATUS: Got y, downloading trustme_build repository to $scripts_path"
-			git clone https://github.com/trustm3/trustme_build.git "$scripts_path"
+			git clone https://github.com/gyroidos/gyroidos_build.git "$scripts_path"
 		fi
 	fi
 

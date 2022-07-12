@@ -21,7 +21,7 @@ RUN update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/cl
 #
 # protobuf-c-text library
 # https://github.com/protobuf-c/protobuf-c-text
-RUN cd /opt && git clone https://github.com/trustm3/external_protobuf-c-text.git && cd /opt/external_protobuf-c-text && ./autogen.sh
+RUN cd /opt && git clone https://github.com/gyroidos/external_protobuf-c-text.git && cd /opt/external_protobuf-c-text && ./autogen.sh
 RUN cd /opt/external_protobuf-c-text && ./configure && make && make install
 
 # Image signing
