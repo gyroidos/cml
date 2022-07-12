@@ -11,7 +11,7 @@ The `rattestation` is automatically built together with the `cmld` in the yocto 
 ### Install protobuf
 
 ```sh
-git clone https://github.com/trustm3/external_protobuf-c-text.git
+git clone https://github.com/gyroidos/external_protobuf-c-text.git
 cd external_protobuf-c-text/
 git submodule update --init --recursive
 
