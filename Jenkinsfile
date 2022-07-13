@@ -104,7 +104,7 @@ pipeline {
 						agent {
 							dockerfile {
 								dir "trustme/cml/scripts/ci"
-								args '--entrypoint=\'\' -v /yocto_mirror/sources:/source_mirror -v /yocto_mirror/sstate-cache:/sstate_mirror --env BUILDNODE="${env.NODE_NAME}"'
+								args '--entrypoint=\'\' -v /yocto_mirror/sources-v0.9:/source_mirror -v /yocto_mirror/sstate-cache-v0.9:/sstate_mirror --env BUILDNODE="${env.NODE_NAME}"'
 								reuseNode false
 							}
 						}
@@ -186,8 +186,8 @@ pipeline {
 														exit 1
 													fi
 
-													if [ -z "${CHANGE_TARGET}" ] && [ "dunfell" = ${BRANCH_NAME} ];then
-														if ! [ -d "/sstate_mirror/${BUILDTYPE}" ];then
+													if [ -z "${CHANGE_TARGET}" ] && [ "v0.9" = ${BRANCH_NAME} ];then
+														if ! [ -d "/sstate_mirror_v0.9/${BUILDTYPE}" ];then
 															echo "Error: sstate mirror directory does not exist at: /sstate_mirror/${BUILDTYPE}"
 															exit 1
 														fi
