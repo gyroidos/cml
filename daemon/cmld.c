@@ -1911,7 +1911,6 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	int res = container_remove_net_interface(container, iface);
 	if (res || !persistent)
 		return res;
-
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);

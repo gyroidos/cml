@@ -107,7 +107,7 @@ crypto_hashalgo_to_proto(crypto_hashalgo_t hashalgo)
 	}
 }
 
-static crypto_verify_result_t
+static crypto_verify_result_code_t
 crypto_verify_result_from_proto(TokenToDaemon__Code code)
 {
 	switch (code) {
@@ -122,7 +122,7 @@ crypto_verify_result_from_proto(TokenToDaemon__Code code)
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
 		return VERIFY_LOCALLY_SIGNED;
 	default:
-		FATAL("Cannot convert %d to valid crypto_verify_result_t value", code);
+		FATAL("Cannot convert %d to valid crypto_verify_result_code_t value", code);
 	}
 }
 
@@ -223,6 +223,8 @@ crypto_cb(int fd, unsigned events, event_io_t *io, void *data)
 
 	TRACE("Received message crypto msg from SCD");
 
+	crypto_verify_result_t verify_result = { .code = VERIFY_ERROR, .matched_ca = str_new("") };
+
 	// TODO outsource socket/fd/events handling
 	if (events & EVENT_IO_READ) {
 		// use protobuf for communication with scd
@@ -256,22 +258,30 @@ crypto_cb(int fd, unsigned events, event_io_t *io, void *data)
 
 		// deal with CRYPTO_VERIFY_* cases
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
+		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
+			if (msg->ca_path == NULL) {
+				ERROR("TokenToDaemon ca_path null after successful verification");
+				break;
+			} else {
+				str_append(verify_result.matched_ca, msg->ca_path);
+			}
+			__attribute__((fallthrough));
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
-		case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
+
+			verify_result.code = crypto_verify_result_from_proto(msg->code);
+
 			if (task->verify_complete) {
-				task->verify_complete(crypto_verify_result_from_proto(msg->code),
-						      task->verify_data_file, task->verify_sig_file,
-						      task->verify_cert_file, task->hash_algo,
-						      task->data);
+				task->verify_complete(verify_result, task->verify_data_file,
+						      task->verify_sig_file, task->verify_cert_file,
+						      task->hash_algo, task->data);
 			} else if (task->verify_buf_complete) {
 				task->verify_buf_complete(
-					crypto_verify_result_from_proto(msg->code),
-					task->verify_data_buf, task->verify_data_buf_len,
-					task->verify_sig_buf, task->verify_sig_buf_len,
-					task->verify_cert_buf, task->verify_cert_buf_len,
-					task->hash_algo, task->data);
+					verify_result, task->verify_data_buf,
+					task->verify_data_buf_len, task->verify_sig_buf,
+					task->verify_sig_buf_len, task->verify_cert_buf,
+					task->verify_cert_buf_len, task->hash_algo, task->data);
 			}
 			break;
 		default:
@@ -531,7 +541,7 @@ crypto_verify_file_block(const char *datafile, const char *sigfile, const char *
 	ASSERT(sigfile);
 	ASSERT(certfile);
 
-	crypto_verify_result_t ret = VERIFY_ERROR;
+	crypto_verify_result_t ret = { .code = VERIFY_ERROR, .matched_ca = str_new("") };
 
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE;
@@ -550,16 +560,23 @@ crypto_verify_file_block(const char *datafile, const char *sigfile, const char *
 	mem_free0(out.verify_sig_file);
 	mem_free0(out.verify_cert_file);
 
-	IF_NULL_RETVAL(msg, VERIFY_ERROR);
+	IF_NULL_RETVAL(msg, ret);
 
 	switch (msg->code) {
 	// deal with CRYPTO_VERIFY_* cases
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
+		ret.code = crypto_verify_result_from_proto(msg->code);
+		break;
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-		ret = crypto_verify_result_from_proto(msg->code);
+		ret.code = crypto_verify_result_from_proto(msg->code);
+		if (msg->ca_path != NULL) {
+			str_append(ret.matched_ca, msg->ca_path);
+		} else {
+			ERROR("TokenToDaemon not providing ca_path after successful verification.");
+		}
 		break;
 	default:
 		ERROR("Invalid TokenToDaemon command %d when verifying file %s with signature %s and certificate %s",
@@ -578,7 +595,7 @@ crypto_verify_buf_block(unsigned char *data_buf, size_t data_buf_len, unsigned c
 	ASSERT(sig_buf);
 	ASSERT(cert_buf);
 
-	crypto_verify_result_t ret = VERIFY_ERROR;
+	crypto_verify_result_t ret = { .code = VERIFY_ERROR, .matched_ca = str_new("") };
 
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF;
@@ -599,16 +616,25 @@ crypto_verify_buf_block(unsigned char *data_buf, size_t data_buf_len, unsigned c
 	out.verify_ignore_time = !cmld_is_device_provisioned() && !cmld_is_hostedmode_active();
 
 	TokenToDaemon *msg = crypto_send_recv_block(&out);
-	IF_NULL_RETVAL(msg, VERIFY_ERROR);
+	if (!msg) {
+		return ret;
+	}
 
 	switch (msg->code) {
 	// deal with CRYPTO_VERIFY_* cases
-	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_SIGNATURE:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE:
+		ret.code = crypto_verify_result_from_proto(msg->code);
+		break;
+	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_GOOD:
 	case TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_LOCALLY_SIGNED:
-		ret = crypto_verify_result_from_proto(msg->code);
+		ret.code = crypto_verify_result_from_proto(msg->code);
+		if (msg->ca_path != NULL) {
+			str_append(ret.matched_ca, msg->ca_path);
+		} else {
+			ERROR("TokenToDaemon not providing ca_path after successful verification.");
+		}
 		break;
 	default:
 		ERROR("Invalid TokenToDaemon command %d when verifying buffer", msg->code);

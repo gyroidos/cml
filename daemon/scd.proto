@@ -159,5 +159,6 @@ message TokenToDaemon {
 
 	optional bytes device_csr = 40;		// device csr in response to PULL_CSR
 	optional bytes hash_value = 50;		// hash_value in reponse to CRYPTO_HASH_FILE
-}
 
+	optional string ca_path = 60;		// Path to CA used for verification
+}

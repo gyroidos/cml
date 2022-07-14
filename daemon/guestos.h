@@ -74,6 +74,15 @@ guestos_get_sig_file_new(const char *dir);
 char *
 guestos_get_cert_file_new(const char *dir);
 
+/**
+ * Returns a new string with the full path of the GuestOS CA symlink file.
+ * Must be free'd.
+ * @param dir the GuestOS directory
+ * @return new string with the full path of the GuestOS CA symlink file
+ */
+char *
+guestos_get_ca_file_new(const char *dir);
+
 /******************************************************************************/
 
 /**
