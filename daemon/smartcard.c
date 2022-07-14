@@ -1046,7 +1046,10 @@ smartcard_new(const char *path)
 	smartcard->path = mem_strdup(path);
 
 	// Start SCD and wait for control interface
-	smartcard->scd_pid = fork_and_exec_scd();
+	if (!cmld_is_hostedmode_active()) {
+		smartcard->scd_pid = fork_and_exec_scd();
+	}
+
 	IF_TRUE_RETVAL_TRACE(smartcard->scd_pid == -1, NULL);
 
 	size_t retries = 0;
