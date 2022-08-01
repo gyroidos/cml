@@ -114,6 +114,8 @@ static const struct option create_options[] = { { "bundle", required_argument, 0
 						{ "help", no_argument, 0, 'h' },
 						{ 0, 0, 0, 0 } };
 
+static const struct option delete_options[] = { { "force", no_argument, 0, 'f' }, { 0, 0, 0, 0 } };
+
 int
 main(int argc, char *argv[])
 {
@@ -176,6 +178,20 @@ main(int argc, char *argv[])
 			default: // includes cases 'h' and '?'
 				DEBUG("option :%s\n", optarg);
 				//print_usage(argv[0]);
+			}
+		}
+	} else if (!strcasecmp(command, "delete")) {
+		fprintf(stderr, "OCI_DELETE");
+
+		if (optind >= argc)
+			print_usage(argv[0]);
+		for (int c, option_index = optind;
+		     - 1 != (c = getopt_long(argc, argv, "+f", delete_options, &option_index));) {
+			switch (c) {
+			case 'f':
+				// fallthrough
+			default:
+				DEBUG("option :%s\n", optarg);
 			}
 		}
 	}
