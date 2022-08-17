@@ -47,6 +47,8 @@
 #include "common/network.h"
 #include "common/reboot.h"
 #include "common/file.h"
+#include "common/dir.h"
+#include "common/str.h"
 
 #include <unistd.h>
 #include <inttypes.h>
@@ -69,20 +71,26 @@ struct control {
 
 static list_t *control_list = NULL;
 
-static void UNUSED
-control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool send_last_line_info)
+/**
+ * @brief callback for the dir_foreach function sending a file as LogMessage to the Controller
+ * @path: Expects path string without trailing "/" at the end
+ * @return 1 on error, 0 else 
+ */
+static int
+control_send_file_as_log_message_cb(const char *path, const char *file, void UNUSED *data)
 {
-	int fp_low = -1;
-	bool skipped_lines = false;
-	FILE *fp = NULL;
-	char *line;
-	char line_low[LOGGER_ENTRY_MAX_LEN + 1];
-	size_t HEADER_LENGTH = 21;
-	ssize_t bytes_read;
-	bool file_is_open = false;
+	IF_NULL_RETVAL(path, 1);
+	IF_NULL_RETVAL(file, 1);
+
+	int *fd = (int *)data;
+	int ret = 0;
+	str_t *path_str = str_new(path);
+	str_append(path_str, "/");
+	str_append(path_str, file);
 
 	LogMessage message = LOG_MESSAGE__INIT;
-	message.prio = (LogPriority)LOGF_PRIO_DEBUG;
+
+	message.name = mem_strdup(file);
 	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 	out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE;
 	if (cmld_get_device_uuid()) {
@@ -90,75 +98,34 @@ control_send_log_file(int fd, char *log_file_name, bool read_low_level, bool sen
 		out.device_uuid = mem_strdup(cmld_get_device_uuid());
 	}
 
-	DEBUG("Opening and sending %s", log_file_name);
-	if (read_low_level) {
-		fp_low = open(log_file_name, O_RDONLY | O_NONBLOCK);
-		if (fp_low == -1) {
-			ERROR("Could not open %s", log_file_name);
+	DEBUG("Opening and sending %s", str_buffer(path_str));
+
+	char *file_buf =
+		file_read_new(str_buffer(path_str), (size_t)file_size(str_buffer(path_str)));
+
+	if (file_buf) {
+		message.msg = mem_strdup(file_buf);
+		free(file_buf);
+		out.log_message = &message;
+		if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
+			ERROR_ERRNO("Could not finish sending %s", str_buffer(path_str));
+			ret = 1;
 		} else {
-			file_is_open = true;
+			DEBUG("Finished sending %s", str_buffer(path_str));
 		}
+		mem_free0(message.msg);
 	} else {
-		fp = fopen(log_file_name, "r");
-		line = NULL;
-		if (fp == NULL) {
-			ERROR("Could not open %s", log_file_name);
-		} else {
-			file_is_open = true;
-		}
+		DEBUG("File %s could not be read to buffer.", str_buffer(path_str));
+		ret = 1;
 	}
 
-	while (file_is_open) {
-		if (read_low_level) {
-			/* The driver let's us read entry by entry */
-			bytes_read = read(fp_low, line_low, LOGGER_ENTRY_MAX_LEN);
-			if (bytes_read <= 0)
-				break;
-			char *first_string = line_low + HEADER_LENGTH;
-			size_t string_len = strlen(first_string);
-			char *second_string = line_low + HEADER_LENGTH + string_len + 1;
-			message.msg = mem_printf("%s/%s", first_string, second_string);
-		} else {
-			size_t len = 0;
-			bytes_read = getline(&line, &len, fp);
-			if (bytes_read == -1)
-				break;
-			message.msg = mem_strdup(line);
-		}
-		out.log_message = &message;
-		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
-			ERROR_ERRNO("Could not finish sending %s", log_file_name);
-			skipped_lines = true;
-			break;
-		}
-		mem_free0(message.msg);
-	}
-	if (send_last_line_info) {
-		message.msg = mem_printf("Last line of log");
-		out.log_message = &message;
-		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
-			ERROR("Could not sent last line info for %s", log_file_name);
-		}
-		mem_free0(message.msg);
-	}
 	if (out.device_uuid != NULL) {
 		mem_free0(out.device_uuid);
 	}
-	if (file_is_open) {
-		if (read_low_level) {
-			close(fp_low);
-		} else {
-			fclose(fp);
-			if (line)
-				free(line);
-		}
-	}
 
-	if (!skipped_lines) {
-		DEBUG("Finished sending complete %s", log_file_name);
-	} else {
-		DEBUG("Finished sending %s; skipped lines", log_file_name);
-	}
+	str_free(path_str, true);
+
+	return ret;
 }
 
 /**
@@ -1071,9 +1038,25 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG: {
-		WARN("Due to privacy concerns this command is currently not supported.");
-		//control_send_log_file(fd, "/proc/last_kmsg", false, false);
-		//control_send_log_file(fd, "/dev/log/main", true, true);
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__RESPONSE;
+		out.has_response = true;
+		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_FAILED;
+
+		int dir_ret =
+			dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb, (void *)&fd);
+
+		if (dir_ret < 0) {
+			WARN("Something went wrong during traversal of LOGFILE_DIR");
+		} else if (dir_ret > 0) {
+			WARN("%d logs could not be sent.", dir_ret);
+		} else {
+			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_OK;
+		}
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+			ERROR_ERRNO("Could not finish send LOG_END message");
+			break;
+		}
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG: {

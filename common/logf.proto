@@ -25,18 +25,9 @@ syntax = "proto2";
 
 option java_package = "de.fraunhofer.aisec.trustme";
 
-enum LogPriority {
-	TRACE = 1;
-	DEBUG = 2;
-	INFO = 3;
-	WARN = 4;
-	ERROR = 5;
-	FATAL = 6;
-	SILENT = 7;
-}
 
 message LogMessage {
-	required LogPriority prio = 1;
+	required string name = 1;
 	required string msg = 2;
 }
 
