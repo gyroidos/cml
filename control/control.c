@@ -37,6 +37,7 @@
 #include "common/file.h"
 #include "common/mem.h"
 #include "common/uuid.h"
+#include "common/str.h"
 
 #include <getopt.h>
 #include <stdbool.h>
@@ -124,6 +125,9 @@ print_usage(const char *cmd)
 	       "        Prints the list of network interfaces assigned to the specified container.\n\n");
 	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
+	printf("   retrieve_logs [<path_to_logstore_dir>]\n"
+	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the given directory"
+	       " or in the current directory if no directory was given.\n\n");
 	printf("\n");
 	exit(-1);
 }
@@ -272,7 +276,7 @@ main(int argc, char *argv[])
 	uuid_t *uuid = NULL;
 	int sock = 0;
 	bool has_container_start_params_key = false;
-
+	str_t *log_dir = NULL;
 	struct termios termios_before;
 	tcgetattr(STDIN_FILENO, &termios_before);
 
@@ -308,6 +312,30 @@ main(int argc, char *argv[])
 	if (!strcasecmp(command, "list_guestos")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS;
 		goto send_message;
+	}
+	if (!strcasecmp(command, "retrieve_logs")) {
+		// need at most one more argument (path to store logs)
+		if (optind < argc - 1)
+			print_usage(argv[0]);
+
+		if (optind == argc) {
+			INFO("No target directory specified. Copying logs to current directory.");
+			log_dir = str_new("./");
+		} else {
+			log_dir = str_new(argv[optind++]);
+			if (str_buffer(log_dir)[str_length(log_dir)] != '/') {
+				str_append(log_dir, "/");
+			}
+			INFO("Copy logs to %s", str_buffer(log_dir));
+		}
+
+		if (file_exists(str_buffer(log_dir)) && file_is_dir(str_buffer(log_dir))) {
+			msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG;
+			goto send_message;
+		} else {
+			INFO("Directory does not exist. Please specify existing directory or no directory to copy into ./");
+			print_usage(argv[0]);
+		}
 	}
 	if (!strcasecmp(command, "reload")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__RELOAD_CONTAINERS;
@@ -854,6 +882,29 @@ handle_resp:
 			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 		}
 	} break;
+	case DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE: {
+		if (!log_dir) {
+			WARN("log_dir is null. Did not except to receive a LOG_MESSAGE");
+			protobuf_free_message((ProtobufCMessage *)resp);
+			goto handle_resp;
+		}
+
+		if (!resp->log_message) {
+			ERROR("resp->log_message is null.");
+			protobuf_free_message((ProtobufCMessage *)resp);
+			goto handle_resp;
+		}
+		INFO("Received Logfile %s", resp->log_message->name);
+
+		str_t *file_str = str_new(str_buffer(log_dir));
+		str_append(file_str, resp->log_message->name);
+
+		if (file_write(str_buffer(file_str), resp->log_message->msg, -1) < 0) {
+			INFO("logfile %s could not be written.", resp->log_message->name);
+		}
+		protobuf_free_message((ProtobufCMessage *)resp);
+		goto handle_resp;
+	} break;
 	default:
 		// TODO for now just dump the response in text format
 		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
@@ -895,6 +946,8 @@ exit:
 	mem_free0(msg.container_uuids);
 	if (uuid)
 		uuid_free(uuid);
+	if (log_dir)
+		str_free(log_dir, true);
 
 	return 0;
 }

@@ -73,8 +73,7 @@ message ControllerToDaemon {
 		// Also fills [container_uuids] with the corresponding container UUIDs.
 		GET_CONTAINER_CONFIG = 4;	// [container_uuid] -> [container_config]
 
-		//Returns /proc/last_kmsg and /dev/log/main (line by line).
-		//This is a debugging feature!
+		//Returns logfiles stored in LOGFILE_DIR
 		GET_LAST_LOG = 5;
 
 		//////////////////////////////////////////////
