@@ -397,10 +397,10 @@ rm -f ${PROCESS_NAME}.img
 
 if ! [[ -z "${IMGPATH}" ]];then
 	echo "STATUS: Testing image at ${IMGPATH}"
-	cp ${IMGPATH} ${PROCESS_NAME}.img
+	rsync ${IMGPATH} ${PROCESS_NAME}.img
 else
 	echo "STATUS: Testing image at $(pwd)/tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img"
-	cp tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img ${PROCESS_NAME}.img
+	rsync tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img ${PROCESS_NAME}.img
 fi
 
 # Prepare image for test with physical tokens
@@ -411,20 +411,54 @@ then
 fi
 
 
+
+
+# Start VM
+# -----------------------------------------------
+
+# copy for faster startup
+cp /usr/share/OVMF/OVMF_VARS.fd .
+
+# Start test VM
+start_vm
+
+
+# Retrieve VM host key
+echo "STATUS: Retrieveing VM host key"
+for I in $(seq 1 10) ;do
+	echo "STATUS: Scanning for VM host key on port $SSH_PORT"
+	if ssh-keyscan -T 10 -p $SSH_PORT -H 127.0.0.1 > ${PROCESS_NAME}.vm_key ;then
+		cp ${PROCESS_NAME}.vm_key /tmp/${PROCESS_NAME}.vm_key
+		echo "STATUS: Got VM host key: $!"
+		break
+	elif [ "10" = "$I" ];then
+		echo "ERROR: exitcode $1"
+		exit 1
+	fi
+
+	echo "STATUS: Failed to retrieve VM host key"
+	sleep 5
+done
+
+echo "STATUS: extracting current installed OS version"
+installed_guestos_version="$(cmd_control_get_guestos_versions)"
+echo "Found OS version: $installed_guestos_version"
+
+
 # Create container configuration file for tests
 if [[ -z "$SCHSM" ]];then
 cat > ./testcontainer.conf << EOF
 name: "test-container"
 guest_os: "trustx-coreos"
-guestos_version: 1
+guestos_version: $installed_guestos_version 
 assign_dev: "c 4:2 rwm"
 EOF
 else
 cat > ./testcontainer.conf << EOF
 name: "test-container"
 guest_os: "trustx-coreos"
-guestos_version: 1
 assign_dev: "c 4:2 rwm"
+guestos_version: $installed_guestos_version 
 token_type: USB
 usb_configs {
   id: "04e6:5816"
@@ -483,34 +517,6 @@ fi
 
 echo "STATUS: Created test container config:"
 echo "$(cat ./testcontainer.conf)"
-
-
-
-# Start VM
-# -----------------------------------------------
-
-# copy for faster startup
-cp /usr/share/OVMF/OVMF_VARS.fd .
-
-# Start test VM
-start_vm
-
-
-# Retrieve VM host key
-echo "STATUS: Retrieveing VM host key"
-for I in $(seq 1 10) ;do
-	echo "STATUS: Scanning for VM host key on port $SSH_PORT"
-	if ssh-keyscan -T 10 -p $SSH_PORT -H 127.0.0.1 > ${PROCESS_NAME}.vm_key ;then
-		echo "STATUS: Got VM host key: $!"
-		break
-	elif [ "10" = "$I" ];then
-		echo "ERROR: exitcode $1"
-		exit 1
-	fi
-
-	echo "STATUS: Failed to retrieve VM host key"
-	sleep 5
-done
 
 
 # Prepare tests

@@ -186,3 +186,8 @@ cmd_control_reboot() {
 	do_test_cmd_noutput "/usr/sbin/control reboot" "Abort"
 }
 
+cmd_control_get_guestos_versions(){
+	COMMAND="/usr/sbin/control list_guestos | grep version\:"
+	OUTPUT="$(ssh ${SSH_OPTS} "$COMMAND")" || true
+	echo "$OUTPUT" | awk '{print $2}'
+}
