@@ -594,6 +594,42 @@ out:
 /******************************************************************************/
 
 guestos_t *
+guestos_mgr_get_by_version(const char *name, uint64_t version, bool complete)
+{
+	IF_NULL_RETVAL(name, NULL);
+
+	guestos_t *latest_os = NULL;
+	for (list_t *l = guestos_list; l; l = l->next) {
+		if (!strcmp(name, guestos_get_name(l->data))) {
+			guestos_t *os = l->data;
+			uint64_t v = guestos_get_version(os);
+
+			// check if os version is correct
+			if (v != version) {
+				TRACE("Found correct os name, but with wrong version. Continuing!");
+				continue;
+			}
+
+			// TODO cache image complete result in guestos instance and get rid of check here?
+			if (complete && !guestos_images_are_complete(os, false)) {
+				audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "broken-update",
+						guestos_get_name(os), 0);
+				DEBUG("GuestOS %s v%" PRIu64
+				      " is incomplete (missing images) or broken, skipping.",
+				      guestos_get_name(os), v);
+				continue;
+			}
+
+			//if the program ends up here, we found the correct os
+			latest_os = os;
+			break;
+		}
+	}
+
+	return latest_os;
+}
+
+guestos_t *
 guestos_mgr_get_latest_by_name(const char *name, bool complete)
 {
 	IF_NULL_RETVAL(name, NULL);
