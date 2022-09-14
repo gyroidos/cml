@@ -54,6 +54,9 @@ file_is_mountpoint(const char *file);
 bool
 file_is_socket(const char *file);
 
+bool
+file_is_fifo(const char *file);
+
 /**
  * Copy a file.
  * @param in_file The file to be read.
