@@ -119,6 +119,10 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 	fd_make_non_blocking(session->console_sock_cmld);
 	fd_make_non_blocking(session->console_sock_container);
 
+	session->cmd = mem_strdup(cmd);
+	session->argc = argc;
+	session->create_pty = create_pty;
+
 	ssize_t i = 0;
 	size_t total_len = ADD_WITH_OVERFLOW_CHECK(session->argc, (size_t)1);
 	total_len = MUL_WITH_OVERFLOW_CHECK(sizeof(char *), total_len);
@@ -130,10 +134,6 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 		i++;
 	}
 	session->argv[i] = NULL;
-
-	session->cmd = mem_strdup(cmd);
-	session->argc = argc;
-	session->create_pty = create_pty;
 
 	return session;
 }
