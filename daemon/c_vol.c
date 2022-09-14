@@ -499,6 +499,13 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 		goto error;
 	}
 	mem_free0(overlayfs_options);
+
+	if (chmod(target_dir, 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", target_dir);
+		goto error;
+	}
+	DEBUG("Changed permissions of %s to 0755", target_dir);
+
 	if (chdir(cwd))
 		WARN("Could not change back to former cwd %s", cwd);
 	mem_free0(cwd);
@@ -752,6 +759,15 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			  tmpfs_opts) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
 			mem_free0(tmpfs_opts);
+
+			if (chmod(dir, 0755) < 0) {
+				ERROR_ERRNO(
+					"Could not set permissions of overlayfs mount point at %s",
+					dir);
+				goto error;
+			}
+			DEBUG("Changed permissions of %s to 0755", dir);
+
 			if (is_root && setup_mode && c_vol_setup_busybox_copy(dir) < 0)
 				WARN("Cannot copy busybox for setup mode!");
 			goto final;
@@ -886,6 +902,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		}
 		DEBUG("Successfully mounted %s using overlay to %s", img, dir);
 		mem_free0(overlayfs_mount_dir);
+
 		goto final;
 	}
 
@@ -1209,6 +1226,12 @@ c_vol_mount_dev(c_vol_t *vol)
 	} else {
 		DEBUG("Applied MS_SHARED to %s", dev_mnt);
 	}
+
+	if (chmod(dev_mnt, 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", dev_mnt);
+		goto error;
+	}
+	DEBUG("Changed permissions of %s to 0755", dev_mnt);
 
 	ret = 0;
 error:
@@ -1692,6 +1715,18 @@ c_vol_start_child(void *volp)
 		goto error;
 	}
 
+	if (chmod("/run", 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", "/run");
+		goto error;
+	}
+	DEBUG("Changed permissions of %s to 0755", "/run");
+
+	if (chmod("/run", 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", "/run");
+		goto error;
+	}
+	DEBUG("Changed permissions of %s to 0755", "/run");
+
 	DEBUG("Mounting " CMLD_SOCKET_DIR);
 	if (mkdir(CMLD_SOCKET_DIR, 0755) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir " CMLD_SOCKET_DIR);
@@ -1701,6 +1736,13 @@ c_vol_start_child(void *volp)
 		ERROR_ERRNO("Could not mount " CMLD_SOCKET_DIR);
 		goto error;
 	}
+
+	if (chmod(CMLD_SOCKET_DIR, 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s",
+			    CMLD_SOCKET_DIR);
+		goto error;
+	}
+	DEBUG("Changed permissions of %s to 0755", CMLD_SOCKET_DIR);
 
 	if (container_has_setup_mode(vol->container) && c_vol_setup_busybox_install() < 0)
 		WARN("Cannot install busybox symlinks for setup mode!");
