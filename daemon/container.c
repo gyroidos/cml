@@ -991,6 +991,7 @@ container_audit_get_loginuid(const container_t *container)
 static void
 container_cleanup(container_t *container, bool is_rebooting)
 {
+	c_fifo_cleanup(container->fifo);
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
 	c_run_cleanup(container->run);

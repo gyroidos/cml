@@ -28,6 +28,12 @@
 
 typedef struct c_fifo c_fifo_t;
 
+void
+c_fifo_cleanup(void *fifo);
+
+void
+c_fifo_free(c_fifo_t *fifo);
+
 int
 c_fifo_start_child(c_fifo_t *fifo);
 
