@@ -132,7 +132,7 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 		goto error_read;
 	if (0 == bytes_read) { // EOF / remote end closed the connection
 		DEBUG("client on fd %d closed connection.", fd);
-		*ret_len = -1;
+		*ret_len = -2;
 		return NULL;
 	}
 	buflen = ntohl(buflen);
@@ -191,6 +191,11 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	// => use unpack to construct it (and initialize it with these defaults)
 	if (0 == buflen)
 		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
+
+	// -2 means that client closed connection
+	if (buflen == -2) {
+		return NULL;
+	}
 
 	if (!buf) {
 		ERROR("Failed to receive packed protobuf message");
