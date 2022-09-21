@@ -36,13 +36,35 @@
 
 #define CRYPTFS_FDE_KEY_LEN 64
 
+/**
+ * Get the full path of a cryptfs device with the specified name
+ *
+ * @param label The name to get the path for
+ * @return char* The device path in case of success, otherwise NULL
+ */
 char *
 cryptfs_get_device_path_new(const char *label);
 
+/**
+ * Create a new cryptfs device with the specified name,
+ *
+ * @param label The name of the volume
+ * @param real_blk_dev The name of the loop device
+ * @param ascii_key The key for the volume
+ * @param meta_blk_dev The meta loop device
+ * @return char* The path of the newly created volume
+ */
 char *
 cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key,
 			 const char *meta_blk_dev);
 
+/**
+ * Close a device-mapper volume
+ *
+ * @param fd The filedescriptor of the device
+ * @param name The name of the device
+ * @return int 0 if successful, otherwise -1
+ */
 int
 cryptfs_delete_blk_dev(int fd, const char *name);
 
