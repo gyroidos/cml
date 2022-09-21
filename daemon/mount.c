@@ -79,6 +79,7 @@ mount_add_entry(mount_t *mnt, enum mount_type type, const char *image_file, cons
 	mntent->sha1 = NULL;
 	mntent->sha256 = NULL;
 	mntent->mount_data = NULL;
+	mntent->verity_sha256 = NULL;
 
 	mnt->list = list_append(mnt->list, mntent);
 	return mntent;
