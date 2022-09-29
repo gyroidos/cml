@@ -1714,9 +1714,12 @@ cmld_guestos_delete(const char *guestos_name)
 	guestos_t *os = guestos_mgr_get_latest_by_name(guestos_name, false);
 	IF_NULL_RETVAL(os, -1);
 
-	// do not delete gustos of managment container c0
-	container_t *c0 = cmld_containers_get_c0();
-	IF_TRUE_RETVAL(os == container_get_guestos(c0), -1);
+	// do not delete guestos of management container c0
+	// not needed in hosted mode
+	if (!cmld_is_hostedmode_active()) {
+		container_t *c0 = cmld_containers_get_c0();
+		IF_TRUE_RETVAL(os == container_get_guestos(c0), -1);
+	}
 
 	return guestos_mgr_delete(os);
 }
