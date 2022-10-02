@@ -54,14 +54,6 @@
 
 #define C_USER_MAP_FORMAT "%d %d %d"
 
-#define SHIFTFS_DIR "/tmp/shiftfs"
-
-struct c_user_shift {
-	char *target;
-	char *mark;
-	bool is_root;
-};
-
 /* User structure with specific usernamespace mappings */
 typedef struct c_user {
 	container_t *container; //!< container which the c_user struct is associated to
@@ -187,15 +179,6 @@ c_user_set_next_uid_range_start(c_user_t *user)
 	return 0;
 }
 
-static void
-c_user_shift_free(struct c_user_shift *s)
-{
-	IF_NULL_RETURN_ERROR(s);
-	mem_free0(s->target);
-	mem_free0(s->mark);
-	mem_free0(s);
-}
-
 /**
  * This function allocates a new c_user_t instance, associated to a specific container object.
  * @return the c_user_t user structure which holds user namespace information for a container.
@@ -259,24 +242,6 @@ error:
 	return -1;
 }
 
-static int
-c_user_cleanup_marks_cb(const char *path, const char *file, UNUSED void *data)
-{
-	char *mark = mem_printf("%s/%s", path, file);
-	if (file_is_mountpoint(mark)) {
-		if (umount2(mark, MNT_DETACH) < 0) {
-			WARN_ERRNO("Could not umount shift mark on %s", mark);
-			mem_free0(mark);
-			return -1;
-		}
-		if (rmdir(mark) < 0)
-			TRACE("Unable to remove %s", mark);
-		INFO("Cleanup mark '%s' done.", mark);
-	}
-	mem_free0(mark);
-	return 0;
-}
-
 /**
  * Cleans up the c_user_t struct.
  */
@@ -302,15 +267,6 @@ c_user_cleanup(void *usr, bool is_rebooting)
 	ns_unbind(user->ns_path);
 
 	c_user_unset_offset(user->offset);
-
-	// cleanup left-over marks in main cmld process
-	const char *uuid = uuid_string(container_get_uuid(user->container));
-	char *path = mem_printf("%s/%s/mark", SHIFTFS_DIR, uuid);
-	if (dir_foreach(path, &c_user_cleanup_marks_cb, NULL) < 0)
-		WARN("Could not release marks in '%s'", path);
-	if (rmdir(path) < 0)
-		TRACE("Unable to remove %s", path);
-	mem_free0(path);
 }
 
 /**
@@ -347,53 +303,6 @@ c_user_get_uid(void *usr)
 	return user->uid_start;
 }
 
-static int
-c_user_chown_dev_cb(const char *path, const char *file, void *data)
-{
-	struct stat s;
-	int ret = 0;
-	c_user_t *user = data;
-	ASSERT(user);
-
-	char *file_to_chown = mem_printf("%s/%s", path, file);
-	if (lstat(file_to_chown, &s) == -1) {
-		mem_free0(file_to_chown);
-		return -1;
-	}
-
-	// modulo operation avoids shifting twice
-	uid_t uid = s.st_uid % UID_RANGE + user->uid_start;
-	gid_t gid = s.st_gid % UID_RANGE + user->uid_start;
-
-	if (file_is_dir(file_to_chown)) {
-		TRACE("Path %s is dir", file_to_chown);
-		if (dir_foreach(file_to_chown, &c_user_chown_dev_cb, user) < 0) {
-			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
-			ret--;
-		}
-		if (chown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
-			ret--;
-		}
-	} else {
-		if (lchown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
-				    gid);
-			ret--;
-		}
-	}
-	TRACE("Chown file '%s' to (%d:%d) (uid_start %d)", file_to_chown, uid, gid,
-	      user->uid_start);
-
-	// chown .
-	if (chown(path, uid, gid) < 0) {
-		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
-		ret--;
-	}
-	mem_free0(file_to_chown);
-	return ret;
-}
-
 /**
  * Become root in new userns
  */
@@ -418,105 +327,6 @@ c_user_start_child(void *usr)
 	if (c_user_setuid0(user) < 0)
 		return -COMPARTMENT_ERROR_USER;
 	return 0;
-}
-
-/**
- * Shifts or sets uid/gids of path using the parent ids for this c_user_t
- *
- * Call this inside the parent user_ns.
- */
-static int
-c_user_shift_ids(void *usr, const char *path, bool is_root)
-{
-	c_user_t *user = usr;
-	ASSERT(user);
-
-	/* We can skip this in case the container has no user ns */
-	if (!container_has_userns(user->container))
-		return 0;
-
-	TRACE("uid %d, euid %d", getuid(), geteuid());
-
-	// if we just got a single file chown this and return
-	if (file_exists(path) && !file_is_dir(path)) {
-		if (lchown(path, user->uid_start, user->uid_start) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", path, user->uid_start,
-				    user->uid_start);
-			goto error;
-		}
-		goto success;
-	}
-
-	// if dev or a cgroup subsys just chown the files
-	if ((strlen(path) >= 4 && !strcmp(strrchr(path, '\0') - 4, "/dev")) ||
-	    (strstr(path, "/cgroup") != NULL)) {
-		if (dir_foreach(path, &c_user_chown_dev_cb, user) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, user->uid_start,
-			      user->uid_start);
-			goto error;
-		}
-		goto success;
-	}
-
-	// if kernel does not support shiftfs just chown the files
-	// and do bind mounts (see jump mark shift)
-	if (!cmld_is_shiftfs_supported()) {
-		if (chown(path, user->uid_start, user->uid_start) < 0) {
-			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", path,
-				    user->uid_start, user->uid_start);
-			goto error;
-		}
-		if (dir_foreach(path, &c_user_chown_dev_cb, user) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, user->uid_start,
-			      user->uid_start);
-			goto error;
-		}
-		goto shift;
-	}
-
-shift:
-	// create mountpoints for lower and upper dev
-	if (dir_mkdir_p(SHIFTFS_DIR, 0777) < 0) {
-		ERROR_ERRNO("Could not mkdir %s", SHIFTFS_DIR);
-		return -1;
-	}
-	if (chmod(SHIFTFS_DIR, 00777) < 0) {
-		ERROR_ERRNO("Could not chmod %s", SHIFTFS_DIR);
-		goto error;
-	}
-
-	struct c_user_shift *shift_mark = mem_new0(struct c_user_shift, 1);
-	shift_mark->target = mem_strdup(path);
-	shift_mark->mark =
-		mem_printf("%s/%s/mark/%d", SHIFTFS_DIR,
-			   uuid_string(container_get_uuid(user->container)), user->mark_index++);
-	shift_mark->is_root = is_root;
-	if (dir_mkdir_p(shift_mark->mark, 0777) < 0) {
-		ERROR_ERRNO("Could not mkdir shiftfs dir %s", shift_mark->mark);
-		c_user_shift_free(shift_mark);
-		goto error;
-	}
-	/*
-	 * In case shiftfs is not supported we use MS_BIND flag to just bind
-	 * mount the chowned directories to the new mount tree.
-	 * If MS_BIND flag is used, fs paramter and other options are ignored
-	 * by the mount system call.
-	 */
-	if (mount(path, shift_mark->mark, "shiftfs", cmld_is_shiftfs_supported() ? 0 : MS_BIND,
-		  "mark") < 0) {
-		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", path, shift_mark->mark);
-		c_user_shift_free(shift_mark);
-		goto error;
-	}
-
-	user->marks = list_append(user->marks, shift_mark);
-
-success:
-
-	INFO("Successfully shifted uids for '%s'", path);
-	return 0;
-error:
-	return -1;
 }
 
 /**
@@ -579,71 +389,6 @@ c_user_start_post_clone(void *usr)
 }
 
 static int
-c_user_shift_mounts(void *usr)
-{
-	c_user_t *user = usr;
-	ASSERT(user);
-
-	/* Skip this, if the container doesn't have a user namespace */
-	if (!container_has_userns(user->container))
-		return 0;
-
-	char *target_dev, *saved_dev;
-	target_dev = saved_dev = NULL;
-
-	TRACE("uid %d, euid %d", getuid(), geteuid());
-	for (list_t *l = user->marks; l; l = l->next) {
-		struct c_user_shift *shift_mark = l->data;
-
-		// save already mounted dev to remount after new rootfs mount
-		if (shift_mark->is_root) {
-			target_dev = mem_printf("%s/dev", shift_mark->target);
-			saved_dev = mem_printf("%s/%s/dev", SHIFTFS_DIR,
-					       uuid_string(container_get_uuid(user->container)));
-			if (dir_mkdir_p(saved_dev, 0777) < 0) {
-				ERROR_ERRNO("Could not mkdir temporary dev dir '%s'", saved_dev);
-				goto error;
-			}
-			if (mount(target_dev, saved_dev, NULL, MS_BIND, NULL) < 0) {
-				ERROR_ERRNO("Could not move dev '%s' to saved_dev '%s'", target_dev,
-					    saved_dev);
-			}
-		}
-
-		// mount the shifted user ids to new root
-		if (mount(shift_mark->mark, shift_mark->target, "shiftfs",
-			  cmld_is_shiftfs_supported() ? 0 : MS_BIND, NULL) < 0) {
-			ERROR_ERRNO("Could not remount shiftfs mark %s to %s", shift_mark->mark,
-				    shift_mark->target);
-			goto error;
-		} else {
-			INFO("Successfully shifted root uid/gid for userns mount %s",
-			     shift_mark->target);
-		}
-
-		// remount saved dev location at new shifted rootfs
-		if (shift_mark->is_root) {
-			if (mount(saved_dev, target_dev, NULL, MS_BIND, NULL) < 0) {
-				ERROR_ERRNO("Could mount dev '%s' in new root", target_dev);
-			}
-			INFO("Successfully moved dev to shifted rootfs at '%s'", target_dev);
-		}
-	}
-
-	if (target_dev)
-		mem_free0(target_dev);
-	if (saved_dev)
-		mem_free0(saved_dev);
-	return 0;
-error:
-	if (target_dev)
-		mem_free0(target_dev);
-	if (saved_dev)
-		mem_free0(saved_dev);
-	return -1;
-}
-
-static int
 c_user_join_userns(void *usr)
 {
 	c_user_t *user = usr;
@@ -683,6 +428,4 @@ c_user_init(void)
 	// register relevant handlers implemented by this module
 	container_register_setuid0_handler(MOD_NAME, c_user_setuid0);
 	container_register_get_uid_handler(MOD_NAME, c_user_get_uid);
-	container_register_shift_ids_handler(MOD_NAME, c_user_shift_ids);
-	container_register_shift_mounts_handler(MOD_NAME, c_user_shift_mounts);
 }

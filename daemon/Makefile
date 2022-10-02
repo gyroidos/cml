@@ -118,6 +118,7 @@ SRC_FILES := main.c \
 SRC_CMODULES := \
 	c_smartcard.c \
 	c_user.c \
+	c_shiftid.c \
 	c_net.c \
 	c_cgroups.c \
 	c_vol.c \
