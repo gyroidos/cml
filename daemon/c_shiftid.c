@@ -21,9 +21,13 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
+
 #define MOD_NAME "c_shiftid"
 
+#include <linux/magic.h>
 #include <sys/mount.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 #include "common/macro.h"
@@ -39,7 +43,7 @@
 struct c_shiftid_mnt {
 	char *target;
 	char *mark;
-	bool is_root;
+	char *ovl_lower;
 };
 
 /* shiftid structure with specific directory mappings */
@@ -55,6 +59,8 @@ c_shiftid_mnt_free(struct c_shiftid_mnt *mnt)
 	IF_NULL_RETURN_ERROR(mnt);
 	mem_free0(mnt->target);
 	mem_free0(mnt->mark);
+	if (mnt->ovl_lower)
+		mem_free0(mnt->ovl_lower);
 	mem_free0(mnt);
 }
 
@@ -180,13 +186,230 @@ c_shiftid_chown_dir_cb(const char *path, const char *file, void *data)
 	return ret;
 }
 
+static int
+c_shiftid_mount_ovl(const char *overlayfs_mount_dir, const char *target_dir, const char *ovl_lower,
+		    bool in_child)
+{
+	char *lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
+	char *upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
+	char *work_dir = mem_printf("%s/work", overlayfs_mount_dir);
+
+	DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, lower_dir=%s, target dir=%s",
+	      work_dir, upper_dir, ovl_lower, target_dir);
+
+	struct statfs ovl_statfs;
+	statfs(overlayfs_mount_dir, &ovl_statfs);
+
+	// overmount tmpfs within user namespace
+	if (in_child && (TMPFS_MAGIC == ovl_statfs.f_type)) {
+		INFO("overmounting existing tmpfs with tmpfs in userns on '%s'.",
+		     overlayfs_mount_dir);
+		if (mount(NULL, overlayfs_mount_dir, "tmpfs", 0, NULL) < 0) {
+			ERROR_ERRNO("Could not mount tmpfs to %s", overlayfs_mount_dir);
+			goto error;
+		}
+	}
+
+	// needed for tmpfs in user namespace (child) as well as tmpfs of
+	// fallback mechanism where lower image is read only and a temporary
+	// upper tmpfs for chowning is used
+	if (dir_mkdir_p(upper_dir, 0777) < 0) {
+		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
+		goto error;
+	}
+	if (dir_mkdir_p(work_dir, 0777) < 0) {
+		ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
+		goto error;
+	}
+
+	// try to hide absolute paths (if just overmounting existing lower dir)
+	if (file_is_link(lower_dir))
+		unlink(lower_dir);
+	if (symlink(ovl_lower, lower_dir) < 0) {
+		ERROR_ERRNO("link lowerdir failed");
+		mem_free0(lower_dir);
+		lower_dir = mem_strdup(ovl_lower);
+	}
+	if (file_is_link(lower_dir))
+		INFO("Sucessfully created link to %s on %s", ovl_lower, lower_dir);
+	else
+		ERROR("Failed to created link to %s on %s", ovl_lower, lower_dir);
+
+	DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, lower_dir=%s, target dir=%s",
+	      work_dir, upper_dir, lower_dir, target_dir);
+	// create mount option string (try to mask absolute paths)
+	char *cwd = get_current_dir_name();
+	char *overlayfs_options;
+	if (chdir(overlayfs_mount_dir)) {
+		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s,metacopy=on",
+					       lower_dir, upper_dir, work_dir);
+		INFO("chdir failed: old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd,
+		     overlayfs_mount_dir, overlayfs_options);
+	} else {
+		overlayfs_options =
+			mem_strdup("lowerdir=lower,upperdir=upper,workdir=work,metacopy=on");
+		INFO("old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd, overlayfs_mount_dir,
+		     overlayfs_options);
+	}
+	INFO("mount_dir: %s", target_dir);
+	// mount overlayfs to dir
+	if (mount("overlay", target_dir, "overlay", 0, overlayfs_options) < 0) {
+		ERROR_ERRNO("Could not mount overlay");
+		mem_free0(overlayfs_options);
+		if (chdir(cwd))
+			WARN("Could not change back to former cwd %s", cwd);
+		mem_free0(cwd);
+		goto error;
+	}
+	mem_free0(overlayfs_options);
+
+	if (chmod(target_dir, 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", target_dir);
+		goto error;
+	}
+	DEBUG("Changed permissions of %s to 0755", target_dir);
+
+	if (chdir(cwd))
+		WARN("Could not change back to former cwd %s", cwd);
+	mem_free0(cwd);
+	mem_free0(lower_dir);
+	mem_free0(upper_dir);
+	mem_free0(work_dir);
+	return 0;
+error:
+	if (file_is_link(lower_dir)) {
+		if (unlink(lower_dir))
+			WARN_ERRNO("could not remove temporary link %s", lower_dir);
+	}
+	mem_free0(lower_dir);
+	mem_free0(upper_dir);
+	mem_free0(work_dir);
+	return -1;
+}
+
+static int
+c_shiftid_prepare_dir(c_shiftid_t *shiftid, struct c_shiftid_mnt *mnt, const char *dir)
+{
+	// if kernel does not support shiftfs just chown the files
+	// and do bind mounts
+	int container_uid = container_get_uid(shiftid->container);
+	struct statfs dir_statfs;
+	statfs(dir, &dir_statfs);
+
+	if (!cmld_is_shiftfs_supported()) {
+		if (dir_statfs.f_flags & MS_RDONLY) {
+			char *tmpfs_dir =
+				mem_printf("%s/%s/tmp%d", SHIFTFS_DIR,
+					   uuid_string(container_get_uuid(shiftid->container)),
+					   shiftid->mark_index);
+			if (dir_mkdir_p(tmpfs_dir, 0777) < 0) {
+				ERROR_ERRNO("Could not mkdir shiftfs dir %s", tmpfs_dir);
+				mem_free0(tmpfs_dir);
+				return -1;
+			}
+			if (mount(NULL, tmpfs_dir, "tmpfs", 0, NULL) < 0) {
+				ERROR_ERRNO("Could not mount tmpfs to %s", tmpfs_dir);
+				mem_free0(tmpfs_dir);
+				return -1;
+			}
+			if (c_shiftid_mount_ovl(tmpfs_dir, dir, dir, false)) {
+				ERROR("Failed to mount ovl '%s' (lower='%s') in userns on '%s'",
+				      tmpfs_dir, dir, dir);
+				mem_free0(tmpfs_dir);
+				return -1;
+			}
+			mem_free0(tmpfs_dir);
+		}
+		if (chown(dir, container_uid, container_uid) < 0) {
+			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", dir, container_uid,
+				    container_uid);
+			return -1;
+		}
+		if (dir_foreach(dir, &c_shiftid_chown_dir_cb, shiftid) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, container_uid,
+			      container_uid);
+			return -1;
+		}
+
+		if (dir_statfs.f_flags & MS_RDONLY) {
+			if (mount("none", dir, "none", MS_REMOUNT | MS_RDONLY, NULL) < 0) {
+				ERROR_ERRNO("Could not remount tmpfs on %s", dir);
+				return -1;
+			}
+		}
+	}
+
+	mnt->mark = mem_printf("%s/%s/mark/%d", SHIFTFS_DIR,
+			       uuid_string(container_get_uuid(shiftid->container)),
+			       shiftid->mark_index++);
+
+	if (dir_mkdir_p(mnt->mark, 0777) < 0) {
+		ERROR_ERRNO("Could not mkdir shiftfs dir %s", mnt->mark);
+		return -1;
+	}
+
+	/*
+	 * In case shiftfs is not supported we use MS_BIND flag to just bind
+	 * mount the chowned directories to the new mount tree.
+	 * If MS_BIND flag is used, fs paramter and other options are ignored
+	 * by the mount system call.
+	 */
+	if (mount(dir, mnt->mark, "shiftfs", cmld_is_shiftfs_supported() ? 0 : MS_BIND, "mark") <
+	    0) {
+		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", dir, mnt->mark);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
+c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
+			const char *ovl_lower)
+{
+	struct c_shiftid_mnt *mnt = NULL;
+	struct c_shiftid_mnt *mnt_lower = NULL;
+
+	if (ovl_lower) {
+		// mount lower shifted
+		mnt_lower = mem_new0(struct c_shiftid_mnt, 1);
+		mnt_lower->target = mem_printf("%s/%s/ovl%d", SHIFTFS_DIR,
+					       uuid_string(container_get_uuid(shiftid->container)),
+					       shiftid->mark_index);
+		if (dir_mkdir_p(mnt_lower->target, 0777) < 0) {
+			ERROR_ERRNO("Could not mkdir shifted lower dir %s", mnt_lower->target);
+			goto error;
+		}
+		mnt_lower->ovl_lower = NULL;
+		IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt_lower, ovl_lower) < 0, error);
+
+		shiftid->marks = list_append(shiftid->marks, mnt_lower);
+	}
+
+	mnt = mem_new0(struct c_shiftid_mnt, 1);
+	mnt->target = mem_strdup(dst);
+	// set shifted lower as ovl_lower
+	mnt->ovl_lower = (ovl_lower) ? mnt_lower->target : NULL;
+	IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt, src) < 0, error);
+
+	shiftid->marks = list_append(shiftid->marks, mnt);
+
+	return 0;
+error:
+	if (mnt)
+		c_shiftid_mnt_free(mnt);
+	if (mnt_lower)
+		c_shiftid_mnt_free(mnt_lower);
+	return -1;
+}
+
 /**
  * Shifts or sets uid/gids of path using the parent ids for this c_shiftid_t
  *
  * Call this inside the parent user_ns.
  */
 static int
-c_shiftid_shift_ids(void *shiftidp, const char *path, bool is_root)
+c_shiftid_shift_ids(void *shiftidp, const char *src, const char *dst, const char *ovl_lower)
 {
 	c_shiftid_t *shiftid = shiftidp;
 	ASSERT(shiftid);
@@ -200,39 +423,24 @@ c_shiftid_shift_ids(void *shiftidp, const char *path, bool is_root)
 	int container_uid = container_get_uid(shiftid->container);
 
 	// if we just got a single file chown this and return
-	if (file_exists(path) && !file_is_dir(path)) {
-		if (lchown(path, container_uid, container_uid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)",
-				    path, container_uid, container_uid);
+	if (file_exists(src) && !file_is_dir(src)) {
+		if (lchown(src, container_uid, container_uid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", src, container_uid,
+				    container_uid);
 			goto error;
 		}
 		goto success;
 	}
 
 	// if cgroup subsys or dev just chown the files
-	if ((strlen(path) >= 5 && !strcmp(strrchr(path, '\0') - 4, "/dev")) ||
-	    (strstr(path, "/cgroup") != NULL)) {
-		if (dir_foreach(path, &c_shiftid_chown_dir_cb, shiftid) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", path, container_uid,
+	if ((strlen(src) >= 5 && !strcmp(strrchr(src, '\0') - 4, "/dev")) ||
+	    (strstr(src, "/cgroup") != NULL)) {
+		if (dir_foreach(src, &c_shiftid_chown_dir_cb, shiftid) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", src, container_uid,
 			      container_uid);
 			goto error;
 		}
 		goto success;
-	}
-
-	// if kernel does not support shiftfs just chown the files
-	// and do bind mounts
-	if (!cmld_is_shiftfs_supported()) {
-		if (chown(path, container_uid, container_uid) < 0) {
-			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", path,
-				    container_uid, container_uid);
-			goto error;
-		}
-		if (dir_foreach(path, &c_shiftid_chown_dir_cb, shiftid) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)",
-			      path, container_uid, container_uid);
-			goto error;
-		}
 	}
 
 	// create mountpoints for lower and upper dev
@@ -245,35 +453,10 @@ c_shiftid_shift_ids(void *shiftidp, const char *path, bool is_root)
 		goto error;
 	}
 
-	struct c_shiftid_mnt *mnt = mem_new0(struct c_shiftid_mnt, 1);
-	mnt->target = mem_strdup(path);
-	mnt->mark =
-		mem_printf("%s/%s/mark/%d", SHIFTFS_DIR,
-			   uuid_string(container_get_uuid(shiftid->container)), shiftid->mark_index++);
-	mnt->is_root = is_root;
-	if (dir_mkdir_p(mnt->mark, 0777) < 0) {
-		ERROR_ERRNO("Could not mkdir shiftfs dir %s", mnt->mark);
-		c_shiftid_mnt_free(mnt);
-		goto error;
-	}
-	/*
-	 * In case shiftfs is not supported we use MS_BIND flag to just bind
-	 * mount the chowned directories to the new mount tree.
-	 * If MS_BIND flag is used, fs paramter and other options are ignored
-	 * by the mount system call.
-	 */
-	if (mount(path, mnt->mark, "shiftfs", cmld_is_shiftfs_supported() ? 0 : MS_BIND,
-		  "mark") < 0) {
-		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", path, mnt->mark);
-		c_shiftid_mnt_free(mnt);
-		goto error;
-	}
-
-	shiftid->marks = list_append(shiftid->marks, mnt);
-
+	IF_TRUE_GOTO(c_shiftid_mount_shifted(shiftid, src, dst, ovl_lower) < 0, error);
 success:
 
-	INFO("Successfully shifted uids for '%s'", path);
+	INFO("Successfully shifted uids for '%s'", src);
 	return 0;
 error:
 	return -1;
@@ -293,23 +476,28 @@ c_shiftid_shift_mounts(void *shiftidp)
 	for (list_t *l = shiftid->marks; l; l = l->next) {
 		struct c_shiftid_mnt *mnt = l->data;
 
+		if (mnt->ovl_lower) {
+			if (c_shiftid_mount_ovl(mnt->mark, mnt->target, mnt->ovl_lower, true)) {
+				ERROR("Failed to mount ovl '%s' (lower='%s') in userns on '%s'",
+				      mnt->mark, mnt->ovl_lower, mnt->target);
+				return -1;
+			}
+			continue;
+		}
+
 		// mount the shifted user ids to new root
 		IF_TRUE_RETVAL(dir_mkdir_p(mnt->target, 0777) < 0, -1);
 		if (mount(mnt->mark, mnt->target, "shiftfs",
 			  cmld_is_shiftfs_supported() ? 0 : MS_BIND, NULL) < 0) {
 			ERROR_ERRNO("Could not remount shiftfs mark %s to %s", mnt->mark,
 				    mnt->target);
-			return -1;
 		} else {
-			INFO("Successfully shifted root uid/gid for userns mount %s",
-			     mnt->target);
+			INFO("Successfully shifted root uid/gid for userns mount %s", mnt->target);
 		}
 	}
 
 	return 0;
 }
-
-
 
 static compartment_module_t c_shiftid_module = {
 	.name = MOD_NAME,

@@ -66,7 +66,7 @@ c_uevent_create_device_node(c_uevent_t *uevent, char *path, int major, int minor
 		goto err;
 	}
 shift:
-	if (container_shift_ids(uevent->container, path, false) < 0) {
+	if (container_shift_ids(uevent->container, path, path, NULL) < 0) {
 		ERROR("Failed to fixup uids for '%s' in usernamspace of container %s", path,
 		      container_get_name(uevent->container));
 		goto err;
