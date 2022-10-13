@@ -1406,31 +1406,6 @@ c_vol_start_child_early(void *volp)
 	DEBUG("Mounting /dev");
 	IF_TRUE_GOTO_ERROR(c_vol_mount_dev(vol) < 0, error);
 
-	/*
-	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
-	 * Remeber, This will only succeed if targetfs is writable
-	 */
-	char *cservice_bin = mem_printf("%s/%s", vol->root, CSERVICE_TARGET);
-	char *cservice_dir = mem_strdup(cservice_bin);
-	char *cservice_dir_p = dirname(cservice_dir);
-	if (dir_mkdir_p(cservice_dir_p, 0755) < 0) {
-		WARN_ERRNO("Could not mkdir '%s' dir", cservice_dir_p);
-	} else if (file_exists("/sbin/cml-service-container")) {
-		file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0);
-		INFO("Copied %s to container", cservice_bin);
-	} else if (file_exists("/usr/sbin/cml-service-container")) {
-		file_copy("/usr/sbin/cml-service-container", cservice_bin, -1, 512, 0);
-		INFO("Copied %s to container", cservice_bin);
-	} else {
-		WARN_ERRNO("Could not copy %s to container", cservice_bin);
-	}
-
-	if (chmod(cservice_bin, 0755))
-		WARN_ERRNO("Could not set %s executable", cservice_bin);
-
-	mem_free0(cservice_bin);
-	mem_free0(cservice_dir);
-
 	return 0;
 error:
 	ERROR("Failed to execute post clone hook for c_vol");
@@ -1659,6 +1634,31 @@ c_vol_start_child(void *volp)
 		ERROR_ERRNO("Could not mount proc and sys");
 		goto error;
 	}
+
+	/*
+	 * copy cml-service-container binary to target as defined in CSERVICE_TARGET
+	 * Remeber, This will only succeed if targetfs is writable
+	 */
+	char *cservice_bin = mem_printf("%s/%s", vol->root, CSERVICE_TARGET);
+	char *cservice_dir = mem_strdup(cservice_bin);
+	char *cservice_dir_p = dirname(cservice_dir);
+	if (dir_mkdir_p(cservice_dir_p, 0755) < 0) {
+		WARN_ERRNO("Could not mkdir '%s' dir", cservice_dir_p);
+	} else if (file_exists("/sbin/cml-service-container")) {
+		file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0);
+		INFO("Copied %s to container", cservice_bin);
+	} else if (file_exists("/usr/sbin/cml-service-container")) {
+		file_copy("/usr/sbin/cml-service-container", cservice_bin, -1, 512, 0);
+		INFO("Copied %s to container", cservice_bin);
+	} else {
+		WARN_ERRNO("Could not copy %s to container", cservice_bin);
+	}
+
+	if (chmod(cservice_bin, 0755))
+		WARN_ERRNO("Could not set %s executable", cservice_bin);
+
+	mem_free0(cservice_bin);
+	mem_free0(cservice_dir);
 
 	if (cmld_is_hostedmode_active())
 		IF_TRUE_GOTO(c_vol_pivot_root(vol) < 0, error);
