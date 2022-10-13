@@ -414,21 +414,39 @@ out:
 	return ret;
 }
 
+static char *
+c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
+{
+	str_t *opts = str_new(NULL);
+
+	// Only mount tmpfs with uid, gid options if shiftfs is not supported
+	// since later one it would be shifted by shiftfs twice.
+	if (!cmld_is_shiftfs_supported())
+		str_append_printf(opts, "uid=%d,gid=%d", uid, gid);
+
+	if (mount_data)
+		str_append_printf(opts, ",%s", mount_data);
+
+	return str_free(opts, false);
+}
+
 static int
-c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char *lowerfs_type,
-		    int mount_flags, const char *mount_data, const char *upper_dev,
-		    const char *lower_dev, const char *overlayfs_mount_dir)
+c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fstype,
+		    const char *lowerfs_type, int mount_flags, const char *mount_data,
+		    const char *upper_dev, const char *lower_dev, const char *overlayfs_mount_dir)
+
 {
 	char *lower_dir, *upper_dir, *work_dir;
 	lower_dir = upper_dir = work_dir = NULL;
 	upper_dev = (upper_dev) ? upper_dev : "tmpfs";
+	int uid = container_get_uid(vol->container);
 
 	// create mountpoints for lower and upper dev
 	if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
 		ERROR_ERRNO("Could not mkdir overlayfs dir %s", overlayfs_mount_dir);
 		return -1;
 	}
-	lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
+	lower_dir = mem_printf("%s-lower", overlayfs_mount_dir);
 	upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
 	work_dir = mem_printf("%s/work", overlayfs_mount_dir);
 
@@ -436,10 +454,21 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 	 * mount backing fs image for overlayfs upper and work dir
 	 * (at least upper and work need to be on the same fs)
 	 */
-	if (mount(upper_dev, overlayfs_mount_dir, upper_fstype, mount_flags, mount_data) < 0) {
+	char *mount_opts;
+	if (strcmp(upper_dev, "tmpfs") == 0) {
+		mount_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
+	} else {
+		mount_opts = (mount_data) ? mem_strdup(mount_data) : NULL;
+	}
+	if (mount(upper_dev, overlayfs_mount_dir, upper_fstype, mount_flags, mount_opts) < 0) {
 		ERROR_ERRNO("Could not mount %s to %s", upper_dev, overlayfs_mount_dir);
+		if (mount_opts)
+			mem_free0(mount_opts);
 		goto error;
 	}
+	if (mount_opts)
+		mem_free0(mount_opts);
+
 	DEBUG("Successfully mounted %s to %s", upper_dev, overlayfs_mount_dir);
 
 	// create mountpoint for upper dev
@@ -465,50 +494,15 @@ c_vol_mount_overlay(const char *target_dir, const char *upper_fstype, const char
 		}
 		DEBUG("Successfully mounted %s to %s", lower_dev, lower_dir);
 	} else {
-		// try to hide absolute paths (if just overmounting existing lower dir)
-		if (file_is_link(lower_dir))
-			unlink(lower_dir);
-		if (symlink(target_dir, lower_dir) < 0) {
-			ERROR_ERRNO("link lowerdir failed");
-			mem_free0(lower_dir);
-			lower_dir = mem_strdup(target_dir);
-		}
+		lower_dir = mem_strdup(target_dir);
 	}
-	DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, lower_dir=%s, target dir=%s",
-	      work_dir, upper_dir, lower_dir, target_dir);
-	// create mount option string (try to mask absolute paths)
-	char *cwd = get_current_dir_name();
-	char *overlayfs_options;
-	if (chdir(overlayfs_mount_dir)) {
-		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s,metacopy=on",
-					       lower_dir, upper_dir, work_dir);
-	} else {
-		overlayfs_options =
-			mem_strdup("lowerdir=lower,upperdir=upper,workdir=work,metacopy=on");
-		TRACE("old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd, overlayfs_mount_dir,
-		      overlayfs_options);
-	}
-	INFO("mount_dir: %s", target_dir);
-	// mount overlayfs to dir
-	if (mount("overlay", target_dir, "overlay", 0, overlayfs_options) < 0) {
-		ERROR_ERRNO("Could not mount overlay");
-		mem_free0(overlayfs_options);
-		if (chdir(cwd))
-			WARN("Could not change back to former cwd %s", cwd);
-		mem_free0(cwd);
+
+	if (container_shift_ids(vol->container, overlayfs_mount_dir, target_dir, lower_dir)) {
+		ERROR_ERRNO("Could not register ovl %s (lower=%s) for idmapped mount on target=%s",
+			    overlayfs_mount_dir, lower_dir, target_dir);
 		goto error;
 	}
-	mem_free0(overlayfs_options);
 
-	if (chmod(target_dir, 0755) < 0) {
-		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", target_dir);
-		goto error;
-	}
-	DEBUG("Changed permissions of %s to 0755", target_dir);
-
-	if (chdir(cwd))
-		WARN("Could not change back to former cwd %s", cwd);
-	mem_free0(cwd);
 	mem_free0(lower_dir);
 	mem_free0(upper_dir);
 	mem_free0(work_dir);
@@ -609,22 +603,6 @@ c_vol_mount_dir_bind(const char *src, const char *dst, unsigned long flags)
 	}
 	DEBUG("Sucessfully bind mounted path %s to %s", src, dst);
 	return 0;
-}
-
-static char *
-c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
-{
-	str_t *opts = str_new(NULL);
-
-	// Only mount tmpfs with uid, gid options if shiftfs is not supported
-	// since later one it would be shifted by shiftfs twice.
-	if (!cmld_is_shiftfs_supported())
-		str_append_printf(opts, "uid=%d,gid=%d", uid, gid);
-
-	if (mount_data)
-		str_append_printf(opts, ",%s", mount_data);
-
-	return str_free(opts, false);
 }
 
 /*
@@ -894,8 +872,9 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			mem_printf("/tmp/overlayfs/%s/%d",
 				   uuid_string(container_get_uuid(vol->container)),
 				   ++vol->overlay_count);
-		if (c_vol_mount_overlay(dir, upper_fstype, lower_fstype, mountflags, mount_data,
-					upper_dev, lower_dev, overlayfs_mount_dir) < 0) {
+		if (c_vol_mount_overlay(vol, dir, upper_fstype, lower_fstype, mountflags,
+					mount_data, upper_dev, lower_dev,
+					overlayfs_mount_dir) < 0) {
 			ERROR_ERRNO("Could not mount %s to %s", img, dir);
 			mem_free0(overlayfs_mount_dir);
 			goto error;
@@ -903,7 +882,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		DEBUG("Successfully mounted %s using overlay to %s", img, dir);
 		mem_free0(overlayfs_mount_dir);
 
-		goto final;
+		// c_vol_mount_overlay allready does idmapping thus skip this after final mount
+		goto final_noshift;
 	}
 
 	DEBUG("Mounting image %s %s using %s to %s", img, mountflags & MS_RDONLY ? "ro" : "rw", dev,
@@ -964,11 +944,13 @@ final:
 	}
 
 	if (shiftids) {
-		if (container_shift_ids(vol->container, dir, is_root) < 0) {
-			ERROR_ERRNO("Shifting user and gids failed!");
+		if (container_shift_ids(vol->container, dir, dir, NULL) < 0) {
+			ERROR_ERRNO("Shifting user and gids for '%s' failed!", dir);
 			goto error;
 		}
 	}
+
+final_noshift:
 
 	if (dev)
 		loopdev_free(dev);
@@ -1498,7 +1480,7 @@ c_vol_start_pre_exec(void *volp)
 		mem_free0(tty_data.name);
 	}
 
-	if (container_shift_ids(vol->container, dev_mnt, false) < 0)
+	if (container_shift_ids(vol->container, dev_mnt, dev_mnt, NULL) < 0)
 		WARN("Failed to setup ids for %s in user namespace!", dev_mnt);
 
 	mem_free0(dev_mnt);

@@ -1172,7 +1172,8 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 			}
 		}
 
-		if (container_shift_ids(cgroups->container, subsys_child_path, false)) {
+		if (container_shift_ids(cgroups->container, subsys_child_path, subsys_child_path,
+					NULL)) {
 			ERROR("Could not shift ids of cgroup subsys for userns");
 			mem_free0(cgroup_tasks);
 			mem_free0(subsys_child_path);

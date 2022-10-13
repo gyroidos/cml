@@ -486,7 +486,8 @@ CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, int major, int minor)
  * with shifted ids in child. This is also be used to shift single files in the
  * in uevent module for container allowed devices.
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(shift_ids, int, const char *path, bool is_root)
+CONTAINER_MODULE_WRAPPER_DECLARE(shift_ids, int, const char *src, const char *dst,
+				 const char *ovl_lower)
 
 /**
  * Mounts all directories with shifted uid and gids inside the container's userns.
