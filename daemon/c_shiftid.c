@@ -28,6 +28,7 @@
 #include <linux/magic.h>
 #include <sys/mount.h>
 #include <sys/vfs.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 #include "common/macro.h"
@@ -363,6 +364,21 @@ c_shiftid_prepare_dir(c_shiftid_t *shiftid, struct c_shiftid_mnt *mnt, const cha
 	return 0;
 }
 
+static bool
+kernel_version_check(char *version)
+{
+	struct utsname buf;
+	char ignore[65];
+	int main, major, main_to_check, major_to_check;
+
+	uname(&buf);
+
+	ASSERT(sscanf(version, "%d.%d%s", &main_to_check, &major_to_check, ignore) >= 2);
+	ASSERT(sscanf(buf.release, "%d.%d.%s", &main, &major, ignore) == 3);
+
+	return (main == main_to_check) ? major >= major_to_check : main >= main_to_check;
+}
+
 static int
 c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 			const char *ovl_lower)
@@ -371,19 +387,46 @@ c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 	struct c_shiftid_mnt *mnt_lower = NULL;
 
 	if (ovl_lower) {
-		// mount lower shifted
-		mnt_lower = mem_new0(struct c_shiftid_mnt, 1);
-		mnt_lower->target = mem_printf("%s/%s/ovl%d", SHIFTFS_DIR,
-					       uuid_string(container_get_uuid(shiftid->container)),
-					       shiftid->mark_index);
-		if (dir_mkdir_p(mnt_lower->target, 0777) < 0) {
-			ERROR_ERRNO("Could not mkdir shifted lower dir %s", mnt_lower->target);
-			goto error;
-		}
-		mnt_lower->ovl_lower = NULL;
-		IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt_lower, ovl_lower) < 0, error);
+		// mount ovl in rootns if kernel is to old
+		if (!kernel_version_check("5.12")) {
+			if (c_shiftid_mount_ovl(src, src, ovl_lower, false)) {
+				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
+				      src, ovl_lower, dst);
+				goto error;
+			}
+			if (mount(src, dst, NULL, MS_BIND, NULL) < 0) {
+				ERROR_ERRNO("Could not bind ovl in rootns '%s' on %s", src, dst);
+				goto error;
+			}
+			mnt = mem_new0(struct c_shiftid_mnt, 1);
+			mnt->target = mem_strdup(dst);
+			// set shifted lower as ovl_lower
+			mnt->ovl_lower = NULL;
+			IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt, src) < 0, error);
 
-		shiftid->marks = list_append(shiftid->marks, mnt_lower);
+			shiftid->marks = list_append(shiftid->marks, mnt);
+			return 0;
+		}
+		// mount lower shifted if not over mounting lower dir itself
+		if (!strcmp(ovl_lower, dst))
+			mnt->ovl_lower = mem_strdup(dst);
+		else {
+			mnt_lower = mem_new0(struct c_shiftid_mnt, 1);
+			mnt_lower->target =
+				mem_printf("%s/%s/ovl%d", SHIFTFS_DIR,
+					   uuid_string(container_get_uuid(shiftid->container)),
+					   shiftid->mark_index);
+			if (dir_mkdir_p(mnt_lower->target, 0777) < 0) {
+				ERROR_ERRNO("Could not mkdir shifted lower dir %s",
+					    mnt_lower->target);
+				goto error;
+			}
+			mnt_lower->ovl_lower = NULL;
+			IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt_lower, ovl_lower) < 0,
+				     error);
+
+			shiftid->marks = list_append(shiftid->marks, mnt_lower);
+		}
 	}
 
 	mnt = mem_new0(struct c_shiftid_mnt, 1);
