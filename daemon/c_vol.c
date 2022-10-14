@@ -1192,13 +1192,12 @@ c_vol_mount_dev(c_vol_t *vol)
 
 	int ret = -1;
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
-	int uid = container_get_uid(vol->container);
-	char *tmpfs_opts = c_vol_get_tmpfs_opts_new(NULL, uid, uid);
+
 	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir /dev");
 		goto error;
 	}
-	if ((ret = mount("tmpfs", dev_mnt, "tmpfs", MS_RELATIME | MS_NOSUID, tmpfs_opts)) < 0) {
+	if ((ret = mount("tmpfs", dev_mnt, "tmpfs", MS_RELATIME | MS_NOSUID, NULL)) < 0) {
 		ERROR_ERRNO("Could not mount /dev");
 		goto error;
 	}
@@ -1207,6 +1206,11 @@ c_vol_mount_dev(c_vol_t *vol)
 		ERROR_ERRNO("Could not apply MS_SHARED to %s", dev_mnt);
 	} else {
 		DEBUG("Applied MS_SHARED to %s", dev_mnt);
+	}
+
+	if (container_shift_ids(vol->container, dev_mnt, dev_mnt, NULL)) {
+		ERROR_ERRNO("Could not shift ids for dev on '%s'", dev_mnt);
+		goto error;
 	}
 
 	if (chmod(dev_mnt, 0755) < 0) {
@@ -1218,7 +1222,6 @@ c_vol_mount_dev(c_vol_t *vol)
 	ret = 0;
 error:
 	mem_free0(dev_mnt);
-	mem_free0(tmpfs_opts);
 	return ret;
 }
 

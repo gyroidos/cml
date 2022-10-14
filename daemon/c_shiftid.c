@@ -52,6 +52,7 @@ typedef struct c_shiftid {
 	container_t *container; //!< container which the c_user struct is associated to
 	list_t *marks;		//marks (c_shiftid_mnt) to be mounted in userns
 	int mark_index;
+	bool is_dev_mounted; // checks if the bind mount for dev is already performed
 } c_shiftid_t;
 
 static void
@@ -77,6 +78,7 @@ c_shiftid_new(compartment_t *compartment)
 
 	c_shiftid_t *shiftid = mem_new0(c_shiftid_t, 1);
 	shiftid->container = compartment_get_extension_data(compartment);
+	shiftid->is_dev_mounted = false;
 
 	TRACE("new c_shiftid struct was allocated");
 
@@ -350,6 +352,25 @@ c_shiftid_prepare_dir(c_shiftid_t *shiftid, struct c_shiftid_mnt *mnt, const cha
 	}
 
 	/*
+	 * In case of dev, we cannot use user namespace mounts since the kernel
+	 * always implcitly sets the SB_I_NODEV flag for filesystems mounted
+	 * in non-inital userns. Thus, we just bind mount it.
+	 */
+	if (strlen(mnt->target) >= 4 && !strcmp(strrchr(mnt->target, '\0') - 4, "/dev")) {
+		if (mount(dir, mnt->mark, NULL, MS_BIND, NULL) < 0) {
+			ERROR_ERRNO("Could not bind dev '%s' on mark %s", dir, mnt->mark);
+			return -1;
+		}
+		if (chown(dir, container_uid, container_uid) < 0) {
+			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", dir, container_uid,
+				    container_uid);
+			return -1;
+		}
+		shiftid->is_dev_mounted = true;
+		return 0;
+	}
+
+	/*
 	 * In case shiftfs is not supported we use MS_BIND flag to just bind
 	 * mount the chowned directories to the new mount tree.
 	 * If MS_BIND flag is used, fs paramter and other options are ignored
@@ -475,15 +496,18 @@ c_shiftid_shift_ids(void *shiftidp, const char *src, const char *dst, const char
 		goto success;
 	}
 
+	bool is_dev = strlen(src) >= 5 && !strcmp(strrchr(src, '\0') - 4, "/dev");
+	bool is_cgroup = strstr(src, "/cgroup") != NULL;
+
 	// if cgroup subsys or dev just chown the files
-	if ((strlen(src) >= 5 && !strcmp(strrchr(src, '\0') - 4, "/dev")) ||
-	    (strstr(src, "/cgroup") != NULL)) {
+	if (is_dev || is_cgroup) {
 		if (dir_foreach(src, &c_shiftid_chown_dir_cb, shiftid) < 0) {
 			ERROR("Could not chown %s to target uid:gid (%d:%d)", src, container_uid,
 			      container_uid);
 			goto error;
 		}
-		goto success;
+		if ((is_dev && shiftid->is_dev_mounted) || is_cgroup)
+			goto success;
 	}
 
 	// create mountpoints for lower and upper dev
@@ -528,10 +552,14 @@ c_shiftid_shift_mounts(void *shiftidp)
 			continue;
 		}
 
+		// always bind mount dev
+		bool is_dev =
+			strlen(mnt->target) >= 4 && !strcmp(strrchr(mnt->target, '\0') - 4, "/dev");
+
 		// mount the shifted user ids to new root
 		IF_TRUE_RETVAL(dir_mkdir_p(mnt->target, 0777) < 0, -1);
 		if (mount(mnt->mark, mnt->target, "shiftfs",
-			  cmld_is_shiftfs_supported() ? 0 : MS_BIND, NULL) < 0) {
+			  (cmld_is_shiftfs_supported() && !is_dev) ? 0 : MS_BIND, NULL) < 0) {
 			ERROR_ERRNO("Could not remount shiftfs mark %s to %s", mnt->mark,
 				    mnt->target);
 		} else {
