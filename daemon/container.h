@@ -497,6 +497,14 @@ CONTAINER_MODULE_WRAPPER_DECLARE(shift_ids, int, const char *src, const char *ds
 CONTAINER_MODULE_WRAPPER_DECLARE(get_uid, int)
 
 /**
+ * Opens an file descriptor to a userns with the corresponding containers
+ * uid mappings.
+ *
+ * Returns the opened namespace fd
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(open_userns, int)
+
+/**
  * Returns the directory where the container's file system tree
  * is mounted in init mount namspace.
  */
