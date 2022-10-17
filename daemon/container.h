@@ -490,13 +490,6 @@ CONTAINER_MODULE_WRAPPER_DECLARE(shift_ids, int, const char *src, const char *ds
 				 const char *ovl_lower)
 
 /**
- * Mounts all directories with shifted uid and gids inside the container's userns.
- *
- * Needs to be called before exec usually in a start_child handler.
- */
-CONTAINER_MODULE_WRAPPER_DECLARE(shift_mounts, int)
-
-/**
  * Returns the uid which is mapped to the root user inside the container
  *
  * if userns is enabled this would be a uid grater than 0.
