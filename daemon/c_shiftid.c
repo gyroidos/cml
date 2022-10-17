@@ -530,7 +530,7 @@ error:
 }
 
 static int
-c_shiftid_shift_mounts(void *shiftidp)
+c_shiftid_start_child(void *shiftidp)
 {
 	c_shiftid_t *shiftid = shiftidp;
 	ASSERT(shiftid);
@@ -547,7 +547,7 @@ c_shiftid_shift_mounts(void *shiftidp)
 			if (c_shiftid_mount_ovl(mnt->mark, mnt->target, mnt->ovl_lower, true)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in userns on '%s'",
 				      mnt->mark, mnt->ovl_lower, mnt->target);
-				return -1;
+				return -COMPARTMENT_ERROR_USER;
 			}
 			continue;
 		}
@@ -562,6 +562,7 @@ c_shiftid_shift_mounts(void *shiftidp)
 			  (cmld_is_shiftfs_supported() && !is_dev) ? 0 : MS_BIND, NULL) < 0) {
 			ERROR_ERRNO("Could not remount shiftfs mark %s to %s", mnt->mark,
 				    mnt->target);
+			return -COMPARTMENT_ERROR_USER;
 		} else {
 			INFO("Successfully shifted root uid/gid for userns mount %s", mnt->target);
 		}
@@ -581,7 +582,7 @@ static compartment_module_t c_shiftid_module = {
 	.start_post_clone = NULL,
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
-	.start_child = NULL,
+	.start_child = c_shiftid_start_child,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
 	.cleanup = c_shiftid_cleanup,
@@ -596,5 +597,4 @@ c_shiftid_init(void)
 
 	// register relevant handlers implemented by this module
 	container_register_shift_ids_handler(MOD_NAME, c_shiftid_shift_ids);
-	container_register_shift_mounts_handler(MOD_NAME, c_shiftid_shift_mounts);
 }
