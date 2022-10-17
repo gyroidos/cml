@@ -755,8 +755,6 @@ CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(setuid0, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(shift_ids, int, void *, const char *, const char *,
 				       const char *)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(shift_ids, int, 0, const char *, const char *, const char *)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(shift_mounts, int, void *)
-CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(shift_mounts, int, 0)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_uid, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uid, int, 0)
 
