@@ -1628,11 +1628,6 @@ c_vol_start_child(void *volp)
 
 	INFO("Switching to new rootfs in '%s'", vol->root);
 
-	if (container_shift_mounts(vol->container) < 0) {
-		ERROR_ERRNO("Mounting of shifting user and gids failed!");
-		goto error;
-	}
-
 	if (c_vol_mount_proc_and_sys(vol, vol->root) == -1) {
 		ERROR_ERRNO("Could not mount proc and sys");
 		goto error;
