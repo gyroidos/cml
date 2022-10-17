@@ -30,9 +30,11 @@
 #include <limits.h>
 #include <sys/mount.h>
 #include <sched.h>
+#include <signal.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "common/macro.h"
@@ -208,15 +210,13 @@ c_user_new(compartment_t *compartment)
  * Setup mappings for uids and gids
  */
 static int
-c_user_setup_mapping(const c_user_t *user)
+c_user_setup_mapping(pid_t pid, int uid_start, int uid_range)
 {
-	ASSERT(user);
-
-	char *uid_mapping = mem_printf(C_USER_MAP_FORMAT, 0, user->uid_start, UID_MAX);
+	char *uid_mapping = mem_printf(C_USER_MAP_FORMAT, 0, uid_start, uid_range);
 	INFO("mapping: '%s'", uid_mapping);
 
-	char *uid_map_path = mem_printf(C_USER_UID_MAP_PATH, container_get_pid(user->container));
-	char *gid_map_path = mem_printf(C_USER_GID_MAP_PATH, container_get_pid(user->container));
+	char *uid_map_path = mem_printf(C_USER_UID_MAP_PATH, pid);
+	char *gid_map_path = mem_printf(C_USER_GID_MAP_PATH, pid);
 
 	// write mapping to proc
 	if (file_printf(uid_map_path, "%s", uid_mapping) == -1) {
@@ -227,9 +227,6 @@ c_user_setup_mapping(const c_user_t *user)
 		ERROR_ERRNO("Failed to write to %s", gid_map_path);
 		goto error;
 	}
-
-	INFO("uid/gid mapping '%s' for %s activated", uid_mapping,
-	     container_get_name(user->container));
 
 	mem_free0(uid_mapping);
 	mem_free0(uid_map_path);
@@ -373,8 +370,10 @@ c_user_start_post_clone(void *usr)
 	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
 
+	pid_t container_pid = container_get_pid(user->container);
+
 	// bind userns to file
-	if (ns_bind("user", container_get_pid(user->container), user->ns_path) == -1) {
+	if (ns_bind("user", container_pid, user->ns_path) == -1) {
 		WARN("Could not bind userns of %s into filesystem!",
 		     container_get_name(user->container));
 	}
@@ -382,8 +381,11 @@ c_user_start_post_clone(void *usr)
 	if (user->fd_userns < 0)
 		WARN("Could not keep userns active for reboot!");
 
-	if (c_user_setup_mapping(user) < 0)
+	if (c_user_setup_mapping(container_pid, user->uid_start, UID_MAX) < 0)
 		return -COMPARTMENT_ERROR_USER;
+
+	INFO("uid/gid mapping '%d %d' for %s activated", user->uid_start, UID_MAX,
+	     container_get_name(user->container));
 
 	return 0;
 }
@@ -399,6 +401,60 @@ c_user_join_userns(void *usr)
 		return -COMPARTMENT_ERROR_USER;
 
 	return 0;
+}
+
+#define CLONE_STACK_SIZE 8192
+
+static int
+c_user_dummy_userns_child(UNUSED void *data)
+{
+	return kill(getpid(), SIGSTOP);
+}
+
+static int
+c_user_open_userns(void *usr)
+{
+	c_user_t *user = usr;
+	ASSERT(user);
+
+	int userns_fd = -1;
+	char *userns_path = NULL;
+	pid_t userns_child = -1;
+	int status = -1;
+
+	void *stack = alloca(CLONE_STACK_SIZE);
+	IF_NULL_GOTO(stack, error);
+
+	void *stack_high = (void *)((const char *)stack + CLONE_STACK_SIZE);
+
+	userns_child = clone(c_user_dummy_userns_child, stack_high, CLONE_NEWUSER | SIGCHLD, NULL);
+	IF_TRUE_GOTO(userns_child < 0, error);
+
+	if (c_user_setup_mapping(userns_child, user->uid_start, UID_MAX) < 0) {
+		ERROR("Could not set mapping for dummy userns");
+		goto error;
+	}
+
+	userns_path = mem_printf("/proc/%d/ns/user", userns_child);
+	if ((userns_fd = open(userns_path, O_RDONLY | O_CLOEXEC)) == -1) {
+		ERROR_ERRNO("Could not userns_fd '%s' for container start", userns_path);
+		goto error;
+	}
+
+	kill(userns_child, SIGKILL);
+	while (waitpid(userns_child, &status, WNOHANG) != userns_child) {
+		continue;
+	}
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		WARN("userns dummy child terminated abnormally/with error");
+	}
+
+	mem_free0(userns_path);
+	return userns_fd;
+error:
+	if (userns_path)
+		mem_free0(userns_path);
+	return -1;
 }
 
 static compartment_module_t c_user_module = {
@@ -428,4 +484,5 @@ c_user_init(void)
 	// register relevant handlers implemented by this module
 	container_register_setuid0_handler(MOD_NAME, c_user_setuid0);
 	container_register_get_uid_handler(MOD_NAME, c_user_get_uid);
+	container_register_open_userns_handler(MOD_NAME, c_user_open_userns);
 }

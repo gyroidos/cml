@@ -757,6 +757,8 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(shift_ids, int, void *, const char *, con
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(shift_ids, int, 0, const char *, const char *, const char *)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_uid, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uid, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(open_userns, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(open_userns, int, 0)
 
 /* Functions usually implemented and registered by c_net module */
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(add_net_interface, int, void *, container_pnet_cfg_t *)
