@@ -28,6 +28,7 @@ SANITIZERS ?= n
 CC_MODE ?= n
 WCAST_ALIGN ?= y
 OCI ?= n
+IDMAPPED ?= n
 
 TRUSTME_HARDWARE := x86
 
@@ -115,6 +116,21 @@ SRC_FILES := main.c \
 	audit.c
 
 # module order is crucial
+ifeq ($(IDMAPPED),y)
+SRC_CMODULES := \
+	c_smartcard.c \
+	c_user.c \
+	c_idmapped.c \
+	c_net.c \
+	c_cgroups.c \
+	c_vol.c \
+	c_service.c \
+	c_run.c \
+	c_time.c \
+	c_audit.c \
+	c_cap.c \
+	c_uevent.c
+else
 SRC_CMODULES := \
 	c_smartcard.c \
 	c_user.c \
@@ -129,6 +145,7 @@ SRC_CMODULES := \
 	c_audit.c \
 	c_cap.c \
 	c_uevent.c
+endif
 
 ifeq ($(OCI),y)
     LOCAL_CFLAGS += -DOCI -I${HOME}/rcs/libocispec/src
