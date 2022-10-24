@@ -867,9 +867,9 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 				}
 				DEBUG("Successfully formatted new image %s using %s", img, dev);
 			}
-			if (!strcmp("btrfs", upper_fstype) &&
-			    !strncmp("subvol", mount_entry_get_mount_data(mntent), 6)) {
-				c_vol_btrfs_create_subvol(dev, mount_entry_get_mount_data(mntent));
+			if (!strcmp("btrfs", upper_fstype) && mount_data &&
+			    !strncmp("subvol", mount_data, 6)) {
+				c_vol_btrfs_create_subvol(dev, mount_data);
 			}
 		} break;
 
