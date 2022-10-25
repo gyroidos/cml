@@ -1495,8 +1495,8 @@ cmld_init(const char *path)
 		FATAL_ERRNO("Could not mkdir containers directory %s", containers_path);
 
 	cmld_wrapped_keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
-	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
+	if (mkdir(cmld_wrapped_keys_path, 0700) < 0 && errno != EEXIST)
+		FATAL_ERRNO("Could not mkdir container keys directory %s", cmld_wrapped_keys_path);
 
 	if (cmld_init_c0(containers_path, device_config_get_c0os(device_config)) < 0)
 		FATAL("Could not init c0");
