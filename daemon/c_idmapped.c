@@ -783,14 +783,39 @@ c_idmapped_start_post_clone(void *idmappedp)
 	return 0;
 }
 
+static int
+c_idmapped_umount_dir_cb(const char *path, const char *file, UNUSED void *data)
+{
+	char *file_to_umount = mem_printf("%s/%s", path, file);
+	if (file_is_mountpoint(file_to_umount)) {
+		if (umount(file_to_umount) < 0)
+			WARN_ERRNO("Could not release bind mount on '%s'", file_to_umount);
+		else
+			INFO("Released bind mount on '%s'", file_to_umount);
+	} else if (file_is_dir(file_to_umount)) {
+		if (dir_foreach(file_to_umount, &c_idmapped_umount_dir_cb, NULL) < 0) {
+			WARN("Could not umount srcs on %s", file_to_umount);
+		}
+	} else {
+		INFO("No mount point '%s'", file_to_umount);
+	}
+	mem_free(file_to_umount);
+	return 0;
+}
+
 /**
- * Cleans up the c_user_t struct.
+ * Cleans up the c_idmapped_t struct.
  */
 static void
 c_idmapped_cleanup(void *idmappedp, UNUSED bool is_rebooting)
 {
 	c_idmapped_t *idmapped = idmappedp;
 	ASSERT(idmapped);
+
+	// release bindmounts to src directories in root ns
+	if (dir_foreach(IDMAPPED_SRC_DIR, &c_idmapped_umount_dir_cb, NULL) < 0) {
+		WARN("Could not umount srcs on %s", IDMAPPED_SRC_DIR);
+	}
 
 	for (list_t *l = idmapped->mapped_mnts; l; l = l->next) {
 		struct c_idmapped_mnt *mnt = l->data;
