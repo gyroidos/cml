@@ -107,17 +107,13 @@ c_shiftid_cleanup_marks_cb(const char *path, const char *file, UNUSED void *data
  * Cleans up the c_shiftid_t struct.
  */
 static void
-c_shiftid_cleanup(void *shiftidp, bool is_rebooting)
+c_shiftid_cleanup(void *shiftidp, UNUSED bool is_rebooting)
 {
 	c_shiftid_t *shiftid = shiftidp;
 	ASSERT(shiftid);
 
 	/* We can skip this in case the container has no user ns */
 	if (!container_has_userns(shiftid->container))
-		return;
-
-	/* skip on reboots of c0 */
-	if (is_rebooting && (cmld_containers_get_c0() == shiftid->container))
 		return;
 
 	// cleanup left-over marks in main cmld process
@@ -128,6 +124,8 @@ c_shiftid_cleanup(void *shiftidp, bool is_rebooting)
 	if (rmdir(path) < 0)
 		TRACE("Unable to remove %s", path);
 	mem_free0(path);
+
+	shiftid->is_dev_mounted = false;
 }
 
 /**
