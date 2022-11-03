@@ -27,6 +27,7 @@
 
 #include <fcntl.h>
 #include <linux/magic.h>
+#include <linux/types.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #include <sys/vfs.h>
