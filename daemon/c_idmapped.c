@@ -799,7 +799,7 @@ c_idmapped_umount_dir_cb(const char *path, const char *file, UNUSED void *data)
 	} else {
 		INFO("No mount point '%s'", file_to_umount);
 	}
-	mem_free(file_to_umount);
+	mem_free0(file_to_umount);
 	return 0;
 }
 
