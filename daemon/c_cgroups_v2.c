@@ -42,6 +42,7 @@
 #include "common/uuid.h"
 
 #include <sched.h>
+#include <sys/mount.h>
 #include <unistd.h>
 
 #ifndef CLONE_NEWCGROUP
@@ -226,4 +227,13 @@ c_cgroups_init(void)
 
 	// register relevant handlers implemented by this module
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
+
+	// mount cgroups if not already mounted by init
+	if (!file_is_mountpoint(CGROUPS_FOLDER)) {
+		if (mount("cgroup2", CGROUPS_FOLDER, "cgroup2",
+			  MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME, NULL) == -1 &&
+		    errno != EBUSY) {
+			FATAL_ERRNO("Could not mount cgroups_v2 unified hirachy");
+		}
+	}
 }
