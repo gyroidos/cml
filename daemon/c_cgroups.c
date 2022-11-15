@@ -1035,18 +1035,6 @@ c_cgroups_devices_is_dev_allowed(void *cgroupsp, int major, int minor)
 /* Hooks */
 
 static int
-c_cgroups_start_pre_clone(void *cgroupsp)
-{
-	c_cgroups_t *cgroups = cgroupsp;
-	ASSERT(cgroups);
-
-	if (mount_cgroups(cgroups->active_cgroups))
-		return -COMPARTMENT_ERROR_CGROUPS;
-
-	return 0;
-}
-
-static int
 c_cgroups_start_post_clone(void *cgroupsp)
 {
 	c_cgroups_t *cgroups = cgroupsp;
@@ -1378,7 +1366,7 @@ static compartment_module_t c_cgroups_module = {
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
-	.start_pre_clone = c_cgroups_start_pre_clone,
+	.start_pre_clone = NULL,
 	.start_post_clone = c_cgroups_start_post_clone,
 	.start_pre_exec = c_cgroups_start_pre_exec,
 	.start_post_exec = NULL,
@@ -1404,4 +1392,8 @@ c_cgroups_init(void)
 	container_register_device_deny_handler(MOD_NAME, c_cgroups_devices_chardev_deny);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_devices_is_dev_allowed);
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
+
+	// mount cgroups if not allready mounted by init
+	if (mount_cgroups(hardware_get_active_cgroups_subsystems()))
+		FATAL("Could not mount cgroups");
 }
