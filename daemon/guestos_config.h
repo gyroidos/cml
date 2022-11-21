@@ -32,13 +32,14 @@
  */
 
 #include "mount.h"
+#include "guestos.pb-c.h"
 
 #include <stdint.h>
 
 /**
  * A structure to present a guest operating system.
  */
-typedef struct _GuestOSConfig guestos_config_t;
+typedef GuestOSConfig guestos_config_t;
 
 /******************************************************************************/
 
