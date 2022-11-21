@@ -1189,6 +1189,7 @@ c_vol_mount_dev(c_vol_t *vol)
 
 	int ret = -1;
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
+	char *pts_mnt = mem_printf("%s/%s", dev_mnt, "pts");
 	int uid = container_get_uid(vol->container);
 	char *tmpfs_opts = c_vol_get_tmpfs_opts_new(NULL, uid, uid);
 	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
@@ -1206,6 +1207,12 @@ c_vol_mount_dev(c_vol_t *vol)
 		DEBUG("Applied MS_SHARED to %s", dev_mnt);
 	}
 
+	DEBUG("Creating directory %s", pts_mnt);
+	if (mkdir(pts_mnt, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir %s", pts_mnt);
+		goto error;
+	}
+
 	if (chmod(dev_mnt, 0755) < 0) {
 		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", dev_mnt);
 		goto error;
@@ -1214,6 +1221,7 @@ c_vol_mount_dev(c_vol_t *vol)
 
 	ret = 0;
 error:
+	mem_free0(pts_mnt);
 	mem_free0(dev_mnt);
 	mem_free0(tmpfs_opts);
 	return ret;
@@ -1717,10 +1725,6 @@ c_vol_start_child(c_vol_t *vol)
 	}
 
 	DEBUG("Mounting /dev/pts");
-	if (mkdir("/dev/pts", 0755) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Could not mkdir /dev/pts");
-		goto error;
-	}
 	if (mount("devpts", "/dev/pts", "devpts", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 		ERROR_ERRNO("Could not mount /dev/pts");
 		goto error;
