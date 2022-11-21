@@ -1192,6 +1192,7 @@ c_vol_mount_dev(c_vol_t *vol)
 
 	int ret = -1;
 	char *dev_mnt = mem_printf("%s/%s", vol->root, "dev");
+	char *pts_mnt = mem_printf("%s/%s", dev_mnt, "pts");
 
 	if ((ret = mkdir(dev_mnt, 0755)) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir /dev");
@@ -1213,6 +1214,12 @@ c_vol_mount_dev(c_vol_t *vol)
 		goto error;
 	}
 
+	DEBUG("Creating directory %s", pts_mnt);
+	if (mkdir(pts_mnt, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir %s", pts_mnt);
+		goto error;
+	}
+
 	if (chmod(dev_mnt, 0755) < 0) {
 		ERROR_ERRNO("Could not set permissions of overlayfs mount point at %s", dev_mnt);
 		goto error;
@@ -1221,6 +1228,7 @@ c_vol_mount_dev(c_vol_t *vol)
 
 	ret = 0;
 error:
+	mem_free0(pts_mnt);
 	mem_free0(dev_mnt);
 	return ret;
 }
@@ -1676,10 +1684,6 @@ c_vol_start_child(void *volp)
 	}
 
 	DEBUG("Mounting /dev/pts");
-	if (mkdir("/dev/pts", 0755) < 0 && errno != EEXIST) {
-		ERROR_ERRNO("Could not mkdir /dev/pts");
-		goto error;
-	}
 	if (mount("devpts", "/dev/pts", "devpts", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 		ERROR_ERRNO("Could not mount /dev/pts");
 		goto error;
