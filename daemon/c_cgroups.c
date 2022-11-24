@@ -338,8 +338,7 @@ c_cgroups_devices_allow(void *cgroupsp, const char *rule)
 
 	int *dev = c_cgroups_dev_from_rule(rule);
 	if (c_cgroups_list_contains_match(global_assigned_devs_list, dev)) {
-		WARN("Unable to allow rule %s: device busy (already assigned to another container)",
-		     rule);
+		WARN("Unable to allow rule %s", rule);
 		mem_free0(dev);
 		return 0;
 	}
@@ -357,8 +356,7 @@ c_cgroups_devices_assign(void *cgroupsp, const char *rule)
 
 	int *dev = c_cgroups_dev_from_rule(rule);
 	if (c_cgroups_list_contains_match(global_allowed_devs_list, dev)) {
-		ERROR("Unable to exclusively assign device according to rule %s: device busy (already available to another container)",
-		      rule);
+		ERROR("Unable to exclusively assign device according to rule %s", rule);
 		mem_free0(dev);
 		return -1;
 	}
