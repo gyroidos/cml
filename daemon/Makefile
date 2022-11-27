@@ -30,6 +30,7 @@ WCAST_ALIGN ?= y
 OCI ?= n
 IDMAPPED ?= n
 CGROUP_V2 ?= n
+SYSTEMD ?= n
 
 TRUSTME_HARDWARE := x86
 
@@ -115,6 +116,12 @@ SRC_FILES := main.c \
 	input.c \
 	common/audit.c \
 	audit.c
+
+ifeq ($(SYSTEMD),y)
+    SRC_CMODULES += \
+	c_cgroups_systemd.c
+    LDLIBS += -lsystemd
+endif
 
 # module order is crucial
 ifeq ($(IDMAPPED),y)
