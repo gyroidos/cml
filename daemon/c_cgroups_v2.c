@@ -39,6 +39,8 @@
 #include "common/macro.h"
 #include "common/file.h"
 #include "common/dir.h"
+#include "common/proc.h"
+#include "common/str.h"
 #include "common/uuid.h"
 
 #include <sched.h>
@@ -50,6 +52,7 @@
 #endif
 
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
+char *c_cgroups_subtree = NULL; // in which containers are running in
 
 typedef struct c_cgroups {
 	container_t *container; // weak reference
@@ -68,7 +71,7 @@ c_cgroups_new(compartment_t *compartment)
 
 	cgroups->ns_cgroup = file_exists("/proc/self/ns/cgroup");
 
-	cgroups->path = mem_printf("%s/%s", CGROUPS_FOLDER,
+	cgroups->path = mem_printf("%s/%s", c_cgroups_subtree,
 				   uuid_string(container_get_uuid(cgroups->container)));
 	return cgroups;
 }
@@ -84,23 +87,50 @@ c_cgroups_free(void *cgroupsp)
 }
 
 static int
-c_cgroups_add_pid(void *cgroupsp, pid_t pid)
+c_cgroups_add_pid_by_path(char *path, pid_t pid)
 {
-	c_cgroups_t *cgroups = cgroupsp;
-	ASSERT(cgroups);
+	ASSERT(path);
+
 	int ret = 0;
+	char *cgroup_tasks = mem_printf("%s/cgroup.procs", path);
 
-	char *cgroup_tasks = mem_printf("%s/cgroup.procs", cgroups->path);
-
-	/* assign the container to the cgroup */
+	/* assign the pid to the cgroup on path */
 	if (file_printf(cgroup_tasks, "%d", pid) == -1) {
-		ERROR_ERRNO("Could not add container %s to its cgroup under %s/%s",
-			    container_get_description(cgroups->container), CGROUPS_FOLDER,
-			    uuid_string(container_get_uuid(cgroups->container)));
+		ERROR_ERRNO("Could not add pid %d to its cgroup under %s", pid, path);
 		ret = -1;
 	}
 
 	mem_free0(cgroup_tasks);
+	return ret;
+}
+
+static int
+c_cgroups_add_pid(void *cgroupsp, pid_t pid)
+{
+	c_cgroups_t *cgroups = cgroupsp;
+	ASSERT(cgroups);
+
+	int ret = 0;
+
+	/*
+	 * in v2 we need to be in leaf cgroup. For instance if we are running a
+	 * nested systemd as container payload, that one would create some
+	 * subcgroups and moves all process out of the container 'root' cgroup.
+	 * thus to later join processes into the container's cgroup we have to
+	 * directly move that process to such a subcgroup of the container.
+	 * 'user.slice' seams to be appropriate for this. Otherwise and
+	 * especially the first process would be added to the container's 'root'
+         * cgroup.
+	 */
+
+	char *user_slice = mem_printf("%s/user.slice", cgroups->path);
+
+	if (file_is_dir(user_slice))
+		ret = c_cgroups_add_pid_by_path(user_slice, pid);
+	else
+		ret = c_cgroups_add_pid_by_path(cgroups->path, pid);
+
+	mem_free0(user_slice);
 	return ret;
 }
 
@@ -236,4 +266,43 @@ c_cgroups_init(void)
 			FATAL_ERRNO("Could not mount cgroups_v2 unified hirachy");
 		}
 	}
+
+	// if not running in root cgroup, we have to move ourselves to a leaf cgroup
+	// e.g. if the cmld were started by systemd
+	char *cgroup_subtree = proc_get_cgroups_path_new(getpid());
+	c_cgroups_subtree = mem_printf("%s%s", CGROUPS_FOLDER, cgroup_subtree);
+	mem_free0(cgroup_subtree);
+
+	char *cgroup_cmld = mem_printf("%s/cmld", c_cgroups_subtree);
+
+	if (mkdir(cgroup_cmld, 0755) && errno != EEXIST) {
+		FATAL_ERRNO("Could not create cgroup %s for cmld's main process!", cgroup_cmld);
+	}
+
+	if (c_cgroups_add_pid_by_path(cgroup_cmld, getpid()) == -1)
+		FATAL("Could not move cmld to leaf cgroup '%s'", cgroup_cmld);
+
+	// activate controllers
+	char *controllers_path = mem_printf("%s/cgroup.controllers", c_cgroups_subtree);
+	char *controllers = file_read_new(controllers_path, 4096);
+
+	// remove possible newline
+	if (controllers[strlen(controllers) - 1] == '\n')
+		controllers[strlen(controllers) - 1] = '\0';
+
+	char *controller = strtok(controllers, " ");
+	str_t *activate = str_new_printf("+%s", controller);
+	for (controller = strtok(NULL, " "); controller; controller = strtok(NULL, " "))
+		str_append_printf(activate, " +%s", controller);
+
+	INFO("activating controllers '%s'", str_buffer(activate));
+	char *subtree_control_path = mem_printf("%s/cgroup.subtree_control", c_cgroups_subtree);
+	if (-1 == file_printf(subtree_control_path, str_buffer(activate)))
+		FATAL("Could not activate cgroup controllers for cmld!");
+
+	str_free(activate, true);
+	mem_free0(subtree_control_path);
+	mem_free0(controllers_path);
+	mem_free0(controllers);
+	mem_free0(cgroup_cmld);
 }
