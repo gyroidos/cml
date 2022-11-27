@@ -51,7 +51,8 @@
 #include "hardware.h"
 #include "bpf_insn.h"
 
-#define CGROUPS_FOLDER "/sys/fs/cgroup"
+// cgroup subtree where cmld is running in (provided by c_cgroups_v2.c)
+extern char *c_cgroups_subtree;
 
 #define LEGACY_DEVCG_ACC_ALL (BPF_DEVCG_ACC_READ | BPF_DEVCG_ACC_WRITE | BPF_DEVCG_ACC_MKNOD)
 #define LEGACY_DEVCG_DEV_ALL (BPF_DEVCG_DEV_BLOCK | BPF_DEVCG_DEV_CHAR)
@@ -679,7 +680,7 @@ c_cgroups_dev_new(compartment_t *compartment)
 	c_cgroups_dev_t *cgroups_dev = mem_new0(c_cgroups_dev_t, 1);
 	cgroups_dev->container = compartment_get_extension_data(compartment);
 
-	cgroups_dev->path = mem_printf("%s/%s", CGROUPS_FOLDER,
+	cgroups_dev->path = mem_printf("%s/%s", c_cgroups_subtree,
 				       uuid_string(container_get_uuid(cgroups_dev->container)));
 
 	cgroups_dev->active_cgroups = hardware_get_active_cgroups_subsystems();
