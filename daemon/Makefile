@@ -29,6 +29,7 @@ CC_MODE ?= n
 WCAST_ALIGN ?= y
 OCI ?= n
 IDMAPPED ?= n
+CGROUP_V2 ?= n
 
 TRUSTME_HARDWARE := x86
 
@@ -117,12 +118,11 @@ SRC_FILES := main.c \
 
 # module order is crucial
 ifeq ($(IDMAPPED),y)
-SRC_CMODULES := \
+SRC_CMODULES += \
 	c_smartcard.c \
 	c_user.c \
 	c_idmapped.c \
 	c_net.c \
-	c_cgroups.c \
 	c_vol.c \
 	c_service.c \
 	c_run.c \
@@ -131,12 +131,11 @@ SRC_CMODULES := \
 	c_cap.c \
 	c_uevent.c
 else
-SRC_CMODULES := \
+SRC_CMODULES += \
 	c_smartcard.c \
 	c_user.c \
 	c_shiftid.c \
 	c_net.c \
-	c_cgroups.c \
 	c_vol.c \
 	c_service.c \
 	c_run.c \
@@ -145,6 +144,15 @@ SRC_CMODULES := \
 	c_audit.c \
 	c_cap.c \
 	c_uevent.c
+endif
+
+ifeq ($(CGROUP_V2),y)
+    SRC_CMODULES += \
+	c_cgroups_dev.c \
+	c_cgroups_v2.c
+else
+    SRC_CMODULES += \
+	c_cgroups.c
 endif
 
 ifeq ($(OCI),y)
