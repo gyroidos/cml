@@ -77,4 +77,13 @@ proc_cap_last_cap(void);
 int
 proc_stat_btime(unsigned long long *boottime_sec);
 
+/**
+ * Returns the unified v2 cgroup in which the current pid is running
+ * by parsing /proc/<pid>/cgroup.
+ * @param pid The pid of the process to be checked
+ * @return subfolder in mounted cgroup hirachy, "" on v1 systems, NULL on error
+ */
+char *
+proc_get_cgroups_path_new(pid_t pid);
+
 #endif /* PROC_H */

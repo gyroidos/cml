@@ -291,3 +291,39 @@ proc_stat_btime(unsigned long long *boottime_sec)
 	fclose(proc);
 	return -1;
 }
+
+char *
+proc_get_cgroups_path_new(pid_t pid)
+{
+	char line_buf[2048];
+	FILE *proc = NULL;
+	char *cgroup_path = NULL;
+	bool read_one_line = false;
+
+	char *path = mem_printf("/proc/%d/cgroup", pid);
+
+	if (NULL == (proc = fopen(path, "r"))) {
+		mem_free0(path);
+		return NULL;
+	}
+
+	while (fgets(line_buf, 2048, proc)) {
+		if (read_one_line) {
+			// more than one line means no unified v2 only setup
+			cgroup_path = mem_strdup("");
+			break;
+		}
+		read_one_line = true;
+
+		if (strlen(line_buf) > 3 && !strncmp(line_buf, "0::", 3)) {
+			cgroup_path = mem_strdup(line_buf + 3);
+			// fgets does not remove '\n'
+			cgroup_path[strcspn(cgroup_path, "\n")] = '\0';
+			break;
+		}
+	}
+
+	fclose(proc);
+	mem_free0(path);
+	return cgroup_path;
+}
