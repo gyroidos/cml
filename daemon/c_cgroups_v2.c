@@ -135,6 +135,60 @@ c_cgroups_add_pid(void *cgroupsp, pid_t pid)
 }
 
 static int
+c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
+{
+	ASSERT(cgroups);
+
+	if (container_get_ram_limit(cgroups->container) == 0) {
+		INFO("Setting no RAM limit for container %s",
+		     container_get_description(cgroups->container));
+		return 0;
+	}
+
+	int ret = -1;
+	char *memory_max_path = mem_printf("%s/memory.max", cgroups->path);
+	char *mem_max_string = NULL;
+	unsigned int mem_max;
+
+	INFO("Trying to set RAM limit of container %s to %d MBytes",
+	     container_get_description(cgroups->container),
+	     container_get_ram_limit(cgroups->container));
+
+	if (!file_exists(memory_max_path)) {
+		ERROR("%s file not found (cgroups not mounted or cgroups memory controler not enabled?)",
+		      memory_max_path);
+		goto out;
+	}
+	if (file_printf(memory_max_path, "%uM", container_get_ram_limit(cgroups->container)) ==
+	    -1) {
+		ERROR("Could not write to cgroups RAM limit file in %s", memory_max_path);
+		goto out;
+	}
+
+	IF_NULL_GOTO((mem_max_string = file_read_new(memory_max_path, 1024)), out);
+
+	if (sscanf(mem_max_string, "%u", &mem_max) != 1) {
+		ERROR("Could not parse cgroups RAM limit file '%s'", memory_max_path);
+		goto out;
+	}
+	// check if the kernel has set the RAM limit correctly
+	if (mem_max != container_get_ram_limit(cgroups->container) * 1024 * 1024) {
+		ERROR("Requested %uM limit, however kernel has set %u Bytes instead!",
+		      container_get_ram_limit(cgroups->container), mem_max);
+		goto out;
+	}
+	INFO("Successfully set RAM limit of container %s to %d MBytes",
+	     container_get_description(cgroups->container),
+	     container_get_ram_limit(cgroups->container));
+
+	ret = 0;
+out:
+	mem_free0(memory_max_path);
+	mem_free0(mem_max_string);
+	return ret;
+}
+
+static int
 c_cgroups_start_post_clone(void *cgroupsp)
 {
 	c_cgroups_t *cgroups = cgroupsp;
@@ -146,6 +200,13 @@ c_cgroups_start_post_clone(void *cgroupsp)
 	if (mkdir(cgroups->path, 0755) && errno != EEXIST) {
 		ERROR_ERRNO("Could not create cgroup %s for container %s", cgroups->path,
 			    container_get_description(cgroups->container));
+		return -COMPARTMENT_ERROR_CGROUPS;
+	}
+
+	/* initialize memory subsystem to limit ram to cgroups->ram_limit */
+	if (c_cgroups_set_ram_limit(cgroups) < 0) {
+		ERROR("Could not configure cgroup maximum ram for container %s",
+		      container_get_description(cgroups->container));
 		return -COMPARTMENT_ERROR_CGROUPS;
 	}
 
