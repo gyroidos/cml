@@ -55,7 +55,7 @@ do_check_params() {
 do_test_cmd_output() {
 	do_check_params "$1" "$2"
 
-	echo "STATUS: Executing command \"$1\""
+	echo "STATUS: \"$1\""
 
 	OUTPUT="$(ssh ${SSH_OPTS} "$1" 2>&1)" || true
 	dbg "Command returned $OUTPUT, code: $?"
@@ -99,6 +99,7 @@ do_test_cmd_noutput() {
 
 cmd_control_start() {
 	do_test_cmd_output "/usr/sbin/control start $1 --key=$2" "CONTAINER_START_OK"
+	sleep 2
 	do_wait_running "$1"
 	sleep 2
 }
@@ -149,12 +150,25 @@ cmd_control_list_guestos() {
 }
 
 cmd_control_create() {
-if [ "dev" = "$1" ];then
-	do_test_cmd_noutput "/usr/sbin/control create \"$2\"" "Abort"
+if [ -z "$2" ];then
+	do_test_cmd_output "/usr/sbin/control create \"$1\"" "uuids"
 else
-	do_test_cmd_noutput "/usr/sbin/control create \"$2\" \"$3\" \"$4\"" "Abort"
+	do_test_cmd_output "/usr/sbin/control create \"$1\" \"$2\" \"$3\"" "uuids"
 fi
+
+sleep 5
 }
+
+cmd_control_create_error() {
+if [ -z "$2" ];then
+	do_test_cmd_noutput "/usr/sbin/control create \"$1\"" "uuids"
+else
+	do_test_cmd_noutput "/usr/sbin/control create \"$1\" \"$2\" \"$3\"" "uuids"
+fi
+
+sleep 5
+}
+
 
 cmd_control_change_pin() {
 	do_test_cmd_output "echo -ne \"$2\n$3\n$3\n\" | /usr/sbin/control change_pin $1" "CONTAINER_CHANGE_PIN_SUCCESSFUL"
@@ -186,3 +200,21 @@ cmd_control_reboot() {
 	do_test_cmd_noutput "/usr/sbin/control reboot" "Abort"
 }
 
+cmd_control_get_guestos_version(){
+	CMD1="/usr/sbin/control list_guestos"
+	CMD2="/usr/sbin/control list_guestos | grep $1 -A 2"
+	CMD3="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\:"
+	CMD4="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\: | awk '{print \$2}'"
+	CMD5="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\: | awk '{print \$2}' | sort | tail -n 1"
+	OUTPUT1="$(ssh ${SSH_OPTS} "$CMD1")"
+	OUTPUT2="$(ssh ${SSH_OPTS} "$CMD2")"
+	OUTPUT3="$(ssh ${SSH_OPTS} "$CMD3")"
+	OUTPUT4="$(ssh ${SSH_OPTS} "$CMD4")"
+	OUTPUT5="$(ssh ${SSH_OPTS} "$CMD5")"
+
+	#echo $OUTPUT1
+	#echo $OUTPUT2
+	#echo $OUTPUT3
+	#echo $OUTPUT4
+	echo $OUTPUT5
+}
