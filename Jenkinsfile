@@ -131,9 +131,7 @@ pipeline {
 									DEVELOPMENT_BUILD=n
 									CC_MODE=y
 								elif [ "schsm" = "${BUILDTYPE}" ];then
-									echo "Preparing Yocto workdir for CC Mode build with schsm support"
-									DEVELOPMENT_BUILD=n
-									CC_MODE=y
+									echo "Preparing Yocto workdir for ccmode build with schsm support"
 									SANITIZERS=y
 									ENABLE_SCHSM="1"
 								else
@@ -227,7 +225,7 @@ pipeline {
 				axes {
 					axis {
 						name 'BUILDTYPE'
-						values 'dev', 'production'
+						values 'dev', 'production', 'ccmode'
 					}
 				}
 				stages {
@@ -247,6 +245,8 @@ pipeline {
 										unstash 'img-dev'
 									} else if ("production" == env.BUILDTYPE){
 										unstash 'img-production'
+									} else if ("ccmode" == env.BUILDTYPE){
+										unstash 'img-ccmode'
 									} else {
 										error "Unkown build type"
 									}
@@ -258,10 +258,14 @@ pipeline {
 
 									if [ "dev" = "${BUILDTYPE}" ];then
 										echo "Testing \"dev\" image"
-										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode dev --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-pr" --ssh 2228 --kill --vnc 41'
+										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode dev --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-dev" --ssh 2228 --kill --vnc 41'
 									elif [ "production" = "${BUILDTYPE}" ];then
 										echo "Testing \"production\" image"
-										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode production --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-dev" --ssh 2229 --kill --vnc 42'
+										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode production --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-pr" --ssh 2229 --kill --vnc 42'
+									elif [ "ccmode" = "${BUILDTYPE}" ];then
+										echo "Testing \"ccmode\" image"
+										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode ccmode --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-cc" --ssh 2230 --kill --vnc 43'
+
 									else
 										error "Unknown build type: ${BUILDTYPE}"
 									fi
@@ -284,7 +288,7 @@ pipeline {
 						echo "$PATH"
 						echo "Physhsm: ${PHYSHSM}"
 
-						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --mode ccmode --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2230 --kill --enable-schsm ${PHYSHSM} 12345678'
+						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --mode dev --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2231 --kill --enable-schsm ${PHYSHSM} 12345678'
 					'''
 				}
 			}
