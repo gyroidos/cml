@@ -9,7 +9,7 @@ source "$(dirname "${CMDPATH}")/VM-container-commands.sh"
 
 export PATH="/sbin/:usr/sbin/:${PATH}"
 
-PROCESS_NAME="qemu-ccmode-ci"
+PROCESS_NAME="qemu-gyroid-ci"
 SSH_PORT=2223
 BUILD_DIR=""
 KILL_VM=false
@@ -120,7 +120,7 @@ cat > ./signedcontainer.conf << EOF
 name: "signedcontainer"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
-assign_dev: "c 4:2 rwm"
+assign_dev: "c 4:3 rwm"
 EOF
 
 
@@ -130,9 +130,8 @@ else
 cat > ./testcontainer.conf << EOF
 name: "testcontainer"
 guest_os: "trustx-coreos"
-assign_dev: "c 4:2 rwm"
 guestos_version: $installed_guestos_version 
-token_type: USB
+assign_dev: "c 4:2 rwm"
 EOF
 
 
@@ -140,7 +139,7 @@ cat > ./signedcontainer.conf << EOF
 name: "signedcontainer"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
-assign_dev: "c 4:2 rwm"
+assign_dev: "c 4:3 rwm"
 token_type: USB
 usb_configs {
   id: "04e6:5816"
@@ -151,10 +150,10 @@ usb_configs {
 EOF
 fi
 
-echo "STATUS: Created testcontainer.conf:"
+echo "STATUS: Prepared testcontainer.conf:"
 echo "$(cat ./testcontainer.conf)"
 
-echo "STATUS: Created testcontainer.conf:"
+echo "STATUS: Prepared signedcontainer.conf:"
 echo "$(cat ./signedcontainer.conf)"
 
 
@@ -571,7 +570,7 @@ start_vm
 
 
 # Retrieve VM host key
-echo "STATUS: Retrieveing VM host key"
+echo "STATUS: Retrieving VM host key"
 for I in $(seq 1 10) ;do
 	echo "STATUS: Scanning for VM host key on port $SSH_PORT"
 	if ssh-keyscan -T 10 -p $SSH_PORT -H 127.0.0.1 > ${PROCESS_NAME}.vm_key ;then
@@ -655,6 +654,8 @@ if [[ "$MODE" == "dev" ]];then
 	cmd_control_create "/tmp/testcontainer.conf"
 	cmd_control_list_container "testcontainer"
 
+	sync_to_disk
+
 	echo "Creating container:\n$(cat signedcontainer.conf)"
 	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
 	cmd_control_list_container "signedcontainer"
@@ -662,6 +663,7 @@ else
 	#cmd_control_create_error "/tmp/testcontainer.conf"
 	echo "Creating container:\n$(cat signedcontainer.conf)"
 	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
+	cmd_control_list_container "signedcontainer"
 fi
 
 sync_to_disk

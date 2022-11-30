@@ -24,6 +24,7 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
+CC_MODE ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -O2
 LOCAL_CFLAGS += -pedantic -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
@@ -70,11 +71,28 @@ SRC_FILES := \
 .PHONY: all
 all: control
 
+
+ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto common/logf.proto
-	protoc-c --c_out=. guestos.proto
-	protoc-c --c_out=. container.proto
+	echo "Using CC_MODE protos"
+	$(MAKE) -C cc_mode
+	ln -sf cc_mode/container.pb-c.c container.pb-c.c
+	ln -sf cc_mode/container.pb-c.h container.pb-c.h
+	ln -sf cc_mode/guestos.pb-c.c guestos.pb-c.c
+	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
 	protoc-c --c_out=. control.proto
 	$(MAKE) -C common protobuf
+
+else
+protobuf: container.proto control.proto guestos.proto common/logf.proto
+	echo "Using dev/production protos"
+	protoc-c --c_out=. container.proto
+	protoc-c --c_out=. control.proto
+	protoc-c --c_out=. guestos.proto
+	$(MAKE) -C common protobuf
+
+endif
+
 
 libcommon: 
 	$(MAKE) -C common libcommon
