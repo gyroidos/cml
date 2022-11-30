@@ -151,6 +151,11 @@ logf_message_hexdump(logf_prio_t prio, const void *b, size_t len, const char *fm
 	size_t i;
 	int n;
 
+	if (len > 1024) {
+		logf_write(prio, "Buffer too long for log");
+		return;
+	}
+
 	va_start(ap, fmt);
 	n = vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
@@ -180,6 +185,11 @@ logf_message_file_hexdump(logf_prio_t prio, const char *file, int line, const vo
 	va_list ap;
 	size_t i;
 	int n;
+
+	if (len > 1024) {
+		logf_write(prio, "Buffer too long for log");
+		return;
+	}
 
 	n = snprintf(buf, sizeof(buf), "%s+%d: ", file, line);
 
