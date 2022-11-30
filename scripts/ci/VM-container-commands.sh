@@ -151,9 +151,9 @@ cmd_control_list_guestos() {
 
 cmd_control_create() {
 if [ -z "$2" ];then
-	do_test_cmd_output "/usr/sbin/control create \"$1\"" "uuids"
+	do_test_cmd_output "/usr/sbin/control create \"$1\"" "guest_os"
 else
-	do_test_cmd_output "/usr/sbin/control create \"$1\" \"$2\" \"$3\"" "uuids"
+	do_test_cmd_output "/usr/sbin/control create \"$1\" \"$2\" \"$3\"" "guest_os"
 fi
 
 sleep 5
@@ -201,20 +201,7 @@ cmd_control_reboot() {
 }
 
 cmd_control_get_guestos_version(){
-	CMD1="/usr/sbin/control list_guestos"
-	CMD2="/usr/sbin/control list_guestos | grep $1 -A 2"
-	CMD3="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\:"
-	CMD4="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\: | awk '{print \$2}'"
-	CMD5="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\: | awk '{print \$2}' | sort | tail -n 1"
-	OUTPUT1="$(ssh ${SSH_OPTS} "$CMD1")"
-	OUTPUT2="$(ssh ${SSH_OPTS} "$CMD2")"
-	OUTPUT3="$(ssh ${SSH_OPTS} "$CMD3")"
-	OUTPUT4="$(ssh ${SSH_OPTS} "$CMD4")"
-	OUTPUT5="$(ssh ${SSH_OPTS} "$CMD5")"
-
-	#echo $OUTPUT1
-	#echo $OUTPUT2
-	#echo $OUTPUT3
-	#echo $OUTPUT4
-	echo $OUTPUT5
+	CMD="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\: | awk '{print \$2}' | sort | tail -n 1"
+	OUTPUT="$(ssh ${SSH_OPTS} "$CMD")"
+	echo $OUTPUT
 }
