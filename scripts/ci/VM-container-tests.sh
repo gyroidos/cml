@@ -9,7 +9,7 @@ source "$(dirname "${CMDPATH}")/VM-container-commands.sh"
 
 export PATH="/sbin/:usr/sbin/:${PATH}"
 
-PROCESS_NAME="qemu-trustme-ci"
+PROCESS_NAME="qemu-ccmode-ci"
 SSH_PORT=2223
 BUILD_DIR=""
 KILL_VM=false
@@ -34,10 +34,16 @@ TESTPW="pw"
 
 wait_vm () {
 	echo "Waiting for VM to become available"
+	sleep 5
 	# Copy test container config to VM
 	success="n"
 	for I in $(seq 1 100) ;do
 		sleep 1
+
+		if [[ -z "$(pgrep $PROCESS_NAME)" ]];then
+			echo "Error: QEMU process exited"
+			exit 1
+		fi
 		if ssh ${SSH_OPTS} "ls /data" ;then
 			echo "VM access was successful"
 			success="y"
@@ -71,79 +77,213 @@ start_vm() {
 	wait_vm
 }
 
+sync_to_disk() {
+	echo "STATUS: Syncing VM state to disk"
+	for I in $(seq 1 10) ;do
+		if ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1;then
+			echo "STATUS: Synced VM state to disk"
+			break
+		elif ! [[ "$I" == "10" ]];then
+			echo "STATUS: Failed to sync VM state to disk, retrying, status: $?"
+		else
+			echo "ERROR: Could not sync VM state to disk, exiting..."
+			exit 1
+		fi
+	done
+}
+
 force_stop_vm() {
 	echo "STATUS: Syncing VM state to disk"
 	ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1
 
-	sync
+	sync_to_disk
+
 	sleep 2
 	pkill $PROCESS_NAME || true
 	rm ${PROCESS_NAME}.vm_key
 }
 
+do_create_testconfigs() {
+# Create container configuration files for tests
+# -----------------------------------------------
+
+if [[ -z "$SCHSM" ]];then
+
+cat > ./testcontainer.conf << EOF
+name: "testcontainer"
+guest_os: "trustx-coreos"
+guestos_version: $installed_guestos_version
+assign_dev: "c 4:2 rwm"
+EOF
+
+cat > ./signedcontainer.conf << EOF
+name: "signedcontainer"
+guest_os: "trustx-coreos"
+guestos_version: $installed_guestos_version
+assign_dev: "c 4:2 rwm"
+EOF
+
+
+
+else
+
+cat > ./testcontainer.conf << EOF
+name: "testcontainer"
+guest_os: "trustx-coreos"
+assign_dev: "c 4:2 rwm"
+guestos_version: $installed_guestos_version 
+token_type: USB
+EOF
+
+
+cat > ./signedcontainer.conf << EOF
+name: "signedcontainer"
+guest_os: "trustx-coreos"
+guestos_version: $installed_guestos_version
+assign_dev: "c 4:2 rwm"
+token_type: USB
+usb_configs {
+  id: "04e6:5816"
+  serial: "${SCHSM}"
+  assign: true
+  type: TOKEN
+}
+EOF
+fi
+
+echo "STATUS: Created testcontainer.conf:"
+echo "$(cat ./testcontainer.conf)"
+
+echo "STATUS: Created testcontainer.conf:"
+echo "$(cat ./signedcontainer.conf)"
+
+
+
+
+echo "PKI_DIR there?: $PKI_DIR"
+# Sign signedcontainer.conf (enforced in production and ccmode images)
+if [[ -d "$PKI_DIR" ]];then
+	echo "A"
+	scripts_path=""
+	if ! [[ -z "${SCRIPTS_DIR}" ]];then
+		scripts_path="${SCRIPTS_DIR}/"
+	elif ! [[ -z "${BUILD_DIR}" ]];then
+		echo "STATUS: --scripts-dir not given, assuming \"../trustme/build\""
+		scripts_path="$(pwd)/../trustme/build"
+		echo "scripts_path: $scripts_path"
+	else
+		echo "STATUS: --scripts-dir not given, assuming \"./trustme/build\""
+		scripts_path="$(pwd)/trustme/build"
+	fi
+
+	echo "B"
+	if ! [[ -d "$scripts_path" ]];then
+		echo "STATUS: Could not find trustme_build directory at $scripts_path."
+		read -r -p "Download from GitHub?" -n 1
+
+		if [[ "$REPLY" == "y" ]];then
+			mkdir -p "$scripts_path"
+			echo "STATUS: Got y, downloading trustme_build repository to $scripts_path"
+			git clone https://github.com/gyroidos/gyroidos_build.git "$scripts_path"
+		fi
+	fi
+
+	echo "c"
+
+	if ! [ -f "$scripts_path/device_provisioning/oss_enrollment/config_creator/sign_config.sh" ];then
+		echo "ERROR: Could not find sign_config.sh at $scripts_path/device_provisioning/oss_enrollment/config_creator/sign_config.sh. Exiting..."
+		exit 1
+	fi
+
+	signing_script="$scripts_path/device_provisioning/oss_enrollment/config_creator/sign_config.sh"
+
+	if ! [[ -f "$signing_script" ]];then
+		echo "ERROR: $signing_script does not exist or is not a regular file. Exiting..."
+		exit 1
+	fi
+
+	echo "STATUS: Signing signedcontainer.conf using and PKI at ${PKI_DIR} and $signing_script"
+
+
+	echo "bash \"$signing_script\" \"./signedcontainer.conf\" \"${PKI_DIR}/ssig_cml.key\" \"${PKI_DIR}/ssig_cml.cert\""
+	bash "$signing_script" "./signedcontainer.conf" "${PKI_DIR}/ssig_cml.key" "${PKI_DIR}/ssig_cml.cert"
+elif [[ "$MODE" == "dev" ]]
+then
+	echo "STATUS: No test PKI found at $PKI_DIR, skipping signing of signedcontainer.conf"
+else
+	echo "STATUS: No test PKI found at $PKI_DIR, can't do $MODE image test"
+	exit 1
+fi
+
+echo "STATUS: Signed signedcontainer.conf:"
+echo "$(cat ./signedcontainer.conf)"
+
+}
 
 do_test_complete() {
-	echo "STATUS: Starting container test suite"
+	echo "STATUS: ########## Starting container test suite ##########"
 
 	# Test if cmld is up and running
 	echo "STATUS: Test if cmld is up and running"
 	cmd_control_list
 
-	# TODO add --schsm-all flag
 	if [[ -z "$SCHSM" ]];then
 		# Skip these tests for physical schsm
-		cmd_control_change_pin_error "test-container" "wrongpin" "$TESTPW"
+		cmd_control_change_pin_error "signedcontainer" "wrongpin" "$TESTPW"
 
 		# Test change_pin command
 		if [[ "$1" == "second_run" ]];then
 			echo "STATUS: Changing token PIN"
-			cmd_control_change_pin "test-container" "$TESTPW" "$TESTPW"
+			cmd_control_change_pin "signedcontainer" "$TESTPW" "$TESTPW"
 		else
-			cmd_control_start_error_unpaired "test-container" "$TESTPW"
+			echo "STATUS: Trigger ERROR_UNPAIRED"
+			cmd_control_start_error_unpaired "signedcontainer" "$TESTPW"
 
-			cmd_control_change_pin "test-container" "trustme" "$TESTPW"
+			echo "STATUS: Change pin: trustme -> $TESTPW token PIN"
+			cmd_control_change_pin "signedcontainer" "trustme" "$TESTPW"
 		fi
 	else
+		# TODO add --schsm-all flag
 		echo "STATUS: Skipping change_pin test for sc-hsm"
 	fi
 
-	cmd_control_start "test-container" "$TESTPW"
+	echo "STATUS: Starting container \"signedcontainer\""
+	cmd_control_start "signedcontainer" "$TESTPW"
 
-	cmd_control_config "test-container"
+	cmd_control_config "signedcontainer"
 
 	cmd_control_list_guestos "trustx-coreos"
 
 	cmd_control_remove_error_eexist "nonexistent-container"
 
-	cmd_control_start_error_eexist "test-container" "$TESTPW"
+	cmd_control_start_error_eexist "signedcontainer" "$TESTPW"
 
 
 	# Stop test container
-	cmd_control_stop "test-container" "$TESTPW"
+	cmd_control_stop "signedcontainer" "$TESTPW"
 
-	cmd_control_stop_error_notrunning "test-container" "$TESTPW"
+	cmd_control_stop_error_notrunning "signedcontainer" "$TESTPW"
 
 
 	# Start and stop again to ensure cleanup routines worked correctly
-	cmd_control_start "test-container" "$TESTPW"
+	cmd_control_start "signedcontainer" "$TESTPW"
 
-	cmd_control_stop "test-container" "$TESTPW"
+	cmd_control_stop "signedcontainer" "$TESTPW"
 
 #	# Remove test container if in second VM run
 	if [[ "$1" == "second_run" ]];then
 		echo "Second test run, removing container"
-		cmd_control_remove "test-container" "$TESTPW"
+		cmd_control_remove "signedcontainer" "$TESTPW"
 
 		echo "STATUS: Check container has been removed"
-		cmd_control_list_ncontainer "test-container"
+		cmd_control_list_ncontainer "signedcontainer"
 
 		echo "STATUS: Removing non-existent container"
-		cmd_control_remove_error_eexist "test-container" "$TESTPW"
+		cmd_control_remove_error_eexist "signedcontainer" "$TESTPW"
 	fi
 
 
 }
-
 
 
 # Argument retrieval
@@ -397,10 +537,10 @@ rm -f ${PROCESS_NAME}.img
 
 if ! [[ -z "${IMGPATH}" ]];then
 	echo "STATUS: Testing image at ${IMGPATH}"
-	cp ${IMGPATH} ${PROCESS_NAME}.img
+	rsync ${IMGPATH} ${PROCESS_NAME}.img
 else
 	echo "STATUS: Testing image at $(pwd)/tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img"
-	cp tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img ${PROCESS_NAME}.img
+	rsync tmp/deploy/images/genericx86-64/trustme_image/trustmeimage.img ${PROCESS_NAME}.img
 fi
 
 # Prepare image for test with physical tokens
@@ -411,78 +551,12 @@ then
 fi
 
 
-# Create container configuration file for tests
-if [[ -z "$SCHSM" ]];then
-cat > ./testcontainer.conf << EOF
-name: "test-container"
-guest_os: "trustx-coreos"
-guestos_version: 1
-assign_dev: "c 4:2 rwm"
-EOF
-else
-cat > ./testcontainer.conf << EOF
-name: "test-container"
-guest_os: "trustx-coreos"
-guestos_version: 1
-assign_dev: "c 4:2 rwm"
-token_type: USB
-usb_configs {
-  id: "04e6:5816"
-  serial: "${SCHSM}"
-  assign: true
-  type: TOKEN
-}
-EOF
-fi
-
-# Sign test container config (enforced in production and ccmode images)
-if [[ -d "$PKI_DIR" ]];then
-	scripts_path=""
-	if ! [[ -z "${SCRIPTS_DIR}" ]];then
-		scripts_path="${SCRIPTS_DIR}/"
-	elif ! [[ -z "${BUILD_DIR}" ]];then
-		echo "STATUS: --scripts-dir not given, assuming \"../trustme/build\""
-		scripts_path="$(pwd)/../trustme/build"
-		echo "scripts_path: $scripts_path"
-	else
-		echo "STATUS: --scripts-dir not given, assuming \"./trustme/build\""
-		scripts_path="$(pwd)/trustme/build"
-	fi
-
-	if ! [[ -d "$scripts_path" ]];then
-		echo "STATUS: Could not find trustme_build directory at $scripts_path."
-		read -r -p "Download from GitHub?" -n 1
-
-		if [[ "$REPLY" == "y" ]];then
-			mkdir -p "$scripts_path"
-			echo "STATUS: Got y, downloading trustme_build repository to $scripts_path"
-			git clone https://github.com/gyroidos/gyroidos_build.git "$scripts_path"
-		fi
-	fi
-
-	if ! [ -f "$scripts_path/device_provisioning/oss_enrollment/config_creator/sign_config.sh" ];then
-		echo "ERROR: Could not find sign_config.sh at $scripts_path/device_provisioning/oss_enrollment/config_creator/sign_config.sh. Exiting..."
-		exit 1
-	fi
-
-	signing_script="$scripts_path/device_provisioning/oss_enrollment/config_creator/sign_config.sh"
-
-	if ! [[ -f "$signing_script" ]];then
-		echo "ERROR: $signing_script does not exist or is not a regular file. Exiting..."
-		exit 1
-	fi
-
-	echo "STATUS: Signing testcontainer.conf using and PKI at ${PKI_DIR} and $signing_script"
 
 
-	bash "$signing_script" "./testcontainer.conf" "${PKI_DIR}/ssig_cml.key" "${PKI_DIR}/ssig_cml.cert"
-elif [[ "$MODE" == "dev" ]]
-then
-	echo "STATUS: No test PKI found at $PKI_DIR, skipping signing of testcontainer.conf"
-fi
 
-echo "STATUS: Created test container config:"
-echo "$(cat ./testcontainer.conf)"
+
+
+
 
 
 
@@ -512,15 +586,21 @@ for I in $(seq 1 10) ;do
 	sleep 5
 done
 
+echo "STATUS: extracting current installed OS version"
+installed_guestos_version="$(cmd_control_get_guestos_version trustx-coreos)"
+echo "Found OS version: $installed_guestos_version"
+
+do_create_testconfigs
 
 # Prepare tests
 # -----------------------------------------------
 
 # Copy test container config to VM
 for I in $(seq 1 10) ;do
-	echo "STATUS: Trying to copy testcontainer.conf to image"
+	echo "STATUS: Trying to copy container configs to image"
 	sleep 5
-	if scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT testcontainer.* root@127.0.0.1:/tmp/;then
+	if scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT testcontainer.conf root@127.0.0.1:/tmp/ && \
+	scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT signedcontainer.conf signedcontainer.sig signedcontainer.cert root@127.0.0.1:/tmp/;then
 		#ssh ${SSH_OPTS} 'ls /tmp/testcontainer.conf 2>&1 | grep -q -v "No such file or directory"';then
 		echo "STATUS: scp was successful"
 		break
@@ -532,6 +612,8 @@ done
 
 # Prepare test container
 # -----------------------------------------------
+
+echo "STATUS: ########## Preparing tests ##########"
 
 # Test if cmld is up and running
 echo "STATUS: Test if cmld is up and running"
@@ -562,37 +644,31 @@ elif [[ "$COPY_ROOTCA" == "y" ]];then
 	exit 1
 fi
 
+
+echo "STATUS: ########## Creating test containers ##########"
+
+
 # Create test container
-echo "STATUS: Starting test containers"
-cmd_control_create "$MODE" "/tmp/testcontainer.conf" "/tmp/testcontainer.sig" "/tmp/testcontainer.cert"
+echo "STATUS: Creating test containers"
+if [[ "$MODE" == "dev" ]];then
+	echo "Creating container:\n$(cat testcontainer.conf)"
+	cmd_control_create "/tmp/testcontainer.conf"
+	cmd_control_list_container "testcontainer"
 
-cmd_control_list_container "test-container"
+	echo "Creating container:\n$(cat signedcontainer.conf)"
+	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
+	cmd_control_list_container "signedcontainer"
+else
+	#cmd_control_create_error "/tmp/testcontainer.conf"
+	echo "Creating container:\n$(cat signedcontainer.conf)"
+	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
+fi
 
-echo "STATUS: Syncing VM state to disk"
-for I in $(seq 1 10) ;do
-	if ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1;then
-		echo "STATUS: Synced VM state to disk"
-		break
-	elif ! [[ "$I" == "10" ]];then
-		echo "STATUS: Failed to sync VM state to disk, retrying, status: $?"
-	else
-		echo "ERROR: Could not sync VM state to disk, exiting..."
-		exit 1
-	fi
-done
-
-
-echo "STATUS: Trigger reboot"
-cmd_control_reboot
-
-echo "STATUS: Waiting for VM to start again"
-wait_vm
-
-cmd_control_list_container "test-container"
-
+sync_to_disk
 
 # Set device container pairing state if testing with physical tokens
 if ! [[ -z "${SCHSM}" ]];then
+	echo "STATUS: ########## Preparing SE ##########"
 	force_stop_vm
 
 	echo "STATUS: Setting container pairing state"

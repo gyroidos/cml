@@ -131,6 +131,9 @@ pipeline {
 									DEVELOPMENT_BUILD=n
 									CC_MODE=y
 								elif [ "schsm" = "${BUILDTYPE}" ];then
+									echo "Preparing Yocto workdir for CC Mode build with schsm support"
+									DEVELOPMENT_BUILD=n
+									CC_MODE=y
 									SANITIZERS=y
 									ENABLE_SCHSM="1"
 								else
@@ -281,7 +284,7 @@ pipeline {
 						echo "$PATH"
 						echo "Physhsm: ${PHYSHSM}"
 
-						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2230 --kill --enable-schsm ${PHYSHSM} 12345678'
+						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --mode ccmode --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2230 --kill --enable-schsm ${PHYSHSM} 12345678'
 					'''
 				}
 			}
