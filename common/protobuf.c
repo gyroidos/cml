@@ -138,6 +138,7 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 	buflen = ntohl(buflen);
 	TRACE("read protobuf message length (%zd bytes read, %zu bytes expected, len=%d)",
 	      bytes_read, sizeof(buflen), buflen);
+
 	if (((size_t)bytes_read != sizeof(buflen))) {
 		ERROR("Protocol violation!");
 		*ret_len = -1;
@@ -159,6 +160,8 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 		goto error_read;
 	}
 	TRACE("read protobuf message data (%zd bytes read, %u bytes expected)", bytes_read, buflen);
+
+	TRACE_HEXDUMP(buf, bytes_read, "Received packed message: ");
 
 	if ((size_t)bytes_read != buflen) {
 		ERROR("Dropped protobuf message (expected length : %zd bytes read != %u bytes expected)",
@@ -189,8 +192,11 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 
 	// zero length data represents a message with all default values
 	// => use unpack to construct it (and initialize it with these defaults)
-	if (0 == buflen)
+	if (0 == buflen) {
+		TRACE("Got zero length message, returning default message fields");
+
 		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
+	}
 
 	if (!buf) {
 		ERROR("Failed to receive packed protobuf message");
@@ -198,6 +204,11 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	}
 
 	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
+
+	if (!msg) {
+		WARN("Failed to parse received protobuf message");
+	}
+
 	mem_free0(buf);
 	return msg;
 }
