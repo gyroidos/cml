@@ -434,9 +434,19 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	const char *os_name = container_config_get_guestos(conf);
 
 	DEBUG("New containers os name is %s", os_name);
-	os = guestos_mgr_get_latest_by_name(os_name, true);
+
+	// if signed config files are used, always load
+	// OS version specified in container config
+	if (cmld_uses_signed_configs()) {
+		os = guestos_mgr_get_by_version(os_name, container_config_get_guestos_version(conf),
+						true);
+	} else {
+		os = guestos_mgr_get_latest_by_name(os_name, true);
+	}
+
 	if (!os) {
-		WARN("Could not get GuestOS %s instance for container %s", os_name, name);
+		WARN("Could not get GuestOS %s instance for container %s with version v%" PRIu64,
+		     os_name, name, container_config_get_guestos_version(conf));
 		mem_free0(config_filename);
 		mem_free0(images_dir);
 		uuid_free(uuid);
@@ -456,6 +466,8 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 
 	current_guestos_version = container_config_get_guestos_version(conf);
 	new_guestos_version = guestos_get_version(os);
+
+	// can't update container config with enforced signatures
 	if ((current_guestos_version < new_guestos_version) && !cmld_uses_signed_configs()) {
 		INFO("Updating guestos version from %" PRIu64 " to %" PRIu64 " for container %s",
 		     current_guestos_version, new_guestos_version, name);
