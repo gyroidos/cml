@@ -112,6 +112,20 @@ guestos_mgr_register_newca(unsigned char *cacert, size_t cacertlen);
 
 /******************************************************************************/
 
+/*
+ * Returns the GuestOS with the given name and version.
+ * If 'complete' is set, only complete GuestOS instances are considered,
+ * i.e. all shared images belonging to the GuestOS must be available on the device.
+ * Otherwise, all registered GuestOSes with the given name are considered.
+ * @param name	    the name of the GuestOS
+ * @param version	version of the GuestOS
+ * @param complete  whether to only consider complete GuestOSes with all images available on the device
+ * @return  a pointer to the found GuestOS instance or NULL if no matching GuestOS was found
+ *	    (Note: The returned pointer should NOT be free'd by the caller.)
+ */
+guestos_t *
+guestos_mgr_get_by_version(const char *name, uint64_t version, bool complete);
+
 /**
  * Returns the latest (by version) GuestOS with the given name.
  * If 'complete' is set, only complete GuestOS instances are considered,
