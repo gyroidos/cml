@@ -407,8 +407,6 @@ c_cgroups_dev_bpf_prog_deactivate(c_cgroups_dev_t *cgroups_dev)
 {
 	ASSERT(cgroups_dev);
 
-	char bpf_log[8192];
-
 	int cgroup_fd = open(cgroups_dev->path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
 
 	union bpf_attr detach_attr = {
@@ -418,10 +416,12 @@ c_cgroups_dev_bpf_prog_deactivate(c_cgroups_dev_t *cgroups_dev)
 	};
 
 	if (bpf(BPF_PROG_DETACH, &detach_attr, sizeof(detach_attr)))
-		WARN_ERRNO("Failed to detach bpf program '%s'!", bpf_log);
+		WARN_ERRNO("Failed to detach bpf program!");
 
 	c_cgroups_dev_bpf_prog_free(cgroups_dev->bpf_prog);
 }
+
+#define BPF_LOG_SIZE 8 * 1024
 
 static int
 c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog_t *prog)
@@ -429,7 +429,6 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 	ASSERT(cgroups_dev);
 	ASSERT(prog);
 
-	char bpf_log[8192];
 	int cgroup_fd = -1;
 
 	union bpf_attr load_attr = {
@@ -437,15 +436,22 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 		.insns = ptr_to_u64(prog->insn),
 		.insn_cnt = prog->insn_n_structs,
 		.license = ptr_to_u64("GPL"),
-		.log_buf = ptr_to_u64(bpf_log),
-		.log_size = 8192,
-		.log_level = 1,
 	};
 
 	prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
 	if (prog->fd < 0) {
-		ERROR_ERRNO("Failed to load bpf program '%s'!", bpf_log);
-		goto error;
+		char *bpf_log = mem_new0(char, BPF_LOG_SIZE);
+		load_attr.log_buf = ptr_to_u64(bpf_log);
+		load_attr.log_size = BPF_LOG_SIZE;
+		load_attr.log_level = 1;
+		// try again to get log
+		prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
+		if (prog->fd < 0) {
+			ERROR_ERRNO("Failed to load bpf program '%s'!", bpf_log);
+			mem_free0(bpf_log);
+			goto error;
+		}
+		mem_free0(bpf_log);
 	}
 
 	cgroup_fd = open(cgroups_dev->path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
@@ -461,7 +467,7 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 
 	int ret = bpf(BPF_PROG_ATTACH, &attach_attr, sizeof(attach_attr));
 	if (ret) {
-		ERROR_ERRNO("Failed to attach bpf program '%s'!", bpf_log);
+		ERROR_ERRNO("Failed to attach bpf program!");
 		goto error;
 	}
 
