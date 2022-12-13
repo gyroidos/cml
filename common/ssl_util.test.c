@@ -960,6 +960,288 @@ test_ssl_verify_certificate_untrusted_complete_chain_null(UNUSED const MunitPara
 	return MUNIT_OK;
 }
 
+static MunitResult
+test_ssl_aes_ecb_pad_success(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = { 0xde, 0xad, 0xca, 0xfe };
+	int src_len = (int)sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret;
+
+	TRACE("Encrypting buffer with size %d ", src_len);
+	ret = ssl_aes_ecb_encrypt(src, src_len, ciphertext, &ciphertext_len, key, sizeof(key), 1);
+	munit_assert(0 == ret);
+
+	TRACE("Decrypting buffer with size %d ", ciphertext_len);
+	ret = ssl_aes_ecb_decrypt(ciphertext, ciphertext_len, dst, &dst_len, key, sizeof(key), 1);
+	munit_assert(0 == ret);
+
+	TRACE_HEXDUMP(src, sizeof(src), "SRC");
+	TRACE_HEXDUMP(ciphertext, ciphertext_len, "ENC");
+	TRACE_HEXDUMP(dst, dst_len, "DEC");
+
+	munit_assert_int(src_len, ==, dst_len);
+	munit_assert_memory_equal(src_len, src, dst);
+	munit_assert_memory_not_equal(src_len, src, ciphertext);
+	munit_assert_memory_not_equal(dst_len, dst, ciphertext);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_aes_ecb_pad_fail(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = { 0xde, 0xad, 0xca, 0xfe };
+	int src_len = (int)sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret;
+
+	TRACE("Encrypting buffer with size %d ", src_len);
+	ret = ssl_aes_ecb_encrypt(src, src_len, ciphertext, &ciphertext_len, key, sizeof(key), 1);
+	munit_assert(0 == ret);
+
+	// Use different key
+	key[0] = 0x1;
+
+	TRACE("Decrypting buffer with size %d ", ciphertext_len);
+	ret = ssl_aes_ecb_decrypt(ciphertext, ciphertext_len, dst, &dst_len, key, sizeof(key), 1);
+	munit_assert(0 != ret);
+
+	TRACE_HEXDUMP(src, sizeof(src), "SRC");
+	TRACE_HEXDUMP(ciphertext, ciphertext_len, "ENC");
+	TRACE_HEXDUMP(dst, dst_len, "DEC");
+
+	munit_assert_int(src_len, !=, dst_len);
+	munit_assert_memory_not_equal(src_len, src, dst);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_aes_ecb_nopad_success(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = { 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7,
+			  0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf };
+	int src_len = (int)sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret;
+
+	TRACE("Encrypting buffer with size %d ", src_len);
+	ret = ssl_aes_ecb_encrypt(src, src_len, ciphertext, &ciphertext_len, key, sizeof(key), 0);
+	munit_assert(0 == ret);
+
+	TRACE("Decrypting buffer with size %d ", ciphertext_len);
+	ret = ssl_aes_ecb_decrypt(ciphertext, ciphertext_len, dst, &dst_len, key, sizeof(key), 0);
+	munit_assert(0 == ret);
+
+	INFO_HEXDUMP(src, sizeof(src), "SRC");
+	INFO_HEXDUMP(ciphertext, ciphertext_len, "ENC");
+	INFO_HEXDUMP(dst, dst_len, "DEC");
+
+	munit_assert_int(src_len, ==, dst_len);
+	munit_assert_memory_equal(src_len, src, dst);
+	munit_assert_memory_not_equal(src_len, src, ciphertext);
+	munit_assert_memory_not_equal(dst_len, dst, ciphertext);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_aes_ecb_nopad_fail(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = {
+		0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe
+	};
+	int src_len = (int)sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret;
+
+	TRACE("Encrypting buffer with size %d ", src_len);
+	ret = ssl_aes_ecb_encrypt(src, src_len, ciphertext, &ciphertext_len, key, sizeof(key), 0);
+	munit_assert(0 != ret);
+
+	TRACE("Decrypting buffer with size %d ", ciphertext_len);
+	ssl_aes_ecb_decrypt(ciphertext, ciphertext_len, dst, &dst_len, key, sizeof(key), 0);
+
+	INFO_HEXDUMP(src, src_len, "SRC");
+	INFO_HEXDUMP(ciphertext, ciphertext_len, "ENC");
+	INFO_HEXDUMP(dst, dst_len, "DEC");
+
+	munit_assert_int(src_len, !=, dst_len);
+	munit_assert_memory_not_equal(src_len, src, dst);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_aes_ctr_success(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = { 0xde, 0xad };
+	int src_len = (int)sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret = -1;
+	ssl_aes_ctx_t *e_ctx, *d_ctx;
+	uint8_t iv[16] = { 0x1, 0x2, 0x3, 0x4, 0x0, 0x0, 0x0, 0x0,
+			   0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+
+	e_ctx = ssl_aes_ctr_init_encrypt(key, sizeof(key), iv, sizeof(iv));
+	munit_assert_not_null(e_ctx);
+
+	d_ctx = ssl_aes_ctr_init_decrypt(key, sizeof(key), iv, sizeof(iv));
+	munit_assert_not_null(d_ctx);
+
+	for (int i = 0; i < 24; i++) {
+		// FUT: Encrypt
+		ret = ssl_aes_ctr_encrypt(e_ctx, src, src_len, ciphertext, &ciphertext_len);
+		munit_assert(ret == 0);
+
+		// Update the IV to the expected value after a full block has been encrypted
+		// This means (i % 8), as we always encrypt 2 bytes
+		if ((i % 8) == 0) {
+			iv[15] += 1;
+			TRACE_HEXDUMP(iv, sizeof(iv), "IV");
+		}
+
+		// Get the actual IV
+#if OPENSSL_API_LEVEL >= 30000
+		uint8_t eiv[16] = { 0 };
+		EVP_CIPHER_CTX_get_updated_iv(e_ctx, eiv, sizeof(eiv));
+#else
+		// TODO remove, as soon as openssl3 is used on all platforms
+		const uint8_t *eiv = EVP_CIPHER_CTX_iv(e_ctx);
+#endif
+
+		// Compare
+		munit_assert_memory_equal(sizeof(iv), iv, eiv);
+
+		// FUT: Decrypt
+		ret = ssl_aes_ctr_decrypt(d_ctx, ciphertext, ciphertext_len, dst, &dst_len);
+		munit_assert(ret == 0);
+
+		// Get the actual IV
+#if OPENSSL_API_LEVEL >= 30000
+		uint8_t div[16] = { 0 };
+		EVP_CIPHER_CTX_get_updated_iv(d_ctx, div, sizeof(div));
+#else
+		// TODO remove, as soon as openssl3 is used on all platforms
+		const uint8_t *div = EVP_CIPHER_CTX_iv(d_ctx);
+#endif
+
+		// Compare
+		munit_assert_memory_equal(sizeof(iv), iv, div);
+
+		munit_assert_int(src_len, ==, dst_len);
+		munit_assert_memory_equal(src_len, src, dst);
+		munit_assert_memory_not_equal(src_len, src, ciphertext);
+		munit_assert_memory_not_equal(dst_len, dst, ciphertext);
+	}
+
+	ssl_aes_ctr_free(e_ctx);
+	ssl_aes_ctr_free(d_ctx);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_aes_ctr_fail_iv(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = { 0xde, 0xad };
+	int src_len = sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret = -1;
+	ssl_aes_ctx_t *e_ctx, *d_ctx;
+	uint8_t iv[16] = { 0x1, 0x2, 0x3, 0x4, 0x0, 0x0, 0x0, 0x0,
+			   0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+
+	e_ctx = ssl_aes_ctr_init_encrypt(key, sizeof(key), iv, sizeof(iv));
+	munit_assert_not_null(e_ctx);
+
+	// Manipulate IV
+	iv[15] = 0xa;
+
+	d_ctx = ssl_aes_ctr_init_decrypt(key, sizeof(key), iv, sizeof(iv));
+	munit_assert_not_null(d_ctx);
+
+	// FUT: Encrypt
+	ret = ssl_aes_ctr_encrypt(e_ctx, src, src_len, ciphertext, &ciphertext_len);
+	munit_assert(ret == 0);
+
+	// FUT: Decrypt
+	ret = ssl_aes_ctr_decrypt(d_ctx, ciphertext, ciphertext_len, dst, &dst_len);
+	munit_assert(ret == 0);
+
+	munit_assert_memory_not_equal(src_len, src, dst);
+
+	ssl_aes_ctr_free(e_ctx);
+	ssl_aes_ctr_free(d_ctx);
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_ssl_aes_ctr_fail_key(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uint8_t key[16] = { 0 };
+	uint8_t src[] = { 0xde, 0xad };
+	int src_len = (int)sizeof(src);
+	uint8_t ciphertext[100];
+	int ciphertext_len = (int)sizeof(ciphertext);
+	uint8_t dst[100];
+	int dst_len = (int)sizeof(dst);
+	int ret = -1;
+	ssl_aes_ctx_t *e_ctx, *d_ctx;
+	uint8_t iv[16] = { 0x1, 0x2, 0x3, 0x4, 0x0, 0x0, 0x0, 0x0,
+			   0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+
+	e_ctx = ssl_aes_ctr_init_encrypt(key, sizeof(key), iv, sizeof(iv));
+	munit_assert_not_null(e_ctx);
+
+	// Manipulate key
+	key[0] = 0x1;
+
+	d_ctx = ssl_aes_ctr_init_decrypt(key, sizeof(key), iv, sizeof(iv));
+	munit_assert_not_null(d_ctx);
+
+	// FUT: Encrypt
+	ret = ssl_aes_ctr_encrypt(e_ctx, src, src_len, ciphertext, &ciphertext_len);
+	munit_assert(ret == 0);
+
+	// FUT: Decrypt
+	ret = ssl_aes_ctr_decrypt(d_ctx, ciphertext, ciphertext_len, dst, &dst_len);
+	munit_assert(ret == 0);
+
+	munit_assert_memory_not_equal(src_len, src, dst);
+
+	ssl_aes_ctr_free(e_ctx);
+	ssl_aes_ctr_free(d_ctx);
+
+	return MUNIT_OK;
+}
+
 static MunitTest tests[] = {
 	{ "test_ssl_verify_signature_from_buf_ssa_ssacert",
 	  test_ssl_verify_signature_from_buf_ssa_ssacert, setup, tear_down, MUNIT_TEST_OPTION_NONE,
@@ -1067,6 +1349,20 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_verify_certificate_untrusted_complete_chain_null",
 	  test_ssl_verify_certificate_untrusted_complete_chain_null, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ecb_pad_success", test_ssl_aes_ecb_pad_success, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ecb_pad_fail", test_ssl_aes_ecb_pad_fail, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ecb_nopad_success", test_ssl_aes_ecb_nopad_success, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ecb_nopad_fail", test_ssl_aes_ecb_nopad_fail, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ctr_success", test_ssl_aes_ctr_success, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ctr_fail_iv", test_ssl_aes_ctr_fail_iv, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_aes_ctr_fail_key", test_ssl_aes_ctr_fail_key, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
 
 	// Mark the end of the array with an entry where the test function is NULL
