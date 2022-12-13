@@ -31,6 +31,8 @@
 
 typedef enum { RSA_PSS_PADDING, RSA_SSA_PADDING } rsa_padding_t;
 
+typedef EVP_CIPHER_CTX ssl_aes_ctx_t;
+
 /**
  * reads a pkcs12 softtoken located in the file token_file, unlocked with the password passphrase,
  * whereas the private key is stored in pkey
@@ -189,5 +191,104 @@ ssl_free(void);
  */
 const char *
 get_digest_name_by_sig_algo_obj(const ASN1_OBJECT *obj);
+
+/**
+ * Takes a plaintext buffer, encrypts it with AES-ECB and writes it to the output buffer.
+ * Be careful using ECB mode without further measures!
+ *
+ * @param in The plaintext buffer to be encrypted
+ * @param inlen The length of the plaintext buffer
+ * @param out The resulting ciphertext buffer
+ * @param outlen The length of the resulting ciphertext buffer
+ * @param key The key to use for encryption
+ * @param keylen The length of the key
+ * @param pad Set to 1 for default PKCS padding, 0 for no padding (in this case, the length
+ * 				of the input buffer must be a multiple of the cipher block size)
+ * @return int 0 if successful, otherwise -1
+ */
+int
+ssl_aes_ecb_encrypt(uint8_t *in, int inlen, uint8_t *out, int *outlen, uint8_t *key, int keylen,
+		    int pad);
+
+/**
+ * Takes a ciphertext buffer, decrypts it with AES-ECB and writes it to the output buffer.
+ * Be careful using ECB mode without further measures!
+ *
+ * @param in the ciphertext buffer to be decrypted
+ * @param inlen The length of the ciphertext buffer
+ * @param out The resulting plaintext buffer
+ * @param outlen The length of the plaintext buffer
+ * @param key The key to use for decryption
+ * @param keylen The length of the key to use
+ * @param pad
+ * @param pad Set to 1 for default PKCS padding, 0 for no padding (in this case, the length
+ * 				of the input buffer must be a multiple of the cipher block size)
+ * @return int 0 if successful, otherwise -1
+ */
+int
+ssl_aes_ecb_decrypt(uint8_t *in, int inlen, uint8_t *out, int *outlen, uint8_t *key, int keylen,
+		    int pad);
+
+/**
+ * Initializes an AES context for encryption with AES-CTR
+ *
+ * @param key The key to use for encryption
+ * @param keylen The length of the key
+ * @param iv The IV to use for encryption
+ * @param ivlen The length of the IV, must be the block size of the cipher
+ * @return ssl_aes_ctx_t Pointer to the newly initialized context in case of success,
+ * 			otherwise NULL. The pointer must be freed via ssl_aes_ctr_cree
+ */
+ssl_aes_ctx_t *
+ssl_aes_ctr_init_encrypt(uint8_t *key, int keylen, uint8_t *iv, int ivlen);
+
+/**
+ * Initializes an AES context for decryption with AES-CTR
+ *
+ * @param key The key to use for decryption
+ * @param keylen The length of the key
+ * @param iv The IV to use for decryption
+ * @param ivlen The length of the IV, must be the block size of the cipher
+ * @return ssl_aes_ctx_t Pointer to the newly initialized context in case of success,
+ * 			otherwise NULL. The pointer must be freed via ssl_aes_ctr_cree
+ */
+ssl_aes_ctx_t *
+ssl_aes_ctr_init_decrypt(uint8_t *key, int keylen, uint8_t *iv, int ivlen);
+
+/**
+ * Encrypts an arbitrary length buffer in AES-CTR mode
+ *
+ * @param ctx The context to be used for encryption, must be initialized
+ * 				with ssl_aes_ctr_init_encrypt
+ * @param in The plaintext buffer to be encrypted
+ * @param inlen The length of the plaintext buffer
+ * @param out The resulting ciphertext buffer
+ * @param outlen The length of the ciphertext buffer
+ * @return int 0 if successful, otherwise -1
+ */
+int
+ssl_aes_ctr_encrypt(ssl_aes_ctx_t *ctx, uint8_t *in, int inlen, uint8_t *out, int *outlen);
+
+/**
+ * Decrypts an arbitrary length buffer in AES-CTR mode
+ *
+ * @param ctx The context to be used for decryption, must be initialized
+ * 				with ssl_aes_ctr_init_decrypt
+ * @param in The ciphertext buffer to be decrypted
+ * @param inlen The length of the ciphertext buffer
+ * @param out The resulting plaintext buffer
+ * @param outlen The length of the plaintext buffer
+ * @return int 0 if successful, otherwise -1
+ */
+int
+ssl_aes_ctr_decrypt(ssl_aes_ctx_t *ctx, uint8_t *in, int inlen, uint8_t *out, int *outlen);
+
+/**
+ * Frees an AES context
+ *
+ * @param ctx The context to be freed
+ */
+void
+ssl_aes_ctr_free(ssl_aes_ctx_t *ctx);
 
 #endif /* P12UTIL_H */

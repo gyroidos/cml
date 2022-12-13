@@ -38,6 +38,7 @@
 #include <openssl/engine.h>
 #include <openssl/bio.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/evp.h>
 
 #include <string.h>
 #include <sys/stat.h>
@@ -1745,4 +1746,291 @@ ssl_verify_signature(const char *cert_file, const char *signature_file, const ch
 						   hash_len, digest_algo);
 
 	return ret;
+}
+
+int
+ssl_aes_ecb_encrypt(uint8_t *in, int inlen, uint8_t *out, int *outlen, uint8_t *key, int keylen,
+		    int pad)
+{
+	ASSERT(in);
+	ASSERT(out);
+	ASSERT(key);
+
+	int finallen = 0;
+	int ret = 0;
+	int out_ret = -1;
+	const EVP_CIPHER *cipher;
+	if (keylen == 16) {
+		cipher = EVP_aes_128_ecb();
+	} else if (keylen == 32) {
+		cipher = EVP_aes_256_ecb();
+	} else {
+		ERROR("Unsupported key length %d (only 128-bit and 256-bit supported)", keylen);
+		return -1;
+	}
+
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	if (!ctx) {
+		ERROR("Failed to allocate context for AES-ECB");
+		return -1;
+	}
+
+	ret = EVP_CIPHER_CTX_init(ctx);
+	if (!ret) {
+		ERROR("Failed to init context: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_EncryptInit_ex(ctx, cipher, NULL, key, NULL);
+	if (!ret) {
+		ERROR("Failed to init context for encryption: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_CIPHER_CTX_set_padding(ctx, pad);
+	if (!ret) {
+		ERROR("Failed to set padding: %d", ret);
+		goto out;
+	}
+
+	// The maximum ciphertext length for n bytes of plaintext is n + AES_BLOCK_SIZE -1 bytes
+	int block_size = EVP_CIPHER_block_size(cipher);
+	int pad_len = (inlen % block_size) ? (block_size - (inlen % block_size)) : 0;
+	int maxlen = ADD_WITH_OVERFLOW_CHECK(inlen, pad_len);
+	if (*outlen < maxlen) {
+		ERROR("Output buffer too small (%d, must be at least %d)", *outlen, maxlen);
+		goto out;
+	}
+
+	ret = EVP_EncryptUpdate(ctx, out, outlen, in, inlen);
+	if (!ret) {
+		ERROR("Failed to update encryption: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_EncryptFinal_ex(ctx, out + *outlen, &finallen);
+	if (!ret) {
+		ERROR("Failed to finalize encryption: %d", ret);
+		goto out;
+	}
+
+	*outlen += finallen;
+	out_ret = 0;
+
+out:
+	EVP_CIPHER_CTX_free(ctx);
+	return out_ret;
+}
+
+int
+ssl_aes_ecb_decrypt(uint8_t *in, int inlen, uint8_t *out, int *outlen, uint8_t *key, int keylen,
+		    int pad)
+{
+	ASSERT(in);
+	ASSERT(out);
+	ASSERT(key);
+
+	int ret = 0;
+	int out_ret = -1;
+	int finallen = 0;
+	const EVP_CIPHER *cipher;
+	if (keylen == 16) {
+		cipher = EVP_aes_128_ecb();
+	} else if (keylen == 32) {
+		cipher = EVP_aes_256_ecb();
+	} else {
+		ERROR("Unsupported key length %d", keylen);
+		return -1;
+	}
+
+	if (*outlen < inlen) {
+		ERROR("Output buffer too small (%d, must be at least %d)", *outlen, inlen);
+		return -1;
+	}
+
+	TRACE("Decrypting buffer with size %d", inlen);
+
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	if (!ctx) {
+		ERROR("Failed to allocate context for AES-ECB");
+		return -1;
+	}
+
+	ret = EVP_CIPHER_CTX_init(ctx);
+	if (!ret) {
+		ERROR("Failed to init context: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_DecryptInit_ex(ctx, cipher, NULL, key, NULL);
+	if (!ret) {
+		ERROR("Failed init context for decryption: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_CIPHER_CTX_set_padding(ctx, pad);
+	if (!ret) {
+		ERROR("Failed to set padding: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_DecryptUpdate(ctx, out, outlen, in, inlen);
+	if (!ret) {
+		ERROR("Failed to decrypt update: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_DecryptFinal_ex(ctx, out + *outlen, &finallen);
+	if (!ret) {
+		ERROR("Failed to decrypt final: %d", ret);
+		goto out;
+	}
+
+	*outlen += finallen;
+	out_ret = 0;
+
+	TRACE("Decrypted buffer, plaintext length: %d", *outlen);
+
+out:
+	EVP_CIPHER_CTX_free(ctx);
+	return out_ret;
+}
+
+EVP_CIPHER_CTX *
+ssl_aes_ctr_init_encrypt(uint8_t *key, int keylen, uint8_t *iv, int ivlen)
+{
+	ASSERT(key);
+	ASSERT(iv);
+
+	int ret = 0;
+	const EVP_CIPHER *cipher;
+	if (keylen == 16) {
+		cipher = EVP_aes_128_ctr();
+	} else if (keylen == 32) {
+		cipher = EVP_aes_256_ctr();
+	} else {
+		ERROR("Unsupported key length %d (only 128-bit and 256-bit supported)", keylen);
+		return NULL;
+	}
+
+	if (ivlen != EVP_CIPHER_iv_length(cipher)) {
+		ERROR("Invalid iv length %d", ivlen);
+		return NULL;
+	}
+
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	if (!ctx) {
+		ERROR("Failed to allocate context for AES-CTR");
+		return NULL;
+	}
+
+	ret = EVP_CIPHER_CTX_init(ctx);
+	if (!ret) {
+		ERROR("Failed to init context: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv);
+	if (!ret) {
+		ERROR("Failed to init context for AES-CTR encryption: %d", ret);
+		goto out;
+	}
+
+	return ctx;
+
+out:
+	EVP_CIPHER_CTX_free(ctx);
+	return NULL;
+}
+
+EVP_CIPHER_CTX *
+ssl_aes_ctr_init_decrypt(uint8_t *key, int keylen, uint8_t *iv, int ivlen)
+{
+	ASSERT(key);
+	ASSERT(iv);
+
+	int ret = 0;
+	const EVP_CIPHER *cipher;
+	if (keylen == 16) {
+		cipher = EVP_aes_128_ctr();
+	} else if (keylen == 32) {
+		cipher = EVP_aes_256_ctr();
+	} else {
+		ERROR("Unsupported key length %d (only 128-bit and 256-bit supported)", keylen);
+		return NULL;
+	}
+
+	if (ivlen != EVP_CIPHER_iv_length(cipher)) {
+		ERROR("Invalid iv length %d", ivlen);
+		return NULL;
+	}
+
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	if (!ctx) {
+		ERROR("Failed to allocate context for AES-CTR");
+		return NULL;
+	}
+
+	ret = EVP_CIPHER_CTX_init(ctx);
+	if (!ret) {
+		ERROR("Failed to init context: %d", ret);
+		goto out;
+	}
+
+	ret = EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv);
+	if (!ret) {
+		ERROR("Failed to init context for AES-CTR encryption: %d", ret);
+		goto out;
+	}
+
+	return ctx;
+
+out:
+	EVP_CIPHER_CTX_free(ctx);
+	return NULL;
+}
+
+int
+ssl_aes_ctr_encrypt(EVP_CIPHER_CTX *ctx, uint8_t *in, int inlen, uint8_t *out, int *outlen)
+{
+	int finallen = 0;
+
+	int ret = EVP_EncryptUpdate(ctx, out, outlen, in, inlen);
+	if (!ret) {
+		ERROR("Failed to update encryption: %d", ret);
+		return -1;
+	}
+
+	ret = EVP_EncryptFinal_ex(ctx, out + *outlen, &finallen);
+	if (!ret) {
+		ERROR("Failed to finalize encryption: %d", ret);
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+ssl_aes_ctr_decrypt(EVP_CIPHER_CTX *ctx, uint8_t *in, int inlen, uint8_t *out, int *outlen)
+{
+	int finallen = 0;
+	int ret = EVP_DecryptUpdate(ctx, out, outlen, in, inlen);
+	if (!ret) {
+		ERROR("Failed to decrypt update: %d", ret);
+		return -1;
+	}
+
+	ret = EVP_DecryptFinal_ex(ctx, out + *outlen, &finallen);
+	if (!ret) {
+		ERROR("Failed to decrypt final: %d", ret);
+		return -1;
+	}
+
+	return 0;
+}
+
+void
+ssl_aes_ctr_free(EVP_CIPHER_CTX *ctx)
+{
+	EVP_CIPHER_CTX_free(ctx);
 }
