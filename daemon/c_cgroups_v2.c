@@ -188,6 +188,58 @@ out:
 	return ret;
 }
 
+/**
+ * This functions gets the allowed cpus for the container from its associated container
+ * object and configures the cgroups cpuset subsystem to restrict access to that cpus.
+ */
+static int
+c_cgroups_set_cpus_allowed(const c_cgroups_t *cgroups)
+{
+	ASSERT(cgroups);
+
+	if (NULL == container_get_cpus_allowed(cgroups->container)) {
+		INFO("Setting no CPU restrictions for container %s",
+		     container_get_description(cgroups->container));
+		return 0;
+	}
+
+	int ret = -1;
+	char *cpuset_cpus_path = mem_printf("%s/cpuset.cpus", cgroups->path);
+	char *cpuset_mems_path = mem_printf("%s/cpuset.mems", cgroups->path);
+
+	if (!file_exists(cpuset_cpus_path)) {
+		ERROR("%s file not found (cgroups or cgroups cpuset subsystem not mounted?)",
+		      cpuset_cpus_path);
+		goto out;
+	}
+	if (file_printf(cpuset_cpus_path, "%s", container_get_cpus_allowed(cgroups->container)) ==
+	    -1) {
+		ERROR("Could not write to cgroups cpuset file in %s", cpuset_cpus_path);
+		goto out;
+	}
+
+	if (!file_exists(cpuset_mems_path)) {
+		ERROR("%s file not found (cgroups or cgroups cpuset subsystem not mounted?)",
+		      cpuset_mems_path);
+		goto out;
+	}
+	if (file_printf(cpuset_mems_path, "0") == -1) {
+		ERROR("Could not write to cgroups cpuset file in %s", cpuset_mems_path);
+		goto out;
+	}
+
+	INFO("Successfully set CPU restriction of container %s to cores %s",
+	     container_get_description(cgroups->container),
+	     container_get_cpus_allowed(cgroups->container));
+
+	ret = 0;
+out:
+	mem_free0(cpuset_cpus_path);
+	mem_free0(cpuset_mems_path);
+
+	return ret;
+}
+
 static int
 c_cgroups_start_post_clone(void *cgroupsp)
 {
@@ -206,6 +258,13 @@ c_cgroups_start_post_clone(void *cgroupsp)
 	/* initialize memory subsystem to limit ram to cgroups->ram_limit */
 	if (c_cgroups_set_ram_limit(cgroups) < 0) {
 		ERROR("Could not configure cgroup maximum ram for container %s",
+		      container_get_description(cgroups->container));
+		return -COMPARTMENT_ERROR_CGROUPS;
+	}
+
+	/* initialize cpuset child subsystem to limit access to allowed cpus */
+	if (c_cgroups_set_cpus_allowed(cgroups) < 0) {
+		ERROR("Could not configure cgroup to restrict cpus of container %s",
 		      container_get_description(cgroups->container));
 		return -COMPARTMENT_ERROR_CGROUPS;
 	}
