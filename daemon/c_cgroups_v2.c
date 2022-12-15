@@ -39,11 +39,13 @@
 #include "common/macro.h"
 #include "common/file.h"
 #include "common/dir.h"
+#include "common/event.h"
 #include "common/proc.h"
 #include "common/str.h"
 #include "common/uuid.h"
 
 #include <sched.h>
+#include <sys/inotify.h>
 #include <sys/mount.h>
 #include <unistd.h>
 
@@ -52,12 +54,27 @@
 #endif
 
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
+
+/* Define timeout for freeze in milliseconds */
+#define CGROUPS_FREEZER_TIMEOUT 5000
+/* Define the time interval between status checks while freezing */
+#define CGROUPS_FREEZER_RETRY_INTERVAL 100
+
+#define CGROUPS_FREEZER_RETRIES CGROUPS_FREEZER_TIMEOUT / CGROUPS_FREEZER_RETRY_INTERVAL
+
 char *c_cgroups_subtree = NULL; // in which containers are running in
 
 typedef struct c_cgroups {
 	container_t *container; // weak reference
 	bool ns_cgroup;
 	char *path;
+
+	bool is_populated;
+	bool is_frozen;
+	event_inotify_t *inotify_cgroup_events;
+
+	event_timer_t *freeze_timer; /* timer to handle a container freeze timeout */
+	int freezer_retries;
 } c_cgroups_t;
 
 static void *
@@ -73,6 +90,12 @@ c_cgroups_new(compartment_t *compartment)
 
 	cgroups->path = mem_printf("%s/%s", c_cgroups_subtree,
 				   uuid_string(container_get_uuid(cgroups->container)));
+
+	cgroups->is_populated = false;
+	cgroups->is_frozen = false;
+	cgroups->inotify_cgroup_events = NULL;
+	cgroups->freeze_timer = NULL;
+	cgroups->freezer_retries = 0;
 	return cgroups;
 }
 
@@ -240,6 +263,174 @@ out:
 	return ret;
 }
 
+static void
+c_cgroups_event_populated(c_cgroups_t *cgroups, bool is_populated)
+{
+	ASSERT(cgroups);
+
+	cgroups->is_populated = is_populated;
+
+	DEBUG("Cgroup for container %s is %s", container_get_description(cgroups->container),
+	      is_populated ? "populated" : "empty");
+}
+
+static void
+c_cgroups_cleanup_freeze_timer(c_cgroups_t *cgroups)
+{
+	ASSERT(cgroups);
+
+	if (cgroups->freeze_timer) {
+		DEBUG("Remove container freeze timer for %s",
+		      container_get_description(cgroups->container));
+		event_remove_timer(cgroups->freeze_timer);
+		event_timer_free(cgroups->freeze_timer);
+		cgroups->freeze_timer = NULL;
+	}
+	cgroups->freezer_retries = 0;
+}
+
+static void
+c_cgroups_event_freezer(c_cgroups_t *cgroups, bool is_frozen)
+{
+	ASSERT(cgroups);
+
+	cgroups->is_frozen = is_frozen;
+
+	DEBUG("State of freezer for container %s is %s",
+	      container_get_description(cgroups->container), is_frozen ? "frozen" : "thawed");
+
+	compartment_state_t compartment_state = container_get_state(cgroups->container);
+
+	if (!is_frozen && (compartment_state == COMPARTMENT_STATE_FREEZING ||
+			   compartment_state == COMPARTMENT_STATE_FROZEN)) {
+		INFO("Container %s thawed from freezing or frozen state",
+		     container_get_description(cgroups->container));
+		c_cgroups_cleanup_freeze_timer(cgroups);
+		container_set_state(cgroups->container, COMPARTMENT_STATE_RUNNING);
+	} else if (is_frozen && (compartment_state != COMPARTMENT_STATE_FROZEN)) {
+		INFO("Container %s frozen", container_get_description(cgroups->container));
+		c_cgroups_cleanup_freeze_timer(cgroups);
+		container_set_state(cgroups->container, COMPARTMENT_STATE_FROZEN);
+	}
+}
+
+static void
+c_cgroups_events_cb(UNUSED const char *path, UNUSED uint32_t mask, UNUSED event_inotify_t *inotify,
+		    void *data)
+{
+	c_cgroups_t *cgroups = data;
+
+	ASSERT(cgroups);
+
+	char *cgroup_events_path = mem_printf("%s/cgroup.events", cgroups->path);
+	char *state_str = file_read_new(cgroup_events_path, 1024);
+	mem_free0(cgroup_events_path);
+
+	int frozen = 0, populated = 0;
+	char *event_line = strtok(state_str, "\n");
+	while (event_line) {
+		if (sscanf(event_line, "populated %d", &populated) == 1) {
+			bool is_populated = populated ? true : false;
+			if (is_populated != cgroups->is_populated)
+				c_cgroups_event_populated(cgroups, is_populated);
+		}
+		if (sscanf(event_line, "frozen %d", &frozen) == 1) {
+			bool is_frozen = frozen ? true : false;
+			if (is_frozen != cgroups->is_frozen)
+				c_cgroups_event_freezer(cgroups, is_frozen);
+		}
+		event_line = strtok(NULL, "\n");
+	}
+	mem_free0(state_str);
+}
+
+static int
+c_cgroups_unfreeze(void *cgroupsp)
+{
+	c_cgroups_t *cgroups = cgroupsp;
+	ASSERT(cgroups);
+
+	char *freezer_state_path = mem_printf("%s/cgroup.freeze", cgroups->path);
+	if (file_write(freezer_state_path, "0", -1) == -1) {
+		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
+		mem_free0(freezer_state_path);
+		return -1;
+	}
+	mem_free0(freezer_state_path);
+	return 0;
+}
+
+static void
+c_cgroups_freeze_timeout_cb(UNUSED event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+
+	c_cgroups_t *cgroups = data;
+
+	DEBUG("Checking state of the freezing process (try no. %d)", cgroups->freezer_retries + 1);
+
+	if (cgroups->freezer_retries < CGROUPS_FREEZER_RETRIES) {
+		cgroups->freezer_retries++;
+		// trigger state update of container
+		c_cgroups_event_freezer(cgroups, cgroups->is_frozen);
+		return;
+	}
+
+	compartment_state_t compartment_state = container_get_state(cgroups->container);
+	if (compartment_state == COMPARTMENT_STATE_FREEZING) {
+		WARN("Hit timeout for freezing container %s, aborting freeze...",
+		     container_get_description(cgroups->container));
+
+		if (c_cgroups_unfreeze(cgroups) < 0) {
+			WARN("Could not abort freeze for container %s",
+			     container_get_description(cgroups->container));
+		} else {
+			WARN("Freeze for container %s aborted",
+			     container_get_description(cgroups->container));
+		}
+	}
+
+	c_cgroups_cleanup_freeze_timer(cgroups);
+}
+
+static int
+c_cgroups_freeze(void *cgroupsp)
+{
+	c_cgroups_t *cgroups = cgroupsp;
+	ASSERT(cgroups);
+
+	compartment_state_t state = container_get_state(cgroups->container);
+	switch (state) {
+	case COMPARTMENT_STATE_FROZEN:
+	case COMPARTMENT_STATE_FREEZING:
+		DEBUG("Container already frozen or freezing, doing nothing...");
+		return 0;
+	case COMPARTMENT_STATE_RUNNING:
+	case COMPARTMENT_STATE_SETUP:
+		break; // actually do freeze
+	default:
+		WARN("Container not running");
+		return -1;
+	}
+
+	char *freezer_state_path = mem_printf("%s/cgroup.freeze", cgroups->path);
+	if (file_write(freezer_state_path, "1", -1) == -1) {
+		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
+		mem_free0(freezer_state_path);
+		return -1;
+	}
+
+	/* register a timer to stop the freeze if it does not complete in time */
+	cgroups->freeze_timer = event_timer_new(CGROUPS_FREEZER_RETRY_INTERVAL, -1,
+						&c_cgroups_freeze_timeout_cb, cgroups);
+	event_add_timer(cgroups->freeze_timer);
+
+	container_set_state(cgroups->container, COMPARTMENT_STATE_FREEZING);
+
+	mem_free0(freezer_state_path);
+	return 0;
+}
+
 static int
 c_cgroups_start_post_clone(void *cgroupsp)
 {
@@ -268,6 +459,13 @@ c_cgroups_start_post_clone(void *cgroupsp)
 		      container_get_description(cgroups->container));
 		return -COMPARTMENT_ERROR_CGROUPS;
 	}
+
+	/* initialize events handling, e.g., for freezer subsystem */
+	char *events_path = mem_printf("%s/cgroup.events", cgroups->path);
+	cgroups->inotify_cgroup_events =
+		event_inotify_new(events_path, IN_MODIFY, &c_cgroups_events_cb, cgroups);
+	event_add_inotify(cgroups->inotify_cgroup_events);
+	mem_free0(events_path);
 
 	return 0;
 }
@@ -377,6 +575,8 @@ c_cgroups_init(void)
 
 	// register relevant handlers implemented by this module
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
+	container_register_freeze_handler(MOD_NAME, c_cgroups_freeze);
+	container_register_unfreeze_handler(MOD_NAME, c_cgroups_unfreeze);
 
 	// mount cgroups if not already mounted by init
 	if (!file_is_mountpoint(CGROUPS_FOLDER)) {
