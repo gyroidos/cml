@@ -71,8 +71,7 @@ typedef struct c_cgroups_bpf_prog {
 
 typedef struct c_cgroups_dev {
 	container_t *container; // weak reference
-	list_t *active_cgroups;
-	char *path; // path to cgroup of the container
+	char *path;		// path to cgroup of the container
 
 	list_t *assigned_devs; /* list of 2 element int arrays, representing maj:min of exclusively assigned devices.
 				  wildcard '*' is mapped to -1 */
@@ -688,8 +687,6 @@ c_cgroups_dev_new(compartment_t *compartment)
 
 	cgroups_dev->path = mem_printf("%s/%s", c_cgroups_subtree,
 				       uuid_string(container_get_uuid(cgroups_dev->container)));
-
-	cgroups_dev->active_cgroups = hardware_get_active_cgroups_subsystems();
 
 	cgroups_dev->assigned_devs = NULL;
 	cgroups_dev->allowed_devs = NULL;
