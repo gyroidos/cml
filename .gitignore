@@ -5,3 +5,10 @@ cscope.out
 tags
 /**/compile_commands.json
 .vscode/
+*pb-c*
+*.o
+*.a
+control/control
+daemon/cmld
+scd/scd
+service/cml-service-container
