@@ -136,7 +136,8 @@ SRC_CMODULES += \
 	c_time.c \
 	c_audit.c \
 	c_cap.c \
-	c_uevent.c
+	c_uevent.c \
+	c_hotplug.c
 else
 SRC_CMODULES += \
 	c_smartcard.c \
@@ -150,7 +151,8 @@ SRC_CMODULES += \
 	c_time.c \
 	c_audit.c \
 	c_cap.c \
-	c_uevent.c
+	c_uevent.c \
+	c_hotplug.c
 endif
 
 ifeq ($(CGROUP_V2),y)
@@ -160,6 +162,7 @@ ifeq ($(CGROUP_V2),y)
 else
     SRC_CMODULES += \
 	c_cgroups.c
+    LOCAL_CFLAGS += -DCGROUPS_LEGACY
 endif
 
 ifeq ($(OCI),y)
