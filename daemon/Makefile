@@ -117,42 +117,23 @@ SRC_FILES := main.c \
 	common/audit.c \
 	audit.c
 
+# module order is crucial
+SRC_CMODULES := \
+	c_smartcard.c \
+	c_user.c
+
+ifeq ($(IDMAPPED),y)
+SRC_CMODULES += \
+	c_idmapped.c
+else
+SRC_CMODULES += \
+	c_shiftid.c
+endif
+
 ifeq ($(SYSTEMD),y)
     SRC_CMODULES += \
 	c_cgroups_systemd.c
     LDLIBS += -lsystemd
-endif
-
-# module order is crucial
-ifeq ($(IDMAPPED),y)
-SRC_CMODULES += \
-	c_smartcard.c \
-	c_user.c \
-	c_idmapped.c \
-	c_net.c \
-	c_vol.c \
-	c_service.c \
-	c_run.c \
-	c_time.c \
-	c_audit.c \
-	c_cap.c \
-	c_uevent.c \
-	c_hotplug.c
-else
-SRC_CMODULES += \
-	c_smartcard.c \
-	c_user.c \
-	c_shiftid.c \
-	c_net.c \
-	c_vol.c \
-	c_service.c \
-	c_run.c \
-	c_fifo.c \
-	c_time.c \
-	c_audit.c \
-	c_cap.c \
-	c_uevent.c \
-	c_hotplug.c
 endif
 
 ifeq ($(CGROUP_V2),y)
@@ -164,6 +145,18 @@ else
 	c_cgroups.c
     LOCAL_CFLAGS += -DCGROUPS_LEGACY
 endif
+
+SRC_CMODULES += \
+	c_net.c \
+	c_vol.c \
+	c_service.c \
+	c_run.c \
+	c_fifo.c \
+	c_time.c \
+	c_audit.c \
+	c_cap.c \
+	c_uevent.c \
+	c_hotplug.c
 
 ifeq ($(OCI),y)
     LOCAL_CFLAGS += -DOCI -I${HOME}/rcs/libocispec/src
