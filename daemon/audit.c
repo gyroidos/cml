@@ -784,8 +784,8 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		int dev_major, dev_minor, res;
 		unsigned long long sector;
 		int sscanf_ret =
-			sscanf(log_record, "%*s module=%*s dev=%d:%d op=%s sector=%llu res=%d",
-			       &dev_major, &dev_minor, op_buf, &sector, &res);
+			sscanf(log_record, "%*s module=%*s op=%s dev=%d:%d sector=%llu res=%d",
+			       op_buf, &dev_major, &dev_minor, &sector, &res);
 		TRACE("audit: sscanf_ret=%d", sscanf_ret);
 		if (sscanf_ret == 5) {
 			char *dev_name = NULL;
