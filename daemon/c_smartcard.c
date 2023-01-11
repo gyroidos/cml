@@ -343,7 +343,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 				unsigned char key[TOKEN_MAX_WRAPPED_KEY_LEN];
 				int keylen = file_read(keyfile, (char *)key, sizeof(key));
 				DEBUG("Length of existing key: %d", keylen);
-				if (keylen < 0) {
+				if (keylen < TOKEN_KEY_LEN) {
 					audit_log_event(container_get_uuid(smartcard->container),
 							FSA, CMLD, TOKEN_MGMT, "read-wrapped-key",
 							uuid_string(container_get_uuid(
