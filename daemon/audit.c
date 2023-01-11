@@ -800,6 +800,8 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 				uuid = uuid_new(uuid_str);
 				TRACE("uuid %s from dev '%s'", uuid_str, dev_file);
 				mem_free0(uuid_str);
+			} else {
+				dev_name = mem_printf("%d:%d", dev_major, dev_minor);
 			}
 
 			container_t *c = uuid ? cmld_container_get_by_uuid(uuid) : NULL;
