@@ -420,6 +420,9 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	ret = 0;
 
 out:
+	// ensure audit log goes to disk
+	file_syncfs(file);
+
 	mem_free0(file);
 	mem_free0(msg_text);
 
