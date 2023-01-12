@@ -1291,7 +1291,7 @@ compartment_kill(compartment_t *compartment)
 	}
 
 	if (compartment_get_pid(compartment) < 0) {
-		ERROR("No pid (%d) for container %s -> state missamatch, do not kill anything!",
+		ERROR("No pid (%d) for container %s -> state mismatch, do not kill anything!",
 		      compartment_get_pid(compartment), compartment_get_description(compartment));
 		return;
 	}
