@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE // for syncfs()
+
 #include <string.h>
 #include <unistd.h>
 
@@ -344,4 +346,16 @@ file_touch(const char *file)
 	}
 	close(fd);
 	return 0;
+}
+
+void
+file_syncfs(const char *file)
+{
+	IF_NULL_RETURN(file);
+
+	int fd = open(file, O_WRONLY);
+	if (syncfs(fd))
+		WARN_ERRNO("Failed to sync fs for '%s'", file);
+
+	close(fd);
 }
