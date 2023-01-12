@@ -160,4 +160,11 @@ file_get_extension(const char *file);
 int
 file_touch(const char *file);
 
+/**
+ * syncs filesystem containg the corresponig file
+ * @param file The file name
+ */
+void
+file_syncfs(const char *file);
+
 #endif /* FILE_H */
