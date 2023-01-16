@@ -1075,12 +1075,14 @@ container_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			/* remove the sigchld callback for this container from the event loop */
 			event_remove_signal(sig);
 			event_signal_free(sig);
-			/* cleanup and set states accordingly to notify observers */
-			container_cleanup(container, rebooting);
 
 			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
 					rebooting ? "reboot" : "stop",
 					uuid_string(container_get_uuid(container)), 0);
+
+			/* cleanup and set states accordingly to notify observers */
+			container_cleanup(container, rebooting);
+
 		} else if (pid == -1) {
 			if (errno == ECHILD) {
 				DEBUG("Process group of container %s terminated completely",
