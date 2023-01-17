@@ -1818,6 +1818,12 @@ container_kill(container_t *container)
 		return;
 	}
 
+	if (container_get_pid(container) < 0) {
+		ERROR("No pid (%d) for container %s -> state mismatch, do not kill anything!",
+		      container_get_pid(container), container_get_description(container));
+		return;
+	}
+
 	// TODO kill container (possibly register callback and wait non-blocking)
 	DEBUG("Killing container %s with pid: %d", container_get_description(container),
 	      container_get_pid(container));
