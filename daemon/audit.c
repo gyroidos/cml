@@ -463,7 +463,7 @@ audit_do_send_record(const container_t *c)
 		return -1;
 	}
 
-	if (!strcmp("", mktemp(tmpfile))) {
+	if (-1 == mkstemp(tmpfile)) {
 		ERROR_ERRNO("Failed to generate temporary filename");
 		return -1;
 	}
