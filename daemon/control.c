@@ -773,7 +773,8 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN) ||
-	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN))) {
+	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN) ||
+	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG))) {
 		TRACE("Received command %d is invalid in CC mode", msg->command);
 		return false;
 	}
