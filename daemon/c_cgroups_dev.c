@@ -792,15 +792,11 @@ c_cgroups_dev_cleanup(void *cgroups_devp, UNUSED bool is_rebooting)
 	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
 	ASSERT(cgroups_dev);
 
-	for (list_t *l = cgroups_dev->allowed_devs; l; l = l->next) {
-		c_cgroups_dev_item_t *dev_item = l->data;
-		c_cgroups_dev_item_free(dev_item);
-	}
-	list_delete(cgroups_dev->allowed_devs);
-
-	/* detach an cleanup bpf prog */
+	/* detach and cleanup bpf prog */
 	if (cgroups_dev->bpf_prog)
 		c_cgroups_dev_bpf_prog_deactivate(cgroups_dev);
+
+	cgroups_dev->bpf_prog = NULL;
 
 	/* free assigned devices */
 	for (list_t *elem = cgroups_dev->assigned_devs; elem != NULL; elem = elem->next) {
@@ -817,6 +813,12 @@ c_cgroups_dev_cleanup(void *cgroups_devp, UNUSED bool is_rebooting)
 	}
 	list_delete(cgroups_dev->allowed_devs);
 	cgroups_dev->allowed_devs = NULL;
+
+	for (list_t *l = cgroups_dev->allowed_devs; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		c_cgroups_dev_item_free(dev_item);
+	}
+	list_delete(cgroups_dev->allowed_devs);
 }
 
 static bool
