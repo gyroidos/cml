@@ -457,7 +457,8 @@ c_user_open_userns(void *usr)
 
 	userns_path = mem_printf("/proc/%d/ns/user", userns_child);
 	if ((userns_fd = open(userns_path, O_RDONLY | O_CLOEXEC)) == -1) {
-		ERROR_ERRNO("Could not userns_fd '%s' for container start", userns_path);
+		ERROR_ERRNO("Could not open userns_fd '%s' for container start",
+			    userns_path ? userns_path : "null");
 		goto error;
 	}
 
