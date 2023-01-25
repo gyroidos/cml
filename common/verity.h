@@ -21,6 +21,18 @@
  * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
  */
 
+#ifndef VERITY_H
+#define VERITY_H
+
+/**
+ * @brief Returns the path for a dm-verity device
+ *
+ * @param label The verity device name
+ * @return char* The path, must be freed
+ */
+char *
+verityfs_get_device_path_new(const char *label);
+
 /**
  * Open a device-mapper verity device
  *
@@ -31,8 +43,8 @@
  * @return int 0 if successful, otherwise -1
  */
 int
-verityfs_open(const char *name, const char *fs_img_name, const char *hash_dev_name,
-	      const char *root_hash);
+verityfs_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
+			const char *root_hash);
 
 /**
  * Close a device-mapper verity device
@@ -42,4 +54,6 @@ verityfs_open(const char *name, const char *fs_img_name, const char *hash_dev_na
  *
  */
 int
-verityfs_close(const char *name);
+verityfs_delete_blk_dev(const char *name);
+
+#endif // VERITY_H
