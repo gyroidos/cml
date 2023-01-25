@@ -109,7 +109,7 @@ SRC_FILES := main.c \
 	common/dm.c \
 	common/cryptfs.c \
 	common/reboot.c \
-	common/verityfs.c \
+	common/verity.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \

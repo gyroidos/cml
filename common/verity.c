@@ -144,9 +144,15 @@ generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, c
 	return 0;
 }
 
+char *
+verityfs_get_device_path_new(const char *label)
+{
+	return mem_printf("%s%s", DM_PATH_PREFIX, label);
+}
+
 int
-verityfs_open(const char *name, const char *fs_img_name, const char *hash_dev_name,
-	      const char *root_hash)
+verityfs_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
+			const char *root_hash)
 {
 	int control_fd = -1;
 	int ret = -1;
@@ -178,11 +184,9 @@ verityfs_open(const char *name, const char *fs_img_name, const char *hash_dev_na
 		ERROR("Failed to create uuid for dm-verity device %s", name);
 		goto out;
 	}
-	TRACE("dm-verity device %s uuid: %s\n", name, dev_uuid);
+	TRACE("dm-verity device %s uuid: %s", name, dev_uuid);
 
-	control_fd = open(DM_CONTROL, O_RDWR);
-	if (control_fd < 0) {
-		ERROR_ERRNO("Failed to open %s\n", DM_CONTROL);
+	if ((control_fd = dm_open_control()) < 0) {
 		goto out;
 	}
 
@@ -274,21 +278,19 @@ verityfs_open(const char *name, const char *fs_img_name, const char *hash_dev_na
 	}
 	char *status_line = (char *)&buf[sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec)];
 	if (status_line[0] == 'V') {
-		DEBUG("Verity Device Activation of %s finished successfully\n", name);
+		DEBUG("Successfully activated verity device %s", name);
 	} else if (status_line[0] == 'C') {
-		WARN("Verity Device Activation of %s finished, corruption detected\n", name);
+		WARN("Activated verity device %s, corruption detected", name);
 		goto out;
 	} else {
-		WARN("Verify Device Activation of %s finished, unknown status %c\n", name,
-		     status_line[0]);
+		WARN("Activated verity device %s, unknown status %c", name, status_line[0]);
 		goto out;
 	}
 
 	ret = 0;
 
 out:
-	if (control_fd > 0)
-		close(control_fd);
+	dm_close_control(control_fd);
 	if (fs_fd > 0)
 		close(fs_fd);
 	if (hash_fd > 0)
@@ -298,7 +300,7 @@ out:
 }
 
 int
-verityfs_close(const char *name)
+verityfs_delete_blk_dev(const char *name)
 {
 	int control_fd = -1;
 	int ret = -1;
@@ -307,9 +309,7 @@ verityfs_close(const char *name)
 
 	TRACE("Closing dm-verity device %s", name);
 
-	control_fd = open(DM_CONTROL, O_RDWR);
-	if (control_fd < 0) {
-		ERROR_ERRNO("Failed to open %s\n", DM_CONTROL);
+	if ((control_fd = dm_open_control()) < 0) {
 		goto out;
 	}
 
@@ -331,11 +331,16 @@ verityfs_close(const char *name)
 		goto out;
 	}
 
+	/* remove device node if necessary */
+	char *device = cryptfs_get_device_path_new(name);
+	unlink(device);
+	mem_free0(device);
+
+	TRACE("Successfully closed dm-verity device %s", name);
 	ret = 0;
 
 out:
-	if (control_fd > 0)
-		close(control_fd);
+	dm_close_control(control_fd);
 
 	return ret;
 }
