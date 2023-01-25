@@ -110,6 +110,39 @@ c_cgroups_free(void *cgroupsp)
 }
 
 static int
+c_cgroups_activate_controllers(const char *path)
+{
+	int ret = 0;
+
+	IF_NULL_RETVAL(path, -1);
+
+	// activate controllers
+	char *controllers_path = mem_printf("%s/cgroup.controllers", path);
+	char *controllers = file_read_new(controllers_path, 4096);
+
+	// remove possible newline
+	if (controllers[strlen(controllers) - 1] == '\n')
+		controllers[strlen(controllers) - 1] = '\0';
+
+	char *controller = strtok(controllers, " ");
+	str_t *activate = str_new_printf("+%s", controller);
+	for (controller = strtok(NULL, " "); controller; controller = strtok(NULL, " "))
+		str_append_printf(activate, " +%s", controller);
+
+	INFO("activating controllers '%s'", str_buffer(activate));
+	char *subtree_control_path = mem_printf("%s/cgroup.subtree_control", path);
+	if (-1 == file_printf(subtree_control_path, str_buffer(activate))) {
+		ERROR("Could not activate cgroup controllers for cgroup '%s'!", path);
+		ret = -1;
+	}
+
+	str_free(activate, true);
+	mem_free0(controllers_path);
+	mem_free0(controllers);
+	return ret;
+}
+
+static int
 c_cgroups_add_pid_by_path(char *path, pid_t pid)
 {
 	ASSERT(path);
@@ -603,26 +636,8 @@ c_cgroups_init(void)
 		FATAL("Could not move cmld to leaf cgroup '%s'", cgroup_cmld);
 
 	// activate controllers
-	char *controllers_path = mem_printf("%s/cgroup.controllers", c_cgroups_subtree);
-	char *controllers = file_read_new(controllers_path, 4096);
-
-	// remove possible newline
-	if (controllers[strlen(controllers) - 1] == '\n')
-		controllers[strlen(controllers) - 1] = '\0';
-
-	char *controller = strtok(controllers, " ");
-	str_t *activate = str_new_printf("+%s", controller);
-	for (controller = strtok(NULL, " "); controller; controller = strtok(NULL, " "))
-		str_append_printf(activate, " +%s", controller);
-
-	INFO("activating controllers '%s'", str_buffer(activate));
-	char *subtree_control_path = mem_printf("%s/cgroup.subtree_control", c_cgroups_subtree);
-	if (-1 == file_printf(subtree_control_path, str_buffer(activate)))
+	if (c_cgroups_activate_controllers(c_cgroups_subtree))
 		FATAL("Could not activate cgroup controllers for cmld!");
 
-	str_free(activate, true);
-	mem_free0(subtree_control_path);
-	mem_free0(controllers_path);
-	mem_free0(controllers);
 	mem_free0(cgroup_cmld);
 }
