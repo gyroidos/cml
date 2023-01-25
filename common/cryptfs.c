@@ -184,8 +184,8 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	int i;
 	int ioctl_ret;
 
-	//DEBUG("Loading crypto mapping table (%s,%s,%s,%s,%d,%d)", real_blk_name, crypto_type,
-	//      master_key_ascii, name, fs_size, fd);
+	TRACE("Loading crypto mapping table (%s,%s,%s,%s,%d,%d)", real_blk_name, crypto_type,
+	      master_key_ascii, name, fs_size, fd);
 
 	io = (struct dm_ioctl *)buffer;
 
@@ -605,18 +605,11 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 }
 
 int
-cryptfs_delete_blk_dev(const char *name)
+cryptfs_delete_blk_dev(int fd, const char *name)
 {
-	int fd;
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
 	int ret = -1;
-
-	fd = open(DM_CONTROL, O_RDWR);
-	if (fd < 0) {
-		ERROR("Cannot open device-mapper");
-		goto error;
-	}
 
 	io = (struct dm_ioctl *)buffer;
 
@@ -647,6 +640,5 @@ cryptfs_delete_blk_dev(const char *name)
 	ret = 0;
 
 error:
-	close(fd); /* If fd is <0 from a failed open call, it's safe to just ignore the close error */
 	return ret;
 }

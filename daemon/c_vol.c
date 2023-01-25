@@ -49,6 +49,7 @@
 #include "common/proc.h"
 #include "common/sock.h"
 #include "common/str.h"
+#include "common/dm.h"
 
 #include "cmld.h"
 #include "hardware.h"
@@ -68,6 +69,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
+#include <linux/dm-ioctl.h>
 
 #define MAKE_EXT4FS "mkfs.ext4"
 #define BTRFSTUNE "btrfstune"
@@ -990,6 +992,9 @@ static int
 c_vol_cleanup_dm(c_vol_t *vol)
 {
 	size_t i, n;
+	int fd;
+
+	IF_TRUE_RETVAL(((fd = dm_open_control()) < 0), -1);
 
 	n = mount_get_count(vol->mnt);
 	for (i = 0; i < n; i++) {
@@ -1006,6 +1011,7 @@ c_vol_cleanup_dm(c_vol_t *vol)
 			DEBUG("Could not delete dm %s", label);
 		mem_free0(label);
 	}
+	dm_close_control(fd);
 
 	return 0;
 }
