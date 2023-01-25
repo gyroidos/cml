@@ -176,6 +176,8 @@ guestos_config_fill_mount_internal(GuestOSMount **mounts, size_t n_mounts, mount
 			mount_entry_set_sha256(e, m->image_sha2_256);
 		if (m->mount_data)
 			mount_entry_set_mount_data(e, m->mount_data);
+		if (m->image_verity_sha256)
+			mount_entry_set_verity_sha256(e, m->image_verity_sha256);
 	}
 }
 

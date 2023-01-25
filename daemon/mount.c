@@ -53,6 +53,7 @@ struct mount_entry {
 	char *sha1;
 	char *sha256;
 	char *mount_data; /**< mount_data to use for mount syscall e.g. "uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:firmware_file:s0" */
+	char *verity_sha256;
 };
 
 mount_t *
@@ -237,6 +238,21 @@ mount_entry_get_mount_data(const mount_entry_t *mntent)
 {
 	ASSERT(mntent);
 	return mntent->mount_data;
+}
+
+char *
+mount_entry_get_verity_sha256(const mount_entry_t *mntent)
+{
+	ASSERT(mntent);
+	return mntent->verity_sha256;
+}
+
+void
+mount_entry_set_verity_sha256(mount_entry_t *mntent, char *sha256)
+{
+	ASSERT(mntent);
+	TRACE("Setting dm-verity sha256 to %s", sha256);
+	mntent->verity_sha256 = mem_strdup(sha256);
 }
 
 bool

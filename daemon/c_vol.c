@@ -57,6 +57,7 @@
 #include "guestos_mgr.h"
 #include "lxcfs.h"
 #include "audit.h"
+#include "verity.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -69,7 +70,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
-#include <linux/dm-ioctl.h>
 
 #define MAKE_EXT4FS "mkfs.ext4"
 #define BTRFSTUNE "btrfstune"
@@ -163,6 +163,27 @@ c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 	}
 
 	return mem_printf("%s/%s.meta.img", dir, mount_entry_get_img(mntent));
+}
+
+static char *
+c_vol_hash_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
+{
+	const char *dir = NULL;
+
+	ASSERT(vol);
+	ASSERT(mntent);
+
+	switch (mount_entry_get_type(mntent)) {
+	case MOUNT_TYPE_SHARED:
+	case MOUNT_TYPE_SHARED_RW:
+		dir = guestos_get_dir(vol->os);
+		break;
+	default:
+		ERROR("Unsupported operating system mount type %d for %s (dm-verity hash device)",
+		      mount_entry_get_type(mntent), mount_entry_get_img(mntent));
+	}
+
+	return mem_printf("%s/%s.hash.img", dir, mount_entry_get_img(mntent));
 }
 
 /**
@@ -443,6 +464,8 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	upper_dev = (upper_dev) ? upper_dev : "tmpfs";
 	int uid = container_get_uid(vol->container);
 
+	TRACE("Creating overlayfs mount directory %s\n", overlayfs_mount_dir);
+
 	// create mountpoints for lower and upper dev
 	if (dir_mkdir_p(overlayfs_mount_dir, 0755) < 0) {
 		ERROR_ERRNO("Could not mkdir overlayfs dir %s", overlayfs_mount_dir);
@@ -451,6 +474,8 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	lower_dir = mem_printf("%s-lower", overlayfs_mount_dir);
 	upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
 	work_dir = mem_printf("%s/work", overlayfs_mount_dir);
+
+	TRACE("Mounting dev %s type %s to dir %s", upper_dev, overlayfs_mount_dir, upper_fstype);
 
 	/*
 	 * mount backing fs image for overlayfs upper and work dir
@@ -473,6 +498,8 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 
 	DEBUG("Successfully mounted %s to %s", upper_dev, overlayfs_mount_dir);
 
+	TRACE("Creating upper dir %s and work dir %s\n", upper_dir, work_dir);
+
 	// create mountpoint for upper dev
 	if (dir_mkdir_p(upper_dir, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
@@ -484,10 +511,12 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	}
 	// create mountpoint for lower dev
 	if (lower_dev) {
+		TRACE("Creating mount dir %s for lower dir", lower_dir);
 		if (dir_mkdir_p(lower_dir, 0755) < 0) {
 			ERROR_ERRNO("Could not mkdir lower dir %s", lower_dir);
 			goto error;
 		}
+		TRACE("Mounting dev %s type %s to dir %s", lower_dev, lower_dir, lowerfs_type);
 		// mount ro image lower
 		if (mount(lower_dev, lower_dir, lowerfs_type, mount_flags | MS_RDONLY, mount_data) <
 		    0) {
@@ -661,12 +690,13 @@ c_vol_setup_busybox_install(void)
 static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
-	char *img, *dev, *img_meta, *dev_meta, *dir;
+	char *img, *dev, *img_meta, *dev_meta, *dir, *img_hash;
 	int fd = 0, fd_meta = 0;
 	bool new_image = false;
 	bool encrypted = mount_entry_is_encrypted(mntent);
 	bool overlay = false;
 	bool shiftids = false;
+	bool verity = false;
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_has_setup_mode(vol->container);
 	int uid = container_get_uid(vol->container);
@@ -674,7 +704,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
 
-	img = dev = img_meta = dev_meta = dir = NULL;
+	img = dev = img_meta = dev_meta = dir = img_hash = NULL;
 
 	if (mount_entry_get_dir(mntent)[0] == '/')
 		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
@@ -685,8 +715,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (!img)
 		goto error;
 
+	TRACE("Mount entry type: %d", mount_entry_get_type(mntent));
+
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
+		verity = true; // Fallthrough
 	case MOUNT_TYPE_DEVICE:
 		mountflags |= MS_RDONLY; // add read-only flag for shared or device images types
 		break;
@@ -695,6 +728,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		overlay = true;
 		break;
 	case MOUNT_TYPE_SHARED_RW:
+		verity = true; // Fallthrough
 	case MOUNT_TYPE_OVERLAY_RW:
 		overlay = true;
 		shiftids = true;
@@ -765,10 +799,65 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		}
 	}
 
-	dev = loopdev_create_new(&fd, img, 0, 0);
-	IF_NULL_GOTO(dev, error);
+	if (verity) {
+		TRACE("Creating dm-verity device");
+		char *label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
+					 mount_entry_get_img(mntent));
+		char *verity_dev = verity_get_device_path_new(label);
+		if (file_is_blk(verity_dev)) {
+			INFO("Using existing mapper device: %s", verity_dev);
+		} else {
+			const char *root_hash = mount_entry_get_verity_sha256(mntent);
+			img_hash = c_vol_hash_image_path_new(vol, mntent);
+			IF_NULL_GOTO(img_hash, error);
+
+			if (verity_create_blk_dev(label, img, img_hash, root_hash)) {
+				ERROR("Failed to open %s from %s as dm-verity device with hash-dev %s and hash %s",
+				      label, img, img_hash, root_hash);
+				mem_free0(label);
+				mem_free0(verity_dev);
+				goto error;
+			}
+
+			int control_fd = -1;
+			if ((control_fd = dm_open_control()) < 0) {
+				ERROR("Failed to open /dev/mapper/control\n");
+				mem_free0(label);
+				mem_free0(verity_dev);
+				goto error;
+			}
+
+			char *type = dm_get_target_type_new(control_fd, label);
+			if (!type) {
+				ERROR("Failed to get target type of %s\n", label);
+				mem_free0(label);
+				mem_free0(verity_dev);
+				goto error;
+			}
+			INFO("Type of %s is %s\n", label, type);
+			dm_close_control(control_fd);
+
+			// TODO audit_log_event?
+		}
+
+		dev = verity_dev;
+		mem_free0(label);
+
+		// TODO timeout?
+		while (access(dev, F_OK) < 0) {
+			NANOSLEEP(0, 100000000);
+			DEBUG("Waiting for %s", dev);
+		}
+		DEBUG("Device %s is now available\n", dev);
+
+	} else {
+		TRACE("Creating loopdev");
+		dev = loopdev_create_new(&fd, img, 0, 0);
+		IF_NULL_GOTO(dev, error);
+	}
 
 	if (encrypted) {
+		TRACE("Creating encrypted image");
 		char *label, *crypt;
 
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
@@ -830,6 +919,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	}
 
 	if (overlay) {
+		TRACE("Device to be mounted is an overlay device\n");
 		const char *upper_fstype = NULL;
 		const char *lower_fstype = NULL;
 		char *upper_dev = NULL;
@@ -838,6 +928,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 		switch (mount_entry_get_type(mntent)) {
 		case MOUNT_TYPE_OVERLAY_RW: {
+			TRACE("Preparing MOUNT_TYPE_OVERLAY_RW");
 			upper_dev = dev;
 			upper_fstype = mount_entry_get_fs(mntent);
 			if (new_image) {
@@ -854,6 +945,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		} break;
 
 		case MOUNT_TYPE_OVERLAY_RO: {
+			TRACE("Preparing MOUNT_TYPE_OVERLAY_RO");
 			upper_dev = dev;
 			upper_fstype = mount_entry_get_fs(mntent);
 			mountflags |= MS_RDONLY;
@@ -863,6 +955,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			upper_fstype = "tmpfs";
 			lower_fstype = mount_entry_get_fs(mntent);
 			lower_dev = dev;
+			TRACE("Preparing MOUNT_TYPE_SHARED_RW with upper fstype %s and lower fstype %s",
+			      upper_fstype, lower_fstype);
 		} break;
 
 		default:
@@ -968,6 +1062,8 @@ final_noshift:
 		close(fd);
 	if (fd_meta)
 		close(fd_meta);
+	if (img_hash)
+		mem_free0(img_hash);
 	return 0;
 
 error:
@@ -991,13 +1087,13 @@ error:
 static int
 c_vol_cleanup_dm(c_vol_t *vol)
 {
-	size_t i, n;
+	ssize_t i, n;
 	int fd;
 
 	IF_TRUE_RETVAL(((fd = dm_open_control()) < 0), -1);
 
 	n = mount_get_count(vol->mnt);
-	for (i = 0; i < n; i++) {
+	for (i = n - 1; i >= 0; i--) {
 		const mount_entry_t *mntent;
 		char *label;
 
@@ -1005,11 +1101,26 @@ c_vol_cleanup_dm(c_vol_t *vol)
 
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				   mount_entry_get_img(mntent));
-		DEBUG("Trying to delete dm %s", label);
-		// we just try to delete all mounts and ignore their type...
-		if (cryptfs_delete_blk_dev(label) < 0)
-			DEBUG("Could not delete dm %s", label);
+
+		DEBUG("Cleanup: Checking target type of %s\n", label);
+
+		char *type = dm_get_target_type_new(fd, label);
+		if (type == NULL) {
+			WARN("Failed to get target type of %s\n", label);
+			continue;
+		}
+
+		DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
+
+		if (!strcmp(type, "crypt")) {
+			if (cryptfs_delete_blk_dev(fd, label) < 0)
+				DEBUG("Could not delete dm-crypt dev %s", label);
+		} else if (!strcmp(type, "verity")) {
+			if (verity_delete_blk_dev(label) < 0)
+				DEBUG("Could not delete dm-verity dev %s", label);
+		}
 		mem_free0(label);
+		mem_free0(type);
 	}
 	dm_close_control(fd);
 

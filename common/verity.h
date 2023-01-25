@@ -31,7 +31,7 @@
  * @return char* The path, must be freed
  */
 char *
-verityfs_get_device_path_new(const char *label);
+verity_get_device_path_new(const char *label);
 
 /**
  * Open a device-mapper verity device
@@ -43,8 +43,8 @@ verityfs_get_device_path_new(const char *label);
  * @return int 0 if successful, otherwise -1
  */
 int
-verityfs_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
-			const char *root_hash);
+verity_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
+		      const char *root_hash);
 
 /**
  * Close a device-mapper verity device
@@ -54,6 +54,6 @@ verityfs_create_blk_dev(const char *name, const char *fs_img_name, const char *h
  *
  */
 int
-verityfs_delete_blk_dev(const char *name);
+verity_delete_blk_dev(const char *name);
 
 #endif // VERITY_H
