@@ -158,4 +158,15 @@ dm_read_version(int fd);
 int
 dm_list_versions(int fd);
 
+/**
+ * Get the target_type of a dm-device
+ *
+ * @param fd The /dev/mapper/control file descripter (can be retrieved
+ * 				via dm_open_control)
+ * @param name The name of the dm-device
+ * @return char* The target_type of the dm-device
+ */
+char *
+dm_get_target_type_new(int fd, const char *name);
+
 #endif // DM_H

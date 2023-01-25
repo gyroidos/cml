@@ -195,3 +195,34 @@ dm_list_versions(int fd)
 
 	return 0;
 }
+
+char *
+dm_get_target_type_new(int fd, const char *name)
+{
+	ASSERT(strlen(name) <= DM_NAME_LEN);
+
+	uint8_t buf[16384] = { 0 };
+	struct dm_ioctl *dmi = NULL;
+
+	dmi = (struct dm_ioctl *)buf;
+	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
+	int ret = dm_ioctl(fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+	if (ret) {
+		// Integrity devices get a "-integrity" postfix, try again with postfix
+		char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
+		dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), integrity_dev_name, NULL,
+			      DM_EXISTS_FLAG, 0, 0, 0);
+		int ret = dm_ioctl(fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+		mem_free0(integrity_dev_name);
+		if (ret) {
+			ERROR_ERRNO("Failed to get dm-type: DM_TABLE_STATUS ioctl returned %d",
+				    ret);
+			return NULL;
+		}
+	}
+
+	struct dm_target_spec *tgt;
+	tgt = (struct dm_target_spec *)&buf[sizeof(struct dm_ioctl)];
+
+	return mem_strdup(tgt->target_type);
+}
