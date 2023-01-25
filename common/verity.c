@@ -145,14 +145,14 @@ generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, c
 }
 
 char *
-verityfs_get_device_path_new(const char *label)
+verity_get_device_path_new(const char *label)
 {
 	return mem_printf("%s%s", DM_PATH_PREFIX, label);
 }
 
 int
-verityfs_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
-			const char *root_hash)
+verity_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
+		      const char *root_hash)
 {
 	int control_fd = -1;
 	int ret = -1;
@@ -300,7 +300,7 @@ out:
 }
 
 int
-verityfs_delete_blk_dev(const char *name)
+verity_delete_blk_dev(const char *name)
 {
 	int control_fd = -1;
 	int ret = -1;

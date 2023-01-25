@@ -53,7 +53,7 @@ enum mount_type {
 	MOUNT_TYPE_EMPTY = 4, /**< image file is generated on container start if not available */
 	MOUNT_TYPE_COPY = 5,  // TODO: remove
 	MOUNT_TYPE_FLASH = 6, ///< image to be flashed to a partition
-	MOUNT_TYPE_OVERLAY_RO = 7,    /**< image file that contains features e.g. 
+	MOUNT_TYPE_OVERLAY_RO = 7,    /**< image file that contains features e.g.
 				      gps, camera ... as overly for system */
 	MOUNT_TYPE_SHARED_RW = 8,     /**< image file is shared by all containers of the operating
 				      system type and an individual writable tmpfs is mounted
@@ -125,6 +125,9 @@ mount_entry_get_sha1(const mount_entry_t *mntent);
 char *
 mount_entry_get_sha256(const mount_entry_t *mntent);
 
+char *
+mount_entry_get_verity_sha256(const mount_entry_t *mntent);
+
 /**
  * Sets the SHA1 hash for the mount entry.
  */
@@ -136,6 +139,9 @@ mount_entry_set_sha1(mount_entry_t *mntent, char *sha1);
  */
 void
 mount_entry_set_sha256(mount_entry_t *mntent, char *sha256);
+
+void
+mount_entry_set_verity_sha256(mount_entry_t *mntent, char *sha256);
 
 /**
  * Checks if the given SHA1 hash matches with the one stored in the mount entry.

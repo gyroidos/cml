@@ -68,6 +68,8 @@ message GuestOSMount {
 	// TODO add further hashes as necessary
 
 	optional string mount_data = 13;  // mount_data used for mount syscall, e.g. "context=" for selinux
+
+	optional string image_verity_sha256 = 14;
 }
 
 
