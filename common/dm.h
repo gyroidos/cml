@@ -24,6 +24,8 @@
 #ifndef DM_H
 #define DM_H
 
+#include <linux/dm-ioctl.h>
+
 #define DM_NAME_LEN 128
 #define DM_UUID_LEN 129
 
@@ -88,6 +90,22 @@ dm_ioctl_init(struct dm_ioctl *io, enum dm_cmd_index idx, size_t dataSize, const
 	      unsigned int event_nr);
 
 /**
+ * Opens /dev/mapper/control
+ *
+ * @return int 0 in case of success, -1 in case of failure
+ */
+int
+dm_open_control(void);
+
+/**
+ * Closes /dev/mapper/control
+ *
+ * @param fd The fd for /dev/mapper/control
+ */
+void
+dm_close_control(int fd);
+
+/**
  * Get the size of a Linux special block device in bytes
  *
  * This function uses BLKGETSIZE64, which returns the size in bytes,
@@ -123,17 +141,21 @@ dm_get_blkdev_readonly(int fd);
 /**
  * Read dm-verity version via the DM_VERSION ioctl
  *
+ * @param fd The /dev/mapper/control file descripter (can be retrieved
+ * 				via dm_open_control)
  * @return int 0 in case of success, -1 in case of failure
  */
 int
-dm_read_version(void);
+dm_read_version(int fd);
 
 /**
  * List dm-verity versions via the DM_LIST_VERSIONS ioctl
  *
+ * @param fd The /dev/mapper/control file descripter (can be retrieved
+ * 				via dm_open_control)
  * @return int 0 in case of success, -1 in case of failure
  */
 int
-dm_list_versions(void);
+dm_list_versions(int fd);
 
 #endif // DM_H
