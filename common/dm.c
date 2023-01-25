@@ -106,6 +106,24 @@ dm_ioctl_init(struct dm_ioctl *io, enum dm_cmd_index idx, size_t data_size, cons
 	return 0;
 }
 
+int
+dm_open_control(void)
+{
+	int fd = open(DM_CONTROL, O_RDWR);
+	if (fd < 0) {
+		ERROR_ERRNO("Failed to open %s\n", DM_CONTROL);
+		return -1;
+	}
+	return fd;
+}
+
+void
+dm_close_control(int fd)
+{
+	if (fd > 0)
+		close(fd);
+}
+
 uint64_t
 dm_get_blkdev_size64(int fd)
 {
@@ -143,18 +161,16 @@ dm_get_blkdev_readonly(int fd)
 }
 
 int
-dm_read_version(void)
+dm_read_version(int fd)
 {
-	int control_fd = -1;
 	uint8_t buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
 
 	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_VERSION, sizeof(buf), NULL, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_VERSION].cmd, dmi);
+	int ioctl_ret = dm_ioctl(fd, cmd_table[INDEX_DM_VERSION].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_VERSION ioctl returned %d", ioctl_ret);
-		close(control_fd);
 		return -1;
 	}
 
@@ -163,19 +179,17 @@ dm_read_version(void)
 }
 
 int
-dm_list_versions(void)
+dm_list_versions(int fd)
 {
-	int control_fd = -1;
 	uint8_t buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
 
 	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_LIST_VERSIONS, sizeof(buf), NULL, NULL, DM_EXISTS_FLAG, 0, 0,
 		      0);
-	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_LIST_VERSIONS].cmd, dmi);
+	int ioctl_ret = dm_ioctl(fd, cmd_table[INDEX_DM_LIST_VERSIONS].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_VERSION ioctl returned %d", ioctl_ret);
-		close(control_fd);
 		return -1;
 	}
 
