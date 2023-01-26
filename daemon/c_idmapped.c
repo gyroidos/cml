@@ -824,6 +824,8 @@ c_idmapped_cleanup(void *idmappedp, UNUSED bool is_rebooting)
 	}
 	list_delete(idmapped->mapped_mnts);
 	idmapped->mapped_mnts = NULL;
+
+	idmapped->is_dev_mounted = false;
 }
 
 static compartment_module_t c_idmapped_module = {
