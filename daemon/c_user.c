@@ -239,6 +239,29 @@ error:
 	return -1;
 }
 
+static void
+c_user_release_ns_cb(container_t *container, container_callback_t *cb, void *data)
+{
+	c_user_t *user = data;
+
+	ASSERT(container);
+	ASSERT(cb);
+	ASSERT(user);
+
+	// skip if the container is not stopped
+	IF_FALSE_RETURN_TRACE(container_get_state(container) == COMPARTMENT_STATE_STOPPED);
+
+	// unregister observer
+	container_unregister_observer(container, cb);
+
+	// remove bound to filesystem
+	if (user->fd_userns > 0) {
+		close(user->fd_userns);
+		user->fd_userns = -1;
+	}
+	ns_unbind(user->ns_path);
+}
+
 /**
  * Cleans up the c_user_t struct.
  */
@@ -256,12 +279,9 @@ c_user_cleanup(void *usr, bool is_rebooting)
 	if (is_rebooting && (cmld_containers_get_c0() == user->container))
 		return;
 
-	// remove bound to filesystem
-	if (user->fd_userns > 0) {
-		close(user->fd_userns);
-		user->fd_userns = -1;
-	}
-	ns_unbind(user->ns_path);
+	/* release bound to filesystem after all modules performed their cleanup() hook. */
+	if (!container_register_observer(user->container, &c_user_release_ns_cb, user))
+		WARN("Could not register release_ns callback");
 
 	c_user_unset_offset(user->offset);
 }
