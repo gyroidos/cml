@@ -143,7 +143,7 @@ c_cgroups_activate_controllers(const char *path)
 }
 
 static int
-c_cgroups_add_pid_by_path(char *path, pid_t pid)
+c_cgroups_add_pid_by_path(const char *path, pid_t pid)
 {
 	ASSERT(path);
 
@@ -509,15 +509,46 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
-	IF_TRUE_RETVAL(c_cgroups_add_pid(cgroups, container_get_pid(cgroups->container)),
-		       -COMPARTMENT_ERROR_CGROUPS);
+	int ret = -1;
 
-	if (container_shift_ids(cgroups->container, cgroups->path, cgroups->path, NULL)) {
-		ERROR("Could not shift ids of cgroup '%s' for userns", cgroups->path);
+	// activate controllers
+	if (c_cgroups_activate_controllers(cgroups->path)) {
+		ERROR("Could not activate cgroup controllers for intermediate cgroup!");
 		return -COMPARTMENT_ERROR_CGROUPS;
 	}
 
-	return 0;
+	/*
+	 * apply another indirection (subcgroup for container child) This is at
+	 * least neaded to run systmd as contaienr payload:
+	 *
+	 * "A container manager that is itself a payload of a host systemd
+	 *  which wants to run a systemd as its own container payload instead
+	 *  hence needs to insert an extra level in the hierarchy in between,
+	 *  so that the systemd on the host and the one in the container won’t
+	 *  fight for the attributes" [https://systemd.io/CGROUP_DELEGATION/]
+	 */
+	char *cgroups_child_path = mem_printf("%s/child", cgroups->path);
+
+	if (mkdir(cgroups_child_path, 0755) && errno != EEXIST) {
+		ERROR_ERRNO("Could not create cgroup %s for container %s", cgroups_child_path,
+			    container_get_description(cgroups->container));
+		goto out;
+	}
+
+	if (c_cgroups_add_pid_by_path(cgroups_child_path, container_get_pid(cgroups->container))) {
+		ERROR("Could not join container to child cgroup!");
+		goto out;
+	}
+
+	if (container_shift_ids(cgroups->container, cgroups_child_path, cgroups_child_path, NULL)) {
+		ERROR("Could not shift ids of cgroup '%s' for userns", cgroups_child_path);
+		goto out;
+	}
+
+	ret = 0;
+out:
+	mem_free0(cgroups_child_path);
+	return ret;
 }
 
 static int
