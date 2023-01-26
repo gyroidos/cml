@@ -788,18 +788,28 @@ static int
 c_idmapped_umount_dir_cb(const char *path, const char *file, UNUSED void *data)
 {
 	char *file_to_umount = mem_printf("%s/%s", path, file);
-	if (file_is_mountpoint(file_to_umount)) {
-		if (umount(file_to_umount) < 0)
+	bool was_mnt = file_is_mountpoint(file_to_umount);
+	bool is_mnt = was_mnt;
+
+	while (is_mnt) {
+		if (umount(file_to_umount) < 0) {
 			WARN_ERRNO("Could not release bind mount on '%s'", file_to_umount);
-		else
-			INFO("Released bind mount on '%s'", file_to_umount);
-	} else if (file_is_dir(file_to_umount)) {
+			break;
+		} else {
+			DEBUG("Released bind mount on '%s'", file_to_umount);
+		}
+		is_mnt = file_is_mountpoint(file_to_umount);
+	}
+	IF_TRUE_GOTO_TRACE(was_mnt, out);
+
+	if (file_is_dir(file_to_umount)) {
 		if (dir_foreach(file_to_umount, &c_idmapped_umount_dir_cb, NULL) < 0) {
 			WARN("Could not umount srcs on %s", file_to_umount);
 		}
 	} else {
-		INFO("No mount point '%s'", file_to_umount);
+		DEBUG("No mount point '%s'", file_to_umount);
 	}
+out:
 	mem_free0(file_to_umount);
 	return 0;
 }
