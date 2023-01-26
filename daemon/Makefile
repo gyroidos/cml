@@ -29,7 +29,7 @@ CC_MODE ?= n
 WCAST_ALIGN ?= y
 OCI ?= n
 IDMAPPED ?= n
-CGROUP_V2 ?= n
+CGROUP_V2 ?= y
 SYSTEMD ?= n
 
 TRUSTME_HARDWARE := x86
