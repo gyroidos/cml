@@ -631,6 +631,14 @@ static compartment_module_t c_cgroups_module = {
 	.join_ns = NULL,
 };
 
+void
+c_cgroups_deinit(void)
+{
+	// free global memory alloctaions
+	if (c_cgroups_subtree)
+		mem_free0(c_cgroups_subtree);
+}
+
 static void INIT
 c_cgroups_init(void)
 {
@@ -641,6 +649,10 @@ c_cgroups_init(void)
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
 	container_register_freeze_handler(MOD_NAME, c_cgroups_freeze);
 	container_register_unfreeze_handler(MOD_NAME, c_cgroups_unfreeze);
+
+	// register cleanup on exit handler
+	if (atexit(&c_cgroups_deinit))
+		WARN("Could not register on exit deinit method 'c_cgroups_deinit()'");
 
 	// mount cgroups if not already mounted by init
 	if (!file_is_mountpoint(CGROUPS_FOLDER)) {
