@@ -589,8 +589,6 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 				ERROR_ERRNO("Could not bind ovl in rootns '%s' on %s", src, dst);
 				goto error;
 			}
-			mnt = mem_new0(struct c_idmapped_mnt, 1);
-			mnt->target = mem_strdup(dst);
 			// set shifted lower as ovl_lower
 			mnt->ovl_lower = NULL;
 			IF_TRUE_GOTO(c_idmapped_prepare_dir(idmapped, mnt, src) < 0, error);
