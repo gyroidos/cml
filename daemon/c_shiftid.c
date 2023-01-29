@@ -405,6 +405,9 @@ c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 	struct c_shiftid_mnt *mnt = NULL;
 	struct c_shiftid_mnt *mnt_lower = NULL;
 
+	mnt = mem_new0(struct c_shiftid_mnt, 1);
+	mnt->target = mem_strdup(dst);
+
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
 		if (!kernel_version_check("5.12")) {
@@ -417,8 +420,6 @@ c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 				ERROR_ERRNO("Could not bind ovl in rootns '%s' on %s", src, dst);
 				goto error;
 			}
-			mnt = mem_new0(struct c_shiftid_mnt, 1);
-			mnt->target = mem_strdup(dst);
 			// set shifted lower as ovl_lower
 			mnt->ovl_lower = NULL;
 			IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt, src) < 0, error);
@@ -448,8 +449,6 @@ c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 		}
 	}
 
-	mnt = mem_new0(struct c_shiftid_mnt, 1);
-	mnt->target = mem_strdup(dst);
 	// set shifted lower as ovl_lower
 	mnt->ovl_lower = (ovl_lower) ? mnt_lower->target : NULL;
 	IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt, src) < 0, error);
