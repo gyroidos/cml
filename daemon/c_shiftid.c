@@ -450,7 +450,8 @@ c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 	}
 
 	// set shifted lower as ovl_lower
-	mnt->ovl_lower = (ovl_lower) ? mnt_lower->target : NULL;
+	mnt->ovl_lower = (ovl_lower && mnt_lower) ? mem_strdup(mnt_lower->target) : NULL;
+
 	IF_TRUE_GOTO(c_shiftid_prepare_dir(shiftid, mnt, src) < 0, error);
 
 	shiftid->marks = list_append(shiftid->marks, mnt);
