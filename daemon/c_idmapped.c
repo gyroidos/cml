@@ -579,7 +579,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
-		if (!kernel_version_check("5.12")) {
+		if (!kernel_version_check("6.0")) {
 			if (c_idmapped_mount_ovl(src, src, ovl_lower, false)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      src, ovl_lower, dst);
