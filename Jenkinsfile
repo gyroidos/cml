@@ -129,9 +129,10 @@ pipeline {
 								elif [ "ccmode" = "${BUILDTYPE}" ];then
 									echo "Preparing Yocto workdir for CC Mode build"
 									DEVELOPMENT_BUILD=n
+									ENABLE_SCHSM="1"
 									CC_MODE=y
 								elif [ "schsm" = "${BUILDTYPE}" ];then
-									echo "Preparing Yocto workdir for ccmode build with schsm support"
+									echo "Preparing Yocto workdir for dev mode build with schsm support"
 									SANITIZERS=y
 									ENABLE_SCHSM="1"
 								else
@@ -142,12 +143,19 @@ pipeline {
 								if [ -d out-${BUILDTYPE}/conf ]; then
 									rm -r out-${BUILDTYPE}/conf
 								fi
+
 								. init_ws.sh out-${BUILDTYPE}
-								echo Using branch name ${BRANCH_NAME} in bbappend files
+
+								echo Using branch name ${BRANCH_NAME} in bbappend file
 								cd ${WORKSPACE}/out-${BUILDTYPE}
+
+								# set right CML branch (either PR or repo branch)
+								echo "BRANCH = \\\"${BRANCH_NAME}\\\"\n" > cmld_git.bbappend.jenkins
+
 								cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
 								rm cmld_git.bbappend
-								cp cmld_git.bbappend.jenkins cmld_git.bbappend
+								mv cmld_git.bbappend.jenkins cmld_git.bbappend
+
 								echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
 								echo "SOURCE_MIRROR_URL = \\\"file:///source_mirror/${BUILDTYPE}\\\"" >> conf/local.conf
 								echo "BB_GENERATE_MIRROR_TARBALLS = \\\"0\\\"" >> conf/local.conf
@@ -155,9 +163,6 @@ pipeline {
 								echo "SSTATE_MIRRORS =+ \\\"file://.* file:///sstate_mirror/${BUILDTYPE}/PATH\\\"" >> conf/multiconfig/container.conf
 								cat conf/local.conf
 
-								if [ "ccmode" = ${BUILDTYPE} ];then
-									echo "BRANCH = \\\"${BRANCH_NAME}\\\"\nEXTRA_OEMAKE += \\\"CC_MODE=y\\\"" > cmld_git.bbappend.jenkins
-								fi
 
 								echo 'TRUSTME_DATAPART_EXTRA_SPACE="10000"' >> conf/local.conf
 
@@ -180,36 +185,29 @@ pipeline {
 											error "Unkown build type"
 										}
 									}
-									lock ('sync-mirror') {
-										script {
-											catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-												sh returnStatus: true, label: 'Sync source and sstate mirrors', script: '''
-													if [ -z "${BUILDTYPE}" ];then
-														echo "Error: BUILDTYPE not set"
-														exit 1
-													fi
 
-													if [ -z "${CHANGE_TARGET}" ] && [ "dunfell" = ${BRANCH_NAME} ];then
-														if ! [ -d "/sstate_mirror/${BUILDTYPE}" ];then
-															echo "Error: sstate mirror directory does not exist at: /sstate_mirror/${BUILDTYPE}"
-															exit 1
-														fi
-
-														echo "syncing sstate-cache"
-														rsync -r out-${BUILDTYPE}/sstate-cache/ /sstate_mirror/${BUILDTYPE}
-													fi
-
-
-													if ! [ -d "/source_mirror/${BUILDTYPE}" ];then
-														echo "Error: sstate mirror directory does not exist at: /source_mirror/${BUILDTYPE}"
-														exit 1
-													fi
-
-													rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
-												'''
-											}
+									script {
+                                        if ("" == env.CHANGE_TARGET && "dunfell" == env.BRANCH_NAME)  {
+                                            lock ('sync-mirror') {
+                                                script {
+                                                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                                                        sh label: 'Syncing mirrors', script: '''
+                                                            if [ -d "/source_mirror/${BUILDTYPE}" ];then
+                                                                rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
+                                                                exit 0
+                                                            else
+                                                                echo "Skipping sstate sync, CHANGE_TARGET==${CHANGE_TARGET}, BRANCH_NAME==${BRANCH_NAME}, /source_mirror/: $(ls /source_mirror/)"
+                                                                exit 1
+                                                            fi
+                                                        '''
+                                                    }
+                                                }
+                                            }
+                                        } else {
+											echo "Skipping sstate cache sync in PR build"
 										}
-									}
+                                    }
+
 									sh label: 'Compress trustmeimage.img', script: 'xz -T 0 -f out-${BUILDTYPE}/tmp/deploy/images/**/trustme_image/trustmeimage.img --keep'
 
 									archiveArtifacts artifacts: 'out-**/tmp/deploy/images/**/trustme_image/trustmeimage.img.xz, out-**/test_certificates/**', fingerprint: true
@@ -238,38 +236,45 @@ pipeline {
 							timeout(time: 30, unit: 'MINUTES')
 						}
 						steps {
-								cleanWs()
+							cleanWs()
 
-								script {
-									if ("dev" == env.BUILDTYPE) {
-										unstash 'img-dev'
-									} else if ("production" == env.BUILDTYPE){
-										unstash 'img-production'
-									} else if ("ccmode" == env.BUILDTYPE){
-										unstash 'img-ccmode'
-									} else {
-										error "Unkown build type"
-									}
+							script {
+								if ("dev" == env.BUILDTYPE) {
+									unstash 'img-dev'
+								} else if ("production" == env.BUILDTYPE){
+									unstash 'img-production'
+								} else if ("ccmode" == env.BUILDTYPE){
+									unstash 'img-ccmode'
+								} else {
+									error "Unkown build type"
 								}
-
+							}
+								
+							catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
 								sh label: 'Perform integration tests', script: '''
 									echo "Running on node $(hostname)"
 									echo "$PATH"
+									echo "VM name: $(echo ${BUILDTYPE} | head -c2)"
 
-									if [ "dev" = "${BUILDTYPE}" ];then
-										echo "Testing \"dev\" image"
-										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode dev --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-dev" --ssh 2228 --kill --vnc 41'
-									elif [ "production" = "${BUILDTYPE}" ];then
-										echo "Testing \"production\" image"
-										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode production --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-pr" --ssh 2229 --kill --vnc 42'
-									elif [ "ccmode" = "${BUILDTYPE}" ];then
-										echo "Testing \"ccmode\" image"
-										bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --skip-rootca --mode ccmode --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "qemutme-cc" --ssh 2230 --kill --vnc 43'
 
-									else
-										error "Unknown build type: ${BUILDTYPE}"
-									fi
+									echo "Testing \"${BUILDTYPE}\" image"
+									export port_tmp="$(printf "%d\n" "'${BUILDTYPE}")"
+									export ssh_port="222$(expr ${port_tmp} % 10)"
+									export vnc_port="4$(expr ${port_tmp} % 10)"
+
+									bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --mode  ${BUILDTYPE} --skip-rootca --dir ${WORKSPACE} --builddir out-${BUILDTYPE} --pki "${WORKSPACE}/out-${BUILDTYPE}/test_certificates" --name "${BRANCH_NAME}$(echo ${BUILDTYPE} | head -c2)" --ssh "${ssh_port}" --kill --vnc "${vnc_port}" --log-dir out-${BUILDTYPE}/cml_logs'
 								'''
+							}
+
+							echo "Archiving CML logs"
+							archiveArtifacts artifacts: 'out-**/cml_logs/**, cml_logs/**', fingerprint: true, allowEmptyArchive: true
+
+							script {
+								if ('FAILURE' == currentBuild.result) {
+									echo "Stage failed, exiting..."
+									error('')
+								}
+							}
 						}
 					}
 				}
@@ -283,13 +288,26 @@ pipeline {
 				sh label: 'Clean workspace', script: 'rm -fr ${WORKSPACE}/.repo ${WORKSPACE}/meta-* ${WORKSPACE}/out-* ${WORKSPACE}/trustme/build ${WORKSPACE}/poky trustme/manifest'
 				unstash 'img-schsm'
 				lock ('schsm-test') {
-					sh label: 'Perform integration test with physical token', script: '''
-						echo "Running on node $(hostname)"
-						echo "$PATH"
-						echo "Physhsm: ${PHYSHSM}"
 
-						bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --mode dev --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "qemutme-sc" --ssh 2231 --kill --enable-schsm ${PHYSHSM} 12345678'
-					'''
+					catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+						sh label: 'Perform integration test with physical token', script: '''
+							echo "Running on node $(hostname)"
+							echo "$PATH"
+							echo "Physhsm: ${PHYSHSM}"
+
+							bash -c '${WORKSPACE}/trustme/cml/scripts/ci/VM-container-tests.sh --mode dev --dir ${WORKSPACE} --builddir out-schsm --pki "${WORKSPACE}/out-schsm/test_certificates" --name "${BRANCH_NAME}sc" --ssh 2231 --kill --enable-schsm ${PHYSHSM} 12345678'
+						'''
+					}
+
+					echo "Archiving CML logs"
+					archiveArtifacts artifacts: 'out-schsm/cml_logs', fingerprint: true, allowEmptyArchive: true
+
+					script {
+						if ('FAILURE' == currentBuild.result) {
+							echo "Stage failed, exiting..."
+							error('')
+						}
+					}
 				}
 			}
 		}
