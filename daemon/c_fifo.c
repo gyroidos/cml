@@ -257,7 +257,7 @@ c_fifo_loop(char *fifo_path_c0, char *fifo_path_container)
 		int count = 0;
 		char buf[1024];
 
-		if (0 < (count = read(fromfd, &buf, sizeof(buf) - 1))) {
+		while (0 < (count = read(fromfd, &buf, sizeof(buf) - 1))) {
 			TRACE("[READLOOP] Read returned %d, writing to target FIFO", count);
 
 			buf[count] = 0;
@@ -267,9 +267,9 @@ c_fifo_loop(char *fifo_path_c0, char *fifo_path_container)
 				ERROR("Could not write all bytes to container FIFO end.");
 				break;
 			}
-		} else {
-			TRACE("[READLOOP] Read returned %d, try to reopen fds", count);
 		}
+
+		TRACE("[READLOOP] Read returned %d, try to reopen fds", count);
 	}
 
 	exit(0);
