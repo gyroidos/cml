@@ -81,6 +81,17 @@ file_is_blk(const char *file)
 }
 
 bool
+file_links_to_blk(const char *file)
+{
+	struct stat s;
+
+	if (file_is_link(file))
+		return !stat(file, &s) && S_ISBLK(s.st_mode);
+
+	return !lstat(file, &s) && S_ISBLK(s.st_mode);
+}
+
+bool
 file_is_mountpoint(const char *file)
 {
 	bool ret;
