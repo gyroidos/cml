@@ -180,33 +180,22 @@ pipeline {
 											error "Unkown build type"
 										}
 									}
-									lock ('sync-mirror') {
-										script {
-											catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-												sh returnStatus: true, label: 'Sync source and sstate mirrors', script: '''
-													if [ -z "${BUILDTYPE}" ];then
-														echo "Error: BUILDTYPE not set"
-														exit 1
-													fi
-
-													if [ -z "${CHANGE_TARGET}" ] && [ "v0.9" = ${BRANCH_NAME} ];then
-														if ! [ -d "/sstate_mirror/${BUILDTYPE}" ];then
-															echo "Error: sstate mirror directory does not exist at: /sstate_mirror/${BUILDTYPE}"
-															exit 1
-														fi
-
-														echo "syncing sstate-cache"
-														rsync -r out-${BUILDTYPE}/sstate-cache/ /sstate_mirror/${BUILDTYPE}
-													fi
-
-
-													if ! [ -d "/source_mirror/${BUILDTYPE}" ];then
-														echo "Error: sstate mirror directory does not exist at: /source_mirror/${BUILDTYPE}"
-														exit 1
-													fi
-
-													rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
-												'''
+									script {
+					                    if ("" == env.CHANGE_TARGET && "dunfell" == env.BRANCH_NAME)  {
+											lock ('sync-mirror') {
+												script {
+													catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+														sh label: 'Syncing mirrors', script: '''
+															if [ -d "/source_mirror/${BUILDTYPE}" ];then
+	                        		                            rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
+	                                		                    exit 0
+	                                        		        else
+	                                                		    echo "Skipping sstate sync, CHANGE_TARGET==${CHANGE_TARGET}, BRANCH_NAME==${BRANCH_NAME}, /source_mirror/: $(ls /source_mirror/)"
+			                                                    exit 1
+	        		                                        fi
+														'''
+													}
+												}
 											}
 										}
 									}
