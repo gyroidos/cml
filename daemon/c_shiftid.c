@@ -125,6 +125,14 @@ c_shiftid_cleanup(void *shiftidp, UNUSED bool is_rebooting)
 		TRACE("Unable to remove %s", path);
 	mem_free0(path);
 
+	// cleanup left-over mounts in SHIFTFS_DIR in main cmld process
+	path = mem_printf("%s/%s", SHIFTFS_DIR, uuid);
+	if (dir_foreach(path, &c_shiftid_cleanup_marks_cb, NULL) < 0)
+		WARN("Could not release marks in '%s'", path);
+	if (rmdir(path) < 0)
+		TRACE("Unable to remove %s", path);
+	mem_free0(path);
+
 	shiftid->is_dev_mounted = false;
 }
 
