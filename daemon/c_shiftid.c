@@ -417,8 +417,8 @@ c_shiftid_mount_shifted(c_shiftid_t *shiftid, const char *src, const char *dst,
 	mnt->target = mem_strdup(dst);
 
 	if (ovl_lower) {
-		// mount ovl in rootns if kernel is to old
-		if (!kernel_version_check("5.12")) {
+		// mount ovl in rootns if shiftfs is not supported or kernel is to old
+		if ((!cmld_is_shiftfs_supported()) || (!kernel_version_check("5.12"))) {
 			if (c_shiftid_mount_ovl(src, src, ovl_lower, false)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      src, ovl_lower, dst);
