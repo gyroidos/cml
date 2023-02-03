@@ -49,6 +49,9 @@ bool
 file_is_blk(const char *file);
 
 bool
+file_links_to_blk(const char *file);
+
+bool
 file_is_mountpoint(const char *file);
 
 bool
