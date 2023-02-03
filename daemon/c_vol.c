@@ -804,7 +804,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		char *label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 					 mount_entry_get_img(mntent));
 		char *verity_dev = verity_get_device_path_new(label);
-		if (file_is_blk(verity_dev)) {
+		if (file_is_blk(verity_dev) || file_links_to_blk(verity_dev)) {
 			INFO("Using existing mapper device: %s", verity_dev);
 		} else {
 			const char *root_hash = mount_entry_get_verity_sha256(mntent);
@@ -874,7 +874,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		}
 
 		crypt = cryptfs_get_device_path_new(label);
-		if (file_is_blk(crypt)) {
+		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
 			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
