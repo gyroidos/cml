@@ -42,7 +42,8 @@ typedef struct c_uevent {
 } c_uevent_t;
 
 static int
-c_uevent_create_device_node(c_uevent_t *uevent, char *path, int major, int minor, char *devtype)
+c_uevent_create_device_node(c_uevent_t *uevent, char *path, int major, int minor,
+			    const char *devtype)
 {
 	char *path_dirname = NULL;
 
