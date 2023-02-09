@@ -51,6 +51,7 @@
 #include "c_run.h"
 #include "c_run.h"
 #include "c_audit.h"
+#include "c_automnt.h"
 #include "container_config.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
@@ -149,6 +150,7 @@ struct container {
 	c_service_t *service;
 	c_run_t *run;
 	c_audit_t *audit;
+	c_automnt_t *automnt;
 	c_time_t *time;
 	// Wifi module?
 
@@ -352,6 +354,13 @@ container_new_internal(const uuid_t *uuid, const char *name, container_type_t ty
 	container->audit = c_audit_new(container);
 	if (!container->audit) {
 		WARN("Could not initialize audit subsystem for container %s (UUID: %s)",
+		     container->name, uuid_string(container->uuid));
+		goto error;
+	}
+
+	container->automnt = c_automnt_new(container);
+	if (!container->automnt) {
+		WARN("Could not initialize automnt subsystem for container %s (UUID: %s)",
 		     container->name, uuid_string(container->uuid));
 		goto error;
 	}
@@ -663,6 +672,8 @@ container_free(container_t *container)
 		c_time_free(container->time);
 	if (container->service)
 		c_service_free(container->service);
+	if (container->automnt)
+		c_automnt_free(container->automnt);
 	if (container->imei)
 		mem_free0(container->imei);
 	if (container->mac_address)
@@ -1001,6 +1012,7 @@ container_audit_get_loginuid(const container_t *container)
 static void
 container_cleanup(container_t *container, bool is_rebooting)
 {
+	c_automnt_cleanup(container->automnt);
 	c_fifo_cleanup(container->fifo);
 	c_cgroups_cleanup(container->cgroups);
 	c_service_cleanup(container->service);
@@ -1382,6 +1394,12 @@ container_start_child_early(void *data)
 		ret = CONTAINER_ERROR_VOL;
 		goto error;
 	}
+
+	if (c_automnt_start_child_early(container->automnt) < 0) {
+		ret = CONTAINER_ERROR_VOL;
+		goto error;
+	}
+
 	void *container_stack = NULL;
 	/* Allocate node stack */
 	if (!(container_stack = alloca(CLONE_STACK_SIZE))) {
@@ -1542,6 +1560,11 @@ container_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *dat
 	/* Call all c_<module>_start_post_exec hooks */
 	if (c_time_start_post_exec(container->time) < 0) {
 		WARN("c_time_start_post_exec failed");
+		goto error;
+	}
+
+	if (c_automnt_start_post_exec(container->automnt) < 0) {
+		WARN("c_automnt_start_post_exec failed");
 		goto error;
 	}
 
