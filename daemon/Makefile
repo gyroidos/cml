@@ -116,7 +116,8 @@ SRC_FILES := main.c \
 	input.c \
 	common/audit.c \
 	audit.c \
-	c_audit.c
+	c_audit.c \
+	c_automnt.c
 
 ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
