@@ -550,6 +550,8 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 
 	if (TMPFS_MAGIC == dir_statfs.f_type) {
 		mnt->mapped_tree_fd = -1;
+		if (mnt->ovl_lower == NULL)
+			mnt->bind_in_child = true;
 		return 0;
 	}
 
