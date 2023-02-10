@@ -1395,11 +1395,6 @@ container_start_child_early(void *data)
 		goto error;
 	}
 
-	if (c_automnt_start_child_early(container->automnt) < 0) {
-		ret = CONTAINER_ERROR_VOL;
-		goto error;
-	}
-
 	void *container_stack = NULL;
 	/* Allocate node stack */
 	if (!(container_stack = alloca(CLONE_STACK_SIZE))) {

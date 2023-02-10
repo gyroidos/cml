@@ -67,7 +67,7 @@ c_automnt_mount_timer_cb(event_timer_t *timer, void *data)
 	char *fstypes[] = { "vfat", "ext4", "btrfs", "ext2", "ext3" };
 	char *basename_path = mem_strdup(tdata->path);
 	char *devname = basename(basename_path);
-	char *mount_path = mem_printf("%s/media/external/%s",
+	char *mount_path = mem_printf("%s/dev/media/external/%s",
 				      container_get_rootdir(tdata->container), devname);
 
 	if (dir_mkdir_p(mount_path, 0755)) {
@@ -143,6 +143,12 @@ c_automnt_mount_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event_i
 		return;
 	}
 
+	if ((!strcmp("/dev/sda", path)) || (!strcmp("/dev/sda1", path)) ||
+	    (!strcmp("/dev/sda2", path))) {
+		INFO("Skip mounting /dev/sda");
+		return;
+	}
+
 	// give device some time to get ready
 	struct c_automnt_mount_timer_data *tdata = mem_new0(struct c_automnt_mount_timer_data, 1);
 	tdata->path = mem_strdup(path);
@@ -180,7 +186,7 @@ c_automnt_start_child_early(c_automnt_t *automnt)
 {
 	ASSERT(automnt);
 
-	char *mnt_media = mem_printf("%s/media", container_get_rootdir(automnt->container));
+	char *mnt_media = mem_printf("%s/dev/media", container_get_rootdir(automnt->container));
 
 	INFO("Mounting tmpfs to %s", mnt_media);
 
@@ -218,7 +224,7 @@ c_automnt_start_post_exec(c_automnt_t *automnt)
 {
 	ASSERT(automnt);
 
-	INFO("Registering inotify on %s", container_get_rootdir(automnt->container));
+	INFO("Registering inotify for c_automnt");
 
 	/* start watching device nodes for automount */
 	event_add_inotify(automnt->inotify_dev);
