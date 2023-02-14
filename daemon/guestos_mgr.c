@@ -134,8 +134,7 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 	}
 
 	if (guestos_mgr_add_from_file(cfg_file, guestos_verified) < 0) {
-		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "load-os-failed-to-add", cfg_file,
-				0);
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "load-os", cfg_file, 0);
 		WARN("Could not add guest operating system from file %s.", cfg_file);
 	} else {
 		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "load-os", cfg_file, 0);
@@ -249,7 +248,7 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 	control_message_t resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED;
 
 	if (!os) {
-		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-failed", NULL, 0);
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os", NULL, 0);
 		goto out;
 	}
 
@@ -257,7 +256,7 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 
 	if (complete && count > 0) {
 		if (guestos_images_flash(os) < 0) {
-			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash-failed",
+			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-flash",
 					guestos_get_name(os), 0);
 			if (cml_update) { // remove failed update images in case of cml updates
 				ERROR("%s %s", GUESTOS_MGR_UPDATE_TITLE,
@@ -268,14 +267,14 @@ download_complete_cb(bool complete, unsigned int count, guestos_t *os, void *dat
 				     GUESTOS_MGR_UPDATE_FLASH_FAILED);
 			}
 		} else {
-			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash-success",
+			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-flash",
 					guestos_get_name(os), 0);
 			INFO("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_SUCCESS);
 			resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_COMPLETED;
 		}
 	} else {
-		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-failed",
-				guestos_get_name(os), 0);
+		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os", guestos_get_name(os),
+				0);
 		ERROR("%s %s", GUESTOS_MGR_UPDATE_TITLE, GUESTOS_MGR_UPDATE_FAILED);
 		guestos_mgr_delete(os);
 	}
