@@ -1826,8 +1826,6 @@ container_start(container_t *container)
 
 error_pre_clone:
 	container_cleanup(container, false);
-	audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-			"error-preparing-container", uuid_string(container_get_uuid(container)), 0);
 	return ret;
 }
 
