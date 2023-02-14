@@ -820,7 +820,7 @@ cmld_audit_compartment_state_cb(container_t *container, container_callback_t *cb
 		if (container_get_prev_state(container) == COMPARTMENT_STATE_STARTING ||
 		    container_get_prev_state(container) == COMPARTMENT_STATE_SETUP) {
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-					"error-preparing-container",
+					"container-start",
 					uuid_string(container_get_uuid(container)), 0);
 		} else {
 			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
@@ -913,9 +913,7 @@ cmld_container_start(container_t *container)
 			return -1;
 		}
 		if (container_start(container)) {
-			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-					"container-start",
-					uuid_string(container_get_uuid(container)), 0);
+			// audit event will be handled by observer
 			WARN("Start of background container %s failed",
 			     container_get_description(container));
 			return -1;
