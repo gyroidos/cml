@@ -671,7 +671,6 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG) ||
-	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__RELOAD_CONTAINERS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REMOVE_CONTAINER) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA) ||
