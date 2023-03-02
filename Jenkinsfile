@@ -146,15 +146,7 @@ pipeline {
 
 								. init_ws.sh out-${BUILDTYPE}
 
-								echo Using branch name ${BRANCH_NAME} in bbappend file
 								cd ${WORKSPACE}/out-${BUILDTYPE}
-
-								# set right CML branch (either PR or repo branch)
-								echo "BRANCH = \\\"${BRANCH_NAME}\\\"\n" > cmld_git.bbappend.jenkins
-
-								cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
-								rm cmld_git.bbappend
-								mv cmld_git.bbappend.jenkins cmld_git.bbappend
 
 								echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
 								echo "SOURCE_MIRROR_URL = \\\"file:///source_mirror/${BUILDTYPE}\\\"" >> conf/local.conf
