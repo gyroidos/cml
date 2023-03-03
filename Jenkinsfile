@@ -53,6 +53,11 @@ pipeline {
 						}
 					}
 					steps {
+						sh label: 'Clean cml Repo', script: '''
+							cd ${WORKSPACE}/trustme/cml
+							git clean -fx
+							cd ${WORKSPACE}
+						'''
 						sh label: 'Check code formatting', script: 'trustme/cml/scripts/ci/check-if-code-is-formatted.sh'
 					}
 				}
@@ -87,6 +92,11 @@ pipeline {
 				}
 			}
 			steps {
+				sh label: 'Clean cml Repo', script: '''
+					cd ${WORKSPACE}/trustme/cml
+					git clean -fx
+					cd ${WORKSPACE}
+				'''
 				sh label: 'Perform unit tests', script: 'trustme/cml/scripts/ci/unit-testing.sh'
 			}
 		}
