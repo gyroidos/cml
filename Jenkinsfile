@@ -35,7 +35,7 @@ pipeline {
 						git branch -D ${BRANCH_NAME}
 					fi
 					git checkout -b ${BRANCH_NAME}
-					git clean -f
+					git clean -fx
 				'''
 
 				stash excludes: '.repo/.**', includes: '**', name: 'ws-yocto', useDefaultExcludes: false, allowEmpty: false
