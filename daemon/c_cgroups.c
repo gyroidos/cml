@@ -76,6 +76,9 @@
 
 #define CGROUPS_FREEZER_RETRIES CGROUPS_FREEZER_TIMEOUT / CGROUPS_FREEZER_RETRY_INTERVAL
 
+#define DEVCG_TYPE_BLOCK 1
+#define DEVCG_TYPE_CHAR 2
+
 /* List of 2-element int arrays, representing maj:min of devices allowed to be used in the running containers.
   * wildcard '*' is mapped to -1 */
 list_t *global_allowed_devs_list = NULL;
@@ -91,10 +94,10 @@ typedef struct c_cgroups {
 	event_inotify_t *inotify_freezer_state;
 	event_timer_t *freeze_timer; /* timer to handle a container freeze timeout */
 	int freezer_retries;
-	list_t *assigned_devs; /* list of 2 element int arrays, representing maj:min of exclusively assigned devices.
-				  wildcard '*' is mapped to -1 */
-	list_t *allowed_devs; /* list of 2 element int arrays, representing maj:min of devices allowed to be accessed.
-				  wildcard '*' is mapped to -1 */
+	list_t *assigned_devs; /* list of 3 element int arrays, representing type maj:min of exclusively
+				  assigned devices.  wildcard '*' is mapped to -1 */
+	list_t *allowed_devs; /* list of 3 element int arrays, representing type maj:min of devices
+				 allowed to be accessed. wildcard '*' is mapped to -1 */
 	bool ns_cgroup;
 } c_cgroups_t;
 
@@ -204,9 +207,10 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 static int *
 c_cgroups_dev_from_rule(const char *rule)
 {
-	int *ret = mem_new0(int, 2);
-	ret[0] = -1;
+	int *ret = mem_new0(int, 3);
+	ret[0] = 0;
 	ret[1] = -1;
+	ret[2] = -1;
 
 	char *rule_cp = mem_strdup(rule);
 	char *pointer;
@@ -215,6 +219,19 @@ c_cgroups_dev_from_rule(const char *rule)
 
 	type = strtok_r(rule_cp, " ", &pointer);
 	IF_NULL_GOTO_TRACE(type, out);
+
+	switch (type) {
+	case 'b':
+		ret[0] = DEVCG_DEV_BLOCK;
+		break;
+	case 'c':
+		ret[0] = DEVCG_DEV_CHAR;
+		break;
+	default:
+		ret[0] = 0;
+	}
+
+	IF_TRUE_RETVAL(ret[0] == 0, out);
 
 	dev = strtok_r(NULL, " ", &pointer);
 	IF_NULL_GOTO_TRACE(dev, out);
@@ -233,7 +250,7 @@ c_cgroups_dev_from_rule(const char *rule)
 		IF_TRUE_GOTO_TRACE(errno == ERANGE, out);
 		IF_TRUE_GOTO_TRACE(parsed_int < INT_MIN, out);
 		IF_TRUE_GOTO_TRACE(parsed_int > INT_MAX, out);
-		ret[0] = (int)parsed_int;
+		ret[1] = (int)parsed_int;
 	}
 	if (strncmp("*", min_str, 1)) {
 		errno = 0;
@@ -241,7 +258,7 @@ c_cgroups_dev_from_rule(const char *rule)
 		IF_TRUE_GOTO_TRACE(errno == ERANGE, out);
 		IF_TRUE_GOTO_TRACE(parsed_int < INT_MIN, out);
 		IF_TRUE_GOTO_TRACE(parsed_int > INT_MAX, out);
-		ret[1] = (int)parsed_int;
+		ret[2] = (int)parsed_int;
 	}
 
 out:
@@ -252,8 +269,8 @@ out:
 static void
 c_cgroups_list_add(list_t **list, const int *dev)
 {
-	int *dev_copy = mem_new0(int, 2);
-	memcpy(dev_copy, dev, sizeof(int) * 2);
+	int *dev_copy = mem_new0(int, 3);
+	memcpy(dev_copy, dev, sizeof(int) * 3);
 	*list = list_append(*list, dev_copy);
 }
 
@@ -262,7 +279,7 @@ c_cgroups_list_remove(list_t **list, const int *dev)
 {
 	for (list_t *elem = *list; elem != NULL; elem = elem->next) {
 		int *dev_elem = (int *)elem->data;
-		if ((dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1])) {
+		if ((dev_elem[0] == dev[0]) && (dev_elem[1] == dev[1]) && dev_elem[2] == dev[2]) {
 			mem_free0(elem->data);
 			*list = list_unlink(*list, elem);
 			break;
@@ -275,11 +292,16 @@ c_cgroups_list_contains_match(const list_t *list, const int *dev)
 {
 	for (const list_t *elem = list; elem != NULL; elem = elem->next) {
 		const int *dev_elem = (const int *)elem->data;
-		if ((dev_elem[0] == -1) || (dev[0] == -1))
-			return 1;
+		// type fist
 		if (dev_elem[0] != dev[0])
 			continue;
-		if ((dev[1] == -1) || (dev_elem[1] == -1) || (dev[1] == dev_elem[1]))
+		// major
+		if ((dev_elem[1] == -1) || (dev[1] == -1))
+			return 1;
+		if (dev_elem[1] != dev[1])
+			continue;
+		// minor
+		if ((dev[2] == -1) || (dev_elem[2] == -1) || (dev[2] == dev_elem[2]))
 			return 1;
 	}
 	return 0;
@@ -989,13 +1011,27 @@ c_cgroups_devices_chardev_deny(void *cgroupsp, int major, int minor)
 }
 
 static bool
-c_cgroups_devices_is_dev_allowed(void *cgroupsp, int major, int minor)
+c_cgroups_devices_is_dev_allowed(void *cgroupsp, char type, int major, int minor)
 {
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
+
+	int type_int;
+	switch (type) {
+	case 'b':
+		type_int = DEVCG_DEV_BLOCK;
+		break;
+	case 'c':
+		type_int = DEVCG_DEV_CHAR;
+		break;
+	default:
+		type_int = 0;
+	}
+
+	IF_TRUE_RETVAL(type_int == 0, false);
 	IF_TRUE_RETVAL_TRACE(major < 0 || minor < 0, false);
 
-	int dev[2] = { major, minor };
+	int dev[3] = { type, major, minor };
 
 	/* search in assigned devices */
 	if (c_cgroups_list_contains_match(cgroups->assigned_devs, dev))
@@ -1335,8 +1371,8 @@ c_cgroups_init(void)
 	container_register_unfreeze_handler(MOD_NAME, c_cgroups_unfreeze);
 	container_register_allow_audio_handler(MOD_NAME, c_cgroups_devices_allow_audio);
 	container_register_deny_audio_handler(MOD_NAME, c_cgroups_devices_deny_audio);
-	container_register_device_allow_handler(MOD_NAME, c_cgroups_devices_chardev_allow);
-	container_register_device_deny_handler(MOD_NAME, c_cgroups_devices_chardev_deny);
+	container_register_device_allow_handler(MOD_NAME, c_cgroups_devices_dev_allow);
+	container_register_device_deny_handler(MOD_NAME, c_cgroups_devices_dev_deny);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_devices_is_dev_allowed);
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
 
