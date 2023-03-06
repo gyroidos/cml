@@ -172,11 +172,20 @@ c_uevent_mount_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event_in
 	DEBUG("blk in container %s: %s (create)", container_get_description(uevent->container),
 	      path);
 
+	char type;
+	if (S_ISBLK(dev_stat.st_mode)) {
+		type = 'b';
+	} else if (S_ISCHR(dev_stat.st_mode)) {
+		type = 'c';
+	} else {
+		return;
+	}
+
 	unsigned int major = major(dev_stat.st_rdev);
 	unsigned int minor = minor(dev_stat.st_rdev);
 
-	if (!container_is_device_allowed(uevent->container, major, minor)) {
-		TRACE("skip not allowed device (%d:%d) for container %s", major, minor,
+	if (!container_is_device_allowed(uevent->container, type, major, minor)) {
+		TRACE("skip not allowed device (%c %d:%d) for container %s", type, major, minor,
 		      container_get_name(uevent->container));
 		return;
 	}
@@ -201,9 +210,12 @@ c_uevent_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 
 	int major = uevent_event_get_major(event);
 	int minor = uevent_event_get_minor(event);
+	const char *devtype = uevent_event_get_devtype(event);
 
-	if (!container_is_device_allowed(uevent->container, major, minor)) {
-		TRACE("skip not allowed device (%d:%d) for container %s", major, minor,
+	char type = (!strcmp(devtype, "disk") && !strcmp(devtype, "partition")) ? 'c' : 'b';
+
+	if (!container_is_device_allowed(uevent->container, type, major, minor)) {
+		TRACE("skip not allowed device (%c %d:%d) for container %s", type, major, minor,
 		      container_get_name(uevent->container));
 		return;
 	}
@@ -234,8 +246,7 @@ c_uevent_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 			     uevent_event_get_devname(event));
 
 	if (actions & UEVENT_ACTION_ADD) {
-		if (c_uevent_create_device_node(uevent, devname, major, minor,
-						uevent_event_get_devtype(event)) < 0) {
+		if (c_uevent_create_device_node(uevent, devname, major, minor, devtype) < 0) {
 			ERROR("Could not create device node");
 			mem_free0(devname);
 			return;
@@ -303,12 +314,14 @@ c_uevent_coldboot_dev_filter_cb(int major, int minor, void *data)
 	c_uevent_t *uevent = data;
 	ASSERT(uevent);
 
-	if (!container_is_device_allowed(uevent->container, major, minor)) {
-		TRACE("filter coldboot uevent for device (%d:%d)", major, minor);
-		return false;
-	}
+	if (container_is_device_allowed(uevent->container, 'c', major, minor))
+		return true;
 
-	return true;
+	if (container_is_device_allowed(uevent->container, 'b', major, minor))
+		return true;
+
+	TRACE("filter coldboot uevent for device (%d:%d)", major, minor);
+	return false;
 }
 
 static void
