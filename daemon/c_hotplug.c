@@ -71,7 +71,7 @@ c_hotplug_usbdev_allow(c_hotplug_t *hotplug, hotplug_usbdev_t *usbdev)
 		return -1;
 	}
 
-	if (-1 == container_device_allow(hotplug->container, hotplug_usbedv_get_major(usbdev),
+	if (-1 == container_device_allow(hotplug->container, 'c', hotplug_usbedv_get_major(usbdev),
 					 hotplug_usbdev_get_minor(usbdev),
 					 hotplug_usbdev_is_assigned(usbdev))) {
 		WARN("Could not %s char device %d:%d !",
