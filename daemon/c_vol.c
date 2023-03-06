@@ -1286,18 +1286,23 @@ c_vol_populate_dev_filter_cb(const char *dev_node, void *data)
 	struct stat s;
 	IF_TRUE_RETVAL(stat(dev_node, &s), true);
 
+	char type;
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
+		type = 'b';
+		break;
 	case S_IFCHR:
-		if (!container_is_device_allowed(vol->container, major(s.st_rdev),
-						 minor(s.st_rdev))) {
-			TRACE("filter device %s (%d:%d)", dev_node, major(s.st_rdev),
-			      minor(s.st_rdev));
-			return false;
-		}
-		// Fallthrough
+		type = 'c';
+		break;
 	default:
 		return true;
+	}
+
+	if (!container_is_device_allowed(vol->container, type, major(s.st_rdev),
+					 minor(s.st_rdev))) {
+		TRACE("filter device %s (%c %d:%d)", dev_node, type, major(s.st_rdev),
+		      minor(s.st_rdev));
+		return false;
 	}
 	return true;
 }
