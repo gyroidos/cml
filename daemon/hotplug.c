@@ -521,7 +521,7 @@ hotplug_handle_usb_device(unsigned actions, uevent_event_t *event)
 					INFO("HOTPLUG USB TOKEN removed");
 					container_token_detach(mapping->container);
 				} else {
-					container_device_deny(mapping->container,
+					container_device_deny(mapping->container, 'c',
 							      mapping->usbdev->major,
 							      mapping->usbdev->minor);
 				}
@@ -575,7 +575,8 @@ hotplug_handle_usb_device(unsigned actions, uevent_event_t *event)
 					INFO("HOTPLUG USB TOKEN added");
 					container_token_attach(mapping->container);
 				}
-				container_device_allow(mapping->container, mapping->usbdev->major,
+				container_device_allow(mapping->container, 'c',
+						       mapping->usbdev->major,
 						       mapping->usbdev->minor, mapping->assign);
 			}
 		}
