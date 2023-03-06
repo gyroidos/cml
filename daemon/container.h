@@ -465,19 +465,19 @@ CONTAINER_MODULE_WRAPPER_DECLARE(remove_net_interface, int, const char *iface)
 CONTAINER_MODULE_WRAPPER_DECLARE(setuid0, int)
 
 /**
- * Allow device access by major, minor number of device.
+ * Allow device access for device of type 'b'|'c' by major, minor number.
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(device_allow, int, int major, int minor, bool assign)
+CONTAINER_MODULE_WRAPPER_DECLARE(device_allow, int, char type, int major, int minor, bool assign)
 
 /**
- * Remove previously allowed device access by major, minor number of device.
+ * Remove previously allowed access for device of type 'b'|'c' and major, minor number.
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(device_deny, int, int major, int minor)
+CONTAINER_MODULE_WRAPPER_DECLARE(device_deny, int, char type, int major, int minor)
 
 /**
- * Checks if the device specified by the major and minor is allowed in this container.
+ * Checks if the device specified by the type 'b'|'c' and the major, minor is allowed in this container.
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, int major, int minor)
+CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, char type, int major, int minor)
 
 /**
  * Prepares a mount for shifted uid and gids of directory/file for the container's userns.
