@@ -35,7 +35,7 @@ pipeline {
 						git branch -D ${BRANCH_NAME}
 					fi
 					git checkout -b ${BRANCH_NAME}
-					git clean -f
+					git clean -fx
 				'''
 
 				stash excludes: '.repo/.**', includes: '**', name: 'ws-yocto', useDefaultExcludes: false, allowEmpty: false
@@ -53,6 +53,11 @@ pipeline {
 						}
 					}
 					steps {
+						sh label: 'Clean cml Repo', script: '''
+							cd ${WORKSPACE}/trustme/cml
+							git clean -fx
+							cd ${WORKSPACE}
+						'''
 						sh label: 'Check code formatting', script: 'trustme/cml/scripts/ci/check-if-code-is-formatted.sh'
 					}
 				}
@@ -87,6 +92,11 @@ pipeline {
 				}
 			}
 			steps {
+				sh label: 'Clean cml Repo', script: '''
+					cd ${WORKSPACE}/trustme/cml
+					git clean -fx
+					cd ${WORKSPACE}
+				'''
 				sh label: 'Perform unit tests', script: 'trustme/cml/scripts/ci/unit-testing.sh'
 			}
 		}
@@ -146,15 +156,7 @@ pipeline {
 
 								. init_ws.sh out-${BUILDTYPE}
 
-								echo Using branch name ${BRANCH_NAME} in bbappend file
 								cd ${WORKSPACE}/out-${BUILDTYPE}
-
-								# set right CML branch (either PR or repo branch)
-								echo "BRANCH = \\\"${BRANCH_NAME}\\\"\n" > cmld_git.bbappend.jenkins
-
-								cat cmld_git.bbappend >> cmld_git.bbappend.jenkins
-								rm cmld_git.bbappend
-								mv cmld_git.bbappend.jenkins cmld_git.bbappend
 
 								echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
 								echo "SOURCE_MIRROR_URL = \\\"file:///source_mirror/${BUILDTYPE}\\\"" >> conf/local.conf
@@ -174,13 +176,13 @@ pipeline {
 							success {
 									script {
 										if ("dev" == env.BUILDTYPE) {
-											stash includes: "out-dev/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-dev/test_certificates/**, trustme/build/**, trustme/cml/**", name: "img-dev"
+											stash includes: "out-dev/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-dev/test_certificates/**, trustme/build/**, trustme/cml/**", excludes: "**/oe-logs/**, **/oe-workdir/**", name: "img-dev"
 										} else if ("production" == env.BUILDTYPE){
-											stash includes: "out-production/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-production/test_certificates/**, trustme/build/**, trustme/cml/**", name: "img-production"
+											stash includes: "out-production/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-production/test_certificates/**, trustme/build/**, trustme/cml/**", excludes: "**/oe-logs/**, **/oe-workdir/**", name: "img-production"
 										} else if("ccmode" == env.BUILDTYPE) {
-											stash includes: "out-ccmode/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-ccmode/test_certificates/**, trustme/build/**, trustme/cml/**", name: "img-ccmode"
+											stash includes: "out-ccmode/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-ccmode/test_certificates/**, trustme/build/**, trustme/cml/**", excludes: "**/oe-logs/**, **/oe-workdir/**", name: "img-ccmode"
 										} else if("schsm" == env.BUILDTYPE) {
-											stash includes: "out-schsm/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-schsm/test_certificates/**, trustme/build/**, trustme/cml/**",name: "img-schsm"
+											stash includes: "out-schsm/tmp/deploy/images/**/trustme_image/trustmeimage.img, out-schsm/test_certificates/**, trustme/build/**, trustme/cml/**", excludes: "**/oe-logs/**, **/oe-workdir/**", name: "img-schsm"
 										} else {
 											error "Unkown build type"
 										}
