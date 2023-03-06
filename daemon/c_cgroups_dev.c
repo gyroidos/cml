@@ -822,14 +822,29 @@ c_cgroups_dev_cleanup(void *cgroups_devp, UNUSED bool is_rebooting)
 }
 
 static bool
-c_cgroups_dev_is_dev_allowed(void *cgroups_devp, int major, int minor)
+c_cgroups_dev_is_dev_allowed(void *cgroups_devp, char type, int major, int minor)
 {
 	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
 	ASSERT(cgroups_dev);
+
+	short type_bpf;
+	switch (type) {
+	case 'b':
+		type_bpf = BPF_DEVCG_DEV_BLOCK;
+		break;
+	case 'c':
+		type_bpf = BPF_DEVCG_DEV_CHAR;
+		break;
+	default:
+		type_bpf = 0;
+	}
+	IF_TRUE_RETVAL(type_bpf == 0, false);
 	IF_TRUE_RETVAL_TRACE(major < 0 || minor < 0, false);
 
 	for (list_t *l = cgroups_dev->allowed_devs; l; l = l->next) {
 		c_cgroups_dev_item_t *dev_item = l->data;
+		if (dev_item->type != type_bpf)
+			continue;
 		if (dev_item->major == major &&
 		    ((dev_item->minor == minor) || dev_item->minor == -1))
 			return true;
@@ -839,14 +854,16 @@ c_cgroups_dev_is_dev_allowed(void *cgroups_devp, int major, int minor)
 }
 
 static int
-c_cgroups_dev_chardev_allow(void *cgroups_devp, int major, int minor, bool assign)
+c_cgroups_dev_device_allow(void *cgroups_devp, char type, int major, int minor, bool assign)
 {
 	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
 	ASSERT(cgroups_dev);
 
 	int ret;
 
-	char *rule = mem_printf("c %d:%d rwm", major, minor);
+	IF_TRUE_RETVAL((type != 'c') && (type != 'b'), -1);
+
+	char *rule = mem_printf("%c %d:%d rwm", type, major, minor);
 	if (assign)
 		ret = c_cgroups_dev_assign(cgroups_dev, rule);
 	else
@@ -857,14 +874,16 @@ c_cgroups_dev_chardev_allow(void *cgroups_devp, int major, int minor, bool assig
 }
 
 static int
-c_cgroups_dev_chardev_deny(void *cgroups_devp, int major, int minor)
+c_cgroups_dev_device_deny(void *cgroups_devp, char type, int major, int minor)
 {
 	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
 	ASSERT(cgroups_dev);
 
 	int ret;
 
-	char *rule = mem_printf("c %d:%d rwm", major, minor);
+	IF_TRUE_RETVAL((type != 'c') && (type != 'b'), -1);
+
+	char *rule = mem_printf("%c %d:%d rwm", type, major, minor);
 	ret = c_cgroups_dev_deny(cgroups_dev, rule);
 
 	mem_free0(rule);
@@ -896,7 +915,7 @@ c_cgroups_dev_init(void)
 	compartment_register_module(&c_cgroups_dev_module);
 
 	// register relevant handlers implemented by this module
-	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_chardev_allow);
-	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_chardev_deny);
+	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);
+	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
 }
