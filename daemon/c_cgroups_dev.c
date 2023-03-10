@@ -57,6 +57,10 @@ extern char *c_cgroups_subtree;
 #define LEGACY_DEVCG_ACC_ALL (BPF_DEVCG_ACC_READ | BPF_DEVCG_ACC_WRITE | BPF_DEVCG_ACC_MKNOD)
 #define LEGACY_DEVCG_DEV_ALL (BPF_DEVCG_DEV_BLOCK | BPF_DEVCG_DEV_CHAR)
 
+#ifndef BPF_F_CGROUP_DEVICE_GUARD
+#define BPF_F_CGROUP_DEVICE_GUARD (1U << 7)
+#endif
+
 typedef struct c_cgroups_dev_item {
 	int major, minor;
 	short type;
@@ -440,12 +444,18 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 
 	union bpf_attr load_attr = {
 		.prog_type = BPF_PROG_TYPE_CGROUP_DEVICE,
+		.prog_flags = BPF_F_CGROUP_DEVICE_GUARD,
 		.insns = ptr_to_u64(prog->insn),
 		.insn_cnt = prog->insn_n_structs,
 		.license = ptr_to_u64("GPL"),
 	};
 
 	prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
+
+	if (prog->fd < 0 && errno == EINVAL) {
+		// try again without flag if BPF_F_CGROUP_DEVICE_GUARD is not supported
+		load_attr.prog_flags = 0;
+	}
 
 	int retry = 0;
 	while (prog->fd < 0 && errno == EAGAIN && retry < BPF_PROG_LOAD_RETRIES) {
