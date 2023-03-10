@@ -176,17 +176,23 @@ c_cgroups_add_pid(void *cgroupsp, pid_t pid)
 	 * directly move that process to such a subcgroup of the container.
 	 * 'user.slice' seams to be appropriate for this. Otherwise and
 	 * especially the first process would be added to the container's 'root'
-         * cgroup.
+	 * cgroup.
+	 * In the 'start_pre_exec' hook we apply another indirection (subcgroup
+	 * for container child). This is at least needed to run systemd as
+	 * container payload. We have to consider this intermediate cgroup here,
+	 * too.
 	 */
 
-	char *user_slice = mem_printf("%s/user.slice", cgroups->path);
+	char *cgroups_child_path = mem_printf("%s/child", cgroups->path);
+	char *user_slice = mem_printf("%s/user.slice", cgroups_child_path);
 
 	if (file_is_dir(user_slice))
 		ret = c_cgroups_add_pid_by_path(user_slice, pid);
 	else
-		ret = c_cgroups_add_pid_by_path(cgroups->path, pid);
+		ret = c_cgroups_add_pid_by_path(cgroups_child_path, pid);
 
 	mem_free0(user_slice);
+	mem_free0(cgroups_child_path);
 	return ret;
 }
 
