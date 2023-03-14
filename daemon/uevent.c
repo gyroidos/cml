@@ -675,10 +675,16 @@ uevent_netdev_move(struct uevent *uevent)
 	if (!container)
 		container = cmld_containers_get_c0();
 
-	if ((!container) || (container_get_state(container) != CONTAINER_STATE_BOOTING) ||
-	    (container_get_state(container) != CONTAINER_STATE_RUNNING) ||
+	if (!container) {
+		WARN("Target container not found, skip moving %s", uevent->interface);
+		goto error;
+	}
+
+	if ((container_get_state(container) != CONTAINER_STATE_BOOTING) &&
+	    (container_get_state(container) != CONTAINER_STATE_RUNNING) &&
 	    (container_get_state(container) != CONTAINER_STATE_STARTING)) {
-		WARN("Target container is not running, skip moving %s", uevent->interface);
+		WARN("Target container '%s' is not running, skip moving %s",
+		     container_get_description(container), uevent->interface);
 		goto error;
 	}
 
