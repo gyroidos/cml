@@ -267,43 +267,65 @@ hotplug_rename_interface(const uevent_event_t *event)
 	char *event_devpath = uevent_event_get_devpath(event);
 	const char *prefix = uevent_event_get_devtype(event);
 
+	char *new_ifname = NULL;
+	char *new_devpath = NULL;
+	uevent_event_t *uev_chname = NULL;
+	uevent_event_t *uev_chdevpath = NULL;
+
 	// if no devtype is set in uevent prefix with eth by default
 	if (!*prefix)
 		prefix = "eth";
 
-	char *new_ifname = hotplug_rename_ifi_new(event_ifname, prefix);
+	new_ifname = hotplug_rename_ifi_new(event_ifname, prefix);
 
-	IF_NULL_RETVAL(new_ifname, NULL);
+	if (!new_ifname) {
+		DEBUG("Failed to prepare renamed uevent member (ifname)");
+		goto err;
+	}
 
 	// replace ifname in cmld's available netifs
 	if (cmld_netif_phys_remove_by_name(event_ifname))
 		cmld_netif_phys_add_by_name(new_ifname);
 
-	char *new_devpath = hotplug_replace_devpath_new(event_devpath, event_ifname, new_ifname);
+	new_devpath = hotplug_replace_devpath_new(event_devpath, event_ifname, new_ifname);
 
-	if (!(new_ifname && new_devpath)) {
-		DEBUG("Failed to prepare renamed uevent members");
-		return NULL;
+	if (!new_devpath) {
+		DEBUG("Failed to prepare renamed uevent member (devpath)");
+		goto err;
 	}
 
-	uevent_event_t *uev_chname = uevent_replace_member(event, event_ifname, new_ifname);
+	uev_chname = uevent_replace_member(event, event_ifname, new_ifname);
 
 	if (!uev_chname) {
 		ERROR("Failed to rename interface name %s in uevent", event_ifname);
-		return NULL;
+		goto err;
 	}
-	DEBUG("Injected renamed interface name %s into uevent", new_ifname);
 
-	uevent_event_t *uev_chdevpath = uevent_replace_member(event, event_devpath, new_devpath);
+	event_devpath = uevent_event_get_devpath(uev_chname);
+	uev_chdevpath = uevent_replace_member(uev_chname, event_devpath, new_devpath);
 
 	if (!uev_chdevpath) {
 		ERROR("Failed to rename devpath %s in uevent", event_devpath);
-		mem_free0(uev_chname);
-		return NULL;
+		goto err;
 	}
-	DEBUG("Injected renamed devpath %s into uevent", new_ifname);
+	DEBUG("Injected renamed interface name %s, devpath %s into uevent", new_ifname,
+	      new_devpath);
 
-	return uev_chname;
+	mem_free0(new_ifname);
+	mem_free0(new_devpath);
+	mem_free0(uev_chname);
+
+	return uev_chdevpath;
+
+err:
+	if (new_ifname)
+		mem_free0(new_ifname);
+	if (new_devpath)
+		mem_free0(new_devpath);
+	if (uev_chname)
+		mem_free0(uev_chname);
+
+	return NULL;
 }
 
 static int
