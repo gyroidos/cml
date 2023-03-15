@@ -688,9 +688,6 @@ uevent_netdev_move(struct uevent *uevent)
 		goto error;
 	}
 
-	if (!pnet_cfg)
-		pnet_cfg = container_pnet_cfg_new(uevent->interface, false, NULL);
-
 	// rename network interface to avoid name clashes when moving to container
 	DEBUG("Renaming new interface we were notified about");
 	struct uevent *newevent = uevent_rename_interface(uevent);
@@ -703,6 +700,9 @@ uevent_netdev_move(struct uevent *uevent)
 		ERROR("Failed to rename interface %s. Injecting uevent as it is",
 		      uevent->interface);
 	}
+
+	if (!pnet_cfg)
+		pnet_cfg = container_pnet_cfg_new(uevent->interface, false, NULL);
 
 	macstr = network_mac_addr_to_str_new(iface_mac);
 	if (container_add_net_iface(container, pnet_cfg, false)) {
