@@ -770,6 +770,9 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 			uevent_udev_trigger_coldboot(container);
 		container_unregister_observer(container, cb);
 
+		// retrigger device scan
+		uevent_udevadm_trigger();
+
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
 			container_t *container = l->data;
 			if (container_get_allow_autostart(container)) {
