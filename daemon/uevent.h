@@ -139,4 +139,10 @@ uevent_unregister_netdev(container_t *container, uint8_t mac[6]);
 void
 uevent_udev_trigger_coldboot(container_t *container);
 
+/*
+ * Trigger device scan by udevadm
+ */
+void
+uevent_udevadm_trigger(void);
+
 #endif /* UEVENT_H */

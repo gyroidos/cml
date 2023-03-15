@@ -1308,3 +1308,11 @@ uevent_udev_trigger_coldboot(container_t *container)
 		WARN("Could not trigger coldboot uevents! No '%s'!", sysfs_devices);
 	}
 }
+
+void
+uevent_udevadm_trigger()
+{
+	const char *const argv[] = { "udevadm", "trigger", "--action=add", NULL };
+	if (-1 == proc_fork_and_execvp(argv))
+		WARN("Could not trigger coldboot uevents!");
+}
