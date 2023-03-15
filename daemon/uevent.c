@@ -475,7 +475,17 @@ uevent_rename_ifi_new(const char *oldname, const char *infix)
 static struct uevent *
 uevent_rename_interface(const struct uevent *uevent)
 {
-	char *new_ifname = uevent_rename_ifi_new(uevent->interface, uevent->devtype);
+	char *new_ifname = NULL;
+	char *new_devpath = NULL;
+	struct uevent *uev_chname = NULL;
+	struct uevent *uev_chdevpath = NULL;
+
+	new_ifname = uevent_rename_ifi_new(uevent->interface, uevent->devtype);
+
+	if (!new_ifname) {
+		DEBUG("Failed to prepare renamed uevent member (ifname)");
+		goto err;
+	}
 
 	IF_NULL_RETVAL(new_ifname, NULL);
 
@@ -483,34 +493,47 @@ uevent_rename_interface(const struct uevent *uevent)
 	if (cmld_netif_phys_remove_by_name(uevent->interface))
 		cmld_netif_phys_add_by_name(new_ifname);
 
-	char *new_devpath =
-		uevent_replace_devpath_new(uevent->devpath, uevent->interface, new_ifname);
+	new_devpath = uevent_replace_devpath_new(uevent->devpath, uevent->interface, new_ifname);
 
-	if (!(new_ifname && new_devpath)) {
-		DEBUG("Failed to prepare renamed uevent members");
-		return NULL;
+	if (!new_devpath) {
+		DEBUG("Failed to prepare renamed uevent member (devpath)");
+		goto err;
 	}
 
-	struct uevent *uev_chname = uevent_replace_member(uevent, uevent->interface, new_ifname);
+	uev_chname = uevent_replace_member(uevent, uevent->interface, new_ifname);
 
 	if (!uev_chname) {
 		ERROR("Failed to rename interface name %s in uevent", uevent->interface);
-		return NULL;
+		goto err;
 	}
-	DEBUG("Injected renamed interface name %s into uevent", new_ifname);
 	uevent_parse(uev_chname, uev_chname->msg.raw);
 
-	struct uevent *uev_chdevpath = uevent_replace_member(uevent, uevent->devpath, new_devpath);
+	uev_chdevpath = uevent_replace_member(uev_chname, uev_chname->devpath, new_devpath);
 
 	if (!uev_chdevpath) {
 		ERROR("Failed to rename devpath %s in uevent", uevent->devpath);
-		mem_free0(uev_chname);
-		return NULL;
+		goto err;
 	}
-	DEBUG("Injected renamed devpath %s into uevent", new_ifname);
 	uevent_parse(uev_chdevpath, uev_chdevpath->msg.raw);
 
-	return uev_chname;
+	DEBUG("Injected renamed interface name %s, devpath %s into uevent", new_ifname,
+	      new_devpath);
+
+	mem_free0(new_ifname);
+	mem_free0(new_devpath);
+	mem_free0(uev_chname);
+
+	return uev_chdevpath;
+
+err:
+	if (new_ifname)
+		mem_free0(new_ifname);
+	if (new_devpath)
+		mem_free0(new_devpath);
+	if (uev_chname)
+		mem_free0(uev_chname);
+
+	return NULL;
 }
 
 static uint16_t
