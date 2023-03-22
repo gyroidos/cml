@@ -1371,6 +1371,33 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
+			if (mount_entry_get_verity_sha256(mntent)) {
+				/* let dm-verity do the interitgy checks on
+			         * block access, and check the whole image in
+				 * background
+				 */
+				pid_t pid = fork();
+				if (pid > 0) {
+					INFO("dm-verity active for image %s, "
+					     "start thorough image check in "
+					     "background.",
+					     mount_entry_get_img(mntent));
+					continue;
+				}
+				if (pid == 0) { // child do check (audit msg in guestos)
+					if (guestos_check_mount_image_block(
+						    vol->os, mntent, true) != CHECK_IMAGE_GOOD) {
+						ERROR("Cannot verify image %s: "
+						      "image file is corrupted",
+						      mount_entry_get_img(mntent));
+						_exit(-1);
+					}
+					_exit(0);
+				}
+				// in case pid < 0 just do nothing and check
+				// image in parent, see below
+			}
+
 			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
 			    CHECK_IMAGE_GOOD) {
 				ERROR("Cannot verify image %s: image file is corrupted",
