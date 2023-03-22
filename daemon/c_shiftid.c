@@ -18,7 +18,7 @@
  * the file called "COPYING".
  *
  * Contact Information:
- * Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+ * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
 #define _GNU_SOURCE
