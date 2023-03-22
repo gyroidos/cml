@@ -1506,6 +1506,10 @@ c_vol_start_child_early(void *volp)
 	c_vol_t *vol = volp;
 	ASSERT(vol);
 
+	// check image integrity (this is blocking that is why we do this
+	// in the early_child and not in the host process
+	IF_FALSE_GOTO(c_vol_verify_mount_entries(vol), error);
+
 	INFO("Mounting rootfs to %s", vol->root);
 
 	if (mkdir(container_get_images_dir(vol->container), 0755) < 0 && errno != EEXIST) {
@@ -1734,10 +1738,6 @@ c_vol_start_child(void *volp)
 {
 	c_vol_t *vol = volp;
 	ASSERT(vol);
-
-	// check image integrity (this is blocking that is why we do this
-	// in the child and not before mounting in the host process
-	IF_FALSE_GOTO(c_vol_verify_mount_entries(vol), error);
 
 	// remount proc to reflect namespace change
 	if (!container_has_userns(vol->container)) {
