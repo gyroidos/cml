@@ -350,7 +350,7 @@ while [[ $# > 0 ]]; do
       echo "-k, --kill                  Kill the VM after the tests are completed"
       echo "-n, --name        	Use the given name for the QEMU VM"
       echo "-p, --pki         	Use the given test PKI directory"
-      echo "-i, --image       	Test the given trust|me image instead of looking inside --dir"
+      echo "-i, --image       	Test the given GyroidOS image instead of looking inside --dir"
       echo "-m, --mode        	Test \"dev\", \"production\", or \"ccmode\" image? Default is \"dev\""
       echo "-e, --enable-schsm	Test with given schsm"
       echo "-k, --skip-rootca	Skip attempt to copy custom root CA to image"
