@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# This file is part of trust|me
+# This file is part of GyroidOS
 # Copyright(c) 2013 - 2017 Fraunhofer AISEC
 # Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 #
@@ -19,7 +19,7 @@
 # the file called "COPYING".
 #
 # Contact Information:
-# Fraunhofer AISEC <trustme@aisec.fraunhofer.de>
+# Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
 #
 
 from thread import *

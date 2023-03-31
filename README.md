@@ -1,12 +1,12 @@
 
 # Container Management Layer
 
-This repository contains the daemons and tools of the trust|me Container Management Layer (CML).
+This repository contains the daemons and tools of the GyroidOS Container Management Layer (CML).
 The project documentation can by found on [gyroidos.github.io](https://gyroidos.github.io).
 
 ## Contributing
 
-This project is part of trust|me which enforces the [Developer Certificate of Origin](https://developercertificate.org/) (DCO) on Pull Requests. It requires all commit messages to contain the Signed-off-by line with an email address that matches the commit author and the name on your GitHub account.
+This project is part of GyroidOS which enforces the [Developer Certificate of Origin](https://developercertificate.org/) (DCO) on Pull Requests. It requires all commit messages to contain the Signed-off-by line with an email address that matches the commit author and the name on your GitHub account.
 
 The Developer Certificate of Origin (DCO) is a lightweight way for contributors to certify that they wrote or otherwise have the right to submit the code they are contributing to the project. Here is the full text of the DCO, reformatted for readability:
 
