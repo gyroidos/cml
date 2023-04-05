@@ -437,22 +437,6 @@ out:
 	return ret;
 }
 
-static char *
-c_vol_get_tmpfs_opts_new(const char *mount_data, int uid, int gid)
-{
-	str_t *opts = str_new(NULL);
-
-	// Only mount tmpfs with uid, gid options if shiftfs is not supported
-	// since later one it would be shifted by shiftfs twice.
-	if (!cmld_is_shiftfs_supported())
-		str_append_printf(opts, "uid=%d,gid=%d", uid, gid);
-
-	if (mount_data)
-		str_append_printf(opts, ",%s", mount_data);
-
-	return str_free(opts, false);
-}
-
 static int
 c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fstype,
 		    const char *lowerfs_type, int mount_flags, const char *mount_data,
@@ -462,7 +446,6 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	char *lower_dir, *upper_dir, *work_dir;
 	lower_dir = upper_dir = work_dir = NULL;
 	upper_dev = (upper_dev) ? upper_dev : "tmpfs";
-	int uid = container_get_uid(vol->container);
 
 	TRACE("Creating overlayfs mount directory %s\n", overlayfs_mount_dir);
 
@@ -481,20 +464,10 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	 * mount backing fs image for overlayfs upper and work dir
 	 * (at least upper and work need to be on the same fs)
 	 */
-	char *mount_opts;
-	if (strcmp(upper_dev, "tmpfs") == 0) {
-		mount_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
-	} else {
-		mount_opts = (mount_data) ? mem_strdup(mount_data) : NULL;
-	}
-	if (mount(upper_dev, overlayfs_mount_dir, upper_fstype, mount_flags, mount_opts) < 0) {
+	if (mount(upper_dev, overlayfs_mount_dir, upper_fstype, mount_flags, mount_data) < 0) {
 		ERROR_ERRNO("Could not mount %s to %s", upper_dev, overlayfs_mount_dir);
-		if (mount_opts)
-			mem_free0(mount_opts);
 		goto error;
 	}
-	if (mount_opts)
-		mem_free0(mount_opts);
 
 	DEBUG("Successfully mounted %s to %s", upper_dev, overlayfs_mount_dir);
 
@@ -699,7 +672,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool verity = false;
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_has_setup_mode(vol->container);
-	int uid = container_get_uid(vol->container);
 
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
@@ -768,11 +740,9 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
 		const char *mount_data = mount_entry_get_mount_data(mntent);
-		char *tmpfs_opts = c_vol_get_tmpfs_opts_new(mount_data, uid, uid);
 		if (mount(mount_entry_get_fs(mntent), dir, mount_entry_get_fs(mntent), mountflags,
-			  tmpfs_opts) >= 0) {
+			  mount_data) >= 0) {
 			DEBUG("Sucessfully mounted %s to %s", mount_entry_get_fs(mntent), dir);
-			mem_free0(tmpfs_opts);
 
 			if (chmod(dir, 0755) < 0) {
 				ERROR_ERRNO(
@@ -787,7 +757,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto final;
 		} else {
 			ERROR_ERRNO("Cannot mount %s to %s", mount_entry_get_fs(mntent), dir);
-			mem_free0(tmpfs_opts);
 			goto error;
 		}
 	}
