@@ -313,12 +313,6 @@ cmld_netif_phys_remove_by_name(const char *if_name);
 void
 cmld_netif_phys_add_by_name(const char *if_name);
 
-/**
- * Checks if kernel supports shiftfs
- */
-bool
-cmld_is_shiftfs_supported(void);
-
 /*
  * Reboot device by trying to gracfully stop or killing containers otherwise.
  */
