@@ -1756,16 +1756,6 @@ cmld_netif_phys_add_by_name(const char *if_name)
 	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
 }
 
-#define PROC_FSES "/proc/filesystems"
-bool
-cmld_is_shiftfs_supported(void)
-{
-	char *fses = file_read_new(PROC_FSES, 2048);
-	bool ret = strstr(fses, "shiftfs") ? true : false;
-	mem_free0(fses);
-	return ret;
-}
-
 void
 cmld_cleanup(void)
 {

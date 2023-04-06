@@ -55,6 +55,16 @@ typedef struct c_shiftid {
 	bool is_dev_mounted; // checks if the bind mount for dev is already performed
 } c_shiftid_t;
 
+#define PROC_FSES "/proc/filesystems"
+static bool
+c_shiftid_is_shiftfs_supported(void)
+{
+	char *fses = file_read_new(PROC_FSES, 2048);
+	bool ret = strstr(fses, "shiftfs") ? true : false;
+	mem_free0(fses);
+	return ret;
+}
+
 static void
 c_shiftid_mnt_free(struct c_shiftid_mnt *mnt)
 {
@@ -291,7 +301,7 @@ c_shiftid_prepare_dir(c_shiftid_t *shiftid, struct c_shiftid_mnt *mnt, const cha
 	struct statfs dir_statfs;
 	statfs(dir, &dir_statfs);
 
-	if (!cmld_is_shiftfs_supported()) {
+	if (!c_shiftid_is_shiftfs_supported()) {
 		if (dir_statfs.f_flags & MS_RDONLY) {
 			char *tmpfs_dir =
 				mem_printf("%s/%s/tmp%d", SHIFTFS_DIR,
@@ -368,8 +378,8 @@ c_shiftid_prepare_dir(c_shiftid_t *shiftid, struct c_shiftid_mnt *mnt, const cha
 	 * If MS_BIND flag is used, fs paramter and other options are ignored
 	 * by the mount system call.
 	 */
-	if (mount(dir, mnt->mark, "shiftfs", cmld_is_shiftfs_supported() ? 0 : MS_BIND, "mark") <
-	    0) {
+	if (mount(dir, mnt->mark, "shiftfs", c_shiftid_is_shiftfs_supported() ? 0 : MS_BIND,
+		  "mark") < 0) {
 		ERROR_ERRNO("Could not mark shiftfs origin %s on mark %s", dir, mnt->mark);
 		return -1;
 	}
@@ -498,7 +508,7 @@ c_shiftid_start_child(void *shiftidp)
 		// mount the shifted user ids to new root
 		IF_TRUE_RETVAL(dir_mkdir_p(mnt->target, 0777) < 0, -1);
 		if (mount(mnt->mark, mnt->target, "shiftfs",
-			  (cmld_is_shiftfs_supported() && !is_dev) ? 0 : MS_BIND, NULL) < 0) {
+			  (c_shiftid_is_shiftfs_supported() && !is_dev) ? 0 : MS_BIND, NULL) < 0) {
 			ERROR_ERRNO("Could not remount shiftfs mark %s to %s", mnt->mark,
 				    mnt->target);
 			return -COMPARTMENT_ERROR_USER;
