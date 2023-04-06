@@ -691,6 +691,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
+		shiftids = true;
 		verity = true; // Fallthrough
 	case MOUNT_TYPE_DEVICE:
 		mountflags |= MS_RDONLY; // add read-only flag for shared or device images types
