@@ -353,8 +353,7 @@ c_idmapped_chown_dir_cb(const char *path, const char *file, void *data)
 }
 
 static int
-c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const char *ovl_lower,
-		     bool in_child)
+c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const char *ovl_lower)
 {
 	char *lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
 	char *upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
@@ -366,18 +365,7 @@ c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const 
 	struct statfs ovl_statfs;
 	statfs(overlayfs_mount_dir, &ovl_statfs);
 
-	// overmount tmpfs within user namespace
-	if (in_child && (TMPFS_MAGIC == ovl_statfs.f_type)) {
-		INFO("overmounting existing tmpfs with tmpfs in userns on '%s'.",
-		     overlayfs_mount_dir);
-		if (mount(NULL, overlayfs_mount_dir, "tmpfs", 0, NULL) < 0) {
-			ERROR_ERRNO("Could not mount tmpfs to %s", overlayfs_mount_dir);
-			goto error;
-		}
-	}
-
-	// needed for tmpfs in user namespace (child) as well as tmpfs of
-	// fallback mechanism where lower image is read only and a temporary
+	// needed for tmpfs of fallback mechanism where lower image is read only and a temporary
 	// upper tmpfs for chowning is used
 	if (dir_mkdir_p(upper_dir, 0777) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
@@ -460,6 +448,12 @@ kernel_version_check(char *version)
 	return (_main == main_to_check) ? _major >= major_to_check : _main >= main_to_check;
 }
 
+static bool
+is_idmapping_supported()
+{
+	return kernel_version_check("6.3");
+}
+
 static int
 c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const char *dir)
 {
@@ -471,7 +465,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 	struct statfs dir_statfs;
 	statfs(dir, &dir_statfs);
 
-	if (!kernel_version_check("6.0")) {
+	if (!is_idmapping_supported()) {
 		if (dir_statfs.f_flags & MS_RDONLY) {
 			char *tmpfs_dir =
 				mem_printf("%s/%s/tmp%d", IDMAPPED_SRC_DIR,
@@ -487,7 +481,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 				mem_free0(tmpfs_dir);
 				return -1;
 			}
-			if (c_idmapped_mount_ovl(tmpfs_dir, dir, dir, false)) {
+			if (c_idmapped_mount_ovl(tmpfs_dir, dir, dir)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in userns on '%s'",
 				      tmpfs_dir, dir, dir);
 				mem_free0(tmpfs_dir);
@@ -528,7 +522,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 		return -1;
 	}
 
-	if (!kernel_version_check("6.0"))
+	if (!is_idmapping_supported())
 		return 0;
 
 	/*
@@ -548,13 +542,6 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 		return 0;
 	}
 
-	if (TMPFS_MAGIC == dir_statfs.f_type) {
-		mnt->mapped_tree_fd = -1;
-		if (mnt->ovl_lower == NULL)
-			mnt->bind_in_child = true;
-		return 0;
-	}
-
 	if (mnt->ovl_lower && !strcmp(mnt->ovl_lower, mnt->target)) {
 		mnt->mapped_tree_fd = -1;
 		return 0;
@@ -566,7 +553,23 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 		return -1;
 	}
 
-	return c_idmapped_mnt_apply_mapping(mnt, userns_fd);
+	int ret = c_idmapped_mnt_apply_mapping(mnt, userns_fd);
+
+	if (mnt->ovl_lower || mnt->ovl_upper)
+		return ret;
+
+	if (mnt->mapped_tree_fd > 0 &&
+	    move_mount(mnt->mapped_tree_fd, "", -1, mnt->src, MOVE_MOUNT_F_EMPTY_PATH) == -1) {
+		ERROR_ERRNO("Could not move_mount %d on %s for container start",
+			    mnt->mapped_tree_fd, mnt->src);
+		return -1;
+	}
+
+	// already shifted in init userns, bind mount in child
+	mnt->mapped_tree_fd = -1;
+	mnt->bind_in_child = true;
+
+	return ret;
 }
 
 static int
@@ -581,8 +584,8 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
-		if (!kernel_version_check("6.0")) {
-			if (c_idmapped_mount_ovl(src, src, ovl_lower, false)) {
+		if (!is_idmapping_supported()) {
+			if (c_idmapped_mount_ovl(src, src, ovl_lower)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      src, ovl_lower, dst);
 				goto error;
@@ -727,7 +730,10 @@ c_idmapped_start_child(void *idmappedp)
 
 		// if explictly set to bind inchild (e.g. /dev on tmpfs) or
 		// kernel does not support idmapped mounts just do bind mount
-		if (mnt->bind_in_child || (!kernel_version_check("6.0"))) {
+		if (mnt->bind_in_child || (!is_idmapping_supported())) {
+			if (!file_exists(mnt->target))
+				dir_mkdir_p(mnt->target, 0755);
+
 			if (mount(mnt->src, mnt->target, NULL, MS_BIND, NULL) < 0) {
 				ERROR_ERRNO("Could not bind mount src %s to %s", mnt->src,
 					    mnt->target);
@@ -749,8 +755,7 @@ c_idmapped_start_child(void *idmappedp)
 		}
 
 		if (mnt->ovl_lower) {
-			if (c_idmapped_mount_ovl(mnt->ovl_upper, mnt->target, mnt->ovl_lower,
-						 true)) {
+			if (c_idmapped_mount_ovl(mnt->ovl_upper, mnt->target, mnt->ovl_lower)) {
 				ERROR("Failed to mount ovl '%s' in userns on '%s'", mnt->ovl_upper,
 				      mnt->target);
 				goto error;
@@ -762,26 +767,6 @@ c_idmapped_start_child(void *idmappedp)
 	return 0;
 error:
 	return -COMPARTMENT_ERROR_USER;
-}
-
-static int
-c_idmapped_start_post_clone(void *idmappedp)
-{
-	c_idmapped_t *idmapped = idmappedp;
-	ASSERT(idmapped);
-
-	/* We can skip this in case the container has no user ns */
-	if (!container_has_userns(idmapped->container))
-		return 0;
-
-	int uid = container_get_uid(idmapped->container);
-	char *root_dir = container_get_rootdir(idmapped->container);
-	if (chown(root_dir, uid, uid) < 0) {
-		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", root_dir, uid, uid);
-		return -COMPARTMENT_ERROR_USER;
-	}
-
-	return 0;
 }
 
 static int
@@ -846,7 +831,7 @@ static compartment_module_t c_idmapped_module = {
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
-	.start_post_clone = c_idmapped_start_post_clone,
+	.start_post_clone = NULL,
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = c_idmapped_start_child,
