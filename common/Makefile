@@ -23,6 +23,7 @@
 
 
 CC ?= gcc
+AR ?= ar
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
@@ -94,13 +95,13 @@ OBJS_COMMON_EXT := \
 	uuid.o
 
 libcommon: $(OBJS_COMMON)
-	ar rcs libcommon.a $^
+	$(AR) rcs libcommon.a $^
 
 libcommon_full: $(OBJS_COMMON_FULL)
-	ar rcs libcommon_full.a $^
+	$(AR) rcs libcommon_full.a $^
 
 libcommon_ext: $(OBJS_COMMON_EXT)
-	ar rcs libcommon_ext.a $^
+	$(AR) rcs libcommon_ext.a $^
 
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
