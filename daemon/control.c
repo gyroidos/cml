@@ -765,6 +765,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REGISTER_NEWCA) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__SET_PROVISIONED) ||
+	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__PULL_DEVICE_CSR) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__PUSH_DEVICE_CERT) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START) ||
@@ -800,6 +801,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
@@ -1137,6 +1139,16 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		res = cmld_set_device_provisioned();
 		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
 				     fd);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED: {
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_PROVISIONED_STATE;
+		out.has_device_is_provisioned = true;
+		out.device_is_provisioned = cmld_is_device_provisioned();
+
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+			WARN("Could not send provisioned state");
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER: {
