@@ -111,6 +111,8 @@ message ControllerToDaemon {
 
 		// Set the device to provisioned state
 		SET_PROVISIONED = 32;
+		// Get the device provisioned state
+		GET_PROVISIONED = 33;
 
 		// Pulls the device csr (provisioning)
 		PULL_DEVICE_CSR = 40;
@@ -239,6 +241,8 @@ message DaemonToController {
 
 		DEVICE_CSR = 40;		// -> [device_csr]
 
+		DEVICE_PROVISIONED_STATE = 41;  // -> [device_is_provisioned]
+
 		// Requests to other endpoint:
 
 		// Log-on the device onto the backend (not applicable for cmdline tool).
@@ -291,6 +295,7 @@ message DaemonToController {
 
 	optional Response response = 13;
 	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
+	optional bool device_is_provisioned = 41;	// device provisioned state (provisioning)
 
 	optional string device_uuid = 200;					// Device UUID for LOGON_DEVICE and LOG_MESSAGE
 	optional string logon_hardware_name = 201;			// Hardware name (e.g. "i9505", "hammerhead", ...) for LOGON_DEVICE

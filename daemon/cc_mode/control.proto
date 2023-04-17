@@ -90,6 +90,8 @@ message ControllerToDaemon {
 
 		// Set the device to provisioned state
 		SET_PROVISIONED = 32;
+		// Get the device provisioned state
+		GET_PROVISIONED = 33;
 
 		// Pulls the device csr (provisioning)
 		PULL_DEVICE_CSR = 40;
@@ -187,6 +189,8 @@ message DaemonToController {
 		RESPONSE = 13;			// -> [response]
 
 		DEVICE_CSR = 40;		// -> [device_csr]
+
+		DEVICE_PROVISIONED_STATE = 41;  // -> [device_is_provisioned]
 	}
 	enum Response {
 		CONTAINER_START_OK = 1;
@@ -231,4 +235,5 @@ message DaemonToController {
 
 	optional Response response = 13;
 	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
+	optional bool device_is_provisioned = 41;	// device provisioned state (provisioning)
 }
