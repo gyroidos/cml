@@ -21,7 +21,7 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #define MOD_NAME "c_uevent"
 
@@ -212,7 +212,7 @@ c_uevent_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 	int minor = uevent_event_get_minor(event);
 	const char *devtype = uevent_event_get_devtype(event);
 
-	char type = (!strcmp(devtype, "disk") && !strcmp(devtype, "partition")) ? 'c' : 'b';
+	char type = (!strcmp(devtype, "disk") || !strcmp(devtype, "partition")) ? 'b' : 'c';
 
 	if (!container_is_device_allowed(uevent->container, type, major, minor)) {
 		TRACE("skip not allowed device (%c %d:%d) for container %s", type, major, minor,
