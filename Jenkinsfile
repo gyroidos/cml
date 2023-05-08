@@ -71,11 +71,11 @@ pipeline {
 				script {
 					REPO_NAME = determineRepoName()
 
-					if (CHANGE_TARGET != null) {
+					if (env.CHANGE_TARGET != null) {
 						// in case this is a PR build
 						// set the BASE_BRANCH to the target
 						// e.g. PR-123 -> kirkstone
-						BASE_BRANCH = CHANGE_TARGET
+						BASE_BRANCH = env.CHANGE_TARGET
 					} else {
 						// in case this is a regular build
 						// let the BASE_BRANCH equal this branch
