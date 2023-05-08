@@ -71,21 +71,21 @@ pipeline {
 				script {
 					REPO_NAME = determineRepoName()
 
-					if (CHANGE_TARGET != null) {
+					if (env.CHANGE_TARGET != null) {
 						// in case this is a PR build
 						// set the BASE_BRANCH to the target
 						// e.g. PR-123 -> kirkstone
-						BASE_BRANCH = CHANGE_TARGET
+						BASE_BRANCH = env.CHANGE_TARGET
 					} else {
 						// in case this is a regular build
 						// let the BASE_BRANCH equal this branch
 						// e.g. kirkstone -> kirkstone
-						BASE_BRANCH = BRANCH_NAME
+						BASE_BRANCH = env.BRANCH_NAME
 					}
 				}
 
 				build job: "../gyroidos/${BASE_BRANCH}", wait: true, parameters: [
-					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${BRANCH_NAME},${PR_BRANCHES}")
+					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${PR_BRANCHES}")
 				]
 			}
 		}
