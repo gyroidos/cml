@@ -669,7 +669,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	bool encrypted = mount_entry_is_encrypted(mntent);
 	bool overlay = false;
 	bool shiftids = false;
-	bool verity = false;
+	bool verity = mount_entry_get_verity_sha256(mntent) != NULL;
 	bool is_root = strcmp(mount_entry_get_dir(mntent), "/") == 0;
 	bool setup_mode = container_has_setup_mode(vol->container);
 
