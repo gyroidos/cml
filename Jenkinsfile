@@ -85,7 +85,7 @@ pipeline {
 				}
 
 				build job: "../gyroidos/${BASE_BRANCH}", wait: true, parameters: [
-					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${PR_BRANCHES}")
+					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}")
 				]
 			}
 		}
