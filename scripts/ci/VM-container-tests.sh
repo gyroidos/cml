@@ -323,7 +323,23 @@ do_test_complete() {
 		cmd_control_remove_error_eexist "signedcontainer" "$TESTPW"
 	fi
 
+}
 
+do_test_provisioning() {
+	echo "STATUS: ########## Starting device provisioning test suite ##########"
+	# test provisioning always last since set_provisioned reduces the command set
+
+	echo "STATUS: Check that device is not provisioned yet"
+	cmd_control_get_provisioned false
+
+	echo "STATUS: Setting device to provisioned state"
+	cmd_control_set_provisioned "CMD_OK"
+
+	echo "STATUS: Check that device is provisioned"
+	cmd_control_get_provisioned true
+
+	echo "STATUS: Check device reduced command set"
+	cmd_control_set_provisioned "CMD_UNSUPPORTED"
 }
 
 
@@ -769,6 +785,8 @@ start_vm
 #ssh ${SSH_OPTS} 'echo "STATUS: VM USB Device: " && lsusb' 2>&1
 
 do_test_complete "second_run"
+
+do_test_provisioning
 
 # Success
 # -----------------------------------------------

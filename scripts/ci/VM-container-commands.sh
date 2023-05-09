@@ -211,3 +211,11 @@ cmd_control_get_guestos_version(){
 cmd_control_retrieve_logs() {
 	do_test_cmd_output "/usr/sbin/control retrieve_logs $1" "response: CMD_OK"
 }
+
+cmd_control_get_provisioned() {
+	do_test_cmd_output "/usr/sbin/control get_provisioned" "device_is_provisioned: $1"
+}
+
+cmd_control_set_provisioned() {
+	do_test_cmd_output "/usr/sbin/control set_provisioned" "response: $1"
+}
