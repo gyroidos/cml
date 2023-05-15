@@ -12,14 +12,13 @@ fetch_logs() {
 	elif [ "ccmode" = "${MODE}" ];then
 		echo "Skipping log file retrieveval in ccmode"
 	else
-		echo "111111"
-		ssh ${SSH_OPTS} "mkdir /tmp/logs"
-		echo "22222"
-		cmd_control_retrieve_logs "/tmp/logs"
-		echo "3333333"
 		mkdir "${LOG_DIR}"
-		echo "4444444"
-		scp -r ${SCP_OPTS} root@127.0.0.1:/tmp/logs/* ${LOG_DIR}
+		skip=$(/sbin/fdisk -lu ${PROCESS_NAME}.img | tail -n1 | awk '{print $2}')
+		sectors=$(/sbin/fdisk -lu ${PROCESS_NAME}.img | tail -n1 | awk '{print $3}')
+		dd if=${PROCESS_NAME}.img of=${PROCESS_NAME}.data bs=512 skip=${skip} count=${sectors}
+		for i in `e2ls ${PROCESS_NAME}.data:/userdata/logs`; do
+			e2cp ${PROCESS_NAME}.data:/userdata/logs/${i} ${LOG_DIR}/
+		done
 		echo "Retrieved CML logs: $(ls -al ${LOG_DIR})"
 	fi
 }
@@ -794,8 +793,8 @@ echo -e "\n\nSUCCESS: All tests passed"
 
 trap - EXIT
 
-fetch_logs
-
 force_stop_vm
+
+fetch_logs
 
 exit 0
