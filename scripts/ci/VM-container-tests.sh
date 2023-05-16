@@ -97,7 +97,7 @@ start_vm() {
 		-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd0 \
 		-drive if=none,id=hd0,file=${PROCESS_NAME}.img,format=raw \
 		-device scsi-hd,drive=hd1 \
-		-drive if=none,id=hd1,file=${PROCESS_NAME}.btrfs,format=raw \
+		-drive if=none,id=hd1,file=${PROCESS_NAME}.ext4fs,format=raw \
 		-device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
 		-drive "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd" \
 		-drive "if=pflash,format=raw,file=./OVMF_VARS.fd" \
@@ -588,12 +588,12 @@ fi
 # Create image
 # -----------------------------------------------
 echo "STATUS: Creating images"
-if ! [ -e "${PROCESS_NAME}.btrfs" ]
+if ! [ -e "${PROCESS_NAME}.ext4fs" ]
 then
-	dd if=/dev/zero of=${PROCESS_NAME}.btrfs bs=1M count=10000 &> /dev/null
+	dd if=/dev/zero of=${PROCESS_NAME}.ext4fs bs=1M count=10000 &> /dev/null
 fi
 
-mkfs.btrfs -f -L containers ${PROCESS_NAME}.btrfs
+mkfs.ext4 -L containers ${PROCESS_NAME}.ext4fs
 
 # Backup system image
 # TODO it could have been modified if VM run outside of this script with different args already
@@ -753,7 +753,7 @@ if ! [[ -z "${SCHSM}" ]];then
 	force_stop_vm
 
 	echo "STATUS: Setting container pairing state"
-	/usr/local/bin/preparetmecontainer.sh "$(pwd)/${PROCESS_NAME}.btrfs"
+	/usr/local/bin/preparetmecontainer.sh "$(pwd)/${PROCESS_NAME}.ext4fs"
 
 	echo "STATUS: Waiting for QEMU to cleanup USB devices"
 	sleep 5
