@@ -350,12 +350,25 @@ file_touch(const char *file)
 {
 	IF_NULL_RETVAL(file, -1);
 
-	int fd = open(file, O_WRONLY | O_CREAT, 00666);
-	if (fd < 0) {
-		DEBUG_ERRNO("Could not touch output file %s", file);
-		return -1;
+	if (file_exists(file)) {
+		int fd = open(file, O_WRONLY | O_CREAT, 00666);
+		if (fd < 0) {
+			DEBUG_ERRNO("Could not touch output file %s", file);
+			return -1;
+		}
+
+		if (!syncfs(fd)) {
+			ERROR_ERRNO("Failed to sync fs for %s", file);
+		}
+
+		close(fd);
+	} else {
+		if (-1 == mknod(file, S_IFREG | 00666, 0)) {
+			DEBUG_ERRNO("Could not create file %s", file);
+			return -1;
+		}
 	}
-	close(fd);
+
 	return 0;
 }
 
