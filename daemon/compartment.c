@@ -50,8 +50,9 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <pty.h>
+#include <sys/mman.h>
 
-#define CLONE_STACK_SIZE 8192
+#define CLONE_STACK_SIZE 8 * 1024 * 1024
 /* Define some missing clone flags in BIONIC */
 #ifndef CLONE_NEWNS
 #define CLONE_NEWNS 0x00020000
@@ -882,7 +883,10 @@ compartment_start_child_early(void *data)
 
 	void *compartment_stack = NULL;
 	/* Allocate node stack */
-	if (!(compartment_stack = alloca(CLONE_STACK_SIZE))) {
+
+	if (MAP_FAILED ==
+	    (compartment_stack = mmap(NULL, CLONE_STACK_SIZE, PROT_READ | PROT_WRITE,
+				      MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0))) {
 		WARN_ERRNO("Not enough memory for allocating compartment stack");
 		goto error;
 	}
@@ -1201,7 +1205,9 @@ compartment_start(compartment_t *compartment)
 
 	void *compartment_stack = NULL;
 	/* Allocate node stack */
-	if (!(compartment_stack = alloca(CLONE_STACK_SIZE))) {
+	if (MAP_FAILED ==
+	    (compartment_stack = mmap(NULL, CLONE_STACK_SIZE, PROT_READ | PROT_WRITE,
+				      MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0))) {
 		WARN_ERRNO("Not enough memory for allocating compartment stack");
 		goto error_pre_clone;
 	}
