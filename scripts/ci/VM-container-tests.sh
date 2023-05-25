@@ -2,10 +2,6 @@
 
 set -e
 
-err_early() {
-	echo "ERROR: An early error occured, exiting without fetching log files..."
-}
-
 fetch_logs() {
 	if [ -z "${LOG_DIR}" ];then
 		echo "-l / --log-dir not specified, skipping log file retrieval"
@@ -29,7 +25,7 @@ err_fetch_logs() {
 	exit 1
 }
 
-trap 'err_early' EXIT
+trap 'err_fetch_logs' EXIT
 
 #set -o pipefail
 
@@ -695,8 +691,6 @@ echo "STATUS: ########## Preparing tests ##########"
 echo "STATUS: Test if cmld is up and running"
 cmd_control_list
 
-
-trap 'err_fetch_logs' EXIT
 
 # Skip root CA registering test if test PKI no available or disabled
 if [[ "$COPY_ROOTCA" == "y" ]]
