@@ -40,6 +40,8 @@ reboot_reboot(int cmd)
 		// ANDROID_RB_RESTART is deprecated and no longer recommended to be used
 		res = android_reboot(ANDROID_RB_RESTART, 0, 0);
 #else
+		// do sync otherwise data will be lost. (man 2 reboot)
+		sync();
 		res = reboot(RB_AUTOBOOT);
 #endif
 		break;
@@ -47,6 +49,8 @@ reboot_reboot(int cmd)
 #ifdef ANDROID
 		res = android_reboot(ANDROID_RB_POWEROFF, 0, 0);
 #else
+		// do sync otherwise data will be lost. (man 2 reboot)
+		sync();
 		res = reboot(RB_POWER_OFF);
 #endif
 		break;
