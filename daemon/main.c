@@ -47,7 +47,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static logf_handler_t *cml_daemon_logfile_handler = NULL;
+logf_handler_t *cml_daemon_logfile_handler = NULL;
 static void *main_logfile_p = NULL;
 static bool is_handling_sigint = false;
 
