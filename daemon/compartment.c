@@ -73,6 +73,8 @@
 #define CLONE_NEWNET 0x40000000
 #endif
 
+extern logf_handler_t *cml_daemon_logfile_handler;
+
 /* Timeout for a compartment boot. If the compartment does not come up in that time frame
  * it is killed forcefully */
 /* TODO is that enough time for all benign starts? */
@@ -668,10 +670,7 @@ compartment_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED v
 {
 	int fd = atoi(file);
 
-	DEBUG("Closing file descriptor %d", fd);
-
-	if (close(fd) < 0)
-		WARN_ERRNO("Could not close file descriptor %d", fd);
+	close(fd);
 
 	return 0;
 }
@@ -679,8 +678,10 @@ compartment_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED v
 static int
 compartment_close_all_fds()
 {
+	DEBUG("Closing all fds");
+	logf_unregister(cml_daemon_logfile_handler);
+
 	if (dir_foreach("/proc/self/fd", &compartment_close_all_fds_cb, NULL) < 0) {
-		WARN("Could not open /proc/self/fd directory, /proc not mounted?");
 		return -1;
 	}
 
