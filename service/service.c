@@ -61,6 +61,7 @@
 char *LAST_AUDIT_HASH;
 
 static logf_handler_t *service_logfile_handler = NULL;
+static FILE *service_logfile = NULL;
 
 #ifndef BOOT_COMPLETE_ONLY
 static int
@@ -383,12 +384,17 @@ fork_service_message_handler()
 	if (-1 == pid) {
 		ERROR("Failed to fork service handler");
 	} else if (0 == pid) {
+		logf_unregister(service_logfile_handler);
+		if (service_logfile) {
+			logf_file_close(service_logfile);
+		}
+
 		if (service_close_all_fds()) {
 			ERROR("Failed to close parent fds.");
 		}
 
-		FILE *stream = logf_file_new(LOGFILE_DIR "service-handler");
-		service_logfile_handler = logf_register(&logf_file_write, stream);
+		service_logfile = logf_file_new(LOGFILE_DIR "service-handler");
+		service_logfile_handler = logf_register(&logf_file_write, service_logfile);
 		logf_handler_set_prio(service_logfile_handler, LOGF_PRIO_TRACE);
 
 		int sock;
@@ -436,8 +442,8 @@ main(int argc, char **argv)
 	event_init();
 
 	DEBUG("Registering file logger");
-	service_logfile_handler =
-		logf_register(&logf_file_write, logf_file_new(LOGFILE_DIR "service-init"));
+	service_logfile = logf_file_new(LOGFILE_DIR "service-init");
+	service_logfile_handler = logf_register(&logf_file_write, service_logfile);
 	logf_handler_set_prio(service_logfile_handler, LOGF_PRIO_TRACE);
 
 	if (-1 == (sock = open_service_socket())) {
