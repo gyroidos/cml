@@ -201,11 +201,11 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 
 	if (!fgets(hash_buf, 129, hash_file)) {
 		ERROR("Hash length was smaller than 64 bytes");
-		fclose(hash_file);
+		pclose(hash_file);
 		mem_free0(hash_buf);
 		goto out;
 	}
-	fclose(hash_file);
+	pclose(hash_file);
 
 	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
 		ERROR("Failed to create audit log directory");
