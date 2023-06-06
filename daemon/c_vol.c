@@ -491,6 +491,12 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 		}
 		TRACE("Mounting dev %s type %s to dir %s", lower_dev, lower_dir, lowerfs_type);
 		// mount ro image lower
+
+		while (access(lower_dev, F_OK) < 0) {
+			NANOSLEEP(0, 100000000);
+			DEBUG("Waiting for %s", lower_dev);
+		}
+
 		if (mount(lower_dev, lower_dir, lowerfs_type, mount_flags | MS_RDONLY, mount_data) <
 		    0) {
 			ERROR_ERRNO("Could not mount %s to %s", lower_dev, lower_dir);
@@ -938,6 +944,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			mem_printf("/tmp/overlayfs/%s/%d",
 				   uuid_string(container_get_uuid(vol->container)),
 				   ++vol->overlay_count);
+
 		if (c_vol_mount_overlay(vol, dir, upper_fstype, lower_fstype, mountflags,
 					mount_data, upper_dev, lower_dev,
 					overlayfs_mount_dir) < 0) {
