@@ -15,7 +15,7 @@ pipeline {
 					if [ -z "${manifest_branch}" ]; then
 						manifest_branch=${BRANCH_NAME}
 					fi
-					repo init -u https://github.com/gyroidos/gyroidos.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
+					repo init --depth=1 -u https://github.com/gyroidos/gyroidos.git -b ${manifest_branch} -m yocto-x86-genericx86-64.xml
 				'''
 
 				sh label: 'Adapt manifest for jenkins', script: '''
@@ -27,7 +27,7 @@ pipeline {
 					echo "<remove-project name=\\\"cml\\\" />" >> .repo/local_manifests/jenkins.xml
 					echo "</manifest>" >> .repo/local_manifests/jenkins.xml
 				'''
-				sh 'repo sync -j8'
+				sh 'repo sync --current-branch -j8'
 				sh label: 'Prepare trustme/cml', script: '''
 					echo branch name from Jenkins: ${BRANCH_NAME}
 					cd ${WORKSPACE}/trustme/cml
@@ -35,7 +35,7 @@ pipeline {
 						git branch -D ${BRANCH_NAME}
 					fi
 					git checkout -b ${BRANCH_NAME}
-					git clean -f
+					git -C ${WORKSPACE}/trustme/cml clean -fx
 				'''
 
 				stash excludes: '.repo/.**', includes: '**', name: 'ws-yocto', useDefaultExcludes: false, allowEmpty: false
@@ -104,7 +104,7 @@ pipeline {
 						agent {
 							dockerfile {
 								dir "trustme/cml/scripts/ci"
-								args '--entrypoint=\'\' -v /yocto_mirror/sources-v0.9:/source_mirror -v /yocto_mirror/sstate-cache-v0.9:/sstate_mirror --env BUILDNODE="${env.NODE_NAME}"'
+								args '--entrypoint=\'\' -v /yocto_mirror/v0.9/x86/sources:/source_mirror -v /yocto_mirror/v0.9/x86/sstate-cache:/sstate_mirror --env BUILDNODE="${env.NODE_NAME}"'
 								reuseNode false
 							}
 						}
@@ -149,11 +149,18 @@ pipeline {
 								rm cmld_git.bbappend
 								cp cmld_git.bbappend.jenkins cmld_git.bbappend
 								echo "INHERIT += \\\"own-mirrors\\\"" >> conf/local.conf
-								echo "SOURCE_MIRROR_URL = \\\"file:///source_mirror/${BUILDTYPE}\\\"" >> conf/local.conf
+								echo "SOURCE_MIRROR_URL = \\\"file:///source_mirror\\\"" >> conf/local.conf
 								echo "BB_GENERATE_MIRROR_TARBALLS = \\\"0\\\"" >> conf/local.conf
 								echo "SSTATE_MIRRORS =+ \\\"file://.* file:///sstate_mirror/${BUILDTYPE}/PATH\\\"" >> conf/local.conf
 								echo "SSTATE_MIRRORS =+ \\\"file://.* file:///sstate_mirror/${BUILDTYPE}/PATH\\\"" >> conf/multiconfig/container.conf
+								echo "BB_SIGNATURE_HANDLER = \\\"OEBasicHash\\\"" >> conf/local.conf
+								echo "BB_HASHSERVE = \\\"\\\"" >> conf/local.conf
+
 								cat conf/local.conf
+
+								echo "/sstate_mirror: $(ls -al /sstate_mirror/)"
+								echo "/source_mirror: $(ls -al /source_mirror/)"
+								echo "/source_mirror/${BUILDTYPE}: $(ls -al /source_mirror/${BUILDTYPE})"
 
 								if [ "ccmode" = ${BUILDTYPE} ];then
 									echo "BRANCH = \\\"${BRANCH_NAME}\\\"\nEXTRA_OEMAKE += \\\"CC_MODE=y\\\"" > cmld_git.bbappend.jenkins
@@ -186,13 +193,21 @@ pipeline {
 												script {
 													catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
 														sh label: 'Syncing mirrors', script: '''
-															if [ -d "/source_mirror/${BUILDTYPE}" ];then
-	                        		                            rsync -r out-${BUILDTYPE}/downloads/ /source_mirror/${BUILDTYPE}
-	                                		                    exit 0
-	                                        		        else
-	                                                		    echo "Skipping sstate sync, CHANGE_TARGET==${CHANGE_TARGET}, BRANCH_NAME==${BRANCH_NAME}, /source_mirror/: $(ls /source_mirror/)"
-			                                                    exit 1
-	        		                                        fi
+                                                            if [ -d "/source_mirror" ];then
+                                                                rsync -r --ignore-existing --no-devices --no-specials --no-links  out-${BUILDTYPE}/downloads/ /source_mirror
+                                                            else
+                                                                echo "Skipping source_mirror sync, CHANGE_TARGET==${CHANGE_TARGET}, BRANCH_NAME==${BRANCH_NAME}, PR_BRANCHES==${PR_BRANCHES}, /source_mirror/: $(ls /source_mirror/)"
+                                                                exit 1
+                                                            fi
+
+                                                            if [ -d "/sstate_mirror" ];then
+                                                                rsync -r --no-devices --no-specials --no-links out-${BUILDTYPE}/sstate-cache/ /sstate_mirror/${BUILDTYPE}
+                                                            else
+                                                                echo "Skipping sstate_mirror sync, CHANGE_TARGET==${CHANGE_TARGET}, BRANCH_NAME==${BRANCH_NAME},  PR_BRANCHES==${PR_BRANCHES}, /sstate_mirror/${BUILDTYPE}: $(ls /sstate_mirror/)"
+                                                                exit 1
+                                                            fi
+
+                                                            exit 0
 														'''
 													}
 												}
