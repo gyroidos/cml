@@ -1,6 +1,32 @@
 #!/bin/bash
 
 set -e
+
+fetch_logs() {
+	if [ -z "${LOG_DIR}" ];then
+		echo "-l / --log-dir not specified, skipping log file retrieval"
+	elif [ "ccmode" = "${MODE}" ];then
+		echo "Skipping log file retrieveval in ccmode"
+	else
+		mkdir "${LOG_DIR}"
+		skip=$(/sbin/fdisk -lu ${PROCESS_NAME}.img | tail -n1 | awk '{print $2}')
+		sectors=$(/sbin/fdisk -lu ${PROCESS_NAME}.img | tail -n1 | awk '{print $3}')
+		dd if=${PROCESS_NAME}.img of=${PROCESS_NAME}.data bs=512 skip=${skip} count=${sectors}
+		for i in `e2ls ${PROCESS_NAME}.data:/userdata/logs`; do
+			e2cp ${PROCESS_NAME}.data:/userdata/logs/${i} ${LOG_DIR}/
+		done
+		echo "Retrieved CML logs: $(ls -al ${LOG_DIR})"
+	fi
+}
+
+err_fetch_logs() {
+	echo "An error occurred, attempting to fetch logs from VM"
+	fetch_logs
+	exit 1
+}
+
+trap 'err_fetch_logs' EXIT
+
 #set -o pipefail
 
 CMDPATH="${BASH_SOURCE[0]}"
@@ -15,6 +41,7 @@ BUILD_DIR=""
 KILL_VM=false
 IMGPATH=""
 MODE=""
+LOG_DIR=""
 
 # Directory containing test PKI for image
 PKI_DIR=""
@@ -66,7 +93,7 @@ start_vm() {
 		-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd0 \
 		-drive if=none,id=hd0,file=${PROCESS_NAME}.img,format=raw \
 		-device scsi-hd,drive=hd1 \
-		-drive if=none,id=hd1,file=${PROCESS_NAME}.btrfs,format=raw \
+		-drive if=none,id=hd1,file=${PROCESS_NAME}.ext4fs,format=raw \
 		-device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
 		-drive "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd" \
 		-drive "if=pflash,format=raw,file=./OVMF_VARS.fd" \
@@ -87,7 +114,7 @@ sync_to_disk() {
 			echo "STATUS: Failed to sync VM state to disk, retrying, status: $?"
 		else
 			echo "ERROR: Could not sync VM state to disk, exiting..."
-			exit 1
+			err_fetch_logs
 		fi
 	done
 }
@@ -114,6 +141,8 @@ name: "testcontainer"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
 assign_dev: "c 4:2 rwm"
+fifos: "testfifo1"
+fifos: "testfifo2"
 EOF
 
 cat > ./signedcontainer.conf << EOF
@@ -121,6 +150,8 @@ name: "signedcontainer"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
 assign_dev: "c 4:3 rwm"
+fifos: "signedfifo1"
+fifos: "signedfifo2"
 EOF
 
 
@@ -132,6 +163,9 @@ name: "testcontainer"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version 
 assign_dev: "c 4:2 rwm"
+fifos: "testfifo1"
+fifos: "testfifo2"
+
 EOF
 
 
@@ -140,6 +174,8 @@ name: "signedcontainer"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
 assign_dev: "c 4:3 rwm"
+fifos: "signedfifo1"
+fifos: "signedfifo2"
 token_type: USB
 usb_configs {
   id: "04e6:5816"
@@ -206,11 +242,8 @@ if [[ -d "$PKI_DIR" ]];then
 
 	echo "bash \"$signing_script\" \"./signedcontainer.conf\" \"${PKI_DIR}/ssig_cml.key\" \"${PKI_DIR}/ssig_cml.cert\""
 	bash "$signing_script" "./signedcontainer.conf" "${PKI_DIR}/ssig_cml.key" "${PKI_DIR}/ssig_cml.cert"
-elif [[ "$MODE" == "dev" ]]
-then
-	echo "STATUS: No test PKI found at $PKI_DIR, skipping signing of signedcontainer.conf"
 else
-	echo "STATUS: No test PKI found at $PKI_DIR, can't do $MODE image test"
+	echo "ERROR: No test PKI found at $PKI_DIR, exiting..."
 	exit 1
 fi
 
@@ -251,6 +284,10 @@ do_test_complete() {
 
 	cmd_control_config "signedcontainer"
 
+	ssh ${SSH_OPTS} "echo testmessage1 > /dev/fifos/signedfifo1"
+
+	ssh ${SSH_OPTS} "echo testmessage2 > /dev/fifos/signedfifo2"
+
 	cmd_control_list_guestos "trustx-coreos"
 
 	cmd_control_remove_error_eexist "nonexistent-container"
@@ -281,9 +318,7 @@ do_test_complete() {
 		cmd_control_remove_error_eexist "signedcontainer" "$TESTPW"
 	fi
 
-
 }
-
 
 # Argument retrieval
 # -----------------------------------------------
@@ -308,7 +343,7 @@ while [[ $# > 0 ]]; do
       echo "-k, --kill                  Kill the VM after the tests are completed"
       echo "-n, --name        	Use the given name for the QEMU VM"
       echo "-p, --pki         	Use the given test PKI directory"
-      echo "-i, --image       	Test the given trust|me image instead of looking inside --dir"
+      echo "-i, --image       	Test the given GyroidOS image instead of looking inside --dir"
       echo "-m, --mode        	Test \"dev\", \"production\", or \"ccmode\" image? Default is \"dev\""
       echo "-e, --enable-schsm	Test with given schsm"
       echo "-k, --skip-rootca	Skip attempt to copy custom root CA to image"
@@ -343,7 +378,7 @@ while [[ $# > 0 ]]; do
       ;;
     -o|--builddir)
       shift
-      BUILD_DIR=$1
+      BUILD_DIR="$(readlink -v -f $1)"
       shift
       ;;
     -f|--force)
@@ -391,7 +426,7 @@ while [[ $# > 0 ]]; do
       ;;
     -p|--pki)
       shift
-      PKI_DIR=$1
+      PKI_DIR="$(readlink -v -f $1)"
       shift
       ;;
     -i|--image)
@@ -424,9 +459,15 @@ while [[ $# > 0 ]]; do
       ;;
     -r| --scripts-dir)
       shift
-      SCRIPTS_DIR="$1"
+      SCRIPTS_DIR="$(readlink -v -f $1)"
       shift
       ;;
+    -l| --log-dir)
+      shift
+      LOG_DIR="$(readlink -v -f $1)"
+      shift
+      ;;
+
      *)
       echo "ERROR: Unknown arguments specified? ($1)"
       exit 1
@@ -434,9 +475,11 @@ while [[ $# > 0 ]]; do
   esac
 done
 
+BASE_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=5"
+SCP_OPTS="-P $SSH_PORT $BASE_OPTS"
+SSH_OPTS="-p $SSH_PORT $BASE_OPTS root@localhost"
 
-SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=5 -p $SSH_PORT root@localhost"
-
+# check PKI dir
 if [[ -z "${PKI_DIR}" ]];then
 	echo "STATUS: --pki not specified, assuming \"test_certificates\""
 	PKI_DIR="test_certificates"
@@ -444,8 +487,8 @@ fi
 
 
 
-if ! [ "${MODE}" = "dev" ] && ! [ -d "${PKI_DIR}" ];then
-	echo "ERROR: testing $MODE image but no test PKI found to sign container config. Exiting..."
+if ! [ -d "${PKI_DIR}" ];then
+	echo "ERROR: No PKI given, exiting..."
 	exit 1
 fi
 
@@ -523,12 +566,12 @@ fi
 # Create image
 # -----------------------------------------------
 echo "STATUS: Creating images"
-if ! [ -e "${PROCESS_NAME}.btrfs" ]
+if ! [ -e "${PROCESS_NAME}.ext4fs" ]
 then
-	dd if=/dev/zero of=${PROCESS_NAME}.btrfs bs=1M count=10000 &> /dev/null
+	dd if=/dev/zero of=${PROCESS_NAME}.ext4fs bs=1M count=10000 &> /dev/null
 fi
 
-mkfs.btrfs -f -L containers ${PROCESS_NAME}.btrfs
+mkfs.ext4 -L containers ${PROCESS_NAME}.ext4fs
 
 # Backup system image
 # TODO it could have been modified if VM run outside of this script with different args already
@@ -598,13 +641,25 @@ do_create_testconfigs
 for I in $(seq 1 10) ;do
 	echo "STATUS: Trying to copy container configs to image"
 	sleep 5
-	if scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT testcontainer.conf root@127.0.0.1:/tmp/ && \
-	scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT signedcontainer.conf signedcontainer.sig signedcontainer.cert root@127.0.0.1:/tmp/;then
+	echo "scp ${SCP_OPTS} testcontainer.conf root@127.0.0.1:/tmp/"
+
+	# copy only .conf if signing was skipped
+	if [ -f signedcontainer.sig ];then
+		FILES="signedcontainer.conf  signedcontainer.sig signedcontainer.cert"
+	else
+		FILES="signedcontainer.conf"
+	fi
+
+	if scp ${SCP_OPTS} testcontainer.conf root@127.0.0.1:/tmp/ && \
+	scp $SCP_OPTS $FILES root@127.0.0.1:/tmp/;then
 		#ssh ${SSH_OPTS} 'ls /tmp/testcontainer.conf 2>&1 | grep -q -v "No such file or directory"';then
 		echo "STATUS: scp was successful"
 		break
-	else
+	elif ! [ $I -eq 10 ];then
 		echo "STATUS: scp failed, retrying..."
+	else
+		echo "STATUS: Failed to copy container configs to VM, exiting..."
+		err_fetch_logs
 	fi
 done
 
@@ -618,13 +673,14 @@ echo "STATUS: ########## Preparing tests ##########"
 echo "STATUS: Test if cmld is up and running"
 cmd_control_list
 
+
 # Skip root CA registering test if test PKI no available or disabled
-if [[ "$COPY_ROOTCA" == "y" && -f "${PKI_DIR}/ssig_rootca.cert" ]]
+if [[ "$COPY_ROOTCA" == "y" ]]
 then
 	echo "STATUS: Copying root CA at ${PKI_DIR}/ssig_rootca.cert to image as requested"
 	for I in $(seq 1 10) ;do
 		echo "STATUS: Trying to copy rootca cert"
-		if scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=${PROCESS_NAME}.vm_key -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=10 -P $SSH_PORT ${PKI_DIR}/ssig_rootca.cert root@127.0.0.1:/tmp/;then
+		if scp -q $SCP_OPTS ${PKI_DIR}/ssig_rootca.cert root@127.0.0.1:/tmp/;then
 			echo "STATUS: scp was sucessful"
 			break
 		elif ! [ $I -eq 10 ];then
@@ -638,9 +694,6 @@ then
 
 
 	cmd_control_ca_register " /tmp/ssig_rootca.cert"
-elif [[ "$COPY_ROOTCA" == "y" ]];then
-	echo "ERROR: Failed to copy root CA to image, ${PKI_DIR}/ssig_rootca.cert is not a regular file".
-	exit 1
 fi
 
 
@@ -649,7 +702,8 @@ echo "STATUS: ########## Creating test containers ##########"
 
 # Create test container
 echo "STATUS: Creating test containers"
-if [[ "$MODE" == "dev" ]];then
+if [ "dev" = "$MODE" ];then
+	echo "Creating containers for dev image"
 	echo "Creating container:\n$(cat testcontainer.conf)"
 	cmd_control_create "/tmp/testcontainer.conf"
 	cmd_control_list_container "testcontainer"
@@ -660,6 +714,7 @@ if [[ "$MODE" == "dev" ]];then
 	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
 	cmd_control_list_container "signedcontainer"
 else
+	echo "Creating containers for ${MODE} image"
 	#cmd_control_create_error "/tmp/testcontainer.conf"
 	echo "Creating container:\n$(cat signedcontainer.conf)"
 	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
@@ -674,7 +729,7 @@ if ! [[ -z "${SCHSM}" ]];then
 	force_stop_vm
 
 	echo "STATUS: Setting container pairing state"
-	/usr/local/bin/preparetmecontainer.sh "$(pwd)/${PROCESS_NAME}.btrfs"
+	/usr/local/bin/preparetmecontainer.sh "$(pwd)/${PROCESS_NAME}.ext4fs"
 
 	echo "STATUS: Waiting for QEMU to cleanup USB devices"
 	sleep 5
@@ -706,10 +761,14 @@ start_vm
 
 do_test_complete "second_run"
 
-force_stop_vm
-
-
 # Success
 # -----------------------------------------------
 echo -e "\n\nSUCCESS: All tests passed"
 
+trap - EXIT
+
+force_stop_vm
+
+fetch_logs
+
+exit 0
