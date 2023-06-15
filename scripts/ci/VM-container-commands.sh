@@ -13,10 +13,12 @@ do_wait_running () {
 	while [ true ];do
 		STATE="$(ssh ${SSH_OPTS} "/usr/sbin/control state $1" 2>&1)"
 
+		dbg "STATE: $STATE"
+
 		if ! [ -z "$(grep RUNNING <<< \"${STATE}\")" ];then
 			echo "STATUS: Container is running"
 			break
-		elif [ -z "$(grep STARTING <<< \"${STATE}\")" ] || [ -z "$(grep BOOTING <<< \"${STATE}\")" ] ;then
+		elif ! [ -z "$(grep STARTING <<< \"${STATE}\")" ] || ! [ -z "$(grep BOOTING <<< \"${STATE}\")" ] ;then
 			printf "."
 			sleep 2
 		else
@@ -204,4 +206,8 @@ cmd_control_get_guestos_version(){
 	CMD="/usr/sbin/control list_guestos | grep $1 -A 2 | grep version\: | awk '{print \$2}' | sort | tail -n 1"
 	OUTPUT="$(ssh ${SSH_OPTS} "$CMD")"
 	echo $OUTPUT
+}
+
+cmd_control_retrieve_logs() {
+	do_test_cmd_output "/usr/sbin/control retrieve_logs $1" "response: CMD_OK"
 }
