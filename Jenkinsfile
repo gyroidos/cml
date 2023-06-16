@@ -1,6 +1,9 @@
 pipeline {
 	agent any
-	options { checkoutToSubdirectory('trustme/cml') }
+	options {
+		checkoutToSubdirectory('trustme/cml')
+		preserveStashes(buildCount: 1)
+	}
 
 	stages {
 
