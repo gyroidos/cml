@@ -191,7 +191,8 @@ pipeline {
 										}
 									}
 									script {
-					                    if ("" == env.CHANGE_TARGET && "dunfell" == env.BRANCH_NAME)  {
+					                    //if ("" == env.CHANGE_TARGET && "v0.9" == env.BRANCH_NAME)  {
+					                    if ("v0.9" == env.BRANCH_NAME)  {
 											lock ('sync-mirror') {
 												script {
 													catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
