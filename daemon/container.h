@@ -136,6 +136,18 @@ void
 container_free(container_t *container);
 
 /**
+ * Checks if a given container is stoppable
+ */
+bool
+container_is_stoppable(container_t *container);
+
+/**
+ * Checks if a given container is startable
+ */
+bool
+container_is_startable(container_t *container);
+
+/**
  * Return the directory where the container stores its images.
  */
 const char *
