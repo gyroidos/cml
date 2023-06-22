@@ -894,8 +894,7 @@ cmld_container_start(container_t *container)
 		return -1;
 	}
 
-	if ((container_get_state(container) == COMPARTMENT_STATE_STOPPED) ||
-	    (container_get_state(container) == COMPARTMENT_STATE_REBOOTING)) {
+	if (container_is_startable(container)) {
 		/* container is not running => start it */
 		DEBUG("Container %s is not running => start it",
 		      container_get_description(container));
@@ -920,11 +919,18 @@ cmld_container_start(container_t *container)
 		}
 		time_register_clock_check();
 	} else {
-		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"container-start-already-running",
-				uuid_string(container_get_uuid(container)), 0);
-		DEBUG("Container %s has been already started",
-		      container_get_description(container));
+		// differentiate between a running container (which does not need to be started) and a 'broken' container state, that cannot be started
+		if ((container_get_state(container) == COMPARTMENT_STATE_STARTING) ||
+		    (container_get_state(container) == COMPARTMENT_STATE_RUNNING)) {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"container-start-already-running",
+					uuid_string(container_get_uuid(container)), 0);
+		} else {
+			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
+					"container-start",
+					uuid_string(container_get_uuid(container)), 0);
+			return -1;
+		}
 	}
 
 	return 0;
@@ -1607,13 +1613,13 @@ cmld_container_stop(container_t *container)
 
 	DEBUG("Trying to stop container %s", container_get_description(container));
 
-	if (container_get_state(container) == COMPARTMENT_STATE_STOPPED) {
-		ERROR("Container %s not running, unable to stop",
-		      container_get_description(container));
-
+	// check if the container is in a stoppable state
+	// otherwise the container_stop command is regarded
+	// as failed
+	if (!container_is_stoppable(container)) {
+		WARN("Container is already in a stopped state. Aborting");
 		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
-				"container-stop-failed", uuid_string(container_get_uuid(container)),
-				0);
+				"container-stop", uuid_string(container_get_uuid(container)), 0);
 		return -1;
 	}
 
