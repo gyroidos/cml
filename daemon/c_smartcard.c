@@ -930,10 +930,8 @@ c_smartcard_token_detach(void *smartcardp)
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
-	DEBUG("USB token has been detached, stopping Container %s",
-	      container_get_name(smartcard->container));
-
-	if (container_stop(smartcard->container)) {
+	// try to stop the container
+	if (cmld_container_stop(smartcard->container)) {
 		ERROR("Could not stop container after token detachment.");
 	}
 
