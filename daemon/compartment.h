@@ -451,4 +451,16 @@ compartment_set_debug_log_dir(compartment_t *compartment, const char *dir);
 bool
 compartment_contains_pid(const compartment_t *compartment, pid_t pid);
 
+/**
+ * Checks if a given compartment is stoppable
+ */
+bool
+compartment_is_stoppable(compartment_t *compartment);
+
+/**
+ * Checks if a given compartment is startable
+ */
+bool
+compartment_is_startable(compartment_t *compartment);
+
 #endif /* COMPARTMENT_H */

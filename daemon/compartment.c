@@ -155,6 +155,31 @@ enum compartment_start_sync_msg {
 
 static list_t *compartment_module_list = NULL;
 
+bool
+compartment_is_stoppable(compartment_t *compartment)
+{
+	if ((compartment_get_state(compartment) == COMPARTMENT_STATE_RUNNING) ||
+	    (compartment_get_state(compartment) == COMPARTMENT_STATE_BOOTING)) {
+		DEBUG("Compartment can be stopped.");
+		return true;
+	}
+
+	return false;
+}
+
+bool
+compartment_is_startable(compartment_t *compartment)
+{
+	if ((compartment_get_state(compartment) == COMPARTMENT_STATE_STOPPED) ||
+	    (compartment_get_state(compartment) == COMPARTMENT_STATE_REBOOTING)) {
+		DEBUG("Compartment can be started.");
+		return true;
+	}
+
+	DEBUG("Compartment is in unstartable state.(%d)", compartment_get_state(compartment));
+	return false;
+}
+
 void
 compartment_register_module(compartment_module_t *mod)
 {
@@ -1175,13 +1200,6 @@ int
 compartment_start(compartment_t *compartment)
 {
 	ASSERT(compartment);
-
-	if ((compartment_get_state(compartment) != COMPARTMENT_STATE_STOPPED) &&
-	    (compartment_get_state(compartment) != COMPARTMENT_STATE_REBOOTING)) {
-		ERROR("Container %s is not stopped and can therefore not be started",
-		      compartment_get_description(compartment));
-		return COMPARTMENT_ERROR;
-	}
 
 	int ret = 0;
 
