@@ -378,6 +378,20 @@ container_set_state(container_t *container, compartment_state_t state)
 	compartment_set_state(container->compartment, state);
 }
 
+bool
+container_is_stoppable(container_t *container)
+{
+	ASSERT(container);
+	return compartment_is_stoppable(container->compartment);
+}
+
+bool
+container_is_startable(container_t *container)
+{
+	ASSERT(container);
+	return compartment_is_startable(container->compartment);
+}
+
 compartment_state_t
 container_get_state(const container_t *container)
 {
