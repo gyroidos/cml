@@ -91,9 +91,9 @@ start_vm() {
 		-name trustme-tester,process=${PROCESS_NAME} -nodefaults -nographic \
 		-device virtio-rng-pci,rng=id -object rng-random,id=id,filename=/dev/urandom \
 		-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd0 \
-		-drive if=none,id=hd0,file=${PROCESS_NAME}.img,format=raw \
+		-drive if=none,id=hd0,file=${PROCESS_NAME}.img,cache=directsync,format=raw \
 		-device scsi-hd,drive=hd1 \
-		-drive if=none,id=hd1,file=${PROCESS_NAME}.ext4fs,format=raw \
+		-drive if=none,id=hd1,file=${PROCESS_NAME}.ext4fs,cache=directsync,format=raw \
 		-device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
 		-drive "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd" \
 		-drive "if=pflash,format=raw,file=./OVMF_VARS.fd" \
