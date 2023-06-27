@@ -798,15 +798,19 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 		return true;
 	}
 	// Device is in privileged provisioned mode, only allow subset of commands
-	if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
+	if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CMLD_HANDLES_PIN) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_STOP) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_LIST_IFACES) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG)) {
 		TRACE("Received command %d is valid in provisioned mode", msg->command);
 		return true;
