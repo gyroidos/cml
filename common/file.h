@@ -170,4 +170,40 @@ file_touch(const char *file);
 void
 file_syncfs(const char *file);
 
+/**
+ * Check whether to files/dirs are on the same file system
+ * @param path1 path to first file or directory
+ * @param path2 path to second file or directory
+ * @return true if on same fs, false otherwise.
+ */
+bool
+file_on_same_fs(const char *path1, const char *path2);
+
+/**
+ * get disk space of underlying file system of the corresponding
+ * file or directory at path.
+ * @param path The file name or directory name
+ * @return The size of the file system on the given path or -1 on error.
+ */
+off_t
+file_disk_space(const char *path);
+
+/**
+ * get free disk space of underlying file system of the corresponding
+ * file or directory at path.
+ * @param path The file name or directory name
+ * @return The free space in the file system for the given path or -1 on error.
+ */
+off_t
+file_disk_space_free(const char *path);
+
+/**
+ * get free used disk space of underlying file system of the corresponding
+ * file or directory at path.
+ * @param path The file name or directory name
+ * @return The used disk space of the file system for the given path or -1 on error.
+ */
+off_t
+file_disk_space_used(const char *path);
+
 #endif /* FILE_H */

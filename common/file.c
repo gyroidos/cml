@@ -35,6 +35,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <fcntl.h>
 #include <alloca.h>
 
@@ -378,4 +379,54 @@ file_syncfs(const char *file)
 		WARN_ERRNO("Failed to sync fs for '%s'", file);
 
 	close(fd);
+}
+
+bool
+file_on_same_fs(const char *path1, const char *path2)
+{
+	IF_NULL_RETVAL(path1, false);
+	IF_NULL_RETVAL(path2, false);
+
+	struct stat s1, s2;
+
+	if (lstat(path1, &s1) < 0 || lstat(path2, &s2) < 0)
+		return false;
+
+	return s1.st_dev == s2.st_dev;
+}
+
+off_t
+file_disk_space(const char *path)
+{
+	IF_NULL_RETVAL(path, -1);
+	struct statvfs s;
+
+	if (statvfs(path, &s) < 0)
+		return -1;
+
+	return s.f_blocks * s.f_frsize;
+}
+
+off_t
+file_disk_space_free(const char *path)
+{
+	IF_NULL_RETVAL(path, -1);
+	struct statvfs s;
+
+	if (statvfs(path, &s) < 0)
+		return -1;
+
+	return s.f_bfree * s.f_frsize;
+}
+
+off_t
+file_disk_space_used(const char *path)
+{
+	IF_NULL_RETVAL(path, -1);
+	struct statvfs s;
+
+	if (statvfs(path, &s) < 0)
+		return -1;
+
+	return (s.f_blocks - s.f_bfree) * s.f_frsize;
 }
