@@ -30,6 +30,7 @@
 #include "dir.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -328,4 +329,74 @@ proc_get_cgroups_path_new(pid_t pid)
 	fclose(proc);
 	mem_free0(path);
 	return cgroup_path;
+}
+
+struct proc_meminfo {
+	ssize_t mem_total;
+	ssize_t mem_free;
+	ssize_t mem_available;
+};
+
+proc_meminfo_t *
+proc_meminfo_new()
+{
+	proc_meminfo_t *meminfo;
+	char *buf, *tmp;
+	int n;
+
+	buf = file_read_new("/proc/meminfo", 4096);
+	IF_NULL_RETVAL(buf, NULL);
+
+	meminfo = mem_new0(proc_meminfo_t, 1);
+
+	n = sscanf(buf, "MemTotal:\t%zd kB", &meminfo->mem_total);
+	IF_FALSE_GOTO(n == 1, error);
+	TRACE("Parsed MemTotal: %zd kB", meminfo->mem_total);
+
+	tmp = strstr(buf, "\nMemFree:");
+	IF_NULL_GOTO(tmp, error);
+	n = sscanf(tmp, "\nMemFree:\t%zd kB", &meminfo->mem_free);
+	IF_FALSE_GOTO(n == 1, error);
+	TRACE("Parsed MemFree: %zd kB", meminfo->mem_free);
+
+	tmp = strstr(buf, "\nMemAvailable:");
+	IF_NULL_GOTO(tmp, error);
+	n = sscanf(tmp, "\nMemAvailable:\t%zd kB", &meminfo->mem_available);
+	IF_FALSE_GOTO(n == 1, error);
+	TRACE("Parsed MemAvailable: %zd kB", meminfo->mem_available);
+
+	mem_free0(buf);
+	return meminfo;
+error:
+	mem_free0(meminfo);
+	mem_free0(buf);
+	return NULL;
+}
+
+void
+proc_meminfo_free(proc_meminfo_t *meminfo)
+{
+	IF_NULL_RETURN(meminfo);
+	mem_free0(meminfo);
+}
+
+ssize_t
+proc_get_mem_total(const proc_meminfo_t *meminfo)
+{
+	IF_NULL_RETVAL(meminfo, -1);
+	return MUL_WITH_OVERFLOW_CHECK(meminfo->mem_total, 1024);
+}
+
+ssize_t
+proc_get_mem_free(const proc_meminfo_t *meminfo)
+{
+	IF_NULL_RETVAL(meminfo, -1);
+	return MUL_WITH_OVERFLOW_CHECK(meminfo->mem_free, 1024);
+}
+
+ssize_t
+proc_get_mem_available(const proc_meminfo_t *meminfo)
+{
+	IF_NULL_RETVAL(meminfo, -1);
+	return MUL_WITH_OVERFLOW_CHECK(meminfo->mem_available, 1024);
 }

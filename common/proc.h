@@ -86,4 +86,44 @@ proc_stat_btime(unsigned long long *boottime_sec);
 char *
 proc_get_cgroups_path_new(pid_t pid);
 
+typedef struct proc_meminfo proc_meminfo_t;
+
+/**
+ * Parses /proc/meminfo into an internal struct
+ * @return pointer to the newly allocated struct, NULL on error
+ */
+proc_meminfo_t *
+proc_meminfo_new();
+
+/**
+ * Frees the meminfo internal struct
+ * @param meminfo pointer to struct which should be freed
+ */
+void
+proc_meminfo_free(proc_meminfo_t *meminfo);
+
+/**
+ * Returns the mem_total in bytes retrieved from /proc/meminfo
+ * @param meminfo struct containing the parsed output of /proc/meminfo
+ * @return mem_total in bytes on success, -1 on error
+ */
+ssize_t
+proc_get_mem_total(const proc_meminfo_t *meminfo);
+
+/**
+ * Returns the mem_free in bytes retrieved from /proc/meminfo
+ * @param meminfo struct containing the parsed output of /proc/meminfo
+ * @return mem_total in bytes on success, -1 on error
+ */
+ssize_t
+proc_get_mem_free(const proc_meminfo_t *meminfo);
+
+/**
+ * Returns the mem_available in bytes retrieved from /proc/meminfo
+ * @param meminfo struct containing the parsed output of /proc/meminfo
+ * @return mem_total in bytes on success, -1 on error
+ */
+ssize_t
+proc_get_mem_available(const proc_meminfo_t *meminfo);
+
 #endif /* PROC_H */
