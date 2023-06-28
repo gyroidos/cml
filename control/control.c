@@ -75,6 +75,8 @@ print_usage(const char *cmd)
 	       "        Sets the device to provisioned state which limits certain commands\n\n");
 	printf("   get_provisioned\n"
 	       "        Gets the device provisioned state.\n\n");
+	printf("   device_stats\n"
+	       "        Gets the device statistics about memory and disk usage.\n\n");
 	printf("   create <container.conf> [<container.sig> <container.cert>]\n"
 	       "        Creates a container from the given config file,\n"
 	       "        and optionally signature and certificate files\n\n");
@@ -357,6 +359,10 @@ main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "get_provisioned")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "device_stats")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_DEVICE_STATS;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "push_guestos_config")) {
