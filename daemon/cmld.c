@@ -1913,3 +1913,9 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	container_config_free(conf);
 	return 0;
 }
+
+const char *
+cmld_get_cmld_dir(void)
+{
+	return cmld_path;
+}

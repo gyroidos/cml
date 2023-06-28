@@ -347,4 +347,10 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 int
 cmld_container_remove_net_iface(container_t *container, const char *iface, bool persistent);
 
+/**
+ * Returns the runtime path for cml's persistent data
+ */
+const char *
+cmld_get_cmld_dir(void);
+
 #endif /* CMLD_H */
