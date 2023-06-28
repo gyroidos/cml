@@ -65,6 +65,9 @@ message ControllerToDaemon {
 		// Also fills [container_uuids] with the corresponding container UUIDs.
 		GET_CONTAINER_CONFIG = 4;	// [container_uuid] -> [container_config]
 
+		// Retrive device statistics about mem and storage
+		GET_DEVICE_STATS = 6;
+
 		/**********************************************************************
 		 * @exclude
 		 * Commands (global) that modify the system 
@@ -103,7 +106,7 @@ message ControllerToDaemon {
 		 * Commands that operate on a specific container
 		**********************************************************************/
 
-	// The UUID of the container must be in the container_uuids field.
+		// The UUID of the container must be in the container_uuids field.
 
 		// Starts a container. Also needs [start_params].
 		CONTAINER_START = 101;
@@ -138,7 +141,7 @@ message ControllerToDaemon {
 	optional bytes container_config_signature = 18;		// signature of the container config file
 	optional bytes container_config_certificate = 19;	// sw signing certificate to verify the signature on the container config file
 	optional string newpin = 20;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN
-	
+
 	// Daemon
 	optional bytes guestos_config_file = 30;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
 	optional bytes guestos_config_signature = 31;	// signature of the GuestOS config file
@@ -159,6 +162,18 @@ message ContainerStartParams {
 message AssignInterfaceParams {
 	optional string iface_name = 1;
 	optional bool persistent = 2 [default = false];
+}
+
+message DeviceStats {
+	required uint64 disk_system = 1;
+	required uint64 disk_system_free = 2;
+	required uint64 disk_system_used = 3;
+	optional uint64 disk_containers = 4;
+	optional uint64 disk_containers_free = 5;
+	optional uint64 disk_containers_used = 6;
+	optional uint64 mem_total = 7;
+	optional uint64 mem_free = 8;
+	optional uint64 mem_available = 9;
 }
 
 /******************************************************************************
@@ -187,6 +202,8 @@ message DaemonToController {
 		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
 
 		RESPONSE = 13;			// -> [response]
+
+		DEVICE_STATS = 30;		// -> [device_stats]
 
 		DEVICE_CSR = 40;		// -> [device_csr]
 
@@ -234,6 +251,9 @@ message DaemonToController {
 	optional bool container_cmld_handles_pin = 11; 		// Indicate that CMLD handles pin input for container start and stop
 
 	optional Response response = 13;
+
+	optional DeviceStats device_stats = 20;		// device_stats for GET_DEVICE_STATS
+
 	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
 	optional bool device_is_provisioned = 41;	// device provisioned state (provisioning)
 }

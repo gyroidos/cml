@@ -76,6 +76,9 @@ message ControllerToDaemon {
 		//Returns logfiles stored in LOGFILE_DIR
 		GET_LAST_LOG = 5;
 
+		// Retrive device statistics about mem and storage
+		GET_DEVICE_STATS = 6;
+
 		//////////////////////////////////////////////
 		// Commands (global) that modify the system //
 		//////////////////////////////////////////////
@@ -211,6 +214,18 @@ message ControllerToDaemon {
 // Outgoing messages //////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+message DeviceStats {
+	required uint64 disk_system = 1;
+	required uint64 disk_system_free = 2;
+	required uint64 disk_system_used = 3;
+	optional uint64 disk_containers = 4;
+	optional uint64 disk_containers_free = 5;
+	optional uint64 disk_containers_used = 6;
+	optional uint64 mem_total = 7;
+	optional uint64 mem_free = 8;
+	optional uint64 mem_available = 9;
+}
+
 /**
  * Control message sent from the cml-daemon on the device to the backend/cmdline tool/etc.
  */
@@ -238,6 +253,8 @@ message DaemonToController {
 		EXEC_END = 14;
 
 		EXEC_OUTPUT = 15;
+
+		DEVICE_STATS = 30;		// -> [device_stats]
 
 		DEVICE_CSR = 40;		// -> [device_csr]
 
@@ -294,6 +311,9 @@ message DaemonToController {
 	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
 
 	optional Response response = 13;
+
+	optional DeviceStats device_stats = 20;		// device_stats for GET_DEVICE_STATS
+
 	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
 	optional bool device_is_provisioned = 41;	// device provisioned state (provisioning)
 

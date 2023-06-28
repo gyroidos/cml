@@ -49,6 +49,7 @@
 #include "common/file.h"
 #include "common/dir.h"
 #include "common/str.h"
+#include "common/proc.h"
 
 #include <unistd.h>
 #include <inttypes.h>
@@ -1217,6 +1218,47 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		mem_free0(cuuid_str);
 		protobuf_free_message((ProtobufCMessage *)ccfg[0]);
 		mem_free0(ccfg);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__GET_DEVICE_STATS: {
+		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+		out.code = DAEMON_TO_CONTROLLER__CODE__DEVICE_STATS;
+
+		DeviceStats *device_stats = mem_new(DeviceStats, 1);
+		device_stats__init(device_stats);
+
+		device_stats->disk_system = file_disk_space(cmld_get_cmld_dir());
+		device_stats->disk_system_free = file_disk_space_free(cmld_get_cmld_dir());
+		device_stats->disk_system_used = file_disk_space_used(cmld_get_cmld_dir());
+
+		if (!file_on_same_fs(cmld_get_cmld_dir(), cmld_get_containers_dir())) {
+			device_stats->has_disk_containers = true;
+			device_stats->has_disk_containers_free = true;
+			device_stats->has_disk_containers_used = true;
+			device_stats->disk_containers = file_disk_space(cmld_get_containers_dir());
+			device_stats->disk_containers_free =
+				file_disk_space_free(cmld_get_containers_dir());
+			device_stats->disk_containers_used =
+				file_disk_space_used(cmld_get_containers_dir());
+		}
+
+		proc_meminfo_t *meminfo = proc_meminfo_new();
+		if (meminfo) {
+			device_stats->has_mem_total = true;
+			device_stats->has_mem_free = true;
+			device_stats->has_mem_available = true;
+			device_stats->mem_total = proc_get_mem_total(meminfo);
+			device_stats->mem_free = proc_get_mem_free(meminfo);
+			device_stats->mem_available = proc_get_mem_available(meminfo);
+		}
+
+		out.device_stats = device_stats;
+
+		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+			WARN("Could not send provisioned state");
+
+		proc_meminfo_free(meminfo);
+		protobuf_free_message((ProtobufCMessage *)device_stats);
 	} break;
 
 	// Container-specific commands:
