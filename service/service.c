@@ -178,9 +178,8 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 
 	int ret = -1;
 
-	char tmpfile[17] = "/tmp/audit_XXXXXX";
-
-	if (!strcmp("", mktemp(tmpfile))) {
+	char tmpfile[] = "/tmp/audit_XXXXXX";
+	if (-1 == mkstemp(tmpfile)) {
 		ERROR_ERRNO("Failed to generate temporary filename");
 		return -1;
 	}
