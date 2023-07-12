@@ -39,6 +39,9 @@
 
 #define SCD_TOKENCONTROL_SOCK_LISTEN_BACKLOG 1
 
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 typedef struct scd_tokencontrol {
 	int cfd;
 	int lsock;
@@ -244,6 +247,9 @@ scd_tokencontrol_cb_accept(int fd, unsigned events, UNUSED event_io_t *io, void 
 		DEBUG("Made tokenctrl_cfd non-blocking");
 
 		// only accept one connection per socket at a time
+		token->token_data->tctrl->events =
+			list_remove(token->token_data->tctrl->events, io);
+
 		wrapped_remove_event_io(io);
 
 		event_io_t *event = event_io_new(token->token_data->tctrl->cfd, EVENT_IO_READ,
@@ -253,7 +259,6 @@ scd_tokencontrol_cb_accept(int fd, unsigned events, UNUSED event_io_t *io, void 
 			list_append(token->token_data->tctrl->events, event);
 
 		event_add_io(event);
-
 	} else if (events & EVENT_IO_EXCEPT) {
 		TRACE("EVENT_IO_EXCEPT on socket %d, closing...", fd);
 	} else {
