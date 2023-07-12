@@ -522,6 +522,37 @@ hotplug_usbdev_set_sysfs_props(hotplug_usbdev_t *usbdev)
 	return 0;
 }
 
+struct hotplug_token_data {
+	container_t *container;
+	char *devname;
+};
+
+static void
+hotplug_token_timer_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+	struct hotplug_token_data *token_data = data;
+
+	static int retries = 10;
+
+	DEBUG("devname: %s", token_data->devname);
+
+	IF_TRUE_GOTO(0 > retries--, out);
+
+	// wait for device node to become available
+	IF_TRUE_RETURN(!file_exists(token_data->devname));
+
+	container_token_attach(token_data->container);
+	INFO("Processed token attachment of token %s for container %s", token_data->devname,
+	     container_get_name(token_data->container));
+
+out:
+	mem_free0(token_data->devname);
+	mem_free0(token_data);
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
 /*
  * return true if uevent is handled completely, false if uevent should process further
  * in calling funtion
@@ -595,7 +626,22 @@ hotplug_handle_usb_device(unsigned actions, uevent_event_t *event)
 				     container_get_name(mapping->container));
 				if (HOTPLUG_USBDEV_TYPE_TOKEN == mapping->usbdev->type) {
 					INFO("HOTPLUG USB TOKEN added");
-					container_token_attach(mapping->container);
+					struct hotplug_token_data *token_data =
+						mem_new0(struct hotplug_token_data, 1);
+					token_data->container = mapping->container;
+					token_data->devname = mem_printf(
+						"%s%s",
+						strncmp("/dev/", uevent_event_get_devname(event),
+							4) ?
+							"/dev/" :
+							"/",
+						uevent_event_get_devname(event));
+
+					// give devfs some time to create device node for token
+					event_timer_t *e =
+						event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+								hotplug_token_timer_cb, token_data);
+					event_add_timer(e);
 				}
 				container_device_allow(mapping->container, 'c',
 						       mapping->usbdev->major,
