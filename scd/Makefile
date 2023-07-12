@@ -31,6 +31,9 @@ TRUSTME_SCHSM ?= n
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+
+LOCAL_LFLAGS := -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon
+
 ifeq ($(WCAST_ALIGN),y)
     LOCAL_CFLAGS += -Wcast-align
 endif
@@ -56,7 +59,8 @@ ifeq ($(SANITIZERS),y)
 endif
 ifeq ($(TRUSTME_SCHSM), y)
     # If requested, we build sc-hsm support into trustme
-    LOCAL_CFLAGS += -DENABLESCHSM -lctccid
+    LOCAL_CFLAGS += -DENABLESCHSM
+	LOCAL_LFLAGS += -lctccid
     SRC_FILES += \
 	sc-hsm-lib/sc-hsm-cardservice.c \
 	usbtoken.c
@@ -109,7 +113,7 @@ libcommon:
 	$(MAKE) -C common libcommon
 
 scd: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon -o scd
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(LOCAL_LFLAGS) -o scd
 
 
 .PHONY: clean
