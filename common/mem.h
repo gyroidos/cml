@@ -198,6 +198,22 @@ mem_free_array(void **array, size_t size);
 		(struct_type *)mem_realloc((mem), _total_len);                                     \
 	})
 
+/**
+ * Convenience wrapper macro for aligned_alloc which calculates
+ * the correct size to be allocated and casts accordingly.
+ */
+#define mem_aligned_alloc(alignment, struct_type, n_structs)                                       \
+	__extension__({                                                                            \
+		size_t _total_len = 0;                                                             \
+		size_t _lvalue = (size_t)sizeof(struct_type);                                      \
+		size_t _rvalue = (size_t)(n_structs);                                              \
+		if (__builtin_mul_overflow(_lvalue, _rvalue, &_total_len)) {                       \
+			FATAL("Detected integer overflow in allocation size.                       \
+                                Aborting to prevent heap overflow.");                              \
+		}                                                                                  \
+		(struct_type *)aligned_alloc(alignment, _total_len);                               \
+	})
+
 static inline void
 mem_memset0(void *ptr, size_t num)
 {
