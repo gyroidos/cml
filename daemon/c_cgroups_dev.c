@@ -280,11 +280,14 @@ c_cgroups_dev_bpf_prog_append(c_cgroups_bpf_prog_t *prog, const struct bpf_insn 
 {
 	if (prog == NULL) {
 		prog = mem_new0(c_cgroups_bpf_prog_t, 1);
-		prog->insn = mem_new0(struct bpf_insn, insn_n_structs);
+		prog->insn = mem_aligned_alloc(8, struct bpf_insn, insn_n_structs);
 		prog->insn_n_structs = 0;
 	} else {
-		prog->insn = mem_renew(struct bpf_insn, prog->insn,
-				       prog->insn_n_structs + insn_n_structs);
+		struct bpf_insn *_insn = prog->insn;
+		prog->insn = mem_aligned_alloc(8, struct bpf_insn,
+					       prog->insn_n_structs + insn_n_structs);
+		memcpy(prog->insn, _insn, prog->insn_n_structs * sizeof(struct bpf_insn));
+		mem_free0(_insn);
 	}
 	memcpy(prog->insn + prog->insn_n_structs, insn, insn_n_structs * sizeof(struct bpf_insn));
 	prog->insn_n_structs += insn_n_structs;
@@ -439,6 +442,7 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 
 	prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
 	if (prog->fd < 0) {
+		WARN_ERRNO("Failed to load bpf program retrying with logbuffer!");
 		char *bpf_log = mem_new0(char, BPF_LOG_SIZE);
 		load_attr.log_buf = ptr_to_u64(bpf_log);
 		load_attr.log_size = BPF_LOG_SIZE;
