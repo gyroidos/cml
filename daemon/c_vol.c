@@ -1620,7 +1620,7 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		ERROR_ERRNO("Could not apply lxcfs overlay on mount %s", mnt_proc);
 		goto error;
 	} else {
-		INFO("lxfs not supported - not mounting overlay");
+		INFO("lxcfs not supported - not mounting overlay");
 	}
 
 	DEBUG("Mounting sys on %s", mnt_sys);
