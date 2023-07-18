@@ -234,9 +234,6 @@ cmld_container_stop_cb(container_t *container, container_callback_t *cb, void *d
 	/* unregister observer */
 	container_unregister_observer(container, cb);
 
-	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-			"container-stopped", uuid_string(container_get_uuid(container)), 0);
-
 	/* execute on_all_stopped, if all containers are stopped now */
 	if (cmld_containers_are_all_stopped()) {
 		INFO("all containers are stopped now, execution of on_all_stopped()");
