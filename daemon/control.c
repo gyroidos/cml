@@ -517,19 +517,23 @@ control_handle_cmd_list_guestos_configs(UNUSED const ControllerToDaemon *msg, in
 static void
 control_handle_cmd_push_guestos_configs(const ControllerToDaemon *msg, int fd)
 {
-	if (!msg->has_guestos_config_file)
+	bool has_cfg = false, has_sig = false, has_cert = false;
+
+	if (!(has_cfg = msg->has_guestos_config_file))
 		WARN("PUSH_GUESTOS_CONFIG without config file");
-	else if (!msg->has_guestos_config_signature)
+
+	if (!(has_sig = msg->has_guestos_config_signature))
 		WARN("PUSH_GUESTOS_CONFIG without config signature");
-	else if (!msg->has_guestos_config_certificate)
+
+	if (!(has_cert = msg->has_guestos_config_certificate))
 		WARN("PUSH_GUESTOS_CONFIG without config certificate");
-	else {
-		guestos_mgr_push_config(msg->guestos_config_file.data, msg->guestos_config_file.len,
-					msg->guestos_config_signature.data,
-					msg->guestos_config_signature.len,
-					msg->guestos_config_certificate.data,
-					msg->guestos_config_certificate.len, fd);
-	}
+
+	guestos_mgr_push_config(has_cfg ? msg->guestos_config_file.data : NULL,
+				has_cfg ? msg->guestos_config_file.len : 0,
+				has_sig ? msg->guestos_config_signature.data : NULL,
+				has_sig ? msg->guestos_config_signature.len : 0,
+				has_cert ? msg->guestos_config_certificate.data : NULL,
+				has_cert ? msg->guestos_config_certificate.len : 0, fd);
 }
 
 /**
