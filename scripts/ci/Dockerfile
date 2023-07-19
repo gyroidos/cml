@@ -1,8 +1,8 @@
-FROM debian:buster
+FROM debian:bullseye
 
 
 # Essentials
-RUN apt-get update && apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping libsdl1.2-dev xterm lsb-release libprotobuf-c1 libprotobuf-c-dev protobuf-compiler protobuf-c-compiler autoconf libtool libtool-bin re2c check rsync lz4 zstd
+RUN apt-get update && apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping libsdl1.2-dev xterm lsb-release libprotobuf-c1 libprotobuf-c-dev protobuf-compiler protobuf-c-compiler autoconf libtool libtool-bin re2c check rsync lz4 zstd
 
 
 # CI
@@ -13,11 +13,11 @@ RUN apt-get install -y libssl-dev libcap-dev libselinux-dev apt-transport-https
 RUN echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list
 RUN echo "deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-RUN apt-get update && apt-get install -y clang-10 clang-tools-10 clang-10-doc libclang-common-10-dev libclang-10-dev libclang1-10 clang-format-10 python3-clang-10 clangd-10 lld-10 lldb-10 libfuzzer-10-dev
-RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-10 100
-RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-10 100
-RUN update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-10 100
-RUN update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-10 100
+RUN apt-get update && apt-get install -y clang-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 python3-clang-13 clangd-13 lld-13 lldb-13 libfuzzer-13-dev
+RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-13 100
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-13 100
+RUN update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-13 100
+RUN update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-13 100
 #
 # protobuf-c-text library
 # https://github.com/protobuf-c/protobuf-c-text
@@ -25,7 +25,7 @@ RUN cd /opt && git clone https://github.com/gyroidos/external_protobuf-c-text.gi
 RUN cd /opt/external_protobuf-c-text && ./configure && make && make install
 
 # Image signing
-RUN apt-get update && apt-get install -y python-protobuf python3-protobuf
+RUN apt-get update && apt-get install -y python3-protobuf
 
 # Qemu
 RUN apt-get update && apt-get install -y qemu-kvm ovmf
@@ -44,15 +44,25 @@ RUN apt-get update && apt-get install -y kmod procps curl
 
 # trusted-connector build dependencies
 # for new yarn based build of trusted-connector core compartment
-RUN curl -sL https://deb.nodesource.com/setup_11.x | bash - \
+
+RUN apt-get install -y apt-utils
+
+RUN apt-get install -y vim openjdk-17-jdk-headless ca-certificates-java
+
+
+RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - \
 	&& apt-get install -y nodejs
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
 RUN echo "deb http://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
 	&& apt-get update \
-	&& apt-get install -y vim openjdk-11-jdk-headless openjdk-11-jre-headless yarn
+	&& apt-get install yarn
 
 # optee python dependings
-RUN apt-get update && apt-get install -y python-crypto python3-crypto
+RUN apt-get update && apt-get install -y python3-cryptography
+
+RUN echo "deb http://ftp.de.debian.org/debian bullseye-backports main contrib non-free" >> /etc/apt/sources.list
+
+RUN apt-get -y update && apt-get -y install -t bullseye-backports linux-image-amd64
 
 WORKDIR "/opt/ws-yocto/"
 
