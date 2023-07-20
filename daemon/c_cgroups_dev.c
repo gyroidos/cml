@@ -423,7 +423,8 @@ c_cgroups_dev_bpf_prog_deactivate(c_cgroups_dev_t *cgroups_dev)
 	c_cgroups_dev_bpf_prog_free(cgroups_dev->bpf_prog);
 }
 
-#define BPF_LOG_SIZE 8 * 1024
+#define BPF_LOG_SIZE 1024 * 1024
+#define BPF_PROG_LOAD_RETRIES 10
 
 static int
 c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog_t *prog)
@@ -441,6 +442,14 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 	};
 
 	prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
+
+	int retry = 0;
+	while (prog->fd < 0 && errno == EAGAIN && retry < BPF_PROG_LOAD_RETRIES) {
+		retry++;
+		TRACE_ERRNO("Failed to load bpf program retrying (retry %d)!", retry);
+		prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
+	}
+
 	if (prog->fd < 0) {
 		WARN_ERRNO("Failed to load bpf program retrying with logbuffer!");
 		char *bpf_log = mem_new0(char, BPF_LOG_SIZE);
