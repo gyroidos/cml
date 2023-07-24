@@ -563,33 +563,24 @@ typedef enum download_images_result {
 static void
 iterate_images_cb_download_complete(download_t *dl, bool success, void *data);
 
+static void
+iterate_images_cb_download_hash_complete(download_t *dl, bool success, void *data);
+
 static bool
-iterate_images_trigger_download(iterate_images_t *task)
+iterate_image_do_trigger_download(const char *img_name, iterate_images_t *task,
+				  download_callback_t dl_cb)
 {
-	ASSERT(task);
-
-	mount_entry_t *e = mount_get_entry(task->mnt, task->i);
-	const char *img_name = mount_entry_get_img(e);
-
-	TRACE("dl_attempt = %u for %s.img", task->dl_attempts, img_name);
-	if (task->dl_attempts >= GUESTOS_MAX_DOWNLOAD_ATTEMPTS) {
-		WARN("Maximum download attempts (%d) exceeded for %s.img. Aborting image downloads.",
-		     GUESTOS_MAX_DOWNLOAD_ATTEMPTS, img_name);
-		return false;
-	}
-	task->dl_attempts++; // increase dl_attempt counter
-
 	// check if guestos has update file server, use device.conf as fallback
 	const char *update_base_url = guestos_config_get_update_base_url(task->os->cfg) ?
 					      guestos_config_get_update_base_url(task->os->cfg) :
 					      cmld_get_device_update_base_url();
-	char *img_path = mem_printf("%s/%s.img", guestos_get_dir(task->os), img_name);
-	char *img_url = mem_printf("%s/operatingsystems/%s/%s-%" PRIu64 "/%s.img", update_base_url,
+	char *img_path = mem_printf("%s/%s", guestos_get_dir(task->os), img_name);
+	char *img_url = mem_printf("%s/operatingsystems/%s/%s-%" PRIu64 "/%s", update_base_url,
 				   hardware_get_name(), guestos_get_name(task->os),
 				   guestos_get_version(task->os), img_name);
 	// invoke downloader
 	DEBUG("Downloading %s to %s (attempt=%u).", img_url, img_path, task->dl_attempts);
-	download_t *dl = download_new(img_url, img_path, iterate_images_cb_download_complete, task);
+	download_t *dl = download_new(img_url, img_path, dl_cb, task);
 	mem_free0(img_url);
 	mem_free0(img_path);
 	if (download_start(dl) < 0) {
@@ -598,6 +589,78 @@ iterate_images_trigger_download(iterate_images_t *task)
 		return false;
 	}
 	return true;
+}
+
+static bool
+iterate_images_trigger_download(iterate_images_t *task)
+{
+	ASSERT(task);
+
+	bool res = false;
+	char *img_name = NULL;
+	download_callback_t cb = NULL;
+	mount_entry_t *e = mount_get_entry(task->mnt, task->i);
+
+	TRACE("dl_attempt = %u for %s", task->dl_attempts, mount_entry_get_img(e));
+	if (task->dl_attempts >= GUESTOS_MAX_DOWNLOAD_ATTEMPTS) {
+		WARN("Maximum download attempts (%d) exceeded for %s. Aborting image downloads.",
+		     GUESTOS_MAX_DOWNLOAD_ATTEMPTS, mount_entry_get_img(e));
+		return false;
+	}
+	task->dl_attempts++; // increase dl_attempt counter
+
+	if (mount_entry_get_verity_sha256(e) && strcmp(mount_entry_get_verity_sha256(e), "")) {
+		img_name = mem_printf("%s.hash.img", mount_entry_get_img(e));
+		// if no meta image download_complete handeler is trigger by download_hash_complete
+		cb = iterate_images_cb_download_hash_complete;
+	} else {
+		img_name = mem_printf("%s.img", mount_entry_get_img(e));
+		// if no meta image is set directly trigger download_complete handeler
+		cb = iterate_images_cb_download_complete;
+	}
+	res = iterate_image_do_trigger_download(img_name, task, cb);
+
+	mem_free0(img_name);
+	return res;
+}
+
+static void
+iterate_images_cb_download_hash_complete(download_t *dl, bool success, void *data)
+{
+	iterate_images_t *task = data;
+	ASSERT(task);
+
+	bool res = true;
+
+	if (success) {
+		INFO("Download of %s succeeded!", download_get_url(dl));
+
+		// do trigger download of real image
+		mount_entry_t *e = mount_get_entry(task->mnt, task->i);
+		char *img_name = mem_printf("%s.img", mount_entry_get_img(e));
+		res = iterate_image_do_trigger_download(img_name, task,
+							iterate_images_cb_download_complete);
+		mem_free0(img_name);
+		IF_FALSE_GOTO_WARN(res, err);
+	} else {
+		WARN("Download of %s failed!", download_get_url(dl));
+		goto err;
+	}
+
+	download_free(dl);
+	return;
+
+err:
+	if (!iterate_images_trigger_download(task)) {
+		// notify caller
+		if (task->on_complete.download_complete)
+			task->on_complete.download_complete(false, task->dl_count, task->os,
+							    task->complete_data);
+		task->os->downloading = false;
+		// cleanup
+		iterate_images_free(task);
+	}
+	download_free(dl);
 }
 
 static void
