@@ -301,14 +301,31 @@ guestos_mgr_download_latest(const char *name, int resp_fd)
 	if (!guestos_images_are_complete(os, false)) {
 		int *cb_resp_fd = mem_new(int, 1);
 		*cb_resp_fd = resp_fd;
-		if (!guestos_images_download(os, download_complete_cb, cb_resp_fd)) {
-			resp = CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_WAITING;
-			audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-start", name,
-					0);
-		} else {
-			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-start", name,
-					0);
+		if (guestos_images_are_downloading(os)) {
+			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT,
+					"download-os-already-in-progress", guestos_get_name(os), 0);
+			DEBUG("Download for GuestOS %s v%" PRIu64
+			      " already in progress, returning...",
+			      guestos_get_name(os), guestos_get_version(os));
 			goto out;
+		}
+		if (!guestos_images_download(os, download_complete_cb, cb_resp_fd)) {
+			WARN("Cannot download images for GuestOS %s since no device update base URL"
+			     " was configured!",
+			     guestos_get_name(os));
+			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-no-base-url",
+					guestos_get_name(os), 0);
+			goto out;
+		} else {
+			if (guestos_images_are_downloading(os)) {
+				audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-start",
+						name, 0);
+			} else {
+				audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT,
+						"download-os-nothing-to-download",
+						guestos_get_name(os), 0);
+			}
+			return;
 		}
 	}
 	if (guestos_images_flash(os) < 0) {

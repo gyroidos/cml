@@ -29,7 +29,6 @@
 #include "cmld.h"
 #include "crypto.h"
 #include "tss.h"
-#include "audit.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -572,6 +571,13 @@ guestos_images_check(guestos_t *os, guestos_images_check_complete_cb_t cb, void 
 }
 
 // DOWNLOAD IMAGES
+
+bool
+guestos_images_are_downloading(const guestos_t *os)
+{
+	return os->downloading;
+}
+
 /* TODO do we need this (notify caller about result)?
 typedef enum download_images_result {
 	DOWNLOAD_IMAGES_STARTED,
@@ -755,39 +761,29 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 	const char *update_base_url = guestos_config_get_update_base_url(os->cfg) ?
 					      guestos_config_get_update_base_url(os->cfg) :
 					      cmld_get_device_update_base_url();
-	if (!update_base_url) {
-		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-no-base-url",
-				guestos_get_name(os), 0);
-		WARN("Cannot download images for GuestOS %s since no device update base URL"
-		     " was configured!",
-		     guestos_get_name(os));
-		return os->downloading;
-	}
 
-	// prevent bad things from happening when calling this function while already downloading
-	if (os->downloading) {
-		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "download-os-already-in-progress",
-				guestos_get_name(os), 0);
-		DEBUG("Download for GuestOS %s v%" PRIu64 " already in progress, returning...",
-		      guestos_get_name(os), guestos_get_version(os));
-		return os->downloading;
-	}
+	IF_NULL_RETVAL(update_base_url, false);
+
+	/*
+	 * prevent bad things from happening when calling this function while already downloading.
+	 * keep this here, too, but should be handled outside, e.g., in guestos_mgr before calling
+	 * guestos_images_download().
+	 */
+	IF_TRUE_RETVAL(os->downloading, false);
+
 	// prepare image iteration
 	os->downloading = true;
 	if (!iterate_images_start(os, iterate_images_cb_download_check,
 				  (iterate_images_on_complete_cb_t){ .download_complete = cb },
 				  data)) {
-		audit_log_event(NULL, SSA, CMLD, GUESTOS_MGMT, "download-os-nothing-to-download",
-				guestos_get_name(os), 0);
 		DEBUG("No images to download for GuestOS %s v%" PRIu64, guestos_get_name(os),
 		      guestos_get_version(os));
 		// notify caller
 		if (cb)
 			cb(true, 0, os, data);
 		os->downloading = false;
-		return os->downloading;
 	}
-	return os->downloading;
+	return true;
 }
 
 // FLASH IMAGES

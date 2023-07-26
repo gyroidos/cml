@@ -170,11 +170,21 @@ typedef void (*guestos_images_download_complete_cb_t)(bool complete, unsigned in
  * @param os the GuestOS instance whose images to verify and download
  * @param cb callback to deliver the result back to the caller (can be NULL if result is irrelevant)
  * @param data data parameter passed to the callback
- * @return true if image download is ongoing
+ * @return true if image download is triggered or false if not
  *
  */
 bool
 guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb, void *data);
+
+/**
+ * Check the given GuestOS is currently downloading images.
+ *
+ * @param os the GuestOS instance to get the downloading state
+ * @return true if image download is ongoing
+ *
+ */
+bool
+guestos_images_are_downloading(const guestos_t *os);
 
 /**
  * Flash the images for the given GuestOS
