@@ -277,6 +277,25 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
 		res = CHECK_IMAGE_SIZE_MISMATCH;
 		goto cleanup;
 	}
+
+	// check if verity hash.img exists if a verity hash is set for this image
+	if (mount_entry_get_verity_sha256(e) && strcmp(mount_entry_get_verity_sha256(e), "")) {
+		char *hash_img_path = mem_printf("%s/%s.hash.img", guestos_get_dir(os), img_name);
+		if (!file_exists(hash_img_path)) {
+			DEBUG("Checking image %s: file does not exist", hash_img_path);
+			res = CHECK_IMAGE_ACCESS_FAILED;
+			mem_free0(hash_img_path);
+			goto cleanup;
+		}
+		if (file_size(hash_img_path) <= 0) {
+			DEBUG("Checking image %s: invalid file size <= 0", hash_img_path);
+			res = CHECK_IMAGE_SIZE_MISMATCH;
+			mem_free0(hash_img_path);
+			goto cleanup;
+		}
+		mem_free0(hash_img_path);
+	}
+
 	if (thorough) {
 		bool match = false;
 		if (mount_entry_get_sha256(e) == NULL) { // fallback to sha1
