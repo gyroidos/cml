@@ -209,7 +209,7 @@ cmd_control_get_guestos_version(){
 }
 
 cmd_control_retrieve_logs() {
-	do_test_cmd_output "/usr/sbin/control retrieve_logs $1" "response: CMD_OK"
+	do_test_cmd_output "/usr/sbin/control retrieve_logs $1" "$2"
 }
 
 cmd_control_get_provisioned() {
@@ -218,4 +218,16 @@ cmd_control_get_provisioned() {
 
 cmd_control_set_provisioned() {
 	do_test_cmd_output "/usr/sbin/control set_provisioned" "response: $1"
+}
+
+cmd_control_list_guestos_silent() {
+    OUTPUT="$(ssh ${SSH_OPTS} "/usr/sbin/control list_guestos" 2>&1)" || true
+    dbg "Command returned $OUTPUT, code: $?"
+
+    if ! echo "$OUTPUT" | grep -q "$1";then
+        dbg "exitcode: $?"
+        echo "ERROR: Check failed, expected \"$2\", got:"
+        echo "\"$OUTPUT\""
+        exit 1
+    fi 
 }

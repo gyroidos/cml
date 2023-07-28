@@ -308,6 +308,23 @@ do_test_complete() {
 
 #	# Remove test container if in second VM run
 	if [[ "$1" == "second_run" ]];then
+		TMPDIR="$(ssh ${SSH_OPTS} "mktemp -d -p /tmp")"
+		ssh ${SSH_OPTS} "sync && sleep 2"
+
+		if [[ "ccmode" == "${MODE}" ]];then
+			cmd_control_retrieve_logs "${TMPDIR}" "CMD_UNSUPPORTED"
+		else
+			for I in {1..1200};do
+				cmd_control_list_guestos_silent "trustx-coreos" 2>/dev/null 
+		
+				if [ 0 = "$(($I%100))" ];then
+					echo "list_guetos_silent: Completed $I commands";
+				fi
+			done
+	
+			cmd_control_retrieve_logs "${TMPDIR}" "CMD_OK"
+		fi
+
 		echo "Second test run, removing container"
 		cmd_control_remove "signedcontainer" "$TESTPW"
 
