@@ -35,8 +35,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define PROTOBUF_MAX_MESSAGE_SIZE 1024 * 1024
-
 // TODO update naming scheme
 
 uint32_t
