@@ -47,6 +47,8 @@ static const char *
 lxcfs_get_bin_path_if_supported(void)
 {
 	char *fses = file_read_new(PROC_FSES, 2048);
+	IF_NULL_RETVAL(fses, NULL);
+
 	bool ret = strstr(fses, "fuse") ? true : false;
 
 	mem_free0(fses);
