@@ -37,6 +37,9 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+#define PROTOBUF_MAX_MESSAGE_SIZE 1024 * 1024
+#define PROTOBUF_MAX_OVERHEAD 1024
+
 /**
  * Packs the given protobuf message struct
  * and returns it's binary serialized form.

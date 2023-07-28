@@ -93,7 +93,6 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 
 	message.name = mem_strdup(file);
 	DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
-	out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE;
 	if (cmld_get_device_uuid()) {
 		TRACE("Setting uuid: %s", cmld_get_device_uuid());
 		out.device_uuid = mem_strdup(cmld_get_device_uuid());
@@ -105,16 +104,53 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 		file_read_new(str_buffer(path_str), (size_t)file_size(str_buffer(path_str)));
 
 	if (file_buf) {
-		message.msg = mem_strdup(file_buf);
-		free(file_buf);
-		out.log_message = &message;
-		if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
-			ERROR_ERRNO("Could not finish sending %s", str_buffer(path_str));
-			ret = 1;
-		} else {
-			DEBUG("Finished sending %s", str_buffer(path_str));
+		int max_fragment_size = PROTOBUF_MAX_MESSAGE_SIZE - PROTOBUF_MAX_OVERHEAD;
+		int sent = 0;
+		int size = strlen(file_buf);
+
+		while (0 < size - sent) {
+			fflush(stdout);
+			fflush(stderr);
+
+			// send fragments if size exceeds fragment_size
+			int tosend = size - sent;
+			if (tosend > max_fragment_size) {
+				out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE_FRAGMENT;
+				message.msg =
+					(char *)mem_strndup(file_buf + sent, max_fragment_size);
+
+				DEBUG("Sending fragment of logfile %s, sent: %d, remaining: %d",
+				      str_buffer(path_str), sent, size - sent);
+
+				out.log_message = &message;
+				if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
+					ERROR_ERRNO("Could not finish sending %s",
+						    str_buffer(path_str));
+					ret = 1;
+					break;
+				}
+
+				sent += max_fragment_size;
+				mem_free0(message.msg);
+			} else {
+				DEBUG("Sending final fragment of logfile %s, sent: %d, remaining: %d",
+				      str_buffer(path_str), sent, size - sent);
+				out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE_FINAL;
+				message.msg = (char *)mem_strndup(file_buf + sent, size - sent);
+
+				out.log_message = &message;
+				if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
+					ERROR_ERRNO("Could not finish sending %s",
+						    str_buffer(path_str));
+					ret = 1;
+					break;
+				}
+
+				sent += strlen(message.msg);
+				mem_free0(message.msg);
+			}
 		}
-		mem_free0(message.msg);
+		mem_free0(file_buf);
 	} else {
 		DEBUG("File %s could not be read to buffer.", str_buffer(path_str));
 		ret = 1;

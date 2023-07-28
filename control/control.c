@@ -893,7 +893,7 @@ handle_resp:
 			protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);
 		}
 	} break;
-	case DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE: {
+	case DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE_FRAGMENT: {
 		if (!log_dir) {
 			WARN("log_dir is null. Did not except to receive a LOG_MESSAGE");
 			protobuf_free_message((ProtobufCMessage *)resp);
@@ -905,17 +905,41 @@ handle_resp:
 			protobuf_free_message((ProtobufCMessage *)resp);
 			goto handle_resp;
 		}
-		INFO("Received Logfile %s", resp->log_message->name);
+		INFO("Received fragment of logfile %s", resp->log_message->name);
 
 		str_t *file_str = str_new(str_buffer(log_dir));
 		str_append(file_str, resp->log_message->name);
 
-		if (file_write(str_buffer(file_str), resp->log_message->msg, -1) < 0) {
+		if (file_write_append(str_buffer(file_str), resp->log_message->msg, -1) < 0) {
 			INFO("logfile %s could not be written.", resp->log_message->name);
 		}
 		protobuf_free_message((ProtobufCMessage *)resp);
 		goto handle_resp;
 	} break;
+	case DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE_FINAL: {
+		if (!log_dir) {
+			WARN("log_dir is null. Did not except to receive a LOG_MESSAGE");
+			protobuf_free_message((ProtobufCMessage *)resp);
+			goto handle_resp;
+		}
+
+		if (!resp->log_message) {
+			ERROR("resp->log_message is null.");
+			protobuf_free_message((ProtobufCMessage *)resp);
+			goto handle_resp;
+		}
+		INFO("Received final fragment of logfile %s", resp->log_message->name);
+
+		str_t *file_str = str_new(str_buffer(log_dir));
+		str_append(file_str, resp->log_message->name);
+
+		if (file_write_append(str_buffer(file_str), resp->log_message->msg, -1) < 0) {
+			INFO("logfile %s could not be written.", resp->log_message->name);
+		}
+		protobuf_free_message((ProtobufCMessage *)resp);
+		goto handle_resp;
+	} break;
+
 	default:
 		// TODO for now just dump the response in text format
 		protobuf_dump_message(STDOUT_FILENO, (ProtobufCMessage *)resp);

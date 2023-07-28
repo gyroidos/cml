@@ -232,7 +232,7 @@ message DeviceStats {
 message DaemonToController {
 	reserved 10; // legacy
 	enum Code {
-		reserved 6, 10, 11; // legacy
+		reserved 6, 10; // legacy
 		// Push info to other endpoint:
 
 		GUESTOS_CONFIGS_LIST = 1;	// -> [guestos_config]
@@ -246,7 +246,9 @@ message DaemonToController {
 
 		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
 
-		LOG_MESSAGE = 12;		// -> [log_message]
+		LOG_MESSAGE_FRAGMENT = 11;		// -> [log_message]
+
+		LOG_MESSAGE_FINAL = 12;		// -> [log_message]
 
 		RESPONSE = 13;			// -> [response]
 
