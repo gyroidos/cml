@@ -179,7 +179,7 @@ static void
 c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data)
 {
 	TRACE("Callback c_service_cb_receive_message has been invoked");
-
+	ASSERT(data);
 	c_service_t *service = data;
 
 	if (events & EVENT_IO_READ) {
