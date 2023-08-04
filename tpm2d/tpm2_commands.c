@@ -38,7 +38,7 @@
 
 #include "tpm2d_write_openssl.h"
 
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 static TSS_CONTEXT *tss_context = NULL;
 
@@ -330,12 +330,10 @@ TPM_RC
 tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask, tpm2d_pcr_t *pcrs[],
 	       size_t pcrs_size)
 {
-	TPM_RC rc;
+	TPM_RC rc = TSS_RC_BAD_HASH_ALGORITHM;
 	PolicyPCR_In in;
 
-	SHA_CTX sha1;
-	SHA256_CTX sha256;
-	SHA512_CTX sha384;
+	EVP_MD_CTX *mdctx = NULL;
 
 	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
 
@@ -354,37 +352,35 @@ tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask, tpm2d_pcr_t *p
 	in.pcrs.pcrSelections[0].pcrSelect[2] = (pcr_mask >> 16) & 0xff;
 
 	if (pcrs_size > 0) {
+		const EVP_MD *md;
+		unsigned int md_size;
+
 		switch (hash_alg) {
 		case TPM_ALG_SHA1:
-			in.pcrDigest.b.size = 20;
-			SHA1_Init(&sha1);
-			for (size_t i = 0; i < pcrs_size; ++i) {
-				SHA1_Update(&sha1, pcrs[i]->pcr_value, pcrs[i]->pcr_size);
-				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
-			}
-			SHA1_Final(in.pcrDigest.b.buffer, &sha1);
-			TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+			md = EVP_sha1();
 			break;
 		case TPM_ALG_SHA256:
-			in.pcrDigest.b.size = 32;
-			SHA256_Init(&sha256);
-			for (size_t i = 0; i < pcrs_size; ++i) {
-				SHA256_Update(&sha256, pcrs[i]->pcr_value, pcrs[i]->pcr_size);
-				INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
-			}
-			SHA256_Final(in.pcrDigest.b.buffer, &sha256);
-			TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+			md = EVP_sha256();
 			break;
 		case TPM_ALG_SHA384:
-			in.pcrDigest.b.size = 48;
-			SHA384_Init(&sha384);
-			for (size_t i = 0; i < pcrs_size; ++i)
-				SHA384_Update(&sha384, pcrs[i]->pcr_value, pcrs[i]->pcr_size);
-			SHA384_Final(in.pcrDigest.b.buffer, &sha384);
+			md = EVP_sha384();
 			break;
 		default:
 			return TSS_RC_BAD_HASH_ALGORITHM;
 		}
+
+		mdctx = EVP_MD_CTX_new();
+		IF_FALSE_GOTO(EVP_DigestInit(mdctx, md), out);
+		for (size_t i = 0; i < pcrs_size; ++i) {
+			IF_FALSE_GOTO(EVP_DigestUpdate(mdctx, pcrs[i]->pcr_value,
+						       pcrs[i]->pcr_size),
+				      out);
+			INFO("pcrs[%zu]: size: %zu", i, pcrs[i]->pcr_size);
+		}
+		IF_FALSE_GOTO(EVP_DigestFinal(mdctx, in.pcrDigest.b.buffer, &md_size), out);
+		in.pcrDigest.b.size = md_size;
+
+		TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
 	}
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyPCR,
@@ -392,6 +388,10 @@ tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask, tpm2d_pcr_t *p
 
 	if (TPM_RC_SUCCESS != rc)
 		TSS_TPM_CMD_ERROR(rc, "CC_PolicyPCR");
+
+out:
+	if (mdctx)
+		EVP_MD_CTX_free(mdctx);
 
 	return rc;
 }
