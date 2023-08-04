@@ -30,7 +30,7 @@ TRUSTME_SCHSM ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
-LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
+LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -Wno-deprecated-declarations -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 
 LOCAL_LFLAGS := -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon
 
