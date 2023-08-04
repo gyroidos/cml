@@ -104,6 +104,9 @@ libcommon_full: $(OBJS_COMMON_FULL)
 libcommon_ext: $(OBJS_COMMON_EXT)
 	$(AR) rcs libcommon_ext.a $^
 
+ssl_util.o: ssl_util.c
+	$(CC) -c $(LOCAL_CFLAGS) -Wno-deprecated-declarations $< -o $@
+
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
 
