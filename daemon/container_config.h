@@ -126,7 +126,7 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt);
 uint32_t
 container_config_get_color(const container_config_t *config);
 
-compartment_type_t
+container_type_t
 container_config_get_type(const container_config_t *config);
 
 uint64_t

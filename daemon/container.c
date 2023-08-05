@@ -86,8 +86,8 @@ container_set_extension(void *extension_data, compartment_t *compartment)
 }
 
 container_t *
-container_new(const uuid_t *uuid, const char *name, compartment_type_t type, bool ns_usr,
-	      bool ns_net, const void *os, const char *config_filename, const char *images_dir,
+container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
+	      const void *os, const char *config_filename, const char *images_dir,
 	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
 	      bool allow_autostart, const char *dns_server, list_t *pnet_cfg_list,
 	      char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
@@ -142,11 +142,24 @@ container_new(const uuid_t *uuid, const char *name, compartment_type_t type, boo
 
 	container->usb_pin_entry = usb_pin_entry;
 
+	// set type specific flags for compartment
+	uint64_t flags = 0;
+	if (type == CONTAINER_TYPE_KVM)
+		flags |= COMPARTMENT_FLAG_TYPE_KVM;
+	else
+		flags |= COMPARTMENT_FLAG_TYPE_CONTAINER;
+
+	// set namespace flags for compartment
+	if (ns_usr)
+		flags |= COMPARTMENT_FLAG_NS_USER;
+	if (ns_net)
+		flags |= COMPARTMENT_FLAG_NS_NET;
+
 	// create internal compartment object with container as extension data
 	compartment_extension_t *extension =
 		compartment_extension_new(container_set_extension, container);
-	container->compartment = compartment_new(uuid, name, type, ns_usr, ns_net, init, init_argv,
-						 init_env, init_env_len, extension);
+	container->compartment = compartment_new(uuid, name, flags, init, init_argv, init_env,
+						 init_env_len, extension);
 
 	if (!container->compartment) {
 		ERROR("Could not create internal compartment object");
@@ -155,7 +168,7 @@ container_new(const uuid_t *uuid, const char *name, compartment_type_t type, boo
 		return NULL;
 	}
 
-	// log output of compartment (only effective for COMPARTMENT_TYPE_KVM)
+	// log output of compartment (only effective compartment has COMPARTMENT_FLAG_TYPE_KVM)
 	compartment_set_debug_log_dir(container->compartment, images_dir);
 
 	compartment_extension_free(extension);
@@ -406,11 +419,15 @@ container_get_prev_state(const container_t *container)
 	return compartment_get_prev_state(container->compartment);
 }
 
-compartment_type_t
+container_type_t
 container_get_type(const container_t *container)
 {
 	ASSERT(container);
-	return compartment_get_type(container->compartment);
+	uint64_t flags = compartment_get_flags(container->compartment);
+	if (flags & COMPARTMENT_FLAG_TYPE_KVM)
+		return CONTAINER_TYPE_KVM;
+
+	return CONTAINER_TYPE_CONTAINER;
 }
 
 const char *

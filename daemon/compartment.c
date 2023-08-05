@@ -88,10 +88,7 @@ struct compartment {
 	compartment_state_t prev_state;
 	uuid_t *uuid;
 	char *name;
-	compartment_type_t type;
-	bool ns_net;
-	bool ns_usr;
-	bool ns_ipc;
+	uint64_t flags;
 	char *key;
 	char *description;
 
@@ -282,9 +279,9 @@ compartment_extension_free(compartment_extension_t *extension)
 }
 
 compartment_t *
-compartment_new(const uuid_t *uuid, const char *name, compartment_type_t type, bool ns_usr,
-		bool ns_net, const char *init, char **init_argv, char **init_env,
-		size_t init_env_len, const compartment_extension_t *extension)
+compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char *init,
+		char **init_argv, char **init_env, size_t init_env_len,
+		const compartment_extension_t *extension)
 {
 	compartment_t *compartment = mem_new0(compartment_t, 1);
 
@@ -300,7 +297,7 @@ compartment_new(const uuid_t *uuid, const char *name, compartment_type_t type, b
 
 	compartment->uuid = uuid_new(uuid_string(uuid));
 	compartment->name = mem_strdup(name);
-	compartment->type = type;
+	compartment->flags = flags;
 
 	/* do not forget to update compartment->description in the setters of uuid and name */
 	compartment->description =
@@ -313,9 +310,8 @@ compartment_new(const uuid_t *uuid, const char *name, compartment_type_t type, b
 	/* initialize exit_status to 0 */
 	compartment->exit_status = 0;
 
-	compartment->ns_usr = ns_usr;
-	compartment->ns_net = ns_net;
-	compartment->ns_ipc = file_exists("/proc/self/ns/ipc");
+	if (file_exists("/proc/self/ns/ipc"))
+		compartment->flags |= COMPARTMENT_FLAG_NS_IPC;
 
 	compartment->csock_list = NULL;
 	compartment->observer_list = NULL;
@@ -761,7 +757,7 @@ compartment_start_child(void *data)
 		}
 	}
 
-	char *root = (compartment->type == COMPARTMENT_TYPE_KVM) ? kvm_root : "/";
+	char *root = (compartment->flags & COMPARTMENT_FLAG_TYPE_KVM) ? kvm_root : "/";
 	if (chdir(root) < 0) {
 		WARN_ERRNO("Could not chdir to \"%s\" in compartment %s", root,
 			   uuid_string(compartment->uuid));
@@ -818,7 +814,7 @@ compartment_start_child(void *data)
 		DEBUG("\t%s", *arg);
 	}
 
-	if (compartment->type == COMPARTMENT_TYPE_KVM) {
+	if (compartment->flags & COMPARTMENT_FLAG_TYPE_KVM) {
 		int fd_master;
 		int pid = forkpty(&fd_master, NULL, NULL, NULL);
 
@@ -922,7 +918,7 @@ compartment_start_child_early(void *data)
 	unsigned long clone_flags = 0;
 	clone_flags |= SIGCHLD | CLONE_PARENT; // sig child to main process
 	clone_flags |= CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID;
-	if (compartment->ns_ipc)
+	if (compartment_has_ipcns(compartment))
 		clone_flags |= CLONE_NEWIPC;
 
 	compartment_module_instance_t *c_user =
@@ -939,9 +935,9 @@ compartment_start_child_early(void *data)
 			IF_TRUE_GOTO((ret = c_net->module->join_ns(c_net->instance)) < 0, error);
 		}
 	} else {
-		if (c_user && compartment->ns_usr)
+		if (c_user && compartment_has_userns(compartment))
 			clone_flags |= CLONE_NEWUSER;
-		if (c_net && compartment->ns_net)
+		if (c_net && compartment_has_netns(compartment))
 			clone_flags |= CLONE_NEWNET;
 	}
 
@@ -1540,11 +1536,11 @@ compartment_get_prev_state(const compartment_t *compartment)
 	return compartment->prev_state;
 }
 
-compartment_type_t
-compartment_get_type(const compartment_t *compartment)
+uint64_t
+compartment_get_flags(const compartment_t *compartment)
 {
 	ASSERT(compartment);
-	return compartment->type;
+	return compartment->flags;
 }
 
 compartment_callback_t *
@@ -1608,14 +1604,21 @@ bool
 compartment_has_netns(const compartment_t *compartment)
 {
 	ASSERT(compartment);
-	return compartment->ns_net;
+	return compartment->flags & COMPARTMENT_FLAG_NS_NET;
 }
 
 bool
 compartment_has_userns(const compartment_t *compartment)
 {
 	ASSERT(compartment);
-	return compartment->ns_usr;
+	return compartment->flags & COMPARTMENT_FLAG_NS_USER;
+}
+
+bool
+compartment_has_ipcns(const compartment_t *compartment)
+{
+	ASSERT(compartment);
+	return compartment->flags & COMPARTMENT_FLAG_NS_IPC;
 }
 
 void

@@ -1755,7 +1755,7 @@ c_vol_start_child(void *volp)
 		goto error;
 	}
 
-	if (container_get_type(vol->container) == COMPARTMENT_TYPE_KVM)
+	if (container_get_type(vol->container) == CONTAINER_TYPE_KVM)
 		return 0;
 
 	INFO("Switching to new rootfs in '%s'", vol->root);

@@ -62,15 +62,13 @@ typedef struct compartment_callback compartment_callback_t;
 typedef struct compartment_extension compartment_extension_t;
 
 /**
- * Represents the type of a compartment. Could be either
- * CONTAINER_TYPE_CONTAINER for a namspaced os-level virtualized
- * or CONTAINER_TYPE_KVM for a full virtulized execution of the
- * child's init process.
+ * FLAGS for configuring a compartment
  */
-typedef enum {
-	COMPARTMENT_TYPE_CONTAINER = 1,
-	COMPARTMENT_TYPE_KVM,
-} compartment_type_t;
+#define COMPARTMENT_FLAG_TYPE_CONTAINER 0x0000000000000001
+#define COMPARTMENT_FLAG_TYPE_KVM 0x0000000000000002
+#define COMPARTMENT_FLAG_NS_USER 0x0000000000000004
+#define COMPARTMENT_FLAG_NS_NET 0x0000000000000008
+#define COMPARTMENT_FLAG_NS_IPC 0x0000000000000010
 
 /**
  * Represents the current compartment state.
@@ -139,9 +137,9 @@ compartment_module_get_instance_by_name(const compartment_t *compartment, const 
  * @return The new compartment instance.
  */
 compartment_t *
-compartment_new(const uuid_t *uuid, const char *name, compartment_type_t type, bool ns_usr,
-		bool ns_net, const char *init, char **init_argv, char **init_env,
-		size_t init_env_len, const compartment_extension_t *extension);
+compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char *init,
+		char **init_argv, char **init_env, size_t init_env_len,
+		const compartment_extension_t *extension);
 
 /**
  * Creates a new compartment_extension object,
@@ -368,10 +366,10 @@ compartment_state_t
 compartment_get_prev_state(const compartment_t *compartment);
 
 /**
- * Returns the the type of the compartment.
+ * Returns the the flags of the compartment.
  */
-compartment_type_t
-compartment_get_type(const compartment_t *compartment);
+uint64_t
+compartment_get_flags(const compartment_t *compartment);
 
 /**
  * Register a callback function which is always called when the compartment's
@@ -410,6 +408,9 @@ compartment_has_netns(const compartment_t *compartment);
 bool
 compartment_has_userns(const compartment_t *compartment);
 
+bool
+compartment_has_ipcns(const compartment_t *compartment);
+
 void
 compartment_set_setup_mode(compartment_t *compartment, bool setup);
 
@@ -435,8 +436,9 @@ compartment_uuid_is_c0id(const uuid_t *uuid);
 /**
  * Set directory for log output of compartment
  *
- * This function set a directory where a logfile for the stdout of the child process
- * of the compartment is logged. (only effective for COMPARTMENT_TYPE_KVM)
+ * This function set a directory where a logfile for the stdout of the
+ * child process of the compartment is logged. (only effective for
+ * compartments with COMPARTMENT_FLAG_TYPE_KVM)
  */
 void
 compartment_set_debug_log_dir(compartment_t *compartment, const char *dir);

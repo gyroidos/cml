@@ -555,7 +555,7 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 	}
 
 	/* allow to run a KVM VMM inside an unprivileged Namespace */
-	if (container_get_type(cgroups->container) == COMPARTMENT_TYPE_KVM) {
+	if (container_get_type(cgroups->container) == CONTAINER_TYPE_KVM) {
 		if (c_cgroups_devices_allow(cgroups, "c 10:232 rwm") < 0)
 			return -1;
 		INFO("Allowing acces to /dev/kvm for lkvm inside new namespace");

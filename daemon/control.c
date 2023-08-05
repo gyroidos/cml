@@ -201,15 +201,15 @@ control_compartment_state_to_proto(compartment_state_t state)
  * The usual identity map between two corresponding C and protobuf enums.
  */
 ContainerType
-control_compartment_type_to_proto(compartment_type_t type)
+control_container_type_to_proto(container_type_t type)
 {
 	switch (type) {
-	case COMPARTMENT_TYPE_CONTAINER:
+	case CONTAINER_TYPE_CONTAINER:
 		return CONTAINER_TYPE__CONTAINER;
-	case COMPARTMENT_TYPE_KVM:
+	case CONTAINER_TYPE_KVM:
 		return CONTAINER_TYPE__KVM;
 	default:
-		FATAL("Unhandled value for compartment_type_t: %d", type);
+		FATAL("Unhandled value for container_type_t: %d", type);
 	}
 }
 
@@ -227,7 +227,7 @@ control_container_status_new(const container_t *container)
 	container_status__init(c_status);
 	c_status->uuid = mem_strdup(uuid_string(container_get_uuid(container)));
 	c_status->name = mem_strdup(container_get_name(container));
-	c_status->type = control_compartment_type_to_proto(container_get_type(container));
+	c_status->type = control_container_type_to_proto(container_get_type(container));
 	c_status->state = control_compartment_state_to_proto(container_get_state(container));
 	c_status->uptime = container_get_uptime(container);
 	c_status->created = container_get_creation_time(container);
