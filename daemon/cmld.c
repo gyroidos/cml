@@ -487,7 +487,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
 	ns_net = container_config_has_netns(conf);
 
-	compartment_type_t type = container_config_get_type(conf);
+	container_type_t type = container_config_get_type(conf);
 
 	list_t *pnet_cfg_list = container_config_get_net_ifaces_list_new(conf);
 
@@ -1230,7 +1230,7 @@ cmld_init_c0(const char *path, const char *c0os)
 	char **init_argv = guestos_get_init_argv_new(c0_os);
 
 	container_t *new_c0 =
-		container_new(c0_uuid, "c0", COMPARTMENT_TYPE_CONTAINER, false, c0_ns_net, c0_os,
+		container_new(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net, c0_os,
 			      NULL, c0_images_folder, c0_ram_limit, NULL, 0xffffff00, false,
 			      cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, init,
 			      init_argv, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false);

@@ -490,7 +490,7 @@ oci_container_new(const char *store_path, const char *peer_path, const char *bun
 	ns_usr = file_exists("/proc/self/ns/user") ? true : false;
 	ns_net = true;
 
-	compartment_type_t type = COMPARTMENT_TYPE_CONTAINER;
+	container_type_t type = CONTAINER_TYPE_CONTAINER;
 
 	list_t *pnet_cfg_list = NULL;
 

@@ -62,6 +62,17 @@ typedef struct container container_t;
 typedef struct container_callback container_callback_t;
 
 /**
+ * Represents the type of a container. Could be either
+ * CONTAINER_TYPE_CONTAINER for a namspaced os-level virtualized
+ * or CONTAINER_TYPE_KVM for a full virtulized execution of the
+ * child's init process.
+ */
+typedef enum {
+	CONTAINER_TYPE_CONTAINER = 1,
+	CONTAINER_TYPE_KVM,
+} container_type_t;
+
+/**
  * Represents the type of token which the container is associated with.
  * The token is used to i.a. wrap the container's disk encryption key.
  */
@@ -120,8 +131,8 @@ enum container_smartcard_error {
  * @return The new container instance.
  */
 container_t *
-container_new(const uuid_t *uuid, const char *name, compartment_type_t type, bool ns_usr,
-	      bool ns_net, const void *os, const char *config_filename, const char *images_folder,
+container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
+	      const void *os, const char *config_filename, const char *images_folder,
 	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
 	      bool allow_autostart, const char *dns_server, list_t *net_ifaces,
 	      char **allowed_devices, char **assigned_devices, list_t *vnet_cfg_list,
@@ -307,6 +318,12 @@ container_get_dev_allow_list(const container_t *container);
 const char **
 container_get_dev_assign_list(const container_t *container);
 
+/**
+ * Returns the the type of the container.
+ */
+container_type_t
+container_get_type(const container_t *container);
+
 // ##################################################################
 // compartment wrappers
 // ##################################################################
@@ -370,9 +387,6 @@ container_get_state(const container_t *container);
 
 compartment_state_t
 container_get_prev_state(const container_t *container);
-
-compartment_type_t
-container_get_type(const container_t *container);
 
 const char *
 container_get_key(const container_t *container);
