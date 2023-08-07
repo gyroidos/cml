@@ -126,7 +126,7 @@ force_stop_vm() {
 	sync_to_disk
 
 	sleep 2
-	pkill $PROCESS_NAME || true
+	pkill -9 $PROCESS_NAME || true
 	rm ${PROCESS_NAME}.vm_key
 }
 
@@ -784,7 +784,7 @@ echo "STATUS: Starting tests"
 do_test_complete
 
 
-force_stop_vm
+cmd_control_reboot
 
 # Workaround to avoid issues qith QEMU's forwarding rules
 sleep 5
