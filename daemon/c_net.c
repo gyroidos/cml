@@ -1631,6 +1631,7 @@ static compartment_module_t c_net_module = {
 	.start_post_clone = c_net_start_post_clone,
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
+	.start_pre_exec_child_early = NULL,
 	.start_child = c_net_start_child,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,

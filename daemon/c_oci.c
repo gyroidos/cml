@@ -182,6 +182,7 @@ static compartment_module_t c_oci_module = {
 	.start_pre_exec = NULL,
 	.start_post_exec = c_oci_start_post_exec,
 	.start_child = c_oci_start_child,
+	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = c_oci_start_pre_exec_child,
 	.stop = NULL,
 	.cleanup = NULL,

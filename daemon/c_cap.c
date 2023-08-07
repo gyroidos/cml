@@ -329,6 +329,7 @@ static compartment_module_t c_cap_module = {
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = c_cap_start_child,
+	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
 	.cleanup = NULL,

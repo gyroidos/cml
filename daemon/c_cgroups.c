@@ -1370,6 +1370,7 @@ static compartment_module_t c_cgroups_module = {
 	.start_pre_exec = c_cgroups_start_pre_exec,
 	.start_post_exec = NULL,
 	.start_child = c_cgroups_start_child,
+	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = c_cgroups_start_pre_exec_child,
 	.stop = NULL,
 	.cleanup = c_cgroups_cleanup,

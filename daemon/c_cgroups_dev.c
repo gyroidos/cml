@@ -915,6 +915,7 @@ static compartment_module_t c_cgroups_dev_module = {
 	.start_pre_exec = c_cgroups_dev_start_pre_exec,
 	.start_post_exec = NULL,
 	.start_child = NULL,
+	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
 	.cleanup = c_cgroups_dev_cleanup,

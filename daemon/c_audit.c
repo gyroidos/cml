@@ -204,6 +204,7 @@ static compartment_module_t c_audit_module = {
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = NULL,
+	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
 	.cleanup = NULL,
