@@ -32,13 +32,13 @@
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #include <sys/vfs.h>
-#include <sys/utsname.h>
 #include <unistd.h>
 
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"
 #include "common/dir.h"
+#include "common/kernel.h"
 #include "container.h"
 
 #define IDMAPPED_SRC_DIR "/tmp/idmapped_mnts"
@@ -454,21 +454,6 @@ error:
 	mem_free0(upper_dir);
 	mem_free0(work_dir);
 	return -1;
-}
-
-static bool
-kernel_version_check(char *version)
-{
-	struct utsname buf;
-	char ignore[65];
-	int _main, _major, main_to_check, major_to_check;
-
-	uname(&buf);
-
-	ASSERT(sscanf(version, "%d.%d%s", &main_to_check, &major_to_check, ignore) >= 2);
-	ASSERT(sscanf(buf.release, "%d.%d.%s", &_main, &_major, ignore) == 3);
-
-	return (_main == main_to_check) ? _major >= major_to_check : _main >= main_to_check;
 }
 
 static bool

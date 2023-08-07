@@ -83,7 +83,8 @@ OBJS_COMMON_FULL := \
 	loopdev.o \
 	audit.pb-c.o \
 	audit.o \
-	uevent.o
+	uevent.o \
+	kernel.o
 
 OBJS_COMMON_EXT := \
 	$(OBJS_COMMON_FULL) \
