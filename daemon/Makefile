@@ -157,7 +157,8 @@ SRC_CMODULES += \
 	c_audit.c \
 	c_cap.c \
 	c_uevent.c \
-	c_hotplug.c
+	c_hotplug.c \
+	c_seccomp.c
 
 ifeq ($(OCI),y)
     LOCAL_CFLAGS += -DOCI -I${HOME}/rcs/libocispec/src

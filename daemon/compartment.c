@@ -770,6 +770,7 @@ compartment_start_child(void *data)
 		compartment_sock_t *cs = l->data;
 		sock_unix_bind(cs->sockfd, cs->path);
 	}
+
 	// send success message to parent
 	DEBUG("Sending COMPARTMENT_START_SYNC_MSG_SUCCESS to parent");
 	char msg_success = COMPARTMENT_START_SYNC_MSG_SUCCESS;
@@ -1033,6 +1034,8 @@ compartment_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *d
 			goto error;
 		}
 	}
+
+	DEBUG("Received message %d from child", msg);
 
 	if (msg == COMPARTMENT_START_SYNC_MSG_ERROR) {
 		WARN("Received error message from child process");
@@ -1669,4 +1672,18 @@ compartment_contains_pid(const compartment_t *compartment, pid_t pid)
 
 	// check if pidns of pid and the pidns of init are the same
 	return ns_cmp_pidns_by_pid(init, pid);
+}
+
+int
+compartment_get_sync_sock_parent(compartment_t *compartment)
+{
+	ASSERT(compartment);
+	return compartment->sync_sock_parent;
+}
+
+int
+compartment_get_sync_sock_child(compartment_t *compartment)
+{
+	ASSERT(compartment);
+	return compartment->sync_sock_child;
 }
