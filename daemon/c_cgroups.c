@@ -79,6 +79,9 @@
 #define DEVCG_TYPE_BLOCK 1
 #define DEVCG_TYPE_CHAR 2
 
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 /* List of 2-element int arrays, representing maj:min of devices allowed to be used in the running containers.
   * wildcard '*' is mapped to -1 */
 list_t *global_allowed_devs_list = NULL;
@@ -203,7 +206,7 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 	NULL
 };
 
-/* extracts major and minor device numbers from a rule as an int array {major, minor} */
+/* extracts major and minor device numbers from a rule as an int array {type, major, minor} */
 static int *
 c_cgroups_dev_from_rule(const char *rule)
 {
@@ -220,18 +223,18 @@ c_cgroups_dev_from_rule(const char *rule)
 	type = strtok_r(rule_cp, " ", &pointer);
 	IF_NULL_GOTO_TRACE(type, out);
 
-	switch (type) {
+	switch (*type) {
 	case 'b':
-		ret[0] = DEVCG_DEV_BLOCK;
+		ret[0] = DEVCG_TYPE_BLOCK;
 		break;
 	case 'c':
-		ret[0] = DEVCG_DEV_CHAR;
+		ret[0] = DEVCG_TYPE_CHAR;
 		break;
 	default:
 		ret[0] = 0;
 	}
 
-	IF_TRUE_RETVAL(ret[0] == 0, out);
+	IF_TRUE_GOTO(ret[0] == 0, out);
 
 	dev = strtok_r(NULL, " ", &pointer);
 	IF_NULL_GOTO_TRACE(dev, out);
@@ -363,6 +366,11 @@ c_cgroups_devices_allow(void *cgroupsp, const char *rule)
 		mem_free0(dev);
 		return 0;
 	}
+
+	char type = dev[0] == DEVCG_TYPE_BLOCK ? 'b' : 'c';
+	TRACE("Allowed device %c %d:%d for container %s", type, dev[1], dev[2],
+	      container_get_name(cgroups->container));
+
 	c_cgroups_add_allowed(cgroups, dev);
 	mem_free0(dev);
 	return c_cgroups_allow_rule(cgroups, rule);
@@ -978,14 +986,14 @@ c_cgroups_devices_watch_dev_dir(c_cgroups_t *cgroups)
 }
 
 static int
-c_cgroups_devices_chardev_allow(void *cgroupsp, int major, int minor, bool assign)
+c_cgroups_devices_dev_allow(void *cgroupsp, char type, int major, int minor, bool assign)
 {
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	int ret;
+	char *rule = mem_printf("%c %d:%d rwm", type, major, minor);
 
-	char *rule = mem_printf("c %d:%d rwm", major, minor);
 	if (assign)
 		ret = c_cgroups_devices_assign(cgroups, rule);
 	else
@@ -996,14 +1004,14 @@ c_cgroups_devices_chardev_allow(void *cgroupsp, int major, int minor, bool assig
 }
 
 static int
-c_cgroups_devices_chardev_deny(void *cgroupsp, int major, int minor)
+c_cgroups_devices_dev_deny(void *cgroupsp, char type, int major, int minor)
 {
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
 	int ret;
+	char *rule = mem_printf("%c %d:%d rwm", type, major, minor);
 
-	char *rule = mem_printf("c %d:%d rwm", major, minor);
 	ret = c_cgroups_devices_deny(cgroups, rule);
 
 	mem_free0(rule);
@@ -1019,10 +1027,10 @@ c_cgroups_devices_is_dev_allowed(void *cgroupsp, char type, int major, int minor
 	int type_int;
 	switch (type) {
 	case 'b':
-		type_int = DEVCG_DEV_BLOCK;
+		type_int = DEVCG_TYPE_BLOCK;
 		break;
 	case 'c':
-		type_int = DEVCG_DEV_CHAR;
+		type_int = DEVCG_TYPE_CHAR;
 		break;
 	default:
 		type_int = 0;
@@ -1031,15 +1039,23 @@ c_cgroups_devices_is_dev_allowed(void *cgroupsp, char type, int major, int minor
 	IF_TRUE_RETVAL(type_int == 0, false);
 	IF_TRUE_RETVAL_TRACE(major < 0 || minor < 0, false);
 
-	int dev[3] = { type, major, minor };
+	int dev[3] = { type_int, major, minor };
 
 	/* search in assigned devices */
-	if (c_cgroups_list_contains_match(cgroups->assigned_devs, dev))
+	if (c_cgroups_list_contains_match(cgroups->assigned_devs, dev)) {
+		TRACE("Found match in assigned_devs for device %d:%d, type %c", dev[1], dev[2],
+		      type);
 		return true;
+	}
 
 	/* search in allowed devices */
-	if (c_cgroups_list_contains_match(cgroups->allowed_devs, dev))
+	if (c_cgroups_list_contains_match(cgroups->allowed_devs, dev)) {
+		TRACE("Found match in assigned_devs for device %d:%d, type %c", dev[1], dev[2],
+		      type);
 		return true;
+	}
+
+	TRACE("Did not find match for device %d:%d, type %c", dev[1], dev[2], type);
 
 	return false;
 }
