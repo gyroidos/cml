@@ -115,7 +115,8 @@ SRC_FILES := main.c \
 	lxcfs.c \
 	input.c \
 	common/audit.c \
-	audit.c
+	audit.c \
+	common/kernel.c
 
 # module order is crucial
 SRC_CMODULES := \
