@@ -677,6 +677,15 @@ container_config_get_cpus_allowed(const container_config_t *config)
 	return config->cfg->assign_cpus;
 }
 
+bool
+container_config_get_allow_system_time(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->allow_system_time;
+}
+
 // hardcode some restricted config otpions in CC Mode
 #ifdef CC_MODE
 uint32_t

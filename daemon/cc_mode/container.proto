@@ -90,6 +90,8 @@ message ContainerConfig {
 
 	optional string assign_cpus = 11; // cpus "m-n", e.g., "0-1"
 
+	optional bool allow_system_time = 18 [default = false];
+
 	optional string dns_server = 21;
 
 	// a list of network interfaces assigned to this container

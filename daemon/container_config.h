@@ -142,6 +142,12 @@ bool
 container_config_get_allow_autostart(const container_config_t *config);
 
 /**
+ * Indicates whether the container is allowed to modify the system time.
+ */
+bool
+container_config_get_allow_system_time(const container_config_t *config);
+
+/**
  * Provides the list of network interfaces assigned to the container from the container's config file
  */
 list_t *

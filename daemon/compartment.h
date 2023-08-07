@@ -69,6 +69,7 @@ typedef struct compartment_extension compartment_extension_t;
 #define COMPARTMENT_FLAG_NS_USER 0x0000000000000004
 #define COMPARTMENT_FLAG_NS_NET 0x0000000000000008
 #define COMPARTMENT_FLAG_NS_IPC 0x0000000000000010
+#define COMPARTMENT_FLAG_SYSTEM_TIME 0x0000000000000020
 
 /**
  * Represents the current compartment state.
@@ -117,6 +118,7 @@ typedef struct compartment_module {
 	int (*start_pre_exec)(void *data);
 	int (*start_post_exec)(void *data);
 	int (*start_child)(void *data);
+	int (*start_pre_exec_child_early)(void *data);
 	int (*start_pre_exec_child)(void *data);
 	int (*stop)(void *data);
 	void (*cleanup)(void *data, bool rebooting);
@@ -464,5 +466,14 @@ compartment_is_stoppable(compartment_t *compartment);
  */
 bool
 compartment_is_startable(compartment_t *compartment);
+
+int
+compartment_get_sync_sock_parent(compartment_t *compartment);
+
+int
+compartment_get_sync_sock_child(compartment_t *compartment);
+
+bool
+compartment_get_allow_system_time(compartment_t *compartment);
 
 #endif /* COMPARTMENT_H */
