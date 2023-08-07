@@ -778,6 +778,18 @@ compartment_start_child(void *data)
 		goto error;
 	}
 
+	DEBUG("Executing start_pre_exec_child_early hooks");
+	for (list_t *l = compartment->module_instance_list; l; l = l->next) {
+		compartment_module_instance_t *c_mod = l->data;
+		compartment_module_t *module = c_mod->module;
+		if (NULL == module->start_pre_exec_child_early)
+			continue;
+
+		if ((ret = module->start_pre_exec_child_early(c_mod->instance)) < 0) {
+			goto error;
+		}
+	}
+
 	/* Block on socket until the next sync message is sent by the parent */
 	if (read(compartment->sync_sock_child, &msg, 1) != 1) {
 		WARN_ERRNO("Could not read from sync socket");

@@ -848,6 +848,7 @@ static compartment_module_t c_idmapped_module = {
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = c_idmapped_start_child,
+	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
 	.cleanup = c_idmapped_cleanup,
