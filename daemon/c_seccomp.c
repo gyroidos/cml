@@ -230,7 +230,7 @@ c_seccomp_start_pre_exec_child_early(void *seccompp)
 	int notify_fd = -1;
 
 	if (-1 == (notify_fd = c_seccomp_install_filter(AUDIT_ARCH_X86_64, EPERM))) {
-		ERROR("Failed to install filter for syscall %d", SYS_creat);
+		ERROR("Failed to install seccomp filter");
 		return -1;
 	}
 
