@@ -37,6 +37,7 @@
 
 #include "compartment.h"
 #include "audit.h"
+#include "hardware.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -568,6 +569,8 @@ static compartment_module_t c_seccomp_module = {
 static void INIT
 c_seccomp_init(void)
 {
+	//TODO: port to multiarch support
+	IF_FALSE_RETURN(0 == strcmp("x86", hardware_get_name()));
 	// register this module in compartment.c
 	compartment_register_module(&c_seccomp_module);
 }
