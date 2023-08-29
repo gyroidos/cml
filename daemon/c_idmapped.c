@@ -28,8 +28,8 @@
 #include <fcntl.h>
 #include <linux/magic.h>
 #include <linux/types.h>
-#include <linux/mount.h>
 #include <sys/mount.h>
+#include <linux/mount.h>
 #include <sys/syscall.h>
 #include <sys/vfs.h>
 #include <unistd.h>
