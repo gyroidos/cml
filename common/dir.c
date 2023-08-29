@@ -195,6 +195,8 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 	dir_copy_params_t *params = dir_copy_params_new(p->target, name, p->filter, p->data);
 	char *file_dst = params->target;
 
+	IF_NULL_GOTO_ERROR(file_dst, out);
+
 	TRACE("p->taget:%s params->target: %s", p->target, params->target);
 
 	// skip filtered files
