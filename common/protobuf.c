@@ -270,7 +270,7 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message)
 	ASSERT(message);
 
 	char *string;
-	size_t msg_len = protobuf_string_from_message(&string, (ProtobufCMessage *)message, NULL);
+	size_t msg_len = protobuf_string_from_message(&string, message, NULL);
 	if (NULL == string) {
 		WARN("Failed to serialize text protobuf message to string.");
 		return -1;
@@ -369,7 +369,7 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
 }
 
 ssize_t
-protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message)
+protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *message)
 {
 	ASSERT(filename);
 	ASSERT(message);
@@ -391,7 +391,7 @@ protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message)
 }
 
 size_t
-protobuf_string_from_message(char **buffer_proto_string, ProtobufCMessage *message,
+protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage *message,
 			     ProtobufCAllocator *allocator)
 {
 	ASSERT(message);
