@@ -78,9 +78,9 @@ list_delete(list_t *list)
 list_t *
 list_unlink(list_t *list, list_t *elem)
 {
-	IF_NULL_RETVAL(elem, list);
-	IF_FALSE_RETVAL(list_contains(list, elem),
-			list); // this also handles the case that list is NULL
+	IF_NULL_RETVAL_TRACE(elem, list);
+	IF_FALSE_RETVAL_TRACE(list_contains(list, elem),
+			      list); // this also handles the case that list is NULL
 
 	list_t *head = list;
 
