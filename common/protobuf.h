@@ -175,7 +175,7 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
  * @return          the length of the serialized message
  */
 ssize_t
-protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message);
+protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *message);
 
 /**
  * Wrapper function for the protobug_c_text_to_string function
@@ -184,7 +184,7 @@ protobuf_message_write_to_file(const char *filename, ProtobufCMessage *message);
  * @param allocator protobuf C allocator
 */
 size_t
-protobuf_string_from_message(char **buffer_proto_string, ProtobufCMessage *message,
+protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage *message,
 			     ProtobufCAllocator *allocator);
 
 #endif // PROTOBUF_H
