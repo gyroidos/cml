@@ -696,17 +696,22 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		goto out;
 	}
 
-	char *record_text;
-	size_t msg_len =
-		protobuf_string_from_message(&record_text, (ProtobufCMessage *)record, NULL);
+	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
+		char *record_text;
+		size_t msg_len = protobuf_string_from_message(&record_text,
+							      (ProtobufCMessage *)record, NULL);
 
-	if (msg_len < 1) {
-		ERROR("Could not cast protobuf message to string");
+		if (msg_len < 1) {
+			ERROR("Could not cast protobuf message to string");
+			mem_free0(record_text);
+			goto out;
+		}
+		TRACE("Logging audit message %s", record_text ? record_text : "");
 		mem_free0(record_text);
-		goto out;
+	} else {
+		DEBUG("Logging %s for component %s", audit_category_to_string(category),
+		      audit_component_to_string(component));
 	}
-	DEBUG("Logging audit message %s", record_text ? record_text : "");
-	mem_free0(record_text);
 
 	ret = audit_record_log(audit_get_log_container(uuid), record);
 
