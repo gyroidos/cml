@@ -106,6 +106,17 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 		return -1;
 	}
 
+	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
+		char *msg_text;
+
+		size_t msg_len = protobuf_string_from_message(&msg_text, message, NULL);
+
+		TRACE("Sending protobuf message with len %ld:\n%s", msg_len,
+		      msg_text ? msg_text : "NULL");
+		if (msg_text)
+			free(msg_text);
+	}
+
 	if (-1 == protobuf_send_message_packed(fd, buf, buflen)) {
 		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
 		mem_free0(buf);
@@ -123,16 +134,21 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 	ASSERT(ret_len);
 	uint32_t buflen = 0;
 	ssize_t bytes_read;
+
 	do {
 		bytes_read = fd_read(fd, (char *)&buflen, sizeof(uint32_t));
 	} while (-1 == bytes_read && errno == EINTR);
-	if (-1 == bytes_read)
-		goto error_read;
-	if (0 == bytes_read) { // EOF / remote end closed the connection
+
+	if (0 == bytes_read ||
+	    (-1 == bytes_read && ECONNRESET == errno)) { // EOF / remote end closed the connection
 		DEBUG("client on fd %d closed connection.", fd);
 		*ret_len = -2;
 		return NULL;
 	}
+
+	if (-1 == bytes_read)
+		goto error_read;
+
 	buflen = ntohl(buflen);
 	TRACE("read protobuf message length (%zd bytes read, %zu bytes expected, len=%d)",
 	      bytes_read, sizeof(buflen), buflen);
@@ -210,6 +226,17 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 
 	if (!msg) {
 		WARN("Failed to parse received protobuf message");
+	}
+
+	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
+		char *msg_text;
+
+		size_t msg_len = protobuf_string_from_message(&msg_text, msg, NULL);
+
+		TRACE("Received protobuf message with len %ld:\n%s", msg_len,
+		      msg_text ? msg_text : "NULL");
+		if (msg_text)
+			free(msg_text);
 	}
 
 	mem_free0(buf);
