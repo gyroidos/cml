@@ -569,14 +569,26 @@ event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *da
 static int
 event_inotify_fd(void)
 {
-	if (event_inotify_io && event_inotify_io->fd >= 0)
+	if (event_inotify_io && event_inotify_io->fd >= 0) {
+		TRACE("Using existing event_inotify_io %p (fd=%d)", (void *)event_inotify_io,
+		      event_inotify_io->fd);
 		return event_inotify_io->fd;
+	}
 
 	int fd = inotify_init();
 	if (fd < 0)
 		FATAL_ERRNO("Could not init inotify");
 
 	event_io_t *io = event_io_new(fd, EVENT_IO_READ, &event_inotify_cb, NULL);
+
+	if (NULL == io) {
+		FATAL_ERRNO("Could not init event_inotify_io (fd=%d)", fd);
+	}
+
+	TRACE("Setting event_inotify_io=%p (fd=%d)", (void *)event_inotify_io,
+	      event_inotify_io->fd);
+
+	event_inotify_io = io;
 	event_add_io(io);
 
 	return fd;
