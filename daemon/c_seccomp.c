@@ -526,7 +526,7 @@ c_seccomp_new(compartment_t *compartment)
 
 	// adapted from user-trap.c
 	struct seccomp_notif_sizes *sizes = mem_new0(struct seccomp_notif_sizes, 1);
-	if (syscall(SYS_seccomp, SECCOMP_GET_NOTIF_SIZES, 0, sizes) < 0) {
+	if (seccomp(SECCOMP_GET_NOTIF_SIZES, 0, sizes) < 0) {
 		ERROR("Faild to get seccomp notify sizes");
 		return NULL;
 	}
