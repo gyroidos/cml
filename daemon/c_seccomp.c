@@ -545,6 +545,8 @@ c_seccomp_free(void *seccompp)
 {
 	c_seccomp_t *seccomp = seccompp;
 	ASSERT(seccomp);
+	if (seccomp->notif_sizes)
+		mem_free0(seccomp->notif_sizes);
 	mem_free0(seccomp);
 }
 
