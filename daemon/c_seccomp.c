@@ -68,6 +68,7 @@
 // TODO multiarch support?
 #define X32_SYSCALL_BIT 0x40000000
 
+/**************************/
 // clang-format off
 #ifndef __NR_pidfd_open
 	#if defined __alpha__
@@ -110,13 +111,17 @@
 #endif
 // clang-format on
 
-typedef struct c_seccomp {
-	compartment_t *compartment;
-	struct seccomp_notif_sizes *notif_sizes;
-	int notify_fd;
-	event_io_t *event;
-	unsigned int enabled_features;
-} c_seccomp_t;
+static int
+pidfd_open(pid_t pid, unsigned int flags)
+{
+	return syscall(__NR_pidfd_open, pid, flags);
+}
+
+static int
+pidfd_getfd(int pidfd, int targetfd, unsigned int flags)
+{
+	return syscall(__NR_pidfd_getfd, pidfd, targetfd, flags);
+}
 
 static int
 seccomp(unsigned int op, unsigned int flags, void *args)
@@ -131,6 +136,15 @@ seccomp_ioctl(int fd, unsigned long request, void *notify_req)
 	errno = 0;
 	return syscall(__NR_ioctl, fd, request, notify_req);
 }
+/**************************/
+
+typedef struct c_seccomp {
+	compartment_t *compartment;
+	struct seccomp_notif_sizes *notif_sizes;
+	int notify_fd;
+	event_io_t *event;
+	unsigned int enabled_features;
+} c_seccomp_t;
 
 #define NCALLS 2
 
@@ -456,6 +470,7 @@ c_seccomp_start_pre_exec(void *seccompp)
 
 	DEBUG("Attempting to receive seccomp notify fd on socket %d",
 	      compartment_get_sync_sock_parent(seccomp->compartment));
+
 	int pidfd = -1, notify_fd_compartment = -1, notify_fd = -1;
 
 	// get notify fd number from child
@@ -470,14 +485,15 @@ c_seccomp_start_pre_exec(void *seccompp)
 	DEBUG("Notify fd fd number in child process with PID %d: %d",
 	      compartment_get_pid(seccomp->compartment), notify_fd_compartment);
 
-	if (-1 ==
-	    (pidfd = syscall(__NR_pidfd_open, compartment_get_pid(seccomp->compartment), 0))) {
+	pidfd = pidfd_open(compartment_get_pid(seccomp->compartment), 0);
+	if (-1 == pidfd) {
 		ERROR_ERRNO("Failed to open pidfd on child process %d",
 			    compartment_get_pid(seccomp->compartment));
 		goto out;
 	}
 
-	if (-1 == (notify_fd = syscall(__NR_pidfd_getfd, pidfd, notify_fd_compartment, 0))) {
+	notify_fd = pidfd_getfd(pidfd, notify_fd_compartment, 0);
+	if (-1 == notify_fd) {
 		ERROR_ERRNO("Failed to receive fd from child process %d",
 			    compartment_get_pid(seccomp->compartment));
 		goto out;
