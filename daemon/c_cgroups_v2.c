@@ -617,6 +617,11 @@ c_cgroups_cleanup(void *cgroupsp, UNUSED bool is_rebooting)
 			     container_get_description(cgroups->container));
 		}
 	}
+
+	/* remove inotify events handling */
+	event_remove_inotify(cgroups->inotify_cgroup_events);
+	event_inotify_free(cgroups->inotify_cgroup_events);
+	cgroups->inotify_cgroup_events = NULL;
 }
 
 static compartment_module_t c_cgroups_module = {
