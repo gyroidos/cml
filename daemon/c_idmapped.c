@@ -262,6 +262,7 @@ c_idmapped_new(compartment_t *compartment)
 	c_idmapped_t *idmapped = mem_new0(c_idmapped_t, 1);
 	idmapped->container = compartment_get_extension_data(compartment);
 	idmapped->is_dev_mounted = false;
+	idmapped->src_index = 0;
 
 	TRACE("new c_idmapped struct was allocated");
 
@@ -837,6 +838,7 @@ c_idmapped_cleanup(void *idmappedp, UNUSED bool is_rebooting)
 	idmapped->mapped_mnts = NULL;
 
 	idmapped->is_dev_mounted = false;
+	idmapped->src_index = 0;
 }
 
 static compartment_module_t c_idmapped_module = {
