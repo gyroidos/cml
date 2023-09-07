@@ -566,7 +566,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 
 	int ret = c_idmapped_mnt_apply_mapping(mnt, userns_fd);
 
-	if (mnt->ovl_lower || mnt->ovl_upper)
+	if (mnt->ovl_lower)
 		return ret;
 
 	if (mnt->mapped_tree_fd > 0 &&
@@ -589,6 +589,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 {
 	struct c_idmapped_mnt *mnt = NULL;
 	struct c_idmapped_mnt *mnt_lower = NULL;
+	struct c_idmapped_mnt *mnt_upper = NULL;
 
 	mnt = mem_new0(struct c_idmapped_mnt, 1);
 	mnt->target = mem_strdup(dst);
@@ -637,10 +638,8 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 			// set idmapped lower as ovl_lower
 			mnt->ovl_lower = mem_strdup(mnt_lower->target);
 		}
-	}
 
-	IF_TRUE_GOTO(c_idmapped_prepare_dir(idmapped, mnt, src) < 0, error);
-	if (ovl_lower) {
+		// mount upper idmapped
 		mnt->ovl_upper = mem_printf("%s/%s/ovl%d", IDMAPPED_SRC_DIR,
 					    uuid_string(container_get_uuid(idmapped->container)),
 					    idmapped->src_index);
@@ -648,8 +647,14 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 			ERROR_ERRNO("Could not mkdir idmapped upper dir %s", mnt->ovl_upper);
 			goto error;
 		}
+		mnt_upper = mem_new0(struct c_idmapped_mnt, 1);
+		mnt_upper->target = mem_strdup(mnt->ovl_upper);
+
+		IF_TRUE_GOTO(c_idmapped_prepare_dir(idmapped, mnt_upper, src) < 0, error);
+		idmapped->mapped_mnts = list_append(idmapped->mapped_mnts, mnt_upper);
 	}
 
+	IF_TRUE_GOTO(c_idmapped_prepare_dir(idmapped, mnt, src) < 0, error);
 	idmapped->mapped_mnts = list_append(idmapped->mapped_mnts, mnt);
 
 	return 0;
@@ -659,6 +664,8 @@ error:
 		c_idmapped_mnt_free(mnt);
 	if (mnt_lower)
 		c_idmapped_mnt_free(mnt_lower);
+	if (mnt_upper)
+		c_idmapped_mnt_free(mnt_upper);
 	return -1;
 }
 
