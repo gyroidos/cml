@@ -385,9 +385,6 @@ c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const 
 	DEBUG("Mounting overlayfs: work_dir=%s, upper_dir=%s, lower_dir=%s, target dir=%s",
 	      work_dir, upper_dir, ovl_lower, target);
 
-	struct statfs ovl_statfs;
-	statfs(overlayfs_mount_dir, &ovl_statfs);
-
 	// needed for tmpfs of fallback mechanism where lower image is read only and a temporary
 	// upper tmpfs for chowning is used
 	if (dir_mkdir_p(upper_dir, 0777) < 0) {
