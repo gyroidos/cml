@@ -513,7 +513,6 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 				return -1;
 			}
 		}
-	} else {
 	}
 
 	mnt->src = mem_printf("%s/%s/src/%d", IDMAPPED_SRC_DIR,
