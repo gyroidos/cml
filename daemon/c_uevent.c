@@ -417,6 +417,19 @@ c_uevent_stop(void *ueventp)
 	return 0;
 }
 
+static void
+c_uevent_cleanup(void *ueventp, UNUSED bool rebooting)
+{
+	c_uevent_t *uevent = ueventp;
+	ASSERT(uevent);
+
+	char *mnt_media = mem_printf("%s/media", container_get_rootdir(uevent->container));
+	if (umount(mnt_media) < 0)
+		WARN_ERRNO("Could not umount %s", mnt_media);
+
+	mem_free0(mnt_media);
+}
+
 static compartment_module_t c_uevent_module = {
 	.name = MOD_NAME,
 	.compartment_new = c_uevent_new,
@@ -431,7 +444,7 @@ static compartment_module_t c_uevent_module = {
 	.start_child = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = c_uevent_stop,
-	.cleanup = NULL,
+	.cleanup = c_uevent_cleanup,
 	.join_ns = NULL,
 };
 
