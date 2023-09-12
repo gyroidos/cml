@@ -146,8 +146,6 @@ typedef struct c_seccomp {
 	unsigned int enabled_features;
 } c_seccomp_t;
 
-#define NCALLS 2
-
 /**
  * slightly modified sample code from the seccomp manpage
  * https://man7.org/linux/man-pages/man2/seccomp.2.html
@@ -194,11 +192,14 @@ c_seccomp_install_filter(unsigned int t_arch, UNUSED int f_errno)
 		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, upper_nr_limit, 4, 0),
 
 		/**
-		 * [4] Jump forward 1 instruction if system call number
-		 * does not match 'syscall_nr'
+		 * [4] Compare agains each syscal and jump to end of block
+		 * if system call number matches 'syscall_nr', jump forward 1
+		 * instruction on last check if system call number does not
+		 * match 'syscall_nr'
 		 */
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_settime, NCALLS - 1, 0),
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_adjtime, 0, 1),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_settime, 2, 0),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_adjtime, 1, 0),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_adjtimex, 0, 1),
 
 		/**
 		 * [5] Matching architecture and system call: don't execute
@@ -379,6 +380,45 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 			resp->id = req->id;
 			resp->error = 0;
 			resp->val = ret_adjtime;
+
+			mem_free(timex);
+		} else if (SYS_adjtimex == req->data.nr) {
+			int ret_adjtimex = -1;
+
+			if (!(COMPARTMENT_FLAG_SYSTEM_TIME &
+			      compartment_get_flags(seccomp->compartment))) {
+				DEBUG("Blocking call to SYS_adjtimex by PID %d", req->pid);
+				goto out;
+			}
+
+			DEBUG("Got adjtimex, struct timex *: %p", (void *)req->data.args[0]);
+
+			struct timex *timex = NULL;
+
+			if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
+				      seccomp, req->pid, (void *)req->data.args[0],
+				      sizeof(struct timex)))) {
+				ERROR_ERRNO("Failed to fetch struct timex");
+				goto out;
+			}
+
+			DEBUG("Executing adjtimex on behalf of container");
+			if (-1 == (ret_adjtimex = adjtimex(timex))) {
+				audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+						"seccomp-emulation-failed",
+						compartment_get_name(seccomp->compartment), 2,
+						"syscall", SYS_adjtimex);
+				ERROR_ERRNO("Failed to execute adjtimex");
+				mem_free(timex);
+				goto out;
+			}
+
+			DEBUG("adjtimex returned %d", ret_adjtimex);
+
+			// prepare answer
+			resp->id = req->id;
+			resp->error = 0;
+			resp->val = ret_adjtimex;
 
 			mem_free(timex);
 		} else if (SYS_clock_settime == req->data.nr) {
