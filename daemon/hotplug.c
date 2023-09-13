@@ -450,6 +450,8 @@ hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data)
 	hotplug_usbdev_t *usbdev = data;
 	IF_NULL_RETVAL(usbdev, -1);
 
+	found = false;
+
 	char *id_product_file = mem_printf("%s/%s/idProduct", path, name);
 	char *id_vendor_file = mem_printf("%s/%s/idVendor", path, name);
 	char *i_serial_file = mem_printf("%s/%s/serial", path, name);
@@ -490,21 +492,24 @@ hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data)
 
 	// major = minor = -1;
 	dev[0] = dev[1] = -1;
+	found = false; // we use this in case of error during file parsing
+
 	len = file_read(dev_file, buf, sizeof(buf));
+	IF_TRUE_GOTO(len < 0, out);
 	IF_TRUE_GOTO((sscanf(buf, "%d:%d", &dev[0], &dev[1]) < 0), out);
 	IF_FALSE_GOTO((dev[0] > -1 && dev[1] > -1), out);
 
+	found = true; // parsing dev_file succeded.
+
 	hotplug_usbdev_set_major(usbdev, dev[0]);
 	hotplug_usbdev_set_minor(usbdev, dev[1]);
-
-	return 0; /* Shouldn't this be -1 to avoid further calls by dir_foreach()? */
 
 out:
 	mem_free0(id_product_file);
 	mem_free0(id_vendor_file);
 	mem_free0(i_serial_file);
 	mem_free0(dev_file);
-	return 0;
+	return found ? 1 : 0;
 }
 
 int
@@ -514,8 +519,9 @@ hotplug_usbdev_set_sysfs_props(hotplug_usbdev_t *usbdev)
 	const char *sysfs_path = "/sys/bus/usb/devices";
 
 	// for the first time iterate through sysfs to find device
-	if (0 > dir_foreach(sysfs_path, &hotplug_usbdev_sysfs_foreach_cb, usbdev)) {
-		WARN("Could not open %s to find usb device!", sysfs_path);
+	if (0 >= dir_foreach(sysfs_path, &hotplug_usbdev_sysfs_foreach_cb, usbdev)) {
+		WARN("Could not find usb device (%d:%d, %s) in %s!", usbdev->id_vendor,
+		     usbdev->id_product, usbdev->i_serial, sysfs_path);
 		return -1;
 	}
 
