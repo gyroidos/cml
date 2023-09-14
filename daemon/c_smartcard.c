@@ -1118,6 +1118,9 @@ c_smartcard_free(void *smartcardp)
 	/* release scd connection */
 	close(smartcard->sock);
 
+	if (smartcard->token_serial)
+		mem_free0(smartcard->token_serial);
+
 	mem_free0(smartcard);
 }
 
