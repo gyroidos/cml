@@ -67,8 +67,9 @@ c_uevent_create_device_node(c_uevent_t *uevent, char *path, int major, int minor
 		goto err;
 	}
 	dev_t dev = makedev(major, minor);
-	mode_t mode =
-		(!strcmp(devtype, "disk") && !strcmp(devtype, "partition")) ? S_IFCHR : S_IFBLK;
+	mode_t mode = (0 == strcmp(devtype, "disk") || 0 == strcmp(devtype, "partition")) ?
+			      S_IFBLK :
+			      S_IFCHR;
 	INFO("Creating device node (%c %d:%d) in %s", S_ISBLK(mode) ? 'b' : 'c', major, minor,
 	     path);
 	if (mknod(path, mode, dev) < 0) {
