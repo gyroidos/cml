@@ -56,12 +56,15 @@
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
+#define C_SERVICE_MAX_CLIENTS 8
+
 typedef struct c_service {
 	container_t *container; // weak reference
 	int sock;
 	int sock_connected; // socket to client which will get events
 	event_io_t *event_io_sock;
 	list_t *event_io_sock_connected_list; // list of clients
+	int clients;
 } c_service_t;
 
 static int
@@ -203,6 +206,7 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 connection_err:
 	service->event_io_sock_connected_list =
 		list_remove(service->event_io_sock_connected_list, io);
+	service->clients--;
 	event_remove_io(io);
 	event_io_free(io);
 	// check if we are/were the main service event receiver
@@ -228,6 +232,9 @@ c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 		goto error;
 
 	IF_FALSE_RETURN(events & EVENT_IO_READ);
+
+	service->clients++;
+	IF_TRUE_GOTO_ERROR(service->clients >= C_SERVICE_MAX_CLIENTS, error);
 
 	int client_sock = sock_unix_accept(fd);
 	IF_TRUE_GOTO_ERROR(client_sock < 0, error);
@@ -262,6 +269,7 @@ error:
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close service socket");
 	service->sock = -1;
+	service->clients--;
 	return;
 }
 
@@ -284,6 +292,7 @@ c_service_new(compartment_t *compartment)
 	service->sock_connected = -1;
 	service->event_io_sock = NULL;
 	service->event_io_sock_connected_list = NULL;
+	service->clients = 0;
 
 	return service;
 }
@@ -325,6 +334,8 @@ c_service_cleanup(void *servicep, UNUSED bool is_rebooting)
 		event_io_free(service->event_io_sock);
 		service->event_io_sock = NULL;
 	}
+
+	service->clients = 0;
 }
 
 /**
