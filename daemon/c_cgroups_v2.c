@@ -476,27 +476,30 @@ c_cgroups_start_post_clone(void *cgroupsp)
 	c_cgroups_t *cgroups = cgroupsp;
 	ASSERT(cgroups);
 
+	int ret = -COMPARTMENT_ERROR_CGROUPS;
+	char *cgroups_child_path = NULL;
+
 	INFO("Creating cgroup %s", cgroups->path);
 
 	/* the cgroup is created simply by creating a directory in our default hierarchy */
 	if (mkdir(cgroups->path, 0755) && errno != EEXIST) {
 		ERROR_ERRNO("Could not create cgroup %s for container %s", cgroups->path,
 			    container_get_description(cgroups->container));
-		return -COMPARTMENT_ERROR_CGROUPS;
+		goto out;
 	}
 
 	/* initialize memory subsystem to limit ram to cgroups->ram_limit */
 	if (c_cgroups_set_ram_limit(cgroups) < 0) {
 		ERROR("Could not configure cgroup maximum ram for container %s",
 		      container_get_description(cgroups->container));
-		return -COMPARTMENT_ERROR_CGROUPS;
+		goto out;
 	}
 
 	/* initialize cpuset child subsystem to limit access to allowed cpus */
 	if (c_cgroups_set_cpus_allowed(cgroups) < 0) {
 		ERROR("Could not configure cgroup to restrict cpus of container %s",
 		      container_get_description(cgroups->container));
-		return -COMPARTMENT_ERROR_CGROUPS;
+		goto out;
 	}
 
 	/* initialize events handling, e.g., for freezer subsystem */
@@ -506,26 +509,15 @@ c_cgroups_start_post_clone(void *cgroupsp)
 	event_add_inotify(cgroups->inotify_cgroup_events);
 	mem_free0(events_path);
 
-	return 0;
-}
-
-static int
-c_cgroups_start_pre_exec(void *cgroupsp)
-{
-	c_cgroups_t *cgroups = cgroupsp;
-	ASSERT(cgroups);
-
-	int ret = -1;
-
 	// activate controllers
 	if (c_cgroups_activate_controllers(cgroups->path)) {
 		ERROR("Could not activate cgroup controllers for intermediate cgroup!");
-		return -COMPARTMENT_ERROR_CGROUPS;
+		goto out;
 	}
 
 	/*
 	 * apply another indirection (subcgroup for container child) This is at
-	 * least neaded to run systmd as contaienr payload:
+	 * least needed to run systmd as container payload:
 	 *
 	 * "A container manager that is itself a payload of a host systemd
 	 *  which wants to run a systemd as its own container payload instead
@@ -533,7 +525,7 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 	 *  so that the systemd on the host and the one in the container won’t
 	 *  fight for the attributes" [https://systemd.io/CGROUP_DELEGATION/]
 	 */
-	char *cgroups_child_path = mem_printf("%s/child", cgroups->path);
+	cgroups_child_path = mem_printf("%s/child", cgroups->path);
 
 	if (mkdir(cgroups_child_path, 0755) && errno != EEXIST) {
 		ERROR_ERRNO("Could not create cgroup %s for container %s", cgroups_child_path,
@@ -553,7 +545,8 @@ c_cgroups_start_pre_exec(void *cgroupsp)
 
 	ret = 0;
 out:
-	mem_free0(cgroups_child_path);
+	if (cgroups_child_path)
+		mem_free0(cgroups_child_path);
 	return ret;
 }
 
@@ -635,7 +628,7 @@ static compartment_module_t c_cgroups_module = {
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
 	.start_post_clone = c_cgroups_start_post_clone,
-	.start_pre_exec = c_cgroups_start_pre_exec,
+	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = NULL,
 	.start_pre_exec_child = c_cgroups_start_pre_exec_child,

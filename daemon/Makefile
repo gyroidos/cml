@@ -139,8 +139,8 @@ endif
 
 ifeq ($(CGROUP_V2),y)
     SRC_CMODULES += \
-	c_cgroups_dev.c \
-	c_cgroups_v2.c
+	c_cgroups_v2.c \
+	c_cgroups_dev.c
 else
     SRC_CMODULES += \
 	c_cgroups.c

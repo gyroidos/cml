@@ -781,15 +781,7 @@ c_cgroups_dev_start_post_clone(void *cgroups_devp)
 		      (dl->access & BPF_DEVCG_ACC_MKNOD) ? "m" : "");
 	}
 
-	return 0;
-}
-
-static int
-c_cgroups_dev_start_pre_exec(void *cgroups_devp)
-{
-	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
-	ASSERT(cgroups_dev);
-
+	/* activate actual bpf program */
 	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->allowed_devs);
 	IF_NULL_RETVAL(prog, -COMPARTMENT_ERROR_CGROUPS);
 
@@ -910,7 +902,7 @@ static compartment_module_t c_cgroups_dev_module = {
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
 	.start_post_clone = c_cgroups_dev_start_post_clone,
-	.start_pre_exec = c_cgroups_dev_start_pre_exec,
+	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = NULL,
 	.start_pre_exec_child_early = NULL,
