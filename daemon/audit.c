@@ -456,6 +456,7 @@ audit_do_send_record(const container_t *c)
 	uint8_t *packed = NULL;
 	uint32_t packed_len = 0;
 	int ret = -1;
+	int fd = -1;
 
 	char tmpfile[strlen(AUDIT_LOGDIR) + 14];
 	if (0 >= sprintf(tmpfile, "%s/%s", AUDIT_LOGDIR, "audit_XXXXXX")) {
@@ -463,7 +464,7 @@ audit_do_send_record(const container_t *c)
 		return -1;
 	}
 
-	if (-1 == mkstemp(tmpfile)) {
+	if (-1 == (fd = mkstemp(tmpfile))) {
 		ERROR_ERRNO("Failed to generate temporary filename");
 		return -1;
 	}
@@ -485,7 +486,7 @@ audit_do_send_record(const container_t *c)
 		goto out;
 	}
 
-	if (-1 == file_write(tmpfile, (char *)packed, packed_len)) {
+	if (-1 == fd_write(fd, (char *)packed, packed_len)) {
 		ERROR("Failed to write packed message to file.");
 		goto out;
 	}
@@ -509,6 +510,8 @@ audit_do_send_record(const container_t *c)
 out:
 	if (ret < 0)
 		ERROR("Failed to send next stored audit record");
+
+	close(fd);
 
 	mem_free0(packed);
 	protobuf_free_message((ProtobufCMessage *)message_proto);
