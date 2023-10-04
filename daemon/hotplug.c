@@ -672,7 +672,7 @@ hotplug_handle_uevent_cb(unsigned actions, uevent_event_t *event, UNUSED void *d
 
 	/* move network ifaces to containers */
 	if (actions & UEVENT_ACTION_ADD && !strcmp(uevent_event_get_subsystem(event), "net") &&
-	    !strstr(uevent_event_get_devpath(event), "virtual") && !cmld_is_hostedmode_active()) {
+	    !strstr(uevent_event_get_devpath(event), "virtual")) {
 		// got new physical interface, initially add to cmld tracking list
 		cmld_netif_phys_add_by_name(uevent_event_get_interface(event));
 
@@ -687,14 +687,16 @@ hotplug_handle_uevent_cb(unsigned actions, uevent_event_t *event, UNUSED void *d
 int
 hotplug_init()
 {
-	// Initially rename all physical interfaces before starting uevent handling.
-	for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
-		const char *ifname = l->data;
-		const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
-		char *if_name_new = hotplug_rename_ifi_new(ifname, prefix);
-		if (if_name_new) {
-			mem_free0(l->data);
-			l->data = if_name_new;
+	if (!cmld_is_hostedmode_active()) {
+		// Initially rename all physical interfaces before starting uevent handling.
+		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
+			const char *ifname = l->data;
+			const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
+			char *if_name_new = hotplug_rename_ifi_new(ifname, prefix);
+			if (if_name_new) {
+				mem_free0(l->data);
+				l->data = if_name_new;
+			}
 		}
 	}
 

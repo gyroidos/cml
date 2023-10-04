@@ -1319,6 +1319,9 @@ static void
 cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_if,
 		  const char *host_gateway, const char *host_dns)
 {
+	// allow exclusive moving of network interfaces to containers
+	cmld_netif_phys_list = network_get_physical_interfaces_new();
+
 	IF_TRUE_RETURN_TRACE(cmld_hostedmode);
 
 	/*
@@ -1332,8 +1335,6 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 
 	/* configure loopback interface of root network namespace */
 	network_setup_loopback();
-
-	cmld_netif_phys_list = network_get_physical_interfaces_new();
 
 	/* configure resolver of root network namespace */
 	if (-1 == file_printf("/etc/resolv.conf", "nameserver %s", host_dns))
