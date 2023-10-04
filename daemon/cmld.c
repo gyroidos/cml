@@ -1869,22 +1869,20 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 
 	int res = 0;
 	container_t *c0 = cmld_containers_get_c0();
-	compartment_state_t state_c0 = container_get_state(c0);
-	bool c0_is_up =
-		(state_c0 == COMPARTMENT_STATE_RUNNING || state_c0 == COMPARTMENT_STATE_BOOTING ||
-		 state_c0 == COMPARTMENT_STATE_SETUP);
+	bool c0_is_up = c0 ? container_is_stoppable(c0) : false;
 
-	if (c0 == container) {
-		if (c0_is_up)
+	if (c0_is_up) {
+		if (c0 == container) {
+			// if interface should be added to c0 just add it.
 			res = container_add_net_interface(container, pnet_cfg);
-		return res;
-	}
+			return res;
+		}
 
-	/* if c0 is running the interface is occupied by c0, thus we have
-	 * to take it back to cml first.
-	 */
-	if (c0_is_up)
+		/* if c0 is running the interface is occupied by c0, thus we have
+		 * to take it back to cml first.
+		 */
 		res = container_remove_net_interface(c0, pnet_cfg->pnet_name);
+	}
 
 	res |= container_add_net_interface(container, pnet_cfg);
 	if (res || !persistent)
