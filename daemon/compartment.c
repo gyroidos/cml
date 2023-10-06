@@ -121,6 +121,10 @@ struct compartment {
 
 	// indicate if the compartment is synced with its config
 	bool is_synced;
+
+	list_t *helper_child_list; // helper childs spawned during startup
+	bool is_doing_cleanup;
+	bool is_rebooting;
 };
 
 struct compartment_callback {
@@ -139,6 +143,10 @@ typedef struct {
 	char *path; /* The path the socket should be/is (pre/post start) bound to */
 } compartment_sock_t;
 
+typedef struct {
+	pid_t pid;
+	char *name;
+} compartment_helper_child_t;
 /**
  * These are used for synchronizing the compartment start between parent
  * and child process
@@ -155,6 +163,10 @@ static list_t *compartment_module_list = NULL;
 bool
 compartment_is_stoppable(compartment_t *compartment)
 {
+	if (compartment->helper_child_list) {
+		DEBUG("Helper childs active, compartment can not be stopped.");
+		return false;
+	}
 	compartment_state_t state = compartment_get_state(compartment);
 	if (state == COMPARTMENT_STATE_RUNNING || state == COMPARTMENT_STATE_BOOTING ||
 	    state == COMPARTMENT_STATE_SETUP) {
@@ -234,6 +246,26 @@ compartment_module_get_mod_instance_by_name(const compartment_t *compartment, co
 			return c_mod;
 	}
 	return NULL;
+}
+
+static compartment_helper_child_t *
+compartment_helper_child_new(char *name, pid_t pid)
+{
+	compartment_helper_child_t *child = mem_new0(compartment_helper_child_t, 1);
+	child->name = mem_strdup(name ? name : "generic");
+	child->pid = pid;
+
+	return child;
+}
+
+static void
+compartment_helper_child_free(compartment_helper_child_t *child)
+{
+	IF_NULL_RETURN(child);
+
+	if (child->name)
+		mem_free0(child->name);
+	mem_free0(child);
 }
 
 void *
@@ -332,6 +364,8 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
 	compartment->setup_mode = false;
 
 	compartment->is_synced = true;
+
+	compartment->helper_child_list = NULL;
 
 	/* Create submodules */
 	for (list_t *l = compartment_module_list; l; l = l->next) {
@@ -572,18 +606,6 @@ compartment_is_privileged(const compartment_t *compartment)
 static void
 compartment_cleanup(compartment_t *compartment, bool is_rebooting)
 {
-	for (list_t *l = compartment->module_instance_list; l; l = l->next) {
-		compartment_module_instance_t *c_mod = l->data;
-		compartment_module_t *module = c_mod->module;
-		if (NULL == module->cleanup)
-			continue;
-
-		module->cleanup(c_mod->instance, is_rebooting);
-	}
-
-	compartment->pid = -1;
-	compartment->pid_early = -1;
-
 	/* timer can be removed here, because compartment is on the transition to the stopped state */
 	if (compartment->stop_timer) {
 		DEBUG("Remove compartment stop timer for %s",
@@ -600,9 +622,62 @@ compartment_cleanup(compartment_t *compartment, bool is_rebooting)
 		compartment->start_timer = NULL;
 	}
 
+	for (list_t *l = compartment->module_instance_list; l; l = l->next) {
+		compartment_module_instance_t *c_mod = l->data;
+		compartment_module_t *module = c_mod->module;
+		if (NULL == module->cleanup)
+			continue;
+
+		module->cleanup(c_mod->instance, is_rebooting);
+	}
+
+	compartment->pid = -1;
+	compartment->pid_early = -1;
+
+	// check if some cleanup routines registered any helper childs
+	// and wait for them in sig child handler
+	if (compartment->helper_child_list) {
+		compartment->is_doing_cleanup = true;
+		return;
+	}
+
 	compartment_state_t state =
 		is_rebooting ? COMPARTMENT_STATE_REBOOTING : COMPARTMENT_STATE_STOPPED;
 	compartment_set_state(compartment, state);
+}
+
+void
+compartment_sigchld_handle_helpers(compartment_t *compartment, event_signal_t *sig)
+{
+	int status = 0;
+
+	list_t *still_active = NULL;
+	for (list_t *l = compartment->helper_child_list; l; l = l->next) {
+		compartment_helper_child_t *child = l->data;
+		pid_t pid = waitpid(child->pid, &status, WNOHANG);
+		if (pid == child->pid) {
+			DEBUG("Reaped helper child %s (pid=%d) for compartment %s", child->name,
+			      pid, compartment_get_description(compartment));
+			compartment_helper_child_free(child);
+		} else {
+			still_active = list_append(still_active, child);
+		}
+	}
+	list_delete(compartment->helper_child_list);
+	compartment->helper_child_list = still_active;
+
+	if (!compartment->helper_child_list && compartment->is_doing_cleanup) {
+		DEBUG("CLEANUP DONE, all pending helpers reaped!");
+		/* remove the sigchld callback for this compartment from the event loop */
+		event_remove_signal(sig);
+		event_signal_free(sig);
+		compartment->is_doing_cleanup = false;
+		compartment_state_t state = compartment->is_rebooting ?
+						    COMPARTMENT_STATE_REBOOTING :
+						    COMPARTMENT_STATE_STOPPED;
+		compartment_set_state(compartment, state);
+		compartment->is_rebooting = false;
+	}
 }
 
 void
@@ -633,14 +708,13 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 				     compartment_get_description(compartment), WTERMSIG(status));
 				/* Since Kernel 3.4 reboot inside pid namspaces
 				 * are signaled by SIGHUP (see manpage REBOOT(2)) */
-				if (WTERMSIG(status) == SIGHUP)
+				if (WTERMSIG(status) == SIGHUP) {
 					rebooting = true;
+					compartment->is_rebooting = true;
+				}
 			} else {
 				continue;
 			}
-			/* remove the sigchld callback for this compartment from the event loop */
-			event_remove_signal(sig);
-			event_signal_free(sig);
 			/* cleanup and set states accordingly to notify observers */
 			compartment_cleanup(compartment, rebooting);
 
@@ -658,6 +732,26 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			      compartment_get_description(compartment));
 		}
 	}
+
+	// check for compartment itself again, e.g., before execv
+	pid = waitpid(compartment_pid, &status, WNOHANG);
+	if (pid == compartment_pid) {
+		INFO("Compartment %s reaped before beeing part of pg",
+		     compartment_get_description(compartment));
+		if (WIFEXITED(status)) {
+			INFO("Early Container %s terminated (init process exited with status=%d)",
+			     compartment_get_description(compartment), WEXITSTATUS(status));
+			compartment->exit_status = WEXITSTATUS(status);
+			compartment_cleanup(compartment, false);
+		} else if (WIFSIGNALED(status)) {
+			INFO("Early Container %s killed by signal %d",
+			     compartment_get_description(compartment), WTERMSIG(status));
+			compartment_cleanup(compartment, false);
+		}
+	}
+
+	// reap any open helper child and set state accordingly
+	compartment_sigchld_handle_helpers(compartment, sig);
 
 	TRACE("No more childs to reap. Callback exiting...");
 }
@@ -682,9 +776,12 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		// cleanup if early child returned with an error
 		if ((WIFEXITED(status) && WEXITSTATUS(status)) || WIFSIGNALED(status)) {
 			compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
-			compartment->pid_early = -1;
 		}
+		compartment->pid_early = -1;
 	}
+
+	// reap any open helper child and set state accordingly
+	compartment_sigchld_handle_helpers(compartment, sig);
 }
 
 static int
@@ -904,7 +1001,14 @@ compartment_start_child_early(void *data)
 
 	compartment_t *compartment = data;
 
+	event_reset();
 	close(compartment->sync_sock_parent);
+
+	/* Make sure /init in node doesn`t kill CMLD daemon */
+	if (setpgid(0, 0) < 0) {
+		WARN("Could not move process group of compartment %s", compartment->name);
+		goto error;
+	}
 
 	for (list_t *l = compartment->module_instance_list; l; l = l->next) {
 		compartment_module_instance_t *c_mod = l->data;
@@ -1015,6 +1119,15 @@ compartment_start_timeout_cb(event_timer_t *timer, void *data)
 	return;
 }
 
+void
+compartment_kill_early_child(compartment_t *compartment)
+{
+	// killing process group of early child if running
+	if (compartment->pid_early > 1) {
+		kill(-(compartment->pid_early), SIGKILL);
+	}
+}
+
 static void
 compartment_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
@@ -1032,7 +1145,10 @@ compartment_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *d
 		// receive success or error message from started child
 		if (read(fd, &msg, 1) != 1) {
 			WARN_ERRNO("Could not read from sync socket");
-			goto error;
+			event_remove_io(io);
+			event_io_free(io);
+			close(fd);
+			return;
 		}
 	}
 
@@ -1195,6 +1311,7 @@ error_pre_clone:
 	event_remove_io(io);
 	event_io_free(io);
 	close(fd);
+	compartment_kill_early_child(compartment);
 	return;
 
 error_post_clone:
@@ -1203,8 +1320,8 @@ error_post_clone:
 	char msg_stop = COMPARTMENT_START_SYNC_MSG_STOP;
 	if (write(compartment->sync_sock_parent, &msg_stop, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");
+		compartment_kill(compartment);
 	}
-	compartment_kill(compartment);
 	return;
 }
 
@@ -1273,7 +1390,7 @@ compartment_start(compartment_t *compartment)
 		WARN_ERRNO("Clone compartment failed");
 		goto error_pre_clone;
 	}
-	compartment->pid = compartment_pid;
+	compartment->pid_early = compartment_pid;
 
 	/* close the childs end of the sync sockets */
 	close(compartment->sync_sock_child);
@@ -1312,8 +1429,8 @@ error_post_clone:
 	char msg_stop = COMPARTMENT_START_SYNC_MSG_STOP;
 	if (write(compartment->sync_sock_parent, &msg_stop, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");
+		compartment_kill(compartment);
 	}
-	compartment_kill(compartment);
 	return ret;
 }
 
@@ -1326,6 +1443,9 @@ compartment_kill(compartment_t *compartment)
 		DEBUG("Trying to kill stopped compartment... doing nothing.");
 		return;
 	}
+
+	// killing process group of early child if running
+	compartment_kill_early_child(compartment);
 
 	if (compartment_get_pid(compartment) < 0) {
 		ERROR("No pid (%d) for container %s -> state mismatch, do not kill anything!",
@@ -1687,4 +1807,19 @@ compartment_get_sync_sock_child(compartment_t *compartment)
 {
 	ASSERT(compartment);
 	return compartment->sync_sock_child;
+}
+
+void
+compartment_wait_for_child(compartment_t *compartment, char *name, pid_t pid)
+{
+	ASSERT(compartment);
+
+	compartment_helper_child_t *child = compartment_helper_child_new(name, pid);
+	compartment->helper_child_list = list_append(compartment->helper_child_list, child);
+
+	DEBUG("Helpers registered:");
+	for (list_t *l = compartment->helper_child_list; l; l = l->next) {
+		compartment_helper_child_t *child = l->data;
+		DEBUG("\t Helper child '%s' (%d)", child->name, child->pid);
+	}
 }

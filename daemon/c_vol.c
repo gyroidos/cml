@@ -50,6 +50,7 @@
 #include "common/sock.h"
 #include "common/str.h"
 #include "common/dm.h"
+#include "common/event.h"
 
 #include "cmld.h"
 #include "hardware.h"
@@ -1331,7 +1332,7 @@ error:
 }
 
 /**
- * This Function verifes integrity of base images as part of
+ * This Function verifies integrity of base images as part of
  * TSF.CML.SecureCompartmentInit.
  */
 static bool
@@ -1347,19 +1348,47 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
 			if (mount_entry_get_verity_sha256(mntent)) {
-				/* let dm-verity do the interitgy checks on
+				// skip, handled in c_vol_verify_mount_entries_bg()
+				continue;
+			}
+			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
+			    CHECK_IMAGE_GOOD) {
+				ERROR("Cannot verify image %s: image file is corrupted",
+				      mount_entry_get_img(mntent));
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+/**
+ * This Function verifies integrity of base images in background as part of
+ * TSF.CML.SecureCompartmentInit.
+ */
+static bool
+c_vol_verify_mount_entries_bg(const c_vol_t *vol)
+{
+	ASSERT(vol);
+
+	int n = mount_get_count(vol->mnt);
+	for (int i = 0; i < n; i++) {
+		const mount_entry_t *mntent;
+		mntent = mount_get_entry(vol->mnt, i);
+		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
+		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
+		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
+			if (mount_entry_get_verity_sha256(mntent)) {
+				/* let dm-verity do the integrity checks on
 			         * block access, and check the whole image in
 				 * background
 				 */
 				pid_t pid = fork();
-				if (pid > 0) {
-					INFO("dm-verity active for image %s, "
-					     "start thorough image check in "
-					     "background.",
-					     mount_entry_get_img(mntent));
-					continue;
-				}
-				if (pid == 0) { // child do check (audit msg in guestos)
+				if (pid < 0) {
+					ERROR_ERRNO("Can not fork child for integrity check!");
+					return false;
+				} else if (pid == 0) { // child do check (audit msg in guestos)
+					event_reset();
 					if (guestos_check_mount_image_block(
 						    vol->os, mntent, true) != CHECK_IMAGE_GOOD) {
 						ERROR("Cannot verify image %s: "
@@ -1368,16 +1397,15 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 						_exit(-1);
 					}
 					_exit(0);
+				} else { // parent
+					INFO("dm-verity active for image %s, "
+					     "start thorough image check in "
+					     "background.",
+					     mount_entry_get_img(mntent));
+					container_wait_for_child(vol->container, "vol-bg-check",
+								 pid);
+					continue;
 				}
-				// in case pid < 0 just do nothing and check
-				// image in parent, see below
-			}
-
-			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
-			    CHECK_IMAGE_GOOD) {
-				ERROR("Cannot verify image %s: image file is corrupted",
-				      mount_entry_get_img(mntent));
-				return false;
 			}
 		}
 	}
@@ -1547,6 +1575,20 @@ c_vol_start_child_early(void *volp)
 
 	return 0;
 error:
+	ERROR("Failed to execute star child early hook for c_vol");
+	return -COMPARTMENT_ERROR_VOL;
+}
+
+static int
+c_vol_start_post_clone(void *volp)
+{
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
+	// check image integrity lazy in background for verity enabled images
+	if (c_vol_verify_mount_entries_bg(vol))
+		return 0;
+
 	ERROR("Failed to execute post clone hook for c_vol");
 	return -COMPARTMENT_ERROR_VOL;
 }
@@ -1916,7 +1958,7 @@ static compartment_module_t c_vol_module = {
 	.start_post_clone_early = NULL,
 	.start_child_early = c_vol_start_child_early,
 	.start_pre_clone = NULL,
-	.start_post_clone = NULL,
+	.start_post_clone = c_vol_start_post_clone,
 	.start_pre_exec = c_vol_start_pre_exec,
 	.start_post_exec = NULL,
 	.start_child = c_vol_start_child,

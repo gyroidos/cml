@@ -65,6 +65,7 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -1353,6 +1354,9 @@ cmld_init(const char *path)
 	INFO("Storage path is %s", path);
 	cmld_path = path;
 	cmld_container_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
+
+	if (prctl(PR_SET_CHILD_SUBREAPER, 1))
+		FATAL("Could not setup cmld as child subreaper!");
 
 	if (mount_private_tmp())
 		FATAL("Could not setup private tmp!");

@@ -482,6 +482,13 @@ container_contains_pid(const container_t *container, pid_t pid)
 	return compartment_contains_pid(container->compartment, pid);
 }
 
+void
+container_wait_for_child(container_t *container, char *name, pid_t pid)
+{
+	ASSERT(container);
+	compartment_wait_for_child(container->compartment, name, pid);
+}
+
 // ##################################################################
 // directly implemented in container
 // ##################################################################
