@@ -476,4 +476,15 @@ compartment_get_sync_sock_child(compartment_t *compartment);
 bool
 compartment_get_allow_system_time(compartment_t *compartment);
 
+/**
+ * Registers child at compartments sigchld handler
+ *
+ * If spawning any helper process during startup of a compartment, use
+ * this function to assure that the spawned helper is reaped properly.
+ * Caution: Do do not spawn helper children in early child hooks. This
+ * function does not propagate the child correctly to the main process.
+ */
+void
+compartment_wait_for_child(compartment_t *compartment, char *name, pid_t pid);
+
 #endif /* COMPARTMENT_H */

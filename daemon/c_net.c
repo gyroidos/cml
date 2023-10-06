@@ -1021,27 +1021,6 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 	return 0;
 }
 
-static void
-c_net_helper_sigchild_cb(UNUSED int signum, event_signal_t *sig, void *data)
-{
-	pid_t *c0_netns_pid = data;
-	pid_t pid;
-	int status = 0;
-
-	ASSERT(c0_netns_pid);
-
-	TRACE("cmld's c0 netns helper SIGCHLD handler called for PID %d", *c0_netns_pid);
-	if ((pid = waitpid(*c0_netns_pid, &status, WNOHANG)) > 0) {
-		TRACE("Reaped c0 netns helper process: %d", pid);
-		/* remove the sigchld callback for this container from the event loop */
-		event_remove_signal(sig);
-		event_signal_free(sig);
-		mem_free0(c0_netns_pid);
-	} else {
-		TRACE("Failed to reap c0 netns helper process");
-	}
-}
-
 /**
  * This function is responsible for moving the container interface to its corresponding namespace.
  * This Function is part of TSF.CML.CompartmentIsolation.
@@ -1174,10 +1153,8 @@ c_net_start_post_clone(void *netp)
 		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
 		DEBUG("Setup of nis should be done by pid=%d", *c0_netns_pid);
-		// register new sigchild handler for helper clone in netns of c0
-		event_signal_t *sig =
-			event_signal_new(SIGCHLD, c_net_helper_sigchild_cb, c0_netns_pid);
-		event_add_signal(sig);
+		// register at sigchild handler for helper clone in netns of c0
+		container_wait_for_child(net->container, "c0-netns-helper", *c0_netns_pid);
 
 		/* setup uplink of cml */
 		c_net_interface_t *ni = list_nth_data(net->interface_list, 0);
@@ -1378,10 +1355,8 @@ c_net_cleanup_c0(c_net_t *net)
 		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
 		DEBUG("Cleanup of ni ifs should be done by pid=%d", *c0_netns_pid);
-		// register new sigchild handler for helper clone in netns of c0
-		event_signal_t *sig =
-			event_signal_new(SIGCHLD, c_net_helper_sigchild_cb, c0_netns_pid);
-		event_add_signal(sig);
+		// register at sigchild handler for helper clone in netns of c0
+		container_wait_for_child(net->container, "c0-netns-helper", *c0_netns_pid);
 	}
 	return 0;
 }

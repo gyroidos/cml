@@ -409,6 +409,9 @@ container_has_setup_mode(const container_t *container);
 bool
 container_contains_pid(const container_t *container, pid_t pid);
 
+void
+container_wait_for_child(container_t *container, char *name, pid_t pid);
+
 // ##################################################################
 // end compartment wrappers
 // ##################################################################
