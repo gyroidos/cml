@@ -690,6 +690,8 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 				network_get_ifname_by_addr_new(if_mac) :
 				mem_strdup(pnet_cfg->pnet_name);
 
+	IF_NULL_RETVAL(if_name, -1);
+
 	if (!c_net_internal) {
 		IF_FALSE_GOTO_ERROR(cmld_netif_phys_remove_by_name(if_name), err);
 
