@@ -825,9 +825,13 @@ c_idmapped_cleanup(void *idmappedp, UNUSED bool is_rebooting)
 	c_idmapped_t *idmapped = idmappedp;
 	ASSERT(idmapped);
 
+	char *src_compartment_dir =
+		mem_printf("%s/%s/src", IDMAPPED_SRC_DIR,
+			   uuid_string(container_get_uuid(idmapped->container)));
+
 	// release bindmounts to src directories in root ns
-	if (dir_foreach(IDMAPPED_SRC_DIR, &c_idmapped_umount_dir_cb, NULL) < 0) {
-		WARN("Could not umount srcs on %s", IDMAPPED_SRC_DIR);
+	if (dir_foreach(src_compartment_dir, &c_idmapped_umount_dir_cb, NULL) < 0) {
+		WARN("Could not umount srcs on %s", src_compartment_dir);
 	}
 
 	for (list_t *l = idmapped->mapped_mnts; l; l = l->next) {
@@ -839,6 +843,8 @@ c_idmapped_cleanup(void *idmappedp, UNUSED bool is_rebooting)
 
 	idmapped->is_dev_mounted = false;
 	idmapped->src_index = 0;
+
+	mem_free0(src_compartment_dir);
 }
 
 static compartment_module_t c_idmapped_module = {
