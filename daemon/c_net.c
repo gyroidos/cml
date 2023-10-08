@@ -721,7 +721,6 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 	return 0;
 err:
 	mem_free0(if_name);
-	mem_free0(pnet_cfg);
 	return -1;
 }
 
