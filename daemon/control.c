@@ -1491,10 +1491,14 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		bool persistent = (!msg->assign_iface_params->has_persistent) ?
 					  false :
 					  msg->assign_iface_params->persistent;
-		res = cmld_container_add_net_iface(
-			container, container_pnet_cfg_new(net_iface, false, NULL), persistent);
-		control_send_message(res ? CONTROL_RESPONSE_CMD_FAILED : CONTROL_RESPONSE_CMD_OK,
-				     fd);
+		container_pnet_cfg_t *pnet_cfg = container_pnet_cfg_new(net_iface, false, NULL);
+		res = cmld_container_add_net_iface(container, pnet_cfg, persistent);
+		if (res) {
+			container_pnet_cfg_free(pnet_cfg);
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
+		} else {
+			control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+		}
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UNASSIGNIFACE: {

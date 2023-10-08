@@ -388,6 +388,7 @@ hotplug_netdev_move(uevent_event_t *event)
 	macstr = network_mac_addr_to_str_new(iface_mac);
 	if (cmld_container_add_net_iface(container, pnet_cfg, false)) {
 		ERROR("cannot move '%s' to %s!", macstr, container_get_name(container));
+		mem_free0(pnet_cfg);
 		goto error;
 	} else {
 		INFO("moved phys network interface '%s' (mac: %s) to %s", event_ifname, macstr,
