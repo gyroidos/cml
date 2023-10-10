@@ -1585,11 +1585,11 @@ compartment_unregister_observer(compartment_t *compartment, compartment_callback
 
 	if (list_find(compartment->observer_list, cb)) {
 		compartment->observer_list = list_remove(compartment->observer_list, cb);
+		DEBUG("Container %s: callback %p unregistered (nr of observers: %d)",
+		      compartment_get_description(compartment), CAST_FUNCPTR_VOIDPTR(cb),
+		      list_length(compartment->observer_list));
 		mem_free0(cb);
 	}
-	DEBUG("Container %s: callback %p unregistered (nr of observers: %d)",
-	      compartment_get_description(compartment), CAST_FUNCPTR_VOIDPTR(cb),
-	      list_length(compartment->observer_list));
 }
 
 const char *
