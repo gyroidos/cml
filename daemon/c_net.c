@@ -716,6 +716,8 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 
 	INFO("Sucessfully move/bridged iface %s to %s", if_name,
 	     container_get_name(net->container));
+
+	mem_free0(if_name);
 	return 0;
 err:
 	mem_free0(if_name);
@@ -742,6 +744,8 @@ c_net_remove_interface(void *netp, const char *if_name_mac)
 	char *if_name = (network_str_to_mac_addr(if_name_mac, if_mac) != -1) ?
 				network_get_ifname_by_addr_new(if_mac) :
 				mem_strdup(if_name_mac);
+
+	IF_NULL_RETVAL(if_name, -1);
 
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *_cfg = l->data;
