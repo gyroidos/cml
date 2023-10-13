@@ -581,6 +581,9 @@ container_destroy(container_t *container)
 	ASSERT(container);
 	int ret = 0;
 
+	/* call destroy hooks of compartment modules */
+	compartment_destroy(container->compartment);
+
 	/* wipe the container */
 	if (file_is_dir(container_get_images_dir(container))) {
 		// wipe_finish only removes data images not configs
@@ -595,9 +598,6 @@ container_destroy(container_t *container)
 	/* remove config files */
 	if (unlink(container_get_config_filename(container)))
 		WARN_ERRNO("Can't delete config file!");
-
-	/* call destroy hooks of compartment modules */
-	compartment_destroy(container->compartment);
 
 	return ret;
 }
