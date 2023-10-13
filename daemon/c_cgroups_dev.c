@@ -824,14 +824,12 @@ c_cgroups_dev_cleanup(void *cgroups_devp, UNUSED bool is_rebooting)
 		c_cgroups_dev_item_t *dev_elem = elem->data;
 		c_cgroups_dev_list_remove(&global_allowed_devs_list, dev_elem);
 	}
-	list_delete(cgroups_dev->allowed_devs);
-	cgroups_dev->allowed_devs = NULL;
-
 	for (list_t *l = cgroups_dev->allowed_devs; l; l = l->next) {
 		c_cgroups_dev_item_t *dev_item = l->data;
 		c_cgroups_dev_item_free(dev_item);
 	}
 	list_delete(cgroups_dev->allowed_devs);
+	cgroups_dev->allowed_devs = NULL;
 }
 
 static bool
