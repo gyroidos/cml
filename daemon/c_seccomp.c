@@ -599,6 +599,7 @@ c_seccomp_cleanup(void *seccompp, UNUSED bool is_rebooting)
 	if (seccomp->event) {
 		event_remove_io(seccomp->event);
 		event_io_free(seccomp->event);
+		seccomp->event = NULL;
 	}
 
 	if (-1 != seccomp->notify_fd)
