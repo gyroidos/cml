@@ -107,7 +107,6 @@ typedef struct {
 	struct in_addr ipv4_bc_addr;   //!< ipv4 bcaddr of container/cmld subnet
 	int cont_offset;	       //!< gives information about the adresses to be set
 	uint8_t veth_mac[6];	       // generated or configured mac of nic in	container
-	pid_t dhcpd_pid;	       // pid of corresponding dhcpd if running for this ni
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -498,7 +497,6 @@ c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
 	ni->nw_name = mem_printf("%s", if_name);
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
-	ni->dhcpd_pid = -1;
 	ni->cont_offset = -1;
 
 	return ni;
@@ -878,108 +876,6 @@ c_net_new(compartment_t *compartment)
 	return net;
 }
 
-static void
-c_net_udhcpd_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
-{
-	c_net_interface_t *ni = data;
-	pid_t pid;
-	int status = 0;
-
-	DEBUG("dhcpd SIGCHLD handler called for PID %d", ni->dhcpd_pid);
-	if ((pid = waitpid(ni->dhcpd_pid, &status, WNOHANG)) > 0) {
-		TRACE("Reaped dhcpd process: %d", pid);
-		/* remove the sigchld callback for this container from the event loop */
-		event_remove_signal(sig);
-		event_signal_free(sig);
-		ni->dhcpd_pid = -1;
-	} else {
-		TRACE("Failed to reap dhcpd process");
-	}
-}
-
-static void
-c_net_udhcpd_stop(c_net_interface_t *ni)
-{
-	ASSERT(ni);
-	int dhcpd_pid;
-	const char *run_dir = "/run/udhcpd";
-	char *pid_file = mem_printf("%s/%s.pid", run_dir, ni->veth_cmld_name);
-	IF_NULL_RETURN(pid_file);
-
-	// no pid_file -> udhcpd not running, skip
-	if (!file_exists(pid_file)) {
-		mem_free0(pid_file);
-		return;
-	}
-
-	char *pid_str = file_read_new(pid_file, file_size(pid_file));
-	if (pid_str && sscanf(pid_str, "%d", &dhcpd_pid) == 1) {
-		DEBUG("Stopping dhcpd process with pid=%d!", dhcpd_pid);
-		kill(dhcpd_pid, SIGTERM);
-		mem_free0(pid_str);
-	}
-	mem_free0(pid_file);
-}
-
-static int
-c_net_udhcpd_start(c_net_interface_t *ni)
-{
-	ASSERT(ni);
-
-	int bytes_written = -1;
-
-	const char *run_dir = "/run/udhcpd";
-	char *conf_file = mem_printf("%s/%s.conf", run_dir, ni->veth_cmld_name);
-	char *ipv4_start = mem_printf(IPV4_DHCP_RANGE_START, ni->cont_offset);
-	char *ipv4_end = mem_printf(IPV4_DHCP_RANGE_END, ni->cont_offset);
-	char *lease_file = mem_printf("%s/%s.leases", run_dir, ni->veth_cmld_name);
-	char *pid_file = mem_printf("%s/%s.pid", run_dir, ni->veth_cmld_name);
-
-	// create config dir if not created yet
-	if (dir_mkdir_p(run_dir, 0755) < 0) {
-		DEBUG_ERRNO("Could not mkdir %s", run_dir);
-		goto out;
-	}
-
-	// if running stop dhcpd for this ni
-	if (ni->dhcpd_pid > 0)
-		c_net_udhcpd_stop(ni);
-
-	bytes_written = file_printf(conf_file,
-				    "interface %s\n"
-				    "start %s\n"
-				    "end %s\n"
-				    "option subnet %s\n"
-				    "lease_file %s\n"
-				    "pidfile %s",
-				    ni->veth_cmld_name, ipv4_start, ipv4_end, IPV4_DHCP_MASK,
-				    lease_file, pid_file);
-
-	IF_FALSE_GOTO(bytes_written > 0, out);
-
-	char *dhcpd_argv[] = { "udhcpd", "-f", conf_file, NULL };
-	ni->dhcpd_pid = fork();
-	if (ni->dhcpd_pid == -1) {
-		ERROR_ERRNO("Could not fork '%s' for %s", dhcpd_argv[0], ni->veth_cmld_name);
-		bytes_written = -1;
-	} else if (ni->dhcpd_pid == 0) {
-		INFO("Starting '%s' for %s", dhcpd_argv[0], ni->veth_cmld_name);
-		execvp(dhcpd_argv[0], dhcpd_argv);
-		FATAL_ERRNO("dhcpd: Could not exec '%s'!", dhcpd_argv[0]);
-	} else {
-		event_signal_t *sigchld = event_signal_new(SIGCHLD, c_net_udhcpd_sigchld_cb, ni);
-		event_add_signal(sigchld);
-	}
-out:
-	mem_free0(lease_file);
-	mem_free0(pid_file);
-	mem_free0(conf_file);
-	mem_free0(ipv4_start);
-	mem_free0(ipv4_end);
-
-	return (bytes_written > 0) ? 0 : -1;
-}
-
 static int
 c_net_start_pre_clone_interface(c_net_interface_t *ni)
 {
@@ -991,7 +887,6 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 		goto err;
 	}
 
-	ni->dhcpd_pid = -1;
 	ni->veth_cmld_name = mem_printf("r_%d", ni->cont_offset);
 	ni->veth_cont_name = mem_printf("c_%d", ni->cont_offset);
 
@@ -1271,10 +1166,6 @@ c_net_start_post_clone(void *netp)
 				FATAL_ERRNO("Could not setup masquerading for %s!",
 					    ni->veth_cmld_name);
 
-			/* Start busybox' dhcpd server for veth */
-			if (c_net_udhcpd_start(ni))
-				FATAL_ERRNO("Could not start udhcpd!");
-
 			DEBUG("Successfully configured %s in %s, wait for child to exit.",
 			      ni->veth_cmld_name, hostns);
 		}
@@ -1417,7 +1308,6 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	TRACE("cleanup c_net_t structure");
 
 	DEBUG("shut network interface %s down", ni->veth_cont_name);
-	c_net_udhcpd_stop(ni);
 
 	/* Release the offset, as the ip addresses are no more occupied */
 	c_net_unset_offset(ni->cont_offset);
