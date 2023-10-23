@@ -1,6 +1,10 @@
 #!/bin/bash
 
-DEBUG="n"
+if  [ "y" = "${CML_DBG}" ];then
+	DEBUG="y"
+else
+	DEBUG="n"
+fi
 
 dbg() {
 	if [ "y" = "$DEBUG" ];then
@@ -22,7 +26,9 @@ do_wait_running () {
 			printf "."
 			sleep 2
 		else
-			echo "ERROR: Container boot failed, aborting...\n"
+			echo "exitcode: $?"
+			echo "ERROR: Check failed, expected \"STARTING\" or \"RUNNING\", got:"
+			echo "\"${STATE}\""
 			exit 1
 		fi
 	done
@@ -67,7 +73,7 @@ do_test_cmd_output() {
 		echo "STATUS: Check successful"
 		sleep 2
 	else
-		dbg "exitcode: $?"
+		echo "exitcode: $?"
 		echo "ERROR: Check failed, expected \"$2\", got:"
 		echo "\"$OUTPUT\""
 		exit 1
@@ -85,7 +91,7 @@ do_test_cmd_noutput() {
 
 
 	if echo "$OUTPUT" | grep -q "$2";then
-		dbg "exitcode: $?"
+		echo "exitcode: $?"
 		echo "ERROR: Check failed, did not expect \"$2\", got:"
 		echo "\"$OUTPUT\""
 		exit 1
