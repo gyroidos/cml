@@ -5,8 +5,6 @@ set -e
 fetch_logs() {
 	if [ -z "${LOG_DIR}" ];then
 		echo "-l / --log-dir not specified, skipping log file retrieval"
-	elif [ "ccmode" = "${MODE}" ];then
-		echo "Skipping log file retrieveval in ccmode"
 	else
 		mkdir "${LOG_DIR}"
 		skip=$(/sbin/fdisk -lu ${PROCESS_NAME}.img | tail -n1 | awk '{print $2}')
