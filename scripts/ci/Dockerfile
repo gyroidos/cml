@@ -64,6 +64,12 @@ RUN echo "deb http://ftp.de.debian.org/debian bullseye-backports main contrib no
 
 RUN apt-get -y update && apt-get -y install -t bullseye-backports linux-image-amd64
 
+# set image label
+ARG CML_BUILDER=jenkins
+
+LABEL "com.gyroidos.builder"="${lbl}"
+
+# set workdir
 WORKDIR "/opt/ws-yocto/"
 
 #COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
