@@ -404,11 +404,13 @@ create_device_node(const char *name)
 	char *device = cryptfs_get_device_path_new(name);
 	/* we might need to remove this device first */
 	unlink(device);
-	if (mknod(device, S_IFBLK | 00777, io->dev) != 0) {
+	if (mknod(device, S_IFBLK | 00777, io->dev) != 0 && errno != EEXIST) {
 		ERROR_ERRNO("Cannot mknod device %s", device);
 		mem_free0(buffer);
 		mem_free0(device);
 		return NULL;
+	} else if (errno == EEXIST) {
+		DEBUG("Device %s already exists, continuing", device);
 	}
 	mem_free0(buffer);
 	return device;
