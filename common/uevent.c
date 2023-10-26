@@ -29,6 +29,7 @@
 
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
@@ -440,7 +441,7 @@ uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join
 		nl_msg_free(nl_msg);
 		_exit(0);
 	} else {
-		if (waitpid(pid, &status, 0) != pid) {
+		if (proc_waitpid(pid, &status, 0) != pid) {
 			ERROR_ERRNO("Could not waitpid for '%d'", pid);
 		} else if (!WIFEXITED(status)) {
 			ERROR("Child %d in netns_pid '%d' terminated abnormally", pid, netns_pid);
