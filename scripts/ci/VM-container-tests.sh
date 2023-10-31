@@ -5,6 +5,8 @@ set -e
 fetch_logs() {
 	if [ -z "${LOG_DIR}" ];then
 		echo "-l / --log-dir not specified, skipping log file retrieval"
+	elif [ "ccmode" = "${MODE}" ];then
+		echo "Skipping log file retrieveval in ccmode"
 	else
 		mkdir "${LOG_DIR}"
 		skip=$(/sbin/fdisk -lu ${PROCESS_NAME}.img | tail -n1 | awk '{print $2}')
@@ -17,8 +19,36 @@ fetch_logs() {
 	fi
 }
 
+
+sync_to_disk() {
+	echo "STATUS: Syncing VM state to disk"
+	for I in $(seq 1 10) ;do
+		if ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1;then
+			echo "STATUS: Synced VM state to disk"
+			break
+		elif ! [[ "$I" == "10" ]];then
+			echo "STATUS: Failed to sync VM state to disk, retrying, status: $?"
+		fi
+
+		echo "STATUS: Failed to sync VM state to disk, giving up..., status: $?"
+	done
+}
+
+force_stop_vm() {
+	echo "STATUS: Syncing VM state to disk"
+	ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1
+
+	sync_to_disk
+
+	sleep 2
+	pkill -9 $PROCESS_NAME || true
+	rm ${PROCESS_NAME}.vm_key
+}
+
 err_fetch_logs() {
 	echo "An error occurred, attempting to fetch logs from VM"
+	force_stop_vm
+
 	fetch_logs
 	exit 1
 }
@@ -85,47 +115,33 @@ wait_vm () {
 }
 
 start_vm() {
+	TEST_NETDEVS="\
+		-nic user,ipv6=off,model=e1000,mac=00:00:00:00:00:11
+		-nic user,ipv6=off,model=e1000,mac=00:00:00:00:00:12
+		-nic user,ipv6=off,model=e1000,mac=00:00:00:00:00:13
+		-nic user,ipv6=off,model=e1000,mac=00:00:00:00:00:14
+		-nic user,ipv6=off,model=e1000,mac=00:00:00:00:00:15
+		-nic user,ipv6=off,model=e1000,mac=00:00:00:00:00:16
+	"
+
 	qemu-system-x86_64 -machine accel=kvm,vmport=off -m 64G -smp 4 -cpu host -bios OVMF.fd \
 		-name trustme-tester,process=${PROCESS_NAME} -nodefaults -nographic \
 		-device virtio-rng-pci,rng=id -object rng-random,id=id,filename=/dev/urandom \
 		-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd0 \
-		-drive if=none,id=hd0,file=${PROCESS_NAME}.img,cache=directsync,format=raw \
+		-drive if=none,id=hd0,file=${PROCESS_NAME}.img,format=raw \
 		-device scsi-hd,drive=hd1 \
 		-drive if=none,id=hd1,file=${PROCESS_NAME}.ext4fs,cache=directsync,format=raw \
-		-device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
+		-nic user,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,model=e1000,mac=00:00:00:00:00:01 \
 		-drive "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd" \
 		-drive "if=pflash,format=raw,file=./OVMF_VARS.fd" \
 		$VNC \
 		$TELNET \
-		$PASS_SCHSM >/dev/null &
+		$PASS_SCHSM \
+		$TEST_NETDEVS >/dev/null &
+
+#		-device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
 
 	wait_vm
-}
-
-sync_to_disk() {
-	echo "STATUS: Syncing VM state to disk"
-	for I in $(seq 1 10) ;do
-		if ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1;then
-			echo "STATUS: Synced VM state to disk"
-			break
-		elif ! [[ "$I" == "10" ]];then
-			echo "STATUS: Failed to sync VM state to disk, retrying, status: $?"
-		else
-			echo "ERROR: Could not sync VM state to disk, exiting..."
-			err_fetch_logs
-		fi
-	done
-}
-
-force_stop_vm() {
-	echo "STATUS: Syncing VM state to disk"
-	ssh ${SSH_OPTS} 'sh -c sync && sleep 5 && sh -c sync' 2>&1
-
-	sync_to_disk
-
-	sleep 2
-	pkill -9 $PROCESS_NAME || true
-	rm ${PROCESS_NAME}.vm_key
 }
 
 do_create_testconfigs() {
@@ -134,41 +150,80 @@ do_create_testconfigs() {
 
 if [[ -z "$SCHSM" ]];then
 
-cat > ./testcontainer.conf << EOF
-name: "testcontainer"
-guest_os: "trustx-coreos"
-guestos_version: $installed_guestos_version
-assign_dev: "c 4:2 rwm"
-fifos: "testfifo1"
-fifos: "testfifo2"
-EOF
 
-cat > ./signedcontainer.conf << EOF
-name: "signedcontainer"
+# todo assign blockdev (sdaX)
+
+cat > ./signedcontainer1.conf << EOF
+name: "signedcontainer1"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
 assign_dev: "c 4:3 rwm"
 fifos: "signedfifo1"
 fifos: "signedfifo2"
+
+
+vnet_configs {
+if_name: "vnet0"
+configure: false
+if_rootns_name: "r_1"
+}
+vnet_configs {
+if_name: "vnet1"
+configure: false
+if_rootns_name: "r_2"
+}
+net_ifaces {
+netif: "00:00:00:00:00:11"
+mac_filter: "AA:AA::AA:AA:AA"
+mac_filter: "00:00:00:00:00:14"
+}
+net_ifaces {
+netif: "00:00:00:00:00:12"
+}
+net_ifaces {
+netif: "00:00:00:00:00:13"
+}
+EOF
+
+cat > ./signedcontainer2.conf << EOF
+name: "signedcontainer2"
+guest_os: "trustx-coreos"
+guestos_version: $installed_guestos_version
+assign_dev: "c 4:3 rwm"
+fifos: "signedfifo1"
+fifos: "signedfifo2"
+
+
+vnet_configs {
+if_name: "vnet0"
+configure: false
+if_rootns_name: "r_13"
+}
+vnet_configs {
+if_name: "vnet1"
+configure: false
+if_rootns_name: "r_3"
+}
+net_ifaces {
+netif: "00:00:00:00:00:14"
+mac_filter: "AA:AA::AA:AA:AA"
+mac_filter: "00:00:00:00:00:11"
+}
+net_ifaces {
+netif: "00:00:00:00:00:15"
+}
+net_ifaces {
+netif: "00:00:00:00:00:16"
+}
+
 EOF
 
 
 
 else
 
-cat > ./testcontainer.conf << EOF
-name: "testcontainer"
-guest_os: "trustx-coreos"
-guestos_version: $installed_guestos_version 
-assign_dev: "c 4:2 rwm"
-fifos: "testfifo1"
-fifos: "testfifo2"
-
-EOF
-
-
-cat > ./signedcontainer.conf << EOF
-name: "signedcontainer"
+cat > ./signedcontainer1.conf << EOF
+name: "signedcontainer1"
 guest_os: "trustx-coreos"
 guestos_version: $installed_guestos_version
 assign_dev: "c 4:3 rwm"
@@ -181,20 +236,40 @@ usb_configs {
   assign: true
   type: TOKEN
 }
+vnet_configs {
+if_name: "eth0"
+configure: false
+if_rootns_name: "r_0"
+}
+vnet_configs {
+if_name: "eth1"
+configure: false
+if_rootns_name: "r_1"
+}
+net_ifaces {
+netif = "11:11:11:11:11:11"
+mac_filter = "AA:AA::AA:AA:AA"
+mac_filter = "BB:BB:BB:BB:BB:BB"
+}
+net_ifaces {
+netif = "11:11:11:11:11:00"
+mac_filter = "CC:CC::CC:CC:CC"
+mac_filter = "DD:DD:DD:DD:DD:DD"
+}
+
 EOF
 fi
 
-echo "STATUS: Prepared testcontainer.conf:"
-echo "$(cat ./testcontainer.conf)"
 
-echo "STATUS: Prepared signedcontainer.conf:"
-echo "$(cat ./signedcontainer.conf)"
+echo "STATUS: Prepared signedcontainer1.conf:"
+echo "$(cat ./signedcontainer1.conf)"
 
-
+echo "STATUS: Prepared signedcontainer2.conf:"
+echo "$(cat ./signedcontainer2.conf)"
 
 
 echo "PKI_DIR there?: $PKI_DIR"
-# Sign signedcontainer.conf (enforced in production and ccmode images)
+# Sign signedcontainer{1,2}.conf (enforced in production and ccmode images)
 if [[ -d "$PKI_DIR" ]];then
 	echo "A"
 	scripts_path=""
@@ -235,23 +310,26 @@ if [[ -d "$PKI_DIR" ]];then
 		exit 1
 	fi
 
-	echo "STATUS: Signing signedcontainer.conf using and PKI at ${PKI_DIR} and $signing_script"
+	echo "STATUS: Signing signedcontainer{1,2}.conf using and PKI at ${PKI_DIR} and $signing_script"
 
 
-	echo "bash \"$signing_script\" \"./signedcontainer.conf\" \"${PKI_DIR}/ssig_cml.key\" \"${PKI_DIR}/ssig_cml.cert\""
-	bash "$signing_script" "./signedcontainer.conf" "${PKI_DIR}/ssig_cml.key" "${PKI_DIR}/ssig_cml.cert"
+	echo "bash \"$signing_script\" \"./signedcontainer1.conf\" \"${PKI_DIR}/ssig_cml.key\" \"${PKI_DIR}/ssig_cml.cert\""
+	bash "$signing_script" "./signedcontainer1.conf" "${PKI_DIR}/ssig_cml.key" "${PKI_DIR}/ssig_cml.cert"
+
+	echo "bash \"$signing_script\" \"./signedcontainer2.conf\" \"${PKI_DIR}/ssig_cml.key\" \"${PKI_DIR}/ssig_cml.cert\""
+	bash "$signing_script" "./signedcontainer2.conf" "${PKI_DIR}/ssig_cml.key" "${PKI_DIR}/ssig_cml.cert"
 else
 	echo "ERROR: No test PKI found at $PKI_DIR, exiting..."
 	exit 1
 fi
 
-echo "STATUS: Signed signedcontainer.conf:"
-echo "$(cat ./signedcontainer.conf)"
-
+echo "STATUS: Signed signedcontainer{1,2}.conf:"
 }
 
 do_test_complete() {
 	echo "STATUS: ########## Starting container test suite ##########"
+	CONTAINER="$1"
+	SECOND_RUN="$2"
 
 	# Test if cmld is up and running
 	echo "STATUS: Test if cmld is up and running"
@@ -259,28 +337,28 @@ do_test_complete() {
 
 	if [[ -z "$SCHSM" ]];then
 		# Skip these tests for physical schsm
-		cmd_control_change_pin_error "signedcontainer" "wrongpin" "$TESTPW"
+		cmd_control_change_pin_error "${CONTAINER}" "wrongpin" "$TESTPW"
 
 		# Test change_pin command
-		if [[ "$1" == "second_run" ]];then
+		if [[ "$2" == "y" ]];then
 			echo "STATUS: Changing token PIN"
-			cmd_control_change_pin "signedcontainer" "$TESTPW" "$TESTPW"
+			cmd_control_change_pin "${CONTAINER}" "$TESTPW" "$TESTPW"
 		else
 			echo "STATUS: Trigger ERROR_UNPAIRED"
-			cmd_control_start_error_unpaired "signedcontainer" "$TESTPW"
+			cmd_control_start_error_unpaired "${CONTAINER}" "$TESTPW"
 
 			echo "STATUS: Change pin: trustme -> $TESTPW token PIN"
-			cmd_control_change_pin "signedcontainer" "trustme" "$TESTPW"
+			cmd_control_change_pin "${CONTAINER}" "trustme" "$TESTPW"
 		fi
 	else
 		# TODO add --schsm-all flag
 		echo "STATUS: Skipping change_pin test for sc-hsm"
 	fi
 
-	echo "STATUS: Starting container \"signedcontainer\""
-	cmd_control_start "signedcontainer" "$TESTPW"
+	echo "STATUS: Starting container \"${CONTAINER}\""
+	cmd_control_start "${CONTAINER}" "$TESTPW"
 
-	cmd_control_config "signedcontainer"
+	cmd_control_config "${CONTAINER}"
 
 	ssh ${SSH_OPTS} "echo testmessage1 > /dev/fifos/signedfifo1"
 
@@ -290,22 +368,22 @@ do_test_complete() {
 
 	cmd_control_remove_error_eexist "nonexistent-container"
 
-	cmd_control_start_error_eexist "signedcontainer" "$TESTPW"
+	cmd_control_start_error_eexist "${CONTAINER}" "$TESTPW"
 
 
 	# Stop test container
-	cmd_control_stop "signedcontainer" "$TESTPW"
+	cmd_control_stop "${CONTAINER}" "$TESTPW"
 
-	cmd_control_stop_error_notrunning "signedcontainer" "$TESTPW"
+	cmd_control_stop_error_notrunning "${CONTAINER}" "$TESTPW"
 
 
 	# Start and stop again to ensure cleanup routines worked correctly
-	cmd_control_start "signedcontainer" "$TESTPW"
+	cmd_control_start "${CONTAINER}" "$TESTPW"
 
-	cmd_control_stop "signedcontainer" "$TESTPW"
+	cmd_control_stop "${CONTAINER}" "$TESTPW"
 
 #	# Remove test container if in second VM run
-	if [[ "$1" == "second_run" ]];then
+	if [[ "${SECOND_RUN}" == "y" ]];then
 		TMPDIR="$(ssh ${SSH_OPTS} "mktemp -d -p /tmp")"
 		ssh ${SSH_OPTS} "sync && sleep 2"
 
@@ -314,23 +392,22 @@ do_test_complete() {
 		else
 			for I in {1..1200};do
 				cmd_control_list_guestos_silent "trustx-coreos" 2>/dev/null 
-		
+
 				if [ 0 = "$(($I%100))" ];then
 					echo "list_guetos_silent: Completed $I commands";
 				fi
 			done
-	
 			cmd_control_retrieve_logs "${TMPDIR}" "CMD_OK"
 		fi
 
 		echo "Second test run, removing container"
-		cmd_control_remove "signedcontainer" "$TESTPW"
+		cmd_control_remove "${CONTAINER}" "$TESTPW"
 
 		echo "STATUS: Check container has been removed"
-		cmd_control_list_ncontainer "signedcontainer"
+		cmd_control_list_ncontainer "${CONTAINER}"
 
 		echo "STATUS: Removing non-existent container"
-		cmd_control_remove_error_eexist "signedcontainer" "$TESTPW"
+		cmd_control_remove_error_eexist "${CONTAINER}" "$TESTPW"
 	fi
 
 }
@@ -674,18 +751,16 @@ do_create_testconfigs
 for I in $(seq 1 10) ;do
 	echo "STATUS: Trying to copy container configs to image"
 	sleep 5
-	echo "scp ${SCP_OPTS} testcontainer.conf root@127.0.0.1:/tmp/"
 
 	# copy only .conf if signing was skipped
 	if [ -f signedcontainer.sig ];then
-		FILES="signedcontainer.conf  signedcontainer.sig signedcontainer.cert"
+		FILES="signedcontainer1.conf signedcontainer1.sig signedcontainer1.cert \
+			   signedcontainer2.conf signedcontainer2.sig signedcontainer2.cert"
 	else
-		FILES="signedcontainer.conf"
+		FILES="signedcontainer1.conf signedcontainer2.conf"
 	fi
 
-	if scp ${SCP_OPTS} testcontainer.conf root@127.0.0.1:/tmp/ && \
-	scp $SCP_OPTS $FILES root@127.0.0.1:/tmp/;then
-		#ssh ${SSH_OPTS} 'ls /tmp/testcontainer.conf 2>&1 | grep -q -v "No such file or directory"';then
+	if scp $SCP_OPTS $FILES root@127.0.0.1:/tmp/;then
 		echo "STATUS: scp was successful"
 		break
 	elif ! [ $I -eq 10 ];then
@@ -737,21 +812,28 @@ echo "STATUS: ########## Creating test containers ##########"
 echo "STATUS: Creating test containers"
 if [ "dev" = "$MODE" ];then
 	echo "Creating containers for dev image"
-	echo "Creating container:\n$(cat testcontainer.conf)"
-	cmd_control_create "/tmp/testcontainer.conf"
-	cmd_control_list_container "testcontainer"
 
 	sync_to_disk
 
-	echo "Creating container:\n$(cat signedcontainer.conf)"
-	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
-	cmd_control_list_container "signedcontainer"
+	echo "Creating container:\n$(cat signedcontainer1.conf)"
+	cmd_control_create "/tmp/signedcontainer1.conf" "/tmp/signedcontainer1.sig" "/tmp/signedcontainer1.cert"
+	cmd_control_list_container "signedcontainer1"
+
+	echo "Creating container:\n$(cat signedcontainer2.conf)"
+	cmd_control_create "/tmp/signedcontainer2.conf"
+	cmd_control_list_container "signedcontainer2"
+
 else
 	echo "Creating containers for ${MODE} image"
-	#cmd_control_create_error "/tmp/testcontainer.conf"
-	echo "Creating container:\n$(cat signedcontainer.conf)"
-	cmd_control_create "/tmp/signedcontainer.conf" "/tmp/signedcontainer.sig" "/tmp/signedcontainer.cert"
-	cmd_control_list_container "signedcontainer"
+
+	echo "Creating container:\n$(cat signedcontainer1.conf)"
+	cmd_control_create "/tmp/signedcontainer1.conf" "/tmp/signedcontainer1.sig" "/tmp/signedcontainer1.cert"
+	cmd_control_list_container "signedcontainer1"
+
+	echo "Creating container:\n$(cat signedcontainer2.conf)"
+	cmd_control_create "/tmp/signedcontainer2.conf" "/tmp/signedcontainer2.sig" "/tmp/signedcontainer2.cert"
+	cmd_control_list_container "signedcontainer2"
+
 fi
 
 sync_to_disk
@@ -779,10 +861,12 @@ fi
 
 echo "STATUS: Starting tests"
 
-do_test_complete
+do_test_complete "signedcontainer1" "n"
+
+do_test_complete "signedcontainer2" "n"
 
 
-cmd_control_reboot
+force_stop_vm
 
 # Workaround to avoid issues qith QEMU's forwarding rules
 sleep 5
@@ -792,7 +876,9 @@ start_vm
 #sleep 5
 #ssh ${SSH_OPTS} 'echo "STATUS: VM USB Device: " && lsusb' 2>&1
 
-do_test_complete "second_run"
+do_test_complete "signedcontainer1" "y"
+
+do_test_complete "signedcontainer2" "y"
 
 do_test_provisioning
 

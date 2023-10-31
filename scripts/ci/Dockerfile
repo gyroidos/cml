@@ -18,11 +18,6 @@ RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-13 100
 RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-13 100
 RUN update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-13 100
 RUN update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-13 100
-#
-# protobuf-c-text library
-# https://github.com/protobuf-c/protobuf-c-text
-RUN cd /opt && git clone https://github.com/gyroidos/external_protobuf-c-text.git && cd /opt/external_protobuf-c-text && ./autogen.sh
-RUN cd /opt/external_protobuf-c-text && ./configure && make && make install
 
 # Image signing
 RUN apt-get update && apt-get install -y python3-protobuf
@@ -47,16 +42,6 @@ RUN apt-get update && apt-get install -y kmod procps curl
 
 RUN apt-get install -y apt-utils
 
-RUN apt-get install -y vim openjdk-17-jdk-headless ca-certificates-java
-
-
-RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - \
-	&& apt-get install -y nodejs
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
-RUN echo "deb http://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
-	&& apt-get update \
-	&& apt-get install yarn
-
 # optee python dependings
 RUN apt-get update && apt-get install -y python3-cryptography
 
@@ -64,6 +49,19 @@ RUN echo "deb http://ftp.de.debian.org/debian bullseye-backports main contrib no
 
 RUN apt-get -y update && apt-get -y install -t bullseye-backports linux-image-amd64
 
+# set image label
+ARG CML_BUILDER=jenkins
+
+LABEL "com.gyroidos.builder"="${lbl}"
+
+# protobuf-c-text library
+ADD https://github.com/gyroidos/external_protobuf-c-text/archive/refs/heads/master.zip /opt/external_protobuf-c-text-master.zip
+
+RUN cd /opt && unzip external_protobuf-c-text-master.zip
+
+RUN cd /opt/external_protobuf-c-text-master && ./autogen.sh && ./configure && make && make install
+
+# Set workdir
 WORKDIR "/opt/ws-yocto/"
 
 #COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
