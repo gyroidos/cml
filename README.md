@@ -6,6 +6,8 @@ The project documentation can by found on [gyroidos.github.io](https://gyroidos.
 
 ## Contributing
 
+Before accepting external contributions, you need to sign our [CLA](https://cla-assistant.io/gyroidos/cml). Our CLA assistent will check, whether you already signed the CLA when you open your first pull request.
+
 This project is part of GyroidOS which enforces the [Developer Certificate of Origin](https://developercertificate.org/) (DCO) on Pull Requests. It requires all commit messages to contain the Signed-off-by line with an email address that matches the commit author and the name on your GitHub account.
 
 The Developer Certificate of Origin (DCO) is a lightweight way for contributors to certify that they wrote or otherwise have the right to submit the code they are contributing to the project. Here is the full text of the DCO, reformatted for readability:
