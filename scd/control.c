@@ -494,6 +494,32 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		if (hash)
 			mem_free0(hash);
 	} break;
+	case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_BUF: {
+		TRACE("SCD: Handle messsage CRYPTO_HASH_BUF");
+		unsigned int hash_len;
+		const char *hash_algo;
+		unsigned char *hash = NULL;
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR;
+
+		hash_algo = switch_proto_hash_algo(msg->hash_algo);
+
+		if (hash_algo) {
+			if ((hash = ssl_hash_buf(msg->hash_buf.data, msg->hash_buf.len, &hash_len,
+						 hash_algo)) == NULL) {
+				ERROR("Hashing buffer failed");
+			} else {
+				out.has_hash_value = true;
+				out.hash_value.len = hash_len;
+				out.hash_value.data = hash;
+				out.code = TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_OK;
+			}
+		}
+
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (hash)
+			mem_free0(hash);
+	} break;
 	/*
 	 * This case handles verify requests as part of TSF.CML.Updates
 	 */
