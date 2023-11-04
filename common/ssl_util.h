@@ -132,6 +132,15 @@ ssl_verify_signature_from_digest(const char *cert_buf, size_t cert_len, const ui
 				 const char *digest_algo);
 
 /**
+ * The buffer located in buf_to_hash is hashed with the hash algorithm hash_algo.
+ * @return The function reveals the hash  as return value and its length via the parameter calc_len.
+ * In case of a failure, NULL is returned.
+ */
+unsigned char *
+ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
+	     const char *digest_algo);
+
+/**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.
  * @return The function reveals the hash  as return value and its length via the parameter calc_len.
  * In case of a failure, NULL is returned.

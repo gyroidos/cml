@@ -116,10 +116,6 @@ add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 static int
 ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx, const EVP_MD *hash_fct);
 
-static unsigned char *
-ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
-	     const char *digest_algo);
-
 ENGINE *tpm_engine = NULL;
 
 #define ssl_print_err()                                                                            \
@@ -1072,7 +1068,7 @@ error:
 	return ret;
 }
 
-static unsigned char *
+unsigned char *
 ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned int *calc_len,
 	     const char *digest_algo)
 {
