@@ -128,10 +128,13 @@ crypto_verify_result_from_proto(TokenToDaemon__Code code)
 
 typedef struct crypto_callback_task {
 	crypto_hash_callback_t hash_complete;
+	crypto_hash_buf_callback_t hash_buf_complete;
 	crypto_verify_callback_t verify_complete;
 	crypto_verify_buf_callback_t verify_buf_complete;
 	void *data;
 	char *hash_file;
+	unsigned char *hash_buf;
+	size_t hash_buf_len;
 	crypto_hashalgo_t hash_algo;
 	char *verify_data_file;
 	char *verify_sig_file;
@@ -152,6 +155,21 @@ crypto_callback_hash_task_new(crypto_hash_callback_t cb, void *data, const char 
 	task->hash_complete = cb;
 	task->data = data;
 	task->hash_file = mem_strdup(hash_file);
+	task->hash_algo = hash_algo;
+	return task;
+}
+
+static crypto_callback_task_t *
+crypto_callback_hash_buf_task_new(crypto_hash_buf_callback_t cb, void *data,
+				  const unsigned char *hash_buf, size_t hash_buf_len,
+				  crypto_hashalgo_t hash_algo)
+{
+	crypto_callback_task_t *task = mem_new0(crypto_callback_task_t, 1);
+	task->hash_buf_complete = cb;
+	task->data = data;
+	task->hash_buf = mem_new0(unsigned char, hash_buf_len);
+	memcpy(task->hash_buf, hash_buf, hash_buf_len);
+	task->hash_buf_len = hash_buf_len;
 	task->hash_algo = hash_algo;
 	return task;
 }
@@ -200,6 +218,8 @@ crypto_callback_task_free(crypto_callback_task_t *task)
 	IF_NULL_RETURN(task);
 	if (task->hash_file)
 		mem_free0(task->hash_file);
+	if (task->hash_buf)
+		mem_free0(task->hash_buf);
 	if (task->verify_data_file)
 		mem_free0(task->verify_data_file);
 	if (task->verify_sig_file)
@@ -407,6 +427,32 @@ crypto_hash_file(const char *file, crypto_hashalgo_t hashalgo, crypto_hash_callb
 	out.has_hash_algo = true;
 	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
 	out.hash_file = task->hash_file;
+
+	TRACE("Requesting scd to hash file at %s", task->hash_file);
+
+	if (crypto_send_msg(&out, task) < 0) {
+		crypto_callback_task_free(task);
+		return -1;
+	}
+	return 0;
+}
+
+int
+crypto_hash_buf(const unsigned char *buf, size_t buf_len, crypto_hashalgo_t hashalgo,
+		crypto_hash_buf_callback_t cb, void *data)
+{
+	ASSERT(buf);
+	ASSERT(cb);
+
+	crypto_callback_task_t *task =
+		crypto_callback_hash_buf_task_new(cb, data, buf, buf_len, hashalgo);
+
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_BUF;
+	out.has_hash_algo = true;
+	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
+	out.hash_buf.data = task->hash_buf;
+	out.hash_buf.len = task->hash_buf_len;
 
 	TRACE("Requesting scd to hash file at %s", task->hash_file);
 
