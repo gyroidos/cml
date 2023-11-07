@@ -142,6 +142,45 @@ mount_get_entry_by_img(const mount_t *mnt, const char *img)
 	return NULL;
 }
 
+uint64_t
+mount_get_disk_usage(const mount_t *mnt)
+{
+	ASSERT(mnt);
+	size_t count = mount_get_count(mnt);
+	uint64_t disk_usage = 0;
+
+	for (size_t i = 0; i < count; i++) {
+		mount_entry_t *entry = mount_get_entry(mnt, i);
+		switch (entry->type) {
+		case MOUNT_TYPE_OVERLAY_RW:
+		case MOUNT_TYPE_EMPTY: {
+			// meta.img
+			if (disk_usage <=
+			    (UINT64_MAX - entry->image_size * MOUNT_DM_INTEGRITY_META_FACTOR)) {
+				disk_usage += entry->image_size * MOUNT_DM_INTEGRITY_META_FACTOR;
+			} else {
+				WARN("Overflow detected");
+				return UINT64_MAX;
+			}
+		} // fallthrough
+		case MOUNT_TYPE_DEVICE:
+		case MOUNT_TYPE_DEVICE_RW:
+		case MOUNT_TYPE_COPY: {
+			if (disk_usage <= (UINT64_MAX - entry->image_size)) {
+				disk_usage += entry->image_size;
+			} else {
+				WARN("Overflow detected");
+				return UINT64_MAX;
+			}
+		} break;
+		default:
+			continue;
+		}
+	}
+
+	return disk_usage;
+}
+
 /******************************************************************************/
 
 enum mount_type
