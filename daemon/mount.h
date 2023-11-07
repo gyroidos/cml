@@ -32,6 +32,8 @@
 
 #define MOUNT_CGROUPS_FOLDER "/sys/fs/cgroup"
 
+#define MOUNT_DM_INTEGRITY_META_FACTOR 0.1
+
 /**
  * A structure to present an operating system partition table for a container.
  */
@@ -106,6 +108,12 @@ mount_get_entry(const mount_t *mnt, size_t i);
  */
 mount_entry_t *
 mount_get_entry_by_img(const mount_t *mnt, const char *img);
+
+/**
+ * Calculate the max disk usage of the mount table
+*/
+uint64_t
+mount_get_disk_usage(const mount_t *mnt);
 
 /**
  * Sets the size of the image of the mount entry.

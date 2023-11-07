@@ -267,7 +267,7 @@ c_vol_create_image_empty(const char *img, const char *img_meta, uint64_t size)
 	IF_TRUE_RETVAL(-1 == c_vol_create_sparse_file(img, storage_size), -1);
 
 	if (img_meta) {
-		off64_t meta_size = storage_size / 10;
+		off64_t meta_size = storage_size * MOUNT_DM_INTEGRITY_META_FACTOR;
 		IF_TRUE_RETVAL(-1 == c_vol_create_sparse_file(img_meta, meta_size), -1);
 	}
 
@@ -345,8 +345,8 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 
 	switch (mount_entry_get_type(mntent)) {
 	case MOUNT_TYPE_SHARED:
-		return 0;
 	case MOUNT_TYPE_SHARED_RW:
+		return 0;
 	case MOUNT_TYPE_OVERLAY_RW:
 	case MOUNT_TYPE_EMPTY: {
 		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
