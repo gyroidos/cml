@@ -91,6 +91,8 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
+#define CMLD_STORAGE_FREE_THRESHOLD 0.2 // 20% reserved space
+
 /*
  * dummy key used for unecnrypted c0 and for reboots where the real key
  * is already in kernel
@@ -400,6 +402,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	char **allowed_devices;
 	char **assigned_devices;
 	const char *init;
+	container_t *c = NULL;
 
 	if (!existing_uuid) {
 		uuid = uuid_new(NULL);
@@ -422,10 +425,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 
 	if (!conf) {
 		WARN("Could not read config file %s", config_filename);
-		mem_free0(config_filename);
-		mem_free0(images_dir);
-		uuid_free(uuid);
-		return NULL;
+		goto out;
 	}
 
 	name = container_config_get_name(conf);
@@ -446,11 +446,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	if (!os) {
 		WARN("Could not get GuestOS %s instance for container %s with version v%" PRIu64,
 		     os_name, name, container_config_get_guestos_version(conf));
-		mem_free0(config_filename);
-		mem_free0(images_dir);
-		uuid_free(uuid);
-		container_config_free(conf);
-		return NULL;
+		goto out_config;
 	}
 
 	ram_limit = container_config_get_ram_limit(conf);
@@ -481,11 +477,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 		WARN("The version of the found guestos (%" PRIu64 ") for container %s is to low",
 		     new_guestos_version, name);
 		WARN("Current version is %" PRIu64 "; Aborting...", current_guestos_version);
-		mem_free0(config_filename);
-		mem_free0(images_dir);
-		uuid_free(uuid);
-		container_config_free(conf);
-		return NULL;
+		goto out_config;
 	}
 	ns_usr = file_exists("/proc/self/ns/user") ? container_config_has_userns(conf) : false;
 	ns_net = container_config_has_netns(conf);
@@ -528,23 +520,53 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 
 	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
 
-	container_t *c =
-		container_new(uuid, name, type, ns_usr, ns_net, os, config_filename, images_dir,
-			      ram_limit, cpus_allowed, color, allow_autostart, allow_system_time,
-			      dns_server, pnet_cfg_list, allowed_devices, assigned_devices,
-			      vnet_cfg_list, usbdev_list, init, init_argv, init_env, init_env_len,
-			      fifo_list, ttype, usb_pin_entry);
+	c = container_new(uuid, name, type, ns_usr, ns_net, os, config_filename, images_dir,
+			  ram_limit, cpus_allowed, color, allow_autostart, allow_system_time,
+			  dns_server, pnet_cfg_list, allowed_devices, assigned_devices,
+			  vnet_cfg_list, usbdev_list, init, init_argv, init_env, init_env_len,
+			  fifo_list, ttype, usb_pin_entry);
 	if (c) {
 		// overwrite image sizes of mount table
 		container_config_fill_mount(conf, container_get_mnt(c));
 		container_config_write(conf);
+
+		// check if enough disk space is available
+		mount_t *mnt_table = container_get_mnt(c);
+		uint64_t disk_space_required = mount_get_disk_usage(mnt_table);
+
+		off_t disk_space_available = file_disk_space_free(store_path);
+		if (disk_space_available < 0) {
+			ERROR("Function file_disk_space_free failed");
+			container_free(c);
+			c = NULL;
+			goto out_config;
+		}
+
+		off_t min_free_space = file_disk_space(store_path);
+		if (min_free_space < 0) {
+			ERROR("Function file_disk_space failed");
+			container_free(c);
+			c = NULL;
+			goto out_config;
+		}
+		min_free_space *= CMLD_STORAGE_FREE_THRESHOLD;
+
+		if (disk_space_required > (uint64_t)disk_space_available ||
+		    (disk_space_available - disk_space_required) < (uint64_t)min_free_space) {
+			// not enough space left
+			ERROR("Not enough disk space left");
+			container_free(c);
+			c = NULL;
+			goto out_config;
+		}
 	}
 
+out_config:
+	container_config_free(conf);
+out:
 	uuid_free(uuid);
 	mem_free0(images_dir);
 	mem_free0(config_filename);
-
-	container_config_free(conf);
 	return c;
 }
 
