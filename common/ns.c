@@ -24,8 +24,8 @@
 #define _GNU_SOURCE
 #include <sched.h>
 #include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
-#include <sys/wait.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #include <stdbool.h>
@@ -37,6 +37,7 @@
 #include "dir.h"
 #include "event.h"
 #include "file.h"
+#include "proc.h"
 
 int
 namespace_setuid0()
@@ -213,7 +214,7 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 		int status;
 
 		DEBUG("Waiting for namespace child %i to exit", pid);
-		if (waitpid(pid, &status, 0) != pid) {
+		if (proc_waitpid(pid, &status, 0) != pid) {
 			if (!WIFEXITED(status))
 				ERROR_ERRNO("Namespaced child %d did not exit cleanly", pid);
 			else
