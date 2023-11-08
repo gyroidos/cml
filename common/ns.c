@@ -128,7 +128,7 @@ error:
 
 int
 namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
-	       int (*func)(const void **), const void **data)
+	       int (*func)(const void *), const void *data)
 {
 	if (namespace_pid < 1) {
 		ERROR("Invalid namespace PID given: %d", namespace_pid);
