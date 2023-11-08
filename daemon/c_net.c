@@ -1308,57 +1308,47 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 	}
 }
 
-/**
- * Cleans up the c_net_t struct and shuts down the network interface (in c0's netns).
- */
 static int
-c_net_cleanup_c0(c_net_t *net)
+c_net_do_cleanup_host(const void *data)
 {
+	const c_net_t *net = data;
 	ASSERT(net);
 
-	// cleanup moved rootns veth endpoint in c0's network namespace
-	pid_t *c0_netns_pid = mem_new0(pid_t, 1);
-	*c0_netns_pid = fork();
-	if (*c0_netns_pid == -1) {
-		ERROR_ERRNO("Could not fork for switching to c0's netns");
-		mem_free0(c0_netns_pid);
-		return -1;
-	} else if (*c0_netns_pid == 0) {
-		const char *hostns = cmld_containers_get_c0() ? "c0" : "CML";
+	for (list_t *l = net->interface_list; l; l = l->next) {
+		c_net_interface_t *ni = l->data;
 
-		DEBUG("Cleaning up netifs in %s", hostns);
-
-		event_reset(); // reset event_loop of cloned from parent
-		if (cmld_containers_get_c0()) {
-			if (ns_join_all(container_get_pid(cmld_containers_get_c0()), true)) {
-				ERROR("Failed to join namespaces of container c0");
-			}
-
-			if (namespace_setuid0()) {
-				ERROR("Failed to become root in new namespace");
-			}
-		}
-
-		for (list_t *l = net->interface_list; l; l = l->next) {
-			c_net_interface_t *ni = l->data;
-
-			if (!ni->configure) {
-				c_net_interface_down(ni);
-				continue;
-			}
-			if (network_setup_masquerading(ni->subnet, false))
-				WARN("Failed to remove masquerading from %s", ni->subnet);
-
+		if (!ni->configure) {
 			c_net_interface_down(ni);
+			continue;
 		}
-		DEBUG("Cleanup of net ifs in netns of %s done, exiting netns child!", hostns);
-		_exit(0); // don't call atexit registered cleanup of main process
-	} else {
-		DEBUG("Cleanup of ni ifs should be done by pid=%d", *c0_netns_pid);
-		// register at sigchild handler for helper clone in netns of c0
-		container_wait_for_child(net->container, "c0-netns-helper", *c0_netns_pid);
+		if (network_setup_masquerading(ni->subnet, false))
+			WARN("Failed to remove masquerading from %s", ni->subnet);
+
+		c_net_interface_down(ni);
 	}
 	return 0;
+}
+
+/**
+ * Cleans up the c_net_t struct and shuts down the network interface
+ * (if necessary in c0's netns).
+ */
+static int
+c_net_cleanup_c0(const c_net_t *net)
+{
+	ASSERT(net);
+	int ret = 0;
+	container_t *c0 = cmld_containers_get_c0();
+	const char *hostns = c0 ? "c0" : "CML";
+
+	DEBUG("Cleaning up netifs in %s", hostns);
+
+	// cleanup moved rootns veth endpoint in c0's network namespace
+	pid_t pid = c0 ? container_get_pid(c0) : getpid();
+	ret = namespace_exec(pid, CLONE_NEWNET | CLONE_NEWUSER, true, c_net_do_cleanup_host, net);
+
+	DEBUG("Cleanup of net ifs in netns of %s done!", hostns);
+	return ret;
 }
 
 /**
