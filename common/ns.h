@@ -47,12 +47,12 @@ namespace_setuid0();
  * @param namespaces clone-flags of the namespaces to join
  * @param become_root indicates if setuid(0) should be executed after joining the namespaces
  * @param func function pointer that gets executed inside the given namespaces
- * @param data array that is passed as a parameter to func
+ * @param data pointer that is passed as a parameter to func
  * @returns 0 if the forked child exited cleanly, -1 otherwise.
  */
 int
-namespace_exec(pid_t ns_pid, const int namespaces, bool become_root, int (*func)(const void **),
-	       const void **data);
+namespace_exec(pid_t ns_pid, const int namespaces, bool become_root, int (*func)(const void *),
+	       const void *data);
 
 /**
  * This function joins the current process to all namespaces of a process given
