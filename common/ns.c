@@ -35,6 +35,7 @@
 #include "macro.h"
 #include "mem.h"
 #include "dir.h"
+#include "event.h"
 #include "file.h"
 
 int
@@ -141,6 +142,7 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 		ERROR_ERRNO("Could not fork for switching to namespaces of %d", namespace_pid);
 		return -1;
 	} else if (pid == 0) {
+		event_reset(); // do not handle signals in child
 		TRACE("Child to join namespaces forked");
 
 		if (namespaces & CLONE_NEWCGROUP) {
