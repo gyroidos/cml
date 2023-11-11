@@ -184,7 +184,7 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 		int ret = func(data);
 
 		TRACE("Namespaced function returned %d", ret);
-		exit(ret);
+		_exit(ret); // don't call atexit registered cleanup of main process
 	} else {
 		int status;
 
