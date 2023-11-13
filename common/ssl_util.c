@@ -1274,6 +1274,8 @@ ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char
 
 	FILE *fp = NULL;
 	PKCS12 *p12 = NULL;
+	EVP_PKEY *pkey = NULL;
+	X509 *cert = NULL;
 
 	if (NULL == oldpass || NULL == newpass) {
 		errno = EINVAL;
@@ -1291,8 +1293,21 @@ ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char
 		ERROR("Error loading PKCS#12 structure");
 		goto error;
 	}
-	if (PKCS12_newpass(p12, oldpass, newpass) != 1) {
+	// currently broken in openssl
+	/*if (PKCS12_newpass(p12, oldpass, newpass) != 1) {
 		ERROR("Changing password!");
+		goto error;
+	}*/
+	if (PKCS12_parse(p12, oldpass, &pkey, &cert, NULL) == 0) {
+		ERROR("Error parsing PKCS#12 softtoken");
+		goto error;
+	}
+	// free old token
+	PKCS12_free(p12);
+	// recreate token with new passphrase
+	if ((p12 = PKCS12_create(newpass, TEST_FRIENDLY_NAME, pkey, cert, NULL, 0, 0, 0, 0, 0)) ==
+	    NULL) {
+		ERROR("Error creating PKCS#12 softtoken structure");
 		goto error;
 	}
 	if (!(fp = fopen(token_file, "wb"))) {
