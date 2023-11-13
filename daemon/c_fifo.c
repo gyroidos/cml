@@ -237,23 +237,23 @@ c_fifo_loop(char *fifo_path_c0, char *fifo_path_container)
 
 		if (!file_is_fifo(fifo_path_c0)) {
 			ERROR("Could not open FIFO at %s, stopping forwarder", fifo_path_c0);
-			exit(0);
+			_exit(0);
 		}
 
 		if (-1 == (fromfd = open(fifo_path_c0, O_RDONLY))) {
 			ERROR_ERRNO("Failed to open fromfd at %s, exiting...", fifo_path_c0);
-			exit(-1);
+			_exit(-1);
 		}
 		TRACE("Opened reading end for %s", fifo_path_c0);
 
 		if (!file_is_fifo(fifo_path_container)) {
 			ERROR("Could not open FIFO at %s, stopping forwarder", fifo_path_container);
-			exit(0);
+			_exit(0);
 		}
 
 		if (-1 == (tofd = open(fifo_path_container, O_WRONLY))) {
 			ERROR_ERRNO("Failed to open tofd at %s, exiting ...", fifo_path_container);
-			exit(-1);
+			_exit(-1);
 		}
 		TRACE("Opened writing end for %s", fifo_path_container);
 
@@ -277,7 +277,7 @@ c_fifo_loop(char *fifo_path_c0, char *fifo_path_container)
 		TRACE("[READLOOP] Read returned %d, try to reopen fds", count);
 	}
 
-	exit(0);
+	_exit(0);
 }
 
 static int
@@ -357,7 +357,7 @@ c_fifo_start_post_clone(void *fifop)
 
 			c_fifo_loop(current_fifo_c0, current_fifo_container);
 
-			exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		}
 
 		mem_free(current_fifo_c0);
