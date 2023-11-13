@@ -194,19 +194,19 @@ struct mount_attr {
 #endif
 // clang-format on
 
-static int
+int
 mount_setattr(int dirfd, const char *path, unsigned int flags, struct mount_attr *attr, size_t size)
 {
 	return syscall(__NR_mount_setattr, dirfd, path, flags, attr, size);
 }
 
-static int
+int
 open_tree(int dirfd, const char *path, unsigned int flags)
 {
 	return syscall(__NR_open_tree, dirfd, path, flags);
 }
 
-static int
+int
 move_mount(int from_dirfd, const char *from_path, int to_dirfd, const char *to_path,
 	   unsigned int flags)
 {
