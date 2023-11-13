@@ -163,36 +163,44 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 
 		if (namespaces & CLONE_NEWCGROUP) {
 			TRACE("Join cgroup namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("cgroup", namespace_pid), -1);
+			if (do_join_namespace("cgroup", namespace_pid) == -1)
+				_exit(-1);
 		}
 		if (namespaces & CLONE_NEWIPC) {
 			TRACE("Join ipc namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("ipc", namespace_pid), -1);
+			if (do_join_namespace("ipc", namespace_pid) == -1)
+				_exit(-1);
 		}
 		if (namespaces & CLONE_NEWNET) {
 			TRACE("Join net namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("net", namespace_pid), -1);
+			if (do_join_namespace("net", namespace_pid) == -1)
+				_exit(-1);
 		}
 		if (namespaces & CLONE_NEWUTS) {
 			TRACE("Join uts namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("uts", namespace_pid), -1);
+			if (do_join_namespace("uts", namespace_pid) == -1)
+				_exit(-1);
 		}
 		if (namespaces & CLONE_NEWPID) {
 			TRACE("Join pid namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("pid", namespace_pid), -1);
+			if (do_join_namespace("pid", namespace_pid) == -1)
+				_exit(-1);
 		}
 		if (namespaces & CLONE_NEWUSER) {
 			TRACE("Join user namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("user", namespace_pid), -1);
+			if (do_join_namespace("user", namespace_pid) == -1)
+				_exit(-1);
 		}
 		//after joining the mount namespace the container init process has pid 1 in procfs
 		if (namespaces & CLONE_NEWNS) {
 			TRACE("Join mnt namespace");
-			IF_TRUE_RETVAL_ERROR(do_join_namespace("mnt", namespace_pid), -1);
+			if (do_join_namespace("mnt", namespace_pid) == -1)
+				_exit(-1);
 		}
 		if (become_root) {
 			TRACE("Becoming root in target namespace");
-			IF_TRUE_RETVAL(namespace_setuid0(), -1);
+			if (namespace_setuid0() == -1)
+				_exit(-1);
 		}
 
 		TRACE("Executing namespaced function");
