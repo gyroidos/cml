@@ -64,6 +64,16 @@ setns(int fd, int nstype)
 	return syscall(__NR_setns, fd, nstype);
 }
 
+static bool
+ns_is_self_userns_file(char *file)
+{
+	struct stat s, userns_s;
+	IF_TRUE_RETVAL_TRACE(stat(file, &s) == -1, false);
+	IF_TRUE_RETVAL_TRACE(stat("/proc/self/ns/user", &userns_s) == -1, false);
+
+	return (s.st_dev == userns_s.st_dev) && (s.st_ino == userns_s.st_ino) ? true : false;
+}
+
 int
 do_join_namespace(const char *namespace, const int pid)
 {
@@ -76,6 +86,11 @@ do_join_namespace(const char *namespace, const int pid)
 
 	target_namespace_path = mem_printf("/proc/%d/ns/%s", pid, namespace);
 	current_namespace_path = mem_printf("/proc/self/ns/%s", namespace);
+
+	if (ns_is_self_userns_file(target_namespace_path)) {
+		TRACE("Joining same namespace not necessary -> skip.");
+		goto out;
+	}
 
 	len = readlink(target_namespace_path, target_namespace_id, 40);
 
@@ -111,6 +126,7 @@ do_join_namespace(const char *namespace, const int pid)
 
 	close(ns_fd);
 
+out:
 	mem_free0(target_namespace_path);
 	mem_free0(target_namespace_id);
 	mem_free0(current_namespace_path);
@@ -211,16 +227,6 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 
 #define MAX_NS 16
 static int fd[MAX_NS] = { 0 };
-
-static bool
-ns_is_self_userns_file(char *file)
-{
-	struct stat s, userns_s;
-	IF_TRUE_RETVAL_TRACE(stat(file, &s) == -1, false);
-	IF_TRUE_RETVAL_TRACE(stat("/proc/self/ns/user", &userns_s) == -1, false);
-
-	return (s.st_dev == userns_s.st_dev) && (s.st_ino == userns_s.st_ino) ? true : false;
-}
 
 struct ns_setns_cbdata {
 	int *fd;
