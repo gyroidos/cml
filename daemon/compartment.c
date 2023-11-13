@@ -600,8 +600,6 @@ compartment_is_privileged(const compartment_t *compartment)
  * should make sure that the compartment and all its submodules are in the same
  * state they had immediately after their creation with _new().
  * Return values are not gathered, as the cleanup should just work as the system allows.
- * It also sets compartment state to rebooting if 'is_rebooting' is set and
- * stopped otherwise.
  */
 static void
 compartment_cleanup(compartment_t *compartment, bool is_rebooting)
@@ -633,17 +631,6 @@ compartment_cleanup(compartment_t *compartment, bool is_rebooting)
 
 	compartment->pid = -1;
 	compartment->pid_early = -1;
-
-	// check if some cleanup routines registered any helper childs
-	// and wait for them in sig child handler
-	if (compartment->helper_child_list) {
-		compartment->is_doing_cleanup = true;
-		return;
-	}
-
-	compartment_state_t state =
-		is_rebooting ? COMPARTMENT_STATE_REBOOTING : COMPARTMENT_STATE_STOPPED;
-	compartment_set_state(compartment, state);
 }
 
 void
@@ -717,6 +704,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			}
 			/* cleanup and set states accordingly to notify observers */
 			compartment_cleanup(compartment, rebooting);
+			compartment->is_doing_cleanup = true;
 
 		} else if (pid == -1) {
 			if (errno == ECHILD) {
@@ -741,12 +729,14 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			INFO("Early Container %s terminated (init process exited with status=%d)",
 			     compartment_get_description(compartment), WEXITSTATUS(status));
 			compartment->exit_status = WEXITSTATUS(status);
-			compartment_cleanup(compartment, false);
 		} else if (WIFSIGNALED(status)) {
 			INFO("Early Container %s killed by signal %d",
 			     compartment_get_description(compartment), WTERMSIG(status));
-			compartment_cleanup(compartment, false);
+		} else {
+			return;
 		}
+		compartment_cleanup(compartment, false);
+		compartment->is_doing_cleanup = true;
 	}
 
 	// reap any open helper child and set state accordingly
@@ -1420,6 +1410,7 @@ compartment_start(compartment_t *compartment)
 
 error_pre_clone:
 	compartment_cleanup(compartment, false);
+	compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
 	return ret;
 
 error_post_clone:
