@@ -696,7 +696,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	pid_t compartment_pid = compartment->pid;
 	pid_t pid = 0;
 	int status = 0;
-	while ((pid = waitpid(-(compartment_pid), &status, WNOHANG))) {
+	if ((pid = waitpid(-(compartment_pid), &status, WNOHANG))) {
 		if (pid == compartment_pid) {
 			bool rebooting = false;
 			if (WIFEXITED(status)) {
@@ -713,7 +713,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 					compartment->is_rebooting = true;
 				}
 			} else {
-				continue;
+				return;
 			}
 			/* cleanup and set states accordingly to notify observers */
 			compartment_cleanup(compartment, rebooting);
@@ -726,7 +726,6 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 				WARN_ERRNO("waitpid failed for compartment %s",
 					   compartment_get_description(compartment));
 			}
-			break;
 		} else {
 			DEBUG("Reaped a child with PID %d for compartment %s", pid,
 			      compartment_get_description(compartment));
