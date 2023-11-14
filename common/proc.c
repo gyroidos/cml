@@ -400,3 +400,13 @@ proc_get_mem_available(const proc_meminfo_t *meminfo)
 	IF_NULL_RETVAL(meminfo, -1);
 	return MUL_WITH_OVERFLOW_CHECK(meminfo->mem_available, 1024);
 }
+
+int
+proc_waitpid(pid_t pid, int *status, int options)
+{
+	pid_t ret;
+	while ((ret = waitpid(pid, status, options)) == -1 && errno == EINTR) {
+		TRACE_ERRNO("waitpid interrupted for child '%d', wait again", pid);
+	}
+	return ret;
+}

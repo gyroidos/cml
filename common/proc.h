@@ -126,4 +126,7 @@ proc_get_mem_free(const proc_meminfo_t *meminfo);
 ssize_t
 proc_get_mem_available(const proc_meminfo_t *meminfo);
 
+int
+proc_waitpid(pid_t pid, int *status, int options);
+
 #endif /* PROC_H */
