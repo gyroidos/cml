@@ -641,10 +641,9 @@ compartment_sigchld_handle_helpers(compartment_t *compartment, event_signal_t *s
 	list_t *still_active = NULL;
 	for (list_t *l = compartment->helper_child_list; l; l = l->next) {
 		compartment_helper_child_t *child = l->data;
-		pid_t pid = waitpid(child->pid, &status, WNOHANG);
-		if (pid == child->pid) {
+		if (proc_waitpid(child->pid, &status, WNOHANG) == child->pid) {
 			DEBUG("Reaped helper child %s (pid=%d) for compartment %s", child->name,
-			      pid, compartment_get_description(compartment));
+			      child->pid, compartment_get_description(compartment));
 			compartment_helper_child_free(child);
 		} else {
 			still_active = list_append(still_active, child);
@@ -683,7 +682,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	pid_t compartment_pid = compartment->pid;
 	pid_t pid = 0;
 	int status = 0;
-	if ((pid = waitpid(-(compartment_pid), &status, WNOHANG))) {
+	if ((pid = proc_waitpid(-(compartment_pid), &status, WNOHANG))) {
 		if (pid == compartment_pid) {
 			bool rebooting = false;
 			if (WIFEXITED(status)) {
@@ -721,7 +720,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	}
 
 	// check for compartment itself again, e.g., before execv
-	pid = waitpid(compartment_pid, &status, WNOHANG);
+	pid = proc_waitpid(compartment_pid, &status, WNOHANG);
 	if (pid == compartment_pid) {
 		INFO("Compartment %s reaped before beeing part of pg",
 		     compartment_get_description(compartment));
@@ -757,7 +756,7 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	TRACE("SIGCHLD handler called for compartment %s early start child with PID %d",
 	      compartment_get_description(compartment), compartment->pid);
 
-	if ((pid = waitpid(compartment->pid_early, &status, WNOHANG)) > 0) {
+	if ((pid = proc_waitpid(compartment->pid_early, &status, WNOHANG)) > 0) {
 		TRACE("Reaped early compartment child process: %d", pid);
 		/* remove the sigchld callback for this early child from the event loop */
 		event_remove_signal(sig);
