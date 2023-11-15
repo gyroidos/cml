@@ -636,11 +636,13 @@ c_cgroups_dev_deny(void *cgroups_devp, const char *rule)
 	}
 
 	cgroups_dev->allowed_devs = list_remove(cgroups_dev->allowed_devs, matched_dev);
+	mem_free0(matched_dev);
 
 	// an entry for an assigned device should only be present once in the list
 	if ((matched_dev = c_cgroups_dev_list_match(cgroups_dev->assigned_devs, dev_item)) !=
 	    NULL) {
 		cgroups_dev->assigned_devs = list_remove(cgroups_dev->assigned_devs, matched_dev);
+		mem_free0(matched_dev);
 	}
 
 	mem_free0(dev_item);
@@ -807,6 +809,10 @@ c_cgroups_dev_cleanup(void *cgroups_devp, UNUSED bool is_rebooting)
 	for (list_t *elem = cgroups_dev->assigned_devs; elem != NULL; elem = elem->next) {
 		c_cgroups_dev_item_t *dev_elem = elem->data;
 		c_cgroups_dev_list_remove(&global_assigned_devs_list, dev_elem);
+	}
+	for (list_t *l = cgroups_dev->assigned_devs; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		c_cgroups_dev_item_free(dev_item);
 	}
 	list_delete(cgroups_dev->assigned_devs);
 	cgroups_dev->assigned_devs = NULL;
