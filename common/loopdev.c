@@ -169,6 +169,8 @@ error:
 		ioctl(*loop_fd, LOOP_CLR_FD, 0);
 		close(*loop_fd);
 	}
+	if (loop_dev)
+		mem_free0(loop_dev);
 	return NULL;
 }
 
