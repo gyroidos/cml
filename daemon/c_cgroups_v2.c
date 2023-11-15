@@ -246,7 +246,8 @@ c_cgroups_set_ram_limit(c_cgroups_t *cgroups)
 	ret = 0;
 out:
 	mem_free0(memory_max_path);
-	mem_free0(mem_max_string);
+	if (mem_max_string)
+		mem_free0(mem_max_string);
 	return ret;
 }
 
