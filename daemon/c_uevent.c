@@ -230,14 +230,13 @@ c_uevent_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 			event_coldboot = uevent_event_replace_synth_uuid_new(event, "0");
 			if (!event_coldboot) {
 				ERROR("Failed to mask out container uuid from SYNTH_UUID in uevent");
-				return;
+				goto err;
 			}
 			event = event_coldboot;
 			goto send;
 		} else {
 			TRACE("Skip coldboot event's for other conainer");
-			uuid_free(synth_uuid);
-			return;
+			goto err;
 		}
 	}
 
@@ -249,8 +248,7 @@ c_uevent_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 	if (actions & UEVENT_ACTION_ADD) {
 		if (c_uevent_create_device_node(uevent, devname, major, minor, devtype) < 0) {
 			ERROR("Could not create device node");
-			mem_free0(devname);
-			return;
+			goto err;
 		}
 	} else if (actions & UEVENT_ACTION_REMOVE) {
 		if (unlink(devname) < 0 && errno != ENOENT) {
@@ -267,7 +265,9 @@ send:
 		TRACE("Sucessfully injected uevent into netns of container %s!",
 		      container_get_name(uevent->container));
 	}
-
+err:
+	if (synth_uuid)
+		uuid_free(synth_uuid);
 	if (devname)
 		mem_free0(devname);
 	if (event_coldboot)
