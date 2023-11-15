@@ -34,6 +34,7 @@
 #include <linux/limits.h>
 #include <linux/sockios.h>
 #include <sched.h>
+#include <sys/mman.h>
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include <macro.h>
@@ -212,16 +213,24 @@ c_run_cleanup(void *runp, UNUSED bool is_rebooting)
 static int
 do_clone(int (*func)(void *), unsigned long flags, void *data)
 {
+	int ret = 0;
 	void *exec_stack = NULL;
 	/* Allocate node stack */
-	if (!(exec_stack = alloca(CLONE_STACK_SIZE))) {
-		WARN_ERRNO("Not enough memory for allocating container stack");
+
+	if (MAP_FAILED == (exec_stack = mmap(NULL, CLONE_STACK_SIZE, PROT_READ | PROT_WRITE,
+					     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0))) {
+		WARN_ERRNO("Not enough memory for allocating c_run stack");
 		return -1;
 	}
 
 	void *exec_stack_high = (void *)((const char *)exec_stack + CLONE_STACK_SIZE);
 
-	return clone(func, exec_stack_high, flags, data);
+	ret = clone(func, exec_stack_high, flags, data);
+
+	if (exec_stack && munmap(exec_stack, CLONE_STACK_SIZE) == -1)
+		WARN("Could not unmap c_run exec_stack!");
+
+	return ret;
 }
 
 static c_run_session_t *
