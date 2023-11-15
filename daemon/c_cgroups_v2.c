@@ -137,6 +137,7 @@ c_cgroups_activate_controllers(const char *path)
 	}
 
 	str_free(activate, true);
+	mem_free0(subtree_control_path);
 	mem_free0(controllers_path);
 	mem_free0(controllers);
 	return ret;
