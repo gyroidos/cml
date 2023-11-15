@@ -307,194 +307,181 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		event_remove_io(seccomp->event);
 		event_io_free(seccomp->event);
 		close(seccomp->notify_fd);
-
 		return;
-	} else if (events & EVENT_IO_READ) {
-		struct seccomp_notif *req = mem_alloc0(seccomp->notif_sizes->seccomp_notif);
-		struct seccomp_notif_resp *resp = mem_alloc0(seccomp->notif_sizes->seccomp_notif);
-
-		TRACE("Attempting to retrieve seccomp notification on fd %d", fd);
-
-		if (seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_RECV, req)) {
-			if (EINTR == errno) {
-				ERROR("SECCOMP_IOCTL_NOTIF_RECV interrupted by SIGCHLD");
-				audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-						"seccomp-rcv-next",
-						compartment_get_name(seccomp->compartment), 2,
-						"errno", errno);
-				return;
-			} else {
-				ERROR("SECCOMP_IOCTL_NOTIF_RECV interrupted by unexpected event");
-				audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-						"seccomp-rcv-next",
-						compartment_get_name(seccomp->compartment), 2,
-						"errno", errno);
-				return;
-			}
-		}
-
-		TRACE("[%llu] Got syscall no. %d by PID %u", req->id, req->data.nr, req->pid);
-
-		if (SYS_clock_adjtime == req->data.nr) {
-			int ret_adjtime = -1;
-
-			if (!(COMPARTMENT_FLAG_SYSTEM_TIME &
-			      compartment_get_flags(seccomp->compartment))) {
-				DEBUG("Blocking call to SYS_clock_adjtime by PID %d", req->pid);
-				goto out;
-			}
-
-			DEBUG("Got clock_adjtime, clk_id: %lld, struct timex *: %p",
-			      req->data.args[0], (void *)req->data.args[1]);
-
-			struct timex *timex = NULL;
-
-			if (CLOCK_REALTIME != req->data.args[0]) {
-				DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
-				      uuid_string(compartment_get_uuid(seccomp->compartment)),
-				      req->data.args[0]);
-				goto out;
-			}
-
-			if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
-				      seccomp, req->pid, (void *)req->data.args[1],
-				      sizeof(struct timex)))) {
-				ERROR_ERRNO("Failed to fetch struct timex");
-				goto out;
-			}
-
-			DEBUG("Executing clock_adjtime on behalf of container");
-			if (-1 == (ret_adjtime = clock_adjtime(CLOCK_REALTIME, timex))) {
-				audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-						"seccomp-emulation-failed",
-						compartment_get_name(seccomp->compartment), 2,
-						"syscall", SYS_clock_adjtime);
-				ERROR_ERRNO("Failed to execute clock_adjtime");
-				mem_free(timex);
-				goto out;
-			}
-
-			DEBUG("clock_adjtime returned %d", ret_adjtime);
-
-			// prepare answer
-			resp->id = req->id;
-			resp->error = 0;
-			resp->val = ret_adjtime;
-
-			mem_free(timex);
-		} else if (SYS_adjtimex == req->data.nr) {
-			int ret_adjtimex = -1;
-
-			if (!(COMPARTMENT_FLAG_SYSTEM_TIME &
-			      compartment_get_flags(seccomp->compartment))) {
-				DEBUG("Blocking call to SYS_adjtimex by PID %d", req->pid);
-				goto out;
-			}
-
-			DEBUG("Got adjtimex, struct timex *: %p", (void *)req->data.args[0]);
-
-			struct timex *timex = NULL;
-
-			if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
-				      seccomp, req->pid, (void *)req->data.args[0],
-				      sizeof(struct timex)))) {
-				ERROR_ERRNO("Failed to fetch struct timex");
-				goto out;
-			}
-
-			DEBUG("Executing adjtimex on behalf of container");
-			if (-1 == (ret_adjtimex = adjtimex(timex))) {
-				audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-						"seccomp-emulation-failed",
-						compartment_get_name(seccomp->compartment), 2,
-						"syscall", SYS_adjtimex);
-				ERROR_ERRNO("Failed to execute adjtimex");
-				mem_free(timex);
-				goto out;
-			}
-
-			DEBUG("adjtimex returned %d", ret_adjtimex);
-
-			// prepare answer
-			resp->id = req->id;
-			resp->error = 0;
-			resp->val = ret_adjtimex;
-
-			mem_free(timex);
-		} else if (SYS_clock_settime == req->data.nr) {
-			int ret_settime = -1;
-
-			if (!(COMPARTMENT_FLAG_SYSTEM_TIME &
-			      compartment_get_flags(seccomp->compartment))) {
-				DEBUG("Blocking call to SYS_clock_settime by PID %d", req->pid);
-				goto out;
-			}
-
-			DEBUG("Got clock_settime, clockid: %lld, struct timespec *: %p",
-			      req->data.args[0], (void *)req->data.args[1]);
-
-			struct timespec *timespec = NULL;
-
-			if (CLOCK_REALTIME != req->data.args[0]) {
-				DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
-				      uuid_string(compartment_get_uuid(seccomp->compartment)),
-				      req->data.args[0]);
-				goto out;
-			}
-
-			if (!(timespec = (struct timespec *)c_seccomp_fetch_vm_new(
-				      seccomp, req->pid, (void *)req->data.args[1],
-				      sizeof(struct timespec)))) {
-				ERROR_ERRNO("Failed to fetch struct timespec");
-				goto out;
-			}
-
-			DEBUG("Executing clock_settime on behalf of container");
-			if (-1 == (ret_settime = clock_settime(CLOCK_REALTIME, timespec))) {
-				audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-						"seccomp-emulation-failed",
-						compartment_get_name(seccomp->compartment), 2,
-						"syscall", SYS_clock_settime);
-				ERROR_ERRNO("Failed to execute clock_settime");
-				goto out;
-			}
-
-			DEBUG("clock_settime returned %d", ret_settime);
-
-			// prepare answer
-			resp->id = req->id;
-			resp->error = 0;
-			resp->val = ret_settime;
-
-			mem_free(timespec);
-		} else {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-unexpected-syscall",
-					compartment_get_name(seccomp->compartment), 2, "syscall",
-					req->data.nr);
-
-			ERROR("Got syscall not handled by us: %d", req->data.nr);
-
-			resp->id = req->id;
-			resp->error = 0;
-			resp->val = 0;
-			resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-		}
-
-		if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-send-respone",
-					compartment_get_name(seccomp->compartment), 2, "errno",
-					errno);
-			ERROR_ERRNO("Failed to send seccomp notify response");
-		} else {
-			DEBUG("Successfully handled seccomp notification");
-		}
-
-	out:
-		mem_free(req);
-		mem_free(resp);
 	}
+
+	IF_FALSE_RETURN(events & EVENT_IO_READ);
+
+	struct seccomp_notif *req = mem_alloc0(seccomp->notif_sizes->seccomp_notif);
+	struct seccomp_notif_resp *resp = mem_alloc0(seccomp->notif_sizes->seccomp_notif);
+
+	TRACE("Attempting to retrieve seccomp notification on fd %d", fd);
+
+	if (seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_RECV, req)) {
+		ERROR("SECCOMP_IOCTL_NOTIF_RECV interrupted by %s",
+		      EINTR == errno ? "SIGCHLD" : "unexpected event");
+
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-rcv-next",
+				compartment_get_name(seccomp->compartment), 2, "errno", errno);
+		goto out;
+	}
+
+	TRACE("[%llu] Got syscall no. %d by PID %u", req->id, req->data.nr, req->pid);
+
+	if (SYS_clock_adjtime == req->data.nr) {
+		int ret_adjtime = -1;
+
+		if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
+			DEBUG("Blocking call to SYS_clock_adjtime by PID %d", req->pid);
+			goto out;
+		}
+
+		DEBUG("Got clock_adjtime, clk_id: %lld, struct timex *: %p", req->data.args[0],
+		      (void *)req->data.args[1]);
+
+		struct timex *timex = NULL;
+
+		if (CLOCK_REALTIME != req->data.args[0]) {
+			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
+			      uuid_string(compartment_get_uuid(seccomp->compartment)),
+			      req->data.args[0]);
+			goto out;
+		}
+
+		if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
+								     (void *)req->data.args[1],
+								     sizeof(struct timex)))) {
+			ERROR_ERRNO("Failed to fetch struct timex");
+			goto out;
+		}
+
+		DEBUG("Executing clock_adjtime on behalf of container");
+		if (-1 == (ret_adjtime = clock_adjtime(CLOCK_REALTIME, timex))) {
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+					"seccomp-emulation-failed",
+					compartment_get_name(seccomp->compartment), 2, "syscall",
+					SYS_clock_adjtime);
+			ERROR_ERRNO("Failed to execute clock_adjtime");
+			mem_free(timex);
+			goto out;
+		}
+
+		DEBUG("clock_adjtime returned %d", ret_adjtime);
+
+		// prepare answer
+		resp->id = req->id;
+		resp->error = 0;
+		resp->val = ret_adjtime;
+
+		mem_free(timex);
+	} else if (SYS_adjtimex == req->data.nr) {
+		int ret_adjtimex = -1;
+
+		if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
+			DEBUG("Blocking call to SYS_adjtimex by PID %d", req->pid);
+			goto out;
+		}
+
+		DEBUG("Got adjtimex, struct timex *: %p", (void *)req->data.args[0]);
+
+		struct timex *timex = NULL;
+
+		if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
+								     (void *)req->data.args[0],
+								     sizeof(struct timex)))) {
+			ERROR_ERRNO("Failed to fetch struct timex");
+			goto out;
+		}
+
+		DEBUG("Executing adjtimex on behalf of container");
+		if (-1 == (ret_adjtimex = adjtimex(timex))) {
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+					"seccomp-emulation-failed",
+					compartment_get_name(seccomp->compartment), 2, "syscall",
+					SYS_adjtimex);
+			ERROR_ERRNO("Failed to execute adjtimex");
+			mem_free(timex);
+			goto out;
+		}
+
+		DEBUG("adjtimex returned %d", ret_adjtimex);
+
+		// prepare answer
+		resp->id = req->id;
+		resp->error = 0;
+		resp->val = ret_adjtimex;
+
+		mem_free(timex);
+	} else if (SYS_clock_settime == req->data.nr) {
+		int ret_settime = -1;
+
+		if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
+			DEBUG("Blocking call to SYS_clock_settime by PID %d", req->pid);
+			goto out;
+		}
+
+		DEBUG("Got clock_settime, clockid: %lld, struct timespec *: %p", req->data.args[0],
+		      (void *)req->data.args[1]);
+
+		struct timespec *timespec = NULL;
+
+		if (CLOCK_REALTIME != req->data.args[0]) {
+			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
+			      uuid_string(compartment_get_uuid(seccomp->compartment)),
+			      req->data.args[0]);
+			goto out;
+		}
+
+		if (!(timespec = (struct timespec *)c_seccomp_fetch_vm_new(
+			      seccomp, req->pid, (void *)req->data.args[1],
+			      sizeof(struct timespec)))) {
+			ERROR_ERRNO("Failed to fetch struct timespec");
+			goto out;
+		}
+
+		DEBUG("Executing clock_settime on behalf of container");
+		if (-1 == (ret_settime = clock_settime(CLOCK_REALTIME, timespec))) {
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+					"seccomp-emulation-failed",
+					compartment_get_name(seccomp->compartment), 2, "syscall",
+					SYS_clock_settime);
+			ERROR_ERRNO("Failed to execute clock_settime");
+			mem_free(timespec);
+			goto out;
+		}
+
+		DEBUG("clock_settime returned %d", ret_settime);
+
+		// prepare answer
+		resp->id = req->id;
+		resp->error = 0;
+		resp->val = ret_settime;
+
+		mem_free(timespec);
+	} else {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				req->data.nr);
+
+		ERROR("Got syscall not handled by us: %d", req->data.nr);
+
+		resp->id = req->id;
+		resp->error = 0;
+		resp->val = 0;
+		resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+	}
+
+	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-respone",
+				compartment_get_name(seccomp->compartment), 2, "errno", errno);
+		ERROR_ERRNO("Failed to send seccomp notify response");
+	} else {
+		DEBUG("Successfully handled seccomp notification");
+	}
+
+out:
+	mem_free(req);
+	mem_free(resp);
 }
 
 static int
