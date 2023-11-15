@@ -457,7 +457,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	DEBUG("New containers max ram is %" PRIu32 "", ram_limit);
 
 	cpus_allowed = container_config_get_cpus_allowed(conf);
-	DEBUG("New containers allowed cpu cores are %s", cpus_allowed);
+	DEBUG("New containers allowed cpu cores are %s", cpus_allowed ? cpus_allowed : "all");
 
 	color = container_config_get_color(conf);
 
