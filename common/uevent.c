@@ -718,7 +718,8 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 	}
 out:
 	mem_free0(full_path);
-	mem_free0(dev_file);
+	if (dev_file)
+		mem_free0(dev_file);
 	return ret;
 }
 
