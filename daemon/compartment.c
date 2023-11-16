@@ -679,11 +679,10 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	/* In the start function the childs init process gets set a process group which has
 	 * the same pgid as its pid. We wait for all processes belonging to our compartment's
 	 * process group, but only change the compartments state to stopped if the init exited */
-	pid_t compartment_pid = compartment->pid;
 	pid_t pid = 0;
 	int status = 0;
-	if ((pid = proc_waitpid(-(compartment_pid), &status, WNOHANG))) {
-		if (pid == compartment_pid) {
+	if (compartment->pid > 0 && (pid = proc_waitpid(-(compartment->pid), &status, WNOHANG))) {
+		if (pid == compartment->pid) {
 			bool rebooting = false;
 			if (WIFEXITED(status)) {
 				INFO("Container %s terminated (init process exited with status=%d)",
@@ -720,8 +719,8 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	}
 
 	// check for compartment itself again, e.g., before execv
-	pid = proc_waitpid(compartment_pid, &status, WNOHANG);
-	if (pid == compartment_pid) {
+	pid = proc_waitpid(compartment->pid, &status, WNOHANG);
+	if (pid == compartment->pid) {
 		INFO("Compartment %s reaped before beeing part of pg",
 		     compartment_get_description(compartment));
 		if (WIFEXITED(status)) {
@@ -756,7 +755,8 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	TRACE("SIGCHLD handler called for compartment %s early start child with PID %d",
 	      compartment_get_description(compartment), compartment->pid);
 
-	if ((pid = proc_waitpid(compartment->pid_early, &status, WNOHANG)) > 0) {
+	if (compartment->pid_early &&
+	    (pid = proc_waitpid(compartment->pid_early, &status, WNOHANG)) > 0) {
 		TRACE("Reaped early compartment child process: %d", pid);
 		/* remove the sigchld callback for this early child from the event loop */
 		event_remove_signal(sig);
