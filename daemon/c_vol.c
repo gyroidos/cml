@@ -1658,9 +1658,12 @@ c_vol_mount_proc_and_sys(const c_vol_t *vol, const char *dir)
 		goto error;
 	}
 
-	if (lxcfs_is_supported() && lxcfs_mount_proc_overlay(mnt_proc)) {
-		ERROR_ERRNO("Could not apply lxcfs overlay on mount %s", mnt_proc);
-		goto error;
+	if (lxcfs_is_supported()) {
+		if (lxcfs_mount_proc_overlay(mnt_proc) == -1) {
+			ERROR_ERRNO("Could not apply lxcfs overlay on mount %s", mnt_proc);
+			goto error;
+		}
+		INFO("lxcfs overlay mounted successfully.");
 	} else {
 		INFO("lxcfs not supported - not mounting overlay");
 	}
