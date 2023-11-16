@@ -38,11 +38,11 @@
 #include "common/fd.h"
 #include "common/event.h"
 #include "common/file.h"
+#include "common/proc.h"
 
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <fcntl.h>
 #include <sched.h>
 #include <signal.h>
@@ -127,7 +127,7 @@ c_fifo_cleanup(void *fifop, UNUSED bool is_rebooting)
 
 		DEBUG("Stopping forwarder %d", *pid);
 		kill(*pid, SIGKILL);
-		waitpid(*pid, NULL, 0);
+		proc_waitpid(*pid, NULL, 0);
 
 		mem_free(pid);
 		fifo->forwarder_list = list_unlink(fifo->forwarder_list, fifo->forwarder_list);
