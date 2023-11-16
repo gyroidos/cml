@@ -1180,9 +1180,6 @@ c_net_start_post_clone(void *netp)
 		WARN("Could not bind netns of %s into filesystem!",
 		     container_get_name(net->container));
 	}
-	net->fd_netns = open(net->ns_path, O_RDONLY);
-	if (net->fd_netns < 0)
-		WARN("Could not keep netns active for reboot!");
 
 	return 0;
 }
@@ -1364,9 +1361,13 @@ c_net_cleanup(void *netp, bool is_rebooting)
 	if (!container_has_netns(net->container) || !(list_length(net->interface_list)))
 		return;
 
-	/* skip on reboots of c0 */
-	if (is_rebooting && (cmld_containers_get_c0() == net->container))
+	/* skip cleanup and keep netns open on reboots of c0 */
+	if (is_rebooting && (cmld_containers_get_c0() == net->container)) {
+		net->fd_netns = open(net->ns_path, O_RDONLY);
+		if (net->fd_netns < 0)
+			WARN("Could not keep netns active for reboot!");
 		return;
+	}
 
 	// remove bound to filesystem
 	if (net->fd_netns > 0) {
