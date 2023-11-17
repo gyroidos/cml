@@ -417,8 +417,12 @@ c_cgroups_dev_bpf_prog_deactivate(c_cgroups_dev_t *cgroups_dev)
 		.attach_bpf_fd = cgroups_dev->bpf_prog->fd,
 	};
 
-	if (bpf(BPF_PROG_DETACH, &detach_attr, sizeof(detach_attr)))
+	// if cgroup still exist detach the program from it
+	if (cgroup_fd > 0 && bpf(BPF_PROG_DETACH, &detach_attr, sizeof(detach_attr)))
 		WARN_ERRNO("Failed to detach bpf program!");
+
+	close(cgroups_dev->bpf_prog->fd);
+	close(cgroup_fd);
 
 	c_cgroups_dev_bpf_prog_free(cgroups_dev->bpf_prog);
 }
@@ -488,6 +492,7 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 		c_cgroups_dev_bpf_prog_deactivate(cgroups_dev);
 
 	cgroups_dev->bpf_prog = prog;
+	close(cgroup_fd);
 
 	return 0;
 error:
