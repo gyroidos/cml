@@ -1319,6 +1319,7 @@ compartment_start(compartment_t *compartment)
 	ASSERT(compartment);
 
 	int ret = 0;
+	void *compartment_stack = NULL;
 
 	compartment_set_state(compartment, COMPARTMENT_STATE_STARTING);
 
@@ -1339,7 +1340,6 @@ compartment_start(compartment_t *compartment)
 	/*********************************************************/
 	/* PREPARE CLONE */
 
-	void *compartment_stack = NULL;
 	/* Allocate node stack */
 	if (MAP_FAILED ==
 	    (compartment_stack = mmap(NULL, CLONE_STACK_SIZE, PROT_READ | PROT_WRITE,
@@ -1404,12 +1404,16 @@ compartment_start(compartment_t *compartment)
 			goto error_post_clone;
 		}
 	}
+	if (compartment_stack && munmap(compartment_stack, CLONE_STACK_SIZE) == -1)
+		WARN("Could not unmap compartment_stack!");
 
 	return 0;
 
 error_pre_clone:
 	compartment_cleanup(compartment, false);
 	compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
+	if (compartment_stack && munmap(compartment_stack, CLONE_STACK_SIZE) == -1)
+		WARN("Could not unmap compartment_stack!");
 	return ret;
 
 error_post_clone:
@@ -1420,6 +1424,8 @@ error_post_clone:
 		WARN_ERRNO("write to sync socket failed");
 		compartment_kill(compartment);
 	}
+	if (compartment_stack && munmap(compartment_stack, CLONE_STACK_SIZE) == -1)
+		WARN("Could not unmap compartment_stack!");
 	return ret;
 }
 
