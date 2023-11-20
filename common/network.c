@@ -656,6 +656,8 @@ msg_err:
 int
 network_str_to_mac_addr(const char *mac_str, uint8_t mac[6])
 {
+	IF_NULL_RETVAL(mac_str, -1);
+
 	int ret =
 		sscanf(mac_str,
 		       "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8,
