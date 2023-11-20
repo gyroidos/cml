@@ -832,6 +832,9 @@ c_net_new(compartment_t *compartment)
 	uint8_t mac[6];
 	for (list_t *l = container_get_pnet_cfg_list(net->container); l; l = l->next) {
 		container_pnet_cfg_t *pnet_cfg = l->data;
+		// deep copy for internal list and hotplugging
+		container_pnet_cfg_t *pnet_cfg_mv = container_pnet_cfg_new(
+			pnet_cfg->pnet_name, pnet_cfg->mac_filter, pnet_cfg->mac_whitelist);
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
 		TRACE("mv_name_list add ifname %s", if_name_macstr);
@@ -840,8 +843,9 @@ c_net_new(compartment_t *compartment)
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
 			// register at hotplug subsys
-			if (-1 == hotplug_register_netdev(net->container, pnet_cfg)) {
+			if (-1 == hotplug_register_netdev(net->container, pnet_cfg_mv)) {
 				WARN("Could not register Interface for moving");
+				container_pnet_cfg_free(pnet_cfg_mv);
 			} else {
 				INFO("Registed Interface for mac '%s' at hotplug subsys",
 				     if_name_macstr);
@@ -861,10 +865,9 @@ c_net_new(compartment_t *compartment)
 		TRACE("mv_name_list add ifname %s", if_name);
 
 		if (cmld_netif_phys_remove_by_name(if_name))
-			net->pnet_mv_list = list_append(
-				net->pnet_mv_list,
-				container_pnet_cfg_new(pnet_cfg->pnet_name, pnet_cfg->mac_filter,
-						       pnet_cfg->mac_whitelist));
+			net->pnet_mv_list = list_append(net->pnet_mv_list, pnet_cfg_mv);
+
+		mem_free0(if_name);
 	}
 
 	// path to bind netns, compatible to ip netns tool
