@@ -128,10 +128,42 @@ uevent_trace(uevent_event_t *uevent, char *raw_p)
 	}
 }
 
-static void
-uevent_parse(uevent_event_t *uevent, char *raw_p)
+static bool
+uevent_event_is_udev(const uevent_event_t *event)
+{
+	return !strncmp(event->msg.nlh.prefix, "libudev", event->msg_len);
+}
+
+static int
+uevent_parse(uevent_event_t *uevent)
 {
 	ASSERT(uevent);
+
+	char *raw_p = uevent->msg.raw;
+
+	// skip header
+	if (uevent_event_is_udev(uevent)) {
+		/* udev message needs proper version magic */
+		if (uevent->msg.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
+			WARN("unrecognized message signature (%x != %x)", uevent->msg.nlh.magic,
+			     htonl(UDEV_MONITOR_MAGIC));
+			return -1;
+		}
+		if (uevent->msg.nlh.properties_off + 32 > uevent->msg_len) {
+			WARN("message smaller than expected (%u > %zd)",
+			     uevent->msg.nlh.properties_off + 32, uevent->msg_len);
+			return -1;
+		}
+		raw_p += uevent->msg.nlh.properties_off;
+	} else if (strchr(raw_p, '@')) {
+		/* kernel message */
+		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
+		raw_p += strlen(raw_p) + 1;
+	} else {
+		/* kernel message */
+		TRACE("no uevent: %s", raw_p);
+		return -1;
+	}
 
 	uevent->action = "";
 	uevent->devpath = "";
@@ -212,6 +244,8 @@ uevent_parse(uevent_event_t *uevent, char *raw_p)
 
 	TRACE("uevent { '%s', '%s', '%s', '%s', %d, %d, '%s'}", uevent->action, uevent->devpath,
 	      uevent->subsystem, uevent->devname, uevent->major, uevent->minor, uevent->interface);
+
+	return 0;
 }
 
 uevent_event_t *
@@ -263,7 +297,7 @@ uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newme
 	else
 		newevent->msg.raw[newevent->msg_len] = '\0';
 
-	uevent_parse(newevent, newevent->msg.raw);
+	IF_TRUE_GOTO_ERROR(uevent_parse(newevent) == -1, error);
 
 	return newevent;
 
@@ -372,7 +406,8 @@ uevent_event_copy_new(const uevent_event_t *event)
 	memcpy(event_clone, event, sizeof(uevent_event_t));
 
 	// update internal pointers to cloned raw buffer
-	uevent_parse(event_clone, event_clone->msg.raw);
+	if (uevent_parse(event_clone) == -1)
+		mem_free0(event_clone);
 
 	return event_clone;
 }
@@ -472,35 +507,18 @@ uevent_action_from_string(const char *action)
 }
 
 static void
-handle_kernel_event(uevent_event_t *uevent, char *raw_p)
+handle_uev_list(uevent_event_t *uevent, list_t *event_list)
 {
-	TRACE("handle_kernel_event");
-	uevent_parse(uevent, raw_p);
+	TRACE("handle_udev_event");
 
-	/* handle registerd uev events */
-	for (list_t *l = uevent_uev_kernel_list; l; l = l->next) {
+	/* handle registerd uev udev events */
+	for (list_t *l = event_list; l; l = l->next) {
 		uevent_uev_t *uev = l->data;
 		unsigned action = uevent_action_from_string(uevent->action);
 		if (action & uev->actions)
 			uev->func(action, uevent, uev->data);
 	}
 	TRACE("Handled uevent seqnum=%llu.", uevent->seqnum);
-}
-
-static void
-handle_udev_event(uevent_event_t *uevent, char *raw_p)
-{
-	TRACE("handle_udev_event");
-	uevent_parse(uevent, raw_p);
-
-	/* handle registerd uev udev events */
-	for (list_t *l = uevent_uev_udev_list; l; l = l->next) {
-		uevent_uev_t *uev = l->data;
-		unsigned action = uevent_action_from_string(uevent->action);
-		if (action & uev->actions)
-			uev->func(action, uevent, uev->data);
-	}
-	return;
 }
 
 static void
@@ -515,27 +533,18 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		goto err;
 	}
 
+	IF_TRUE_GOTO_ERROR(uevent_parse(uev) == -1, err);
+
 	char *raw_p = uev->msg.raw;
 
-	if (strncmp(uev->msg.nlh.prefix, "libudev", uev->msg_len) == 0) {
-		/* udev message needs proper version magic */
-		if (uev->msg.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
-			WARN("unrecognized message signature (%x != %x)", uev->msg.nlh.magic,
-			     htonl(UDEV_MONITOR_MAGIC));
-			goto err;
-		}
-		if (uev->msg.nlh.properties_off + 32 > uev->msg_len) {
-			WARN("message smaller than expected (%u > %zd)",
-			     uev->msg.nlh.properties_off + 32, uev->msg_len);
-			goto err;
-		}
-		raw_p += uev->msg.nlh.properties_off;
-		handle_udev_event(uev, raw_p);
+	if (uevent_event_is_udev(uev)) {
+		/* udev message */
+		TRACE("udev uevent: %s", raw_p ? raw_p : "NULL");
+		handle_uev_list(uev, uevent_uev_udev_list);
 	} else if (strchr(raw_p, '@')) {
 		/* kernel message */
 		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
-		raw_p += strlen(raw_p) + 1;
-		handle_kernel_event(uev, raw_p);
+		handle_uev_list(uev, uevent_uev_kernel_list);
 	} else {
 		/* kernel message */
 		TRACE("no uevent: %s", raw_p);
