@@ -333,6 +333,8 @@ hotplug_netdev_move(uevent_event_t *event)
 {
 	uint8_t iface_mac[6];
 	char *macstr = NULL;
+	uevent_event_t *newevent = NULL;
+	container_pnet_cfg_t *pnet_cfg_c0 = NULL;
 	char *event_ifname = uevent_event_get_interface(event);
 
 	if (network_get_mac_by_ifname(event_ifname, iface_mac)) {
@@ -352,8 +354,11 @@ hotplug_netdev_move(uevent_event_t *event)
 	}
 
 	// no mapping found move to c0
-	if (!container)
+	if (!container) {
 		container = cmld_containers_get_c0();
+		pnet_cfg_c0 = container_pnet_cfg_new(event_ifname, false, NULL);
+		pnet_cfg = pnet_cfg_c0;
+	}
 
 	if (!container) {
 		WARN("Target container not found, skip moving %s", event_ifname);
@@ -368,12 +373,9 @@ hotplug_netdev_move(uevent_event_t *event)
 		goto error;
 	}
 
-	if (!pnet_cfg)
-		pnet_cfg = container_pnet_cfg_new(event_ifname, false, NULL);
-
 	// rename network interface to avoid name clashes when moving to container
 	DEBUG("Renaming new interface we were notified about");
-	uevent_event_t *newevent = hotplug_rename_interface(event);
+	newevent = hotplug_rename_interface(event);
 
 	// uevent pointer is not freed inside this function, therefore we can safely drop it
 	if (newevent) {
@@ -382,13 +384,12 @@ hotplug_netdev_move(uevent_event_t *event)
 		event_ifname = uevent_event_get_interface(event);
 		container_pnet_cfg_set_pnet_name(pnet_cfg, event_ifname);
 	} else {
-		ERROR("failed to rename interface %s. injecting uevent as it is", event_ifname);
+		WARN("failed to rename interface %s. injecting uevent as it is", event_ifname);
 	}
 
 	macstr = network_mac_addr_to_str_new(iface_mac);
 	if (cmld_container_add_net_iface(container, pnet_cfg, false)) {
 		ERROR("cannot move '%s' to %s!", macstr, container_get_name(container));
-		mem_free0(pnet_cfg);
 		goto error;
 	} else {
 		INFO("moved phys network interface '%s' (mac: %s) to %s", event_ifname, macstr,
@@ -398,8 +399,7 @@ hotplug_netdev_move(uevent_event_t *event)
 	// if mac_filter is applied we have a bridge interface and do not
 	// need to send the uevent about the physical if
 	if (pnet_cfg->mac_filter) {
-		mem_free0(macstr);
-		return 0;
+		goto out;
 	}
 
 	// if moving was successful also inject uevent
@@ -411,10 +411,16 @@ hotplug_netdev_move(uevent_event_t *event)
 		TRACE("successfully injected uevent into netns of container %s!",
 		      container_get_name(container));
 	}
-
+out:
+	if (newevent)
+		mem_free0(newevent);
 	mem_free0(macstr);
 	return 0;
 error:
+	if (newevent)
+		mem_free0(newevent);
+	if (pnet_cfg_c0)
+		mem_free0(pnet_cfg_c0);
 	mem_free0(macstr);
 	return -1;
 }
