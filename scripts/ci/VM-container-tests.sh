@@ -141,6 +141,10 @@ guestos_version: $installed_guestos_version
 assign_dev: "c 4:2 rwm"
 fifos: "testfifo1"
 fifos: "testfifo2"
+image_sizes {
+  image_name: "etc"
+  image_size: 128
+}
 EOF
 
 cat > ./signedcontainer.conf << EOF
@@ -150,6 +154,10 @@ guestos_version: $installed_guestos_version
 assign_dev: "c 4:3 rwm"
 fifos: "signedfifo1"
 fifos: "signedfifo2"
+image_sizes {
+  image_name: "etc"
+  image_size: 128
+}
 EOF
 
 
@@ -163,7 +171,10 @@ guestos_version: $installed_guestos_version
 assign_dev: "c 4:2 rwm"
 fifos: "testfifo1"
 fifos: "testfifo2"
-
+image_sizes {
+  image_name: "etc"
+  image_size: 128
+}
 EOF
 
 
@@ -180,6 +191,10 @@ usb_configs {
   serial: "${SCHSM}"
   assign: true
   type: TOKEN
+}
+image_sizes {
+  image_name: "etc"
+  image_size: 128
 }
 EOF
 fi
