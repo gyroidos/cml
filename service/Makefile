@@ -98,7 +98,7 @@ service: libcommon $(SRC_FILES)
 	$(CC) $(LOCAL_CFLAGS) $(CLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container
 
 service-static: libcommon $(SRC_FILES)
-	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container
+	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container-static
 
 exec_cap_systime: libcommon $(SRC_FILES_EXEC_CAP_SYSTIME)
 	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES_EXEC_CAP_SYSTIME) ${LD_LIB_FLAGS} -o exec_cap_systime
