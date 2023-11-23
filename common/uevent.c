@@ -533,7 +533,7 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		goto err;
 	}
 
-	IF_TRUE_GOTO_ERROR(uevent_parse(uev) == -1, err);
+	IF_TRUE_GOTO_TRACE(uevent_parse(uev) == -1, err);
 
 	char *raw_p = uev->msg.raw;
 
@@ -545,9 +545,6 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		/* kernel message */
 		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
 		handle_uev_list(uev, uevent_uev_kernel_list);
-	} else {
-		/* kernel message */
-		TRACE("no uevent: %s", raw_p);
 	}
 err:
 	mem_free0(uev);
