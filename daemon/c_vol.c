@@ -1819,11 +1819,11 @@ c_vol_start_child(void *volp)
 	char *cservice_dir_p = dirname(cservice_dir);
 	if (dir_mkdir_p(cservice_dir_p, 0755) < 0) {
 		WARN_ERRNO("Could not mkdir '%s' dir", cservice_dir_p);
-	} else if (file_exists("/sbin/cml-service-container")) {
-		file_copy("/sbin/cml-service-container", cservice_bin, -1, 512, 0);
+	} else if (file_exists("/sbin/cml-service-container-static")) {
+		file_copy("/sbin/cml-service-container-static", cservice_bin, -1, 512, 0);
 		INFO("Copied %s to container", cservice_bin);
-	} else if (file_exists("/usr/sbin/cml-service-container")) {
-		file_copy("/usr/sbin/cml-service-container", cservice_bin, -1, 512, 0);
+	} else if (file_exists("/usr/sbin/cml-service-container-static")) {
+		file_copy("/usr/sbin/cml-service-container-static", cservice_bin, -1, 512, 0);
 		INFO("Copied %s to container", cservice_bin);
 	} else {
 		WARN_ERRNO("Could not copy %s to container", cservice_bin);
