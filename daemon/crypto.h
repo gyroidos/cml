@@ -32,10 +32,17 @@
 typedef enum crypto_hashalgo { SHA1, SHA256, SHA512 } crypto_hashalgo_t;
 
 /**
- * Callback function for receiving the result of a hash operation.
+ * Callback function for receiving the result of a hash operation. (file)
  */
 typedef void (*crypto_hash_callback_t)(const char *hash_string, const char *hash_file,
 				       crypto_hashalgo_t hash_algo, void *data);
+
+/**
+ * Callback function for receiving the result of a hash operation. (buffer)
+ */
+typedef void (*crypto_hash_buf_callback_t)(const char *hash_string, const unsigned char *hash_buf,
+					   size_t hash_buf_len, crypto_hashalgo_t hash_algo,
+					   void *data);
 
 /**
  * Requests the scd to hash the given file and report the hash to the given callback.
@@ -50,6 +57,19 @@ int
 crypto_hash_file(const char *file, crypto_hashalgo_t hashalgo, crypto_hash_callback_t cb,
 		 void *data);
 
+/**
+ * Requests the scd to hash the given buffer and report the hash to the given callback.
+ *
+ * @param buf the buffer to hash
+ * @param buf_len the size of the buffer to hash
+ * @param hashalgo the hash algorithm to use
+ * @param cb the callback to receive the result
+ * @param data custom data parameter to pass to the callback
+ * @return 0 if the hash request was sent and the callback is expected to be called, -1 otherwise
+ */
+int
+crypto_hash_buf(const unsigned char *buf, size_t buf_len, crypto_hashalgo_t hashalgo,
+		crypto_hash_buf_callback_t cb, void *data);
 /**
  * Requests the scd to hash the given file, wait for the result and directly return it.
  *
