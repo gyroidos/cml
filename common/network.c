@@ -708,9 +708,23 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 	uint8_t mac_i[6];
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
-		char *dev_addr_path = mem_printf("/sys/class/net/%s/address", i->if_name);
-		char *mac_str = file_read_new(dev_addr_path, 128);
+		char *dev_addr_path, *dev_bridge_path, *mac_str;
+
+		// check whether matching device is a bridge
+		dev_bridge_path = mem_printf("/sys/class/net/%s/bridge", i->if_name);
+
+		if (file_is_dir(dev_bridge_path)) {
+			DEBUG("Matched bridge interface, continue searching");
+			mem_free0(dev_bridge_path);
+
+			continue;
+		}
+		mem_free0(dev_bridge_path);
+
+		dev_addr_path = mem_printf("/sys/class/net/%s/address", i->if_name);
+		mac_str = file_read_new(dev_addr_path, 128);
 		mem_free0(dev_addr_path);
+
 		if (mac_str == NULL)
 			continue;
 
