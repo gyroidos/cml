@@ -91,7 +91,7 @@ cmld_reload_containers(void);
  * @param path  The path of the container
  * @return 0 on success, -1 on error
  */
-int
+container_t *
 cmld_reload_container(const uuid_t *uuid, const char *path);
 
 /**
