@@ -1375,8 +1375,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			TRACE("Update: Reloading container %s from %s",
 			      uuid_string(container_get_uuid(container)),
 			      cmld_get_containers_dir());
-			if (cmld_reload_container(container_get_uuid(container),
-						  cmld_get_containers_dir()) != 0) {
+			if (!cmld_reload_container(container_get_uuid(container),
+						   cmld_get_containers_dir())) {
 				ERROR("Failed to reload container on config update");
 			}
 		}

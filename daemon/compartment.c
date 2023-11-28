@@ -1685,10 +1685,7 @@ compartment_register_observer(compartment_t *compartment,
 	compartment_callback_t *ccb = mem_new0(compartment_callback_t, 1);
 	ccb->cb = cb;
 	ccb->data = data;
-	compartment->observer_list = list_append(compartment->observer_list, ccb);
-	DEBUG("Container %s: callback %p registered (nr of observers: %d)",
-	      compartment_get_description(compartment), CAST_FUNCPTR_VOIDPTR(cb),
-	      list_length(compartment->observer_list));
+	compartment->observer_list = list_prepend(compartment->observer_list, ccb);
 	return ccb;
 }
 
