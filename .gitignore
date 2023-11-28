@@ -12,4 +12,5 @@ control/control
 daemon/cmld
 scd/scd
 service/cml-service-container
+service/cml-service-container-static
 control/cc_mode
