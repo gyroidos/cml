@@ -88,7 +88,7 @@ then
         echo "No files to be formatted"
     fi
 else
-   $ROOT_DIR/scripts/clang-format -i $VERBOSE -style=file $FILES
+    clang-format -i $VERBOSE -style=file $FILES
 fi
 
 

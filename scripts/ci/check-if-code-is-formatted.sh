@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." >/dev/null 2>&1 && pwd)"
-CLANG_FORMAT="${ROOT_DIR}/scripts/clang-format"
+CLANG_FORMAT="clang-format"
 FILES=$(find $ROOT_DIR -type f -regextype sed -regex ".*\(\.c\|\.h\)")
 
 echo "Detected clang-format version..."
