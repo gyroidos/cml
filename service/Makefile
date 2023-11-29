@@ -106,5 +106,5 @@ exec_cap_systime: libcommon $(SRC_FILES_EXEC_CAP_SYSTIME)
 
 .PHONY: clean
 clean:
-	rm -f cml-service-container exec_cap_systime *.o *.pb-c.*
+	rm -f cml-service-container cml-service-container-static exec_cap_systime *.o *.pb-c.*
 	$(MAKE) -C common clean
