@@ -397,7 +397,7 @@ protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage 
 	ASSERT(message);
 	size_t proto_len = -1;
 
-	char *tmp_string = protobuf_c_text_to_string(message, allocator);
+	char *tmp_string = protobuf_c_text_to_string((ProtobufCMessage *)message, allocator);
 	if (!tmp_string) {
 		ERROR("Failed to serialize text protobuf message to string.");
 		goto error;
