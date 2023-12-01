@@ -79,6 +79,16 @@ nl_sock_t *
 nl_sock_xfrm_new();
 
 /**
+ * Allocates, opens and returns a nl_sock object of family NETLINK_ROUTING with various netlink options.
+ * The socket is subscribed to RTMGRP_IPV4_IFADDR and RTMGRP_IPV6_IFADDR events.
+ * Priviledges are required, because this socket is using a RCVBUFFORCE flag option overwriting
+ * the max recv-buf file.
+ * @return Pointer to nl_sock; NULL in case of failure
+ */
+nl_sock_t *
+nl_sock_ifaddr_new();
+
+/**
  * Allocates, opens and returns a nl_sock object of a different netlink family than the other
  * sock_*_new functions without specific netlink options.
  * @return Pointer to nl_sock; NULL in case of failure
