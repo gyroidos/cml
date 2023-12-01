@@ -144,7 +144,7 @@ nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t si
  * @return failure: -1, success: 0
  */
 static int
-nl_sock_conf_route_sock(nl_sock_t *sock)
+nl_sock_conf_route_sock(nl_sock_t *sock, uint32_t groups)
 {
 	ASSERT(sock);
 
@@ -161,7 +161,7 @@ nl_sock_conf_route_sock(nl_sock_t *sock)
 
 	/* Declare as a unicast socket, don't listen to multicast groups */
 	sock->local.nl_family = AF_NETLINK;
-	sock->local.nl_groups = 0;
+	sock->local.nl_groups = groups;
 
 	return 0;
 }
@@ -173,26 +173,6 @@ nl_mgrp(uint32_t group)
 		FATAL("Group exeeds uint32, Use setsockopt for this group %d\n", group);
 	}
 	return group ? (1 << (group - 1)) : 0;
-}
-
-/**
- * Configures a created nl_sock as xfrm nl socket for receiving sa specific kernel msg's
- * @param nl_sock The socket to be configured
- * @return failure: -1, success: 0
- */
-static int
-nl_sock_conf_xfrm_sock(nl_sock_t *sock)
-{
-	ASSERT(sock);
-
-	// use default netlink conf
-	if (nl_sock_conf_route_sock(sock) < 0)
-		return -1;
-
-	// subscribe to sa related events
-	sock->local.nl_groups =
-		nl_mgrp(XFRMNLGRP_ACQUIRE) | nl_mgrp(XFRMNLGRP_EXPIRE) | nl_mgrp(XFRMNLGRP_SA);
-	return 0;
 }
 
 /**
@@ -238,9 +218,10 @@ nl_sock_conf_uevent_sock(nl_sock_t *sock)
  * 	NETLINK_KOBJECT_UEVENT, NETLINK_ROUTE, NETLINK_XFRM.
  * Should be called only by nl_sock_*_new functions.
  * @param protocol Netlink Protocol Family
+ * @param groups Netlink multicast groups bitmask
  */
 static nl_sock_t *
-nl_sock_new(int protocol)
+nl_sock_new(int protocol, uint32_t groups)
 {
 	socklen_t socklen;
 	nl_sock_t *ret = NULL;
@@ -258,18 +239,21 @@ nl_sock_new(int protocol)
 	if (ret->fd < 0)
 		goto err;
 
-	if (protocol == NETLINK_KOBJECT_UEVENT) {
-		if (nl_sock_conf_uevent_sock(ret))
+	switch (protocol) {
+	case NETLINK_KOBJECT_UEVENT:
+		if (nl_sock_conf_uevent_sock(ret)) {
 			goto err;
-	} else if (protocol == NETLINK_ROUTE) {
-		if (nl_sock_conf_route_sock(ret))
+		}
+		break;
+
+	case NETLINK_XFRM:
+	case NETLINK_ROUTE:
+	// use rtnetlink config as default
+	default:
+		if (nl_sock_conf_route_sock(ret, groups)) {
 			goto err;
-	} else if (protocol == NETLINK_XFRM) {
-		if (nl_sock_conf_xfrm_sock(ret))
-			goto err;
-	} else { // use rtnetlink config as default
-		if (nl_sock_conf_route_sock(ret))
-			goto err;
+		}
+		break;
 	}
 
 	/* Bind on the local socket. Kernel sets address pid automatically. */
@@ -301,32 +285,43 @@ nl_sock_uevent_new(pid_t udevd_pid)
 {
 	TRACE("Creating uevent nl socket");
 	trusted_udevd_pid = udevd_pid;
-	return nl_sock_new(NETLINK_KOBJECT_UEVENT);
+	return nl_sock_new(NETLINK_KOBJECT_UEVENT, 0);
 }
 
 nl_sock_t *
 nl_sock_routing_new()
 {
 	TRACE("Creating routing nl socket");
-	return nl_sock_new(NETLINK_ROUTE);
+	return nl_sock_new(NETLINK_ROUTE, 0);
+}
+
+nl_sock_t *
+nl_sock_ifaddr_new()
+{
+	TRACE("Creating routing nl socket for ifaddr ifdel");
+	uint32_t nl_groups = (nl_mgrp(RTNLGRP_IPV4_IFADDR) | nl_mgrp(RTNLGRP_IPV6_IFADDR));
+	return nl_sock_new(NETLINK_ROUTE, nl_groups);
 }
 
 nl_sock_t *
 nl_sock_xfrm_new()
 {
 	TRACE("Creating xfrm nl socket");
-	return nl_sock_new(NETLINK_XFRM);
+	uint32_t nl_groups =
+		(nl_mgrp(XFRMNLGRP_ACQUIRE) | nl_mgrp(XFRMNLGRP_EXPIRE) | nl_mgrp(XFRMNLGRP_SA));
+	return nl_sock_new(NETLINK_XFRM, nl_groups);
 }
 
 nl_sock_t *
 nl_sock_default_new(int protocol)
 {
-	if (protocol == NETLINK_KOBJECT_UEVENT || protocol == NETLINK_ROUTE)
-		WARN("The default sock constructor should not be used with uevent or routing "
+	if (protocol == NETLINK_KOBJECT_UEVENT || protocol == NETLINK_ROUTE ||
+	    protocol == NETLINK_XFRM)
+		WARN("The default sock constructor should not be used with uevent, routing or xfrm "
 		     "parameters. Use the proper uevent/routing_new functions instead");
 
 	TRACE("Creating default nl socket");
-	return nl_sock_new(protocol);
+	return nl_sock_new(protocol, 0);
 }
 
 int
@@ -867,7 +862,7 @@ nl_genl_family_getid(const char *family_name)
 	};
 
 	/* Open netlink socket */
-	if (!(nl_sock = nl_sock_new(NETLINK_GENERIC))) {
+	if (!(nl_sock = nl_sock_new(NETLINK_GENERIC, 0))) {
 		ERROR("failed to allocate gen_netlink socket");
 		return 0;
 	}
