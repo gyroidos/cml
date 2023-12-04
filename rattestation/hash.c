@@ -104,19 +104,23 @@ hash_sha256(uint8_t *digest, uint8_t *data, size_t len)
 void
 hash_extend(hash_algo_t hash_algo, uint8_t *pcr_value, uint8_t *pcr_extend)
 {
+	const EVP_MD *md;
+	EVP_MD_CTX *c = EVP_MD_CTX_new();
+
 	if (hash_algo == HASH_ALGO_SHA1) {
-		SHA_CTX ctx;
-		SHA1_Init(&ctx);
-		SHA1_Update(&ctx, pcr_value, SHA_DIGEST_LENGTH);
-		SHA1_Update(&ctx, pcr_extend, SHA_DIGEST_LENGTH);
-		SHA1_Final(pcr_value, &ctx);
+		md = EVP_sha1();
 	} else if (hash_algo == HASH_ALGO_SHA256) {
-		SHA256_CTX ctx;
-		SHA256_Init(&ctx);
-		SHA256_Update(&ctx, pcr_value, SHA256_DIGEST_LENGTH);
-		SHA256_Update(&ctx, pcr_extend, SHA256_DIGEST_LENGTH);
-		SHA256_Final(pcr_value, &ctx);
+		md = EVP_sha256();
 	} else {
 		printf("Error: Hash algo not supported\n");
+		goto out;
 	}
+
+	EVP_DigestInit(c, md);
+	EVP_DigestUpdate(c, pcr_value, hash_algo_to_size(hash_algo));
+	EVP_DigestUpdate(c, pcr_extend, hash_algo_to_size(hash_algo));
+	EVP_DigestFinal(c, pcr_value, NULL);
+
+out:
+	EVP_MD_CTX_free(c);
 }
