@@ -35,7 +35,7 @@
 #include <sys/wait.h>
 #include <stdint.h>
 
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #define OPENSSLBIN_PATH "openssl"
 #define TAR_PATH "tar"
@@ -97,12 +97,12 @@ convert_bin_to_hex_new(const uint8_t *bin, int length)
 	return hex;
 }
 
-char *
-util_hash_sha_image_file_new(const char *image_file)
+static char *
+util_hash_image_file_new(const char *image_file, const EVP_MD *md)
 {
 	FILE *fp = NULL;
-	SHA_CTX ctx;
-	SHA1_Init(&ctx);
+	EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+	EVP_DigestInit(ctx, md);
 
 	if (!(fp = fopen(image_file, "rb"))) {
 		ERROR_ERRNO("Error in file hasing, cannot open %s", image_file);
@@ -113,36 +113,25 @@ util_hash_sha_image_file_new(const char *image_file)
 	unsigned char buf[SIGN_HASH_BUFFER_SIZE];
 
 	while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
-		SHA1_Update(&ctx, buf, len);
+		EVP_DigestUpdate(ctx, buf, len);
 	}
 	fclose(fp);
 
-	SHA1_Final(buf, &ctx);
-	return convert_bin_to_hex_new(buf, SHA_DIGEST_LENGTH);
+	EVP_DigestFinal(ctx, buf, NULL);
+	EVP_MD_CTX_free(ctx);
+	return convert_bin_to_hex_new(buf, EVP_MD_size(md));
+}
+
+char *
+util_hash_sha_image_file_new(const char *image_file)
+{
+	return util_hash_image_file_new(image_file, EVP_sha1());
 }
 
 char *
 util_hash_sha256_image_file_new(const char *image_file)
 {
-	FILE *fp = NULL;
-	SHA256_CTX ctx;
-	SHA256_Init(&ctx);
-
-	if (!(fp = fopen(image_file, "rb"))) {
-		ERROR_ERRNO("Error in file hasing, cannot open %s", image_file);
-		return NULL;
-	}
-
-	int len = 0;
-	unsigned char buf[SIGN_HASH_BUFFER_SIZE];
-
-	while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
-		SHA256_Update(&ctx, buf, len);
-	}
-	fclose(fp);
-
-	SHA256_Final(buf, &ctx);
-	return convert_bin_to_hex_new(buf, SHA256_DIGEST_LENGTH);
+	return util_hash_image_file_new(image_file, EVP_sha256());
 }
 
 int
