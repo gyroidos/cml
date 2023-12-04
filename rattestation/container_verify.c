@@ -30,7 +30,6 @@
 #include <string.h>
 
 #include <openssl/evp.h>
-#include <openssl/sha.h>
 
 #include "common/mem.h"
 #include "common/macro.h"
@@ -57,19 +56,7 @@ container_verify_runtime_measurements(MlContainerEntry **entries, size_t len,
 
 		INFO("Verifying container %s", entries[i]->filename);
 
-		if (pcr_hash_algo == HASH_ALGO_SHA256) {
-			SHA256_CTX c_256;
-			SHA256_Init(&c_256);
-			SHA256_Update(&c_256, pcr_calculated, SHA256_DIGEST_LENGTH);
-			SHA256_Update(&c_256, entries[i]->data_hash.data, SHA256_DIGEST_LENGTH);
-			SHA256_Final(pcr_calculated, &c_256);
-		} else if (pcr_hash_algo == HASH_ALGO_SHA1) {
-			SHA_CTX c;
-			SHA1_Init(&c);
-			SHA1_Update(&c, pcr_calculated, SHA_DIGEST_LENGTH);
-			SHA1_Update(&c, entries[i]->data_hash.data, SHA_DIGEST_LENGTH);
-			SHA1_Final(pcr_calculated, &c);
-		}
+		hash_extend(pcr_hash_algo, pcr_calculated, entries[i]->data_hash.data);
 	}
 
 	if (memcmp(pcr_calculated, pcr_tpm, hash_size) != 0) {
