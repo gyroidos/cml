@@ -65,6 +65,7 @@ PROTO_SRC := \
 
 SRC_FILES := \
 	common/protobuf.c \
+	common/protobuf-text.c \
 	attestation.c \
 	hash.c \
 	ima_verify.c \

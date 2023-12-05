@@ -41,6 +41,7 @@
 #include "common/dir.h"
 #include "common/file.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/ssl_util.h"
 
 #include <unistd.h>

@@ -38,6 +38,7 @@
 #include "common/dir.h"
 #include "common/file.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/event.h"
 #include "common/fd.h"
 #include "common/nl.h"

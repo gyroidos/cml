@@ -93,7 +93,8 @@ OBJS_COMMON_EXT := \
 	hex.o \
 	reboot.o \
 	ssl_util.o \
-	uuid.o
+	uuid.o \
+	protobuf-text.o \
 
 libcommon: $(OBJS_COMMON)
 	$(AR) rcs libcommon.a $^

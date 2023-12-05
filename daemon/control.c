@@ -38,6 +38,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/sock.h"
 #include "common/uuid.h"
 #include "common/event.h"
@@ -75,7 +76,7 @@ static list_t *control_list = NULL;
 /**
  * @brief callback for the dir_foreach function sending a file as LogMessage to the Controller
  * @path: Expects path string without trailing "/" at the end
- * @return 1 on error, 0 else 
+ * @return 1 on error, 0 else
  */
 static int
 control_send_file_as_log_message_cb(const char *path, const char *file, void UNUSED *data)

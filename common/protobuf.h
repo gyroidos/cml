@@ -26,7 +26,7 @@
  *
  * Provides utility functions to handle Protocol Buffers messages,
  * including serialization and deserialization of protobuf messages
- * to and from binary or text format representations.
+ * to and from binary representations.
  */
 
 #ifndef PROTOBUF_H
@@ -126,65 +126,5 @@ protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor, uint8_t *b
  */
 void
 protobuf_free_message(ProtobufCMessage *message);
-
-/**
- * Writes (dumps) the given protobuf message struct to the given file descriptor
- * (e.g. a file or socket) in text form (human-readable).
- *
- * @param fd        the file descriptor that the message is written to
- * @param message   the protobuf message struct to be dumped
- * @return  the length of the dumped message string
- */
-ssize_t
-protobuf_dump_message(int fd, const ProtobufCMessage *message);
-
-/**
- * Parses a protobuf message as defined by the given descriptor
- * from the given text file.
- *
- * @param filename      name of the text file containing the protobuf message
- * @param descriptor    the protobuf message descriptor that defines the message structure
- * @return  a pointer to the parsed protobuf message struct;
- *          must be released with protobuf_free_message()
- */
-ProtobufCMessage *
-protobuf_message_new_from_textfile(const char *filename,
-				   const ProtobufCMessageDescriptor *descriptor);
-
-/**
- * Parses a protobuf message as defined by the given descriptor
- * from the given string.
- *
- * @param filename      name of the text file containing the protobuf message
- * @param descriptor    the protobuf message descriptor that defines the message structure
- * @return  a pointer to the parsed protobuf message struct;
- *          must be released with protobuf_free_message()
- */
-ProtobufCMessage *
-protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor);
-
-ProtobufCMessage *
-protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
-			      const ProtobufCMessageDescriptor *descriptor);
-
-/**
- * Writes a textual representation of the given protobuf message to the given file.
- *
- * @param filename  name of the text file where to store the serialized protobuf message
- * @param message   the protobuf message to be serialized
- * @return          the length of the serialized message
- */
-ssize_t
-protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *message);
-
-/**
- * Wrapper function for the protobug_c_text_to_string function
- * @param buffer_proto_string target buffer for serialized protobuf message
- * @param message protofbuf message
- * @param allocator protobuf C allocator
-*/
-size_t
-protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage *message,
-			     ProtobufCAllocator *allocator);
 
 #endif // PROTOBUF_H

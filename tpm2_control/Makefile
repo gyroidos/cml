@@ -43,11 +43,11 @@ endif
 ifeq ($(AGGRESSIVE_WARNINGS),y)
     # on CI (and also for well-behaved developers) warnings should be
     # converted to errors; this helps us redistribute the code base without any pain;
-    # pure builds are better than polluted builds. 
+    # pure builds are better than polluted builds.
     LOCAL_CFLAGS += -Werror
 endif
 ifeq ($(SANITIZERS),y)
-    # if requested, we enable sanitization for easier debugging 
+    # if requested, we enable sanitization for easier debugging
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
@@ -56,6 +56,7 @@ endif
 
 SRC_FILES := \
 	common/protobuf.c \
+	common/protobuf-text.c \
 	common/sock.c \
 	common/file.c \
 	common/fd.c \
@@ -72,7 +73,7 @@ protobuf: attestation.proto tpm2d.proto
 	protoc-c --c_out=. tpm2d.proto
 	$(MAKE) -C common protobuf
 
-libcommon: 
+libcommon:
 	$(MAKE) -C common libcommon
 
 $(SRC_FILES): protobuf

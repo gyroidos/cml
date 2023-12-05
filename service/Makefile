@@ -46,11 +46,11 @@ endif
 ifeq ($(AGGRESSIVE_WARNINGS),y)
     # on CI (and also for well-behaved developers) warnings should be
     # converted to errors; this helps us redistribute the code base without any pain;
-    # pure builds are better than polluted builds. 
+    # pure builds are better than polluted builds.
     LOCAL_CFLAGS += -Werror
 endif
 ifeq ($(SANITIZERS),y)
-    # if requested, we enable sanitization for easier debugging 
+    # if requested, we enable sanitization for easier debugging
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
@@ -63,6 +63,7 @@ SRC_FILES := \
 	container.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c \
+	common/protobuf-text.c \
 	common/logf.pb-c.c \
 	service.c
 
@@ -71,6 +72,7 @@ SRC_FILES_EXEC_CAP_SYSTIME := \
 	container.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c \
+	common/protobuf-text.c \
 	common/logf.pb-c.c \
 	exec_cap_systime.c
 

@@ -28,6 +28,7 @@
 #include "common/file.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/uuid.h"
 
 struct device_config {
