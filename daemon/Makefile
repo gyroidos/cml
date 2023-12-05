@@ -96,6 +96,7 @@ SRC_FILES := main.c \
 	guestos_mgr.c \
 	guestos_config.c \
 	common/protobuf.c \
+	common/protobuf-text.c \
 	download.c \
 	crypto.c \
 	scd.c \

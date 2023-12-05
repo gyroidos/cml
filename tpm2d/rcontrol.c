@@ -42,6 +42,7 @@
 #include "common/event.h"
 #include "common/file.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 
 #include <google/protobuf-c/protobuf-c-text.h>
 

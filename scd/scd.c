@@ -41,6 +41,7 @@
 #include "common/file.h"
 #include "common/uuid.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/list.h"
 #include "common/ssl_util.h"
 #include "token.h"

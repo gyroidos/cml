@@ -14,3 +14,8 @@ scd/scd
 service/cml-service-container
 service/cml-service-container-static
 control/cc_mode
+service/exec_cap_systime
+tpm2_control/tpm2_control
+tpm2d/tpm2d
+converter/converter
+rung/rung

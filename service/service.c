@@ -33,6 +33,7 @@
 #include "common/file.h"
 #include "common/logf.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/sock.h"
 #include "common/event.h"
 #include "common/fd.h"

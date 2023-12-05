@@ -79,6 +79,7 @@ SRC_FILES += \
 	common/fd.c \
 	common/uuid.c \
 	common/protobuf.c \
+	common/protobuf-text.c \
 	common/ssl_util.c \
 	device.pb-c.c \
 	scd.pb-c.c \

@@ -33,6 +33,7 @@
 #include "common/dir.h"
 #include "common/list.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/mem.h"
 
 #include "docker.h"

@@ -32,6 +32,7 @@
 #include "common/file.h"
 #include "common/list.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 
 #include <stdint.h>
 #include <inttypes.h>

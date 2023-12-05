@@ -30,6 +30,7 @@
 #include "common/mem.h"
 #include "common/file.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 
 RAttestationConfig *
 rattestation_read_config_new(const char *file)

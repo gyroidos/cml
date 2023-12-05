@@ -32,6 +32,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
+#include "common/protobuf-text.h"
 #include "common/sock.h"
 #include "common/file.h"
 
