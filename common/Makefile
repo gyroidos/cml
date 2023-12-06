@@ -28,6 +28,8 @@ DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
+WITH_OPENSSL ?= n
+WITH_PROTOBUF_TEXT ?= n
 
 LOCAL_CFLAGS += -I../include -pedantic -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -fPIC
@@ -73,6 +75,15 @@ OBJS_COMMON := \
 	ns.o \
 	nl.o
 
+ifeq ($(WITH_OPENSSL),y)
+    OBJS_COMMON += ssl_util.o
+else ifeq ($(MAKECMDGOALS),test)
+	OBJS_COMMON += ssl_util.o
+endif
+ifeq ($(WITH_PROTOBUF_TEXT),y)
+    OBJS_COMMON += protobuf-text.o
+endif
+
 OBJS_COMMON_FULL := \
 	$(OBJS_COMMON) \
 	protobuf.o \
@@ -83,26 +94,19 @@ OBJS_COMMON_FULL := \
 	audit.pb-c.o \
 	audit.o \
 	uevent.o \
-	kernel.o
-
-OBJS_COMMON_EXT := \
-	$(OBJS_COMMON_FULL) \
+	kernel.o \
 	cryptfs.o \
 	dm.o \
 	hex.o \
 	reboot.o \
-	ssl_util.o \
 	uuid.o \
-	protobuf-text.o \
+	verity.o
 
 libcommon: $(OBJS_COMMON)
 	$(AR) rcs libcommon.a $^
 
 libcommon_full: $(OBJS_COMMON_FULL)
 	$(AR) rcs libcommon_full.a $^
-
-libcommon_ext: $(OBJS_COMMON_EXT)
-	$(AR) rcs libcommon_ext.a $^
 
 ssl_util.o: ssl_util.c
 	$(CC) -c $(LOCAL_CFLAGS) -Wno-deprecated-declarations $< -o $@
@@ -114,7 +118,7 @@ audit.pb-c.c: audit.proto
 	protoc-c --c_out=. $<
 
 LFLAGS_TEST := \
-	-L. -lcommon_ext \
+	-L. -lcommon_full \
 	-lssl \
 	-lcrypto
 
@@ -127,7 +131,7 @@ common.test: $(TEST_SUITES) munit.h munit.c common.test.c
 	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c $(LFLAGS_TEST)
 
 .PHONY: test
-test: libcommon_ext common.test
+test: libcommon_full common.test
 	./common.test
 
 .PHONY: clean
