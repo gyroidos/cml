@@ -35,7 +35,6 @@ setup_stunnel:
 
 control_pb2.py:
 	protoc -I=../daemon --python_out=. ../daemon/control.proto
-	protoc -I=../daemon --python_out=. ../daemon/common/logf.proto
 	protoc -I=../daemon --python_out=. ../daemon/container.proto
 	protoc -I=../daemon --python_out=. ../daemon/guestos.proto
 

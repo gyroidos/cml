@@ -66,7 +66,6 @@ SRC_FILES := \
 	guestos.pb-c.c \
 	control.pb-c.c \
 	container.pb-c.c \
-	common/logf.pb-c.c \
 	control.c
 
 .PHONY: all
@@ -74,7 +73,7 @@ all: control
 
 
 ifeq ($(CC_MODE),y)
-protobuf: container.proto control.proto guestos.proto common/logf.proto
+protobuf: container.proto control.proto guestos.proto
 	echo "Using CC_MODE protos"
 	$(MAKE) -C cc_mode
 	ln -sf cc_mode/container.pb-c.c container.pb-c.c
@@ -85,7 +84,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto
 	$(MAKE) -C common protobuf
 
 else
-protobuf: container.proto control.proto guestos.proto common/logf.proto
+protobuf: container.proto control.proto guestos.proto
 	echo "Using dev/production protos"
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto

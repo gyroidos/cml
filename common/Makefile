@@ -59,7 +59,7 @@ endif
 all: libcommon
 
 .PHONY: protobuf
-protobuf: audit.pb-c.c logf.pb-c.c
+protobuf: audit.pb-c.c
 
 OBJS_COMMON := \
 	event.o \
@@ -76,7 +76,6 @@ OBJS_COMMON := \
 OBJS_COMMON_FULL := \
 	$(OBJS_COMMON) \
 	protobuf.o \
-	logf.pb-c.o \
 	sock.o \
 	network.o \
 	proc.o \
@@ -112,9 +111,6 @@ ssl_util.o: ssl_util.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
 
 audit.pb-c.c: audit.proto
-	protoc-c --c_out=. $<
-
-logf.pb-c.c: logf.proto
 	protoc-c --c_out=. $<
 
 LFLAGS_TEST := \

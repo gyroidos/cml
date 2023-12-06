@@ -64,7 +64,6 @@ SRC_FILES := \
 	control.pb-c.c \
 	guestos.pb-c.c \
 	common/protobuf-text.c \
-	common/logf.pb-c.c \
 	service.c
 
 SRC_FILES_EXEC_CAP_SYSTIME := \
@@ -73,7 +72,6 @@ SRC_FILES_EXEC_CAP_SYSTIME := \
 	control.pb-c.c \
 	guestos.pb-c.c \
 	common/protobuf-text.c \
-	common/logf.pb-c.c \
 	exec_cap_systime.c
 
 LD_LIB_FLAGS := \
@@ -84,7 +82,7 @@ LD_LIB_FLAGS := \
 .PHONY: all
 all: service exec_cap_systime
 
-protobuf: c_service.proto container.proto control.proto guestos.proto common/logf.proto
+protobuf: c_service.proto container.proto control.proto guestos.proto
 	protoc-c --c_out=. c_service.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto

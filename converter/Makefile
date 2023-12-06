@@ -53,7 +53,6 @@ endif
 
 
 PROTO_SRC := \
-	common/logf.pb-c.c \
 	container.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c
@@ -75,7 +74,7 @@ LD_LIB_FLAGS := \
 .PHONY: all
 all: converter
 
-protobuf: container.proto control.proto guestos.proto common/logf.proto
+protobuf: container.proto control.proto guestos.proto
 	protoc-c --c_out=. guestos.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto

@@ -27,11 +27,10 @@ option java_package = "de.fraunhofer.aisec.trustme";
 
 import "guestos.proto";
 import "container.proto";
-import "common/logf.proto";
 
 /******************************************************************************
  * @exclude
- * Incoming messages 
+ * Incoming messages
  *******************************************************************************/
 
 
@@ -70,7 +69,7 @@ message ControllerToDaemon {
 
 		/**********************************************************************
 		 * @exclude
-		 * Commands (global) that modify the system 
+		 * Commands (global) that modify the system
 		**********************************************************************/
 		// Push new GuestOS config. Needs [guestos_config_*].
 		// Images will be updated later.

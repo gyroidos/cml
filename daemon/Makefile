@@ -73,12 +73,10 @@ PROTO_SRC := \
 	container.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c \
-	common/logf.pb-c.c \
 	device.pb-c.c \
 	scd.pb-c.c \
 	attestation.pb-c.c \
 	tpm2d.pb-c.c \
-	common/audit.pb-c.c \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
@@ -171,7 +169,7 @@ endif
 
 
 ifeq ($(CC_MODE),y)
-protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto
+protobuf: container.proto control.proto guestos.proto device.proto scd.proto common/audit.proto c_service.proto
 	$(MAKE) -C cc_mode
 	ln -sf cc_mode/container.pb-c.c container.pb-c.c
 	ln -sf cc_mode/container.pb-c.h container.pb-c.h
@@ -187,7 +185,7 @@ protobuf: container.proto control.proto guestos.proto common/logf.proto device.p
 	$(MAKE) -C common protobuf
 
 else
-protobuf: container.proto control.proto guestos.proto common/logf.proto device.proto scd.proto common/audit.proto c_service.proto oci_control.proto
+protobuf: container.proto control.proto guestos.proto device.proto scd.proto common/audit.proto c_service.proto oci_control.proto
 	protoc-c --c_out=. container.proto
 	protoc-c --c_out=. control.proto
 	protoc-c --c_out=. guestos.proto
