@@ -55,11 +55,6 @@ endif
 
 
 SRC_FILES := \
-	common/protobuf.c \
-	common/protobuf-text.c \
-	common/sock.c \
-	common/file.c \
-	common/fd.c \
 	attestation.pb-c.c \
 	tpm2d.pb-c.c \
 	tpm2d_control.c
@@ -73,12 +68,12 @@ protobuf: attestation.proto tpm2d.proto
 	$(MAKE) -C common protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
 
 $(SRC_FILES): protobuf
 
 tpm2_control: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o tpm2_control
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon_full -o tpm2_control
 
 .PHONY: clean
 clean:
