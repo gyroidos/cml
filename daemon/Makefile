@@ -64,7 +64,7 @@ ifeq ($(CC_MODE),y)
     LOCAL_CFLAGS += -DCC_MODE
 endif
 
-LDLIBS := -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -lutil
+LDLIBS := -lc -Lcommon -lcommon_full -lutil -lprotobuf-c -lprotobuf-c-text
 
 .PHONY: all
 all: cmld
@@ -81,11 +81,9 @@ PROTO_SRC := \
 
 SRC_FILES := main.c \
 	cmld.c \
-	common/uevent.c \
 	hotplug.c \
 	container.c \
 	compartment.c \
-	common/uuid.c \
 	control.c \
 	container_config.c \
 	device_config.c \
@@ -93,29 +91,16 @@ SRC_FILES := main.c \
 	guestos.c \
 	guestos_mgr.c \
 	guestos_config.c \
-	common/protobuf.c \
-	common/protobuf-text.c \
 	download.c \
 	crypto.c \
 	scd.c \
 	tss.c \
-	common/hex.c \
-	common/sock.c \
-	common/network.c \
-	common/proc.c \
-	common/loopdev.c \
 	ksm.c \
-	common/dm.c \
-	common/cryptfs.c \
-	common/reboot.c \
-	common/verity.c \
 	time.c \
 	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
 	input.c \
-	common/audit.c \
-	audit.c \
-	common/kernel.c
+	audit.c
 
 # module order is crucial
 SRC_CMODULES := \
@@ -202,7 +187,7 @@ endif
 $(PROTO_SRC): protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
 
 cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
 	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
