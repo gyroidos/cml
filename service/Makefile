@@ -63,7 +63,6 @@ SRC_FILES := \
 	container.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c \
-	common/protobuf-text.c \
 	service.c
 
 SRC_FILES_EXEC_CAP_SYSTIME := \
@@ -71,7 +70,6 @@ SRC_FILES_EXEC_CAP_SYSTIME := \
 	container.pb-c.c \
 	control.pb-c.c \
 	guestos.pb-c.c \
-	common/protobuf-text.c \
 	exec_cap_systime.c
 
 LD_LIB_FLAGS := \
@@ -92,7 +90,7 @@ protobuf: c_service.proto container.proto control.proto guestos.proto
 $(SRC_FILES): protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon_full
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
 
 service: libcommon $(SRC_FILES)
 	$(CC) $(LOCAL_CFLAGS) $(CLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container
