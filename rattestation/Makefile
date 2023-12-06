@@ -84,10 +84,10 @@ protobuf: attestation.proto
 $(PROTO_SRC): protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon_ext
+	$(MAKE) -C common libcommon_full WITH_OPENSSL=y
 
 rattestation: libcommon $(SRC_FILES) $(PROTO_SRC)
-	$(CC) $(STATIC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon_ext -lssl -lcrypto -libmtss -o $@
+	$(CC) $(STATIC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon_full -lssl -lcrypto -libmtss -o $@
 
 .PHONY: clean
 clean:
