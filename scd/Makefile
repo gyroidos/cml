@@ -32,7 +32,7 @@ LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -Wno-deprecated-declarations -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 
-LOCAL_LFLAGS := -lc -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto -Lcommon -lcommon
+LOCAL_LFLAGS := -lc -Lcommon -lcommon_full -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto
 
 ifeq ($(WCAST_ALIGN),y)
     LOCAL_CFLAGS += -Wcast-align
@@ -68,19 +68,6 @@ endif
 
 
 SRC_FILES += \
-	common/list.c \
-	common/logf.c \
-	common/mem.c \
-	common/sock.c \
-	common/event.c \
-	common/str.c \
-	common/file.c \
-	common/dir.c \
-	common/fd.c \
-	common/uuid.c \
-	common/protobuf.c \
-	common/protobuf-text.c \
-	common/ssl_util.c \
 	device.pb-c.c \
 	scd.pb-c.c \
 	control.c \
@@ -111,7 +98,7 @@ endif
 $(SRC_FILES): protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_full WITH_OPENSSL=y WITH_PROTOBUF_TEXT=y
 
 scd: libcommon $(SRC_FILES)
 	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(LOCAL_LFLAGS) -o scd
