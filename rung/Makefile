@@ -64,14 +64,13 @@ SRC_FILES := \
 	common/fd.c \
 	common/uuid.c \
 	common/event.c \
-	common/logf.pb-c.c \
 	oci_control.pb-c.c \
 	rung.c
 
 .PHONY: all
 all: control
 
-protobuf: common/logf.proto
+protobuf: oci_control.proto
 	protoc-c --c_out=. oci_control.proto
 	$(MAKE) -C common protobuf
 

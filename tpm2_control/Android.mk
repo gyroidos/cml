@@ -40,7 +40,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	common/file.c \
 	common/fd.c \
 	tpm2d.proto \
-	common/logf.proto \
 	tpm2d_control.c
 
 LOCAL_STATIC_LIBRARIES += libprotobuf-c-text libc

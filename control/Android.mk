@@ -40,7 +40,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	common/file.c \
 	common/fd.c \
 	control.proto \
-	common/logf.proto \
 	guestos.proto \
 	container.proto \
 	control.c

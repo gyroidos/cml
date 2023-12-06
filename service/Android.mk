@@ -43,7 +43,6 @@ LOCAL_SRC_FILES := $(CMLD_COMMON_SRC_FILES) \
 	container.proto \
 	control.proto \
 	guestos.proto \
-	common/logf.proto \
 	dumb_init.c \
 	service.c
 

@@ -62,7 +62,6 @@ SRC_FILES := \
 	common/fd.c \
 	attestation.pb-c.c \
 	tpm2d.pb-c.c \
-	common/logf.pb-c.c \
 	tpm2d_control.c
 
 .PHONY: all
