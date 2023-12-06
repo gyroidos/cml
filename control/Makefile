@@ -52,17 +52,9 @@ ifeq ($(SANITIZERS),y)
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
 
+LDLIBS := -lc -Lcommon -lcommon_full -lprotobuf-c -lprotobuf-c-text
 
 SRC_FILES := \
-	common/list.c \
-	common/logf.c \
-	common/mem.c \
-	common/protobuf.c \
-	common/protobuf-text.c \
-	common/sock.c \
-	common/file.c \
-	common/fd.c \
-	common/uuid.c \
 	guestos.pb-c.c \
 	control.pb-c.c \
 	container.pb-c.c \
@@ -95,12 +87,12 @@ endif
 
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
 
 ${SRC_FILES}: protobuf
 
 control: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o control
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(LDLIBS) -o control
 
 .PHONY: clean
 clean:
