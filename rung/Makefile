@@ -51,19 +51,9 @@ ifeq ($(SANITIZERS),y)
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
 
+LDLIBS := -lc -Lcommon -lcommon_full -lprotobuf-c -lprotobuf-c-text
 
 SRC_FILES := \
-	common/list.c \
-	common/logf.c \
-	common/mem.c \
-	common/protobuf.c \
-	common/protobuf-text.c \
-	common/sock.c \
-	common/dir.c \
-	common/file.c \
-	common/fd.c \
-	common/uuid.c \
-	common/event.c \
 	oci_control.pb-c.c \
 	rung.c
 
@@ -75,12 +65,12 @@ protobuf: oci_control.proto
 	$(MAKE) -C common protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
 
 ${SRC_FILES}: protobuf
 
 control: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon -o rung
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(LDLIBS) -o rung
 
 .PHONY: clean
 clean:
