@@ -65,7 +65,7 @@ SRC_FILES := \
 	converter.c
 
 LD_LIB_FLAGS := \
-	-Lcommon -lcommon_ext \
+	-Lcommon -lcommon_full \
 	-lprotobuf-c \
 	-lprotobuf-c-text \
 	-lresolv \
@@ -83,7 +83,7 @@ protobuf: container.proto control.proto guestos.proto
 $(PROTO_SRC): protobuf
 
 libcommon:
-	$(MAKE) -C common libcommon_ext
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
 
 converter: libcommon $(SRC_FILES) $(PROTO_SRC)
 	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(PROTO_SRC) $(LD_LIB_FLAGS) -o $@
