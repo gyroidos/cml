@@ -86,6 +86,8 @@ audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len)
 	return ret;
 }
 
+#ifdef WITH_PROTOBUF_TEXT
+#include "protobuf-text.h"
 static int
 audit_kernel_log_record(const AuditRecord *msg)
 {
@@ -163,6 +165,7 @@ out:
 
 	return ret;
 }
+#endif // WITH_PROTOBUF_TEXT
 
 int
 audit_kernel_write_loginuid(uint32_t uid)

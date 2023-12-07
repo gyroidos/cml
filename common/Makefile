@@ -82,6 +82,7 @@ else ifeq ($(MAKECMDGOALS),test)
 endif
 ifeq ($(WITH_PROTOBUF_TEXT),y)
     OBJS_COMMON += protobuf-text.o
+	LOCAL_CFLAGS += -DWITH_PROTOBUF_TEXT
 endif
 
 OBJS_COMMON_FULL := \
