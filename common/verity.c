@@ -158,6 +158,8 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	int ret = -1;
 	uint8_t buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
+	char *fs_dev = NULL;
+	char *hash_dev = NULL;
 
 	TRACE("Opening dm-verity device %s with image %s, hash-tree %s and root-hash %s", name,
 	      fs_img_name, hash_dev_name, root_hash);
@@ -201,7 +203,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 
 	// Create loopdevice for dm-verity image
 	int fs_fd = 0;
-	char *fs_dev = loopdev_create_new(&fs_fd, fs_img_name, 1, 0);
+	fs_dev = loopdev_create_new(&fs_fd, fs_img_name, 1, 0);
 	if (!fs_dev) {
 		goto out;
 	}
@@ -217,7 +219,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	}
 
 	// Create loop device for dm-verity hash-tree
-	char *hash_dev = loopdev_create_new(&hash_fd, hash_dev_name, 1, 0);
+	hash_dev = loopdev_create_new(&hash_fd, hash_dev_name, 1, 0);
 	if (!hash_dev) {
 		goto out;
 	}
@@ -295,6 +297,10 @@ out:
 		close(fs_fd);
 	if (hash_fd > 0)
 		close(hash_fd);
+	if (fs_dev)
+		mem_free0(fs_dev);
+	if (hash_dev)
+		mem_free0(hash_dev);
 
 	return ret;
 }
