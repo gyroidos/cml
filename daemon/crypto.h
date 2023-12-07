@@ -25,6 +25,7 @@
 #define CRYPTO_H
 
 #include "stdbool.h"
+#include "common/str.h"
 
 /**
  * Choice of supported hash algorithms.
@@ -81,14 +82,23 @@ char *
 crypto_hash_file_block_new(const char *file, crypto_hashalgo_t hashalgo);
 
 /**
- * Result of a signature verification.
+ * Result CODE of a signature verification.
  */
-typedef enum crypto_verify_result {
+typedef enum crypto_verify_result_code {
 	VERIFY_GOOD = 0,
 	VERIFY_ERROR,
 	VERIFY_BAD_SIGNATURE,
 	VERIFY_BAD_CERTIFICATE,
 	VERIFY_LOCALLY_SIGNED
+} crypto_verify_result_code_t;
+
+/**
+ * Result of a signature verification.
+ * Contains the result code and the path of the CA used for the verification in case of a verification success.
+ */
+typedef struct crypto_verify_result {
+	crypto_verify_result_code_t code;
+	str_t *matched_ca;
 } crypto_verify_result_t;
 
 /**

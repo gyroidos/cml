@@ -76,6 +76,12 @@ guestos_get_cert_file_new(const char *dir)
 	return mem_printf("%s.cert", dir);
 }
 
+char *
+guestos_get_ca_file_new(const char *dir)
+{
+	return mem_printf("%s.ca", dir);
+}
+
 /******************************************************************************/
 
 /**
@@ -1006,7 +1012,7 @@ guestos_purge(guestos_t *os)
 		char *img_path = mem_printf("%s/%s.img", dir, img_name);
 
 		if (file_exists(img_path) && unlink(img_path) < 0) {
-			WARN_ERRNO("Failed to erase file %s", img_path);
+			WARN_ERRNO("Failed to remove symlink %s", img_path);
 		}
 		mem_free0(img_path);
 	}
@@ -1023,6 +1029,14 @@ guestos_purge(guestos_t *os)
 	if (unlink(file) < 0) {
 		WARN_ERRNO("Failed to erase file %s", file);
 	}
+
+	// remove ca symlink
+	char *symlink = guestos_get_ca_file_new(os->dir);
+	if (unlink(symlink) < 0) {
+		WARN_ERRNO("Failed to erase file %s", symlink);
+	}
+	mem_free0(symlink);
+
 	// remove dir
 	if (rmdir(dir) < 0) {
 		WARN_ERRNO("Failed to remove directory %s", dir);

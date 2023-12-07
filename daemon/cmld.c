@@ -1526,8 +1526,8 @@ cmld_init(const char *path)
 		FATAL_ERRNO("Could not mkdir containers directory %s", containers_path);
 
 	cmld_wrapped_keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
-	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
+	if (mkdir(cmld_wrapped_keys_path, 0700) < 0 && errno != EEXIST)
+		FATAL_ERRNO("Could not mkdir container keys directory %s", cmld_wrapped_keys_path);
 
 	if (cmld_init_c0(containers_path, device_config_get_c0os(device_config)) < 0)
 		FATAL("Could not init c0");
@@ -1745,9 +1745,12 @@ cmld_guestos_delete(const char *guestos_name)
 	guestos_t *os = guestos_mgr_get_latest_by_name(guestos_name, false);
 	IF_NULL_RETVAL(os, -1);
 
-	// do not delete gustos of managment container c0
-	container_t *c0 = cmld_containers_get_c0();
-	IF_TRUE_RETVAL(os == container_get_guestos(c0), -1);
+	// do not delete guestos of management container c0
+	// not needed in hosted mode
+	if (!cmld_is_hostedmode_active()) {
+		container_t *c0 = cmld_containers_get_c0();
+		IF_TRUE_RETVAL(os == container_get_guestos(c0), -1);
+	}
 
 	return guestos_mgr_delete(os);
 }
@@ -1930,7 +1933,6 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	int res = container_remove_net_interface(container, iface);
 	if (res || !persistent)
 		return res;
-
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);

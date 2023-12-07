@@ -42,6 +42,7 @@
 #include "common/file.h"
 #include "common/protobuf.h"
 #include "common/ssl_util.h"
+#include "common/str.h"
 
 #include <unistd.h>
 
@@ -103,6 +104,7 @@ struct verify_cert_ca_cb_data {
 	const char *cert_file;
 	bool ignore_time;
 	bool verified;
+	str_t *ca_path;
 };
 
 static int
@@ -119,6 +121,9 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
 	} else {
 		INFO("Certificate validation succeeded using ca: %s", ca_file);
 		cb_data->verified = true;
+		//Give back path to successful CA
+		str_append(cb_data->ca_path, ca_file);
+
 		// break dir_foreach
 		ret = -1;
 	}
@@ -133,23 +138,29 @@ scd_control_verify_cert_ca_cb(const char *path, const char *file, void *data)
  */
 static TokenToDaemon__Code
 scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_file,
-			  const char *verify_cert_file, bool ignore_time, const char *hash_algo)
+			  const char *verify_cert_file, str_t *verify_ca_file, bool ignore_time,
+			  const char *hash_algo)
 {
+	ASSERT(verify_ca_file);
 	int ret;
 	TokenToDaemon__Code out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_ERROR;
 	IF_NULL_RETVAL(hash_algo, out_code);
 
 	bool verified = false;
+
 	// At first, we explicitly assume that the file to be verified is a software update file,
 	// and we thus use the software signing root CA.
 	if ((ret = ssl_verify_certificate(verify_cert_file, SSIG_ROOT_CERT, ignore_time)) == 0) {
 		verified = true;
+
+		//track matched CA
+		str_append(verify_ca_file, SSIG_ROOT_CERT);
 	} else {
 		// Try all CA files in trusted CA store
 		struct verify_cert_ca_cb_data cb_data = { .cert_file = verify_cert_file,
 							  .ignore_time = ignore_time,
-							  .verified = false };
-
+							  .verified = false,
+							  .ca_path = verify_ca_file };
 		dir_foreach(TRUSTED_CA_STORE, scd_control_verify_cert_ca_cb, &cb_data);
 		if (cb_data.verified) {
 			verified = true;
@@ -166,6 +177,7 @@ scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_f
 
 	// Retry with Local CA
 	if ((ret = ssl_verify_certificate(verify_cert_file, LOCALCA_ROOT_CERT, ignore_time)) == 0) {
+		str_append(verify_ca_file, LOCALCA_ROOT_CERT);
 		goto do_signature;
 	} else if (ret == -1) {
 		ERROR("Certificate not a valid local ssig cert");
@@ -532,14 +544,18 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			write_to_tmpfile_new(msg->verify_sig_buf.data, msg->verify_sig_buf.len);
 		char *tmp_cert_file =
 			write_to_tmpfile_new(msg->verify_cert_buf.data, msg->verify_cert_buf.len);
+
 		bool ignore_time = (msg->has_verify_ignore_time && msg->verify_ignore_time) ?
 					   msg->verify_ignore_time :
 					   false;
+
+		str_t *path_to_verify_ca = str_new("");
+
 		if (tmp_data_file && tmp_sig_file && tmp_cert_file) {
-			out.code =
-				scd_control_handle_verify(tmp_data_file, tmp_sig_file,
-							  tmp_cert_file, ignore_time,
-							  switch_proto_hash_algo(msg->hash_algo));
+			out.code = scd_control_handle_verify(
+				tmp_data_file, tmp_sig_file, tmp_cert_file, path_to_verify_ca,
+				ignore_time, switch_proto_hash_algo(msg->hash_algo));
+			out.ca_path = mem_strdup(str_buffer(path_to_verify_ca));
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
@@ -555,6 +571,12 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			unlink(tmp_cert_file);
 			mem_free0(tmp_cert_file);
 		}
+		if (out.ca_path) {
+			mem_free0(out.ca_path);
+		}
+		if (path_to_verify_ca) {
+			str_free(path_to_verify_ca, true);
+		}
 
 	} break;
 	/*
@@ -566,10 +588,22 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		bool ignore_time = (msg->has_verify_ignore_time && msg->verify_ignore_time) ?
 					   msg->verify_ignore_time :
 					   false;
+
+		str_t *path_to_verify_ca = str_new("");
+
 		out.code = scd_control_handle_verify(msg->verify_data_file, msg->verify_sig_file,
-						     msg->verify_cert_file, ignore_time,
+						     msg->verify_cert_file, path_to_verify_ca,
+						     ignore_time,
 						     switch_proto_hash_algo(msg->hash_algo));
+		out.ca_path = mem_strdup(str_buffer(path_to_verify_ca));
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		if (out.ca_path) {
+			mem_free0(out.ca_path);
+		}
+		if (path_to_verify_ca) {
+			str_free(path_to_verify_ca, true);
+		}
+
 	} break;
 	default:
 		WARN("DaemonToToken command %d unknown or not implemented yet", msg->code);
