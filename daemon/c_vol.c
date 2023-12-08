@@ -459,7 +459,7 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
 	work_dir = mem_printf("%s/work", overlayfs_mount_dir);
 
-	TRACE("Mounting dev %s type %s to dir %s", upper_dev, overlayfs_mount_dir, upper_fstype);
+	TRACE("Mounting dev %s type %s to dir %s", upper_dev, upper_fstype, overlayfs_mount_dir);
 
 	/*
 	 * mount backing fs image for overlayfs upper and work dir
