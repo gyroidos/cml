@@ -198,13 +198,14 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	// Verify aggregated PCR value
 	DEBUG_HEXDUMP(tpms_attest.attested.quote.pcrDigest.t.buffer,
 		      tpms_attest.attested.quote.pcrDigest.t.size, "Quote PCR Digest");
-	SHA256_CTX ctx;
-	SHA256_Init(&ctx);
+	EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+	EVP_DigestInit(ctx, EVP_sha256());
 	uint8_t pcr_calc[SHA256_DIGEST_LENGTH] = { 0 };
 	for (size_t i = 0; i < resp->n_pcr_values; i++) {
-		SHA256_Update(&ctx, resp->pcr_values[i]->value.data, SHA256_DIGEST_LENGTH);
+		EVP_DigestUpdate(ctx, resp->pcr_values[i]->value.data, SHA256_DIGEST_LENGTH);
 	}
-	SHA256_Final(pcr_calc, &ctx);
+	EVP_DigestFinal(ctx, pcr_calc, NULL);
+	EVP_MD_CTX_free(ctx);
 	if (memcmp(tpms_attest.attested.quote.pcrDigest.t.buffer, pcr_calc, SHA256_DIGEST_LENGTH)) {
 		ERROR("VERIFY AGGREGATED PCR FAILED");
 		ret = false;
