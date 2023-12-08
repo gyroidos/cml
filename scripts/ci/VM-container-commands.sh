@@ -24,7 +24,7 @@ do_wait_running () {
 			break
 		elif ! [ -z "$(grep STARTING <<< \"${STATE}\")" ] || ! [ -z "$(grep BOOTING <<< \"${STATE}\")" ] ;then
 			printf "."
-			sleep 2
+			sleep 0.1
 		else
 			echo "exitcode: $?"
 			echo "ERROR: Check failed, expected \"STARTING\" or \"RUNNING\", got:"
@@ -32,8 +32,6 @@ do_wait_running () {
 			exit 1
 		fi
 	done
-
-	sleep 2
 }
 
 
@@ -47,7 +45,7 @@ do_wait_stopped () {
 			break
 		else
 			printf "."
-			sleep 2
+			sleep 0.5
 		fi
 	done
 }
@@ -71,7 +69,7 @@ do_test_cmd_output() {
 	if echo "$OUTPUT" | grep -q "$2";then
 		dbg "exitcode: $?"
 		echo "STATUS: Check successful"
-		sleep 2
+		#sleep 2
 	else
 		echo "exitcode: $?"
 		echo "ERROR: Check failed, expected \"$2\", got:"
@@ -98,7 +96,7 @@ do_test_cmd_noutput() {
 	else
 		dbg "exitcode: $?"
 		echo "STATUS: Check successful"
-		sleep 2
+		#sleep 2
 	fi
 
 }
@@ -107,19 +105,20 @@ do_test_cmd_noutput() {
 
 cmd_control_start() {
 	do_test_cmd_output "/usr/sbin/control start $1 --key=$2" "CONTAINER_START_OK"
-	sleep 2
+	#sleep 2
 	do_wait_running "$1"
-	sleep 2
+	#sleep 2
 }
 
 cmd_control_start_error_unpaired() {
 	do_test_cmd_output "/usr/sbin/control start $1 --key=$2" "CONTAINER_START_TOKEN_UNPAIRED"
-	sleep 2
+	#sleep 2
+
 }
 
 cmd_control_start_error_eexist() {
 	do_test_cmd_output "/usr/sbin/control start $1 --key=$2" "CONTAINER_START_EEXIST"
-	sleep 2
+	#sleep 2
 }
 
 
@@ -127,14 +126,14 @@ cmd_control_start_error_eexist() {
 cmd_control_stop() {
 	do_test_cmd_output "/usr/sbin/control stop $1 --key=$2" "CONTAINER_STOP_OK"
 	do_wait_stopped "$1"
-	sleep 2
+	#sleep 2
 
 }
 
 cmd_control_stop_error_notrunning() {
 	do_test_cmd_output "/usr/sbin/control stop $1 --key=$2" "CONTAINER_STOP_FAILED_NOT_RUNNING"
 	do_wait_stopped "$1"
-	sleep 2
+	#sleep 2
 
 }
 
@@ -164,7 +163,7 @@ else
 	do_test_cmd_output "/usr/sbin/control create \"$1\" \"$2\" \"$3\"" "guest_os"
 fi
 
-sleep 5
+#sleep 5
 }
 
 cmd_control_create_error() {
@@ -174,7 +173,7 @@ else
 	do_test_cmd_noutput "/usr/sbin/control create \"$1\" \"$2\" \"$3\"" "uuids"
 fi
 
-sleep 5
+#sleep 5
 }
 
 
@@ -237,3 +236,9 @@ cmd_control_list_guestos_silent() {
         exit 1
     fi 
 }
+
+cmd_control_update_config() {
+	do_test_cmd_output "/usr/sbin/control update_config $1" "$2"
+}
+
+
