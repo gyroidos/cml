@@ -44,7 +44,11 @@ fd_write(int fd, const char *buf, size_t len)
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				TRACE_ERRNO("Writing to fd %d: Blocked, retrying...", fd);
 				continue;
+			} else if (errno == EINTR) {
+				TRACE("Reading from fd %d: Interrupted, retrying...", fd);
+				continue;
 			}
+
 			ERROR_ERRNO("Failed to write to fd %d", fd);
 			return ret;
 		}
@@ -74,7 +78,11 @@ fd_read(int fd, char *buf, size_t len)
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				TRACE("Reading from fd %d: Blocked, retrying...", fd);
 				continue;
+			} else if (errno == EINTR) {
+				TRACE("Reading from fd %d: Interrupted, retrying...", fd);
+				continue;
 			}
+
 			return ret;
 		}
 
