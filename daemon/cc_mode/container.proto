@@ -72,7 +72,7 @@ enum ContainerTokenType {
 }
 
 message ContainerConfig {
-	reserved 6, 7, 10, 17, 20, 22; // legacy or only available in non-CC Mode
+	reserved 6, 7, 10, 20, 22; // legacy or only available in non-CC Mode
 	// user configurable, non unique
 	required string name = 1;
 	// name of GuestOS, e.g. android
@@ -90,6 +90,7 @@ message ContainerConfig {
 
 	optional string assign_cpus = 11; // cpus "m-n", e.g., "0-1"
 
+	optional bool allow_autostart = 17 [default = false];
 	optional bool allow_system_time = 18 [default = false];
 
 	optional string dns_server = 21;
