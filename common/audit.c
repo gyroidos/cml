@@ -40,8 +40,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <google/protobuf-c/protobuf-c-text.h>
-
 AuditRecord *
 audit_record_new(const char *type, const char *subject_id, int meta_length,
 		 AuditRecord__Meta **metas)
@@ -88,6 +86,7 @@ audit_kernel_send(nl_sock_t *audit_sock, int type, const void *data, size_t len)
 
 #ifdef WITH_PROTOBUF_TEXT
 #include "protobuf-text.h"
+#include <google/protobuf-c/protobuf-c-text.h>
 static int
 audit_kernel_log_record(const AuditRecord *msg)
 {
