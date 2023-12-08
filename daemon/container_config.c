@@ -679,6 +679,14 @@ container_config_get_cpus_allowed(const container_config_t *config)
 }
 
 bool
+container_config_get_allow_autostart(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	return config->cfg->allow_autostart;
+}
+
+bool
 container_config_get_allow_system_time(const container_config_t *config)
 {
 	ASSERT(config);
@@ -699,12 +707,6 @@ container_type_t
 container_config_get_type(UNUSED const container_config_t *config)
 {
 	return CONTAINER_TYPE_CONTAINER;
-}
-
-bool
-container_config_get_allow_autostart(UNUSED const container_config_t *config)
-{
-	return true;
 }
 
 bool
@@ -733,14 +735,6 @@ container_config_get_type(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return container_config_proto_to_type(config->cfg->type);
-}
-
-bool
-container_config_get_allow_autostart(const container_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-	return config->cfg->allow_autostart;
 }
 
 bool
