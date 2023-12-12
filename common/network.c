@@ -211,19 +211,19 @@ network_setup_port_forwarding(const char *srcip, uint16_t srcport, const char *d
 
 	DEBUG("%s port forwarding from %s to %s", enable ? "Enabling" : "Disabling", src_port, dst);
 
-	// forward local port to destination:port
-	const char *const argv[] = { IPTABLES_PATH, "-t", "nat",       enable ? "-I" : "-D",
-				     "OUTPUT",	    "-s", "127.0.0.1", "-d",
-				     "127.0.0.1",   "-p", "tcp",       "--dport",
-				     src_port,	    "-j", "DNAT",      "--to-destination",
+	// forward public port to destination:port
+	const char *const argv[] = { IPTABLES_PATH, "-t", "nat",      enable ? "-I" : "-D",
+				     "PREROUTING",  "-p", "tcp",      "--dport",
+				     src_port,	    "-m", "addrtype", "--dst-type",
+				     "LOCAL",	    "-j", "DNAT",     "--to-destination",
 				     dst,	    NULL };
 	int error = proc_fork_and_execvp(argv);
+
 	// change source address for forwarded packets
-	const char *const argv2[] = { IPTABLES_PATH, "-t", "nat",	enable ? "-I" : "-D",
-				      "POSTROUTING", "-s", "127.0.0.1", "-d",
-				      dstip,	     "-p", "tcp",	"--dport",
-				      dst_port,	     "-j", "SNAT",	"--to-source",
-				      srcip,	     NULL };
+	const char *const argv2[] = { IPTABLES_PATH, "-t",	    "nat",    enable ? "-I" : "-D",
+				      "POSTROUTING", "-d",	    dstip,    "-p",
+				      "tcp",	     "--dport",	    dst_port, "-j",
+				      "SNAT",	     "--to-source", srcip,    NULL };
 	error |= proc_fork_and_execvp(argv2);
 
 	mem_free0(src_port);
