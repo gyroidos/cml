@@ -95,6 +95,11 @@
 /* Network prefix */
 #define IPV4_PREFIX 24
 
+/* Port numbers for SSH access to cml in debug build.
+ * CML_SSH_PORT_C0 gets forwarded to CML_SSH_PORT_CML */
+#define CML_SSH_PORT_CML 22
+#define CML_SSH_PORT_C0 2222
+
 /* Network interface structure with interface specific settings */
 typedef struct {
 	char *nw_name;		       //!< Name of the network device
@@ -1024,6 +1029,29 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 	return 0;
 }
 
+#ifdef DEBUG_BUILD
+static int
+setup_c0_cml_ssh_port_forwarding(c_net_interface_t *ni)
+{
+	char srcaddr[INET_ADDRSTRLEN];
+	char dstaddr[INET_ADDRSTRLEN];
+
+	IF_NULL_GOTO(inet_ntop(AF_INET, &ni->ipv4_cont_addr, srcaddr, sizeof(srcaddr)), err);
+	IF_NULL_GOTO(inet_ntop(AF_INET, &ni->ipv4_cmld_addr, dstaddr, sizeof(dstaddr)), err);
+
+	IF_TRUE_GOTO(network_setup_port_forwarding(srcaddr, CML_SSH_PORT_C0, dstaddr,
+						   CML_SSH_PORT_CML, true),
+		     err);
+
+	return 0;
+
+err:
+	ERROR_ERRNO("Could not setup port forwarding from %s:%d to %s:%d on interface %s!", srcaddr,
+		    CML_SSH_PORT_C0, dstaddr, CML_SSH_PORT_CML, ni->veth_cmld_name);
+	return -1;
+}
+#endif
+
 /**
  * This function is responsible for moving the container interface to its corresponding namespace.
  * This Function is part of TSF.CML.CompartmentIsolation.
@@ -1129,7 +1157,13 @@ c_net_start_post_clone(void *netp)
 				if (network_setup_masquerading(ni->subnet, true))
 					FATAL_ERRNO("Could not setup masquerading for %s!",
 						    ni->veth_cmld_name);
-				// configuration of interface is done in root netns below
+					// configuration of interface is done in root netns below
+
+#ifdef DEBUG_BUILD
+				/* setup port forwarding for ssh in debug build */
+				if (setup_c0_cml_ssh_port_forwarding(ni))
+					FATAL("Could not setup ssh port forwarding!");
+#endif
 				continue;
 			}
 
