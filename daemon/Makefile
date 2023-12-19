@@ -30,6 +30,7 @@ WCAST_ALIGN ?= y
 OCI ?= n
 IDMAPPED ?= n
 CGROUP_V2 ?= y
+CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 
 TRUSTME_HARDWARE := x86
@@ -125,6 +126,10 @@ ifeq ($(CGROUP_V2),y)
     SRC_CMODULES += \
 	c_cgroups_v2.c \
 	c_cgroups_dev.c
+ifeq ($(CGROUP_SOCKOPT),y)
+    SRC_CMODULES += \
+	c_cgroups_sockopt.c
+endif
 else
     SRC_CMODULES += \
 	c_cgroups.c

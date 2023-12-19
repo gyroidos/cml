@@ -204,3 +204,25 @@ struct bpf_insn;
 		.code = BPF_JMP | BPF_EXIT, .dst_reg = 0, .src_reg = 0, .off = 0, .imm = 0 })
 
 #endif
+
+// some macros from: tools/include/linux/filter.h
+
+/* Unconditional jumps, goto pc + off16 */
+
+#define BPF_JMP_A(OFF)                                          \
+        ((struct bpf_insn) {                                    \
+                .code  = BPF_JMP | BPF_JA,                      \
+                .dst_reg = 0,                                   \
+                .src_reg = 0,                                   \
+                .off   = OFF,                                   \
+                .imm   = 0 })
+
+/* Function call */
+
+#define BPF_EMIT_CALL(FUNC)                                     \
+        ((struct bpf_insn) {                                    \
+                .code  = BPF_JMP | BPF_CALL,                    \
+                .dst_reg = 0,                                   \
+                .src_reg = 0,                                   \
+                .off   = 0,                                     \
+                .imm   = ((FUNC) - BPF_FUNC_unspec) })
