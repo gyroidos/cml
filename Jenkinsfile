@@ -10,13 +10,18 @@ pipeline {
 	}
 
 	stages {
+		stage('Get Dockerfile') {
+			steps {
+				sh label: 'Download Dockerfile from Github', script: '''
+					wget https://raw.githubusercontent.com/gyroidos/gyroidos/kirkstone/Dockerfile -O Dockerfile
+				'''
+			}
+		}
 		stage('Inspect the Codebase') {
 			parallel {
 				stage('Code Format & Style') {
 					agent {
 						dockerfile {
-							/*TODO: update the Dockerfile in the build repo instead*/
-							dir 'scripts/ci'
 							args '--entrypoint=\'\' -v /yocto_mirror:/source_mirror'
 						}
 					}
@@ -24,7 +29,7 @@ pipeline {
 					steps {
 						sh label: 'Clean cml Repo', script: '''
 							cd ${WORKSPACE}
-							git clean -fx
+							git clean -fx --exclude=Dockerfile
 						'''
 						sh label: 'Check code formatting', script: 'scripts/ci/check-if-code-is-formatted.sh'
 					}
@@ -55,7 +60,6 @@ pipeline {
 		stage('Unit Testing') {
 			agent {
 				dockerfile {
-					dir 'scripts/ci'
 					args '--entrypoint=\'\''
 					reuseNode true
 				}
@@ -64,7 +68,7 @@ pipeline {
 			steps {
 				sh label: 'Clean cml Repo', script: '''
 					cd ${WORKSPACE}
-					git clean -fx
+					git clean -fx --exclude=Dockerfile
 				'''
 				sh label: 'Perform unit tests', script: 'scripts/ci/unit-testing.sh'
 			}
