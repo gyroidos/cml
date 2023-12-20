@@ -97,7 +97,7 @@ c_cgroups_sockopt_prog_new(const struct bpf_insn *insn, int insn_nr)
 static void
 c_cgroups_sockopt_prog_free(c_cgroups_sockopt_prog_t *prog)
 {
-	IF_NULL_RETUN(prog);
+	IF_NULL_RETURN(prog);
 
 	if (prog->insn)
 		mem_free0(prog->insn);
