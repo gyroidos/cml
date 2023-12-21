@@ -37,7 +37,8 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
-#define PROTOBUF_MAX_MESSAGE_SIZE 1024 * 1024
+// The protobuf default byte size limit is 64MB
+#define PROTOBUF_MAX_MESSAGE_SIZE 1024 * 1024 * 64
 #define PROTOBUF_MAX_OVERHEAD 1024
 
 /**
