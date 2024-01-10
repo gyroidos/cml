@@ -794,9 +794,9 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 			      container_get_state(container) == COMPARTMENT_STATE_STOPPED);
 
 	container_t *c = NULL;
-	container_unregister_observer(container, cb);
 
 	if (!container_get_sync_state(container)) {
+		container_unregister_observer(container, cb);
 		DEBUG("Container is out of sync with its config. Reloading..");
 		if (!(c = cmld_reload_container(container_get_uuid(container),
 						cmld_get_containers_dir()))) {
@@ -813,8 +813,7 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 			     container_get_description(c));
 		}
 	} else {
-		DEBUG("Container %s not in state STOPPED or REBOOTING, not reloading configuration",
-		      container_get_description(c));
+		DEBUG("Container %s already in sync", container_get_description(container));
 	}
 }
 
