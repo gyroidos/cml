@@ -241,7 +241,7 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 
 	char *s = (char *)mem_memcpy(readers, lr);
 	/* readers: |-|-|---15---|---X---|-|-|
-	 *	 fields  1 2     3       4    5 6
+	 *   fields  1 2     3       4    5 6
 	 * 		1: uint8_t libusb_get_bus_number()
 	 * 		2: uint8_t libusb_get_device_address
 	 * 		3: string  "SmartCard-HSM ("
@@ -256,20 +256,32 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 		iport = *po << 8 | *(po + 1);
 		po += 2;
 		idx += 2;
+		TRACE("reader string at offset '%u': '%s'", idx, readers + idx);
 
+		/*
+		 * advance po offset to beginning of field 4
+		 */
 		po += 15;
 
-		size_t s_len = strlen(po) - 1;
+		size_t s_len = strlen(po);
 
-		if ((s_len > 0) && (strncmp(po, serial, s_len) == 0)) {
-			TRACE("USBTOKEN: token_filter_by_serial() found reader with serial: %s at port 0x%04x",
+		/*
+		 * string at po now contains 4 and 5, "<iSerialNumber>)".
+		 * thus, strip ")" for comparison
+		 */
+		if ((s_len > 0) && (strncmp(po, serial, s_len - 1) == 0)) {
+			TRACE("USBTOKEN: token_filter_by_serial() found reader"
+			      " with serial: %s at port 0x%04x",
 			      serial, iport);
 			*port = iport;
 			mem_free0(s);
 			return 0;
 		}
 
-		po += 15 + s_len + 1;
+		/*
+		 * advance pointers to the next reader string
+		 */
+		po += s_len + 1;
 		idx += 15 + s_len + 1;
 	}
 
