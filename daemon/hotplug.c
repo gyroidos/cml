@@ -590,10 +590,11 @@ hotplug_handle_usb_device(unsigned actions, uevent_event_t *event)
 					container_device_deny(mapping->container, 'c',
 							      mapping->usbdev->major,
 							      mapping->usbdev->minor);
+					INFO("Denied access to unbound device node %d:%d"
+					     " mapped in container %s",
+					     mapping->usbdev->major, mapping->usbdev->minor,
+					     container_get_name(mapping->container));
 				}
-				INFO("Denied access to unbound device node %d:%d mapped in container %s",
-				     mapping->usbdev->major, mapping->usbdev->minor,
-				     container_get_name(mapping->container));
 			}
 		}
 	}
