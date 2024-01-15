@@ -29,6 +29,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"
+#include "common/list.h"
 #include "common/str.h"
 #include "common/ssl_util.h"
 
@@ -51,6 +52,7 @@
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 static unsigned short g_ctn = 0;
+static list_t *ctn_available_list = NULL; // already used but closed ctns less than g_ctn
 
 /* following are implementation specific byte arrays used to commuicate with 'sc-hsm' tokens
  * manufactored by CardContact.
@@ -82,6 +84,31 @@ struct usbtoken {
 	unsigned char *latr; // ATR of last reset
 	size_t latr_len;
 };
+
+static unsigned short
+ctn_get_unused(void)
+{
+	unsigned short ctn;
+
+	if (!ctn_available_list) {
+		ctn = g_ctn++;
+	} else {
+		unsigned short *ctn_available = ctn_available_list->data;
+		ctn = *ctn_available;
+		mem_free0(ctn_available);
+		ctn_available_list = list_unlink(ctn_available_list, ctn_available_list);
+	}
+
+	return ctn;
+}
+
+static void
+ctn_set_available(unsigned short ctn)
+{
+	unsigned short *ctn_available = mem_new0(unsigned short, 1);
+	*ctn_available = ctn;
+	ctn_available_list = list_append(ctn_available_list, ctn_available);
+}
 
 /**
  * Derive an authentication code from a parining secret and a user pin/passwd.
@@ -398,7 +425,7 @@ usbtoken_new(const char *serial)
 	IF_NULL_RETVAL_ERROR(token, NULL);
 
 	token->locked = true;
-	token->ctn = g_ctn++;
+	token->ctn = ctn_get_unused();
 	token->serial = mem_strdup(serial);
 	IF_NULL_GOTO_ERROR(token->serial, err);
 
@@ -406,6 +433,7 @@ usbtoken_new(const char *serial)
 	mem_free0(brsp);
 	if (rc != 0) {
 		ERROR("Failed to initialize ctapi interface to usb token reader");
+		ctn_set_available(token->ctn);
 		goto err;
 	}
 
@@ -570,7 +598,10 @@ usbtoken_free(usbtoken_t *token)
 	ASSERT(token);
 
 	if (0 != CT_close(token->ctn)) {
-		ERROR("Closing CT interface to token failed.");
+		ERROR("Closing CT interface (ctn=%d) to token failed.", token->ctn);
+	} else {
+		DEBUG("Closing CT interface (ctn=%d) done.", token->ctn);
+		ctn_set_available(token->ctn);
 	}
 
 	mem_free0(token->latr);
@@ -579,7 +610,6 @@ usbtoken_free(usbtoken_t *token)
 	usbtoken_free_secrets(token);
 
 	mem_free0(token);
-	g_ctn--;
 }
 
 /**
