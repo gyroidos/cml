@@ -1745,6 +1745,13 @@ cmld_container_wipe(container_t *container)
 {
 	ASSERT(container);
 
+	/* remove wrapped key */
+	char *key_file = mem_printf("%s/%s.key", cmld_get_wrapped_keys_dir(),
+				    uuid_string(container_get_uuid(container)));
+	if (file_exists(key_file))
+		unlink(key_file);
+
+	mem_free0(key_file);
 	return container_wipe(container);
 }
 
