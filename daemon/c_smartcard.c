@@ -45,6 +45,7 @@
 #include "common/proc.h"
 
 #include <google/protobuf-c/protobuf-c-text.h>
+#include <libgen.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -80,6 +81,8 @@ typedef struct c_smartcard {
 	container_token_type_t token_type;
 	// the iSerial of the usbtoken reader
 	char *token_serial;
+	// the path to the usbtoken APDU relay socket inside the container
+	char *token_relay_path;
 
 	// indicates whether the scd has succesfully initialized the token structure
 	bool is_init;
@@ -1093,6 +1096,8 @@ c_smartcard_new(compartment_t *compartment)
 		     uuid_string(container_get_uuid(smartcard->container)));
 	}
 
+	smartcard->token_relay_path = NULL;
+
 	return smartcard;
 }
 
@@ -1121,6 +1126,9 @@ c_smartcard_free(void *smartcardp)
 
 	if (smartcard->token_serial)
 		mem_free0(smartcard->token_serial);
+
+	if (smartcard->token_relay_path)
+		mem_free0(smartcard->token_relay_path);
 
 	mem_free0(smartcard);
 }
@@ -1183,45 +1191,53 @@ c_smartcard_bind_token(c_smartcard_t *smartcard)
 	char *src_path = mem_printf("%s/%s.sock", SCD_TOKENCONTROL_SOCKET,
 				    uuid_string(container_get_uuid(smartcard->container)));
 	char *dest_dir = mem_printf("%s/dev/tokens", container_get_rootdir(smartcard->container));
-	char *dest_path = mem_printf("%s/token.sock", dest_dir);
 
-	DEBUG("Binding token socket to %s", dest_path);
+	if (NULL == smartcard->token_relay_path)
+		smartcard->token_relay_path = mem_printf("%s/token.sock", dest_dir);
+
+	DEBUG("Binding token socket to %s", smartcard->token_relay_path);
 
 	if (!file_exists(dest_dir)) {
 		if (dir_mkdir_p(dest_dir, 0755)) {
-			ERROR_ERRNO("Failed to create containing directory for %s", dest_path);
+			ERROR_ERRNO("Failed to create containing directory for %s",
+				    smartcard->token_relay_path);
 			goto err;
 		}
 
 		if (chown(dest_dir, uid, uid)) {
-			ERROR("Failed to chown token directory at %s to %d", dest_path, uid);
+			ERROR("Failed to chown token directory at %s to %d",
+			      smartcard->token_relay_path, uid);
 			goto err;
 		} else {
-			DEBUG("Successfully chowned token directory at %s to %d", dest_path, uid);
+			DEBUG("Successfully chowned token directory at %s to %d",
+			      smartcard->token_relay_path, uid);
 		}
 	} else if (!file_is_dir(dest_dir)) {
 		ERROR("Token path %s exists and is no directory", dest_dir);
 		goto err;
 	}
 
-	if (file_touch(dest_path)) {
-		ERROR_ERRNO("Failed to prepare target file for bind mount at %s", dest_path);
+	if (file_touch(smartcard->token_relay_path)) {
+		ERROR_ERRNO("Failed to prepare target file for bind mount at %s",
+			    smartcard->token_relay_path);
 		goto err;
 	}
 
-	DEBUG("Binding token socket from %s to %s", src_path, dest_path);
-	if (mount(src_path, dest_path, NULL, MS_BIND, NULL)) {
-		ERROR_ERRNO("Failed to bind socket from %s to %s", src_path, dest_path);
+	DEBUG("Binding token socket from %s to %s", src_path, smartcard->token_relay_path);
+	if (mount(src_path, smartcard->token_relay_path, NULL, MS_BIND, NULL)) {
+		ERROR_ERRNO("Failed to bind socket from %s to %s", src_path,
+			    smartcard->token_relay_path);
 		goto err;
 	} else {
-		DEBUG("Successfully bound token socket to %s", dest_path);
+		DEBUG("Successfully bound token socket to %s", smartcard->token_relay_path);
 	}
 
-	if (chown(dest_path, uid, uid)) {
-		ERROR("Failed to chown token socket at %s to %d", dest_path, uid);
+	if (chown(smartcard->token_relay_path, uid, uid)) {
+		ERROR("Failed to chown token socket at %s to %d", smartcard->token_relay_path, uid);
 		goto err;
 	} else {
-		DEBUG("Successfully chowned token socket at %s to %d", dest_path, uid);
+		DEBUG("Successfully chowned token socket at %s to %d", smartcard->token_relay_path,
+		      uid);
 	}
 
 	ret = 0;
@@ -1229,7 +1245,26 @@ c_smartcard_bind_token(c_smartcard_t *smartcard)
 err:
 	mem_free0(src_path);
 	mem_free0(dest_dir);
-	mem_free0(dest_path);
+
+	return ret;
+}
+
+static int
+c_smartcard_unbind_token(c_smartcard_t *smartcard)
+{
+	ASSERT(smartcard);
+
+	if (CONTAINER_TOKEN_TYPE_USB != smartcard->token_type)
+		return 0;
+
+	int ret = -1;
+
+	DEBUG("Unbinding token socket from %s.", smartcard->token_relay_path);
+	if ((ret = umount2(smartcard->token_relay_path, MNT_DETACH)) == -1) {
+		ERROR_ERRNO("Failed to unbind socket from %s", smartcard->token_relay_path);
+	} else {
+		DEBUG("Successfully unbound token socket from %s", smartcard->token_relay_path);
+	}
 
 	return ret;
 }
@@ -1254,6 +1289,21 @@ c_smartcard_start_pre_exec(void *smartcardp)
 	return 0;
 }
 
+/**
+ * Cleanup hook.
+ *
+ * @param smartcardp The generic smartcard object of the associated container.
+ */
+static void
+c_smartcard_cleanup(void *smartcardp, UNUSED bool is_rebooting)
+{
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
+
+	if (c_smartcard_unbind_token(smartcard) < 0)
+		WARN("Failed to unbind token to container");
+}
+
 static compartment_module_t c_smartcard_module = {
 	.name = MOD_NAME,
 	.compartment_new = c_smartcard_new,
@@ -1268,7 +1318,7 @@ static compartment_module_t c_smartcard_module = {
 	.start_child = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
-	.cleanup = NULL,
+	.cleanup = c_smartcard_cleanup,
 	.join_ns = NULL,
 };
 
