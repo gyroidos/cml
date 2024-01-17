@@ -122,7 +122,7 @@ struct compartment {
 	// indicate if the compartment is synced with its config
 	bool is_synced;
 
-	list_t *helper_child_list; // helper childs spawned during startup
+	list_t *helper_child_list; // helper children spawned during startup
 	bool is_doing_cleanup;
 	bool is_rebooting;
 };
@@ -164,7 +164,7 @@ bool
 compartment_is_stoppable(compartment_t *compartment)
 {
 	if (compartment->helper_child_list) {
-		DEBUG("Helper childs active, compartment can not be stopped.");
+		DEBUG("Helper children active, compartment can not be stopped.");
 		return false;
 	}
 	compartment_state_t state = compartment_get_state(compartment);
@@ -676,14 +676,21 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	TRACE("SIGCHLD handler called for compartment %s with PID %d",
 	      compartment_get_description(compartment), compartment->pid);
 
+	if (compartment->pid == -1) {
+		TRACE("All processes of container %s already reaped, check for remaining helpers.",
+		      compartment_get_description(compartment));
+
+		compartment_sigchld_handle_helpers(compartment, sig);
+		return;
+	}
+
 	/* In the start function the childs init process gets set a process group which has
 	 * the same pgid as its pid. We wait for all processes belonging to our compartment's
 	 * process group, but only change the compartments state to stopped if the init exited */
 	pid_t pid = 0;
 	int status = 0;
-	if (compartment->pid > 0 && (pid = proc_waitpid(-(compartment->pid), &status, WNOHANG))) {
+	if ((pid = proc_waitpid(-(compartment->pid), &status, WNOHANG)) != 0) {
 		if (pid == compartment->pid) {
-			bool rebooting = false;
 			if (WIFEXITED(status)) {
 				INFO("Container %s terminated (init process exited with status=%d)",
 				     compartment_get_description(compartment), WEXITSTATUS(status));
@@ -694,14 +701,13 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 				/* Since Kernel 3.4 reboot inside pid namspaces
 				 * are signaled by SIGHUP (see manpage REBOOT(2)) */
 				if (WTERMSIG(status) == SIGHUP) {
-					rebooting = true;
 					compartment->is_rebooting = true;
 				}
 			} else {
 				return;
 			}
 			/* cleanup and set states accordingly to notify observers */
-			compartment_cleanup(compartment, rebooting);
+			compartment_cleanup(compartment, compartment->is_rebooting);
 			compartment->is_doing_cleanup = true;
 
 		} else if (pid == -1) {
@@ -719,8 +725,8 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	}
 
 	// check for compartment itself again, e.g., before execv
-	pid = proc_waitpid(compartment->pid, &status, WNOHANG);
-	if (pid == compartment->pid) {
+	if (compartment->pid > 0 &&
+	    compartment->pid == proc_waitpid(compartment->pid, &status, WNOHANG)) {
 		INFO("Compartment %s reaped before beeing part of pg",
 		     compartment_get_description(compartment));
 		if (WIFEXITED(status)) {
@@ -740,7 +746,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	// reap any open helper child and set state accordingly
 	compartment_sigchld_handle_helpers(compartment, sig);
 
-	TRACE("No more childs to reap. Callback exiting...");
+	TRACE("No more children to reap. Callback exiting...");
 }
 
 void
@@ -749,11 +755,11 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	compartment_t *compartment = data;
 	ASSERT(compartment);
 
-	pid_t pid;
+	pid_t pid = 0;
 	int status = 0;
 
 	TRACE("SIGCHLD handler called for compartment %s early start child with PID %d",
-	      compartment_get_description(compartment), compartment->pid);
+	      compartment_get_description(compartment), compartment->pid_early);
 
 	if (compartment->pid_early &&
 	    (pid = proc_waitpid(compartment->pid_early, &status, WNOHANG)) > 0) {
@@ -763,6 +769,9 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		event_signal_free(sig);
 		// cleanup if early child returned with an error
 		if ((WIFEXITED(status) && WEXITSTATUS(status)) || WIFSIGNALED(status)) {
+			if (compartment->pid == -1)
+				compartment_cleanup(compartment, false);
+
 			compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
 		}
 		compartment->pid_early = -1;
@@ -1209,6 +1218,20 @@ error_pre_exec:
 		WARN_ERRNO("write to sync socket failed");
 		goto error;
 	}
+
+	// kill running helper children
+	for (list_t *l = compartment->helper_child_list; l; l = l->next) {
+		compartment_helper_child_t *child = l->data;
+		if (child->pid <= 1) {
+			WARN("Helper child with pid=%d, in list, do not kill anything", child->pid);
+			continue;
+		}
+		if (kill(child->pid, SIGKILL)) {
+			TRACE_ERRNO("Could not send kill to helper %s (pid=%d).", child->name,
+				    child->pid);
+		}
+	}
+
 	event_remove_io(io);
 	event_io_free(io);
 	close(fd);
