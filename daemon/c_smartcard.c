@@ -1254,8 +1254,7 @@ c_smartcard_unbind_token(c_smartcard_t *smartcard)
 {
 	ASSERT(smartcard);
 
-	if (CONTAINER_TOKEN_TYPE_USB != smartcard->token_type)
-		return 0;
+	IF_NULL_RETVAL(smartcard->token_relay_path, 0);
 
 	int ret = -1;
 
