@@ -43,6 +43,7 @@
 #include "common/protobuf.h"
 #include "common/protobuf-text.h"
 #include "common/ssl_util.h"
+#include "common/sock-sd.h"
 
 #include <unistd.h>
 
@@ -659,7 +660,8 @@ scd_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 scd_control_t *
 scd_control_new(const char *path)
 {
-	int sock = sock_unix_create_and_bind(SOCK_SEQPACKET | SOCK_NONBLOCK, path);
+	int sock = path ? sock_unix_create_and_bind(SOCK_SEQPACKET | SOCK_NONBLOCK, path) :
+			  sock_sd_listen_fd(NULL);
 	if (sock < 0) {
 		WARN("Could not create and bind UNIX domain socket");
 		return NULL;

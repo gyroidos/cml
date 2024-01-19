@@ -31,5 +31,11 @@ SBINDIR := /usr/sbin
 install:
 	install -d ${DESTDIR}${SBINDIR}
 	install scd ${DESTDIR}${SBINDIR}/cml-scd
+ifeq ($(SYSTEMD), y)
+	install -d ${DESTDIR}/lib/systemd/system/
+	install systemd/cml-scd.service ${DESTDIR}/lib/systemd/system/
+	install systemd/cml-scd.socket ${DESTDIR}/lib/systemd/system/
+else
 	install -d ${DESTDIR}/etc/init.d
 	install init.d/cml-scd ${DESTDIR}/etc/init.d/
+endif

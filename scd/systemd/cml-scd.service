@@ -1,0 +1,10 @@
+[Unit]
+Description = GyroidOS CML-SCD Daemon
+AssertFileNotEmpty=/var/lib/cml/tokens/device.cert
+After=cml-scd.socket
+Requires=cml-scd.socket
+
+[Service]
+Type=exec
+ExecStart=/usr/sbin/cml-scd
+NonBlocking=true
