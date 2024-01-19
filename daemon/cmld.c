@@ -72,7 +72,9 @@
 #include <stdlib.h>
 
 // clang-format off
+#ifndef CMLD_CONTROL_SOCKET
 #define CMLD_CONTROL_SOCKET SOCK_PATH(control)
+#endif // CMLD_CONTROL_SOCKET
 // clang-format on
 
 #define CMLD_SUSPEND_TIMEOUT 5000

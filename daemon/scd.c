@@ -29,6 +29,7 @@
 #include "common/file.h"
 #include "common/sock.h"
 #include "common/proc.h"
+#include "common/mem.h"
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -36,12 +37,14 @@
 #include <unistd.h>
 
 // clang-format off
-#define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
+#define SCD_CONTROL_SOCKET "scd_control"
 // clang-format on
 
 #ifndef SCD_BINARY_NAME
 #define SCD_BINARY_NAME "scd"
 #endif
+
+char *scd_sock_path = NULL;
 
 static pid_t scd_pid;
 
@@ -96,10 +99,11 @@ scd_init(bool start_daemon)
 		scd_pid = -1;
 	}
 
+	scd_sock_path = sock_get_path_new(SCD_CONTROL_SOCKET);
 	size_t retries = 0;
 	do {
 		NANOSLEEP(0, 500000000)
-		sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+		sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
 		retries++;
 		TRACE("Retry %zu connecting to scd", retries);
 	} while (sock < 0 && retries < 10);
@@ -110,7 +114,7 @@ scd_init(bool start_daemon)
 	}
 
 	// allow access from namespaced child before chroot and execv of init
-	if (chmod(SCD_CONTROL_SOCKET, 00777))
+	if (chmod(scd_sock_path, 00777))
 		WARN("could not change access rights for scd control socket");
 
 	return 0;
@@ -121,5 +125,7 @@ scd_cleanup(void)
 {
 	IF_TRUE_RETURN_TRACE(scd_pid == -1);
 	DEBUG("Stopping %s process with pid=%d!", SCD_BINARY_NAME, scd_pid);
+	mem_free(scd_sock_path);
+	scd_sock_path = NULL;
 	kill(scd_pid, SIGTERM);
 }

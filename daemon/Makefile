@@ -64,7 +64,13 @@ ifeq ($(CC_MODE),y)
     LOCAL_CFLAGS += -DCC_MODE
 endif
 
-LDLIBS := -lc -Lcommon -lcommon_full -lutil -lprotobuf-c -lprotobuf-c-text
+LDLIBS := -lc -Lcommon
+ifeq ($(SYSTEMD),y)
+	LDLIBS += -lcommon_full_systemd -lsystemd
+else
+	LDLIBS += -lcommon_full
+endif
+LDLIBS += -lutil -lprotobuf-c -lprotobuf-c-text
 
 .PHONY: all
 all: cmld
@@ -115,23 +121,26 @@ SRC_CMODULES += \
 endif
 
 ifeq ($(SYSTEMD),y)
-    SRC_CMODULES += \
-	c_cgroups_systemd.c
-    LDLIBS += -lsystemd
+	SRC_CMODULES += \
+		c_cgroups_systemd.c
+	LOCAL_CFLAGS += \
+		-DSYSTEMD \
+		-DCMLD_CONTROL_SOCKET=NULL \
+		-DSOCKET_PREFIX='"cml_"'
 endif
 
 ifeq ($(CGROUP_V2),y)
-    SRC_CMODULES += \
-	c_cgroups_v2.c \
-	c_cgroups_dev.c
+	SRC_CMODULES += \
+		c_cgroups_v2.c \
+		c_cgroups_dev.c
 ifeq ($(CGROUP_SOCKOPT),y)
-    SRC_CMODULES += \
-	c_cgroups_sockopt.c
+	SRC_CMODULES += \
+		c_cgroups_sockopt.c
 endif
 else
-    SRC_CMODULES += \
-	c_cgroups.c
-    LOCAL_CFLAGS += -DCGROUPS_LEGACY
+	SRC_CMODULES += \
+		c_cgroups.c
+	LOCAL_CFLAGS += -DCGROUPS_LEGACY
 endif
 
 SRC_CMODULES += \
@@ -194,7 +203,11 @@ endif
 $(PROTO_SRC): protobuf
 
 libcommon:
+ifeq ($(SYSTEMD),y)
+	$(MAKE) -C common libcommon_full_systemd WITH_PROTOBUF_TEXT=y
+else
 	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
+endif
 
 cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
 	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld

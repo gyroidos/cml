@@ -1,0 +1,8 @@
+[Unit]
+Description = GyroidOS CML Socket
+
+[Socket]
+FileDescriptorName=cml_control
+Accept=no
+SocketGroup=cml-control
+ListenStream=/run/socket/cml_control

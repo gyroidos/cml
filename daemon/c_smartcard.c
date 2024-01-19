@@ -53,7 +53,6 @@
 #include <unistd.h>
 
 // clang-format off
-#define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
 #define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
 // clang-format on
 
@@ -71,6 +70,8 @@
 #define TOKEN_IS_PAIRED_FILE_NAME "token_is_paired"
 
 #define USB_TOKEN_ATTACH_TIMEOUT 500
+
+extern char *scd_sock_path; // defined in scd.c
 
 typedef struct c_smartcard {
 	int sock;
@@ -161,9 +162,9 @@ c_smartcard_send_recv_block(const DaemonToToken *out)
 {
 	ASSERT(out);
 
-	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
 	if (sock < 0) {
-		ERROR_ERRNO("Failed to connect to scd control socket %s", SCD_CONTROL_SOCKET);
+		ERROR_ERRNO("Failed to connect to scd control socket %s", scd_sock_path);
 		return NULL;
 	}
 
@@ -1080,7 +1081,7 @@ c_smartcard_new(compartment_t *compartment)
 	smartcard->err_cb = NULL;
 	smartcard->err_cbdata = NULL;
 
-	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
 	if (smartcard->sock < 0) {
 		mem_free0(smartcard);
 		ERROR("Failed to connect to scd");
