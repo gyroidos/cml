@@ -37,8 +37,6 @@
 #include <unistd.h>
 
 // clang-format off
-#define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
-
 #ifndef CRYPTO_HWRNG_PATH
 #define CRYPTO_HWRNG_PATH "/dev/hwrng"
 #endif
@@ -48,15 +46,16 @@
 #endif
 
 // clang-format on
+extern char *scd_sock_path; // defined in scd.c
 
 static TokenToDaemon *
 crypto_send_recv_block(const DaemonToToken *out)
 {
 	ASSERT(out);
 
-	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, SCD_CONTROL_SOCKET);
+	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
 	if (sock < 0) {
-		ERROR_ERRNO("Failed to connect to scd control socket %s", SCD_CONTROL_SOCKET);
+		ERROR_ERRNO("Failed to connect to scd control socket %s", scd_sock_path);
 		return NULL;
 	}
 
@@ -368,10 +367,9 @@ crypto_send_msg(const DaemonToToken *out, crypto_callback_task_t *task)
 	ASSERT(out);
 	ASSERT(task);
 
-	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET | SOCK_NONBLOCK, SCD_CONTROL_SOCKET);
+	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET | SOCK_NONBLOCK, scd_sock_path);
 	if (sock < 0) {
-		ERROR_ERRNO("Failed to connect to scd control socket %s for crypto",
-			    SCD_CONTROL_SOCKET);
+		ERROR_ERRNO("Failed to connect to scd control socket %s", scd_sock_path);
 		return -1;
 	}
 
@@ -400,10 +398,10 @@ crypto_generic_send_msg(const DaemonToToken *out, int resp_fd)
 {
 	ASSERT(out);
 
-	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET | SOCK_NONBLOCK, SCD_CONTROL_SOCKET);
+	int sock = sock_unix_create_and_connect(SOCK_SEQPACKET | SOCK_NONBLOCK, scd_sock_path);
 	if (sock < 0) {
 		ERROR_ERRNO("Failed to connect to scd control socket %s for crypto_generic",
-			    SCD_CONTROL_SOCKET);
+			    scd_sock_path);
 		return -1;
 	}
 

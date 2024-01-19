@@ -1,0 +1,11 @@
+[Unit]
+Description = GyroidOS CML Daemon
+Requires=cml-scd.socket 
+Requires=cmld.socket
+After=cml-scd.socket 
+After=cmld.socket
+
+[Service]
+Environment="scd_control=/run/socket/cml_scd_control"
+Type=exec
+ExecStart=/usr/sbin/cmld

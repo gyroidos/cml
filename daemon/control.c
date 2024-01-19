@@ -50,6 +50,7 @@
 #include "common/dir.h"
 #include "common/str.h"
 #include "common/proc.h"
+#include "common/sock-sd.h"
 
 #include <unistd.h>
 #include <inttypes.h>
@@ -1747,7 +1748,7 @@ control_t *
 control_local_new(const char *path)
 {
 	control_t *control;
-	int sock = sock_unix_create_and_bind(SOCK_STREAM, path);
+	int sock = path ? sock_unix_create_and_bind(SOCK_STREAM, path) : sock_sd_listen_fd(NULL);
 	if (sock < 0) {
 		WARN("Could not create and bind UNIX domain socket");
 		return NULL;
