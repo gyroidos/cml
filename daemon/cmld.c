@@ -100,6 +100,8 @@
 #define DUMMY_KEY                                                                                  \
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
+#define CMLD_C0_UUID "00000000-0000-0000-0000-000000000000"
+
 static const char *cmld_path = DEFAULT_BASE_PATH;
 static const char *cmld_container_path = NULL;
 static const char *cmld_wrapped_keys_path = NULL;
@@ -142,7 +144,7 @@ cmld_start_c0(container_t *new_c0);
 container_t *
 cmld_containers_get_c0()
 {
-	uuid_t *c0_uuid = uuid_new("00000000-0000-0000-0000-000000000000");
+	uuid_t *c0_uuid = uuid_new(CMLD_C0_UUID);
 	container_t *container = cmld_container_get_by_uuid(c0_uuid);
 	uuid_free(c0_uuid);
 	return container;
@@ -582,31 +584,29 @@ cmld_containers_add(container_t *container)
 static void
 cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, UNUSED void *data)
 {
-	IF_FALSE_RETURN_ERROR(container_get_state(container) == COMPARTMENT_STATE_REBOOTING ||
-			      container_get_state(container) == COMPARTMENT_STATE_STOPPED);
+	IF_FALSE_RETURN(container_get_state(container) == COMPARTMENT_STATE_REBOOTING ||
+			container_get_state(container) == COMPARTMENT_STATE_STOPPED);
 
-	container_t *c = NULL;
-
-	if (!container_get_sync_state(container)) {
-		container_unregister_observer(container, cb);
-		DEBUG("Container is out of sync with its config. Reloading..");
-		if (!(c = cmld_reload_container(container_get_uuid(container),
-						cmld_get_containers_dir()))) {
-			ERROR("Failed to reload container on config update");
-		} else {
-			/* register observer on new container object */
-			if (!container_register_observer(c, &cmld_container_config_sync_cb, NULL)) {
-				WARN("Could not register container config sync observer callback for %s",
-				     container_get_description(c));
-				audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT,
-						"c0-reload", uuid_string(container_get_uuid(c)), 0);
-			}
-			WARN("Could not register container config sync observer callback for %s",
-			     container_get_description(c));
-		}
-	} else {
+	if (container_get_sync_state(container)) {
 		DEBUG("Container %s already in sync", container_get_description(container));
+		return;
 	}
+
+	// in error case reload may destroy container object thus dup uuid
+	uuid_t *c_uuid = uuid_new(uuid_string(container_get_uuid(container)));
+
+	container_unregister_observer(container, cb);
+	DEBUG("Container is out of sync with its config. Reloading..");
+
+	if (!cmld_reload_container(c_uuid, cmld_get_containers_dir())) {
+		ERROR("Failed to reload container on config update");
+		audit_log_event(c_uuid, FSA, CMLD, CONTAINER_MGMT, "reload", uuid_string(c_uuid),
+				0);
+		if (strncmp(uuid_string(c_uuid), CMLD_C0_UUID, strlen(CMLD_C0_UUID)))
+			FATAL("Could not reload C0!");
+	}
+
+	mem_free0(c_uuid);
 }
 
 container_t *
@@ -615,37 +615,44 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 	ASSERT(uuid);
 	ASSERT(path);
 
-	container_t *c = NULL;
+	container_t *c = NULL, *c_current = NULL;
 
 	// Will be destroyed on container_free
 	uuid_t *uuid_tmp = uuid_new(uuid_string(uuid));
 
-	c = cmld_container_get_by_uuid(uuid);
-	if (c) {
-		compartment_state_t state = container_get_state(c);
+	c_current = cmld_container_get_by_uuid(uuid);
+	if (c_current) {
+		compartment_state_t state = container_get_state(c_current);
 		if (state != COMPARTMENT_STATE_STOPPED) {
 			DEBUG("Refusing to reload already created and not stopped container %s.",
-			      container_get_name(c));
+			      container_get_name(c_current));
+			c = c_current;
 			goto cleanup;
 		}
-		DEBUG("Removing outdated created container %s for config update",
-		      container_get_name(c));
-
-		cmld_containers_list = list_remove(cmld_containers_list, c);
-		container_free(c);
 	}
 	c = cmld_container_new(path, uuid_tmp, NULL, 0, NULL, 0, NULL, 0);
 	if (!c) {
 		WARN("Could not create new container object");
+		c = c_current;
 		goto cleanup;
+	}
+
+	if (c_current) {
+		DEBUG("Removing outdated created container %s for config update",
+		      container_get_name(c_current));
+
+		cmld_containers_list = list_remove(cmld_containers_list, c_current);
+		container_free(c_current);
 	}
 
 	DEBUG("Loaded config for container %s", container_get_name(c));
 	cmld_containers_list = list_append(cmld_containers_list, c);
 
-	/* register observer for automatic config reload again
-	   CAUTION: This callback destroys the previous container object.
-	            It must be the last observer in the observer list */
+	/*
+	 * register observer for automatic config reload again
+	 * CAUTION: This callback destroys the previous container object.
+	 *          It must be the last observer in the observer list
+	 */
 	if (!container_register_observer(c, &cmld_container_config_sync_cb, NULL)) {
 		WARN("Could not register container config sync observer callback for %s",
 		     container_get_description(c));
@@ -908,9 +915,9 @@ cmld_container_register_observers(container_t *container)
 			     container_get_description(container));
 		}
 	}
-	/* register audit sync observer */
+	/* register an observer for auditing compartment state */
 	if (!container_register_observer(container, &cmld_audit_compartment_state_cb, NULL)) {
-		WARN("Could not register container audit sync observer callback for %s",
+		WARN("Could not register container audit state observer callback for %s",
 		     container_get_description(container));
 		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 				"container-observer-error",
@@ -1280,16 +1287,6 @@ cmld_init_c0(const char *path, const char *c0os)
 	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);
 
-	/* register an observer for automatic config reload of c0
-	   CAUTION: This callback destroys the previous container object.
-	            It must be the last observer in the observer list */
-	if (!container_register_observer(new_c0, &cmld_container_config_sync_cb, NULL)) {
-		WARN("Could not register container config sync observer callback for c0");
-		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
-				uuid_string(container_get_uuid(new_c0)), 0);
-		return -1;
-	}
-
 	mem_free0(c0_images_folder);
 
 out:
@@ -1343,9 +1340,9 @@ cmld_start_c0(container_t *new_c0)
 				uuid_string(container_get_uuid(new_c0)), 0);
 		return -1;
 	}
-	/* register an observer for automatic config reload */
+	/* register an observer for auditing compartment state */
 	if (!container_register_observer(new_c0, &cmld_audit_compartment_state_cb, NULL)) {
-		WARN("Could not register container audit sync observer callback for %s",
+		WARN("Could not register container audit state observer callback for %s",
 		     container_get_description(new_c0));
 		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
 				uuid_string(container_get_uuid(new_c0)), 0);
@@ -1584,9 +1581,11 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 		cmld_container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 	if (c) {
 		cmld_containers_list = list_append(cmld_containers_list, c);
-		/* register an observer for automatic config reload
-	       CAUTION: This callback destroys the previous container object.
-	                It must be the last observer in the observer list */
+		/*
+		 * register an observer for automatic config reload
+		 * CAUTION: This callback destroys the previous container object.
+		 *          It must be the last observer in the observer list
+		 */
 		if (!container_register_observer(c, &cmld_container_config_sync_cb, NULL)) {
 			WARN("Could not register container config sync observer callback for %s",
 			     container_get_description(c));
