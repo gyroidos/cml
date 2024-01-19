@@ -53,7 +53,9 @@
 #include <signal.h>
 
 // clang-format off
-#define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
+#ifndef SCD_CONTROL_SOCKET
+#define SCD_CONTROL_SOCKET SOCK_PATH(scd_control)
+#endif // SCD_CONTROL_SOCKET
 // clang-format on
 
 // Do not edit! This path is also configured in cmld.c

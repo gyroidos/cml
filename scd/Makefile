@@ -27,12 +27,19 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
 TRUSTME_SCHSM ?= n
+SYSTEMD ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -Wno-deprecated-declarations -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 
-LOCAL_LFLAGS := -lc -Lcommon -lcommon_full -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto
+LOCAL_LFLAGS := -lc -Lcommon
+ifeq ($(SYSTEMD),y)
+	LOCAL_LFLAGS += -lcommon_full_systemd -lsystemd
+else
+	LOCAL_LFLAGS += -lcommon_full
+endif
+LOCAL_LFLAGS += -lprotobuf-c -lprotobuf-c-text -lssl -lcrypto
 
 ifeq ($(WCAST_ALIGN),y)
     LOCAL_CFLAGS += -Wcast-align
@@ -64,6 +71,12 @@ ifeq ($(TRUSTME_SCHSM), y)
     SRC_FILES += \
 	sc-hsm-lib/sc-hsm-cardservice.c \
 	usbtoken.c
+endif
+ifeq ($(SYSTEMD),y)
+	LOCAL_CFLAGS += \
+		-DSYSTEMD \
+		-DSCD_CONTROL_SOCKET=NULL \
+		-DSOCKET_PREFIX='"cml_"'
 endif
 
 
@@ -98,7 +111,11 @@ endif
 $(SRC_FILES): protobuf
 
 libcommon:
+ifeq ($(SYSTEMD),y)
+	$(MAKE) -C common libcommon_full_systemd WITH_OPENSSL=y WITH_PROTOBUF_TEXT=y
+else
 	$(MAKE) -C common libcommon_full WITH_OPENSSL=y WITH_PROTOBUF_TEXT=y
+endif
 
 scd: libcommon $(SRC_FILES)
 	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(LOCAL_LFLAGS) -o scd
