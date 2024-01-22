@@ -632,10 +632,15 @@ event_add_inotify(event_inotify_t *inotify)
 {
 	IF_NULL_RETVAL(inotify, -1);
 
+	if (list_contains(event_inotify_list, list_find(event_inotify_list, inotify))) {
+		ERROR("Could not add inotify event twice!");
+		return -EEXIST;
+	}
+
 	inotify->wd =
 		inotify_add_watch(event_inotify_fd(), inotify->path, inotify->mask | IN_MASK_ADD);
 	if (inotify->wd < 0) {
-		WARN_ERRNO("Could not add inotify watch for %s", inotify->path);
+		ERROR_ERRNO("Could not add inotify watch for %s", inotify->path);
 		return -1;
 	}
 
