@@ -508,7 +508,12 @@ c_cgroups_start_post_clone(void *cgroupsp)
 	char *events_path = mem_printf("%s/cgroup.events", cgroups->path);
 	cgroups->inotify_cgroup_events =
 		event_inotify_new(events_path, IN_MODIFY, &c_cgroups_events_cb, cgroups);
-	event_add_inotify(cgroups->inotify_cgroup_events);
+	int error = event_add_inotify(cgroups->inotify_cgroup_events);
+	if (error && error != -EEXIST) {
+		ERROR("Could not register inotify event for cgroups events!");
+		goto out;
+	}
+
 	mem_free0(events_path);
 
 	// activate controllers
