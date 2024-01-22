@@ -393,14 +393,18 @@ c_uevent_start_post_exec(void *ueventp)
 	if (uevent_add_uev(uevent->uev))
 		return -COMPARTMENT_ERROR;
 
+	/* start watching device nodes for automount */
+	int error = event_add_inotify(uevent->inotify_dev);
+	if (error && error != -EEXIST) {
+		ERROR("Could not register inotify event for automount events!");
+		return -COMPARTMENT_ERROR;
+	}
+
 	/* register an observer to wait for the container to be running */
 	if (!container_register_observer(uevent->container, &c_uevent_boot_complete_cb, uevent)) {
 		WARN("Could not register c_uevent_boot_complete observer callback for %s",
 		     container_get_description(uevent->container));
 	}
-
-	/* start watching device nodes for automount */
-	event_add_inotify(uevent->inotify_dev);
 
 	return 0;
 }
