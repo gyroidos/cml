@@ -239,29 +239,6 @@ error:
 	return -1;
 }
 
-static void
-c_user_release_ns_cb(container_t *container, container_callback_t *cb, void *data)
-{
-	c_user_t *user = data;
-
-	ASSERT(container);
-	ASSERT(cb);
-	ASSERT(user);
-
-	// skip if the container is not stopped
-	IF_FALSE_RETURN_TRACE(container_get_state(container) == COMPARTMENT_STATE_STOPPED);
-
-	// unregister observer
-	container_unregister_observer(container, cb);
-
-	// remove bound to filesystem
-	if (user->fd_userns > 0) {
-		close(user->fd_userns);
-		user->fd_userns = -1;
-	}
-	ns_unbind(user->ns_path);
-}
-
 /**
  * Cleans up the c_user_t struct.
  */
@@ -276,14 +253,31 @@ c_user_cleanup(void *usr, bool is_rebooting)
 		return;
 
 	/* skip on reboots of c0 */
-	if (is_rebooting && (cmld_containers_get_c0() == user->container))
-		return;
+	if (is_rebooting && (cmld_containers_get_c0() == user->container)) {
+		pid_t container_pid = container_get_pid(user->container);
 
-	/* release bound to filesystem after all modules performed their cleanup() hook. */
-	if (!container_register_observer(user->container, &c_user_release_ns_cb, user))
-		WARN("Could not register release_ns callback");
+		// bind userns to file
+		if (ns_bind("user", container_pid, user->ns_path) == -1) {
+			WARN("Could not bind userns of %s into filesystem!",
+			     container_get_name(user->container));
+		}
+		user->fd_userns = open(user->ns_path, O_RDONLY);
+		if (user->fd_userns < 0)
+			WARN("Could not keep userns active for reboot!");
+
+		return;
+	}
 
 	c_user_unset_offset(user->offset);
+
+	if (file_exists(user->ns_path)) {
+		// remove any left-over bound to filesystem
+		if (user->fd_userns > 0) {
+			close(user->fd_userns);
+			user->fd_userns = -1;
+		}
+		ns_unbind(user->ns_path);
+	}
 }
 
 /**
@@ -361,8 +355,16 @@ c_user_start_pre_clone(void *usr)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == user->container) &&
-	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING))
+	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING)) {
+		// remove bound to filesystem
+		if (user->fd_userns > 0) {
+			close(user->fd_userns);
+			user->fd_userns = -1;
+		}
+		ns_unbind(user->ns_path);
+
 		return 0;
+	}
 
 	// reserve a new mapping
 	if (c_user_set_next_uid_range_start(user)) {
@@ -391,15 +393,6 @@ c_user_start_post_clone(void *usr)
 		return 0;
 
 	pid_t container_pid = container_get_pid(user->container);
-
-	// bind userns to file
-	if (ns_bind("user", container_pid, user->ns_path) == -1) {
-		WARN("Could not bind userns of %s into filesystem!",
-		     container_get_name(user->container));
-	}
-	user->fd_userns = open(user->ns_path, O_RDONLY);
-	if (user->fd_userns < 0)
-		WARN("Could not keep userns active for reboot!");
 
 	if (c_user_setup_mapping(container_pid, user->uid_start, UID_MAX) < 0)
 		return -COMPARTMENT_ERROR_USER;
