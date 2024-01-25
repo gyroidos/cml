@@ -638,19 +638,18 @@ compartment_sigchld_handle_helpers(compartment_t *compartment, event_signal_t *s
 {
 	int status = 0;
 
-	list_t *still_active = NULL;
-	for (list_t *l = compartment->helper_child_list; l; l = l->next) {
+	for (list_t *l = compartment->helper_child_list; l;) {
+		list_t *next = l->next;
 		compartment_helper_child_t *child = l->data;
 		if (proc_waitpid(child->pid, &status, WNOHANG) == child->pid) {
 			DEBUG("Reaped helper child %s (pid=%d) for compartment %s", child->name,
 			      child->pid, compartment_get_description(compartment));
+			compartment->helper_child_list =
+				list_unlink(compartment->helper_child_list, l);
 			compartment_helper_child_free(child);
-		} else {
-			still_active = list_append(still_active, child);
 		}
+		l = next;
 	}
-	list_delete(compartment->helper_child_list);
-	compartment->helper_child_list = still_active;
 
 	if (!compartment->helper_child_list && compartment->is_doing_cleanup) {
 		DEBUG("CLEANUP DONE, all pending helpers reaped!");
