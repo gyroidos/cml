@@ -67,23 +67,6 @@ static bool guestos_mgr_allow_locally_signed = false;
 
 /******************************************************************************/
 
-static void
-guestos_mgr_purge_obsolete(void)
-{
-	INFO("Looking for obsolete GuestOSes to purge...");
-	for (list_t *l = guestos_list; l;) {
-		list_t *next = l->next;
-		guestos_t *os = l->data;
-		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
-		if ((latest && guestos_get_version(os) < guestos_get_version(latest))) {
-			guestos_list = list_unlink(guestos_list, l);
-			guestos_purge(os);
-			guestos_free(os);
-		}
-		l = next;
-	}
-}
-
 /**
  * This function verifies the guestos configuration file at load time
  * as part of TSF.CML.SecureCompartmentInit
@@ -164,8 +147,6 @@ guestos_mgr_load_operatingsystems(void)
 		return -1;
 	}
 
-	guestos_mgr_purge_obsolete();
-
 	return 0;
 }
 
@@ -235,6 +216,24 @@ guestos_mgr_delete(guestos_t *os)
 	guestos_free(os);
 
 	return 0;
+}
+
+void
+guestos_mgr_purge_obsolete(void)
+{
+	INFO("Looking for obsolete GuestOSes to purge...");
+	for (list_t *l = guestos_list; l;) {
+		list_t *next = l->next;
+		guestos_t *os = l->data;
+		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
+		if (latest && guestos_get_version(os) < guestos_get_version(latest) &&
+		    !guestos_mgr_is_guestos_used_by_containers(guestos_get_name(os))) {
+			guestos_list = list_unlink(guestos_list, l);
+			guestos_purge(os);
+			guestos_free(os);
+		}
+		l = next;
+	}
 }
 
 /******************************************************************************/
