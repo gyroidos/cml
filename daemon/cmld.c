@@ -1551,6 +1551,9 @@ cmld_init(const char *path)
 	if (cmld_load_containers(containers_path) < 0)
 		FATAL("Could not load containers");
 
+	// check for unused superseded GuestOSes and remove them
+	guestos_mgr_purge_obsolete();
+
 	if (cmld_start_c0(cmld_containers_get_c0()) < 0)
 		FATAL("Could not start c0");
 

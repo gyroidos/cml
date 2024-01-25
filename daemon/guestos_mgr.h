@@ -71,6 +71,16 @@ guestos_mgr_add_from_file(const char *file, guestos_verify_result_t verify_resul
 int
 guestos_mgr_delete(guestos_t *os);
 
+/**
+ * Purges all old GuestOSes from disk. It keeps older versions of operating
+ * systems if they are still in use by a container. Thus, be careful to call this
+ * function not too early in startup process. Container configs must be loaded
+ * before calling this. Otherwise the container list is empty which means no OS
+ * would be in use and only the latest version would be kept.
+ */
+void
+guestos_mgr_purge_obsolete(void);
+
 /******************************************************************************/
 
 /**
