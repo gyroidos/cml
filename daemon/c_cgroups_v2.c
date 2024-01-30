@@ -175,8 +175,8 @@ c_cgroups_add_pid(void *cgroupsp, pid_t pid)
 	 * subcgroups and moves all process out of the container 'root' cgroup.
 	 * thus to later join processes into the container's cgroup we have to
 	 * directly move that process to such a subcgroup of the container.
-	 * 'user.slice' seams to be appropriate for this. Otherwise and
-	 * especially the first process would be added to the container's 'root'
+	 * A subcgroup in 'user.slice' seams to be appropriate for this. Otherwise
+	 * processes would be added to a subcgroup of the container's 'root'
 	 * cgroup.
 	 * In the 'start_pre_exec' hook we apply another indirection (subcgroup
 	 * for container child). This is at least needed to run systemd as
@@ -187,11 +187,28 @@ c_cgroups_add_pid(void *cgroupsp, pid_t pid)
 	char *cgroups_child_path = mem_printf("%s/child", cgroups->path);
 	char *user_slice = mem_printf("%s/user.slice", cgroups_child_path);
 
-	if (file_is_dir(user_slice))
-		ret = c_cgroups_add_pid_by_path(user_slice, pid);
-	else
-		ret = c_cgroups_add_pid_by_path(cgroups_child_path, pid);
+	char *cgroups_leaf_path = mem_printf(
+		"%s/cmld-injected", file_is_dir(user_slice) ? user_slice : cgroups_child_path);
 
+	if (dir_mkdir_p(cgroups_leaf_path, 0755)) {
+		ERROR("Cannot create leaf cgroup %s for pid=%d in container %s", cgroups_leaf_path,
+		      pid, container_get_name(cgroups->container));
+		ret = -1;
+		goto out;
+	}
+
+	int u_g_id = container_get_pid(cgroups->container);
+	if (chown(cgroups_leaf_path, u_g_id, u_g_id)) {
+		ERROR_ERRNO("Cannot chown leaf cgroup %s for pid=%d in container %s",
+			    cgroups_leaf_path, pid, container_get_name(cgroups->container));
+		ret = -1;
+		goto out;
+	}
+
+	ret = c_cgroups_add_pid_by_path(cgroups_leaf_path, pid);
+
+out:
+	mem_free0(cgroups_leaf_path);
 	mem_free0(user_slice);
 	mem_free0(cgroups_child_path);
 	return ret;
