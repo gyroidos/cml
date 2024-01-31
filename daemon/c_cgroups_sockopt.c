@@ -59,6 +59,7 @@ typedef struct c_cgroups_sockopt_prog {
 	struct bpf_insn *insn;
 	int insn_n_structs;
 	int fd;
+	char *name;
 } c_cgroups_sockopt_prog_t;
 
 typedef struct c_cgroups_sockopt {
@@ -81,7 +82,7 @@ bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned int size)
 }
 
 static c_cgroups_sockopt_prog_t *
-c_cgroups_sockopt_prog_new(const struct bpf_insn *insn, int insn_nr)
+c_cgroups_sockopt_prog_new(const struct bpf_insn *insn, int insn_nr, const char *name)
 {
 	IF_TRUE_RETVAL(insn == NULL || insn_nr <= 0, NULL);
 
@@ -90,6 +91,7 @@ c_cgroups_sockopt_prog_new(const struct bpf_insn *insn, int insn_nr)
 	memcpy(prog->insn, insn, sizeof(struct bpf_insn) * insn_nr);
 
 	prog->insn_n_structs = insn_nr;
+	prog->name = mem_printf("cml_%s", name);
 
 	return prog;
 }
@@ -101,6 +103,8 @@ c_cgroups_sockopt_prog_free(c_cgroups_sockopt_prog_t *prog)
 
 	if (prog->insn)
 		mem_free0(prog->insn);
+	if (prog->name)
+		mem_free0(prog->name);
 	mem_free0(prog);
 }
 
@@ -152,6 +156,8 @@ c_cgroups_sockopt_prog_activate(c_cgroups_sockopt_t *sockopt, c_cgroups_sockopt_
 		.license = ptr_to_u64("GPL"),
 		.expected_attach_type = BPF_CGROUP_SETSOCKOPT,
 	};
+
+	strncpy(load_attr.prog_name, prog->name, BPF_OBJ_NAME_LEN - 1);
 
 	INFO("bpf insns: %d, %llx", load_attr.insn_cnt, load_attr.insns);
 
@@ -270,7 +276,7 @@ c_cgroups_sockopt_allow_ip_tos_128_generate()
 
 	DEBUG("Generated BPF prog with total_insn_nr ='%d'", total_insn_nr);
 
-	c_cgroups_sockopt_prog_t *prog = c_cgroups_sockopt_prog_new(insn, total_insn_nr);
+	c_cgroups_sockopt_prog_t *prog = c_cgroups_sockopt_prog_new(insn, total_insn_nr, "tos_128");
 
 	return prog;
 }
