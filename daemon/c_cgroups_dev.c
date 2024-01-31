@@ -67,6 +67,7 @@ typedef struct c_cgroups_bpf_prog {
 	struct bpf_insn *insn;
 	int insn_n_structs;
 	int fd;
+	char *name;
 } c_cgroups_bpf_prog_t;
 
 typedef struct c_cgroups_dev {
@@ -282,6 +283,7 @@ c_cgroups_dev_bpf_prog_append(c_cgroups_bpf_prog_t *prog, const struct bpf_insn 
 		prog = mem_new0(c_cgroups_bpf_prog_t, 1);
 		prog->insn = mem_aligned_alloc(8, struct bpf_insn, insn_n_structs);
 		prog->insn_n_structs = 0;
+		prog->name = mem_strdup("cml_devices");
 	} else {
 		struct bpf_insn *_insn = prog->insn;
 		prog->insn = mem_aligned_alloc(8, struct bpf_insn,
@@ -299,6 +301,8 @@ c_cgroups_dev_bpf_prog_free(c_cgroups_bpf_prog_t *prog)
 {
 	if (prog->insn)
 		mem_free0(prog->insn);
+	if (prog->name)
+		mem_free0(prog->name);
 	mem_free0(prog);
 }
 
@@ -444,6 +448,8 @@ c_cgroups_dev_bpf_prog_activate(c_cgroups_dev_t *cgroups_dev, c_cgroups_bpf_prog
 		.insn_cnt = prog->insn_n_structs,
 		.license = ptr_to_u64("GPL"),
 	};
+
+	strncpy(load_attr.prog_name, prog->name, BPF_OBJ_NAME_LEN - 1);
 
 	prog->fd = bpf(BPF_PROG_LOAD, &load_attr, sizeof(load_attr));
 
