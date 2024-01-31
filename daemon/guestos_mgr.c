@@ -165,6 +165,20 @@ guestos_mgr_is_guestos_used_by_containers(const char *os_name)
 	return false;
 }
 
+static bool
+guestos_mgr_is_this_guestos_used_by_containers(guestos_t *os)
+{
+	ASSERT(os);
+
+	int n = cmld_containers_get_count();
+	for (int i = 0; i < n; i++) {
+		container_t *c = cmld_container_get_by_index(i);
+		if (os == container_get_guestos(c))
+			return true;
+	}
+	return false;
+}
+
 /******************************************************************************/
 
 int
@@ -227,7 +241,7 @@ guestos_mgr_purge_obsolete(void)
 		guestos_t *os = l->data;
 		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
 		if (latest && guestos_get_version(os) < guestos_get_version(latest) &&
-		    !guestos_mgr_is_guestos_used_by_containers(guestos_get_name(os))) {
+		    !guestos_mgr_is_this_guestos_used_by_containers(os)) {
 			guestos_list = list_unlink(guestos_list, l);
 			guestos_purge(os);
 			guestos_free(os);
