@@ -1004,11 +1004,16 @@ guestos_purge(guestos_t *os)
 		}
 		const char *img_name = mount_entry_get_img(e);
 		char *img_path = mem_printf("%s/%s.img", dir, img_name);
+		char *img_hash_path = mem_printf("%s/%s.hash.img", dir, img_name);
 
 		if (file_exists(img_path) && unlink(img_path) < 0) {
 			WARN_ERRNO("Failed to erase file %s", img_path);
 		}
+		if (file_exists(img_hash_path) && unlink(img_hash_path) < 0) {
+			WARN_ERRNO("Failed to erase file %s", img_hash_path);
+		}
 		mem_free0(img_path);
+		mem_free0(img_hash_path);
 	}
 	// remove config and signature file
 	const char *file = guestos_get_cfg_file(os);
