@@ -151,4 +151,13 @@ uevent_event_copy_new(const uevent_event_t *event);
 int
 uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join_userns);
 
+/**
+ * Parses string representation of a uevent and returns a pointer to a uevent_event_t.
+ * Separation of fields via newlines as read from sysfs, for instance, is supported.
+ *
+ * @param uev String representation of the uevent to be parsed.
+ * @return The newly created uevent_event_t event.
+ */
+uevent_event_t *
+uevent_parse_from_string_new(const char *uev);
 #endif /* UEVENT_H_ */
