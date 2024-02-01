@@ -40,11 +40,12 @@ verity_get_device_path_new(const char *label);
  * @param fs_img_name The path of the image
  * @param hash_dev_name The path of the hash-tree image
  * @param root_hash The root hash as a hexadecimal string
+ * @param enforce_symlinks Treat existing symlinks at /dev/mapper with this name as error
  * @return int 0 if successful, otherwise -1
  */
 int
 verity_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
-		      const char *root_hash);
+		      const char *root_hash, bool enforce_symlinks);
 
 /**
  * Close a device-mapper verity device
