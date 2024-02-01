@@ -31,12 +31,14 @@
 
 #define DM_EXISTS_FLAG 0x00000004
 
+#define DEVFS_PATH "/dev"
+
 #ifdef ANDROID
 #define DM_CONTROL "/dev/device-mapper"
 #define DM_PATH_PREFIX "/dev/block/dm-"
 #else
 #define DM_CONTROL "/dev/mapper/control"
-#define DM_PATH_PREFIX "/dev/mapper/"
+#define DM_PATH_PREFIX "/dev/mapper"
 #endif
 
 enum dm_cmd_index {
