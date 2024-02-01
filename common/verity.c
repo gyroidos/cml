@@ -32,12 +32,16 @@
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/sysmacros.h>
+#include <limits.h>
 
 #include "macro.h"
 #include "mem.h"
 #include "uuid.h"
 #include "hex.h"
 #include "fd.h"
+#include "uevent.h"
+#include "file.h"
 
 #include "loopdev.h"
 #include "cryptfs.h"
@@ -147,12 +151,133 @@ generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, c
 char *
 verity_get_device_path_new(const char *label)
 {
-	return mem_printf("%s%s", DM_PATH_PREFIX, label);
+	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
+}
+
+static char *
+verity_get_link_path_new(const char *verity_name)
+{
+	return mem_printf("%s/%s", DM_PATH_PREFIX, verity_name);
+}
+
+static int
+create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
+{
+	int ret = -1;
+	uevent_event_t *uev = NULL;
+	char *targetpath = NULL, *linkpath = NULL, *buf = NULL;
+	char *uev_path = mem_printf("/sys/dev/block/%u:%u/uevent", major(devt), minor(devt));
+
+	DEBUG("Creating symlink for verity device %s (%u:%u)", name, major(devt), minor(devt));
+
+	if (!(buf = file_read_new(uev_path, PATH_MAX))) {
+		ERROR("Failed to read uevent for verity device %s", name);
+		goto out;
+	}
+
+	uev = uevent_parse_from_string_new(buf);
+
+	if (!uev) {
+		ERROR_ERRNO("Failed to parse uevent");
+		goto out;
+	}
+
+	const char *devptr = uevent_event_get_devname(uev);
+
+	if (!devptr) {
+		ERROR_ERRNO("Failed to parse devname from uevent");
+		goto out;
+	}
+
+	targetpath = mem_printf("%s/%s", DEVFS_PATH, devptr);
+	linkpath = verity_get_link_path_new(name);
+
+	DEBUG("Creating symlink for verity device %s (%u:%u): %s -> %s", name, major(devt),
+	      minor(devt), linkpath, targetpath);
+
+	if (0 != symlink(targetpath, linkpath)) {
+		if ((errno == EEXIST) && (!enforce_symlinks)) {
+			WARN("Symlink for verity device %s already exists, using it as requested",
+			     name);
+		} else {
+			ERROR_ERRNO("Failed to create symlink for verity device %s: %s -> %s", name,
+				    linkpath, targetpath);
+			goto out;
+		}
+	}
+
+	ret = 0;
+
+out:
+	mem_free0(uev_path);
+	if (buf)
+		mem_free0(buf);
+	if (uev)
+		mem_free0(uev);
+	if (targetpath)
+		mem_free0(targetpath);
+	if (linkpath)
+		mem_free0(linkpath);
+
+	return ret;
+}
+
+int
+verity_delete_blk_dev(const char *name)
+{
+	int control_fd = -1;
+	int ret = -1;
+	uint8_t buf[16384] = { 0 };
+	struct dm_ioctl *dmi = NULL;
+
+	TRACE("Closing dm-verity device %s", name);
+
+	if ((control_fd = dm_open_control()) < 0) {
+		goto out;
+	}
+
+	char *linkpath = verity_get_link_path_new(name);
+
+	if (unlink(linkpath)) {
+		ERROR_ERRNO("Failed to remove symlink '%s' to verity device", linkpath);
+	}
+	mem_free0(linkpath);
+
+	// Make sure that dm-verity device exists
+	dmi = (struct dm_ioctl *)buf;
+	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL,
+		      DM_EXISTS_FLAG | DM_NOFLUSH_FLAG, 0, 0, 0);
+	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+	if (ioctl_ret != 0) {
+		ERROR_ERRNO("Cannot close dm-verity device %s", name);
+		goto out;
+	}
+
+	dmi = (struct dm_ioctl *)buf;
+	dm_ioctl_init(dmi, INDEX_DM_DEV_REMOVE, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
+	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_REMOVE].cmd, dmi);
+	if (ioctl_ret != 0) {
+		ERROR_ERRNO("Failed to close dm-verity device");
+		goto out;
+	}
+
+	/* remove device node if necessary */
+	char *device = cryptfs_get_device_path_new(name);
+	unlink(device);
+	mem_free0(device);
+
+	TRACE("Successfully closed dm-verity device %s", name);
+	ret = 0;
+
+out:
+	dm_close_control(control_fd);
+
+	return ret;
 }
 
 int
 verity_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
-		      const char *root_hash)
+		      const char *root_hash, bool enforce_symlinks)
 {
 	int control_fd = -1;
 	int ret = -1;
@@ -279,17 +404,27 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 		goto out;
 	}
 	char *status_line = (char *)&buf[sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec)];
+
 	if (status_line[0] == 'V') {
 		DEBUG("Successfully activated verity device %s", name);
+
+		if (0 != create_dm_symlink(name, ((struct dm_ioctl *)buf)->dev, enforce_symlinks)) {
+			ERROR("Failed to create symlink for verity device %s, closing device",
+			      name);
+
+			if (verity_delete_blk_dev(name)) {
+				ERROR("Failed to close verity device %s", name);
+			}
+
+			goto out;
+		}
+
+		ret = 0;
 	} else if (status_line[0] == 'C') {
 		WARN("Activated verity device %s, corruption detected", name);
-		goto out;
 	} else {
 		WARN("Activated verity device %s, unknown status %c", name, status_line[0]);
-		goto out;
 	}
-
-	ret = 0;
 
 out:
 	dm_close_control(control_fd);
@@ -301,52 +436,6 @@ out:
 		mem_free0(fs_dev);
 	if (hash_dev)
 		mem_free0(hash_dev);
-
-	return ret;
-}
-
-int
-verity_delete_blk_dev(const char *name)
-{
-	int control_fd = -1;
-	int ret = -1;
-	uint8_t buf[16384] = { 0 };
-	struct dm_ioctl *dmi = NULL;
-
-	TRACE("Closing dm-verity device %s", name);
-
-	if ((control_fd = dm_open_control()) < 0) {
-		goto out;
-	}
-
-	// Make sure that dm-verity device exists
-	dmi = (struct dm_ioctl *)buf;
-	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL,
-		      DM_EXISTS_FLAG | DM_NOFLUSH_FLAG, 0, 0, 0);
-	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
-	if (ioctl_ret != 0) {
-		ERROR_ERRNO("Cannot close dm-verity device %s", name);
-		goto out;
-	}
-
-	dmi = (struct dm_ioctl *)buf;
-	dm_ioctl_init(dmi, INDEX_DM_DEV_REMOVE, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_REMOVE].cmd, dmi);
-	if (ioctl_ret != 0) {
-		ERROR_ERRNO("Failed to close dm-verty device");
-		goto out;
-	}
-
-	/* remove device node if necessary */
-	char *device = cryptfs_get_device_path_new(name);
-	unlink(device);
-	mem_free0(device);
-
-	TRACE("Successfully closed dm-verity device %s", name);
-	ret = 0;
-
-out:
-	dm_close_control(control_fd);
 
 	return ret;
 }

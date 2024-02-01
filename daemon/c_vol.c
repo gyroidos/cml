@@ -786,7 +786,8 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			img_hash = c_vol_hash_image_path_new(vol, mntent);
 			IF_NULL_GOTO(img_hash, error);
 
-			if (verity_create_blk_dev(label, img, img_hash, root_hash)) {
+			if (verity_create_blk_dev(label, img, img_hash, root_hash,
+						  !cmld_is_hostedmode_active())) {
 				ERROR("Failed to open %s from %s as dm-verity device with hash-dev %s and hash %s",
 				      label, img, img_hash, root_hash);
 				mem_free0(label);
