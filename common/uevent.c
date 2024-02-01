@@ -135,35 +135,9 @@ uevent_event_is_udev(const uevent_event_t *event)
 }
 
 static int
-uevent_parse(uevent_event_t *uevent)
+uevent_parse(uevent_event_t *uevent, char *raw_p_hint)
 {
-	ASSERT(uevent);
-
-	char *raw_p = uevent->msg.raw;
-
-	// skip header
-	if (uevent_event_is_udev(uevent)) {
-		/* udev message needs proper version magic */
-		if (uevent->msg.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
-			WARN("unrecognized message signature (%x != %x)", uevent->msg.nlh.magic,
-			     htonl(UDEV_MONITOR_MAGIC));
-			return -1;
-		}
-		if (uevent->msg.nlh.properties_off + 32 > uevent->msg_len) {
-			WARN("message smaller than expected (%u > %zd)",
-			     uevent->msg.nlh.properties_off + 32, uevent->msg_len);
-			return -1;
-		}
-		raw_p += uevent->msg.nlh.properties_off;
-	} else if (strchr(raw_p, '@')) {
-		/* kernel message */
-		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
-		raw_p += strlen(raw_p) + 1;
-	} else {
-		/* kernel message */
-		TRACE("no uevent: %s", raw_p);
-		return -1;
-	}
+	char *raw_p;
 
 	uevent->action = "";
 	uevent->devpath = "";
@@ -179,6 +153,11 @@ uevent_parse(uevent_event_t *uevent)
 	uevent->id_serial_short = "";
 	uevent->interface = "";
 	uevent->synth_uuid = "";
+
+	if (raw_p_hint)
+		raw_p = raw_p_hint;
+	else
+		raw_p = uevent->msg.raw;
 
 	uevent_trace(uevent, raw_p);
 
@@ -238,14 +217,73 @@ uevent_parse(uevent_event_t *uevent)
 			;
 
 		/* check if message ended */
-		if (raw_p >= uevent->msg.raw + uevent->msg_len)
+		if (raw_p >= uevent->msg.raw + uevent->msg_len) {
 			break;
+		}
 	}
 
 	TRACE("uevent { '%s', '%s', '%s', '%s', %d, %d, '%s'}", uevent->action, uevent->devpath,
 	      uevent->subsystem, uevent->devname, uevent->major, uevent->minor, uevent->interface);
 
 	return 0;
+}
+
+uevent_event_t *
+uevent_parse_from_string_new(const char *uev)
+{
+	IF_NULL_RETVAL_ERROR(uev, NULL);
+
+	int len = strlen(uev);
+
+	uevent_event_t *event = mem_new0(uevent_event_t, 1);
+
+	memcpy(event->msg.raw, uev, len);
+	event->msg_len = len;
+
+	// replace newlines by null bytes
+	for (int i = 0; i < len; i++) {
+		if ('\n' == event->msg.raw[i]) {
+			event->msg.raw[i] = '\0';
+		}
+	}
+
+	uevent_parse(event, NULL);
+
+	return event;
+}
+
+static int
+uevent_parse_nl(uevent_event_t *uevent)
+{
+	ASSERT(uevent);
+
+	char *raw_p = uevent->msg.raw;
+
+	// skip header
+	if (uevent_event_is_udev(uevent)) {
+		/* udev message needs proper version magic */
+		if (uevent->msg.nlh.magic != htonl(UDEV_MONITOR_MAGIC)) {
+			WARN("unrecognized message signature (%x != %x)", uevent->msg.nlh.magic,
+			     htonl(UDEV_MONITOR_MAGIC));
+			return -1;
+		}
+		if (uevent->msg.nlh.properties_off + 32 > uevent->msg_len) {
+			WARN("message smaller than expected (%u > %zd)",
+			     uevent->msg.nlh.properties_off + 32, uevent->msg_len);
+			return -1;
+		}
+		raw_p += uevent->msg.nlh.properties_off;
+	} else if (strchr(raw_p, '@')) {
+		/* kernel message */
+		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
+		raw_p += strlen(raw_p) + 1;
+	} else {
+		/* kernel message */
+		TRACE("no uevent: %s", raw_p);
+		return -1;
+	}
+
+	return uevent_parse(uevent, raw_p);
 }
 
 uevent_event_t *
@@ -297,7 +335,7 @@ uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newme
 	else
 		newevent->msg.raw[newevent->msg_len] = '\0';
 
-	IF_TRUE_GOTO_ERROR(uevent_parse(newevent) == -1, error);
+	IF_TRUE_GOTO_ERROR(uevent_parse_nl(newevent) == -1, error);
 
 	return newevent;
 
@@ -406,7 +444,7 @@ uevent_event_copy_new(const uevent_event_t *event)
 	memcpy(event_clone, event, sizeof(uevent_event_t));
 
 	// update internal pointers to cloned raw buffer
-	if (uevent_parse(event_clone) == -1)
+	if (uevent_parse_nl(event_clone) == -1)
 		mem_free0(event_clone);
 
 	return event_clone;
@@ -533,7 +571,7 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 		goto err;
 	}
 
-	IF_TRUE_GOTO_TRACE(uevent_parse(uev) == -1, err);
+	IF_TRUE_GOTO_TRACE(uevent_parse_nl(uev) == -1, err);
 
 	char *raw_p = uev->msg.raw;
 
