@@ -32,6 +32,7 @@
 
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/dir.h"
 #include "common/file.h"
 
 #include <fcntl.h>
@@ -49,12 +50,17 @@ struct guestos {
 	guestos_verify_result_t verify_result; ///< result of guestos signature verification
 
 	bool downloading; ///< indicates download in progress
+
+	char *rollback_dir;    ///< directory where flashed image locations are backuped
+	bool partialy_flashed; ///< indicates that at least one image of type flash made it to disk
 };
 
 #define GUESTOS_MAX_DOWNLOAD_ATTEMPTS 3
 #define GUESTOS_FLASHED_FILE "flash_complete" // TODO check contents of partitions instead!
 #define GUESTOS_FLASH_BLOCKSIZE 512	      // blocksize in bytes for flashing partitions
 #define GUESTOS_VERIFY_BLOCKSIZE 4096	      // blocksize in bytes for verifying partitions
+
+#define GUESTOS_FLASH_BACKUP_DIR "os_update_bak"
 
 /******************************************************************************/
 
@@ -108,6 +114,7 @@ guestos_new_internal(guestos_config_t *cfg, const char *basepath)
 	os->cert_file = guestos_get_cert_file_new(os->dir);
 	os->cfg = cfg;
 	os->downloading = false;
+	os->partialy_flashed = false;
 	return os;
 }
 
@@ -904,9 +911,33 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 		res = 0;
 		break;
 	case VERIFY_PARTITION_MISMATCH:
+		if (NULL == os->rollback_dir)
+			os->rollback_dir =
+				mem_printf("%s/%s/%s-%" PRIu64, cmld_get_cmld_dir(),
+					   GUESTOS_FLASH_BACKUP_DIR, guestos_get_name(os),
+					   guestos_get_version(os));
+		char *flash_bak = mem_printf("%s/%s", os->rollback_dir, img_name);
+		DEBUG("Backup partition %s before flash to %s.", flash_path, flash_bak);
+		if (-1 == dir_mkdir_p(os->rollback_dir, 0755)) {
+			ERROR("Failed to create dir %s for backup of partition %s",
+			      os->rollback_dir, flash_path);
+			mem_free0(flash_bak);
+			break;
+		}
+		if (-1 == file_copy(flash_path, flash_bak, -1, GUESTOS_FLASH_BLOCKSIZE, 0)) {
+			ERROR("Failed to backup partition %s to file %s", flash_path, flash_bak);
+			// Unlink partial written backup file
+			if (file_exists(flash_bak) && unlink(flash_bak) < 0)
+				WARN_ERRNO("Failed to erase file %s", flash_bak);
+			mem_free0(flash_bak);
+			break;
+		}
+
 		DEBUG("Flashing partition %s with image %s.", flash_path, img_path);
-		file_copy(img_path, flash_path, mount_entry_get_size(e), GUESTOS_FLASH_BLOCKSIZE,
-			  0);
+		file_copy(img_path, flash_path, -1, GUESTOS_FLASH_BLOCKSIZE, 0);
+
+		mem_free0(flash_bak);
+		os->partialy_flashed = true;
 
 		switch (verify_partition(img_path, flash_path)) {
 		case VERIFY_PARTITION_MATCH:
@@ -959,6 +990,7 @@ images_flash_no_check(guestos_t *os)
 		flashed += res;
 	}
 	if (flashed > 0) {
+		os->partialy_flashed = false;
 		DEBUG("Images for GuestOS %s have been flashed.", guestos_get_name(os));
 		// TODO notify caller about flash result?
 	} else {
@@ -1012,6 +1044,26 @@ guestos_purge(guestos_t *os)
 		if (file_exists(img_hash_path) && unlink(img_hash_path) < 0) {
 			WARN_ERRNO("Failed to erase file %s", img_hash_path);
 		}
+		if (os->partialy_flashed && mount_entry_get_type(e) == MOUNT_TYPE_FLASH) {
+			char *flash_path =
+				hardware_get_block_by_name_path() ?
+					mem_printf("%s%s", hardware_get_block_by_name_path(), dir) :
+					mem_strdup(dir);
+			char *flash_bak = mem_printf("%s/%s", os->rollback_dir, img_name);
+			DEBUG("Rollback flashed partition %s to %s.", flash_bak, flash_path);
+
+			if (-1 ==
+			    file_copy(flash_bak, flash_path, -1, GUESTOS_FLASH_BLOCKSIZE, 0)) {
+				ERROR("Failed to rollback backup file %s to partition %s",
+				      flash_bak, flash_path);
+			}
+			// restored sucessfully unlink backup file
+			if (unlink(flash_bak) < 0)
+				WARN_ERRNO("Failed to erase file %s", flash_bak);
+			mem_free0(flash_path);
+			mem_free0(flash_bak);
+		}
+
 		mem_free0(img_path);
 		mem_free0(img_hash_path);
 	}
@@ -1031,6 +1083,9 @@ guestos_purge(guestos_t *os)
 	// remove dir
 	if (rmdir(dir) < 0) {
 		WARN_ERRNO("Failed to remove directory %s", dir);
+	}
+	if (os->rollback_dir && rmdir(os->rollback_dir) < 0) {
+		WARN_ERRNO("Failed to remove directory %s", os->rollback_dir);
 	}
 
 	mount_free(mnt);
