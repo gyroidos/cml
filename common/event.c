@@ -329,37 +329,6 @@ wrapped_remove_inotify(void *elem)
 	event_inotify_free(elem);
 }
 
-void
-event_reset()
-{
-	if (event_inotify_io) {
-		TRACE("Resetting inotify event");
-		event_remove_io(event_inotify_io);
-		close(event_inotify_io->fd);
-		event_io_free(event_inotify_io);
-		event_inotify_io = NULL;
-	}
-
-	TRACE("Resetting event epoll fd");
-	event_reset_fd();
-
-	if (event_timer_list) {
-		TRACE("Resetting event timers");
-		list_foreach(event_timer_list, wrapped_remove_timer);
-		event_timer_list = NULL;
-	}
-	if (event_signal_list) {
-		TRACE("Resetting event signal handler list");
-		list_foreach(event_signal_list, wrapped_remove_signal);
-		event_signal_list = NULL;
-	}
-	if (event_inotify_list) {
-		TRACE("Resetting event inotify list");
-		list_foreach(event_inotify_list, wrapped_remove_inotify);
-		event_inotify_list = NULL;
-	}
-}
-
 event_io_t *
 event_io_new(int fd, unsigned events,
 	     void (*func)(int fd, unsigned events, event_io_t *io, void *data), void *data)
@@ -589,9 +558,19 @@ event_inotify_fd(void)
 	      event_inotify_io->fd);
 
 	event_inotify_io = io;
-	event_add_io(io);
 
 	return fd;
+}
+
+static void
+event_inotify_reset_fd(void)
+{
+	IF_NULL_RETURN_TRACE(event_inotify_io);
+
+	event_remove_io(event_inotify_io);
+	close(event_inotify_io->fd);
+	event_io_free(event_inotify_io);
+	event_inotify_io = NULL;
 }
 
 event_inotify_t *
@@ -630,7 +609,12 @@ event_inotify_free(event_inotify_t *inotify)
 int
 event_add_inotify(event_inotify_t *inotify)
 {
+	int ret = 0;
+
 	IF_NULL_RETVAL(inotify, -1);
+
+	if (event_inotify_io)
+		event_remove_io(event_inotify_io);
 
 	if (list_contains(event_inotify_list, list_find(event_inotify_list, inotify))) {
 		ERROR("Could not add inotify event twice!");
@@ -641,7 +625,8 @@ event_add_inotify(event_inotify_t *inotify)
 		inotify_add_watch(event_inotify_fd(), inotify->path, inotify->mask | IN_MASK_ADD);
 	if (inotify->wd < 0) {
 		ERROR_ERRNO("Could not add inotify watch for %s", inotify->path);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	event_inotify_list = list_append(event_inotify_list, inotify);
@@ -650,7 +635,11 @@ event_add_inotify(event_inotify_t *inotify)
 	      (void *)inotify, CAST_FUNCPTR_VOIDPTR inotify->func, inotify->data, inotify->wd,
 	      inotify->path, inotify->mask);
 
-	return 0;
+out:
+	// needs to be (re)added to epoll after a new watch is added
+	event_add_io(event_inotify_io);
+
+	return ret;
 }
 
 void
@@ -691,6 +680,9 @@ event_remove_inotify(event_inotify_t *inotify)
 	TRACE("Removed inotify event %p (func=%p, data=%p, wd=%d, path=%s, mask=0x%08x)",
 	      (void *)inotify, CAST_FUNCPTR_VOIDPTR inotify->func, inotify->data, inotify->wd,
 	      inotify->path, inotify->mask);
+
+	// if last watcher is removed also close inotify fd
+	event_inotify_reset_fd();
 }
 
 /******************************************************************************/
@@ -866,4 +858,30 @@ event_loop(void)
 	}
 
 	DEBUG("Leaving event loop");
+}
+
+void
+event_reset()
+{
+	TRACE("Resetting event inotify fd");
+	event_inotify_reset_fd();
+
+	TRACE("Resetting event epoll fd");
+	event_reset_fd();
+
+	if (event_timer_list) {
+		TRACE("Resetting event timers");
+		list_foreach(event_timer_list, wrapped_remove_timer);
+		event_timer_list = NULL;
+	}
+	if (event_signal_list) {
+		TRACE("Resetting event signal handler list");
+		list_foreach(event_signal_list, wrapped_remove_signal);
+		event_signal_list = NULL;
+	}
+	if (event_inotify_list) {
+		TRACE("Resetting event inotify list");
+		list_foreach(event_inotify_list, wrapped_remove_inotify);
+		event_inotify_list = NULL;
+	}
 }
