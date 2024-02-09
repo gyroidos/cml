@@ -55,6 +55,9 @@ typedef struct c_fifo {
 	list_t *forwarder_list;
 } c_fifo_t;
 
+// all fifos which needs to be recreated after a reboot of c0
+list_t *c0_fifo_list = NULL;
+
 void *
 c_fifo_new(compartment_t *compartment)
 {
@@ -112,32 +115,36 @@ c_fifo_get_container_path_new(c_fifo_t *fifo)
 }
 
 static void
-c_fifo_cleanup(void *fifop, UNUSED bool is_rebooting)
+c_fifo_cleanup(void *fifop, bool is_rebooting)
 {
 	c_fifo_t *fifo = (c_fifo_t *)fifop;
 	ASSERT(fifo);
+
+	if (is_rebooting) {
+		if (fifo->container == cmld_containers_get_c0())
+			return;
+	}
 
 	char *fifo_path_c0 = c_fifo_get_c0_path_new(fifo);
 	IF_NULL_RETURN_DEBUG(fifo_path_c0);
 
 	while (fifo->forwarder_list) {
 		pid_t *pid = fifo->forwarder_list->data;
-		ASSERT(pid);
-		ASSERT(0 < *pid);
-
-		DEBUG("Stopping forwarder %d", *pid);
-		kill(*pid, SIGKILL);
-
-		mem_free(pid);
+		if (pid)
+			mem_free(pid);
 		fifo->forwarder_list = list_unlink(fifo->forwarder_list, fifo->forwarder_list);
 	}
 
 	// clean up FIFOs in c0
 	// FIFOs in container are removed during c_vol cleanup
 	for (list_t *elem = fifo->fifo_list; elem != NULL; elem = elem->next) {
-		char *current_fifo = (char *)elem->data;
+		char *current_fifo = elem->data;
 		if (!current_fifo)
 			continue;
+
+		void *rm_c0_fifo = list_find(c0_fifo_list, current_fifo);
+		if (rm_c0_fifo)
+			c0_fifo_list = list_remove(c0_fifo_list, rm_c0_fifo);
 
 		char *current_path = mem_printf("%s/%s", fifo_path_c0, current_fifo);
 
@@ -150,9 +157,10 @@ c_fifo_cleanup(void *fifop, UNUSED bool is_rebooting)
 }
 
 static int
-c_fifo_create_fifos(c_fifo_t *fifo, uid_t uid, const char *fifo_dir, const uuid_t *container_uuid)
+c_fifo_create_fifos(list_t *fifo_list, uid_t uid, const char *fifo_dir,
+		    const uuid_t *container_uuid)
 {
-	IF_NULL_RETVAL_ERROR(fifo, -1);
+	IF_NULL_RETVAL_ERROR(fifo_list, -1);
 	IF_NULL_RETVAL_ERROR(fifo_dir, -1);
 	const char *audit_subject;
 
@@ -179,7 +187,7 @@ c_fifo_create_fifos(c_fifo_t *fifo, uid_t uid, const char *fifo_dir, const uuid_
 
 	TRACE("Chowned FIFO dir at %s to %d", fifo_dir, uid);
 
-	for (list_t *elem = fifo->fifo_list; elem != NULL; elem = elem->next) {
+	for (list_t *elem = fifo_list; elem != NULL; elem = elem->next) {
 		char *current_fifo = elem->data;
 		DEBUG("Preparing FIFO \'%s\'", current_fifo);
 
@@ -290,10 +298,11 @@ c_fifo_start_post_clone(void *fifop)
 	char *fifo_path_c0 = NULL, *fifo_path_container = NULL;
 	uid_t c0uid;
 
-	if (cmld_containers_get_c0() == fifo->container) {
-		DEBUG("Skipping fifo creation for c0");
+	list_t *fifo_list = c0 == fifo->container ? c0_fifo_list : fifo->fifo_list;
+
+	// no FIFOs to create
+	if (fifo_list == NULL)
 		return 0;
-	}
 
 	// create FIFOs in c0
 	DEBUG("Creating FIFOs in c0");
@@ -302,14 +311,14 @@ c_fifo_start_post_clone(void *fifop)
 
 	if (cmld_is_hostedmode_active()) {
 		c0uid = 0;
-		if (-1 == c_fifo_create_fifos(fifo, c0uid, fifo_path_c0, NULL)) {
+		if (-1 == c_fifo_create_fifos(fifo_list, c0uid, fifo_path_c0, NULL)) {
 			ERROR("Failed to prepare container FIFOs on host");
 			ret = -COMPARTMENT_ERROR_FIFO;
 			goto error;
 		}
 	} else {
 		c0uid = container_get_uid(c0);
-		if (-1 == c_fifo_create_fifos(fifo, c0uid, fifo_path_c0,
+		if (-1 == c_fifo_create_fifos(fifo_list, c0uid, fifo_path_c0,
 					      container_get_uuid(cmld_containers_get_c0()))) {
 			ERROR("Failed to prepare container FIFOs in c0");
 			ret = -COMPARTMENT_ERROR_FIFO;
@@ -317,12 +326,21 @@ c_fifo_start_post_clone(void *fifop)
 		}
 	}
 
+	// for c0 only recreate existing fifos in c0_fifo_list
+	if (cmld_containers_get_c0() == fifo->container)
+		goto out;
+
+	// store c0 fifos
+	for (list_t *l = fifo_list; l; l = l->next) {
+		c0_fifo_list = list_append(c0_fifo_list, l->data);
+	}
+
 	// create FIFOs in container
 	DEBUG("Creating FIFOs in target container");
 	fifo_path_container = c_fifo_get_container_path_new(fifo);
 
-	if (-1 == c_fifo_create_fifos(fifo, container_get_uid(fifo->container), fifo_path_container,
-				      container_get_uuid(fifo->container))) {
+	if (-1 == c_fifo_create_fifos(fifo->fifo_list, container_get_uid(fifo->container),
+				      fifo_path_container, container_get_uuid(fifo->container))) {
 		ERROR("Failed to prepare container FIFOs in target container");
 		ret = -COMPARTMENT_ERROR_FIFO;
 
@@ -373,7 +391,7 @@ c_fifo_start_post_clone(void *fifop)
 
 		DEBUG("Forked FIFO forwarding child %d for %s", pid, current_fifo);
 	}
-
+out:
 	ret = 0;
 
 error:
@@ -383,6 +401,24 @@ error:
 		mem_free(fifo_path_container);
 
 	return ret;
+}
+
+static int
+c_fifo_stop(void *fifop)
+{
+	c_fifo_t *fifo = fifop;
+	ASSERT(fifo);
+
+	for (list_t *l = fifo->forwarder_list; l; l = l->next) {
+		pid_t *pid = l->data;
+		if (0 >= *pid)
+			continue;
+
+		DEBUG("Stopping forwarder %d", *pid);
+		kill(*pid, SIGKILL);
+	}
+
+	return 0;
 }
 
 static compartment_module_t c_fifo_module = {
@@ -399,7 +435,7 @@ static compartment_module_t c_fifo_module = {
 	.start_child = NULL,
 	.start_pre_exec_child_early = NULL,
 	.start_pre_exec_child = NULL,
-	.stop = NULL,
+	.stop = c_fifo_stop,
 	.cleanup = c_fifo_cleanup,
 	.join_ns = NULL,
 };
