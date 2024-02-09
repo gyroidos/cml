@@ -127,7 +127,6 @@ c_fifo_cleanup(void *fifop, UNUSED bool is_rebooting)
 
 		DEBUG("Stopping forwarder %d", *pid);
 		kill(*pid, SIGKILL);
-		proc_waitpid(*pid, NULL, 0);
 
 		mem_free(pid);
 		fifo->forwarder_list = list_unlink(fifo->forwarder_list, fifo->forwarder_list);
@@ -330,7 +329,7 @@ c_fifo_start_post_clone(void *fifop)
 		goto error;
 	}
 
-	//fork FIFO forwarding childs
+	// fork FIFO forwarding children
 	for (list_t *elem = fifo->fifo_list; elem != NULL; elem = elem->next) {
 		char *current_fifo = elem->data;
 		char *current_fifo_c0 = mem_printf("%s/%s", fifo_path_c0, current_fifo);
@@ -350,7 +349,6 @@ c_fifo_start_post_clone(void *fifop)
 
 		} else if (pid == 0) {
 			DEBUG("Preparing forwarding for FIFO \'%s\'", current_fifo);
-
 			DEBUG("Forwarding from %s to %s", current_fifo_c0, current_fifo_container);
 
 			event_reset();
@@ -367,6 +365,11 @@ c_fifo_start_post_clone(void *fifop)
 		*mpid = pid;
 		DEBUG("Appending %d to forwarder list", *mpid);
 		fifo->forwarder_list = list_append(fifo->forwarder_list, mpid);
+
+		// register at sigchild handler for helper forwarding clone
+		char *forwarder_name = mem_printf("%s-forwarder", current_fifo);
+		container_wait_for_child(fifo->container, forwarder_name, *mpid);
+		mem_free0(forwarder_name);
 
 		DEBUG("Forked FIFO forwarding child %d for %s", pid, current_fifo);
 	}
