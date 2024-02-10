@@ -163,10 +163,6 @@ static list_t *compartment_module_list = NULL;
 bool
 compartment_is_stoppable(compartment_t *compartment)
 {
-	if (compartment->helper_child_list) {
-		DEBUG("Helper children active, compartment can not be stopped.");
-		return false;
-	}
 	compartment_state_t state = compartment_get_state(compartment);
 	if (state == COMPARTMENT_STATE_RUNNING || state == COMPARTMENT_STATE_BOOTING ||
 	    state == COMPARTMENT_STATE_SETUP) {
@@ -182,6 +178,11 @@ compartment_is_startable(compartment_t *compartment)
 {
 	if ((compartment_get_state(compartment) == COMPARTMENT_STATE_STOPPED) ||
 	    (compartment_get_state(compartment) == COMPARTMENT_STATE_REBOOTING)) {
+		if (compartment->helper_child_list) {
+			DEBUG("Helper children active, compartment can not be stopped.");
+			return false;
+		}
+
 		DEBUG("Compartment can be started.");
 		return true;
 	}
