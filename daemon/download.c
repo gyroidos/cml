@@ -118,17 +118,18 @@ download_start(download_t *dl)
 	pid_t pid = fork();
 
 	char *const argv[] = { WGET_PATH, "-O", dl->file, dl->url, NULL };
+	bool do_file_copy = strlen(dl->url) > 7 && !strncmp(dl->url, "file://", 7);
 
 	switch (pid) {
 	case -1:
-		ERROR_ERRNO("Could not fork wget to download image %s", dl->file);
+		ERROR_ERRNO("Could not fork to download (%s) image %s", dl->file,
+			    do_file_copy ? "wget" : "file_copy");
 		return -1;
 	case 0: {
-		if (strlen(dl->url) > 7 && !strncmp(dl->url, "file://", 7)) {
+		if (do_file_copy) {
 			char *local_dl_src = dl->url + 7;
 			INFO("Copying file from %s -> %s", local_dl_src, dl->file);
-			int ret =
-				file_copy(local_dl_src, dl->file, file_size(local_dl_src), 512, 0);
+			int ret = file_copy(local_dl_src, dl->file, -1, 512, 0);
 			if (ret < 0)
 				ERROR("Failed retrieving '%s'!", dl->url);
 			_exit(ret);
@@ -139,7 +140,8 @@ download_start(download_t *dl)
 		}
 	}
 	default:
-		DEBUG("Started wget with PID %d", pid);
+		DEBUG("Started download helper (%s) with PID %d",
+		      do_file_copy ? "wget" : "file_copy", pid);
 		dl->wget_pid = pid;
 		event_signal_t *sig = event_signal_new(SIGCHLD, download_sigchld_cb, dl);
 		event_add_signal(sig);
