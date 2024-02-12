@@ -64,7 +64,6 @@ typedef struct c_user {
 	list_t *marks;		//marks to be mounted in userns
 	int mark_index;
 	int fd_userns;
-	char *ns_path;
 } c_user_t;
 
 /**
@@ -196,11 +195,6 @@ c_user_new(compartment_t *compartment)
 
 	user->uid_start = 0;
 
-	// path to bind userns (used for reboots)
-	dir_mkdir_p("/var/run/userns", 00755);
-	user->ns_path =
-		mem_printf("/var/run/userns/%s", uuid_string(container_get_uuid(user->container)));
-
 	TRACE("new c_user struct was allocated");
 
 	return user;
@@ -253,31 +247,10 @@ c_user_cleanup(void *usr, bool is_rebooting)
 		return;
 
 	/* skip on reboots of c0 */
-	if (is_rebooting && (cmld_containers_get_c0() == user->container)) {
-		pid_t container_pid = container_get_pid(user->container);
-
-		// bind userns to file
-		if (ns_bind("user", container_pid, user->ns_path) == -1) {
-			WARN("Could not bind userns of %s into filesystem!",
-			     container_get_name(user->container));
-		}
-		user->fd_userns = open(user->ns_path, O_RDONLY);
-		if (user->fd_userns < 0)
-			WARN("Could not keep userns active for reboot!");
-
+	if (is_rebooting && (cmld_containers_get_c0() == user->container))
 		return;
-	}
 
 	c_user_unset_offset(user->offset);
-
-	if (file_exists(user->ns_path)) {
-		// remove any left-over bound to filesystem
-		if (user->fd_userns > 0) {
-			close(user->fd_userns);
-			user->fd_userns = -1;
-		}
-		ns_unbind(user->ns_path);
-	}
 }
 
 /**
@@ -288,7 +261,6 @@ c_user_free(void *usr)
 {
 	c_user_t *user = usr;
 	ASSERT(user);
-	mem_free0(user->ns_path);
 	mem_free0(user);
 }
 
@@ -355,16 +327,8 @@ c_user_start_pre_clone(void *usr)
 
 	/* skip on reboots of c0 */
 	if ((cmld_containers_get_c0() == user->container) &&
-	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING)) {
-		// remove bound to filesystem
-		if (user->fd_userns > 0) {
-			close(user->fd_userns);
-			user->fd_userns = -1;
-		}
-		ns_unbind(user->ns_path);
-
+	    (container_get_prev_state(user->container) == COMPARTMENT_STATE_REBOOTING))
 		return 0;
-	}
 
 	// reserve a new mapping
 	if (c_user_set_next_uid_range_start(user)) {
@@ -400,6 +364,27 @@ c_user_start_post_clone(void *usr)
 	INFO("uid/gid mapping '%d %d' for %s activated", user->uid_start, UID_MAX,
 	     container_get_name(user->container));
 
+	// open userns to keep ns alive during reboot
+	char *ns_path = mem_printf("/proc/%d/ns/user", container_pid);
+	user->fd_userns = open(ns_path, O_RDONLY);
+	if (user->fd_userns < 0)
+		WARN("Could not keep userns active for reboot!");
+
+	mem_free(ns_path);
+	return 0;
+}
+
+static int
+c_user_stop(void *usr)
+{
+	c_user_t *user = usr;
+	ASSERT(user);
+
+	// release reference to userns
+	if (user->fd_userns > 0) {
+		close(user->fd_userns);
+		user->fd_userns = -1;
+	}
 	return 0;
 }
 
@@ -408,10 +393,14 @@ c_user_join_userns(void *usr)
 {
 	c_user_t *user = usr;
 	ASSERT(user);
-	IF_FALSE_RETVAL(file_exists(user->ns_path), -1);
 
-	if (ns_join_by_path(user->ns_path) < 0)
+	IF_TRUE_RETVAL_ERROR(user->fd_userns < 0, -COMPARTMENT_ERROR_USER);
+
+	if (setns(user->fd_userns, 0) == -1) {
+		ERROR_ERRNO("Could not join namespace by fd %d!", user->fd_userns);
+		close(user->fd_userns);
 		return -COMPARTMENT_ERROR_USER;
+	}
 
 	return 0;
 }
@@ -484,7 +473,7 @@ static compartment_module_t c_user_module = {
 	.start_post_exec = NULL,
 	.start_child = c_user_start_child,
 	.start_pre_exec_child = NULL,
-	.stop = NULL,
+	.stop = c_user_stop,
 	.cleanup = c_user_cleanup,
 	.join_ns = c_user_join_userns,
 };
