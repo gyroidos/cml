@@ -84,16 +84,14 @@ c_fifo_free(void *fifop)
 static char *
 c_fifo_get_c0_path_new(c_fifo_t *fifo)
 {
-	pid_t c0_pid, target_pid;
 	container_t *c0 = cmld_containers_get_c0();
 	char *fifo_path_c0;
 
-	if (c0 &&
-	    (c0_pid = container_get_pid(c0)) != (target_pid = container_get_pid(fifo->container))) {
+	if (c0) {
 		fifo_path_c0 =
 			mem_printf("/tmp/%s/%s", uuid_string(container_get_uuid(c0)), FIFO_PATH);
 
-		TRACE("Creating c0 fifos at %s, ns_pid=%d", fifo_path_c0, c0_pid);
+		TRACE("Creating c0 fifos at %s", fifo_path_c0);
 	} else if (cmld_is_hostedmode_active()) {
 		fifo_path_c0 = mem_printf("/tmp/cmlfifos/");
 
