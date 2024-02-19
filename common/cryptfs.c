@@ -72,7 +72,7 @@ get_provided_data_sectors(const char *real_blk_name);
 char *
 cryptfs_get_device_path_new(const char *label)
 {
-	return mem_printf("%s%s", DM_PATH_PREFIX, label);
+	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
 }
 
 #if 0
