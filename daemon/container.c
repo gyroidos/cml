@@ -851,8 +851,6 @@ CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_uptime, time_t, 0)
 /* Functions usually implemented and registered by c_cap module */
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_cap_current_process, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(set_cap_current_process, int, 0)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_cap_systime, int, void *, char *const *)
-CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(exec_cap_systime, int, -1, char *const *)
 
 /* Functions usually implemented and registered by c_run module */
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(run, int, void *, int, char *, ssize_t, char **, int)
