@@ -128,8 +128,15 @@ c_fifo_cleanup(void *fifop, bool is_rebooting)
 
 	while (fifo->forwarder_list) {
 		pid_t *pid = fifo->forwarder_list->data;
-		if (pid)
+		if (pid) {
+			// stop hooks are not called if compartment is killed;
+			// thus, kill forwarders here.
+			if (*pid > 0) {
+				DEBUG("Kill still running forwarder %d", *pid);
+				kill(*pid, SIGKILL);
+			}
 			mem_free(pid);
+		}
 		fifo->forwarder_list = list_unlink(fifo->forwarder_list, fifo->forwarder_list);
 	}
 
@@ -412,6 +419,7 @@ c_fifo_stop(void *fifop)
 
 		DEBUG("Stopping forwarder %d", *pid);
 		kill(*pid, SIGKILL);
+		*pid = -1;
 	}
 
 	return 0;
