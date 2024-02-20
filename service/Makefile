@@ -69,8 +69,7 @@ SRC_FILES_EXEC_CAP_SYSTIME := \
 	c_service.pb-c.c \
 	container.pb-c.c \
 	control.pb-c.c \
-	guestos.pb-c.c \
-	exec_cap_systime.c
+	guestos.pb-c.c
 
 LD_LIB_FLAGS := \
 	-Lcommon -lcommon_full \
@@ -78,7 +77,7 @@ LD_LIB_FLAGS := \
 	-lprotobuf-c-text
 
 .PHONY: all
-all: service exec_cap_systime
+all: service
 
 protobuf: c_service.proto container.proto control.proto guestos.proto
 	protoc-c --c_out=. c_service.proto
@@ -98,11 +97,7 @@ service: libcommon $(SRC_FILES)
 service-static: libcommon $(SRC_FILES)
 	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES) ${LD_LIB_FLAGS} -o cml-service-container-static
 
-exec_cap_systime: libcommon $(SRC_FILES_EXEC_CAP_SYSTIME)
-	$(CC) -static $(LOCAL_CFLAGS) $(CFLAGS) $(SRC_FILES_EXEC_CAP_SYSTIME) ${LD_LIB_FLAGS} -o exec_cap_systime
-
-
 .PHONY: clean
 clean:
-	rm -f cml-service-container cml-service-container-static exec_cap_systime *.o *.pb-c.*
+	rm -f cml-service-container cml-service-container-static *.o *.pb-c.*
 	$(MAKE) -C common clean
