@@ -51,21 +51,17 @@ message CmldToServiceMessage {
 }
 
 message ServiceToCmldMessage {
-	reserved 6 to 14; // legacy
+	reserved 6 to 16; // legacy
 	enum Code {
-		reserved 2 to 17; // legacy
+		reserved 2 to 17, 20; // legacy
 		BOOT_COMPLETED = 1;
 
 		CONTAINER_CFG_NAME_REQ = 18;
 		CONTAINER_CFG_DNS_REQ = 19;
 
-		EXEC_CAP_SYSTIME_PRIV = 20;
-
 		AUDIT_ACK = 21;
 	}
 	required Code code = 1;
 
-	optional string captime_exec_path = 15;
-	repeated string captime_exec_param = 16;
 	optional string audit_ack = 17;
 }
