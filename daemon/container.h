@@ -545,11 +545,6 @@ CONTAINER_MODULE_WRAPPER_DECLARE(get_rootdir, char *)
 CONTAINER_MODULE_WRAPPER_DECLARE(get_mnt, void *)
 
 /**
- * Executes a binary of a priviliegd container with cap_sys_time in root userns.
- */
-CONTAINER_MODULE_WRAPPER_DECLARE(exec_cap_systime, int, char *const *argv)
-
-/**
  * Returns the last ACK hash that has been received from this container
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(audit_get_last_ack, const char *)
