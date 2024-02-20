@@ -140,9 +140,7 @@ c_fifo_cleanup(void *fifop, bool is_rebooting)
 		if (!current_fifo)
 			continue;
 
-		void *rm_c0_fifo = list_find(c0_fifo_list, current_fifo);
-		if (rm_c0_fifo)
-			c0_fifo_list = list_remove(c0_fifo_list, rm_c0_fifo);
+		c0_fifo_list = list_remove(c0_fifo_list, current_fifo);
 
 		char *current_path = mem_printf("%s/%s", fifo_path_c0, current_fifo);
 
