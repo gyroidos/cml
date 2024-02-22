@@ -142,8 +142,8 @@ mount_get_entry_by_img(const mount_t *mnt, const char *img)
 	return NULL;
 }
 
-uint64_t
-mount_get_disk_usage(const mount_t *mnt)
+off_t
+mount_get_disk_usage_container(const mount_t *mnt)
 {
 	ASSERT(mnt);
 	size_t count = mount_get_count(mnt);
@@ -151,6 +151,7 @@ mount_get_disk_usage(const mount_t *mnt)
 
 	for (size_t i = 0; i < count; i++) {
 		mount_entry_t *entry = mount_get_entry(mnt, i);
+		ASSERT(entry);
 		switch (entry->type) {
 		case MOUNT_TYPE_OVERLAY_RW:
 		case MOUNT_TYPE_EMPTY: {
@@ -159,8 +160,8 @@ mount_get_disk_usage(const mount_t *mnt)
 			    (UINT64_MAX - entry->image_size * MOUNT_DM_INTEGRITY_META_FACTOR)) {
 				disk_usage += entry->image_size * MOUNT_DM_INTEGRITY_META_FACTOR;
 			} else {
-				WARN("Overflow detected");
-				return UINT64_MAX;
+				ERROR("Overflow detected");
+				return -1;
 			}
 		} // fallthrough
 		case MOUNT_TYPE_DEVICE:
@@ -169,8 +170,8 @@ mount_get_disk_usage(const mount_t *mnt)
 			if (disk_usage <= (UINT64_MAX - entry->image_size)) {
 				disk_usage += entry->image_size;
 			} else {
-				WARN("Overflow detected");
-				return UINT64_MAX;
+				ERROR("Overflow detected");
+				return -1;
 			}
 		} break;
 		default:
@@ -178,7 +179,47 @@ mount_get_disk_usage(const mount_t *mnt)
 		}
 	}
 
-	return disk_usage;
+	off_t retval = (off_t)disk_usage;
+	if (retval < 0 || disk_usage != (uint64_t)retval) {
+		ERROR("off_t is not sufficient for required disk space");
+		return -1;
+	}
+
+	return retval;
+}
+
+off_t
+mount_get_disk_usage_guestos(const mount_t *mnt)
+{
+	ASSERT(mnt);
+	size_t count = mount_get_count(mnt);
+	uint64_t disk_usage = 0;
+
+	for (size_t i = 0; i < count; i++) {
+		mount_entry_t *entry = mount_get_entry(mnt, i);
+		ASSERT(entry);
+		switch (entry->type) {
+		case MOUNT_TYPE_SHARED:
+		case MOUNT_TYPE_COPY: {
+			if (disk_usage <= (UINT64_MAX - entry->image_size)) {
+				disk_usage += entry->image_size;
+			} else {
+				ERROR("Overflow detected");
+				return -1;
+			}
+		} break;
+		default:
+			continue;
+		}
+	}
+
+	off_t retval = (off_t)disk_usage;
+	if (retval < 0 || disk_usage != (uint64_t)retval) {
+		ERROR("off_t is not sufficient for required disk space");
+		return -1;
+	}
+
+	return retval;
 }
 
 /******************************************************************************/

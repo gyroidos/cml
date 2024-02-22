@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 #include "common/list.h"
 
@@ -110,10 +111,22 @@ mount_entry_t *
 mount_get_entry_by_img(const mount_t *mnt, const char *img);
 
 /**
- * Calculate the max disk usage of the mount table
+ * Calculate the max disk usage of a given container mount table
+ * 
+ * @param mnt the mount table
+ * @return Success: required disk space, Error: -1
 */
-uint64_t
-mount_get_disk_usage(const mount_t *mnt);
+off_t
+mount_get_disk_usage_container(const mount_t *mnt);
+
+/**
+ * Calculate the max disk usage of a given guestos mount table
+ * 
+ * @param mnt the mount table
+ * @return Success: required disk space, Error: -1
+*/
+off_t
+mount_get_disk_usage_guestos(const mount_t *mnt);
 
 /**
  * Sets the size of the image of the mount entry.
