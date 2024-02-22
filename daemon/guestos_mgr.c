@@ -433,7 +433,38 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-failed", os_name, 0);
 		ERROR("Signature verification failed (%d) for pushed GuestOS config buffer, skipping.",
 		      verify_result);
-		goto err;
+		goto cleanup_os;
+	}
+
+	// disk space check
+	mount_t *mnt = mount_new();	   // need to get "mounts" to get image URLs... feels wrong
+	guestos_fill_mount(os, mnt);	   // append mounts to be checked
+	guestos_fill_mount_setup(os, mnt); // append setup mode mounts to be check
+
+	off_t disk_space_required = mount_get_disk_usage_guestos(mnt);
+	if (disk_space_required < 0) {
+		ERROR("Function mount_get_disk_usage_guestos failed");
+		goto cleanup_mnt;
+	}
+
+	off_t disk_space_available = file_disk_space_free(guestos_get_dir(os));
+	if (disk_space_available < 0) {
+		ERROR("Function file_disk_space_free failed");
+		goto cleanup_mnt;
+	}
+
+	off_t min_free_space = file_disk_space(guestos_get_dir(os));
+	if (min_free_space < 0) {
+		ERROR("Function file_disk_space failed");
+		goto cleanup_mnt;
+	}
+	min_free_space *= CMLD_STORAGE_FREE_THRESHOLD;
+
+	if (disk_space_required > disk_space_available ||
+	    (disk_space_available - disk_space_required) < min_free_space) {
+		// not enough space left
+		ERROR("Not enough disk space left");
+		goto cleanup_mnt;
 	}
 
 	uint64_t os_ver = guestos_get_version(os);
@@ -455,7 +486,7 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 			WARN("Skipping update of GuestOS %s version %" PRIu64
 			     " to older/same version %" PRIu64 ".",
 			     os_name, old_ver, os_ver);
-			goto cleanup_os;
+			goto cleanup_mnt;
 		} else if (os_ver == old_ver) {
 			DEBUG("Retrigger download of GuestOS images for %s of v%" PRIu64 ".",
 			      os_name, os_ver);
@@ -517,6 +548,8 @@ trigger_download:
 
 cleanup_purge:
 	guestos_purge(os);
+cleanup_mnt:
+	mount_free(mnt);
 cleanup_os:
 	guestos_free(os);
 err:
