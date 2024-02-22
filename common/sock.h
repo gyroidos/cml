@@ -57,8 +57,11 @@
 #else
 #define CMLD_SOCKET_DIR "/run/socket"
 #endif
+#ifndef SOCKET_PREFIX
+#define SOCKET_PREFIX "cml-"
+#endif // SOCKET_PREFIX
 // clang-format off
-#define SOCK_PATH(name) CMLD_SOCKET_DIR"/cml-"#name
+#define SOCK_PATH(name) CMLD_SOCKET_DIR "/" SOCKET_PREFIX #name
 // clang-format on
 
 /**
@@ -232,5 +235,14 @@ sock_unix_get_peer_uid(int sock, uint32_t *peer_uid);
  */
 int
 sock_unix_get_peer_pid(int sock, uint32_t *peer_pid);
+
+/**
+ * Get filesystem path for a given socket name
+ * 
+ * @param sock_name     The name of the socket
+ * @return              The path of the socket 
+*/
+char *
+sock_get_path_new(const char *sock_name);
 
 #endif // SOCK_H

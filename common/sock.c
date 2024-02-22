@@ -296,3 +296,18 @@ sock_unix_get_peer_pid(int sock, uint32_t *peer_pid)
 	*peer_pid = ucred.pid;
 	return 0;
 }
+
+char *
+sock_get_path_new(const char *sock_name)
+{
+	char *env_path = getenv(sock_name);
+	char *sock_path = NULL;
+
+	if (env_path) {
+		sock_path = mem_printf("%s", env_path);
+		return sock_path;
+	} else {
+		sock_path = mem_printf("%s/%s%s", CMLD_SOCKET_DIR, SOCKET_PREFIX, sock_name);
+		return sock_path;
+	}
+}
