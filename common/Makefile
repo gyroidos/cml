@@ -109,6 +109,12 @@ libcommon: $(OBJS_COMMON)
 libcommon_full: $(OBJS_COMMON_FULL)
 	$(AR) rcs libcommon_full.a $^
 
+libcommon_full_systemd: $(OBJS_COMMON_FULL) sock-sd.o
+	$(AR) rcs libcommon_full_systemd.a $^
+
+sock-sd.o: sock-sd.c
+	$(CC) -c $(LOCAL_CFLAGS) -DSYSTEMD $< -o $@
+
 ssl_util.o: ssl_util.c
 	$(CC) -c $(LOCAL_CFLAGS) -Wno-deprecated-declarations $< -o $@
 
