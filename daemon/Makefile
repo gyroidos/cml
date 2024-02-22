@@ -32,6 +32,7 @@ IDMAPPED ?= n
 CGROUP_V2 ?= y
 CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
+AUTOMOUNT ?= y
 
 TRUSTME_HARDWARE := x86
 
@@ -148,6 +149,10 @@ SRC_CMODULES += \
 	c_uevent.c \
 	c_hotplug.c \
 	c_seccomp.c
+
+ifeq ($(AUTOMOUNT),y)
+    SRC_CMODULES += c_automount.c
+endif
 
 ifeq ($(OCI),y)
     LOCAL_CFLAGS += -DOCI -I${HOME}/rcs/libocispec/src
