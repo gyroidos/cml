@@ -50,6 +50,8 @@
 
 #define PROVISIONED_FILE_NAME "_cml_provisioned_"
 
+#define CMLD_STORAGE_FREE_THRESHOLD 0.2 // 20% reserved space
+
 /**
  * Enum represents different commands to control a container
  */

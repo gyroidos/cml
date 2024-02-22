@@ -91,8 +91,6 @@
 
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
-#define CMLD_STORAGE_FREE_THRESHOLD 0.2 // 20% reserved space
-
 /*
  * dummy key used for unecnrypted c0 and for reboots where the real key
  * is already in kernel
@@ -534,7 +532,13 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 
 		// check if enough disk space is available
 		mount_t *mnt_table = container_get_mnt(c);
-		uint64_t disk_space_required = mount_get_disk_usage(mnt_table);
+		off_t disk_space_required = mount_get_disk_usage_container(mnt_table);
+		if (disk_space_required < 0) {
+			ERROR("Function mount_get_disk_usage_container failed");
+			container_free(c);
+			c = NULL;
+			goto out_config;
+		}
 
 		off_t disk_space_available = file_disk_space_free(store_path);
 		if (disk_space_available < 0) {
@@ -553,8 +557,8 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 		}
 		min_free_space *= CMLD_STORAGE_FREE_THRESHOLD;
 
-		if (disk_space_required > (uint64_t)disk_space_available ||
-		    (disk_space_available - disk_space_required) < (uint64_t)min_free_space) {
+		if (disk_space_required > disk_space_available ||
+		    (disk_space_available - disk_space_required) < min_free_space) {
 			// not enough space left
 			ERROR("Not enough disk space left");
 			container_free(c);
