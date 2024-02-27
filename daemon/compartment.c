@@ -621,14 +621,31 @@ compartment_cleanup(compartment_t *compartment, bool is_rebooting)
 		compartment->start_timer = NULL;
 	}
 
+	list_t *do_late_list = NULL;
+
 	for (list_t *l = compartment->module_instance_list; l; l = l->next) {
 		compartment_module_instance_t *c_mod = l->data;
 		compartment_module_t *module = c_mod->module;
 		if (NULL == module->cleanup)
 			continue;
 
+		if (module->flags & COMPARTMENT_MODULE_F_CLEANUP_LATE) {
+			do_late_list = list_append(do_late_list, c_mod);
+			continue;
+		}
+
 		module->cleanup(c_mod->instance, is_rebooting);
 	}
+
+	/* cleanup modules with flag COMPARTMENT_MODULE_F_CLEANUP_LATE set.
+	 * NULL check and check for flag already made in loop above */
+	for (list_t *l = do_late_list; l; l = l->next) {
+		compartment_module_instance_t *c_mod = l->data;
+		compartment_module_t *module = c_mod->module;
+		module->cleanup(c_mod->instance, is_rebooting);
+	}
+
+	list_delete(do_late_list);
 
 	compartment->pid = -1;
 	compartment->pid_early = -1;
