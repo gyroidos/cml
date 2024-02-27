@@ -1970,6 +1970,7 @@ static compartment_module_t c_vol_module = {
 	.stop = NULL,
 	.cleanup = c_vol_cleanup,
 	.join_ns = NULL,
+	.flags = COMPARTMENT_MODULE_F_CLEANUP_LATE,
 };
 
 static void INIT
