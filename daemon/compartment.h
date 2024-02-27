@@ -123,7 +123,16 @@ typedef struct compartment_module {
 	int (*stop)(void *data);
 	void (*cleanup)(void *data, bool rebooting);
 	int (*join_ns)(void *data);
+	int flags;
 } compartment_module_t;
+
+/* If COMPARTMENT_MODULE_F_CLEANUP_LATE is used, the call to
+ * module cleanup() is postponed to after all modules without
+ * that flag. Remember if more than one module has this flag set,
+ * the order in which the modules are registered also applies to
+ * the late cleanup.
+ */
+#define COMPARTMENT_MODULE_F_CLEANUP_LATE (1U << 0)
 
 void
 compartment_register_module(compartment_module_t *mod);
