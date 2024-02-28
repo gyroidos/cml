@@ -1076,7 +1076,6 @@ ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned in
 	ASSERT(digest_algo);
 
 	unsigned char *ret = NULL;
-	FILE *fp = NULL;
 	const EVP_MD *hash_fct;
 	EVP_MD_CTX *md_ctx = NULL;
 
@@ -1087,7 +1086,6 @@ ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned in
 
 	if ((md_ctx = EVP_MD_CTX_new()) == NULL) {
 		ERROR("Allocating EVP_MD failed!");
-		fclose(fp);
 		return NULL;
 	}
 
@@ -1095,7 +1093,6 @@ ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned in
 
 	if (!EVP_DigestUpdate(md_ctx, buf_to_hash, buf_len)) {
 		ERROR("Error in buffer hashing");
-		fclose(fp);
 		goto error;
 	}
 
