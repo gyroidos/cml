@@ -40,11 +40,13 @@
 #include "common/list.h"
 #include "common/dir.h"
 #include "common/file.h"
+#include "common/proc.h"
 #include "common/protobuf.h"
 #include "common/protobuf-text.h"
 #include "common/ssl_util.h"
 #include "common/sock-sd.h"
 
+#include <signal.h>
 #include <unistd.h>
 
 #include <google/protobuf-c/protobuf-c-text.h>
@@ -466,6 +468,71 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
+	default:
+		WARN("DaemonToToken command %d unknown or not implemented yet", msg->code);
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		out.code = TOKEN_TO_DAEMON__CODE__CMD_UNKNOWN;
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+		break;
+	}
+}
+
+static void
+scd_crypto_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+{
+	pid_t *pid = data;
+	ASSERT(pid);
+
+	int status = 0;
+
+	if (proc_waitpid(*pid, &status, WNOHANG) == *pid) {
+		TRACE("Reaped child process: %d", *pid);
+		/* remove the sigchld callback for this pid from the event loop */
+		event_remove_signal(sig);
+		event_signal_free(sig);
+
+		if ((WIFEXITED(status) && WEXITSTATUS(status)) || WIFSIGNALED(status)) {
+			WARN("asyn crypto handler reurned with error");
+		}
+		mem_free0(pid);
+	}
+}
+
+static void
+scd_control_handle_crypto_message(const DaemonToToken *msg, int fd)
+{
+	pid_t pid;
+
+	if (NULL == msg) {
+		WARN("msg=NULL, returning");
+		return;
+	}
+
+	IF_TRUE_RETURN((pid = fork()) < 0);
+
+	if (pid > 0) {
+		/* parent (main scd process) */
+		pid_t *_pid = mem_new0(pid_t, 1);
+		*_pid = pid;
+		event_signal_t *sig = event_signal_new(SIGCHLD, scd_crypto_sigchld_cb, _pid);
+		event_add_signal(sig);
+		return;
+	}
+
+	/* here we are in the worker child */
+	event_reset();
+
+	if (LOGF_PRIO_TRACE >= LOGF_LOG_MIN_PRIO) {
+		char *msg_text;
+		size_t msg_len =
+			protobuf_string_from_message(&msg_text, (ProtobufCMessage *)msg, NULL);
+		TRACE("Worker child handling DaemonToToken message:\n%s",
+		      msg_len > 0 ? msg_text : "NULL");
+		if (msg_text)
+			free(msg_text);
+	}
+
+	switch (msg->code) {
 	/*
 	 * This case handles hashing request as part of
 	 * TSF.CML.SecureCompartmentInit and TSF.CML.Updates
@@ -580,6 +647,9 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 		break;
 	}
+
+	// worker child exit
+	_exit(0);
 }
 
 /**
@@ -602,7 +672,16 @@ scd_control_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void
 		// close connection if client EOF, or protocol parse error
 		IF_NULL_GOTO_TRACE(msg, connection_err);
 
-		scd_control_handle_message(msg, fd);
+		switch (msg->code) {
+		case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_FILE:
+		case DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_BUF:
+		case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_FILE:
+		case DAEMON_TO_TOKEN__CODE__CRYPTO_VERIFY_BUF:
+			scd_control_handle_crypto_message(msg, fd);
+			break;
+		default:
+			scd_control_handle_message(msg, fd);
+		}
 		protobuf_free_message((ProtobufCMessage *)msg);
 		DEBUG("Handled control connection %d", fd);
 	}
