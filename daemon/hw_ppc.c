@@ -36,10 +36,6 @@
 #include "common/event.h"
 
 /******************************************************************************/
-static const char *hw_ppc_devices_whitelist_base[] = {
-	NULL // deny all
-};
-
 /**
  * List of devices allowed additionally in privileged containers.
  */
@@ -113,12 +109,6 @@ const char *
 hardware_get_powerbutton_input_path(void)
 {
 	return NULL;
-}
-
-const char **
-hardware_get_devices_whitelist_base()
-{
-	return hw_ppc_devices_whitelist_base;
 }
 
 const char **
