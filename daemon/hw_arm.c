@@ -122,12 +122,6 @@ hardware_get_nw_mv_name_list(void)
 	return NULL;
 }
 
-const char *
-hardware_get_radio_ifname(void)
-{
-	return NULL;
-}
-
 bool
 hardware_supports_systemv_ipc(void)
 {

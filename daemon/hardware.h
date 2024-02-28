@@ -144,12 +144,6 @@ hardware_get_nw_name_list(void);
 list_t *
 hardware_get_nw_mv_name_list(void);
 
-/**
- * Returns the interface name for mobile data (e.g., rmnet0)
- */
-const char *
-hardware_get_radio_ifname(void);
-
 bool
 hardware_supports_systemv_ipc(void);
 

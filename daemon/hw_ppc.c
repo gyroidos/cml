@@ -136,12 +136,6 @@ hardware_get_routing_table_radio(void)
 	return "";
 }
 
-const char *
-hardware_get_radio_ifname(void)
-{
-	return NULL;
-}
-
 bool
 hardware_supports_systemv_ipc(void)
 {
