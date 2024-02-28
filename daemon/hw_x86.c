@@ -38,58 +38,12 @@
 #define BOOT_BL_BRIGHTNESS 26
 
 /******************************************************************************/
-static char *hw_x86_serial_number = "00000000";
 static char *hw_x86_name = "x86";
 
 const char *
 hardware_get_name(void)
 {
 	return hw_x86_name;
-}
-
-const char *
-hardware_get_manufacturer(void)
-{
-	// TODO check if this is the correct manufacturer string
-	return "Intel / AMD";
-}
-
-const char *
-hardware_get_model(void)
-{
-	// TODO return the proper "hardware model"
-	return "x86-model";
-}
-
-const char *
-hardware_get_serial_number(void)
-{
-	return hw_x86_serial_number;
-}
-
-const char *
-hardware_get_bootimg_path(void)
-{
-	//return "/dev/block/platform/msm_sdcc.1/by-name/boot";
-	return NULL;
-}
-
-int
-hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
-{
-	return 0;
-}
-
-bool
-hardware_is_led_on(void)
-{
-	return false;
-}
-
-const char *
-hardware_get_powerbutton_input_path(void)
-{
-	return NULL;
 }
 
 list_t *
@@ -114,24 +68,6 @@ hardware_get_nw_name_list(void)
 	list_t *nw_name_list = NULL;
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
-}
-
-list_t *
-hardware_get_nw_mv_name_list(void)
-{
-	return NULL;
-}
-
-bool
-hardware_supports_systemv_ipc(void)
-{
-	return true;
-}
-
-const char *
-hardware_get_routing_table_radio(void)
-{
-	return NULL;
 }
 
 int

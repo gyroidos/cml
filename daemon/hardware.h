@@ -47,75 +47,6 @@ const char *
 hardware_get_name(void);
 
 /**
- * Get the hardware model. This is a unique hardware key together with the manufacturer.
- * @return The hardware model.
- */
-
-const char *
-hardware_get_model(void);
-
-/**
- * Get the hardware serial number. Together with the manufacturer and model information this identifies a device.
- * @return The serial number of the device.
- */
-
-const char *
-hardware_get_serial_number(void);
-
-/**
- * Get the wifi mac address of the device.
- * @return The wifi mac address of the device.
- */
-
-const char *
-hardware_get_wifi_mac(void);
-
-/**
- * Get the bluetooth mac address of the device.
- * @return The bluetooth mac address of the device.
- */
-
-const char *
-hardware_get_bluetooth_mac(void);
-
-/**
- * Get the IMEI of the device.
- * @return The IMEI of the device.
- */
-
-const char *
-hardware_get_imei(void);
-
-/**
- * Get the path to the boot partion.
- * @return the path.
- */
-const char *
-hardware_get_bootimg_path(void);
-
-/**
- * Set the color of the device LED by rgb values. Turn the LED off with value 0.
- * @param color The color value in #RRGGBBAA format.
- * @param should_blink If true let the LED blink (preferably done by hardware),
- * if false turn LED on constantly.
- * @return -1 on error else 0.
- */
-int
-hardware_set_led(uint32_t color, bool should_blink);
-
-bool
-hardware_is_led_on();
-
-int
-hardware_register_fb_status_cb(void (*func)(bool));
-
-const char *
-hardware_get_audio_device_dir(void);
-
-bool
-hardware_is_audio_device(const char *file);
-
-/**
  * Get random bytes using the hardware random number generator (if supported).
  * If no support is available, get random bytes from /dev/random.
  * @param buf	buffer where the random bytes will be returned (must be large enough to hold 'len' bytes)
@@ -136,18 +67,5 @@ hardware_get_active_cgroups_subsystems(void);
  */
 list_t *
 hardware_get_nw_name_list(void);
-
-/**
- * Returns list of network interfaces which should be moved
- * into the privileged container's netns
- */
-list_t *
-hardware_get_nw_mv_name_list(void);
-
-bool
-hardware_supports_systemv_ipc(void);
-
-const char *
-hardware_get_routing_table_radio(void);
 
 #endif /* HARDWARE_H */
