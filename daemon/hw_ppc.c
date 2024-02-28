@@ -72,13 +72,6 @@ hardware_get_bootimg_path(void)
 	return NULL;
 }
 
-const char *
-hardware_get_block_by_name_path(void)
-{
-	//return "/dev/block/platform/msm_sdcc.1/by-name";
-	return NULL;
-}
-
 int
 hardware_set_led(UNUSED uint32_t color, UNUSED bool should_blink)
 {
