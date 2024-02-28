@@ -37,13 +37,6 @@
 
 /******************************************************************************/
 /**
- * List of devices allowed additionally in privileged containers.
- */
-static const char *hw_ppc_devices_whitelist_priv[] = {
-	NULL // deny all
-};
-
-/**
  * List of audio devices
  */
 static const char *hw_ppc_devices_whitelist_audio[] = {
@@ -109,12 +102,6 @@ const char *
 hardware_get_powerbutton_input_path(void)
 {
 	return NULL;
-}
-
-const char **
-hardware_get_devices_whitelist_priv()
-{
-	return hw_ppc_devices_whitelist_priv;
 }
 
 int
