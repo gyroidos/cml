@@ -742,13 +742,6 @@ c_cgroups_dev_start_post_clone(void *cgroups_devp)
 		return -COMPARTMENT_ERROR_CGROUPS;
 	}
 
-	/* allow hardware specific base whitelist */
-	if (c_cgroups_dev_allow_list(cgroups_dev, hardware_get_devices_whitelist_base()) < 0) {
-		ERROR("Could not initialize hardware specific base devices whitelist for container %s",
-		      container_get_description(cgroups_dev->container));
-		return -COMPARTMENT_ERROR_CGROUPS;
-	}
-
 	if (container_is_privileged(cgroups_dev->container)) {
 		/* allow hardware specific whitelist for privileged containers */
 		if (c_cgroups_dev_allow_list(cgroups_dev, hardware_get_devices_whitelist_priv()) <

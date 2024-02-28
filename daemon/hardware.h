@@ -47,21 +47,6 @@ const char *
 hardware_get_name(void);
 
 /**
- * Get the hardware manufacturer. This is a unique hardware key together with the model.
- * @return The hardware manufacturer.
- */
-
-const char *
-hardware_get_manufacturer(void);
-
-/**
- * Get the base whitelist of hardware specific devices which are required for every container
- * independent from its configuration
- */
-const char **
-hardware_get_devices_whitelist_base();
-
-/**
  * Get the whitelist of hardware specific devices which are additionally to the
  * base list allowed for privileged containers
  */

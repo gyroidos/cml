@@ -38,10 +38,6 @@
 #define BOOT_BL_BRIGHTNESS 26
 
 /******************************************************************************/
-static const char *hw_x86_devices_whitelist_base[] = {
-	NULL // deny all
-};
-
 /**
  * List of devices allowed additionally in privileged containers.
  */
@@ -115,12 +111,6 @@ const char *
 hardware_get_powerbutton_input_path(void)
 {
 	return NULL;
-}
-
-const char **
-hardware_get_devices_whitelist_base()
-{
-	return hw_x86_devices_whitelist_base;
 }
 
 const char **
