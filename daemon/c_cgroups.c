@@ -445,25 +445,6 @@ c_cgroups_devices_allow_list(void *cgroupsp, const char **list)
 }
 
 static int
-c_cgroups_devices_deny_list(void *cgroupsp, const char **list)
-{
-	c_cgroups_t *cgroups = cgroupsp;
-	ASSERT(cgroups);
-
-	/* if the list is null, do nothing */
-	if (!list)
-		return 0;
-
-	/* iterate over list and allow entries */
-	for (int i = 0; list[i]; i++) {
-		if (c_cgroups_devices_deny(cgroups, list[i]) < 0) {
-			return -1;
-		}
-	}
-	return 0;
-}
-
-static int
 c_cgroups_devices_assign_list(c_cgroups_t *cgroups, const char **list)
 {
 	if (!list)
@@ -487,39 +468,6 @@ c_cgroups_devices_deny_all(void *cgroupsp)
 }
 
 static int
-c_cgroups_devices_allow_audio(void *cgroupsp)
-{
-	c_cgroups_t *cgroups = cgroupsp;
-	ASSERT(cgroups);
-
-	DEBUG("Allow audio access for container %s", container_get_description(cgroups->container));
-
-	if (c_cgroups_devices_allow_list(cgroups, hardware_get_devices_whitelist_audio()) < 0) {
-		ERROR("Could not allow audio devices for container %s",
-		      container_get_description(cgroups->container));
-		return -1;
-	}
-	return 0;
-}
-
-static int
-c_cgroups_devices_deny_audio(void *cgroupsp)
-{
-	c_cgroups_t *cgroups = cgroupsp;
-	ASSERT(cgroups);
-
-	DEBUG("Deny audio access for container %s", container_get_description(cgroups->container));
-
-	if (c_cgroups_devices_deny_list(cgroups, hardware_get_devices_whitelist_audio()) < 0) {
-		ERROR("Could not deny audio devices for container %s",
-		      container_get_description(cgroups->container));
-		return -1;
-	}
-
-	return 0;
-}
-
-static int
 c_cgroups_devices_init(c_cgroups_t *cgroups)
 {
 	ASSERT(cgroups);
@@ -534,15 +482,6 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 		ERROR("Could not initialize generic devices whitelist for container %s",
 		      container_get_description(cgroups->container));
 		return -1;
-	}
-
-	/* get allowed features from the associated container object and configure
-	 * according to it */
-	/* currently: activate only for privileged containers... */
-	if (container_is_privileged(cgroups->container)) {
-		if (c_cgroups_devices_allow_audio(cgroups) < 0) {
-			return -1;
-		}
 	}
 
 	/* allow to run a KVM VMM inside an unprivileged Namespace */
@@ -1369,8 +1308,6 @@ c_cgroups_init(void)
 	// register relevant handlers implemented by this module
 	container_register_freeze_handler(MOD_NAME, c_cgroups_freeze);
 	container_register_unfreeze_handler(MOD_NAME, c_cgroups_unfreeze);
-	container_register_allow_audio_handler(MOD_NAME, c_cgroups_devices_allow_audio);
-	container_register_deny_audio_handler(MOD_NAME, c_cgroups_devices_deny_audio);
 	container_register_device_allow_handler(MOD_NAME, c_cgroups_devices_dev_allow);
 	container_register_device_deny_handler(MOD_NAME, c_cgroups_devices_dev_deny);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_devices_is_dev_allowed);

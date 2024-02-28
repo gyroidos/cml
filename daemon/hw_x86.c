@@ -38,13 +38,6 @@
 #define BOOT_BL_BRIGHTNESS 26
 
 /******************************************************************************/
-/**
- * List of audio devices
- */
-static const char *hw_x86_devices_whitelist_audio[] = {
-	NULL // deny all
-};
-
 static char *hw_x86_serial_number = "00000000";
 static char *hw_x86_name = "x86";
 
@@ -104,12 +97,6 @@ const char *
 hardware_get_powerbutton_input_path(void)
 {
 	return NULL;
-}
-
-const char **
-hardware_get_devices_whitelist_audio()
-{
-	return hw_x86_devices_whitelist_audio;
 }
 
 list_t *
