@@ -536,16 +536,6 @@ c_cgroups_devices_init(c_cgroups_t *cgroups)
 		return -1;
 	}
 
-	if (container_is_privileged(cgroups->container)) {
-		/* allow hardware specific whitelist for privileged containers */
-		if (c_cgroups_devices_allow_list(cgroups, hardware_get_devices_whitelist_priv()) <
-		    0) {
-			ERROR("Could not initialize hardware specific privileged devices whitelist for container %s",
-			      container_get_description(cgroups->container));
-			return -1;
-		}
-	}
-
 	/* get allowed features from the associated container object and configure
 	 * according to it */
 	/* currently: activate only for privileged containers... */

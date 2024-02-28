@@ -47,13 +47,6 @@ const char *
 hardware_get_name(void);
 
 /**
- * Get the whitelist of hardware specific devices which are additionally to the
- * base list allowed for privileged containers
- */
-const char **
-hardware_get_devices_whitelist_priv();
-
-/**
  * Get whitelist of devices required for audio
  */
 const char **

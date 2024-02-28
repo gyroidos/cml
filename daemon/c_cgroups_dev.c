@@ -742,16 +742,6 @@ c_cgroups_dev_start_post_clone(void *cgroups_devp)
 		return -COMPARTMENT_ERROR_CGROUPS;
 	}
 
-	if (container_is_privileged(cgroups_dev->container)) {
-		/* allow hardware specific whitelist for privileged containers */
-		if (c_cgroups_dev_allow_list(cgroups_dev, hardware_get_devices_whitelist_priv()) <
-		    0) {
-			ERROR("Could not initialize hardware specific privileged devices whitelist for container %s",
-			      container_get_description(cgroups_dev->container));
-			return -COMPARTMENT_ERROR_CGROUPS;
-		}
-	}
-
 	/* allow to run a KVM VMM inside an unprivileged Namespace */
 	if (container_get_type(cgroups_dev->container) == CONTAINER_TYPE_KVM) {
 		if (c_cgroups_dev_allow(cgroups_dev, "c 10:232 rwm") < 0)
