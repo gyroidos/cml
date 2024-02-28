@@ -36,13 +36,6 @@
 #include "common/event.h"
 
 /******************************************************************************/
-/**
- * List of audio devices
- */
-static const char *hw_ppc_devices_whitelist_audio[] = {
-	NULL // deny all
-};
-
 static char *hw_ppc_serial_number = "00000000";
 static char *hw_ppc_name = "ppc";
 
@@ -123,12 +116,6 @@ hardware_get_random(unsigned char *buf, size_t len)
 		     rnd, sw);
 		return file_read(sw, (char *)buf, len);
 	}
-}
-
-const char **
-hardware_get_devices_whitelist_audio()
-{
-	return hw_ppc_devices_whitelist_audio;
 }
 
 list_t *

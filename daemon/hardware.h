@@ -47,12 +47,6 @@ const char *
 hardware_get_name(void);
 
 /**
- * Get whitelist of devices required for audio
- */
-const char **
-hardware_get_devices_whitelist_audio();
-
-/**
  * Get the hardware model. This is a unique hardware key together with the manufacturer.
  * @return The hardware model.
  */
