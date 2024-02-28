@@ -898,10 +898,7 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 
 	int res = -1;
 	char *img_path = mem_printf("%s/%s.img", guestos_get_dir(os), img_name);
-	char *flash_path =
-		hardware_get_block_by_name_path() ?
-			mem_printf("%s%s", hardware_get_block_by_name_path(), flash_partition) :
-			mem_strdup(flash_partition);
+	char *flash_path = mem_strdup(flash_partition);
 	DEBUG("Flashing image %s to partition %s", img_path, flash_path);
 
 	switch (verify_partition(img_path, flash_path)) {
@@ -1045,10 +1042,7 @@ guestos_purge(guestos_t *os)
 			WARN_ERRNO("Failed to erase file %s", img_hash_path);
 		}
 		if (os->partialy_flashed && mount_entry_get_type(e) == MOUNT_TYPE_FLASH) {
-			char *flash_path =
-				hardware_get_block_by_name_path() ?
-					mem_printf("%s%s", hardware_get_block_by_name_path(), dir) :
-					mem_strdup(dir);
+			char *flash_path = mem_strdup(dir);
 			char *flash_bak = mem_printf("%s/%s", os->rollback_dir, img_name);
 			DEBUG("Rollback flashed partition %s to %s.", flash_bak, flash_path);
 

@@ -94,15 +94,6 @@ const char *
 hardware_get_bootimg_path(void);
 
 /**
- * Get the path to block devices by name,
- * e.g. /dev/block/platform/msm_sdcc.1/by-name.
- * @return The path.
- */
-
-const char *
-hardware_get_block_by_name_path(void);
-
-/**
  * Set the color of the device LED by rgb values. Turn the LED off with value 0.
  * @param color The color value in #RRGGBBAA format.
  * @param should_blink If true let the LED blink (preferably done by hardware),

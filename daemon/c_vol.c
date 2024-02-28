@@ -313,28 +313,27 @@ c_vol_create_image_copy(c_vol_t *vol, const char *img, const mount_entry_t *mnte
 static int
 c_vol_create_image_device(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
-	const char *dir;
-	char *dev;
+	const char *dev;
 	int ret;
 
 	ASSERT(vol);
 	ASSERT(img);
 	ASSERT(mntent);
 
-	dir = hardware_get_block_by_name_path();
-	if (!dir) {
-		ERROR("Could not get block by name path for hardware");
+	dev = mount_entry_get_img(mntent);
+	if (!dev) {
+		ERROR("Could not get block device path for hardware");
 		return -1;
 	}
-
-	// example for dev: /dev/block/platform/msm_sdcc.1/by-name/efs
-	dev = mem_printf("%s/%s", dir, mount_entry_get_img(mntent));
+	if (dev[0] != '/') {
+		ERROR("Block device path %s is not absolute", dev);
+		return -1;
+	}
 
 	ret = file_copy(dev, img, -1, 512, 0);
 	if (ret < 0)
 		ERROR("Could not copy file %s to %s", dev, img);
 
-	mem_free0(dev);
 	return ret;
 }
 
