@@ -25,11 +25,11 @@
 
 #include "scd.pb-c.h"
 
-#include "hardware.h"
 #include "cmld.h"
 #include "audit.h"
 #include "hotplug.h"
 #include "scd_shared.h"
+#include "crypto.h"
 
 #include "common/macro.h"
 #include "common/event.h"
@@ -128,7 +128,7 @@ c_smartcard_get_pairing_secret(c_smartcard_t *smartcard, unsigned char *buf, int
 		bytes_read = file_read(pair_sec_file, (char *)buf, buf_len);
 	} else {
 		DEBUG("No pairing secret has been persisted yet. Creating new one");
-		bytes_read = hardware_get_random(buf, buf_len);
+		bytes_read = crypto_random_get_bytes(buf, buf_len);
 		if (bytes_read != buf_len) {
 			ERROR("Failed to get random pairing secret");
 			bytes_read = -1;
@@ -393,7 +393,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					break;
 				}
 				unsigned char key[TOKEN_KEY_LEN];
-				int keylen = hardware_get_random(key, sizeof(key));
+				int keylen = crypto_random_get_bytes(key, sizeof(key));
 				DEBUG("SCD: keylen=%d, sizeof(key)=%zu", keylen, sizeof(key));
 				if (keylen != sizeof(key)) {
 					audit_log_event(container_get_uuid(smartcard->container),

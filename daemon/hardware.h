@@ -47,15 +47,6 @@ const char *
 hardware_get_name(void);
 
 /**
- * Get random bytes using the hardware random number generator (if supported).
- * If no support is available, get random bytes from /dev/random.
- * @param buf	buffer where the random bytes will be returned (must be large enough to hold 'len' bytes)
- * @param len	number of random bytes to store in 'buf'
- */
-int
-hardware_get_random(unsigned char *buf, size_t len);
-
-/**
  * Returns a list containing strings of the active cgroups subsystems
  */
 list_t *

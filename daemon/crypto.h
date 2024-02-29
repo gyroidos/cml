@@ -223,4 +223,14 @@ crypto_pull_device_csr_new(size_t *csr_len);
 int
 crypto_push_device_cert(int resp_fd, uint8_t *cert, size_t cert_len);
 
+/**
+ * Get random bytes using the hardware random number generator (if supported).
+ * If no support is available, get random bytes from /dev/random.
+ * @param buf	buffer where the random bytes will be returned (must be large enough to hold 'len' bytes)
+ * @param len	number of random bytes to store in 'buf'
+ * @return	number of random bytes stored in 'buf'; -1 on error
+ */
+int
+crypto_random_get_bytes(unsigned char *buf, size_t len);
+
 #endif /* CRYPTO_H */
