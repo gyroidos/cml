@@ -27,6 +27,7 @@
 #include "cmld.h"
 
 #include "common/event.h"
+#include "common/file.h"
 #include "common/hex.h"
 #include "common/macro.h"
 #include "common/mem.h"
@@ -37,6 +38,15 @@
 
 // clang-format off
 #define SCD_CONTROL_SOCKET SOCK_PATH(scd-control)
+
+#ifndef CRYPTO_HWRNG_PATH
+#define CRYPTO_HWRNG_PATH "/dev/hwrng"
+#endif
+
+#ifndef CRYPTO_RANDOM_PATH
+#define CRYPTO_RANDOM_PATH "/dev/random"
+#endif
+
 // clang-format on
 
 static TokenToDaemon *
@@ -745,4 +755,25 @@ crypto_push_device_cert(int resp_fd, uint8_t *cert, size_t cert_len)
 error:
 	control_send_message(CONTROL_RESPONSE_DEVICE_CERT_ERROR, resp_fd);
 	return -1;
+}
+
+int
+crypto_random_get_bytes(unsigned char *buf, size_t len)
+{
+	const char *rnd = CRYPTO_HWRNG_PATH;
+	const char *sw = CRYPTO_RANDOM_PATH;
+
+	int bytes_read = file_read(rnd, (char *)buf, len);
+	if (bytes_read > 0 && (size_t)bytes_read == len) {
+		return bytes_read;
+	} else {
+		if (!file_exists(sw)) {
+			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!",
+			      rnd, sw);
+			return -1;
+		}
+		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.",
+		     rnd, sw);
+		return file_read(sw, (char *)buf, len);
+	}
 }

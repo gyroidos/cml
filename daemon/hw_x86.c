@@ -69,24 +69,3 @@ hardware_get_nw_name_list(void)
 	nw_name_list = list_append(nw_name_list, "eth0");
 	return nw_name_list;
 }
-
-int
-hardware_get_random(unsigned char *buf, size_t len)
-{
-	const char *rnd = "/dev/hwrng";
-	const char *sw = "/dev/random";
-
-	int bytes_read = file_read(rnd, (char *)buf, len);
-	if (bytes_read > 0 && (size_t)bytes_read == len) {
-		return bytes_read;
-	} else {
-		if (!file_exists(sw)) {
-			ERROR("Failed to retrieve random numbers. Neither random number generator %s or %s could be accessed!",
-			      rnd, sw);
-			return -1;
-		}
-		WARN("Could not access %s, falling back to %s. Check if device provides a hardware random number generator.",
-		     rnd, sw);
-		return file_read(sw, (char *)buf, len);
-	}
-}

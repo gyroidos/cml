@@ -24,7 +24,7 @@
 #include "oci.h"
 
 #include "container.h"
-#include "hardware.h"
+#include "crypto.h"
 
 #include "common/file.h"
 #include "common/macro.h"
@@ -56,7 +56,7 @@ c_oci_start_pre_clone(void *ocip)
 		ascii_key = file_read_new(oci->key_file, file_size(oci->key_file));
 	} else {
 		unsigned char key[TOKEN_KEY_LEN];
-		int keylen = hardware_get_random(key, sizeof(key));
+		int keylen = crypto_random_get_bytes(key, sizeof(key));
 		ascii_key = convert_bin_to_hex_new(key, keylen);
 		mem_memset0(key, sizeof(key));
 		// include terminating null byte into file
