@@ -46,10 +46,4 @@
 const char *
 hardware_get_name(void);
 
-/**
- * Returns a list containing strings of the active cgroups subsystems
- */
-list_t *
-hardware_get_active_cgroups_subsystems(void);
-
 #endif /* HARDWARE_H */
