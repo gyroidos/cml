@@ -65,11 +65,21 @@
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
-// TODO multiarch support?
-#define X32_SYSCALL_BIT 0x40000000
-
 /**************************/
 // clang-format off
+
+#define X32_SYSCALL_BIT 0x40000000
+
+#if defined __x86_64__
+	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_X86_64
+#elif defined __aarch64__
+	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_AARCH64
+#elif defined __riscv
+	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV64
+#endif
+
+/**************************/
+
 #ifndef __NR_pidfd_open
 	#if defined __alpha__
 		#define __NR_pidfd_open 544
@@ -151,72 +161,46 @@ typedef struct c_seccomp {
  * https://man7.org/linux/man-pages/man2/seccomp.2.html
  * an the Linux secomp sample code at samples/seccomp
  */
-int
-c_seccomp_install_filter(unsigned int t_arch, UNUSED int f_errno)
+static int
+c_seccomp_install_filter()
 {
-	unsigned int upper_nr_limit = 0xffffffff;
-
-	/**
-	 * Assume that AUDIT_ARCH_X86_64 means the normal x86-64 ABI
-	 * (in the x32 ABI, all system calls have bit 30 set in the
-	 * 'nr' field, meaning the numbers are >= X32_SYSCALL_BIT)
-	 *
+	/*
+	 * This filter allows all system calls other than the explicitly listed
+	 * ones, namely
+	 * - SYS_clock_settime
+	 * - SYS_clock_adjtime
+	 * - SYS_adjtimex
+	 * and thus follows a deny-list approach.
 	 */
-	if (t_arch == AUDIT_ARCH_X86_64)
-		upper_nr_limit = X32_SYSCALL_BIT - 1;
-
 	struct sock_filter filter[] = {
 		/**
-		 * [0] Load architecture from 'seccomp_data' buffer into
-		 * accumulator
+		 * Architecture check: load arch from seccomp_data, check if equal
+		 * to the expected syscall ABI and kill process if not.
 		 */
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, arch))),
-
-		/**
-		 * [1] Jump forward 5 instructions if architecture does not
-		 * match 't_arch'
-		 */
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, t_arch, 0, 6),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, C_SECCOMP_AUDIT_ARCH, 1, 0),
+		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
 
 		/*
-		 * [2] Load system call number from 'seccomp_data' buffer into
-		 * accumulator
+		 * Syscall filter: load the syscall number and check against each syscall
+		 * for that a notification should be sent. If no match is found, the syscall
+		 * is allowed.
+		 *
+		 * NB: The x86_64 ABI and the x32 ABI share AUDIT_ARCH_X86_64 and syscalls
+		 * are distinguished using the X32_SYSCALL_BIT. To avoid bypassing the
+		 * filter using X32 syscall numbers we block all X32 syscalls.
 		 */
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, nr))),
-
-		/**
-		 * [3] Check ABI - only needed for x86-64 in blacklist use
-		 * cases.Use BPF_JGT instead of checking against the bit
-		 * mask to avoid having to reload the syscall number.
-		 */
-		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, upper_nr_limit, 4, 0),
-
-		/**
-		 * [4] Compare agains each syscal and jump to end of block
-		 * if system call number matches 'syscall_nr', jump forward 1
-		 * instruction on last check if system call number does not
-		 * match 'syscall_nr'
-		 */
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_settime, 2, 0),
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_adjtime, 1, 0),
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_adjtimex, 0, 1),
-
-		/**
-		 * [5] Matching architecture and system call: don't execute
-		 * the system call, and return 'f_errno' in 'errno'
-		 */
-		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
-
-		/**
-		 * [6] Destination of system call number mismatch: allow other
-		 * system calls
-		 */
-		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
-
-		/**
-		 * [7] Destination of architecture mismatch: kill task
-		 */
+#if (C_SECCOMP_AUDIT_ARCH == AUDIT_ARCH_X86_64)
+		/* Deny all X32 syscalls */
+		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, (X32_SYSCALL_BIT - 1), 0, 1),
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
+#endif
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_settime, 3, 0),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_adjtime, 2, 0),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_adjtimex, 1, 0),
+		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF),
 	};
 
 	struct sock_fprog prog = { .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
@@ -245,7 +229,7 @@ c_seccomp_start_pre_exec_child_early(void *seccompp)
 
 	int notify_fd = -1;
 
-	if (-1 == (notify_fd = c_seccomp_install_filter(AUDIT_ARCH_X86_64, EPERM))) {
+	if (-1 == (notify_fd = c_seccomp_install_filter())) {
 		ERROR("Failed to install seccomp filter");
 		return -1;
 	}
@@ -615,8 +599,6 @@ static compartment_module_t c_seccomp_module = {
 static void INIT
 c_seccomp_init(void)
 {
-	//TODO: port to multiarch support
-	IF_FALSE_RETURN(0 == strcmp("x86", hardware_get_name()));
 	// register this module in compartment.c
 	compartment_register_module(&c_seccomp_module);
 }
