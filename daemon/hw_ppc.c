@@ -43,14 +43,3 @@ hardware_get_name(void)
 {
 	return hw_ppc_name;
 }
-
-list_t *
-hardware_get_active_cgroups_subsystems(void)
-{
-	list_t *subsys_list = NULL;
-	subsys_list = list_append(subsys_list, "devices");
-	subsys_list = list_append(subsys_list, "cpu");
-	subsys_list = list_append(subsys_list, "memory");
-	subsys_list = list_append(subsys_list, "freezer");
-	return subsys_list;
-}

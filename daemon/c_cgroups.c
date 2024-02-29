@@ -65,10 +65,6 @@
 
 #define CGROUPS_FOLDER MOUNT_CGROUPS_FOLDER
 
-// FIXME: currently replaced by hardware_get_active_cgroups_subsystems() to
-// work-around a buggy kernel cgroups implementation for the "deb" device.
-//#define ACTIVE_CGROUPS_SUBSYSTEMS "cpu,memory,freezer,devices"
-
 /* Define timeout for freeze in milliseconds */
 #define CGROUPS_FREEZER_TIMEOUT 5000
 /* Define the time interval between status checks while freezing */
@@ -104,6 +100,25 @@ typedef struct c_cgroups {
 	bool ns_cgroup;
 } c_cgroups_t;
 
+/**
+ * Returns a list containing strings of the active cgroups subsystems
+ */
+static list_t *
+get_active_cgroups_subsystems(void)
+{
+	list_t *subsys_list = NULL;
+	subsys_list = list_append(subsys_list, "net_cls,net_prio");
+	subsys_list = list_append(subsys_list, "devices");
+	subsys_list = list_append(subsys_list, "cpuset");
+	subsys_list = list_append(subsys_list, "memory");
+	subsys_list = list_append(subsys_list, "perf_event");
+	subsys_list = list_append(subsys_list, "cpu,cpuacct");
+	subsys_list = list_append(subsys_list, "blkio");
+	subsys_list = list_append(subsys_list, "freezer");
+	subsys_list = list_append(subsys_list, "pids");
+	return subsys_list;
+}
+
 static void *
 c_cgroups_new(compartment_t *compartment)
 {
@@ -113,7 +128,7 @@ c_cgroups_new(compartment_t *compartment)
 	c_cgroups_t *cgroups = mem_new0(c_cgroups_t, 1);
 	cgroups->container = compartment_get_extension_data(compartment);
 
-	cgroups->active_cgroups = hardware_get_active_cgroups_subsystems();
+	cgroups->active_cgroups = get_active_cgroups_subsystems();
 
 	cgroups->inotify_freezer_state = NULL;
 	cgroups->freeze_timer = NULL;
@@ -1314,6 +1329,6 @@ c_cgroups_init(void)
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
 
 	// mount cgroups if not allready mounted by init
-	if (mount_cgroups(hardware_get_active_cgroups_subsystems()))
+	if (mount_cgroups(get_active_cgroups_subsystems()))
 		FATAL("Could not mount cgroups");
 }
