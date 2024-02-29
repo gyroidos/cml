@@ -52,11 +52,4 @@ hardware_get_name(void);
 list_t *
 hardware_get_active_cgroups_subsystems(void);
 
-/**
- * Returns list of network interfaces which should be
- * generated and connected(routed) to outside world
- */
-list_t *
-hardware_get_nw_name_list(void);
-
 #endif /* HARDWARE_H */

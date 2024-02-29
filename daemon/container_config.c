@@ -55,6 +55,10 @@ struct container_config {
 #define C_CONFIG_MAX_RAM_LIMIT (1 << 30) // TODO 1GB? (< 4GB due to uint32)
 #define C_CONFIG_MAX_STORAGE (4LL << 30) // TODO 4GB?
 
+#ifndef C_CONFIG_DEFAULT_VETH_NAME
+#define C_CONFIG_DEFAULT_VETH_NAME "host0"
+#endif
+
 /**
  * The usual identity map between two corresponding C and protobuf enums.
  */
@@ -572,7 +576,8 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 	}
 
 	if (if_cfg_list == NULL) {
-		list_t *nw_name_list = hardware_get_nw_name_list();
+		list_t *nw_name_list = NULL;
+		nw_name_list = list_append(nw_name_list, C_CONFIG_DEFAULT_VETH_NAME);
 		for (list_t *l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
 			uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };

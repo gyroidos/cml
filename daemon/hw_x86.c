@@ -61,11 +61,3 @@ hardware_get_active_cgroups_subsystems(void)
 	subsys_list = list_append(subsys_list, "pids");
 	return subsys_list;
 }
-
-list_t *
-hardware_get_nw_name_list(void)
-{
-	list_t *nw_name_list = NULL;
-	nw_name_list = list_append(nw_name_list, "eth0");
-	return nw_name_list;
-}
