@@ -154,12 +154,6 @@ verity_get_device_path_new(const char *label)
 	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
 }
 
-static char *
-verity_get_link_path_new(const char *verity_name)
-{
-	return mem_printf("%s/%s", DM_PATH_PREFIX, verity_name);
-}
-
 static int
 create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
 {
@@ -190,7 +184,7 @@ create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
 	}
 
 	targetpath = mem_printf("%s/%s", DEVFS_PATH, devptr);
-	linkpath = verity_get_link_path_new(name);
+	linkpath = verity_get_device_path_new(name);
 
 	DEBUG("Creating symlink for verity device %s (%u:%u): %s -> %s", name, major(devt),
 	      minor(devt), linkpath, targetpath);
@@ -236,13 +230,6 @@ verity_delete_blk_dev(const char *name)
 		goto out;
 	}
 
-	char *linkpath = verity_get_link_path_new(name);
-
-	if (unlink(linkpath)) {
-		ERROR_ERRNO("Failed to remove symlink '%s' to verity device", linkpath);
-	}
-	mem_free0(linkpath);
-
 	// Make sure that dm-verity device exists
 	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL,
@@ -261,8 +248,8 @@ verity_delete_blk_dev(const char *name)
 		goto out;
 	}
 
-	/* remove device node if necessary */
-	char *device = cryptfs_get_device_path_new(name);
+	/* remove device node or symlink if necessary */
+	char *device = verity_get_device_path_new(name);
 	unlink(device);
 	mem_free0(device);
 
