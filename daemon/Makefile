@@ -34,8 +34,6 @@ CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
 
-TRUSTME_HARDWARE := x86
-
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -I../scd -pedantic -O2
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 ifeq ($(WCAST_ALIGN),y)
@@ -99,7 +97,6 @@ SRC_FILES := main.c \
 	tss.c \
 	ksm.c \
 	time.c \
-	hw_$(TRUSTME_HARDWARE).c \
 	lxcfs.c \
 	input.c \
 	audit.c

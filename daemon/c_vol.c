@@ -53,7 +53,6 @@
 #include "common/event.h"
 
 #include "cmld.h"
-#include "hardware.h"
 #include "guestos.h"
 #include "guestos_mgr.h"
 #include "lxcfs.h"

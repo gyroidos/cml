@@ -37,7 +37,6 @@
 
 #include "compartment.h"
 #include "audit.h"
-#include "hardware.h"
 
 #include "common/macro.h"
 #include "common/mem.h"

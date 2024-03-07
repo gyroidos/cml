@@ -34,7 +34,6 @@
 #include "common/logf.h"
 
 #include "cmld.h"
-#include "hardware.h"
 #include "lxcfs.h"
 #include "tss.h"
 
@@ -118,7 +117,6 @@ main(int argc, char **argv)
 	const char *path;
 
 	INFO("Starting...");
-	INFO("Device hardware is %s", hardware_get_name());
 
 	if (argc >= 2)
 		path = strdup(argv[1]);
