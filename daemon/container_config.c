@@ -41,7 +41,6 @@
 #include "crypto.h"
 #include "guestos.h"
 #include "guestos_mgr.h"
-#include "hardware.h"
 #include "network.h"
 #include "hotplug.h"
 

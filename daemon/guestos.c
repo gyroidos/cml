@@ -24,7 +24,6 @@
 #include "guestos.h"
 #include "guestos_config.h"
 
-#include "hardware.h"
 #include "download.h"
 #include "cmld.h"
 #include "crypto.h"
@@ -38,6 +37,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #include <inttypes.h>
 
@@ -83,6 +83,25 @@ guestos_get_cert_file_new(const char *dir)
 }
 
 /******************************************************************************/
+
+static const char *
+guestos_hardware_get_name(void)
+{
+	struct utsname buf;
+
+	uname(&buf);
+
+	if (!strncmp(buf.machine, "x86_64", sizeof(buf.machine))) {
+		return "x86";
+	} else if (!strncmp(buf.machine, "aarch64", sizeof(buf.machine))) {
+		return "arm";
+	} else if (!strncmp(buf.machine, "riscv64", sizeof(buf.machine))) {
+		return "riscv";
+	} else {
+		ERROR("Cannot map machine %s to a supported architecture.", buf.machine);
+		return NULL;
+	}
+}
 
 /**
  * Internal constructor for guestos_t.
@@ -602,13 +621,19 @@ static bool
 iterate_image_do_trigger_download(const char *img_name, iterate_images_t *task,
 				  download_callback_t dl_cb)
 {
+	const char *hardware_name = guestos_hardware_get_name();
+	if (!hardware_name) {
+		return false;
+	}
+
 	// check if guestos has update file server, use device.conf as fallback
 	const char *update_base_url = guestos_config_get_update_base_url(task->os->cfg) ?
 					      guestos_config_get_update_base_url(task->os->cfg) :
 					      cmld_get_device_update_base_url();
 	char *img_path = mem_printf("%s/%s", guestos_get_dir(task->os), img_name);
+
 	char *img_url = mem_printf("%s/operatingsystems/%s/%s-%" PRIu64 "/%s", update_base_url,
-				   hardware_get_name(), guestos_get_name(task->os),
+				   hardware_name, guestos_get_name(task->os),
 				   guestos_get_version(task->os), img_name);
 	// invoke downloader
 	DEBUG("Downloading %s to %s (attempt=%u).", img_url, img_path, task->dl_attempts);

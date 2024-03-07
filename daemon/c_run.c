@@ -47,7 +47,6 @@
 #include "common/event.h"
 #include "common/proc.h"
 #include "common/ns.h"
-#include "hardware.h"
 #include "container.h"
 #include "cmld.h"
 

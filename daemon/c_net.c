@@ -61,7 +61,6 @@
 #include "common/ns.h"
 #include "container.h"
 #include "cmld.h"
-#include "hardware.h"
 #include "hotplug.h"
 
 /* Offset for ipv4/mac address allocation, e.g. 127.1.(IPV4_SUBNET_OFFS+x).2

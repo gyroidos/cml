@@ -30,7 +30,6 @@
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "cmld.h"
-#include "hardware.h"
 #include "crypto.h"
 #include "audit.h"
 

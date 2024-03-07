@@ -42,7 +42,6 @@
 #include "common/dir.h"
 #include "common/network.h"
 #include "common/reboot.h"
-#include "hardware.h"
 #include "mount.h"
 #include "device_config.h"
 #include "control.h"
