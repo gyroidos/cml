@@ -102,7 +102,8 @@
 /* Network interface structure with interface specific settings */
 typedef struct {
 	char *nw_name;		       //!< Name of the network device
-	bool configure;		       // do ip/routing configuration
+	char *nw_name_cmld;	       //!< Name of the network device in rootns
+	bool configure;		       //!< do ip/routing configuration
 	char *veth_cmld_name;	       //!< associated veth name in root ns
 	char *veth_cont_name;	       //!< veth name in the container's ns
 	char *subnet;		       //!< string with subnet (x.x.x.x/y)
@@ -110,7 +111,7 @@ typedef struct {
 	struct in_addr ipv4_cont_addr; //!< ipv4 address of container
 	struct in_addr ipv4_bc_addr;   //!< ipv4 bcaddr of container/cmld subnet
 	int cont_offset;	       //!< gives information about the adresses to be set
-	uint8_t veth_mac[6];	       // generated or configured mac of nic in	container
+	uint8_t veth_mac[6];	       //!< generated or configured mac of nic in container
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -494,12 +495,14 @@ msg_err:
 }
 
 static c_net_interface_t *
-c_net_interface_new(const char *if_name, uint8_t if_mac[6], bool configure)
+c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_mac[6],
+		    bool configure)
 {
 	ASSERT(if_name);
 
 	c_net_interface_t *ni = mem_new0(c_net_interface_t, 1);
-	ni->nw_name = mem_printf("%s", if_name);
+	ni->nw_name = mem_strdup(if_name);
+	ni->nw_name_cmld = root_if_name ? mem_strdup(root_if_name) : NULL;
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
 	ni->cont_offset = -1;
@@ -819,15 +822,15 @@ c_net_new(compartment_t *compartment)
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
 		c_net_interface_t *ni_cml =
-			c_net_interface_new(CML_UPLINK_INTERFACE_NAME, mac, true);
+			c_net_interface_new(CML_UPLINK_INTERFACE_NAME, "uplink", mac, true);
 		net->interface_list = list_append(net->interface_list, ni_cml);
 	}
 
 	for (list_t *l = container_get_vnet_cfg_list(net->container); l; l = l->next) {
 		container_vnet_cfg_t *cfg = l->data;
 
-		c_net_interface_t *ni =
-			c_net_interface_new(cfg->vnet_name, cfg->vnet_mac, cfg->configure);
+		c_net_interface_t *ni = c_net_interface_new(cfg->vnet_name, cfg->rootns_name,
+							    cfg->vnet_mac, cfg->configure);
 		ASSERT(ni);
 		net->interface_list = list_append(net->interface_list, ni);
 
@@ -1020,6 +1023,13 @@ c_net_start_post_clone_interface(pid_t pid, c_net_interface_t *ni)
 	DEBUG("move %s to the ns of this pid: %d", ni->veth_cont_name, pid);
 	if (c_net_move_ifi(ni->veth_cont_name, pid) < 0)
 		return -1;
+
+	/* Rename veth endpoint in rootns to the given name in container config */
+	if (ni->nw_name_cmld && (0 == network_rename_ifi(ni->veth_cmld_name, ni->nw_name_cmld))) {
+		DEBUG("renamed rootns ifi from %s to %s", ni->veth_cmld_name, ni->nw_name_cmld);
+		mem_free0(ni->veth_cmld_name);
+		ni->veth_cmld_name = mem_strdup(ni->nw_name_cmld);
+	}
 
 	return 0;
 }
@@ -1449,6 +1459,8 @@ c_net_free_interface(c_net_interface_t *ni)
 	mem_free0(ni->veth_cmld_name);
 	mem_free0(ni->veth_cont_name);
 	mem_free0(ni->nw_name);
+	if (ni->nw_name_cmld)
+		mem_free0(ni->nw_name_cmld);
 	mem_free0(ni);
 }
 

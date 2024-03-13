@@ -569,7 +569,8 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 		mac[0] |= 0x02; /* set local assignment bit (IEEE802) */
 
 		container_vnet_cfg_t *if_cfg =
-			container_vnet_cfg_new(config->cfg->vnet_configs[i]->if_name, NULL, mac,
+			container_vnet_cfg_new(config->cfg->vnet_configs[i]->if_name,
+					       config->cfg->vnet_configs[i]->if_rootns_name, mac,
 					       config->cfg->vnet_configs[i]->configure);
 		if_cfg_list = list_append(if_cfg_list, if_cfg);
 	}
