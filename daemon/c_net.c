@@ -112,6 +112,7 @@ typedef struct {
 	struct in_addr ipv4_bc_addr;   //!< ipv4 bcaddr of container/cmld subnet
 	int cont_offset;	       //!< gives information about the adresses to be set
 	uint8_t veth_mac[6];	       //!< generated or configured mac of nic in container
+	int veth_cmld_idx;	       //!< Index of veth endpoint in rootns
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -949,6 +950,12 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name, ni->veth_mac))
 		goto err;
 
+	/* Get the interface index of the interface name */
+	if (!(ni->veth_cmld_idx = if_nametoindex(ni->veth_cmld_name))) {
+		ERROR("veth interface name could not be resolved");
+		goto err;
+	}
+
 	return 0;
 
 	/* In case of an error, release the current offset */
@@ -1311,6 +1318,19 @@ c_net_interface_down(c_net_interface_t *ni)
 	/* shut the network interface down */
 	// check if iface was allready destroyed by kernel
 	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
+		char current_if_name[IF_NAMESIZE];
+
+		/*
+		 * if interface was renamed during runtime, we have to get the
+		 * current name by index
+		 */
+		if (if_indextoname(ni->veth_cmld_idx, current_if_name)) {
+			ERROR("veth interface name could not be resolved for "
+			      "ifidx=%d (startup name '%s')",
+			      ni->veth_cmld_idx, ni->veth_cmld_name);
+			return;
+		}
+
 		if (network_set_flag(ni->veth_cmld_name, IFF_DOWN))
 			WARN("network interface could not be gracefully shut down");
 
