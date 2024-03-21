@@ -38,11 +38,11 @@ install:
 	echo "uuid: \"$(shell cat /proc/sys/kernel/random/uuid)\"" > ${DESTDIR}/etc/cml/device.conf
 	echo "hostedmode: true\ntpm_enabled: false" >> ${DESTDIR}/etc/cml/device.conf
 	install -d ${DESTDIR}/usr/share/doc/cml
-	install guestos.proto ${DESTDIR}/usr/share/doc/cml/
+	install -m 0644 guestos.proto ${DESTDIR}/usr/share/doc/cml/
 ifeq ($(SYSTEMD), y)
 	install -d ${DESTDIR}/lib/systemd/system/
-	install systemd/cmld.service ${DESTDIR}/lib/systemd/system/
-	install systemd/cmld.socket ${DESTDIR}/lib/systemd/system/
+	install -m 0644 systemd/cmld.service ${DESTDIR}/lib/systemd/system/
+	install -m 0644 systemd/cmld.socket ${DESTDIR}/lib/systemd/system/
 else
 	install -d ${DESTDIR}/etc/init.d
 	install init.d/cmld ${DESTDIR}/etc/init.d/
