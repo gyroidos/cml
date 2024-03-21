@@ -75,6 +75,7 @@
 #ifndef CMLD_CONTROL_SOCKET
 #define CMLD_CONTROL_SOCKET SOCK_PATH(control)
 #endif // CMLD_CONTROL_SOCKET
+#define CMLD_CONTROL_CONTAINER_SOCKET SOCK_PATH(control)
 // clang-format on
 
 #define CMLD_SUSPEND_TIMEOUT 5000
@@ -871,8 +872,8 @@ cmld_container_register_observers(container_t *container)
 	if (os && guestos_get_feature_install_guest(container_get_guestos(container))) {
 		INFO("GuestOS allows to install new Guests => mapping control socket");
 		int *control_sock_p = mem_new0(int, 2);
-		control_sock_p[0] =
-			container_bind_socket_before_start(container, CMLD_CONTROL_SOCKET);
+		control_sock_p[0] = container_bind_socket_before_start(
+			container, CMLD_CONTROL_CONTAINER_SOCKET);
 #ifdef OCI
 		control_sock_p[1] =
 			container_bind_socket_before_start(container, CMLD_OCI_CONTROL_SOCKET);
@@ -1273,7 +1274,8 @@ cmld_start_c0(container_t *new_c0)
 	INFO("Starting management container %s...", container_get_description(new_c0));
 
 	int *control_sock_p = mem_new0(int, 2);
-	control_sock_p[0] = container_bind_socket_before_start(new_c0, CMLD_CONTROL_SOCKET);
+	control_sock_p[0] =
+		container_bind_socket_before_start(new_c0, CMLD_CONTROL_CONTAINER_SOCKET);
 #ifdef OCI
 	control_sock_p[1] = container_bind_socket_before_start(new_c0, CMLD_OCI_CONTROL_SOCKET);
 #endif
