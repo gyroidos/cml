@@ -25,5 +25,5 @@ include Makefile
 
 SBINDIR := /usr/sbin
 install:
-	mkdir -p ${DESTDIR}${SBINDIR}
-	cp cml-service-container-static ${DESTDIR}${SBINDIR}/
+	install -d ${DESTDIR}${SBINDIR}
+	install cml-service-container-static ${DESTDIR}${SBINDIR}/
