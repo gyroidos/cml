@@ -45,6 +45,7 @@
 
 #include <fcntl.h>
 #include <string.h>
+#include <sys/file.h>
 #include <time.h>
 #include <linux/audit.h>
 #include <inttypes.h>
@@ -220,21 +221,35 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 
 	TRACE("audit record from textfile using log '%s'", filename);
 
-	FILE *file = fopen(filename, "r");
+	FILE *file = fopen(filename, purge ? "r+" : "r");
 	if (!file) {
-		WARN_ERRNO("Could not open file \"%s\" for reading.", filename);
+		WARN_ERRNO("Could not fopen file \"%s\" for reading.", filename);
 		return NULL;
 	}
 
-	ssize_t size = file_size(filename);
+	int fd = fileno(file);
+	if (fd < 0) {
+		WARN_ERRNO("Could not get fd for \"%s\" for reading.", filename);
+		fclose(file);
+		return NULL;
+	}
 
-	if (0 > size) {
+	int audit_file_lock = flock(fd, LOCK_EX);
+	if (audit_file_lock < 0) {
+		ERROR_ERRNO("Failed to get lock on audit log file: %s", filename);
+		fclose(file);
+		return NULL;
+	}
+
+	struct stat s;
+	if (fstat(fd, &s) && 0 > s.st_size) {
 		ERROR("Failed to retrieve size of audit record log '%s'", filename);
 		fclose(file);
 		return NULL;
 	}
 
 	AuditRecord *record = NULL;
+	ssize_t size = s.st_size;
 
 	// read file up to delimiter
 	char *buf = mem_alloc0(size + 1);
@@ -271,7 +286,6 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 		read += current;
 		mem_free0(line);
 	}
-	fclose(file);
 
 	// parse record from file
 	if (0 == size) {
@@ -316,40 +330,41 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 			goto out;
 		}
 
-		char *filebuf = file_read_new(filename, AUDIT_STORAGE);
-
-		if (!filebuf) {
-			ERROR("Failed to read audit log file");
+		rewind(file);
+		if (fread(buf, sizeof(char), size, file)) {
+			ERROR("Failed to read audit log file into memory");
 			goto out;
 		}
 
 		size_t offset = read + strlen(AUDIT_DELIMITER);
-		if (-1 == file_write(filename, filebuf + offset, strlen(filebuf + offset))) {
+		if (-1 == fd_write(fd, buf + offset, strlen(buf + offset))) {
 			ERROR_ERRNO("Failed to remove message from file: %s", filename);
 		}
-		mem_free0(filebuf);
 	}
 
 out:
 	if (buf)
 		mem_free0(buf);
 
+	if (audit_file_lock == 0 && flock(fd, LOCK_UN)) {
+		ERROR_ERRNO("Failed to release lock on audit log file: %s", filename);
+	}
+	fclose(file);
+
 	return (AuditRecord *)record;
 }
 
 static bool
-audit_log_check_delimiter(const char *log_file)
+audit_log_check_delimiter(int fd)
 {
-	int fd = -1;
 	char buf[sizeof(AUDIT_DELIMITER)];
-	size_t log_file_size = 0;
 	bool ret = false;
 
-	IF_TRUE_RETVAL_TRACE(0 >= (log_file_size = file_size(log_file)), true);
-	if (0 > (fd = open(log_file, O_RDONLY))) {
-		TRACE_ERRNO("open failed by returning fd=%d", fd);
-		return true;
-	}
+	struct stat s;
+	IF_TRUE_RETVAL(fstat(fd, &s) != 0, true);
+	IF_TRUE_RETVAL(s.st_size <= 0, true);
+
+	off_t current = lseek(fd, 0, SEEK_CUR);
 
 	IF_TRUE_GOTO_WARN(-1 == lseek(fd, -strlen(AUDIT_DELIMITER), SEEK_END), out);
 	IF_TRUE_GOTO_WARN(-1 == fd_read(fd, buf, strlen(AUDIT_DELIMITER)), out);
@@ -359,9 +374,10 @@ audit_log_check_delimiter(const char *log_file)
 	// if delimiter line was read, all is fine
 	if (!strcmp(AUDIT_DELIMITER, buf))
 		ret = true;
-
 out:
-	close(fd);
+	if (-1 == lseek(fd, current, SEEK_SET))
+		WARN_ERRNO("could not restore position!");
+
 	return ret;
 }
 
@@ -369,6 +385,8 @@ static int
 audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 {
 	int ret = -1;
+	int audit_file_lock = -1;
+	int fd = -1;
 
 	char *dir = mem_printf("%s/audit", AUDIT_LOGDIR);
 
@@ -400,27 +418,49 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	}
 
 	TRACE("Logging audit record to file: %s", file);
-	if (!audit_log_check_delimiter(file)) {
+
+	int oflags = O_RDWR;
+	oflags |= file_exists(file) ? O_APPEND : (O_CREAT | O_TRUNC);
+
+	fd = open(file, oflags, 00600);
+	if (fd < 0) {
+		ERROR_ERRNO("Failed to open audit log file: %s", file);
+		goto out;
+	}
+
+	audit_file_lock = flock(fd, LOCK_EX);
+	if (audit_file_lock < 0) {
+		ERROR_ERRNO("Failed to get lock on audit log file: %s", file);
+		goto out;
+	}
+
+	if (!audit_log_check_delimiter(fd)) {
 		TRACE("Fixup audit delimiter to %s", file);
-		if (0 > file_write_append(file, AUDIT_DELIMITER, strlen(AUDIT_DELIMITER))) {
+		if (0 > fd_write(fd, AUDIT_DELIMITER, strlen(AUDIT_DELIMITER))) {
 			ERROR("Failed to fixup audit log file: %s", file);
 			goto out;
 		}
 	}
 
-	if (0 > file_write_append(file, msg_text, msg_len)) {
+	if (0 > fd_write(fd, msg_text, msg_len)) {
 		ERROR("Failed to log audit message to file: %s", file);
 		goto out;
 	}
 
-	if (0 > file_write_append(file, AUDIT_DELIMITER, strlen(AUDIT_DELIMITER))) {
-		ERROR("Failed to log audit message to file: %s", msg_text);
+	if (0 > fd_write(fd, AUDIT_DELIMITER, strlen(AUDIT_DELIMITER))) {
+		ERROR("Failed to log audit message %s to file: %s", msg_text, file);
 		goto out;
 	}
 
 	ret = 0;
 
 out:
+	if (audit_file_lock == 0 && flock(fd, LOCK_UN)) {
+		ERROR_ERRNO("Failed to release lock on audit log file: %s", file);
+	}
+
+	close(fd);
+
 	// ensure audit log goes to disk
 	file_syncfs(file);
 
