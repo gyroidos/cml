@@ -2,7 +2,7 @@
 Description = GyroidOS CML Socket
 
 [Socket]
-FileDescriptorName=cml_control
+FileDescriptorName=cml-control
 Accept=no
 SocketGroup=cml-control
-ListenStream=/run/socket/cml_control
+ListenStream=/run/socket/cml-control
