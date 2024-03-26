@@ -28,6 +28,7 @@
 #include "macro.h"
 #include "mem.h"
 
+#include <ctype.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/un.h>
@@ -297,17 +298,37 @@ sock_unix_get_peer_pid(int sock, uint32_t *peer_pid)
 	return 0;
 }
 
+static char *
+sock_get_env_var_name_new(const char *sock_name)
+{
+	// sock name: "cml-control" -> env var name: "CML_CONTROL"
+
+	char *env_var = mem_strdup(sock_name);
+	for (size_t i = 0; i < strlen(sock_name); i++)
+		env_var[i] = (sock_name[i] == '-') ? '_' : toupper(sock_name[i]);
+
+	return env_var;
+}
+
 char *
 sock_get_path_new(const char *sock_name)
 {
-	char *env_path = getenv(sock_name);
 	char *sock_path = NULL;
+	char *env_var = sock_get_env_var_name_new(sock_name);
+	IF_NULL_GOTO(env_var, out);
 
-	if (env_path) {
-		sock_path = mem_printf("%s", env_path);
-		return sock_path;
-	} else {
-		sock_path = mem_printf("%s/%s%s", CMLD_SOCKET_DIR, SOCKET_PREFIX, sock_name);
-		return sock_path;
+	char *env_path = getenv(env_var);
+	if (NULL == env_path) {
+		mem_free0(env_var);
+		goto out;
 	}
+
+	DEBUG("got socket name %s by environment %s", env_path, env_var);
+	sock_path = mem_printf("%s", env_path);
+	mem_free0(env_var);
+	return sock_path;
+
+out:
+	sock_path = mem_printf("%s/%s%s", CMLD_SOCKET_DIR, SOCKET_PREFIX, sock_name);
+	return sock_path;
 }
