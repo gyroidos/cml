@@ -25,7 +25,6 @@ DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 CC_MODE ?= n
-SYSTEMD ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -Icommon -O2
 LOCAL_CFLAGS += -pedantic -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
@@ -51,10 +50,6 @@ ifeq ($(SANITIZERS),y)
     # this requires libasan libasan-static libubsan libubsan-static
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
-endif
-ifeq ($(SYSTEMD),y)
-    # Systemd sockets use different prefix
-    LOCAL_CFLAGS += -DSOCKET_PREFIX='"cml_"'
 endif
 
 LDLIBS := -lc -Lcommon -lcommon_full -lprotobuf-c -lprotobuf-c-text
