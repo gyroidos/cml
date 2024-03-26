@@ -27,7 +27,6 @@ DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
-SYSTEMD ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -O2 -pedantic
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
@@ -56,9 +55,6 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
-ifeq ($(SYSTEMD),y)
-    LOCAL_CFLAGS += -DSOCKET_PREFIX='"cml_"'
-endif
 
 
 SRC_FILES := \
@@ -68,12 +64,6 @@ SRC_FILES := \
 	control.pb-c.c \
 	guestos.pb-c.c \
 	service.c
-
-SRC_FILES_EXEC_CAP_SYSTIME := \
-	c_service.pb-c.c \
-	container.pb-c.c \
-	control.pb-c.c \
-	guestos.pb-c.c
 
 LD_LIB_FLAGS := \
 	-Lcommon -lcommon_full \
