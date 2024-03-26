@@ -125,8 +125,7 @@ ifeq ($(SYSTEMD),y)
 		c_cgroups_systemd.c
 	LOCAL_CFLAGS += \
 		-DSYSTEMD \
-		-DCMLD_CONTROL_SOCKET=NULL \
-		-DSOCKET_PREFIX='"cml_"'
+		-DCMLD_CONTROL_SOCKET=NULL
 endif
 
 ifeq ($(CGROUP_V2),y)

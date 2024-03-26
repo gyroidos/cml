@@ -75,8 +75,7 @@ endif
 ifeq ($(SYSTEMD),y)
 	LOCAL_CFLAGS += \
 		-DSYSTEMD \
-		-DSCD_CONTROL_SOCKET=NULL \
-		-DSOCKET_PREFIX='"cml_"'
+		-DSCD_CONTROL_SOCKET=NULL
 endif
 
 
