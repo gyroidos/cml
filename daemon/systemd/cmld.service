@@ -6,6 +6,6 @@ After=cml-scd.socket
 After=cmld.socket
 
 [Service]
-Environment="scd_control=/run/socket/cml_scd_control"
+Environment="SCD_CONTROL=/run/socket/cml-scd_control"
 Type=exec
 ExecStart=/usr/sbin/cmld
