@@ -31,6 +31,7 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -408,5 +409,24 @@ proc_waitpid(pid_t pid, int *status, int options)
 	while ((ret = waitpid(pid, status, options)) == -1 && errno == EINTR) {
 		TRACE_ERRNO("waitpid interrupted for child '%d', wait again", pid);
 	}
+	return ret;
+}
+
+char *
+proc_get_filename_of_fd_new(pid_t pid, int fd)
+{
+	char *ret;
+
+	char *file_path = mem_alloc0(PATH_MAX);
+	char *path = mem_printf("/proc/%d/fd/%d", pid, fd);
+
+	ssize_t len = readlink(path, file_path, PATH_MAX);
+	if (len < 0 || len > PATH_MAX - 1)
+		ERROR_ERRNO("readlink on %s returned %zd", path, len);
+
+	ret = (len < 0 || len > PATH_MAX - 1) ? NULL : mem_strdup(file_path);
+
+	mem_free0(file_path);
+	mem_free0(path);
 	return ret;
 }

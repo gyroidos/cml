@@ -129,4 +129,14 @@ proc_get_mem_available(const proc_meminfo_t *meminfo);
 int
 proc_waitpid(pid_t pid, int *status, int options);
 
+/**
+ * Returns the name of the file which was used when the file descriptor
+ * fd was opened.
+ * @param pid The pid of the process which opened the fd
+ * @param fd The file descriptor
+ * @return path of the file when fd was opened, NULL on error
+ */
+char *
+proc_get_filename_of_fd_new(pid_t pid, int fd);
+
 #endif /* PROC_H */
