@@ -592,6 +592,10 @@ c_vol_mount_dir_bind(const char *src, const char *dst, unsigned long flags)
 		return -1;
 	}
 
+	// try to create mount point before mount, usually not necessary...
+	if (dir_mkdir_p(dst, 0755) < 0)
+		DEBUG_ERRNO("Could not mkdir %s", dst);
+
 	TRACE("Mounting path %s to %s", src, dst);
 	if (mount(src, dst, NULL, flags, NULL) < 0) {
 		ERROR_ERRNO("Could not bind mount path %s to %s", src, dst);
@@ -729,7 +733,10 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		DEBUG("Skipping mounting of FLASH type image %s", mount_entry_get_img(mntent));
 		goto final;
 	case MOUNT_TYPE_BIND_DIR:
+		mountflags |= MS_RDONLY; // Fallthrough
+	case MOUNT_TYPE_BIND_DIR_RW:
 		mountflags |= MS_BIND; // use bind mount
+		shiftids = true;
 		IF_TRUE_GOTO(-1 == c_vol_mount_dir_bind(img, dir, mountflags), error);
 		goto final;
 	default:
