@@ -101,6 +101,7 @@ message ContainerConfig {
 	// Flags indicating the allows for containers:
 	optional bool allow_autostart = 17 [default = false];
 	optional bool allow_system_time = 18 [default = false];
+	optional bool allow_module_load = 19 [default = false];
 
 	// TODO: add further features as necessary
 

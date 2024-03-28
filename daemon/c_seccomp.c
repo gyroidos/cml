@@ -41,10 +41,13 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/fd.h"
+#include "common/file.h"
 #include "common/event.h"
 #include "common/audit.h"
 #include "common/kernel.h"
+#include "common/proc.h"
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -56,6 +59,7 @@
 #include <sys/socket.h>
 #include <sys/timex.h>
 
+#include <linux/capability.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <linux/audit.h>
@@ -120,6 +124,10 @@
 #endif
 // clang-format on
 
+#ifndef MODULE_INIT_COMPRESSED_FILE
+#define MODULE_INIT_COMPRESSED_FILE 4
+#endif
+
 static int
 pidfd_open(pid_t pid, unsigned int flags)
 {
@@ -144,6 +152,12 @@ seccomp_ioctl(int fd, unsigned long request, void *notify_req)
 {
 	errno = 0;
 	return syscall(__NR_ioctl, fd, request, notify_req);
+}
+
+static int
+finit_module(int fd, const char *param_values, int flags)
+{
+	return syscall(__NR_finit_module, fd, param_values, flags);
 }
 /**************************/
 
@@ -195,6 +209,7 @@ c_seccomp_install_filter()
 		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, (X32_SYSCALL_BIT - 1), 0, 1),
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
 #endif
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_finit_module, 4, 0),
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_settime, 3, 0),
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_adjtime, 2, 0),
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_adjtimex, 1, 0),
@@ -218,6 +233,26 @@ static bool
 c_seccomp_is_pidfd_supported()
 {
 	return kernel_version_check("5.10.0");
+}
+
+static bool
+c_seccomp_capable(pid_t pid, uint64_t cap)
+{
+	bool ret = true;
+
+	proc_status_t *pstat = proc_status_new(pid);
+	if (!pstat) {
+		ERROR("Failed to get status of target process %d", pid);
+		return false;
+	}
+	// Check effective set to emulate the kernel capable() check
+	if (!(proc_status_get_cap_eff(pstat) & (1ULL << cap))) {
+		ERROR("process %d is missing capability!", pid);
+		ret = false;
+	}
+
+	proc_status_free(pstat);
+	return ret;
 }
 
 static int
@@ -324,6 +359,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		struct timex *timex = NULL;
 
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+			goto out;
+		}
+
 		if (CLOCK_REALTIME != req->data.args[0]) {
 			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
 			      uuid_string(compartment_get_uuid(seccomp->compartment)),
@@ -369,6 +410,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		struct timex *timex = NULL;
 
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+			goto out;
+		}
+
 		if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
 								     (void *)req->data.args[0],
 								     sizeof(struct timex)))) {
@@ -408,6 +455,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		struct timespec *timespec = NULL;
 
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+			goto out;
+		}
+
 		if (CLOCK_REALTIME != req->data.args[0]) {
 			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
 			      uuid_string(compartment_get_uuid(seccomp->compartment)),
@@ -441,6 +494,84 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		resp->val = ret_settime;
 
 		mem_free(timespec);
+	} else if (SYS_finit_module == req->data.nr) {
+		int ret_finit_module = -1;
+
+		if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(seccomp->compartment))) {
+			DEBUG("Blocking call to SYS_finit_module by PID %d", req->pid);
+			goto out;
+		}
+
+		DEBUG("Got finit_module from pid %d, fd: %lld, const char params_values *: %p, flags: %lld",
+		      req->pid, req->data.args[0], (void *)req->data.args[1], req->data.args[2]);
+
+		int fd_in_target = req->data.args[0];
+		int flags = req->data.args[2];
+
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_MODULE)) {
+			ERROR("Missing CAP_SYS_MODULE for process %d!", req->pid);
+			goto out;
+		}
+
+		// kernel cmdline and modparams are restricted to 1024 chars
+		int param_max_len = 1024;
+		char *param_values = mem_alloc0(param_max_len);
+		if (!(param_values = (char *)c_seccomp_fetch_vm_new(
+			      seccomp, req->pid, (void *)req->data.args[1], param_max_len))) {
+			ERROR_ERRNO("Failed to fetch module paramters string");
+			mem_free0(param_values);
+			goto out;
+		}
+
+		char *mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
+
+		// TODO check against list in
+		// char *mod_name = basename(mod_filename);
+
+		DEBUG("Executing finit_module on behalf of container using module %s from CML",
+		      mod_filename);
+		int cml_mod_fd = open(mod_filename, O_RDONLY);
+		if (cml_mod_fd < 0) {
+			ERROR_ERRNO("Failed to open module %s in CML", mod_filename);
+			mem_free0(param_values);
+			mem_free0(mod_filename);
+			goto out;
+		}
+		/*
+		 * for security reasons we strip out flags MODULE_INIT_IGNORE_MODVERSIONS
+		 * MODULE_INIT_IGNORE_VERMAGIC which skips sanity checks and only allow
+		 * @flag_mask (currently this is MODULE_INIT_COMPRESSED_FILE only)
+		 * however to be save on additional introduced module flags, we do not
+		 * explicitly mask out the known bad flags like this:
+		 *
+		 *	flags &= ~(MODULE_INIT_IGNORE_MODVERSIONS | MODULE_INIT_IGNORE_VERMAGIC);
+		 */
+		int flag_mask = ~(MODULE_INIT_COMPRESSED_FILE);
+		flags &= ~(flag_mask);
+
+		if (-1 == (ret_finit_module = finit_module(cml_mod_fd, param_values, flags))) {
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+					"seccomp-emulation-failed",
+					compartment_get_name(seccomp->compartment), 2, "syscall",
+					SYS_finit_module);
+			ERROR_ERRNO("Failed to execute finit_module");
+			mem_free0(param_values);
+			mem_free0(mod_filename);
+			close(cml_mod_fd);
+			goto out;
+		}
+		close(cml_mod_fd);
+
+		DEBUG("finit_module returned %d", ret_finit_module);
+
+		// prepare answer
+		resp->id = req->id;
+		resp->error = 0;
+		resp->val = ret_finit_module;
+
+		mem_free0(param_values);
+		mem_free0(mod_filename);
 	} else {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",

@@ -25,6 +25,7 @@
 #define PROC_H
 
 #include <unistd.h>
+#include <stdint.h>
 
 typedef struct proc_status proc_status_t;
 
@@ -39,6 +40,12 @@ proc_status_get_name(const proc_status_t *status);
 
 pid_t
 proc_status_get_ppid(const proc_status_t *status);
+
+uint64_t
+proc_status_get_cap_prm(const proc_status_t *status);
+
+uint64_t
+proc_status_get_cap_eff(const proc_status_t *status);
 
 /**
  * Kills a process/service with a given name. If ppid is bigger
@@ -128,5 +135,15 @@ proc_get_mem_available(const proc_meminfo_t *meminfo);
 
 int
 proc_waitpid(pid_t pid, int *status, int options);
+
+/**
+ * Returns the name of the file which was used when the file discrptor
+ * fd was opened.
+ * @param pid The pid of the process which opend the fd
+ * @param fd The file discriptor
+ * @return path of the file when fd was opend, NULL on error
+ */
+char *
+proc_get_filename_of_fd_new(pid_t pid, int fd);
 
 #endif /* PROC_H */

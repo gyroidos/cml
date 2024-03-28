@@ -700,6 +700,15 @@ container_config_get_allow_system_time(const container_config_t *config)
 	return config->cfg->allow_system_time;
 }
 
+bool
+container_config_get_allow_module_load(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->allow_module_load;
+}
+
 // hardcode some restricted config otpions in CC Mode
 #ifdef CC_MODE
 uint32_t

@@ -31,7 +31,9 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -61,6 +63,8 @@ struct proc_status {
 	gid_t egid;
 	gid_t sgid;
 	gid_t fgid;
+	uint64_t cap_prm;
+	uint64_t cap_eff;
 };
 
 proc_status_t *
@@ -91,19 +95,19 @@ proc_status_new(pid_t pid)
 	IF_FALSE_GOTO(n == 1, error);
 	TRACE("Parsed state for %d: %c", pid, status->state);
 
-	tmp = strstr(buf, "\nPid:");
+	tmp = strstr(tmp, "\nPid:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nPid:\t%d\n", &status->pid);
 	IF_FALSE_GOTO(n == 1, error);
 	TRACE("Parsed pid for %d: %d", pid, status->pid);
 
-	tmp = strstr(buf, "\nPPid:");
+	tmp = strstr(tmp, "\nPPid:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nPPid:\t%d\n", &status->ppid);
 	IF_FALSE_GOTO(n == 1, error);
 	TRACE("Parsed ppid for %d: %d", pid, status->ppid);
 
-	tmp = strstr(buf, "\nUid:");
+	tmp = strstr(tmp, "\nUid:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nUid:\t%u\t%u\t%u\t%u\n", &status->ruid, &status->euid, &status->suid,
 		   &status->fuid);
@@ -111,13 +115,25 @@ proc_status_new(pid_t pid)
 	TRACE("Parsed uid for %d: %u %u %u %u", pid, status->ruid, status->euid, status->suid,
 	      status->fuid);
 
-	tmp = strstr(buf, "\nGid:");
+	tmp = strstr(tmp, "\nGid:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nGid:\t%u\t%u\t%u\t%u\n", &status->rgid, &status->egid, &status->sgid,
 		   &status->fgid);
 	IF_FALSE_GOTO(n == 4, error);
 	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid, status->egid, status->sgid,
 	      status->fgid);
+
+	tmp = strstr(tmp, "\nCapPrm:");
+	IF_NULL_GOTO(tmp, error);
+	n = sscanf(tmp, "\nCapPrm:\t%" SCNx64 "\n", &status->cap_prm);
+	IF_FALSE_GOTO(n == 1, error);
+	TRACE("Parsed CapPrm for %d: %016" PRIx64, pid, status->cap_prm);
+
+	tmp = strstr(tmp, "\nCapEff:");
+	IF_NULL_GOTO(tmp, error);
+	n = sscanf(tmp, "\nCapEff:\t%016" SCNx64 "\n", &status->cap_eff);
+	IF_FALSE_GOTO(n == 1, error);
+	TRACE("Parsed CapEff for %d: %016" PRIx64, pid, status->cap_eff);
 
 	mem_free0(buf);
 	return status;
@@ -145,6 +161,20 @@ proc_status_get_ppid(const proc_status_t *status)
 {
 	ASSERT(status);
 	return status->ppid;
+}
+
+uint64_t
+proc_status_get_cap_prm(const proc_status_t *status)
+{
+	ASSERT(status);
+	return status->cap_prm;
+}
+
+uint64_t
+proc_status_get_cap_eff(const proc_status_t *status)
+{
+	ASSERT(status);
+	return status->cap_eff;
 }
 
 static int
@@ -408,5 +438,23 @@ proc_waitpid(pid_t pid, int *status, int options)
 	while ((ret = waitpid(pid, status, options)) == -1 && errno == EINTR) {
 		TRACE_ERRNO("waitpid interrupted for child '%d', wait again", pid);
 	}
+	return ret;
+}
+
+char *
+proc_get_filename_of_fd_new(pid_t pid, int fd)
+{
+	char *ret;
+
+	char *file_path = mem_alloc0(PATH_MAX);
+	char *path = mem_printf("/proc/%d/fd/%d", pid, fd);
+
+	ssize_t len = readlink(path, file_path, PATH_MAX);
+	if (len < 0 || len > PATH_MAX - 1)
+		ERROR_ERRNO("readlink on %s returned %zd", path, len);
+
+	ret = (len < 0 || len > PATH_MAX - 1) ? NULL : mem_strdup(file_path);
+
+	mem_free0(path);
 	return ret;
 }
