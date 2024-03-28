@@ -25,6 +25,7 @@
 #define PROC_H
 
 #include <unistd.h>
+#include <stdint.h>
 
 typedef struct proc_status proc_status_t;
 
@@ -39,6 +40,12 @@ proc_status_get_name(const proc_status_t *status);
 
 pid_t
 proc_status_get_ppid(const proc_status_t *status);
+
+uint64_t
+proc_status_get_cap_prm(const proc_status_t *status);
+
+uint64_t
+proc_status_get_cap_eff(const proc_status_t *status);
 
 /**
  * Kills a process/service with a given name. If ppid is bigger
