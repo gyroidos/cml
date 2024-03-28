@@ -1445,6 +1445,12 @@ c_vol_new(compartment_t *compartment)
 		container_init_env_prepend(vol->container, guestos_get_init_env(vol->os),
 					   guestos_get_init_env_len(vol->os));
 	}
+
+	// mount modules inside container
+	if (compartment_get_flags(compartment) & COMPARTMENT_FLAG_MODULE_LOAD)
+		mount_add_entry(vol->mnt, MOUNT_TYPE_BIND_DIR, "/lib/modules", "/lib/modules",
+				"none", 0);
+
 	return vol;
 }
 
