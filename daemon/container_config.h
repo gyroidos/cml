@@ -148,6 +148,16 @@ bool
 container_config_get_allow_system_time(const container_config_t *config);
 
 /**
+ * Indicates whether the container is allowed to load modules.
+ *
+ * Module loading is only allowed if the kernel enforces signatures.
+ * Further, the acctual modules are loaded from the cmld's mount view.
+ * Thus, no binary from the container itself is passed to the kernel.
+ */
+bool
+container_config_get_allow_module_load(const container_config_t *config);
+
+/**
  * Provides the list of network interfaces assigned to the container from the container's config file
  */
 list_t *

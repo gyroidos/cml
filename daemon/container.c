@@ -89,11 +89,11 @@ container_t *
 container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
 	      const void *os, const char *config_filename, const char *images_dir,
 	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
-	      bool allow_autostart, bool allow_system_time, const char *dns_server,
-	      list_t *pnet_cfg_list, char **allowed_devices, char **assigned_devices,
-	      list_t *vnet_cfg_list, list_t *usbdev_list, const char *init, char **init_argv,
-	      char **init_env, size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
-	      bool usb_pin_entry)
+	      bool allow_autostart, bool allow_system_time, bool allow_module_load,
+	      const char *dns_server, list_t *pnet_cfg_list, char **allowed_devices,
+	      char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
+	      char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
+	      container_token_type_t ttype, bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -156,6 +156,8 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 		flags |= COMPARTMENT_FLAG_NS_NET;
 	if (allow_system_time)
 		flags |= COMPARTMENT_FLAG_SYSTEM_TIME;
+	if (allow_module_load)
+		flags |= COMPARTMENT_FLAG_MODULE_LOAD;
 
 	// create internal compartment object with container as extension data
 	compartment_extension_t *extension =
