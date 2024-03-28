@@ -45,6 +45,9 @@ struct container {
 	char *config_filename;
 	char *images_dir;
 
+	// list of allowed modules (names)
+	list_t *module_allowed_list;
+
 	// list of allowed devices (rules)
 	char **device_allowed_list;
 
@@ -100,10 +103,10 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 	      const void *os, const char *config_filename, const char *images_dir,
 	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
 	      bool allow_autostart, bool allow_system_time, const char *dns_server,
-	      list_t *pnet_cfg_list, char **allowed_devices, char **assigned_devices,
-	      list_t *vnet_cfg_list, list_t *usbdev_list, const char *init, char **init_argv,
-	      char **init_env, size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
-	      bool usb_pin_entry)
+	      list_t *pnet_cfg_list, list_t *allowed_module_list, char **allowed_devices,
+	      char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
+	      char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
+	      container_token_type_t ttype, bool usb_pin_entry)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -144,6 +147,13 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 	container->fifo_list = fifo_list;
 
 	container->dns_server = dns_server ? mem_strdup(dns_server) : NULL;
+
+	// module list from container config
+	for (list_t *elem = allowed_module_list; elem != NULL; elem = elem->next) {
+		char *mod_name = elem->data;
+		DEBUG("List element in allowed_modules: %s", mod_name);
+	}
+	container->module_allowed_list = allowed_module_list;
 	container->device_allowed_list = allowed_devices;
 	container->device_assigned_list = assigned_devices;
 	container->usbdev_list = usbdev_list;
@@ -166,6 +176,8 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 		flags |= COMPARTMENT_FLAG_NS_NET;
 	if (allow_system_time)
 		flags |= COMPARTMENT_FLAG_SYSTEM_TIME;
+	if (allowed_module_list)
+		flags |= COMPARTMENT_FLAG_MODULE_LOAD;
 
 	// create internal compartment object with container as extension data
 	compartment_extension_t *extension =
@@ -211,6 +223,11 @@ container_free(container_t *container)
 
 	if (container->dns_server)
 		mem_free0(container->dns_server);
+
+	for (list_t *l = container->module_allowed_list; l; l = l->next) {
+		mem_free0(l->data);
+	}
+	list_delete(container->module_allowed_list);
 
 	if (container->device_allowed_list)
 		mem_free0(container->device_allowed_list);
@@ -670,6 +687,13 @@ container_get_dns_server(const container_t *container)
 {
 	ASSERT(container);
 	return container->dns_server;
+}
+
+const list_t *
+container_get_module_allow_list(const container_t *container)
+{
+	ASSERT(container);
+	return (const list_t *)container->module_allowed_list;
 }
 
 const char **

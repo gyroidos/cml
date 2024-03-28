@@ -154,9 +154,18 @@ list_t *
 container_config_get_net_ifaces_list_new(const container_config_t *config);
 
 /**
+ * Provides the list of modules explicitely allowed for the container
+ *
+ * Module loading is only allowed if the kernel enforces signatures.
+ * Further, the acctual modules are loaded from the cmld's mount view.
+ * Thus, no binary from the container itself is passed to the kernel.
+ */
+list_t *
+container_config_get_module_allow_list_new(const container_config_t *config);
+
+/**
  * Provides the list of hardware devices explicitely allowed for the container from the container's config file
  */
-
 char **
 container_config_get_dev_allow_list_new(const container_config_t *config);
 
