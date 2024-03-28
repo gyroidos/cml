@@ -148,13 +148,13 @@ enum container_smartcard_error {
  */
 container_t *
 container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
-	      const void *os, const char *config_filename, const char *images_folder,
+	      const void *os, const char *config_filename, const char *images_dir,
 	      unsigned int ram_limit, const char *cpus_allowed, uint32_t color,
 	      bool allow_autostart, bool allow_system_time, const char *dns_server,
-	      list_t *net_ifaces, char **allowed_devices, char **assigned_devices,
-	      list_t *vnet_cfg_list, list_t *usbdev_list, const char *init, char **init_argv,
-	      char **init_env, size_t init_env_len, list_t *fifo_list, container_token_type_t ttype,
-	      bool usb_pin_entry);
+	      list_t *pnet_cfg_list, list_t *allowed_module_list, char **allowed_devices,
+	      char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
+	      char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
+	      container_token_type_t ttype, bool usb_pin_entry);
 
 /**
  * Free a container data structure.
@@ -364,6 +364,12 @@ container_pnet_cfg_set_pnet_name(container_pnet_cfg_t *pnet_cfg, const char *pne
  */
 list_t *
 container_get_usbdev_list(const container_t *container);
+
+/**
+ * Get the list of module names which are allowed in container config.
+ */
+const list_t *
+container_get_module_allow_list(const container_t *container);
 
 const char **
 container_get_dev_allow_list(const container_t *container);

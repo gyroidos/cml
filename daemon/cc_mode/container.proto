@@ -98,6 +98,9 @@ message ContainerConfig {
 	// a list of network interfaces assigned to this container
 	repeated ContainerPnetConfig net_ifaces = 23;
 
+	// a list of modules explicitely allowed for this container
+	repeated string allow_module = 24;
+
 	// a list of devices explicitely allowed for this container
 	repeated string allow_dev = 25;
 

@@ -435,6 +435,19 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 	return net_ifaces_list;
 }
 
+list_t *
+container_config_get_module_allow_list_new(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	list_t *module_list = NULL;
+	for (size_t i = 0; i < config->cfg->n_allow_module; ++i) {
+		module_list = list_append(module_list, mem_strdup(config->cfg->allow_module[i]));
+	}
+	return module_list;
+}
+
 char **
 container_config_get_dev_allow_list_new(const container_config_t *config)
 {
