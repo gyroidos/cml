@@ -43,6 +43,7 @@
 
 typedef struct c_cap {
 	container_t *container;
+	compartment_t *compartment;
 } c_cap_t;
 
 static void *
@@ -53,6 +54,7 @@ c_cap_new(compartment_t *compartment)
 
 	c_cap_t *cap = mem_new0(c_cap_t, 1);
 	cap->container = compartment_get_extension_data(compartment);
+	cap->compartment = compartment;
 
 	return cap;
 }
@@ -84,8 +86,9 @@ c_cap_set_current_process(void *capp)
 	/* 9 */ C_CAP_DROP(CAP_LINUX_IMMUTABLE);
 	/* 14 */ C_CAP_DROP(CAP_IPC_LOCK);
 	/* 15 */ C_CAP_DROP(CAP_IPC_OWNER);
-	/* 16 */ C_CAP_DROP(CAP_SYS_MODULE);
-	///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
+	if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(cap->compartment)))
+		/* 16 */ C_CAP_DROP(CAP_SYS_MODULE);
+		///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
 #ifndef DEBUG_BUILD
 	/* 19 */ C_CAP_DROP(CAP_SYS_PTRACE);
 #endif
