@@ -70,6 +70,7 @@ typedef struct compartment_extension compartment_extension_t;
 #define COMPARTMENT_FLAG_NS_NET 0x0000000000000008
 #define COMPARTMENT_FLAG_NS_IPC 0x0000000000000010
 #define COMPARTMENT_FLAG_SYSTEM_TIME 0x0000000000000020
+#define COMPARTMENT_FLAG_MODULE_LOAD 0x0000000000000040
 
 /**
  * Represents the current compartment state.

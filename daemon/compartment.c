@@ -312,6 +312,19 @@ compartment_extension_free(compartment_extension_t *extension)
 	mem_free0(extension);
 }
 
+static bool
+compartment_is_module_sig_enforced(void)
+{
+	char *sig_enforce = file_read_new("/sys/module/module/parameters/sig_enforce", 2);
+	if (!sig_enforce)
+		return false;
+
+	int ret = sig_enforce[0] == 'Y' ? true : false;
+
+	mem_free0(sig_enforce);
+	return ret;
+}
+
 compartment_t *
 compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char *init,
 		char **init_argv, char **init_env, size_t init_env_len,
@@ -332,6 +345,12 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
 	compartment->uuid = uuid_new(uuid_string(uuid));
 	compartment->name = mem_strdup(name);
 	compartment->flags = flags;
+
+	/* strip out COMPARTMENT_FLAG_MODULE_LOAD if signatures are not enforced */
+	if (!compartment_is_module_sig_enforced()) {
+		compartment->flags &= ~COMPARTMENT_FLAG_MODULE_LOAD;
+		INFO("striped COMPARTMENT_FLAG_MODULE_LOAD since module signatures are not enforced!");
+	}
 
 	/* do not forget to update compartment->description in the setters of uuid and name */
 	compartment->description =
