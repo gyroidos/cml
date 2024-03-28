@@ -41,9 +41,11 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/fd.h"
+#include "common/file.h"
 #include "common/event.h"
 #include "common/audit.h"
 #include "common/kernel.h"
+#include "common/proc.h"
 
 #include <unistd.h>
 #include <stddef.h>
@@ -56,6 +58,7 @@
 #include <sys/socket.h>
 #include <sys/timex.h>
 
+#include <linux/capability.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <linux/audit.h>
@@ -220,6 +223,26 @@ c_seccomp_is_pidfd_supported()
 	return kernel_version_check("5.10.0");
 }
 
+static bool
+c_seccomp_capable(pid_t pid, uint64_t cap)
+{
+	bool ret = true;
+
+	proc_status_t *pstat = proc_status_new(pid);
+	if (!pstat) {
+		ERROR("Failed to get status of target process %d", pid);
+		return false;
+	}
+	// Check effective set to emulate the kernel capable() check
+	if (!(proc_status_get_cap_eff(pstat) & (1ULL << cap))) {
+		ERROR("process %d is missing capability!", pid);
+		ret = false;
+	}
+
+	proc_status_free(pstat);
+	return ret;
+}
+
 static int
 c_seccomp_start_pre_exec_child_early(void *seccompp)
 {
@@ -324,6 +347,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		struct timex *timex = NULL;
 
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+			goto out;
+		}
+
 		if (CLOCK_REALTIME != req->data.args[0]) {
 			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
 			      uuid_string(compartment_get_uuid(seccomp->compartment)),
@@ -369,6 +398,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		struct timex *timex = NULL;
 
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+			goto out;
+		}
+
 		if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
 								     (void *)req->data.args[0],
 								     sizeof(struct timex)))) {
@@ -407,6 +442,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		      (void *)req->data.args[1]);
 
 		struct timespec *timespec = NULL;
+
+		// Check cap of target pid in its namespace
+		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+			goto out;
+		}
 
 		if (CLOCK_REALTIME != req->data.args[0]) {
 			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
