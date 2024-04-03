@@ -46,15 +46,20 @@
 #include "common/audit.h"
 #include "common/kernel.h"
 #include "common/proc.h"
+#include "common/ns.h"
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <sched.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <sys/syscall.h>
+#include <sys/sysmacros.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/timex.h>
@@ -161,6 +166,11 @@ finit_module(int fd, const char *param_values, int flags)
 {
 	return syscall(__NR_finit_module, fd, param_values, flags);
 }
+static int
+capset(cap_user_header_t hdrp, cap_user_data_t datap)
+{
+	return syscall(__NR_capset, hdrp, datap);
+}
 /**************************/
 
 typedef struct c_seccomp {
@@ -184,6 +194,8 @@ c_seccomp_install_filter()
 	/*
 	 * This filter allows all system calls other than the explicitly listed
 	 * ones, namely
+	 * - SYS_mknod
+	 * - SYS_mknodat
 	 * - SYS_finit_module
 	 * - SYS_clock_settime
 	 * - SYS_clock_adjtime
@@ -214,10 +226,32 @@ c_seccomp_install_filter()
 		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, (X32_SYSCALL_BIT - 1), 0, 1),
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
 #endif
+		/*
+		 * for mknod(): load args[1] (mode_t mode) from seccomp_data,
+		 * check if mode is blk or char dev -> SECCOMP_RET_NOTIFY
+		 * otherwise skip emulation. -> SECCOMP_RET_ALLOW
+		 */
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mknod, 0, 3),
+		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, args[1]))),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 10, 0),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 9, 0),
+
+		/*
+		 * for mknodat(): load args[2] (mode_t mode) from seccomp_data,
+		 * check if mode is blk or char dev -> SECCOMP_RET_NOTIFY
+		 * otherwise skip emulation. -> SECCOMP_RET_ALLOW
+		 */
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mknodat, 0, 3),
+		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, args[2]))),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 6, 0),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 5, 0),
+
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_finit_module, 4, 0),
+
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_settime, 3, 0),
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_adjtime, 2, 0),
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_adjtimex, 1, 0),
+
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF),
 	};
@@ -300,8 +334,8 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	remote_iov[0].iov_base = rbuf;
 	remote_iov[0].iov_len = size;
 
-	uint64_t bytes_read = syscall(SYS_process_vm_readv, pid, local_iov, 1, remote_iov, 1, 0);
-	if (size != bytes_read) {
+	ssize_t bytes_read = syscall(SYS_process_vm_readv, pid, local_iov, 1, remote_iov, 1, 0);
+	if (bytes_read < 0) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
 				compartment_get_name(seccomp->compartment), 2, "pid", pid);
 
@@ -409,6 +443,68 @@ out:
 	return ret_list;
 }
 
+struct mknodat_fork_data {
+	int dirfd;
+	const char *pathname;
+	const char *cwd;
+	mode_t mode;
+	dev_t dev;
+	uid_t uid;
+};
+
+static int
+c_seccomp_do_mknodat_fork(const void *data)
+{
+	const struct mknodat_fork_data *params = data;
+	ASSERT(params);
+
+	/*
+	 * We change to the mapped root user in the container.
+	 * Otherwise, if we just use system root with uid 0, we cannot write
+	 * mounts mounted by the container itself, e.g. '/tmp'. This would
+	 * result in an "errno (75: Value too large for defined data type)".
+	 * To still allow mknod we need to preserve CAP_MKNOD.
+	 */
+	IF_TRUE_RETVAL(prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0), -1);
+
+	if (setgid(params->uid) < 0) {
+		ERROR_ERRNO("Could not set gid to '%d' in container", params->uid);
+		return -1;
+	}
+
+	if (setuid(params->uid) < 0) {
+		ERROR_ERRNO("Could not change to mapped root '(%d)' in container", params->uid);
+		return -1;
+	}
+
+	struct __user_cap_header_struct cap_header = { .version = _LINUX_CAPABILITY_VERSION_3,
+						       .pid = 0 };
+	struct __user_cap_data_struct cap_data[2];
+	mem_memset0(&cap_data, sizeof(cap_data));
+
+	cap_data[CAP_TO_INDEX(CAP_MKNOD)].permitted |= CAP_TO_MASK(CAP_MKNOD);
+	cap_data[CAP_TO_INDEX(CAP_MKNOD)].effective |= CAP_TO_MASK(CAP_MKNOD);
+
+	if (capset(&cap_header, cap_data)) {
+		ERROR_ERRNO("Could not set CAP_MKNOD effective!");
+		return -1;
+	}
+
+	if (params->cwd && chdir(params->cwd)) {
+		ERROR_ERRNO("Failed to switch to working directory (%s) of target process",
+			    params->cwd);
+		return -1;
+	}
+
+	DEBUG("Executing mknodat %s in mountns of container", params->pathname);
+	if (-1 == mknodat(params->dirfd, params->pathname, params->mode, params->dev)) {
+		ERROR_ERRNO("Failed to execute mknodat");
+		return -1;
+	}
+
+	return 0;
+}
+
 static void
 c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 {
@@ -441,8 +537,14 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-rcv-next",
 				compartment_get_name(seccomp->compartment), 2, "errno", errno);
-		goto out;
+		mem_free0(req);
+		mem_free0(resp);
+		return;
 	}
+
+	// default answer
+	resp->id = req->id;
+	resp->error = -EPERM;
 
 	TRACE("[%llu] Got syscall no. %d by PID %u", req->id, req->data.nr, req->pid);
 
@@ -710,6 +812,127 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		mem_free0(param_values);
 		mem_free0(mod_filename);
+	} else if (SYS_mknodat == req->data.nr || SYS_mknodat == req->data.nr) {
+		int ret_mknodat = -1;
+		const char *syscall_name = req->data.nr == SYS_mknodat ? "mknodat" : "mknod";
+		int dirfd = -1;
+		int arg_offset = 0;
+
+		/*
+		 * We emulate mknod() by mknodat() for code dedup:
+		 *
+		 * mknod() and mknodat() have the same arguments, except that
+		 * mknodat has dirfd as first argument:
+		 *   int mknod(const char *pathname, mode_t mode, dev_t dev);
+		 *   int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev);
+		 *
+		 * We therefore use an offset +1 for the data.args array to
+		 * retrieve syscall parameters from seccomp req in case of
+		 * mknodat() and set dirfd to AT_FDCWD in case of mknod()
+		 */
+		if (req->data.nr == SYS_mknodat) {
+			DEBUG("Got %s() from pid %d, fd: %lld, const char *pathname: %p, mode: %lld, dev: %lld",
+			      syscall_name, req->pid, req->data.args[0], (void *)req->data.args[1],
+			      req->data.args[2], req->data.args[3]);
+			dirfd = req->data.args[arg_offset];
+			arg_offset++;
+		} else { // SYS_mknod
+			DEBUG("Got %s() from pid %d, const char *pathname: %p, mode: %lld, dev: %lld",
+			      syscall_name, req->pid, (void *)req->data.args[0], req->data.args[1],
+			      req->data.args[2]);
+			dirfd = AT_FDCWD;
+		}
+
+		mode_t mode = req->data.args[1 + arg_offset];
+		dev_t dev = req->data.args[2 + arg_offset];
+
+		/* Check cap of target pid in its namespace */
+		if (!c_seccomp_capable(req->pid, CAP_MKNOD)) {
+			ERROR("Missing CAP_MKNOD for process %d!", req->pid);
+			goto out;
+		}
+
+		/* We only handle char and block devices, due to our seccomp filter */
+		char dev_type = S_ISCHR(mode) ? 'c' : 'b';
+
+		/* Check if dev is allowed (c_cgroups submodule) */
+		if (!container_is_device_allowed(seccomp->container, dev_type, major(dev),
+						 minor(dev))) {
+			ERROR("Missing cgroup permission for device (%c %d:%d) in process %d!",
+			      dev_type, major(dev), minor(dev), req->pid);
+			goto out;
+		}
+
+		int pathname_max_len = PATH_MAX;
+		char *pathname = mem_alloc0(pathname_max_len);
+		if (!(pathname = (char *)c_seccomp_fetch_vm_new(
+			      seccomp, req->pid, (void *)req->data.args[0 + arg_offset],
+			      pathname_max_len))) {
+			ERROR_ERRNO("Failed to fetch pathname string");
+			mem_free0(pathname);
+			goto out;
+		}
+
+		int cml_dirfd = AT_FDCWD;
+		if (dirfd != AT_FDCWD) {
+			int pidfd;
+			if (-1 == (pidfd = pidfd_open(req->pid, 0))) {
+				ERROR_ERRNO("Could not open pidfd for emulating %s()",
+					    syscall_name);
+				mem_free0(pathname);
+				goto out;
+			}
+
+			cml_dirfd = pidfd_getfd(pidfd, dirfd, 0);
+			if (cml_dirfd < 0) {
+				ERROR_ERRNO(
+					"Could not open dirfd in target process for emulating %s()",
+					syscall_name);
+				mem_free0(pathname);
+				goto out;
+			}
+		}
+
+		char *cwd = proc_get_cwd_new(req->pid);
+
+		DEBUG("Emulating %s by executing mknodat %s on behalf of container", syscall_name,
+		      pathname);
+
+		struct mknodat_fork_data mknodat_params = { .dirfd = cml_dirfd,
+							    .pathname = pathname,
+							    .cwd = cwd,
+							    .mode = mode,
+							    .dev = dev,
+							    .uid = container_get_uid(
+								    seccomp->container) };
+		if (-1 ==
+		    (ret_mknodat = namespace_exec(req->pid, CLONE_NEWNS, false,
+						  c_seccomp_do_mknodat_fork, &mknodat_params))) {
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+					"seccomp-emulation-failed",
+					compartment_get_name(seccomp->compartment), 2, "syscall",
+					SYS_mknodat);
+			ERROR_ERRNO("Failed to execute mknodat");
+			if (cwd)
+				mem_free0(cwd);
+			mem_free0(pathname);
+			if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
+				close(cml_dirfd);
+			goto out;
+		}
+
+		DEBUG("mknodat returned %d", ret_mknodat);
+
+		// prepare answer
+		resp->id = req->id;
+		resp->error = 0;
+		resp->val = ret_mknodat;
+
+		if (cwd)
+			mem_free0(cwd);
+		mem_free0(pathname);
+		if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
+			close(cml_dirfd);
 	} else {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
@@ -722,6 +945,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		resp->val = 0;
 		resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
 	}
+out:
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-respone",
@@ -731,7 +955,6 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		DEBUG("Successfully handled seccomp notification");
 	}
 
-out:
 	mem_free(req);
 	mem_free(resp);
 }
