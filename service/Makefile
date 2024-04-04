@@ -65,12 +65,6 @@ SRC_FILES := \
 	guestos.pb-c.c \
 	service.c
 
-SRC_FILES_EXEC_CAP_SYSTIME := \
-	c_service.pb-c.c \
-	container.pb-c.c \
-	control.pb-c.c \
-	guestos.pb-c.c
-
 LD_LIB_FLAGS := \
 	-Lcommon -lcommon_full \
 	-lprotobuf-c \
