@@ -111,6 +111,8 @@ static const char *c_cgroups_dev_generic_whitelist[] = {
 	/*************/
 	/* Character */
 
+	"c 0:0 rwm", // Overlayfs whiteouts
+
 	/* Memory Devices */
 	//"c 1:1 rwm", // physical mem
 	//"c 1:2 rwm", // kmem
