@@ -166,10 +166,17 @@ finit_module(int fd, const char *param_values, int flags)
 {
 	return syscall(__NR_finit_module, fd, param_values, flags);
 }
+
 static int
 capset(cap_user_header_t hdrp, cap_user_data_t datap)
 {
 	return syscall(__NR_capset, hdrp, datap);
+}
+
+static int
+capget(cap_user_header_t hdrp, cap_user_data_t datap)
+{
+	return syscall(__NR_capget, hdrp, datap);
 }
 /**************************/
 
@@ -277,21 +284,17 @@ c_seccomp_is_pidfd_supported()
 static bool
 c_seccomp_capable(pid_t pid, uint64_t cap)
 {
-	bool ret = true;
+	struct __user_cap_header_struct cap_header = { .version = _LINUX_CAPABILITY_VERSION_3,
+						       .pid = pid };
+	struct __user_cap_data_struct cap_data[2];
+	mem_memset0(&cap_data, sizeof(cap_data));
 
-	proc_status_t *pstat = proc_status_new(pid);
-	if (!pstat) {
-		ERROR("Failed to get status of target process %d", pid);
+	if (capget(&cap_header, cap_data)) {
+		ERROR_ERRNO("Could not get capabilty sets!");
 		return false;
 	}
-	// Check effective set to emulate the kernel capable() check
-	if (!(proc_status_get_cap_eff(pstat) & (1ULL << cap))) {
-		ERROR("process %d is missing capability!", pid);
-		ret = false;
-	}
 
-	proc_status_free(pstat);
-	return ret;
+	return cap_data[CAP_TO_INDEX(cap)].effective & CAP_TO_MASK(cap);
 }
 
 static int
