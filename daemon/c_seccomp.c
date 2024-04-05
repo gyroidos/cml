@@ -516,6 +516,24 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 			goto out;
 		}
 
+		char *mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
+
+		// Validate path for module location
+		bool valid_prefix = false;
+		const char *valid_path[2] = { "/lib/modules", "/usr/lib/modules" };
+		for (int i = 0; i < 2 && valid_prefix == false; ++i) {
+			if (0 == strncmp(valid_path[i], mod_filename, strlen(valid_path[i]))) {
+				valid_prefix = true;
+				break;
+			}
+		}
+
+		if (!valid_prefix) {
+			ERROR("Path validation for '%s' failed! %d!", mod_filename, req->pid);
+			mem_free0(mod_filename);
+			goto out;
+		}
+
 		// kernel cmdline and modparams are restricted to 1024 chars
 		int param_max_len = 1024;
 		char *param_values = mem_alloc0(param_max_len);
@@ -523,10 +541,9 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 			      seccomp, req->pid, (void *)req->data.args[1], param_max_len))) {
 			ERROR_ERRNO("Failed to fetch module paramters string");
 			mem_free0(param_values);
+			mem_free0(mod_filename);
 			goto out;
 		}
-
-		char *mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
 
 		// TODO check against list in
 		// char *mod_name = basename(mod_filename);
