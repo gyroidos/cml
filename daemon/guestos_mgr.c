@@ -447,13 +447,13 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 		goto cleanup_mnt;
 	}
 
-	off_t disk_space_available = file_disk_space_free(guestos_get_dir(os));
+	off_t disk_space_available = file_disk_space_free(guestos_basepath);
 	if (disk_space_available < 0) {
 		ERROR("Function file_disk_space_free failed");
 		goto cleanup_mnt;
 	}
 
-	off_t min_free_space = file_disk_space(guestos_get_dir(os));
+	off_t min_free_space = file_disk_space(guestos_basepath);
 	if (min_free_space < 0) {
 		ERROR("Function file_disk_space failed");
 		goto cleanup_mnt;
@@ -463,7 +463,7 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 	if (disk_space_required > disk_space_available ||
 	    (disk_space_available - disk_space_required) < min_free_space) {
 		// not enough space left
-		ERROR("Not enough disk space left");
+		ERROR("Not enough disk space left on %s", guestos_basepath);
 		goto cleanup_mnt;
 	}
 
