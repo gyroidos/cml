@@ -146,4 +146,12 @@ proc_waitpid(pid_t pid, int *status, int options);
 char *
 proc_get_filename_of_fd_new(pid_t pid, int fd);
 
+/**
+ * Returns the current working dir of a process
+ * @param pid The pid of the process
+ * @return path of the cwd of the process with pid pid, NULL on error
+ */
+char *
+proc_get_cwd_new(pid_t pid);
+
 #endif /* PROC_H */
