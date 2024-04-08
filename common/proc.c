@@ -459,3 +459,22 @@ proc_get_filename_of_fd_new(pid_t pid, int fd)
 	mem_free0(path);
 	return ret;
 }
+
+char *
+proc_get_cwd_new(pid_t pid)
+{
+	char *ret;
+
+	char *file_path = mem_alloc0(PATH_MAX);
+	char *path = mem_printf("/proc/%d/cwd", pid);
+
+	ssize_t len = readlink(path, file_path, PATH_MAX);
+	if (len < 0 || len > PATH_MAX - 1)
+		ERROR_ERRNO("readlink on %s returned %zd", path, len);
+
+	ret = (len < 0 || len > PATH_MAX - 1) ? NULL : mem_strdup(file_path);
+
+	mem_free0(file_path);
+	mem_free0(path);
+	return ret;
+}
