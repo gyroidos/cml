@@ -35,7 +35,6 @@
 #define _GNU_SOURCE
 #include <string.h>
 
-#include "hardware.h"
 #include "cmld.h"
 #include "mount.h"
 

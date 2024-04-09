@@ -49,7 +49,6 @@
 #include <unistd.h>
 
 #include "container.h"
-#include "hardware.h"
 #include "bpf_insn.h"
 
 // cgroup subtree where cmld is running in (provided by c_cgroups_v2.c)
