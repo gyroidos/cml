@@ -190,11 +190,6 @@ typedef struct c_seccomp {
 	list_t *module_list; /* names of modules loaded by this compartment */
 } c_seccomp_t;
 
-/**
- * slightly modified sample code from the seccomp manpage
- * https://man7.org/linux/man-pages/man2/seccomp.2.html
- * an the Linux secomp sample code at samples/seccomp
- */
 static int
 c_seccomp_install_filter()
 {
