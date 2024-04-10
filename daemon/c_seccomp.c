@@ -58,6 +58,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/timex.h>
+#include <sys/utsname.h>
 
 #include <linux/capability.h>
 #include <linux/filter.h>
@@ -168,6 +169,8 @@ typedef struct c_seccomp {
 	int notify_fd;
 	event_io_t *event;
 	unsigned int enabled_features;
+	container_t *container;
+	list_t *module_list; /* names of modules loaded by this compartment */
 } c_seccomp_t;
 
 /**
@@ -309,6 +312,101 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	}
 
 	return lbuf;
+}
+
+/**
+ * Parse module dependencies file "/lib/modules/<release>/modules.dep"
+ * to retrieve module dependencies for an allowed module
+ */
+static list_t *
+c_seccomp_get_module_dependencies_new(const char *module_name)
+{
+	FILE *fp;
+	char *line = NULL;
+	size_t len = 0;
+	list_t *ret_list = NULL;
+
+	struct utsname u_name;
+	uname(&u_name);
+
+	char *modules_dep_path = mem_printf("/lib/modules/%s/modules.dep", u_name.release);
+
+	fp = fopen(modules_dep_path, "r");
+	mem_free0(modules_dep_path);
+
+	IF_NULL_RETVAL(fp, NULL);
+
+	const char *mod_suffix = ".ko";
+	char *mod_name = mem_alloc0(strlen(module_name) + strlen(mod_suffix) + 1);
+	char *_mod_name = mem_alloc0(strlen(module_name) + strlen(mod_suffix) + 1);
+
+	size_t i;
+	for (i = 0; i < strlen(module_name); i++) {
+		mod_name[i] = (module_name[i] == '_') ? '-' : module_name[i];
+		_mod_name[i] = (module_name[i] == '-') ? '_' : module_name[i];
+	}
+	for (size_t j = 0; j < strlen(mod_suffix); j++) {
+		mod_name[i + j] = mod_suffix[j];
+		_mod_name[i + j] = mod_suffix[j];
+	}
+
+	TRACE("Searching for (_)mod_name '%s' and '%s'", mod_name, _mod_name);
+
+	bool mod_found_in_line = false;
+	ssize_t n;
+	/*
+	 * Sample lines in modules.dep may look like:
+	 *
+	 * kernel/arch/x86/crypto/twofish-x86_64.ko.xz: kernel/crypto/twofish_common.ko.xz
+	 * [...]
+	 * kernel/crypto/twofish_common.ko.xz:
+	 *
+	 * so we have to match only the first token. If we only use strstr() on
+	 * 'line' we would also match the first line if module name was twofish_common
+	 */
+	while ((n = getline(&line, &len, fp)) != -1) {
+		char *_line = mem_strdup(line);
+		char *mod_tok = strtok(_line, ":");
+		if (strstr(mod_tok, mod_name) || strstr(mod_tok, _mod_name)) {
+			mod_found_in_line = true;
+			TRACE("found line '%s'", line);
+			mem_free(_line);
+			break;
+		}
+		mem_free(_line);
+	}
+
+	mem_free0(mod_name);
+	mem_free0(_mod_name);
+
+	fclose(fp);
+
+	IF_FALSE_GOTO_ERROR(mod_found_in_line, out);
+
+	/*
+	 * A line in modules.dep file looks like:
+	 * kernel/net/smc/smc_diag.ko: kernel/net/smc/smc.ko kernel/drivers/infiniband/core/ib_core.ko
+	 *
+	 * If container config has a module set like this: 'allow_module: "smc-diag"'
+	 * this is matched against the constructed '_mode_name = "smc_diag.ko"'
+	 *
+	 * Thus, now we match the first string by delimiter ": "
+	 *	kernel/net/smc/smc_diag.ko: -> first token
+	 * afterwards we set the delimiter for tokenizing to " "
+	 * 	kernel/net/smc/smc.ko -> second token
+	 * 	kernel/drivers/infiniband/core/ib_core.ko -> third token
+	 * and append those tokens to the module list
+	 */
+	char *mod_dep_tok = strtok(line, ": ");
+	while (mod_dep_tok) {
+		INFO("modules.dep: adding module '%s' to internal matching list!", mod_dep_tok);
+		ret_list = list_append(ret_list, mem_strdup(mod_dep_tok));
+		mod_dep_tok = strtok(NULL, " ");
+	}
+
+out:
+	mem_free0(line);
+	return ret_list;
 }
 
 static void
@@ -518,6 +616,22 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		char *mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
 
+		// Check against list of allowed modules
+		bool module_allowed = false;
+		for (list_t *l = seccomp->module_list; l; l = l->next) {
+			char *mod_name = l->data;
+			if (strstr(mod_filename, mod_name)) {
+				module_allowed = true;
+				break;
+			}
+		}
+
+		if (!module_allowed) {
+			ERROR("Check whitelist for '%s' failed!", mod_filename);
+			mem_free0(mod_filename);
+			goto out;
+		}
+
 		// Validate path for module location
 		bool valid_prefix = false;
 		const char *valid_path[2] = { "/lib/modules", "/usr/lib/modules" };
@@ -544,9 +658,6 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 			mem_free0(mod_filename);
 			goto out;
 		}
-
-		// TODO check against list in
-		// char *mod_name = basename(mod_filename);
 
 		DEBUG("Executing finit_module on behalf of container using module %s from CML",
 		      mod_filename);
@@ -687,7 +798,7 @@ c_seccomp_new(compartment_t *compartment)
 	// adapted from user-trap.c
 	struct seccomp_notif_sizes *sizes = mem_new0(struct seccomp_notif_sizes, 1);
 	if (seccomp(SECCOMP_GET_NOTIF_SIZES, 0, sizes) < 0) {
-		ERROR("Faild to get seccomp notify sizes");
+		ERROR("Failed to get seccomp notify sizes");
 		return NULL;
 	}
 
@@ -696,6 +807,15 @@ c_seccomp_new(compartment_t *compartment)
 	seccomp->notif_sizes = sizes;
 	seccomp->notify_fd = -1;
 	seccomp->compartment = compartment;
+	seccomp->container = compartment_get_extension_data(compartment);
+
+	seccomp->module_list = NULL;
+	const list_t *l = container_get_module_allow_list(seccomp->container);
+	for (; l; l = l->next) {
+		const char *module_name = l->data;
+		seccomp->module_list = list_join(
+			seccomp->module_list, c_seccomp_get_module_dependencies_new(module_name));
+	}
 
 	return seccomp;
 }
@@ -707,6 +827,12 @@ c_seccomp_free(void *seccompp)
 	ASSERT(seccomp);
 	if (seccomp->notif_sizes)
 		mem_free0(seccomp->notif_sizes);
+
+	for (list_t *l = seccomp->module_list; l; l = l->next) {
+		mem_free0(l->data);
+	}
+	list_delete(seccomp->module_list);
+
 	mem_free0(seccomp);
 }
 
