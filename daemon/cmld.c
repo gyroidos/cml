@@ -1006,10 +1006,10 @@ cmld_container_ctrl_with_input(container_t *container, cmld_container_ctrl_t con
 	TRACE("Searching for USB pin reader for interactive pin entry");
 
 	// Iterate through usb-dev list and look for USB_PIN_ENTRY device
-	hotplug_usbdev_t *usbdev_pinreader = NULL;
+	container_usbdev_t *usbdev_pinreader = NULL;
 	for (list_t *l = container_get_usbdev_list(container); l; l = l->next) {
-		hotplug_usbdev_t *usbdev = (hotplug_usbdev_t *)l->data;
-		if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_PIN_ENTRY) {
+		container_usbdev_t *usbdev = (container_usbdev_t *)l->data;
+		if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_PIN_ENTRY) {
 			usbdev_pinreader = usbdev;
 			break;
 		}
@@ -1018,9 +1018,9 @@ cmld_container_ctrl_with_input(container_t *container, cmld_container_ctrl_t con
 	IF_FALSE_RETVAL(usbdev_pinreader, -1);
 
 	TRACE("Found USB pin reader. Device Serial: %s. Vendor:Product: %x:%x",
-	      hotplug_usbdev_get_i_serial(usbdev_pinreader),
-	      hotplug_usbdev_get_id_vendor(usbdev_pinreader),
-	      hotplug_usbdev_get_id_product(usbdev_pinreader));
+	      container_usbdev_get_i_serial(usbdev_pinreader),
+	      container_usbdev_get_id_vendor(usbdev_pinreader),
+	      container_usbdev_get_id_product(usbdev_pinreader));
 
 	cmld_container_ctrl_with_input_cb_data_t *cb_data =
 		mem_new0(cmld_container_ctrl_with_input_cb_data_t, 1);
@@ -1029,8 +1029,8 @@ cmld_container_ctrl_with_input(container_t *container, cmld_container_ctrl_t con
 	cb_data->err_cb = err_cb;
 	cb_data->err_cb_data = err_cb_data;
 
-	return input_read_exec(hotplug_usbdev_get_id_vendor(usbdev_pinreader),
-			       hotplug_usbdev_get_id_product(usbdev_pinreader),
+	return input_read_exec(container_usbdev_get_id_vendor(usbdev_pinreader),
+			       container_usbdev_get_id_product(usbdev_pinreader),
 			       cmld_container_ctrl_with_input_cb, cb_data);
 }
 

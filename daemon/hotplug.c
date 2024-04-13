@@ -43,141 +43,16 @@
 #include "common/str.h"
 #include "common/uevent.h"
 
-typedef struct hotplug_container_dev_mapping {
-	container_t *container;
-	hotplug_usbdev_t *usbdev;
-	bool assign;
-} hotplug_container_dev_mapping_t;
-
 typedef struct hotplug_net_dev_mapping {
 	container_t *container;
 	container_pnet_cfg_t *pnet_cfg;
 	uint8_t mac[6];
 } hotplug_container_netdev_mapping_t;
 
-struct hotplug_usbdev {
-	char *i_serial;
-	uint16_t id_vendor;
-	uint16_t id_product;
-	int major;
-	int minor;
-	bool assign;
-	hotplug_usbdev_type_t type;
-};
-
 static uevent_uev_t *uevent_uev = NULL;
-
-// track usb devices mapped to containers
-static list_t *hotplug_container_dev_mapping_list = NULL;
 
 // track net devices mapped to containers
 static list_t *hotplug_container_netdev_mapping_list = NULL;
-
-hotplug_usbdev_t *
-hotplug_usbdev_new(hotplug_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product,
-		   char *i_serial, bool assign)
-{
-	hotplug_usbdev_t *usbdev = mem_new0(hotplug_usbdev_t, 1);
-	usbdev->type = type;
-	usbdev->id_vendor = id_vendor;
-	usbdev->id_product = id_product;
-	usbdev->i_serial = mem_strdup(i_serial);
-	usbdev->assign = assign;
-	usbdev->major = -1;
-	usbdev->minor = -1;
-	return usbdev;
-}
-
-uint16_t
-hotplug_usbdev_get_id_vendor(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->id_vendor;
-}
-
-uint16_t
-hotplug_usbdev_get_id_product(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->id_product;
-}
-
-hotplug_usbdev_type_t
-hotplug_usbdev_get_type(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->type;
-}
-
-char *
-hotplug_usbdev_get_i_serial(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->i_serial;
-}
-
-bool
-hotplug_usbdev_is_assigned(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->assign;
-}
-
-void
-hotplug_usbdev_set_major(hotplug_usbdev_t *usbdev, int major)
-{
-	ASSERT(usbdev);
-	usbdev->major = major;
-}
-
-void
-hotplug_usbdev_set_minor(hotplug_usbdev_t *usbdev, int minor)
-{
-	ASSERT(usbdev);
-	usbdev->minor = minor;
-}
-
-int
-hotplug_usbedv_get_major(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->major;
-}
-
-int
-hotplug_usbdev_get_minor(hotplug_usbdev_t *usbdev)
-{
-	ASSERT(usbdev);
-	return usbdev->minor;
-}
-
-static hotplug_container_dev_mapping_t *
-hotplug_container_dev_mapping_new(container_t *container, hotplug_usbdev_t *usbdev)
-{
-	hotplug_container_dev_mapping_t *mapping = mem_new0(hotplug_container_dev_mapping_t, 1);
-	mapping->container = container;
-	mapping->usbdev = mem_new0(hotplug_usbdev_t, 1);
-	mapping->usbdev->i_serial = mem_strdup(usbdev->i_serial);
-	mapping->usbdev->id_vendor = usbdev->id_vendor;
-	mapping->usbdev->id_product = usbdev->id_product;
-	mapping->usbdev->major = usbdev->major;
-	mapping->usbdev->minor = usbdev->minor;
-	mapping->usbdev->assign = usbdev->assign;
-	mapping->usbdev->type = usbdev->type;
-
-	return mapping;
-}
-
-static void
-hotplug_container_dev_mapping_free(hotplug_container_dev_mapping_t *mapping)
-{
-	if (mapping->usbdev) {
-		if (mapping->usbdev->i_serial)
-			mem_free0(mapping->usbdev->i_serial);
-		mem_free0(mapping->usbdev);
-	}
-	mem_free0(mapping);
-}
 
 static void
 hotplug_container_netdev_mapping_free(hotplug_container_netdev_mapping_t *mapping)
@@ -495,51 +370,6 @@ hotplug_cleanup()
 
 	uevent_remove_uev(uevent_uev);
 	uevent_uev_free(uevent_uev);
-}
-
-int
-hotplug_register_usbdevice(container_t *container, hotplug_usbdev_t *usbdev)
-{
-	hotplug_container_dev_mapping_t *mapping =
-		hotplug_container_dev_mapping_new(container, usbdev);
-	hotplug_container_dev_mapping_list =
-		list_append(hotplug_container_dev_mapping_list, mapping);
-
-	INFO("Registered usbdevice %04x:%04x '%s' [c %d:%d] for container %s",
-	     mapping->usbdev->id_vendor, mapping->usbdev->id_product, mapping->usbdev->i_serial,
-	     mapping->usbdev->major, mapping->usbdev->minor,
-	     container_get_name(mapping->container));
-
-	return 0;
-}
-
-int
-hotplug_unregister_usbdevice(container_t *container, hotplug_usbdev_t *usbdev)
-{
-	hotplug_container_dev_mapping_t *mapping_to_remove = NULL;
-
-	for (list_t *l = hotplug_container_dev_mapping_list; l; l = l->next) {
-		hotplug_container_dev_mapping_t *mapping = l->data;
-		if ((mapping->container == container) &&
-		    (mapping->usbdev->id_vendor == usbdev->id_vendor) &&
-		    (mapping->usbdev->id_product == usbdev->id_product) &&
-		    (0 == strcmp(mapping->usbdev->i_serial, usbdev->i_serial))) {
-			mapping_to_remove = mapping;
-		}
-	}
-
-	IF_NULL_RETVAL(mapping_to_remove, -1);
-
-	hotplug_container_dev_mapping_list =
-		list_remove(hotplug_container_dev_mapping_list, mapping_to_remove);
-
-	INFO("Unregistered usbdevice %04x:%04x '%s' for container %s",
-	     mapping_to_remove->usbdev->id_vendor, mapping_to_remove->usbdev->id_product,
-	     mapping_to_remove->usbdev->i_serial, container_get_name(mapping_to_remove->container));
-
-	hotplug_container_dev_mapping_free(mapping_to_remove);
-
-	return 0;
 }
 
 int

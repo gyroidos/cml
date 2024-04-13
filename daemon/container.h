@@ -82,6 +82,22 @@ typedef enum {
 	CONTAINER_TOKEN_TYPE_USB,
 } container_token_type_t;
 
+typedef enum container_usbdev_type {
+	CONTAINER_USBDEV_TYPE_GENERIC = 1,
+	CONTAINER_USBDEV_TYPE_TOKEN,
+	CONTAINER_USBDEV_TYPE_PIN_ENTRY
+} container_usbdev_type_t;
+
+/**
+ * Structure to define the mapping of hotplug event to usb device
+
+ * It defines the usb vendor and product as show by lsusb
+ * and if there is any, the serial of a device, e.g. from uTrust Token.
+ * Further, it is defined if the device should be assigned exclusivly
+ * to the container or if just the access is allowed.
+ */
+typedef struct container_usbdev container_usbdev_t;
+
 /**
  * Structure to define the configuration for a virtual network
  * interface in a container. It defines the name and if cmld
@@ -256,6 +272,40 @@ container_get_vnet_cfg_list(const container_t *container);
 
 list_t *
 container_get_fifo_list(const container_t *container);
+
+/**
+ * Initialize a container_usbdev_t data structure and allocate needed memory
+ */
+container_usbdev_t *
+container_usbdev_new(container_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product,
+		     char *i_serial, bool assign);
+
+uint16_t
+container_usbdev_get_id_vendor(container_usbdev_t *usbdev);
+
+uint16_t
+container_usbdev_get_id_product(container_usbdev_t *usbdev);
+
+char *
+container_usbdev_get_i_serial(container_usbdev_t *usbdev);
+
+container_usbdev_type_t
+container_usbdev_get_type(container_usbdev_t *usbdev);
+
+bool
+container_usbdev_is_assigned(container_usbdev_t *usbdev);
+
+void
+container_usbdev_set_major(container_usbdev_t *usbdev, int major);
+
+void
+container_usbdev_set_minor(container_usbdev_t *usbdev, int minor);
+
+int
+container_usbdev_get_major(container_usbdev_t *usbdev);
+
+int
+container_usbdev_get_minor(container_usbdev_t *usbdev);
 
 /**
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory

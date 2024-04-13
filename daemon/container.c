@@ -75,6 +75,16 @@ struct container_callback {
 	void *data;
 };
 
+struct container_usbdev {
+	char *i_serial;
+	uint16_t id_vendor;
+	uint16_t id_product;
+	int major;
+	int minor;
+	bool assign;
+	container_usbdev_type_t type;
+};
+
 static void
 container_set_extension(void *extension_data, compartment_t *compartment)
 {
@@ -680,6 +690,84 @@ container_get_usbdev_list(const container_t *container)
 {
 	ASSERT(container);
 	return container->usbdev_list;
+}
+
+container_usbdev_t *
+container_usbdev_new(container_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product,
+		     char *i_serial, bool assign)
+{
+	container_usbdev_t *usbdev = mem_new0(container_usbdev_t, 1);
+	usbdev->type = type;
+	usbdev->id_vendor = id_vendor;
+	usbdev->id_product = id_product;
+	usbdev->i_serial = mem_strdup(i_serial);
+	usbdev->assign = assign;
+	usbdev->major = -1;
+	usbdev->minor = -1;
+	return usbdev;
+}
+
+uint16_t
+container_usbdev_get_id_vendor(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->id_vendor;
+}
+
+uint16_t
+container_usbdev_get_id_product(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->id_product;
+}
+
+container_usbdev_type_t
+container_usbdev_get_type(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->type;
+}
+
+char *
+container_usbdev_get_i_serial(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->i_serial;
+}
+
+bool
+container_usbdev_is_assigned(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->assign;
+}
+
+void
+container_usbdev_set_major(container_usbdev_t *usbdev, int major)
+{
+	ASSERT(usbdev);
+	usbdev->major = major;
+}
+
+void
+container_usbdev_set_minor(container_usbdev_t *usbdev, int minor)
+{
+	ASSERT(usbdev);
+	usbdev->minor = minor;
+}
+
+int
+container_usbdev_get_major(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->major;
+}
+
+int
+container_usbdev_get_minor(container_usbdev_t *usbdev)
+{
+	ASSERT(usbdev);
+	return usbdev->minor;
 }
 
 container_vnet_cfg_t *

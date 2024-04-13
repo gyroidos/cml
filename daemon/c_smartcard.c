@@ -1058,10 +1058,10 @@ c_smartcard_new(compartment_t *compartment)
 	// Check configuration for a valid usb device of type TOKEN
 	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
 		for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
-			hotplug_usbdev_t *ud = (hotplug_usbdev_t *)l->data;
-			if (hotplug_usbdev_get_type(ud) == HOTPLUG_USBDEV_TYPE_TOKEN) {
+			container_usbdev_t *ud = (container_usbdev_t *)l->data;
+			if (container_usbdev_get_type(ud) == CONTAINER_USBDEV_TYPE_TOKEN) {
 				smartcard->token_serial =
-					mem_strdup(hotplug_usbdev_get_i_serial(ud));
+					mem_strdup(container_usbdev_get_i_serial(ud));
 				DEBUG("container %s configured to use usb token reader with serial %s",
 				      container_get_name(smartcard->container),
 				      smartcard->token_serial);
