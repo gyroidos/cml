@@ -280,6 +280,9 @@ container_usbdev_t *
 container_usbdev_new(container_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product,
 		     char *i_serial, bool assign);
 
+void
+container_usbdev_free(container_usbdev_t *usbdev);
+
 uint16_t
 container_usbdev_get_id_vendor(container_usbdev_t *usbdev);
 

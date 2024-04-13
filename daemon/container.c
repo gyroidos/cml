@@ -218,7 +218,8 @@ container_free(container_t *container)
 		mem_free0(container->device_assigned_list);
 
 	for (list_t *l = container->usbdev_list; l; l = l->next) {
-		mem_free0(l->data);
+		container_usbdev_t *usbdev = l->data;
+		container_usbdev_free(usbdev);
 	}
 	list_delete(container->usbdev_list);
 
@@ -705,6 +706,14 @@ container_usbdev_new(container_usbdev_type_t type, uint16_t id_vendor, uint16_t 
 	usbdev->major = -1;
 	usbdev->minor = -1;
 	return usbdev;
+}
+
+void
+container_usbdev_free(container_usbdev_t *usbdev)
+{
+	if (usbdev->i_serial)
+		mem_free0(usbdev->i_serial);
+	mem_free0(usbdev);
 }
 
 uint16_t
