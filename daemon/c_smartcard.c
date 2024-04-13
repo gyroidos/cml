@@ -1055,7 +1055,7 @@ c_smartcard_new(compartment_t *compartment)
 
 	smartcard->token_type = container_get_token_type(smartcard->container);
 
-	// Register at hotplug subsystem for plug events if USB TOKEN
+	// Check configuration for a valid usb device of type TOKEN
 	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
 		for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
 			hotplug_usbdev_t *ud = (hotplug_usbdev_t *)l->data;
@@ -1065,8 +1065,6 @@ c_smartcard_new(compartment_t *compartment)
 				DEBUG("container %s configured to use usb token reader with serial %s",
 				      container_get_name(smartcard->container),
 				      smartcard->token_serial);
-				hotplug_usbdev_set_sysfs_props(ud);
-				hotplug_register_usbdevice(smartcard->container, ud);
 				break; // TODO: handle misconfiguration with several usbtoken?
 			}
 		}
@@ -1113,13 +1111,6 @@ c_smartcard_free(void *smartcardp)
 			WARN("Cannot remove USB token for container %s",
 			     container_get_name(smartcard->container));
 		}
-	}
-
-	/* unregister usb tokens from hotplug subsystem */
-	for (list_t *l = container_get_usbdev_list(smartcard->container); l; l = l->next) {
-		hotplug_usbdev_t *usbdev = l->data;
-		if (HOTPLUG_USBDEV_TYPE_TOKEN == hotplug_usbdev_get_type(usbdev))
-			hotplug_unregister_usbdevice(smartcard->container, usbdev);
 	}
 
 	/* release scd connection */
