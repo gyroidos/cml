@@ -151,7 +151,6 @@ SRC_CMODULES += \
 	c_time.c \
 	c_audit.c \
 	c_cap.c \
-	c_uevent.c \
 	c_hotplug.c \
 	c_seccomp.c
 

@@ -82,9 +82,6 @@ hotplug_usbedv_get_major(hotplug_usbdev_t *usbdev);
 int
 hotplug_usbdev_get_minor(hotplug_usbdev_t *usbdev);
 
-int
-hotplug_usbdev_set_sysfs_props(hotplug_usbdev_t *usbdev);
-
 /**
  * Global setup for the hotplug handler for netdev and usbdevice handling
  *
