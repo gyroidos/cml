@@ -41,7 +41,6 @@
 #include "common/uevent.h"
 
 #include "container.h"
-#include "hotplug.h"
 
 #include <libgen.h>
 #include <sys/sysmacros.h>
@@ -101,7 +100,7 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 	bool found;
 	int dev[2];
 
-	hotplug_usbdev_t *usbdev = data;
+	container_usbdev_t *usbdev = data;
 	IF_NULL_RETVAL(usbdev, -1);
 
 	found = false;
@@ -122,22 +121,22 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 	len = file_read(id_product_file, buf, sizeof(buf));
 	IF_TRUE_GOTO((len < 4), out);
 	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_product) < 0), out);
-	found = (id_product == hotplug_usbdev_get_id_product(usbdev));
+	found = (id_product == container_usbdev_get_id_product(usbdev));
 	TRACE("found: %d", found);
 
 	len = file_read(id_vendor_file, buf, sizeof(buf));
 	IF_TRUE_GOTO((len < 4), out);
 	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_vendor) < 0), out);
-	found &= (id_vendor == hotplug_usbdev_get_id_vendor(usbdev));
+	found &= (id_vendor == container_usbdev_get_id_vendor(usbdev));
 	TRACE("found: %d", found);
 
 	if (file_exists(i_serial_file)) {
 		len = file_read(i_serial_file, buf, sizeof(buf));
 		TRACE("%s len=%d", buf, len);
-		TRACE("%s len=%zu", hotplug_usbdev_get_i_serial(usbdev),
-		      strlen(hotplug_usbdev_get_i_serial(usbdev)));
-		found &= (0 == strncmp(buf, hotplug_usbdev_get_i_serial(usbdev),
-				       strlen(hotplug_usbdev_get_i_serial(usbdev))));
+		TRACE("%s len=%zu", container_usbdev_get_i_serial(usbdev),
+		      strlen(container_usbdev_get_i_serial(usbdev)));
+		found &= (0 == strncmp(buf, container_usbdev_get_i_serial(usbdev),
+				       strlen(container_usbdev_get_i_serial(usbdev))));
 		TRACE("found: %d", found);
 	} else {
 		buf[0] = '\0';
@@ -155,8 +154,8 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 
 	found = true; // parsing dev_file succeded.
 
-	hotplug_usbdev_set_major(usbdev, dev[0]);
-	hotplug_usbdev_set_minor(usbdev, dev[1]);
+	container_usbdev_set_major(usbdev, dev[0]);
+	container_usbdev_set_minor(usbdev, dev[1]);
 
 out:
 	mem_free0(id_product_file);
@@ -167,7 +166,7 @@ out:
 }
 
 static int
-c_hotplug_usbdev_set_sysfs_props(hotplug_usbdev_t *usbdev)
+c_hotplug_usbdev_set_sysfs_props(container_usbdev_t *usbdev)
 {
 	ASSERT(usbdev);
 	const char *sysfs_path = "/sys/bus/usb/devices";
@@ -175,8 +174,9 @@ c_hotplug_usbdev_set_sysfs_props(hotplug_usbdev_t *usbdev)
 	// for the first time iterate through sysfs to find device
 	if (0 >= dir_foreach(sysfs_path, &c_hotplug_usbdev_sysfs_foreach_cb, usbdev)) {
 		WARN("Could not find usb device (%d:%d, %s) in %s!",
-		     hotplug_usbdev_get_id_vendor(usbdev), hotplug_usbdev_get_id_product(usbdev),
-		     hotplug_usbdev_get_i_serial(usbdev), sysfs_path);
+		     container_usbdev_get_id_vendor(usbdev),
+		     container_usbdev_get_id_product(usbdev), container_usbdev_get_i_serial(usbdev),
+		     sysfs_path);
 		return -1;
 	}
 
@@ -230,14 +230,14 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 
 	if (actions & UEVENT_ACTION_REMOVE) {
 		for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
-			hotplug_usbdev_t *ud = l->data;
-			int major = hotplug_usbedv_get_major(ud);
-			int minor = hotplug_usbdev_get_minor(ud);
-			hotplug_usbdev_type_t type = hotplug_usbdev_get_type(ud);
+			container_usbdev_t *ud = l->data;
+			int major = container_usbdev_get_major(ud);
+			int minor = container_usbdev_get_minor(ud);
+			container_usbdev_type_t type = container_usbdev_get_type(ud);
 
 			if ((uevent_event_get_major(event) == major) &&
 			    (uevent_event_get_minor(event) == minor)) {
-				if (HOTPLUG_USBDEV_TYPE_TOKEN == type) {
+				if (CONTAINER_USBDEV_TYPE_TOKEN == type) {
 					INFO("HOTPLUG USB TOKEN removed");
 					container_token_detach(hotplug->container);
 				}
@@ -271,23 +271,23 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 		}
 
 		for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
-			hotplug_usbdev_t *ud = l->data;
+			container_usbdev_t *ud = l->data;
 
 			TRACE("check mapping: %04x:%04x '%s' for %s bound device node %d:%d -> container %s",
 			      vendor_id, product_id, serial,
-			      (hotplug_usbdev_is_assigned(ud)) ? "assign" : "allow",
+			      (container_usbdev_is_assigned(ud)) ? "assign" : "allow",
 			      uevent_event_get_major(event), uevent_event_get_minor(event),
 			      container_get_name(hotplug->container));
 
-			if ((vendor_id == hotplug_usbdev_get_id_vendor(ud)) &&
-			    (product_id == hotplug_usbdev_get_id_product(ud)) &&
-			    (0 == strcmp(serial, hotplug_usbdev_get_i_serial(ud)))) {
-				hotplug_usbdev_set_major(ud, major);
-				hotplug_usbdev_set_minor(ud, minor);
+			if ((vendor_id == container_usbdev_get_id_vendor(ud)) &&
+			    (product_id == container_usbdev_get_id_product(ud)) &&
+			    (0 == strcmp(serial, container_usbdev_get_i_serial(ud)))) {
+				container_usbdev_set_major(ud, major);
+				container_usbdev_set_minor(ud, minor);
 				INFO("%s bound device node %d:%d -> container %s",
-				     (hotplug_usbdev_is_assigned(ud)) ? "assign" : "allow", major,
+				     (container_usbdev_is_assigned(ud)) ? "assign" : "allow", major,
 				     minor, container_get_name(hotplug->container));
-				if (HOTPLUG_USBDEV_TYPE_TOKEN == hotplug_usbdev_get_type(ud)) {
+				if (CONTAINER_USBDEV_TYPE_TOKEN == container_usbdev_get_type(ud)) {
 					INFO("HOTPLUG USB TOKEN added");
 					struct c_hotplug_token_data *token_data =
 						mem_new0(struct c_hotplug_token_data, 1);
@@ -308,7 +308,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 					event_add_timer(e);
 				}
 				container_device_allow(hotplug->container, 'c', major, minor,
-						       hotplug_usbdev_is_assigned(ud));
+						       container_usbdev_is_assigned(ud));
 			}
 		}
 		mem_free0(serial);
@@ -506,21 +506,22 @@ c_hotplug_start_post_exec(void *hotplugp)
 }
 
 static int
-c_hotplug_usbdev_allow(c_hotplug_t *hotplug, hotplug_usbdev_t *usbdev)
+c_hotplug_usbdev_allow(c_hotplug_t *hotplug, container_usbdev_t *usbdev)
 {
 	ASSERT(hotplug);
 	ASSERT(usbdev);
 	if (0 != c_hotplug_usbdev_set_sysfs_props(usbdev)) {
-		ERROR("Failed to find usbedv in sysfs");
+		ERROR("Failed to find usbdev in sysfs");
 		return -1;
 	}
 
-	if (-1 == container_device_allow(hotplug->container, 'c', hotplug_usbedv_get_major(usbdev),
-					 hotplug_usbdev_get_minor(usbdev),
-					 hotplug_usbdev_is_assigned(usbdev))) {
+	if (-1 == container_device_allow(hotplug->container, 'c',
+					 container_usbdev_get_major(usbdev),
+					 container_usbdev_get_minor(usbdev),
+					 container_usbdev_is_assigned(usbdev))) {
 		WARN("Could not %s char device %d:%d !",
-		     hotplug_usbdev_is_assigned(usbdev) ? "assign" : "allow",
-		     hotplug_usbedv_get_major(usbdev), hotplug_usbdev_get_minor(usbdev));
+		     container_usbdev_is_assigned(usbdev) ? "assign" : "allow",
+		     container_usbdev_get_major(usbdev), container_usbdev_get_minor(usbdev));
 		return -1;
 	}
 
@@ -535,20 +536,20 @@ c_hotplug_coldplug_usbdevs(void *hotplugp)
 
 	/* initially allow allready plugged usb devices to devices_subsystem */
 	for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
-		hotplug_usbdev_t *usbdev = l->data;
+		container_usbdev_t *usbdev = l->data;
 		// USB devices of type PIN_READER are only required outside the container to enter the pin
 		// before the container starts and should not be mapped into the container, as they can
 		// be used for multiple containers and a container should not be able to log the pin of
 		// another container
-		if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_PIN_ENTRY) {
+		if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_PIN_ENTRY) {
 			TRACE("Device of type pin reader is not mapped into the container");
 			continue;
-		} else if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_TOKEN) {
+		} else if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_TOKEN) {
 			c_hotplug_usbdev_allow(hotplug, usbdev);
-		} else if (hotplug_usbdev_get_type(usbdev) == HOTPLUG_USBDEV_TYPE_GENERIC) {
+		} else if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_GENERIC) {
 			c_hotplug_usbdev_allow(hotplug, usbdev);
 		} else {
-			ERROR("Unknown HOTPLUG_USBDEV_TYPE. Device has not been configured!");
+			ERROR("Unknown CONTAINER_USBDEV_TYPE. Device has not been configured!");
 		}
 	}
 	return 0;

@@ -92,16 +92,16 @@ container_config_proto_to_token_type(ContainerTokenType type)
 	}
 }
 
-static hotplug_usbdev_type_t
+static container_usbdev_type_t
 container_config_proto_to_usb_type(ContainerUsbType type)
 {
 	switch (type) {
 	case CONTAINER_USB_TYPE__GENERIC:
-		return HOTPLUG_USBDEV_TYPE_GENERIC;
+		return CONTAINER_USBDEV_TYPE_GENERIC;
 	case CONTAINER_USB_TYPE__TOKEN:
-		return HOTPLUG_USBDEV_TYPE_TOKEN;
+		return CONTAINER_USBDEV_TYPE_TOKEN;
 	case CONTAINER_USB_TYPE__PIN_ENTRY:
-		return HOTPLUG_USBDEV_TYPE_PIN_ENTRY;
+		return CONTAINER_USBDEV_TYPE_PIN_ENTRY;
 	default:
 		FATAL("Unhandled value for ContainerTokenType: %d", type);
 	}
@@ -605,7 +605,7 @@ container_config_get_usbdev_list_new(const container_config_t *config)
 	for (size_t i = 0; i < config->cfg->n_usb_configs; ++i) {
 		uint16_t vendor, product;
 		sscanf(config->cfg->usb_configs[i]->id, "%hx:%hx", &vendor, &product);
-		hotplug_usbdev_t *usbdev = hotplug_usbdev_new(
+		container_usbdev_t *usbdev = container_usbdev_new(
 			container_config_proto_to_usb_type(config->cfg->usb_configs[i]->type),
 			vendor, product, config->cfg->usb_configs[i]->serial,
 			config->cfg->usb_configs[i]->assign);

@@ -35,53 +35,6 @@
 
 #include "container.h"
 
-typedef enum hotplug_usbdev_type {
-	HOTPLUG_USBDEV_TYPE_GENERIC = 1,
-	HOTPLUG_USBDEV_TYPE_TOKEN,
-	HOTPLUG_USBDEV_TYPE_PIN_ENTRY
-} hotplug_usbdev_type_t;
-
-/**
- * Structure to define the mapping of hotplug event to usb device
-
- * It defines the usb vendor and product as show by lsusb
- * and if there is any the serial of a device, e.g. from uTrust Token.
- * Further, it is defined if the device should be assigned exclusivly
- * to the container or if just the access is allowed.
- */
-typedef struct hotplug_usbdev hotplug_usbdev_t;
-
-hotplug_usbdev_t *
-hotplug_usbdev_new(hotplug_usbdev_type_t type, uint16_t id_vendor, uint16_t id_product,
-		   char *i_serial, bool assign);
-
-uint16_t
-hotplug_usbdev_get_id_vendor(hotplug_usbdev_t *usbdev);
-
-uint16_t
-hotplug_usbdev_get_id_product(hotplug_usbdev_t *usbdev);
-
-char *
-hotplug_usbdev_get_i_serial(hotplug_usbdev_t *usbdev);
-
-hotplug_usbdev_type_t
-hotplug_usbdev_get_type(hotplug_usbdev_t *usbdev);
-
-bool
-hotplug_usbdev_is_assigned(hotplug_usbdev_t *usbdev);
-
-void
-hotplug_usbdev_set_major(hotplug_usbdev_t *usbdev, int major);
-
-void
-hotplug_usbdev_set_minor(hotplug_usbdev_t *usbdev, int minor);
-
-int
-hotplug_usbedv_get_major(hotplug_usbdev_t *usbdev);
-
-int
-hotplug_usbdev_get_minor(hotplug_usbdev_t *usbdev);
-
 /**
  * Global setup for the hotplug handler for netdev and usbdevice handling
  *
@@ -95,18 +48,6 @@ hotplug_init();
  */
 void
 hotplug_cleanup();
-
-/**
-  * Registers an usb device mapping for a container at the hotplug subsystem
-  */
-int
-hotplug_register_usbdevice(container_t *container, hotplug_usbdev_t *usbdev);
-
-/**
-  * Unregisters an usb device mapping for a container at the hotplug subsystem
-  */
-int
-hotplug_unregister_usbdevice(container_t *container, hotplug_usbdev_t *usbdev);
 
 /**
  * Registers a net device by its pnet_cfg for a container at the hotplug subsystem
