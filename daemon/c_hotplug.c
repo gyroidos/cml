@@ -37,10 +37,12 @@
 #include "common/dir.h"
 #include "common/event.h"
 #include "common/file.h"
+#include "common/network.h"
 #include "common/uuid.h"
 #include "common/uevent.h"
 
 #include "container.h"
+#include "cmld.h"
 
 #include <libgen.h>
 #include <sys/sysmacros.h>
@@ -50,6 +52,9 @@ typedef struct c_hotplug {
 	container_t *container; // weak reference
 	uevent_uev_t *uev;
 } c_hotplug_t;
+
+// all physical network interfaces which are mapped in a container
+list_t *c_hotplug_pnet_mapped_list = NULL; // list of type container_pnet_cfg_t *
 
 static int
 c_hotplug_create_device_node(c_hotplug_t *hotplug, const char *path, int major, int minor,
@@ -316,6 +321,364 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 	return false;
 }
 
+static char *
+c_hotplug_replace_devpath_new(const char *str, const char *oldstr, const char *newstr)
+{
+	char *ptr_old = NULL;
+	int len_diff = strlen(newstr) - strlen(oldstr);
+	if (!(ptr_old = strstr(str, oldstr))) {
+		DEBUG("Could not find %s in %s", oldstr, str);
+		return NULL;
+	}
+
+	unsigned int off_old;
+	char *str_replaced = mem_alloc0((strlen(str) + 1) + len_diff);
+	unsigned int pos_new = 0;
+
+	off_old = ptr_old - str;
+
+	strncpy(str_replaced, str, off_old);
+	pos_new += off_old;
+
+	strcpy(str_replaced + pos_new, newstr);
+	pos_new += strlen(newstr);
+
+	strcpy(str_replaced + pos_new, ptr_old + strlen(oldstr));
+
+	return str_replaced;
+}
+
+static char *
+c_hotplug_rename_ifi_new(const char *oldname, const char *infix)
+{
+	static unsigned int cmld_wlan_idx = 0;
+	static unsigned int cmld_eth_idx = 0;
+
+	//generate interface name that is unique
+	//in the root network namespace
+	unsigned int *ifi_idx;
+	char *newname = NULL;
+
+	ifi_idx = !strcmp(infix, "wlan") ? &cmld_wlan_idx : &cmld_eth_idx;
+
+	if (-1 == asprintf(&newname, "%s%s%d", "cml", infix, *ifi_idx)) {
+		ERROR("Failed to generate new interface name");
+		return NULL;
+	}
+
+	*ifi_idx += 1;
+
+	INFO("Renaming %s to %s", oldname, newname);
+
+	if (network_rename_ifi(oldname, newname)) {
+		ERROR("Failed to rename interface %s", oldname);
+		mem_free0(newname);
+		return NULL;
+	}
+
+	return newname;
+}
+
+static uevent_event_t *
+c_hotplug_rename_interface(const uevent_event_t *event)
+{
+	char *event_ifname = uevent_event_get_interface(event);
+	char *event_devpath = uevent_event_get_devpath(event);
+	const char *prefix = uevent_event_get_devtype(event);
+
+	char *new_ifname = NULL;
+	char *new_devpath = NULL;
+	uevent_event_t *uev_chname = NULL;
+	uevent_event_t *uev_chdevpath = NULL;
+
+	// if no devtype is set in uevent prefix with eth by default
+	if (!*prefix)
+		prefix = "eth";
+
+	new_ifname = c_hotplug_rename_ifi_new(event_ifname, prefix);
+
+	if (!new_ifname) {
+		DEBUG("Failed to prepare renamed uevent member (ifname)");
+		goto err;
+	}
+
+	new_devpath = c_hotplug_replace_devpath_new(event_devpath, event_ifname, new_ifname);
+
+	if (!new_devpath) {
+		DEBUG("Failed to prepare renamed uevent member (devpath)");
+		goto err;
+	}
+
+	uev_chname = uevent_replace_member(event, event_ifname, new_ifname);
+
+	if (!uev_chname) {
+		ERROR("Failed to rename interface name %s in uevent", event_ifname);
+		goto err;
+	}
+
+	event_devpath = uevent_event_get_devpath(uev_chname);
+	uev_chdevpath = uevent_replace_member(uev_chname, event_devpath, new_devpath);
+
+	if (!uev_chdevpath) {
+		ERROR("Failed to rename devpath %s in uevent", event_devpath);
+		goto err;
+	}
+	DEBUG("Injected renamed interface name %s, devpath %s into uevent", new_ifname,
+	      new_devpath);
+
+	mem_free0(new_ifname);
+	mem_free0(new_devpath);
+	mem_free0(uev_chname);
+
+	return uev_chdevpath;
+
+err:
+	if (new_ifname)
+		mem_free0(new_ifname);
+	if (new_devpath)
+		mem_free0(new_devpath);
+	if (uev_chname)
+		mem_free0(uev_chname);
+
+	return NULL;
+}
+
+int
+c_hotplug_netdev_mapped_interfaces_append(container_t *container)
+{
+	ASSERT(container);
+
+	uint8_t mac[6];
+
+	for (list_t *l = container_get_pnet_cfg_list(container); l; l = l->next) {
+		container_pnet_cfg_t *pnet_cfg = l->data;
+		char *if_name_macstr = pnet_cfg->pnet_name;
+		char *if_name = NULL;
+		TRACE("mv_name_list add ifname %s", if_name_macstr);
+		mem_memset(&mac, 0, 6);
+		// check if string is mac address
+		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
+			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
+			// register at c_hotplug subsys
+			INFO("Occupy interface for mac '%s' for container %s", if_name_macstr,
+			     container_get_name(container));
+
+			if_name = network_get_ifname_by_addr_new(mac);
+			if (NULL == if_name) {
+				INFO("Interface for mac '%s' is not yet connected.",
+				     if_name_macstr);
+			}
+		} else {
+			INFO("Occupy interface by name '%s' for container %s", if_name_macstr,
+			     container_get_name(container));
+		}
+
+		// Add this pnet to the global list of mapped (occupied) pnets
+		if (list_find(c_hotplug_pnet_mapped_list, pnet_cfg)) {
+			ERROR("Physical netif with %s %s already taken by another container!",
+			      if_name ? "mac" : "name", if_name_macstr);
+			mem_free0(if_name);
+			return -1;
+		}
+		c_hotplug_pnet_mapped_list = list_append(c_hotplug_pnet_mapped_list, pnet_cfg);
+		mem_free0(if_name);
+	}
+
+	return 0;
+}
+
+static int
+c_hotplug_netdev_move(uevent_event_t *event, container_pnet_cfg_t *pnet_cfg, container_t *container)
+{
+	ASSERT(event);
+	ASSERT(pnet_cfg);
+	ASSERT(container);
+
+	uint8_t iface_mac[6];
+	char *macstr = NULL;
+	uevent_event_t *newevent = NULL;
+
+	char *event_ifname = uevent_event_get_interface(event);
+
+	if (network_get_mac_by_ifname(event_ifname, iface_mac)) {
+		ERROR("Iface '%s' with no mac, skipping!", event_ifname);
+		goto error;
+	}
+
+	// rename network interface to avoid name clashes when moving to container
+	DEBUG("Renaming new interface we were notified about");
+	newevent = c_hotplug_rename_interface(event);
+
+	// uevent pointer is not freed inside this function, therefore we can safely drop it
+	if (newevent) {
+		DEBUG("using renamed uevent");
+		event = newevent;
+		event_ifname = uevent_event_get_interface(event);
+		container_pnet_cfg_set_pnet_name(pnet_cfg, event_ifname);
+	} else {
+		WARN("failed to rename interface %s. injecting uevent as it is", event_ifname);
+	}
+
+	macstr = network_mac_addr_to_str_new(iface_mac);
+	if (container_add_net_interface(container, pnet_cfg)) {
+		ERROR("cannot move '%s' to %s!", macstr, container_get_name(container));
+		goto error;
+	} else {
+		INFO("moved phys network interface '%s' (mac: %s) to %s", event_ifname, macstr,
+		     container_get_name(container));
+	}
+
+	// if mac_filter is applied we have a bridge interface and do not
+	// need to send the uevent about the physical if
+	if (pnet_cfg->mac_filter) {
+		goto out;
+	}
+
+	// if moving was successful also inject uevent
+	if (uevent_event_inject_into_netns(event, container_get_pid(container),
+					   container_has_userns(container)) < 0) {
+		WARN("could not inject uevent into netns of container %s!",
+		     container_get_name(container));
+	} else {
+		TRACE("successfully injected uevent into netns of container %s!",
+		      container_get_name(container));
+	}
+out:
+	if (newevent)
+		mem_free0(newevent);
+	mem_free0(macstr);
+	return 0;
+error:
+	if (newevent)
+		mem_free0(newevent);
+	mem_free0(macstr);
+	return -1;
+}
+
+typedef struct c_hotplug_netif_data {
+	container_t *container;
+	container_pnet_cfg_t *pnet_cfg;
+	uevent_event_t *event;
+} c_hotplug_netif_data_t;
+
+static c_hotplug_netif_data_t *
+c_hotplug_netif_data_new(uevent_event_t *event, container_pnet_cfg_t *pnet_cfg,
+			 container_t *container)
+{
+	ASSERT(event);
+	ASSERT(container);
+
+	c_hotplug_netif_data_t *netif_data = mem_new0(c_hotplug_netif_data_t, 1);
+	netif_data->event = uevent_event_copy_new(event);
+	netif_data->container = container;
+	netif_data->pnet_cfg = pnet_cfg;
+
+	return netif_data;
+}
+
+static void
+c_hotplug_netif_data_free(c_hotplug_netif_data_t *netif_data)
+{
+	mem_free0(netif_data->event);
+	mem_free0(netif_data);
+	if (netif_data->pnet_cfg)
+		mem_free0(netif_data->pnet_cfg);
+}
+
+static void
+c_hotplug_sysfs_netif_timer_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+	c_hotplug_netif_data_t *cb_data = data;
+
+	// if sysfs is not ready in case of wifi just return and retry.
+	IF_TRUE_RETURN(!strcmp(uevent_event_get_devtype(cb_data->event), "wlan") &&
+		       !network_interface_is_wifi(uevent_event_get_interface(cb_data->event)));
+
+	if (c_hotplug_netdev_move(cb_data->event, cb_data->pnet_cfg, cb_data->container) == -1)
+		WARN("Did not move net interface!");
+	else
+		INFO("Moved net interface to target.");
+
+	c_hotplug_netif_data_free(cb_data);
+	event_remove_timer(timer);
+	event_timer_free(timer);
+}
+
+/*
+ * Return true if the event is handled competly by this function and the calling uevent handler
+ * should just return.
+ */
+static bool
+c_hotplug_handle_pnet_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_t *hotplug,
+			      bool container_is_up)
+{
+	ASSERT(hotplug);
+	ASSERT(event);
+
+	if (!(actions & UEVENT_ACTION_ADD && !strcmp(uevent_event_get_subsystem(event), "net") &&
+	      !strstr(uevent_event_get_devpath(event), "virtual")))
+		return false;
+
+	/* move network ifaces to containers */
+	uint8_t mac[6];
+	uint8_t event_mac[6];
+	char *event_ifname = uevent_event_get_interface(event);
+	container_pnet_cfg_t *pnet_cfg = NULL;
+
+	if (network_get_mac_by_ifname(event_ifname, event_mac)) {
+		ERROR("Iface '%s' with no mac, skipping!", event_ifname);
+		return true;
+	}
+
+	if (hotplug->container == cmld_containers_get_c0()) {
+		for (list_t *l = c_hotplug_pnet_mapped_list; l; l = l->next) {
+			container_pnet_cfg_t *container_pnet_cfg = l->data;
+			char *if_name_macstr = container_pnet_cfg->pnet_name;
+			mem_memset(&mac, 0, 6);
+			if ((0 == network_str_to_mac_addr(if_name_macstr, mac)) &&
+			    (0 == memcmp(event_mac, mac, 6))) {
+				// pnet is occupied by container not moving to c0
+				return true;
+			}
+		}
+
+		// no mapping found move to c0
+		pnet_cfg = container_pnet_cfg_new(event_ifname, false, NULL);
+	} else {
+		for (list_t *l = container_get_pnet_cfg_list(hotplug->container); l; l = l->next) {
+			container_pnet_cfg_t *container_pnet_cfg = l->data;
+			char *if_name_macstr = container_pnet_cfg->pnet_name;
+			mem_memset(&mac, 0, 6);
+			if ((0 == network_str_to_mac_addr(if_name_macstr, mac)) &&
+			    (0 == memcmp(event_mac, mac, 6))) {
+				pnet_cfg =
+					container_pnet_cfg_new(container_pnet_cfg->pnet_name,
+							       container_pnet_cfg->mac_filter,
+							       container_pnet_cfg->mac_whitelist);
+				break;
+			}
+		}
+	}
+
+	// no iterface to handle for this container
+	IF_NULL_RETVAL(pnet_cfg, true);
+
+	if (!container_is_up) {
+		WARN("Target container '%s' is not running, skip moving %s",
+		     container_get_description(hotplug->container), event_ifname);
+		return true;
+	}
+
+	// give sysfs some time to settle if iface is wifi
+	c_hotplug_netif_data_t *cb_data =
+		c_hotplug_netif_data_new(event, pnet_cfg, hotplug->container);
+	event_timer_t *e = event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
+					   c_hotplug_sysfs_netif_timer_cb, cb_data);
+	event_add_timer(e);
+	return true;
+}
+
 static void
 c_hotplug_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 {
@@ -330,6 +693,10 @@ c_hotplug_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 		(container_get_state(hotplug->container) == COMPARTMENT_STATE_BOOTING) ||
 		(container_get_state(hotplug->container) == COMPARTMENT_STATE_RUNNING) ||
 		(container_get_state(hotplug->container) == COMPARTMENT_STATE_STARTING);
+
+	/* handle pnet hotplug */
+	if (c_hotplug_handle_pnet_hotplug(actions, event, hotplug, container_is_up))
+		return;
 
 	/* handle usb hotplug devices */
 	bool hotplugged_do_deny = false;
@@ -432,14 +799,18 @@ c_hotplug_new(compartment_t *compartment)
 				       UEVENT_ACTION_BIND | UEVENT_ACTION_UNBIND,
 			       c_hotplug_handle_event_cb, hotplug);
 
+	// initially register/occupy physical ethernet/wifi interfaces
+	IF_TRUE_GOTO_ERROR(-1 == c_hotplug_netdev_mapped_interfaces_append(hotplug->container),
+			   err);
+
 	// register hotplug handling for this c_hotplug container submodule
-	if (uevent_add_uev(hotplug->uev)) {
-		uevent_uev_free(hotplug->uev);
-		mem_free0(hotplug);
-		return NULL;
-	}
+	IF_TRUE_GOTO_ERROR(uevent_add_uev(hotplug->uev), err);
 
 	return hotplug;
+err:
+	uevent_uev_free(hotplug->uev);
+	mem_free0(hotplug);
+	return NULL;
 }
 
 static void
@@ -450,6 +821,15 @@ c_hotplug_free(void *hotplugp)
 
 	uevent_remove_uev(hotplug->uev);
 	uevent_uev_free(hotplug->uev);
+
+	for (list_t *l = c_hotplug_pnet_mapped_list; l;) {
+		list_t *next = l->next;
+		container_pnet_cfg_t *container_pnet_cfg = l->data;
+		if (list_find(container_get_pnet_cfg_list(hotplug->container), container_pnet_cfg))
+			c_hotplug_pnet_mapped_list = list_unlink(c_hotplug_pnet_mapped_list, l);
+
+		l = next;
+	}
 
 	mem_free0(hotplug);
 }

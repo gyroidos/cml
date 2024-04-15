@@ -61,7 +61,6 @@
 #include "common/ns.h"
 #include "container.h"
 #include "cmld.h"
-#include "hotplug.h"
 
 /* Offset for ipv4/mac address allocation, e.g. 127.1.(IPV4_SUBNET_OFFS+x).2
  * Defines the start value for address allocation */
@@ -122,7 +121,6 @@ typedef struct c_net {
 	list_t *pnet_mv_list; //!< contains list of phyiscal NICs to be bridged via a veth or moved into a container. MAC adress filtering may be applied
 	char *ns_path;	      //!< path for binding netns into filesystem
 	int fd_netns;	      //!< fd to keep netns active during reboots
-	list_t *hotplug_registered_mac_list; //!< contains list of macs which are registered at hotplug module
 } c_net_t;
 
 /**
@@ -681,7 +679,7 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
  *
  * It is used internally by c_net_new, than we already have grabbed the interface.
  * also this function is used externally for new devices during runtime from control
- * or hotplug handler. Then we have to grab the interface from cmld's list of available
+ * or c_hotplug. Then we have to grab the interface from cmld's list of available
  * interfaces and add the pnet_cfg to the internal c_net list.
  */
 static int
@@ -701,16 +699,6 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 
 	IF_NULL_RETVAL(if_name, -1);
 
-	if (!c_net_internal) {
-		IF_FALSE_GOTO_ERROR(cmld_netif_phys_remove_by_name(if_name), err);
-
-		// adding to c0, thus mark this interface available as free for others
-		if (cmld_containers_get_c0() == net->container) {
-			// re-add iface to list of available network interfaces
-			cmld_netif_phys_add_by_name(if_name);
-		}
-	}
-
 	if (!pnet_cfg->mac_filter) { // directly map phys. IF into container
 		DEBUG("move phys %s to the ns of this pid: %d", pnet_cfg->pnet_name, pid);
 		IF_TRUE_GOTO_ERROR(-1 == c_net_move_ifi(if_name, pid), err);
@@ -720,8 +708,11 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 				   err);
 	}
 
-	if (!c_net_internal) // called externally add to internal list
-		net->pnet_mv_list = list_append(net->pnet_mv_list, pnet_cfg);
+	if (!c_net_internal) // called externally add deep copy to internal list
+		net->pnet_mv_list = list_append(net->pnet_mv_list,
+						container_pnet_cfg_new(pnet_cfg->pnet_name,
+								       pnet_cfg->mac_filter,
+								       pnet_cfg->mac_whitelist));
 
 	INFO("Sucessfully move/bridged iface %s to %s", if_name,
 	     container_get_name(net->container));
@@ -784,7 +775,6 @@ c_net_remove_interface(void *netp, const char *if_name_mac)
 	net->pnet_mv_list = list_remove(net->pnet_mv_list, cfg);
 	container_pnet_cfg_free(cfg);
 
-	cmld_netif_phys_add_by_name(if_name);
 	mem_free0(if_name);
 	return 0;
 
@@ -841,9 +831,6 @@ c_net_new(compartment_t *compartment)
 	uint8_t mac[6];
 	for (list_t *l = container_get_pnet_cfg_list(net->container); l; l = l->next) {
 		container_pnet_cfg_t *pnet_cfg = l->data;
-		// deep copy for internal list and hotplugging
-		container_pnet_cfg_t *pnet_cfg_mv = container_pnet_cfg_new(
-			pnet_cfg->pnet_name, pnet_cfg->mac_filter, pnet_cfg->mac_whitelist);
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
 		TRACE("mv_name_list add ifname %s", if_name_macstr);
@@ -851,19 +838,6 @@ c_net_new(compartment_t *compartment)
 		// check if string is mac address
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
-			// register at hotplug subsys
-			if (-1 == hotplug_register_netdev(net->container, pnet_cfg_mv)) {
-				WARN("Could not register Interface for moving");
-				container_pnet_cfg_free(pnet_cfg_mv);
-			} else {
-				INFO("Registed Interface for mac '%s' at hotplug subsys",
-				     if_name_macstr);
-
-				net->hotplug_registered_mac_list =
-					list_append(net->hotplug_registered_mac_list,
-						    mem_memcpy((unsigned char *)&mac, sizeof(mac)));
-			}
-
 			if_name = network_get_ifname_by_addr_new(mac);
 			if (NULL == if_name) {
 				INFO("Interface for mac '%s' is not yet connected.",
@@ -877,8 +851,12 @@ c_net_new(compartment_t *compartment)
 
 		TRACE("mv_name_list add ifname %s", if_name);
 
+		// add deep copy to internal list if available
 		if (cmld_netif_phys_remove_by_name(if_name))
-			net->pnet_mv_list = list_append(net->pnet_mv_list, pnet_cfg_mv);
+			net->pnet_mv_list = list_append(
+				net->pnet_mv_list,
+				container_pnet_cfg_new(pnet_cfg->pnet_name, pnet_cfg->mac_filter,
+						       pnet_cfg->mac_whitelist));
 
 		mem_free0(if_name);
 	}
@@ -1492,14 +1470,6 @@ c_net_free(void *netp)
 {
 	c_net_t *net = netp;
 	ASSERT(net);
-
-	/* unregister netdevs by mac from hotplug subsystem */
-	for (list_t *l = net->hotplug_registered_mac_list; l; l = l->next) {
-		uint8_t *mac = l->data;
-		hotplug_unregister_netdev(net->container, mac);
-		mem_free0(mac);
-	}
-	list_delete(net->hotplug_registered_mac_list);
 
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
