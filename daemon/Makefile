@@ -87,7 +87,6 @@ PROTO_SRC := \
 
 SRC_FILES := main.c \
 	cmld.c \
-	hotplug.c \
 	container.c \
 	compartment.c \
 	control.c \

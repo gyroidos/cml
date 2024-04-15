@@ -27,7 +27,6 @@
 
 #include "cmld.h"
 #include "audit.h"
-#include "hotplug.h"
 #include "scd_shared.h"
 #include "crypto.h"
 

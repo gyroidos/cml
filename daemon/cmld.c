@@ -50,7 +50,6 @@
 #include "scd.h"
 #include "tss.h"
 #include "ksm.h"
-#include "hotplug.h"
 #include "time.h"
 #include "lxcfs.h"
 #include "audit.h"
@@ -1441,12 +1440,6 @@ cmld_init(const char *path)
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
-
-	if (hotplug_init() < 0)
-		FATAL("Could not init hotplug module");
-	INFO("hotplug initialized.");
-	if (atexit(&hotplug_cleanup))
-		WARN("Could not register on exit cleanup method 'hotplug_cleanup()'");
 
 	if (ksm_init() < 0)
 		WARN("Could not init ksm module");
