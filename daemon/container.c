@@ -837,6 +837,9 @@ container_pnet_cfg_set_pnet_name(container_pnet_cfg_t *pnet_cfg, const char *pne
 {
 	IF_NULL_RETURN(pnet_cfg);
 
+	if (pnet_cfg->pnet_name)
+		mem_free0(pnet_cfg->pnet_name);
+
 	pnet_cfg->pnet_name = mem_strdup(pnet_name);
 }
 
