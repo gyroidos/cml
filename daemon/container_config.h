@@ -250,4 +250,7 @@ container_config_get_usbtoken_serial(const container_config_t *config);
 bool
 container_config_get_usb_pin_entry(const container_config_t *config);
 
+const char *
+container_config_get_pkcs11_module(const container_config_t *config);
+
 #endif /* C_CONFIG_H */
