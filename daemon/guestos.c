@@ -125,7 +125,7 @@ guestos_new_internal(guestos_config_t *cfg, const char *basepath)
 		guestos_config_free(cfg);
 		return NULL;
 	}
-	guestos_t *os = mem_new(guestos_t, 1);
+	guestos_t *os = mem_new0(guestos_t, 1);
 	os->dir = mem_printf("%s/%s-%" PRIu64 "", basepath, guestos_name,
 			     guestos_config_get_version(cfg));
 	os->cfg_file = guestos_get_cfg_file_new(os->dir);
