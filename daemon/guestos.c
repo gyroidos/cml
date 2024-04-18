@@ -33,6 +33,7 @@
 #include "common/mem.h"
 #include "common/dir.h"
 #include "common/file.h"
+#include "common/sock.h"
 
 #include <fcntl.h>
 #include <sys/types.h>
@@ -630,9 +631,40 @@ iterate_image_do_trigger_download(const char *img_name, iterate_images_t *task,
 	const char *update_base_url = guestos_config_get_update_base_url(task->os->cfg) ?
 					      guestos_config_get_update_base_url(task->os->cfg) :
 					      cmld_get_device_update_base_url();
+
+	char *update_base_url_pp;
+	if (strlen(update_base_url) > 7 && !strncmp(update_base_url, "file://", 7) &&
+	    update_base_url[7] != '/') {
+		// The given update_base_url points to a file and the path does not begin with /.
+		// Interpret as container relative and access the download via the calling
+		// containers root in /proc/<pid>/root.
+		int control_fd = *(int *)task->complete_data;
+		uint32_t control_pid;
+		if (0 != sock_unix_get_peer_pid(control_fd, &control_pid)) {
+			ERROR("Failed to get PID of control. Cannot resolve relative download URL.");
+			return false;
+		}
+
+		// Get the container of the calling control process to prevent the client from
+		// manipulating the path by chroot'ing into some subdirectory
+		container_t *cnt = cmld_container_get_by_pid(control_pid);
+		if (!cnt) {
+			ERROR("push_guestos_config does not originate from container.");
+			return false;
+		}
+		pid_t cnt_pid = container_get_pid(cnt);
+
+		const char *update_base_path = update_base_url + 7;
+		update_base_url_pp =
+			mem_printf("file:///proc/%d/root/%s", cnt_pid, update_base_path);
+	} else {
+		// Absolute file path or different protocol. Use update_base_url as is.
+		update_base_url_pp = mem_strdup(update_base_url);
+	}
+
 	char *img_path = mem_printf("%s/%s", guestos_get_dir(task->os), img_name);
 
-	char *img_url = mem_printf("%s/operatingsystems/%s/%s-%" PRIu64 "/%s", update_base_url,
+	char *img_url = mem_printf("%s/operatingsystems/%s/%s-%" PRIu64 "/%s", update_base_url_pp,
 				   hardware_name, guestos_get_name(task->os),
 				   guestos_get_version(task->os), img_name);
 	// invoke downloader
@@ -640,6 +672,7 @@ iterate_image_do_trigger_download(const char *img_name, iterate_images_t *task,
 	download_t *dl = download_new(img_url, img_path, dl_cb, task);
 	mem_free0(img_url);
 	mem_free0(img_path);
+	mem_free0(update_base_url_pp);
 	if (download_start(dl) < 0) {
 		ERROR("Failed to start download for %s", download_get_url(dl));
 		download_free(dl);
