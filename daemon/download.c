@@ -123,7 +123,7 @@ download_start(download_t *dl)
 	switch (pid) {
 	case -1:
 		ERROR_ERRNO("Could not fork to download (%s) image %s", dl->file,
-			    do_file_copy ? "wget" : "file_copy");
+			    do_file_copy ? "file_copy" : "wget");
 		return -1;
 	case 0: {
 		if (do_file_copy) {
@@ -141,7 +141,7 @@ download_start(download_t *dl)
 	}
 	default:
 		DEBUG("Started download helper (%s) with PID %d",
-		      do_file_copy ? "wget" : "file_copy", pid);
+		      do_file_copy ? "file_copy" : "wget", pid);
 		dl->wget_pid = pid;
 		event_signal_t *sig = event_signal_new(SIGCHLD, download_sigchld_cb, dl);
 		event_add_signal(sig);
