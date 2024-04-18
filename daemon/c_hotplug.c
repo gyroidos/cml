@@ -52,7 +52,7 @@ typedef struct c_hotplug {
 } c_hotplug_t;
 
 static int
-c_hotplug_create_device_node(c_hotplug_t *hotplug, char *path, int major, int minor,
+c_hotplug_create_device_node(c_hotplug_t *hotplug, const char *path, int major, int minor,
 			     const char *devtype)
 {
 	char *path_dirname = NULL;
@@ -295,7 +295,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 					token_data->devname = mem_printf(
 						"%s%s",
 						strncmp("/dev/", uevent_event_get_devname(event),
-							4) ?
+							5) ?
 							"/dev/" :
 							"/",
 						uevent_event_get_devname(event));
@@ -336,7 +336,7 @@ c_hotplug_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 	if (0 == strncmp(uevent_event_get_subsystem(event), "usb", 3)) {
 		// just forward all usb_interface events, as those do not have a major, minor
 		IF_TRUE_GOTO(container_is_up && (0 == strncmp(uevent_event_get_devtype(event),
-							      "usb_interface", 12)),
+							      "usb_interface", 13)),
 			     send);
 
 		hotplugged_do_deny = c_hotplug_handle_usb_hotplug(actions, event, hotplug);
@@ -378,14 +378,14 @@ c_hotplug_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 			event = event_coldboot;
 			goto send;
 		} else {
-			TRACE("Skip coldboot event's for other conainer");
+			TRACE("Skip coldboot event's for other container");
 			goto err;
 		}
 	}
 
 	// newer versions of udev prepends '/dev/' in DEVNAME
 	devname = mem_printf("%s%s%s", container_get_rootdir(hotplug->container),
-			     strncmp("/dev/", uevent_event_get_devname(event), 4) ? "/dev/" : "",
+			     strncmp("/dev/", uevent_event_get_devname(event), 5) ? "/dev/" : "",
 			     uevent_event_get_devname(event));
 
 	if (actions & UEVENT_ACTION_ADD) {
