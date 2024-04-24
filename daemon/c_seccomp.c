@@ -648,19 +648,27 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 			goto out;
 		}
 
+#if 0
 		// kernel cmdline and modparams are restricted to 1024 chars
 		int param_max_len = 1024;
 		char *param_values = mem_alloc0(param_max_len);
 		if (!(param_values = (char *)c_seccomp_fetch_vm_new(
 			      seccomp, req->pid, (void *)req->data.args[1], param_max_len))) {
-			ERROR_ERRNO("Failed to fetch module paramters string");
+			ERROR_ERRNO("Failed to fetch module parameters string");
 			mem_free0(param_values);
 			mem_free0(mod_filename);
 			goto out;
 		}
+#endif
+		/*
+		 * unitl we do not have a proper module parameters sanity checking,
+		 * we white out parameters, since there may be dangerous ones.
+		 */
+		char *param_values = mem_strdup("");
 
-		DEBUG("Executing finit_module on behalf of container using module %s from CML",
-		      mod_filename);
+		DEBUG("Executing finit_module on behalf of container using module %s"
+		      " with parameters '%s' from CML",
+		      mod_filename, param_values);
 		int cml_mod_fd = open(mod_filename, O_RDONLY);
 		if (cml_mod_fd < 0) {
 			ERROR_ERRNO("Failed to open module %s in CML", mod_filename);
