@@ -20,3 +20,4 @@ tags
 /converter/converter
 /rung/rung
 /common/common.test
+/scd/pkcs11-tests/p11test
