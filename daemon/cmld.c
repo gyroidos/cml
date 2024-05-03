@@ -668,7 +668,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 		goto cleanup;
 	}
 
-	if (cmld_reload_container((const uuid_t *)uuid, path) != 0) {
+	if (cmld_reload_container((const uuid_t *)uuid, path) == NULL) {
 		WARN("Failed to reload container");
 		goto cleanup;
 	}
