@@ -228,15 +228,33 @@ c_seccomp_install_filter()
 		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, (X32_SYSCALL_BIT - 1), 0, 1),
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
 #endif
+
+		/*
+		 * Note for future syscalls
+		 * ========================
+		 *
+		 * Note that the offset to the SECCOMP_RET_USER_NOTIF statement
+		 * depends on whether SYS_mknod is handled and is therefore
+		 * architecture dependent. For all syscalls handled above these
+		 * lines, make sure that these are self contained, i.e. have a
+		 * fixed offset to their ALLOW/USER_NOTIF statement!
+		 */
+
 		/*
 		 * for mknod(): load args[1] (mode_t mode) from seccomp_data,
 		 * check if mode is blk or char dev -> SECCOMP_RET_NOTIFY
 		 * otherwise skip emulation. -> SECCOMP_RET_ALLOW
+		 *
+		 * The mknod system call is not defined for the arm64 architecture,
+		 * therefore disable this check on arm64 as SYS_mknod is not defined
+		 * there.
 		 */
+#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mknod, 0, 3),
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, args[1]))),
 		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 10, 0),
 		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 9, 0),
+#endif
 
 		/*
 		 * for mknodat(): load args[2] (mode_t mode) from seccomp_data,
