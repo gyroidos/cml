@@ -377,7 +377,8 @@ error:
 }
 
 static int
-c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const char *ovl_lower)
+c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const char *ovl_lower,
+		     bool in_userns)
 {
 	char *lower_dir = mem_printf("%s/lower", overlayfs_mount_dir);
 	char *upper_dir = mem_printf("%s/upper", overlayfs_mount_dir);
@@ -415,13 +416,14 @@ c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const 
 	char *cwd = get_current_dir_name();
 	char *overlayfs_options;
 	if (chdir(overlayfs_mount_dir)) {
-		overlayfs_options = mem_printf("lowerdir=%s,upperdir=%s,workdir=%s,metacopy=on",
-					       lower_dir, upper_dir, work_dir);
+		overlayfs_options =
+			mem_printf("lowerdir=%s,upperdir=%s,workdir=%s,%s", lower_dir, upper_dir,
+				   work_dir, in_userns ? "userxattr" : "metacopy=on");
 		INFO("chdir failed: old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd,
 		     overlayfs_mount_dir, overlayfs_options);
 	} else {
-		overlayfs_options =
-			mem_strdup("lowerdir=lower,upperdir=upper,workdir=work,metacopy=on");
+		overlayfs_options = mem_printf("lowerdir=lower,upperdir=upper,workdir=work,%s",
+					       in_userns ? "userxattr" : "metacopy=on");
 		INFO("old_wdir: %s, mount_cwd: %s, overlay_options: %s ", cwd, overlayfs_mount_dir,
 		     overlayfs_options);
 	}
@@ -487,8 +489,8 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 				mem_free0(tmpfs_dir);
 				return -1;
 			}
-			if (c_idmapped_mount_ovl(tmpfs_dir, dir, dir)) {
-				ERROR("Failed to mount ovl '%s' (lower='%s') in userns on '%s'",
+			if (c_idmapped_mount_ovl(tmpfs_dir, dir, dir, false)) {
+				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      tmpfs_dir, dir, dir);
 				mem_free0(tmpfs_dir);
 				return -1;
@@ -594,7 +596,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
 		if (!is_idmapping_supported()) {
-			if (c_idmapped_mount_ovl(src, src, ovl_lower)) {
+			if (c_idmapped_mount_ovl(src, src, ovl_lower, false)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      src, ovl_lower, dst);
 				goto error;
@@ -772,7 +774,8 @@ c_idmapped_start_child(void *idmappedp)
 		}
 
 		if (mnt->ovl_lower) {
-			if (c_idmapped_mount_ovl(mnt->ovl_upper, mnt->target, mnt->ovl_lower)) {
+			if (c_idmapped_mount_ovl(mnt->ovl_upper, mnt->target, mnt->ovl_lower,
+						 true)) {
 				ERROR("Failed to mount ovl '%s' in userns on '%s'", mnt->ovl_upper,
 				      mnt->target);
 				goto error;
