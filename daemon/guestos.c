@@ -51,6 +51,7 @@ struct guestos {
 	guestos_verify_result_t verify_result; ///< result of guestos signature verification
 
 	bool downloading; ///< indicates download in progress
+	bool complete;	  ///< cached result of 'images are complete' check
 
 	char *rollback_dir;    ///< directory where flashed image locations are backuped
 	bool partialy_flashed; ///< indicates that at least one image of type flash made it to disk
@@ -135,6 +136,7 @@ guestos_new_internal(guestos_config_t *cfg, const char *basepath)
 	os->cfg = cfg;
 	os->downloading = false;
 	os->partialy_flashed = false;
+	os->complete = false;
 	return os;
 }
 
@@ -350,9 +352,14 @@ cleanup:
 }
 
 bool
-guestos_images_are_complete(const guestos_t *os, bool thorough)
+guestos_images_are_complete(guestos_t *os, bool thorough)
 {
 	ASSERT(os);
+
+	// check and return cached result
+	if (!thorough && os->complete)
+		return os->complete;
+
 	INFO("Checking images of GuestOS %s v%" PRIu64 " (%s)", guestos_get_name(os),
 	     guestos_get_version(os), thorough ? "thorough" : "quick");
 
@@ -372,6 +379,10 @@ guestos_images_are_complete(const guestos_t *os, bool thorough)
 			break;
 		}
 	}
+
+	// cache result
+	os->complete = res;
+
 	mount_free(mnt);
 	return res;
 }
