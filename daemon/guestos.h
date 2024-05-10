@@ -139,7 +139,7 @@ guestos_check_mount_image_block(const guestos_t *os, const mount_entry_t *e, boo
  * @return true if all images are good, false otherwise
  */
 bool
-guestos_images_are_complete(const guestos_t *os, bool thorough);
+guestos_images_are_complete(guestos_t *os, bool thorough);
 
 /**
  * Callback type for guestos_images_check() to report whether all images of a GuestOS are complete.
