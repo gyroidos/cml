@@ -229,6 +229,7 @@ c_seccomp_install_filter()
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
 #endif
 
+#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
 		/*
 		 * Note for future syscalls
 		 * ========================
@@ -249,7 +250,6 @@ c_seccomp_install_filter()
 		 * therefore disable this check on arm64 as SYS_mknod is not defined
 		 * there.
 		 */
-#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mknod, 0, 3),
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, args[1]))),
 		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 10, 0),
