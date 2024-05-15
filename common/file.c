@@ -136,13 +136,13 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 
 	in_fd = open(in_file, O_RDONLY);
 	if (in_fd < 0) {
-		DEBUG("Could not open input file %s", in_file);
+		DEBUG_ERRNO("Could not open input file %s", in_file);
 		return -1;
 	}
 
 	out_fd = open(out_file, O_WRONLY | O_CREAT | O_TRUNC, 00666);
 	if (out_fd < 0) {
-		DEBUG("Could not open output file %s", out_file);
+		DEBUG_ERRNO("Could not open output file %s", out_file);
 		close(in_fd);
 		return -1;
 	}
@@ -151,7 +151,7 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 
 	ret = lseek(out_fd, seek * bs, SEEK_SET);
 	if (ret < 0) {
-		DEBUG("Could not lseek in output file %s", out_file);
+		DEBUG_ERRNO("Could not lseek in output file %s", out_file);
 		goto out;
 	}
 
@@ -163,12 +163,12 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		if (len == 0) {
 			goto out;
 		} else if (len < 0) {
-			DEBUG("Could not read from input file %s", in_file);
+			DEBUG_ERRNO("Could not read from input file %s", in_file);
 			ret = -1;
 			goto out;
 		} else /* if (len > 0) */ {
 			if (write(out_fd, buf, len) < 0) {
-				DEBUG("Could not write to output file %s", out_file);
+				DEBUG_ERRNO("Could not write to output file %s", out_file);
 				ret = -1;
 				goto out;
 			}
