@@ -42,6 +42,7 @@
 #include "common/dir.h"
 #include "common/network.h"
 #include "common/reboot.h"
+#include "common/uevent.h"
 #include "mount.h"
 #include "device_config.h"
 #include "control.h"
@@ -1358,6 +1359,30 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	network_enable_ip_forwarding();
 }
 
+static int
+cmld_trigger_net_uevent_foreach_cb(const char *path, const char *name, void *data)
+{
+	int ret = 0;
+	char *full_path = mem_printf("%s/%s", path, name);
+
+	if (file_is_dir(full_path)) {
+		if (0 > dir_foreach(full_path, &cmld_trigger_net_uevent_foreach_cb, data)) {
+			WARN("Could not trigger net uevents! No '%s'!", full_path);
+			ret--;
+		}
+	} else if (!strcmp(name, "uevent")) {
+		if (-1 == file_printf(full_path, "add")) {
+			WARN("Could not trigger event %s <- add", full_path);
+			ret--;
+		} else {
+			DEBUG("Trigger net event %s <- add", full_path);
+		}
+	}
+
+	mem_free0(full_path);
+	return ret;
+}
+
 int
 cmld_init(const char *path)
 {
@@ -1522,6 +1547,13 @@ cmld_init(const char *path)
 
 	if (cmld_start_c0(cmld_containers_get_c0()) < 0)
 		FATAL("Could not start c0");
+
+	const char *sysfs_net = "/sys/class/net";
+	// retrigger possibly missed early plugged netdevice through sysfs
+	if (!cmld_hostedmode &&
+	    0 > dir_foreach(sysfs_net, &cmld_trigger_net_uevent_foreach_cb, NULL)) {
+		WARN("Could not trigger net uevents! No '%s'!", sysfs_net);
+	}
 
 	mem_free0(containers_path);
 
