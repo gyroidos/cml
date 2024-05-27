@@ -339,6 +339,36 @@ hotplug_handle_uevent_cb(unsigned actions, uevent_event_t *event, UNUSED void *d
 	}
 }
 
+static int
+hotplug_trigger_net_uevent_foreach_cb(const char *path, const char *name, UNUSED void *data)
+{
+	int ret = 0;
+	char *uevent_path = mem_printf("%s/%s/uevent", path, name);
+	char *driver_path = mem_printf("%s/%s/device/driver", path, name);
+
+	TRACE("checking uevent_path: '%s'", uevent_path);
+	if (!file_exists(uevent_path) || !file_exists(driver_path)) {
+		goto out;
+	}
+
+	// if already in list just do 'nothing' (check removes ifname, so just readd)
+	if (cmld_netif_phys_remove_by_name(name)) {
+		cmld_netif_phys_add_by_name(name);
+		goto out;
+	}
+
+	if (-1 == file_printf(uevent_path, "add")) {
+		WARN("Could not trigger event %s <- add", uevent_path);
+		ret--;
+	} else {
+		DEBUG("Trigger net event %s <- add", uevent_path);
+	}
+out:
+	mem_free0(uevent_path);
+	mem_free0(driver_path);
+	return ret;
+}
+
 int
 hotplug_init()
 {
@@ -360,7 +390,17 @@ hotplug_init()
 				    UEVENT_ACTION_ADD | UEVENT_ACTION_CHANGE | UEVENT_ACTION_REMOVE,
 				    hotplug_handle_uevent_cb, NULL);
 
-	return uevent_add_uev(uevent_uev);
+	IF_TRUE_RETVAL(uevent_add_uev(uevent_uev), -1);
+
+	if (cmld_is_hostedmode_active())
+		return 0;
+
+	const char *sysfs_net = "/sys/class/net";
+	// retrigger possibly missed early plugged netdevice through sysfs
+	if (0 > dir_foreach(sysfs_net, &hotplug_trigger_net_uevent_foreach_cb, NULL)) {
+		WARN("Could not trigger net uevents! No '%s'!", sysfs_net);
+	}
+	return 0;
 }
 
 void
