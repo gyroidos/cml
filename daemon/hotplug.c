@@ -115,6 +115,12 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 	unsigned int *ifi_idx;
 	char *newname = NULL;
 
+	// do not rename twice
+	if (!strncmp(oldname, "cml", 3)) {
+		DEBUG("Keeping ifname %s", oldname);
+		return mem_strdup(oldname);
+	}
+
 	ifi_idx = !strcmp(infix, "wlan") ? &cmld_wlan_idx : &cmld_eth_idx;
 
 	if (-1 == asprintf(&newname, "%s%s%d", "cml", infix, *ifi_idx)) {
