@@ -304,6 +304,11 @@ logf_file_new(const char *name)
 	char *name_with_time_of_day = logf_file_new_name(name);
 	f = fopen(name_with_time_of_day, "w");
 
+	if (0 != setvbuf(f, NULL, _IOLBF, 0)) {
+		fclose(f);
+		f = NULL;
+	}
+
 	mem_free0(name_with_time_of_day);
 
 	return f;
