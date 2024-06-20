@@ -1404,7 +1404,7 @@ c_net_cleanup_c0(const c_net_t *net)
 
 	// cleanup moved rootns veth endpoint in c0's network namespace
 	pid_t pid = c0 ? container_get_pid(c0) : getpid();
-	ret = namespace_exec(pid, CLONE_NEWNET | CLONE_NEWUSER, true, c_net_do_cleanup_host, net);
+	ret = namespace_exec(pid, CLONE_NEWNET | CLONE_NEWUSER, 0, 0, c_net_do_cleanup_host, net);
 
 	DEBUG("Cleanup of net ifs in netns of %s done!", hostns);
 	return ret;
