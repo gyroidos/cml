@@ -168,12 +168,6 @@ finit_module(int fd, const char *param_values, int flags)
 }
 
 static int
-capset(cap_user_header_t hdrp, cap_user_data_t datap)
-{
-	return syscall(__NR_capset, hdrp, datap);
-}
-
-static int
 capget(cap_user_header_t hdrp, cap_user_data_t datap)
 {
 	return syscall(__NR_capget, hdrp, datap);
@@ -465,7 +459,6 @@ struct mknodat_fork_data {
 	const char *cwd;
 	mode_t mode;
 	dev_t dev;
-	uid_t uid;
 };
 
 static int
@@ -473,38 +466,6 @@ c_seccomp_do_mknodat_fork(const void *data)
 {
 	const struct mknodat_fork_data *params = data;
 	ASSERT(params);
-
-	/*
-	 * We change to the mapped root user in the container.
-	 * Otherwise, if we just use system root with uid 0, we cannot write
-	 * mounts mounted by the container itself, e.g. '/tmp'. This would
-	 * result in an "errno (75: Value too large for defined data type)".
-	 * To still allow mknod we need to preserve CAP_MKNOD.
-	 */
-	IF_TRUE_RETVAL(prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0), -1);
-
-	if (setgid(params->uid) < 0) {
-		ERROR_ERRNO("Could not set gid to '%d' in container", params->uid);
-		return -1;
-	}
-
-	if (setuid(params->uid) < 0) {
-		ERROR_ERRNO("Could not change to mapped root '(%d)' in container", params->uid);
-		return -1;
-	}
-
-	struct __user_cap_header_struct cap_header = { .version = _LINUX_CAPABILITY_VERSION_3,
-						       .pid = 0 };
-	struct __user_cap_data_struct cap_data[2];
-	mem_memset0(&cap_data, sizeof(cap_data));
-
-	cap_data[CAP_TO_INDEX(CAP_MKNOD)].permitted |= CAP_TO_MASK(CAP_MKNOD);
-	cap_data[CAP_TO_INDEX(CAP_MKNOD)].effective |= CAP_TO_MASK(CAP_MKNOD);
-
-	if (capset(&cap_header, cap_data)) {
-		ERROR_ERRNO("Could not set CAP_MKNOD effective!");
-		return -1;
-	}
 
 	if (params->cwd && chdir(params->cwd)) {
 		ERROR_ERRNO("Failed to switch to working directory (%s) of target process",
@@ -918,12 +879,10 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 							    .pathname = pathname,
 							    .cwd = cwd,
 							    .mode = mode,
-							    .dev = dev,
-							    .uid = container_get_uid(
-								    seccomp->container) };
-		if (-1 ==
-		    (ret_mknodat = namespace_exec(req->pid, CLONE_NEWNS, false,
-						  c_seccomp_do_mknodat_fork, &mknodat_params))) {
+							    .dev = dev };
+		if (-1 == (ret_mknodat = namespace_exec(
+				   req->pid, CLONE_NEWNS, container_get_uid(seccomp->container),
+				   CAP_MKNOD, c_seccomp_do_mknodat_fork, &mknodat_params))) {
 			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
 					"seccomp-emulation-failed",
 					compartment_get_name(seccomp->compartment), 2, "syscall",
