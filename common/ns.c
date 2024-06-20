@@ -25,8 +25,10 @@
 #include <sched.h>
 #include <unistd.h>
 #include <errno.h>
+#include <linux/capability.h>
 #include <fcntl.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <stdbool.h>
 
@@ -38,6 +40,51 @@
 #include "event.h"
 #include "file.h"
 #include "proc.h"
+
+static int
+capset(cap_user_header_t hdrp, cap_user_data_t datap)
+{
+	return syscall(__NR_capset, hdrp, datap);
+}
+
+static int
+namespace_setuid_keep_cap(int uid, int cap)
+{
+	/*
+	 * We change to the mapped root user (uid) in the container.
+	 * Otherwise, if we just use system root with uid 0, we cannot write
+	 * mounts mounted by the container itself, e.g. '/tmp'. This would
+	 * result in an "errno (75: Value too large for defined data type)".
+	 * To still allow privileged operations using system-wide capabilities,
+	 * we need to preserve the coressponding 'cap'.
+	 */
+	IF_TRUE_RETVAL(prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0), -1);
+
+	if (setgid(uid) < 0) {
+		ERROR_ERRNO("Could not set gid to '%d' in target ns", uid);
+		return -1;
+	}
+
+	if (setuid(uid) < 0) {
+		ERROR_ERRNO("Could not change to mapped root '(%d)' in target ns", uid);
+		return -1;
+	}
+
+	struct __user_cap_header_struct cap_header = { .version = _LINUX_CAPABILITY_VERSION_3,
+						       .pid = 0 };
+	struct __user_cap_data_struct cap_data[2];
+	mem_memset0(&cap_data, sizeof(cap_data));
+
+	cap_data[CAP_TO_INDEX(cap)].permitted |= CAP_TO_MASK(cap);
+	cap_data[CAP_TO_INDEX(cap)].effective |= CAP_TO_MASK(cap);
+
+	if (capset(&cap_header, cap_data)) {
+		ERROR_ERRNO("Could not set cap (%d) effective!", cap);
+		return -1;
+	}
+
+	return 0;
+}
 
 int
 namespace_setuid0()
@@ -145,7 +192,7 @@ error:
 }
 
 int
-namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
+namespace_exec(pid_t namespace_pid, const int namespaces, int uid, int cap,
 	       int (*func)(const void *), const void *data)
 {
 	if (namespace_pid < 1) {
@@ -198,9 +245,14 @@ namespace_exec(pid_t namespace_pid, const int namespaces, bool become_root,
 			if (do_join_namespace("mnt", namespace_pid) == -1)
 				_exit(-1);
 		}
-		if (become_root) {
+		if ((namespaces & CLONE_NEWUSER) && uid == 0) {
 			TRACE("Becoming root in target namespace");
 			if (namespace_setuid0() == -1)
+				_exit(-1);
+		}
+		if (!(namespaces & CLONE_NEWUSER) && cap) {
+			TRACE("Preserve system wide cap in target namespace");
+			if (namespace_setuid_keep_cap(uid, cap) == -1)
 				_exit(-1);
 		}
 
