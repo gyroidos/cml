@@ -863,8 +863,16 @@ event_loop(void)
 void
 event_reset()
 {
-	TRACE("Resetting event inotify fd");
-	event_inotify_reset_fd();
+	/*
+	 * FIXME event_inotify_reset_fd();
+	 * calling event_inotiy_reset_fd() in child process also
+	 * disables notify in parent process somehow.
+	 * Just removing it here for now, however event_inotify_reset_fd()
+	 * needs to be fixed.
+	 */
+
+	// TRACE("Resetting event inotify fd");
+	// event_inotify_reset_fd();
 
 	TRACE("Resetting event epoll fd");
 	event_reset_fd();
