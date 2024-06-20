@@ -30,6 +30,7 @@
 #include "common/dir.h"
 #include "common/event.h"
 #include "common/file.h"
+#include "common/ns.h"
 
 #include "container.h"
 
@@ -38,6 +39,8 @@
 #include <sys/inotify.h>
 #include <sys/mount.h>
 #include <sys/sysmacros.h>
+#include <sched.h>
+#include <linux/capability.h>
 
 #define C_AUTOMOUNT_MOUNT_RETRIES 10
 
@@ -49,22 +52,21 @@ typedef struct c_automount {
 struct c_automount_mount_timer_data {
 	char *path;
 	container_t *container;
+	int retry;
 };
 
-static void
-c_automount_mount_timer_cb(event_timer_t *timer, void *data)
+static int
+c_automount_mountns(const void *data)
 {
-	static int retries = 0;
 	ASSERT(data);
 
-	struct c_automount_mount_timer_data *tdata = data;
+	const struct c_automount_mount_timer_data *tdata = data;
 	int ret = 0;
 
 	char *fstypes[] = { "vfat", "ext4", "btrfs", "ext2", "ext3" };
 	char *basename_path = mem_strdup(tdata->path);
 	char *devname = basename(basename_path);
-	char *mount_path = mem_printf("%s/media/external/%s",
-				      container_get_rootdir(tdata->container), devname);
+	char *mount_path = mem_printf("/media/external/%s", devname);
 
 	if (dir_mkdir_p(mount_path, 0755)) {
 		ERROR("Could not create path for external storage mount point");
@@ -73,10 +75,6 @@ c_automount_mount_timer_cb(event_timer_t *timer, void *data)
 
 	for (int i = 0; i < 5; ++i) {
 		char *mount_data = NULL;
-		if (!strcmp(fstypes[i], "vfat")) {
-			int uid = container_get_uid(tdata->container);
-			mount_data = mem_printf("uid=%d, gid=%d", uid, uid);
-		}
 
 		ret = mount(tdata->path, mount_path, fstypes[i], MS_RELATIME, mount_data);
 
@@ -93,14 +91,32 @@ c_automount_mount_timer_cb(event_timer_t *timer, void *data)
 				    mount_path, fstypes[i]);
 		}
 	}
-
 out:
 	mem_free0(basename_path);
 	mem_free0(mount_path);
 
-	IF_TRUE_RETURN(ret && retries++ < C_AUTOMOUNT_MOUNT_RETRIES);
+	return ret;
+}
 
-	retries = 0;
+static void
+c_automount_mount_timer_cb(event_timer_t *timer, void *data)
+{
+	ASSERT(data);
+
+	struct c_automount_mount_timer_data *tdata = data;
+	/*
+	 * We change to the mapped root user in the container.
+	 * Otherwise, if we just use system root with uid 0, we cannot write
+	 * mounts mounted by the container itself, e.g. '/tmp'. This would
+	 * result in an "errno (75: Value too large for defined data type)".
+	 * To still allow mount, we need to preserve system-wide CAP_SYS_ADMIN'.
+	 */
+	int ret = namespace_exec(container_get_pid(tdata->container), CLONE_NEWNS,
+				 container_get_uid(tdata->container), CAP_SYS_ADMIN,
+				 c_automount_mountns, data);
+
+	IF_TRUE_RETURN(ret && tdata->retry++ < C_AUTOMOUNT_MOUNT_RETRIES);
+
 	mem_free0(tdata->path);
 	mem_free0(tdata);
 
@@ -153,6 +169,7 @@ c_automount_mount_watch_dev_dir_cb(const char *path, uint32_t mask, UNUSED event
 		mem_new0(struct c_automount_mount_timer_data, 1);
 	tdata->path = mem_strdup(path);
 	tdata->container = automount->container;
+	tdata->retry = 0;
 	event_timer_t *e = event_timer_new(1000, EVENT_TIMER_REPEAT_FOREVER,
 					   c_automount_mount_timer_cb, tdata);
 	event_add_timer(e);
@@ -187,42 +204,26 @@ c_automount_free(void *automountp)
 }
 
 static int
-c_automount_start_child_early(void *automountp)
+c_automount_start_child(void *automountp)
 {
 	c_automount_t *automount = automountp;
 	ASSERT(automount);
 
-	char *mnt_media = mem_printf("%s/media", container_get_rootdir(automount->container));
+	const char *mnt_media = "/media";
 
 	INFO("Mounting tmpfs to %s", mnt_media);
 
 	if (mkdir(mnt_media, 0755) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir %s", mnt_media);
-		goto error;
+		return -COMPARTMENT_ERROR;
 	}
 
 	if (mount("tmpfs", mnt_media, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 		ERROR_ERRNO("Could not mount %s", mnt_media);
-		goto error;
+		return -COMPARTMENT_ERROR;
 	}
 
-	if (mount(NULL, mnt_media, NULL, MS_SHARED, NULL) < 0) {
-		ERROR_ERRNO("Could not apply MS_SHARED to %s", mnt_media);
-		goto error;
-	} else {
-		DEBUG("Applied MS_SHARED to %s", mnt_media);
-	}
-
-	if (container_shift_ids(automount->container, mnt_media, mnt_media, NULL)) {
-		ERROR_ERRNO("Could not shift ids for dev on '%s'", mnt_media);
-		goto error;
-	}
-
-	mem_free0(mnt_media);
 	return 0;
-error:
-	mem_free0(mnt_media);
-	return -COMPARTMENT_ERROR;
 }
 
 static int
@@ -271,12 +272,12 @@ static compartment_module_t c_automount_module = {
 	.compartment_free = c_automount_free,
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
-	.start_child_early = c_automount_start_child_early,
+	.start_child_early = NULL,
 	.start_pre_clone = NULL,
 	.start_post_clone = NULL,
 	.start_pre_exec = NULL,
 	.start_post_exec = c_automount_start_post_exec,
-	.start_child = NULL,
+	.start_child = c_automount_start_child,
 	.start_pre_exec_child = NULL,
 	.stop = c_automount_stop,
 	.cleanup = c_automount_cleanup,
