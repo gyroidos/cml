@@ -716,14 +716,22 @@ container_config_get_allow_system_time(const container_config_t *config)
 // hardcode some restricted config otpions in CC Mode
 #ifdef CC_MODE
 uint32_t
-container_config_get_color(UNUSED const container_config_t *config)
+container_config_get_color(const container_config_t *config)
 {
+	ASSERT(config);
+	ASSERT(config->cfg);
+	if (config->cfg->color != 0)
+		WARN("Ignoring color in CC Mode. Setting default: '0'.");
 	return 0;
 }
 
 container_type_t
-container_config_get_type(UNUSED const container_config_t *config)
+container_config_get_type(const container_config_t *config)
 {
+	ASSERT(config);
+	ASSERT(config->cfg);
+	if (container_config_proto_to_type(config->cfg->type) != CONTAINER_TYPE_CONTAINER)
+		WARN("Ignoring container type in CC Mode. Setting default: 'CONTAINER_TYPE_CONTAINER'.");
 	return CONTAINER_TYPE_CONTAINER;
 }
 

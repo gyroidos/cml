@@ -72,7 +72,7 @@ enum ContainerTokenType {
 }
 
 message ContainerConfig {
-	reserved 6, 7, 10, 20, 22; // legacy or only available in non-CC Mode
+	reserved 10, 20, 22; // legacy or only available in non-CC Mode
 	// user configurable, non unique
 	required string name = 1;
 	// name of GuestOS, e.g. android
@@ -85,6 +85,11 @@ message ContainerConfig {
 
 	// ram limit of container, set ram_limit to 0 for unlimited ram
 	optional uint32 ram_limit = 5 [ default = 0 ];      // unit = MBytes
+
+	required fixed32 color = 6 [ default = 0 ]; // (0 enforced in ccmode)
+
+	// type of container, e.g. KVM or CONTAINER (CONTAINER is enforced in ccmode)
+	required ContainerType type = 7 [ default = CONTAINER ];
 
 	repeated string init_env = 8;	// environment variables
 
