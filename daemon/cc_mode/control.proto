@@ -139,17 +139,16 @@ message ControllerToDaemon {
 	optional bytes container_config_file = 13;		// new container config for CREATE_CNTAINER
 	optional bytes container_config_signature = 18;		// signature of the container config file
 	optional bytes container_config_certificate = 19;	// sw signing certificate to verify the signature on the container config file
-	optional string newpin = 20;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN
+	optional string device_pin = 42;		// pin for token for CONTAINER_CHANGE_TOKEN_PIN
+	optional string device_newpin = 43;		// new pin for token for CONTAINER_CHANGE_TOKEN_PIN
 
 	// Daemon
-	optional bytes guestos_config_file = 30;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
-	optional bytes guestos_config_signature = 31;	// signature of the GuestOS config file
-	optional bytes guestos_config_certificate = 32;	// sw signing certificate to verify the signature on the config file
-	optional bytes guestos_rootcert = 33;	// rootca certificate for local or new CAs to verify GuestOSes
-	optional string guestos_name = 34;	// name of a GuestOS (e.g. used in remove command)
-
+	optional bytes guestos_config_file = 20;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
+	optional bytes guestos_config_signature = 21;	// signature of the GuestOS config file
+	optional bytes guestos_config_certificate = 22;	// sw signing certificate to verify the signature on the config file
+	optional bytes guestos_rootcert = 23;	// rootca certificate for local or new CAs to verify GuestOSes
+	optional string guestos_name = 24;	// name of a GuestOS (e.g. used in remove command)
 	optional bytes device_cert = 41;	// device cert for PUSH_DEVICE_CERT
-	optional string device_pin = 42;	// pin for token for CHANGE_DEVICE_PIN
 }
 
 message ContainerStartParams {
