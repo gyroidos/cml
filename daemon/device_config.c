@@ -128,8 +128,12 @@ device_config_get_signed_configs(UNUSED const device_config_t *config)
 }
 
 bool
-device_config_get_tpm_enabled(UNUSED const device_config_t *config)
+device_config_get_tpm_enabled(const device_config_t *config)
 {
+	ASSERT(config);
+	ASSERT(config->cfg);
+	if (!config->cfg->tpm_enabled)
+		WARN("Ignoring tpm_enabled (false) in CC Mode. Setting default: 'true'.");
 	return true;
 }
 
