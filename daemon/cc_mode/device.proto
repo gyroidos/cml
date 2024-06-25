@@ -26,7 +26,7 @@ syntax = "proto2";
 option java_package = "de.fraunhofer.aisec.trustme";
 
 message DeviceConfig {
-	reserved 2 to 4, 6, 7, 13 to 15, 17; // legacy or only available in non-CC Mode
+	reserved 2 to 4, 6, 7, 13 to 15; // legacy or only available in non-CC Mode
 	// unique uuid. may change due to user change.
 	// may be generated if no uuid is available.
 	required string uuid = 1;
@@ -44,4 +44,6 @@ message DeviceConfig {
 
 	// max size of audit log per logging sink in MB
 	optional uint64 audit_size = 16 [default = 0];
+
+	required bool tpm_enabled = 17 [ default = true ]; // (true enforced in ccmode)
 }
