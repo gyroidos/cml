@@ -34,6 +34,9 @@ CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
 
+# Enable experimental not yet completed features for testing/debugging purpose only!
+CC_MODE_EXPERIMENTAL ?= n
+
 LOCAL_CFLAGS := -std=gnu99 -Icommon -I.. -I../include -I../tpm2d -I../scd -pedantic -O2
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
 ifeq ($(WCAST_ALIGN),y)

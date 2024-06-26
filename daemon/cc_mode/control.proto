@@ -64,6 +64,13 @@ message ControllerToDaemon {
 		// Also fills [container_uuids] with the corresponding container UUIDs.
 		GET_CONTAINER_CONFIG = 4;	// [container_uuid] -> [container_config]
 
+		// Returns logfiles stored in LOGFILE_DIR
+		// Since logfiles may contain sensitive data, this command needs
+		// special protection. The logfiles need to be encrypted by the cmld!
+		// WARNING!! EXPERIMENTAL !! The encryption is not yet implemented !!
+		// Needs CC_MODE_EXPERIMENTAL build flag to be set.
+		GET_LAST_LOG = 5;
+
 		// Retrive device statistics about mem and storage
 		GET_DEVICE_STATS = 6;
 
