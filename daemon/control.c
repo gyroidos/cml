@@ -801,6 +801,12 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG) ||
+#ifdef CC_MODE_EXPERIMENTAL
+	      /* Warning!! Needed logfile encryption for this feature to be safe is not
+	       * yet implemented!
+	       */
+	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG) ||
+#endif
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_DEVICE_STATS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__PUSH_GUESTOS_CONFIG) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
@@ -843,6 +849,12 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	// Device is in privileged provisioned mode, only allow subset of commands
 	if ((msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_GUESTOS_CONFIGS) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
+#if !defined(CC_MODE) || defined(CC_MODE_EXPERIMENTAL)
+	    /* Warning!! Needed logfile encryption for this feature to be safe is not
+	     * yet implemented!
+	     */
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG) ||
+#endif
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_DEVICE_STATS) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
