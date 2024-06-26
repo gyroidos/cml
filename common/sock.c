@@ -150,6 +150,13 @@ sock_inet_create(int type)
 	int sock = socket(AF_INET, type, 0);
 	if (-1 == sock)
 		WARN_ERRNO("Failed to create INET socket.");
+
+	int optval = 1;
+	int ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
+	if (ret < 0) {
+		WARN_ERRNO("failed to set socket options\n");
+	}
+
 	return sock;
 }
 
