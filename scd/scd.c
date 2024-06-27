@@ -201,23 +201,11 @@ provisioning_mode()
 			char *hw_name = mem_strdup("hw_unknown");
 #endif
 
-			// create device uuid and write to device_id.conf
+			// create device uuid and write to csr
 			uuid_t *dev_uuid = uuid_new(NULL);
 			const char *uid;
 			if (!dev_uuid || (uid = uuid_string(dev_uuid)) == NULL) {
 				FATAL("Could not create device uuid");
-			}
-
-			DeviceId *dev_id = mem_new(DeviceId, 1);
-			device_id__init(dev_id);
-
-			// set device uuid
-			dev_id->uuid = mem_strdup(uid);
-
-			// write the uuid to device_id config file
-			if (protobuf_message_write_to_file(DEVICE_ID_CONF,
-							   (ProtobufCMessage *)dev_id) < 0) {
-				FATAL("Could not write device id to \"%s\"!", DEVICE_ID_CONF);
 			}
 
 			if (ssl_create_csr(DEVICE_CSR_FILE, dev_key_file, NULL, common_name, uid,
@@ -225,8 +213,6 @@ provisioning_mode()
 				FATAL("Unable to create CSR");
 			}
 
-			// this call also frees dev_id->uuid
-			protobuf_free_message((ProtobufCMessage *)dev_id);
 			mem_free0(hw_serial);
 			mem_free0(hw_name);
 			mem_free0(common_name);
@@ -332,6 +318,25 @@ main(int argc, char **argv)
 	// for now, the scd is using the tpm engine only for provisioning
 	if (ssl_init(false, NULL) == -1) {
 		FATAL("Failed to initialize OpenSSL stack for scd runtime");
+	}
+
+	if (!file_exists(DEVICE_ID_CONF)) {
+		INFO("Generating device identity from %s!", DEVICE_CERT_FILE);
+
+		DeviceId *dev_id = mem_new0(DeviceId, 1);
+		device_id__init(dev_id);
+
+		// set device uuid
+		dev_id->uuid = ssl_get_uid_from_cert_new(DEVICE_CERT_FILE);
+
+		// write the uuid to device_id config file
+		if (protobuf_message_write_to_file(DEVICE_ID_CONF, (ProtobufCMessage *)dev_id) <
+		    0) {
+			FATAL("Could not write device id to \"%s\"!", DEVICE_ID_CONF);
+		}
+
+		// this call also frees dev_id->uuid
+		protobuf_free_message((ProtobufCMessage *)dev_id);
 	}
 
 	DEBUG("Try to create directory for socket if not existing");
