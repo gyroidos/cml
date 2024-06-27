@@ -26,10 +26,7 @@ syntax = "proto2";
 option java_package = "de.fraunhofer.aisec.trustme";
 
 message DeviceConfig {
-	reserved 2 to 4, 6;
-	// unique uuid. may change due to user change.
-	// may be generated if no uuid is available.
-	required string uuid = 1;
+	reserved 1, 2 to 4, 6;
 
 	// base url for fetching updates (image files, etc.)
 	optional string update_base_url = 5;
@@ -57,4 +54,10 @@ message DeviceConfig {
 	optional uint64 audit_size = 16 [default = 0];
 
 	required bool tpm_enabled = 17 [ default = true ];
+}
+
+message DeviceId {
+	// unique uuid. may change due to user change.
+	// may be generated if no uuid is available.
+	required string uuid = 1;
 }
