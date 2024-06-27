@@ -506,7 +506,7 @@ test_ssl_create_csr_pss(UNUSED const MunitParameter params[], UNUSED void *data)
 		FATAL("Could not create device uuid");
 	}
 
-	if (ssl_create_csr("testdata/munic-device.csr", "testdata/munit-private.key", NULL,
+	if (ssl_create_csr("testdata/munit-device.csr", "testdata/munit-private.key", NULL,
 			   "common_name", uid, false, RSA_PSS_PADDING) != 0) {
 		FATAL("Unable to create CSR");
 	}
@@ -517,6 +517,68 @@ test_ssl_create_csr_pss(UNUSED const MunitParameter params[], UNUSED void *data)
 	unlink("testdata/munit-private.key");
 
 	return 0;
+}
+
+static MunitResult
+test_get_uid_from_device_cert_default(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uuid_t *dev_uuid = uuid_new(NULL);
+	munit_assert(NULL != dev_uuid);
+	const char *uid = uuid_string(dev_uuid);
+	munit_assert(NULL != uid);
+
+	munit_assert(0 == ssl_create_csr("testdata/munit-device.csr", "testdata/munit-private.key",
+					 NULL, "common_name", uid, false, RSA_SSA_PADDING));
+
+	munit_assert(0 == ssl_self_sign_csr("testdata/munit-device.csr",
+					    "testdata/munit-device.self.crt",
+					    "testdata/munit-private.key", false));
+
+	char *uuid_read = ssl_get_uid_from_cert_new("testdata/munit-device.self.crt");
+
+	munit_assert(NULL != uuid_read);
+
+	INFO("uid='%s', uuid_read='%s'", uid, uuid_read);
+	munit_assert(0 == memcmp(uid, uuid_read, strlen(uid)));
+
+	mem_free0(uuid_read);
+	uuid_free(dev_uuid);
+	unlink("testdata/munit-device.csr");
+	unlink("testdata/munit-device.self.crt");
+	unlink("testdata/munit-private.key");
+
+	return MUNIT_OK;
+}
+
+static MunitResult
+test_get_uid_from_device_cert_pss(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	uuid_t *dev_uuid = uuid_new(NULL);
+	munit_assert(NULL != dev_uuid);
+	const char *uid = uuid_string(dev_uuid);
+	munit_assert(NULL != uid);
+
+	munit_assert(0 == ssl_create_csr("testdata/munit-device.csr", "testdata/munit-private.key",
+					 NULL, "common_name", uid, false, RSA_PSS_PADDING));
+
+	munit_assert(0 == ssl_self_sign_csr("testdata/munit-device.csr",
+					    "testdata/munit-device.self.crt",
+					    "testdata/munit-private.key", false));
+
+	char *uuid_read = ssl_get_uid_from_cert_new("testdata/munit-device.self.crt");
+
+	munit_assert(NULL != uuid_read);
+
+	INFO("uid = '%s', uuid_read='%s'", uid, uuid_read);
+	munit_assert(0 == memcmp(uid, uuid_read, strlen(uid)));
+
+	mem_free0(uuid_read);
+	uuid_free(dev_uuid);
+	unlink("testdata/munit-device.csr");
+	unlink("testdata/munit-device.self.crt");
+	unlink("testdata/munit-private.key");
+
+	return MUNIT_OK;
 }
 
 static MunitResult
@@ -1303,6 +1365,10 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "ssl_create_csr_pss", test_ssl_create_csr_pss, setup, tear_down, MUNIT_TEST_OPTION_NONE,
 	  NULL },
+	{ "get_uid_from_device_cert_default", test_get_uid_from_device_cert_default, setup,
+	  tear_down, MUNIT_TEST_OPTION_NONE, NULL },
+	{ "get_uid_from_device_cert_pss", test_get_uid_from_device_cert_pss, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_read_pkcs12_token_ssa", test_ssl_read_pkcs12_token_ssa, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_read_pkcs12_token_pss", test_ssl_read_pkcs12_token_pss, setup, tear_down,
