@@ -96,6 +96,7 @@ SRC_FILES := main.c \
 	control.c \
 	container_config.c \
 	device_config.c \
+	device_id.c \
 	mount.c \
 	guestos.c \
 	guestos_mgr.c \
