@@ -57,9 +57,6 @@ device_config_write(const device_config_t *config);
 /*************************/
 
 const char *
-device_config_get_uuid(const device_config_t *config);
-
-const char *
 device_config_get_update_base_url(const device_config_t *config);
 
 const char *
