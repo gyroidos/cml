@@ -56,6 +56,20 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 	       const char *common_name, const char *uid, bool tpmkey, rsa_padding_t rsa_padding);
 
 /**
+ * extracts the uid filed from the cert or csr file
+ * The ssl_create_csr() sets an extension similar to:
+ *
+ * X509v3 Subject Alternative Name:
+ *   URI:UUID:83131c82-ec1d-49ff-943b-1af411858dd0
+ *
+ * This function returns just the UUID value after URI:UUID:
+ *
+ * @return returns uuid on success, NULL in case of a failure.
+ */
+char *
+ssl_get_uid_from_cert_new(const char *file);
+
+/**
  * This function wraps a (symmetric) key plain_key of length plain_key_len into a wrapped key wrapped_key
  * of length wrapped_key_len using a public key pkey (unwrap works with the corresp. private key).
  * @return returns 0 on success, -1 in case of a failure. */

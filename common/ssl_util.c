@@ -319,6 +319,67 @@ error:
 	return -1;
 }
 
+char *
+ssl_get_uid_from_cert_new(const char *file)
+{
+	char *uuid = NULL;
+	int pos = 0;
+	FILE *fp = NULL;
+	X509 *cert = NULL;
+	X509_EXTENSION *ex;
+	BIO *ext_bio = NULL;
+	BUF_MEM *bptr = NULL;
+
+	if (!(fp = fopen(file, "r"))) {
+		ERROR("Error opening file %s", file);
+		return NULL;
+	}
+
+	if (!(cert = PEM_read_X509(fp, NULL, NULL, NULL))) {
+		ERROR("Error reading file %s", file);
+		goto error;
+	}
+
+	if (0 > (pos = X509_get_ext_by_NID(cert, NID_subject_alt_name, -1))) {
+		ERROR("Extension for UUID not found!");
+		goto error;
+	}
+
+	if (!(ex = X509_get_ext(cert, pos))) {
+		ERROR("Unable to get extension at pos=%d", pos);
+		goto error;
+	}
+
+	if (!(ext_bio = BIO_new(BIO_s_mem()))) {
+		ERROR("Unable to allocate mem for extension value BIO");
+		goto error;
+	}
+	if (!X509V3_EXT_print(ext_bio, ex, 0, 0)) {
+		ERROR("Failed to convert ASN1_STRING");
+		goto error;
+	}
+
+	BIO_get_mem_ptr(ext_bio, &bptr);
+	BIO_set_close(ext_bio, BIO_NOCLOSE); /* So BIO_free() leaves BUF_MEM bptr alone */
+
+	uuid = mem_new0(char, 36);
+
+	if (sscanf(bptr->data, "URI:UUID:%36c", uuid) != 1) {
+		ERROR("Failed parsing uuid!");
+		mem_free0(uuid);
+		goto error;
+	}
+
+error:
+	if (ext_bio)
+		BIO_free(ext_bio);
+	if (cert)
+		X509_free(cert);
+	fclose(fp);
+
+	return uuid;
+}
+
 static X509_REQ *
 ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool tpmkey)
 {
