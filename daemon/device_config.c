@@ -29,7 +29,6 @@
 #include "common/mem.h"
 #include "common/protobuf.h"
 #include "common/protobuf-text.h"
-#include "common/uuid.h"
 
 struct device_config {
 	char *file;
@@ -61,10 +60,6 @@ device_config_new(const char *path)
 			     file);
 			cfg = mem_new(DeviceConfig, 1);
 			device_config__init(cfg);
-			//TODO: fix. identifiers don't exist anymore
-			uuid_t *uuid = uuid_new(NULL);
-			cfg->uuid = mem_strdup(uuid_string(uuid));
-			uuid_free(uuid);
 		}
 	}
 	ASSERT(cfg);
@@ -183,15 +178,6 @@ device_config_get_tpm_enabled(const device_config_t *config)
 	return config->cfg->tpm_enabled;
 }
 #endif /* CC_MODE */
-
-const char *
-device_config_get_uuid(const device_config_t *config)
-{
-	ASSERT(config);
-	ASSERT(config->cfg);
-
-	return config->cfg->uuid;
-}
 
 const char *
 device_config_get_update_base_url(const device_config_t *config)
