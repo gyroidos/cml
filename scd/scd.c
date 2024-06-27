@@ -59,7 +59,7 @@
 // clang-format on
 
 // Do not edit! This path is also configured in cmld.c
-#define DEVICE_CONF DEFAULT_CONF_BASE_PATH "/device.conf"
+#define DEVICE_ID_CONF DEFAULT_BASE_PATH "/device_id.conf"
 
 #ifdef ANDROID
 #define PROP_SERIALNO "ro.boot.serialno"
@@ -201,30 +201,23 @@ provisioning_mode()
 			char *hw_name = mem_strdup("hw_unknown");
 #endif
 
-			// create device uuid and write to device.conf
+			// create device uuid and write to device_id.conf
 			uuid_t *dev_uuid = uuid_new(NULL);
 			const char *uid;
 			if (!dev_uuid || (uid = uuid_string(dev_uuid)) == NULL) {
 				FATAL("Could not create device uuid");
 			}
 
-			DeviceConfig *dev_cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
-				DEVICE_CONF, &device_config__descriptor);
-
-			if (!dev_cfg) {
-				FATAL("Failed load device config from file \"%s\"!", DEVICE_CONF);
-			}
+			DeviceId *dev_id = mem_new(DeviceId, 1);
+			device_id__init(dev_id);
 
 			// set device uuid
-			char *proto_uid = mem_strdup(uid);
-			// free this element, as it is overwritten
-			mem_free0(dev_cfg->uuid);
-			dev_cfg->uuid = proto_uid;
+			dev_id->uuid = mem_strdup(uid);
 
-			// write the uuid to device config file
-			if (protobuf_message_write_to_file(DEVICE_CONF,
-							   (ProtobufCMessage *)dev_cfg) < 0) {
-				FATAL("Could not write device config to \"%s\"!", DEVICE_CONF);
+			// write the uuid to device_id config file
+			if (protobuf_message_write_to_file(DEVICE_ID_CONF,
+							   (ProtobufCMessage *)dev_id) < 0) {
+				FATAL("Could not write device id to \"%s\"!", DEVICE_ID_CONF);
 			}
 
 			if (ssl_create_csr(DEVICE_CSR_FILE, dev_key_file, NULL, common_name, uid,
@@ -232,8 +225,8 @@ provisioning_mode()
 				FATAL("Unable to create CSR");
 			}
 
-			// this call also frees proto_uid
-			protobuf_free_message((ProtobufCMessage *)dev_cfg);
+			// this call also frees dev_id->uuid
+			protobuf_free_message((ProtobufCMessage *)dev_id);
 			mem_free0(hw_serial);
 			mem_free0(hw_name);
 			mem_free0(common_name);
