@@ -64,6 +64,9 @@
 #ifdef ANDROID
 #define PROP_SERIALNO "ro.boot.serialno"
 #define PROP_HARDWARE "ro.hardware"
+#else
+#define DMI_PRODUCT_SERIAL "/sys/devices/virtual/dmi/id/product_serial"
+#define DMI_PRODUCT_NAME "/sys/devices/virtual/dmi/id/product_name"
 #endif
 
 #define TOKEN_DEFAULT_PASS "trustme"
@@ -193,13 +196,24 @@ provisioning_mode()
 			if (!property_read_failure)
 				common_name = mem_printf("%s %s", hw_name, hw_serial);
 			else
-				common_name = mem_printf("%s %s", "x86", "0000");
-			DEBUG("Using common name %s", common_name);
+				common_name = mem_printf("%s %s", "generic", "0000");
 #else
-			char *common_name = mem_strdup("common_name");
-			char *hw_serial = mem_strdup("hw_serial");
-			char *hw_name = mem_strdup("hw_unknown");
+			char *hw_serial = NULL;
+			char *hw_name = NULL;
+
+			if (file_exists(DMI_PRODUCT_SERIAL))
+				hw_serial = file_read_new(DMI_PRODUCT_SERIAL, 512);
+			if (!hw_serial)
+				hw_serial = mem_strdup("0000");
+
+			if (file_exists(DMI_PRODUCT_NAME))
+				hw_serial = file_read_new(DMI_PRODUCT_NAME, 512);
+			if (!hw_name)
+				hw_name = mem_strdup("generic");
+
+			char *common_name = mem_printf("%s %s", hw_name, hw_serial);
 #endif
+			DEBUG("Using common name %s", common_name);
 
 			// create device uuid and write to csr
 			uuid_t *dev_uuid = uuid_new(NULL);
