@@ -430,3 +430,25 @@ file_disk_space_used(const char *path)
 
 	return (s.f_blocks - s.f_bfree) * s.f_frsize;
 }
+
+bool
+file_disk_space_available(const char *path, off_t required, float threshold)
+{
+	ASSERT(path);
+	IF_TRUE_RETVAL_ERROR((threshold < 0 || threshold > 1), false);
+
+	off_t available = file_disk_space_free(path);
+	IF_TRUE_RETVAL_ERROR(available < 0, false);
+
+	off_t min_free_space = file_disk_space(path);
+	IF_TRUE_RETVAL_ERROR(min_free_space < 0, false);
+
+	min_free_space *= threshold;
+
+	if (required > available || (available - required) < min_free_space) {
+		ERROR("Not enough disk space left");
+		return false;
+	}
+
+	return true;
+}
