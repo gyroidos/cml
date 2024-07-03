@@ -442,26 +442,10 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 	guestos_fill_mount_setup(os, mnt); // append setup mode mounts to be check
 
 	off_t disk_space_required = mount_get_disk_usage_guestos(mnt);
-	if (disk_space_required < 0) {
-		ERROR("Function mount_get_disk_usage_guestos failed");
-		goto cleanup_mnt;
-	}
+	IF_TRUE_GOTO_ERROR(disk_space_required < 0, cleanup_mnt);
 
-	off_t disk_space_available = file_disk_space_free(guestos_basepath);
-	if (disk_space_available < 0) {
-		ERROR("Function file_disk_space_free failed");
-		goto cleanup_mnt;
-	}
-
-	off_t min_free_space = file_disk_space(guestos_basepath);
-	if (min_free_space < 0) {
-		ERROR("Function file_disk_space failed");
-		goto cleanup_mnt;
-	}
-	min_free_space *= CMLD_STORAGE_FREE_THRESHOLD;
-
-	if (disk_space_required > disk_space_available ||
-	    (disk_space_available - disk_space_required) < min_free_space) {
+	if (!file_disk_space_available(guestos_basepath, disk_space_required,
+				       CMLD_STORAGE_FREE_THRESHOLD)) {
 		// not enough space left
 		ERROR("Not enough disk space left on %s", guestos_basepath);
 		goto cleanup_mnt;
