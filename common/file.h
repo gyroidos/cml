@@ -198,12 +198,23 @@ off_t
 file_disk_space_free(const char *path);
 
 /**
- * get free used disk space of underlying file system of the corresponding
+ * get used disk space of underlying file system of the corresponding
  * file or directory at path.
  * @param path The file name or directory name
  * @return The used disk space of the file system for the given path or -1 on error.
  */
 off_t
 file_disk_space_used(const char *path);
+
+/**
+ * check if enough disk space is available on underlying file system of the corresponding
+ * file or directory at path.
+ * @param path The file name or directory name
+ * @param required The required disk space
+ * @param threshold Percentage of space which should be keept free; value in the range [0,1]
+ * @return true if enough space is available, false otherwise
+ */
+bool
+file_disk_space_available(const char *path, off_t required, float threshold);
 
 #endif /* FILE_H */
