@@ -1550,45 +1550,6 @@ cmld_container_create_clone(container_t *container)
 	return NULL;
 }
 
-static container_t *
-cmld_container_validate_disk_space(container_t *container, const char *store_path)
-{
-	IF_NULL_RETVAL(container, NULL);
-
-	// check if enough disk space is available
-	mount_t *mnt_table = container_get_mnt(container);
-	off_t disk_space_required = mount_get_disk_usage_container(mnt_table);
-	if (disk_space_required < 0) {
-		ERROR("Function mount_get_disk_usage_container failed");
-		goto err;
-	}
-
-	off_t disk_space_available = file_disk_space_free(store_path);
-	if (disk_space_available < 0) {
-		ERROR("Function file_disk_space_free failed");
-		goto err;
-	}
-
-	off_t min_free_space = file_disk_space(store_path);
-	if (min_free_space < 0) {
-		ERROR("Function file_disk_space failed");
-		goto err;
-	}
-	min_free_space *= CMLD_STORAGE_FREE_THRESHOLD;
-
-	if (disk_space_required > disk_space_available ||
-	    (disk_space_available - disk_space_required) < min_free_space) {
-		// not enough space left
-		ERROR("Not enough disk space left");
-		goto err;
-	}
-
-	return container;
-err:
-	mem_free0(container);
-	return NULL;
-}
-
 container_t *
 cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint8_t *sig,
 				  size_t sig_len, uint8_t *cert, size_t cert_len)
@@ -1601,9 +1562,16 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	container_t *c =
 		cmld_container_new(path, NULL, config, config_len, sig, sig_len, cert, cert_len);
 
-	// will free container object if insufficient space available
-	c = cmld_container_validate_disk_space(c, path);
 	if (c) {
+		// check if enough disk space is available
+		mount_t *mnt_table = container_get_mnt(c);
+		off_t disk_space_required = mount_get_disk_usage_container(mnt_table);
+		IF_TRUE_GOTO_ERROR(disk_space_required < 0, err);
+
+		IF_FALSE_GOTO_ERROR(file_disk_space_available(path, disk_space_required,
+							      CMLD_STORAGE_FREE_THRESHOLD),
+				    err);
+
 		cmld_containers_list = list_append(cmld_containers_list, c);
 		/*
 		 * register an observer for automatic config reload
@@ -1625,6 +1593,10 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	}
 	mem_free0(path);
 	return c;
+err:
+	container_free(c);
+	mem_free0(path);
+	return NULL;
 }
 
 static void
