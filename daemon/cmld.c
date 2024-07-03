@@ -1882,25 +1882,41 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 	container_config_t *conf =
 		container_config_new(container_get_config_filename(container), buf, buf_len,
 				     sig_buf, sig_len, cert_buf, cert_len);
-	if (conf) {
-		ret = container_config_write(conf);
-		container_set_sync_state(container, false);
 
-		// Wipe container if USB token serial changed
-		if (cmld_container_has_token_changed(container, conf)) {
-			if (container_wipe(container)) {
-				ERROR("Failed to wipe user data. Setting container state to ZOMBIE");
-				container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
-			}
-			if ((container_get_token_type(container) == CONTAINER_TOKEN_TYPE_USB) &&
-			    container_scd_release_pairing(container)) {
-				ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
-				container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
-			}
-		}
+	IF_FALSE_RETVAL_DEBUG(conf, -1);
 
-		container_config_free(conf);
+	// Check if new config needs additional disk space
+	mount_t *mnt_table_new = mount_new();
+	guestos_fill_mount(container_get_guestos(container), mnt_table_new);
+	guestos_fill_mount_setup(container_get_guestos(container), mnt_table_new);
+	container_config_fill_mount(conf, mnt_table_new);
+	off_t new_disk_usage = mount_get_disk_usage_container(mnt_table_new);
+	off_t current_disk_usage = mount_get_disk_usage_container(container_get_mnt(container));
+	if (new_disk_usage > current_disk_usage) {
+		IF_FALSE_GOTO_ERROR(file_disk_space_available(container_get_images_dir(container),
+							      new_disk_usage - current_disk_usage,
+							      CMLD_STORAGE_FREE_THRESHOLD),
+				    out);
 	}
+
+	ret = container_config_write(conf);
+	container_set_sync_state(container, false);
+
+	// Wipe container if USB token serial changed
+	if (cmld_container_has_token_changed(container, conf)) {
+		if (container_wipe(container)) {
+			ERROR("Failed to wipe user data. Setting container state to ZOMBIE");
+			container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
+		}
+		if ((container_get_token_type(container) == CONTAINER_TOKEN_TYPE_USB) &&
+		    container_scd_release_pairing(container)) {
+			ERROR("Failed to remove token paired file. Setting container state to ZOMBIE");
+			container_set_state(container, COMPARTMENT_STATE_ZOMBIE);
+		}
+	}
+out:
+	mount_free(mnt_table_new);
+	container_config_free(conf);
 	return ret;
 }
 
