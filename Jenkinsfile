@@ -7,6 +7,7 @@ pipeline {
 
 	parameters {
 		string(name: 'PR_BRANCHES', defaultValue: '', description: 'Comma separated list of additional pull request branches (e.g. meta-trustx=PR-177,meta-trustx-nxp=PR-13,gyroidos_build=PR-97)')
+		string(name: 'CI_LIB_VERSION', defaultValue: 'main', description: 'Version of the gyroidos_ci_common library to be used')
 	}
 
 	stages {
@@ -29,7 +30,8 @@ pipeline {
 				}
 
 				build job: "../gyroidos/${BASE_BRANCH}", wait: true, parameters: [
-					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}")
+					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}"),
+					string(name: "CI_LIB_VERSION", value: "${CI_LIB_VERSION}")
 				]
 			}
 		}
