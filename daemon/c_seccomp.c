@@ -358,6 +358,161 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	return lbuf;
 }
 
+static void
+c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			  struct seccomp_notif_resp *resp)
+{
+	int ret_adjtime = -1;
+	struct timex *timex = NULL;
+
+	if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
+		DEBUG("Blocking call to SYS_clock_adjtime by PID %d", req->pid);
+		goto out;
+	}
+
+	DEBUG("Got clock_adjtime, clk_id: %lld, struct timex *: %p", req->data.args[0],
+	      (void *)req->data.args[1]);
+
+	// Check cap of target pid in its namespace
+	if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+		ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+		goto out;
+	}
+
+	if (CLOCK_REALTIME != req->data.args[0]) {
+		DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
+		      uuid_string(compartment_get_uuid(seccomp->compartment)), req->data.args[0]);
+		goto out;
+	}
+
+	if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
+		      seccomp, req->pid, (void *)req->data.args[1], sizeof(struct timex)))) {
+		ERROR_ERRNO("Failed to fetch struct timex");
+		goto out;
+	}
+
+	DEBUG("Executing clock_adjtime on behalf of container");
+	if (-1 == (ret_adjtime = clock_adjtime(CLOCK_REALTIME, timex))) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				SYS_clock_adjtime);
+		ERROR_ERRNO("Failed to execute clock_adjtime");
+		goto out;
+	}
+
+	DEBUG("clock_adjtime returned %d", ret_adjtime);
+
+	// prepare answer
+	resp->id = req->id;
+	resp->error = 0;
+	resp->val = ret_adjtime;
+
+out:
+	if (timex)
+		mem_free(timex);
+}
+
+static void
+c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			   struct seccomp_notif_resp *resp)
+{
+	int ret_adjtimex = -1;
+	struct timex *timex = NULL;
+
+	if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
+		DEBUG("Blocking call to SYS_adjtimex by PID %d", req->pid);
+		goto out;
+	}
+
+	DEBUG("Got adjtimex, struct timex *: %p", (void *)req->data.args[0]);
+
+	// Check cap of target pid in its namespace
+	if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+		ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+		goto out;
+	}
+
+	if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
+		      seccomp, req->pid, (void *)req->data.args[0], sizeof(struct timex)))) {
+		ERROR_ERRNO("Failed to fetch struct timex");
+		goto out;
+	}
+
+	DEBUG("Executing adjtimex on behalf of container");
+	if (-1 == (ret_adjtimex = adjtimex(timex))) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				SYS_adjtimex);
+		ERROR_ERRNO("Failed to execute adjtimex");
+		goto out;
+	}
+
+	DEBUG("adjtimex returned %d", ret_adjtimex);
+
+	// prepare answer
+	resp->id = req->id;
+	resp->error = 0;
+	resp->val = ret_adjtimex;
+
+out:
+	if (timex)
+		mem_free(timex);
+}
+
+static void
+c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			  struct seccomp_notif_resp *resp)
+{
+	int ret_settime = -1;
+	struct timespec *timespec = NULL;
+
+	if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
+		DEBUG("Blocking call to SYS_clock_settime by PID %d", req->pid);
+		goto out;
+	}
+
+	DEBUG("Got clock_settime, clockid: %lld, struct timespec *: %p", req->data.args[0],
+	      (void *)req->data.args[1]);
+
+	// Check cap of target pid in its namespace
+	if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
+		ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
+		goto out;
+	}
+
+	if (CLOCK_REALTIME != req->data.args[0]) {
+		DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
+		      uuid_string(compartment_get_uuid(seccomp->compartment)), req->data.args[0]);
+		goto out;
+	}
+
+	if (!(timespec = (struct timespec *)c_seccomp_fetch_vm_new(
+		      seccomp, req->pid, (void *)req->data.args[1], sizeof(struct timespec)))) {
+		ERROR_ERRNO("Failed to fetch struct timespec");
+		goto out;
+	}
+
+	DEBUG("Executing clock_settime on behalf of container");
+	if (-1 == (ret_settime = clock_settime(CLOCK_REALTIME, timespec))) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				SYS_clock_settime);
+		ERROR_ERRNO("Failed to execute clock_settime");
+		goto out;
+	}
+
+	DEBUG("clock_settime returned %d", ret_settime);
+
+	// prepare answer
+	resp->id = req->id;
+	resp->error = 0;
+	resp->val = ret_settime;
+
+out:
+	if (timespec)
+		mem_free(timespec);
+}
+
 /**
  * Parse module dependencies file "/lib/modules/<release>/modules.dep"
  * to retrieve module dependencies for an allowed module
@@ -453,6 +608,122 @@ out:
 	return ret_list;
 }
 
+static void
+c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			       struct seccomp_notif_resp *resp)
+{
+	int ret_finit_module = -1;
+	char *param_values = NULL;
+	char *mod_filename = NULL;
+	int cml_mod_fd = -1;
+
+	if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(seccomp->compartment))) {
+		DEBUG("Blocking call to SYS_finit_module by PID %d", req->pid);
+		goto out;
+	}
+
+	DEBUG("Got finit_module from pid %d, fd: %lld, const char params_values *: %p, flags: %lld",
+	      req->pid, req->data.args[0], (void *)req->data.args[1], req->data.args[2]);
+
+	int fd_in_target = req->data.args[0];
+	int flags = req->data.args[2];
+
+	// Check cap of target pid in its namespace
+	if (!c_seccomp_capable(req->pid, CAP_SYS_MODULE)) {
+		ERROR("Missing CAP_SYS_MODULE for process %d!", req->pid);
+		goto out;
+	}
+
+	mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
+
+	// Check against list of allowed modules
+	bool module_allowed = false;
+	for (list_t *l = seccomp->module_list; l; l = l->next) {
+		char *mod_name = l->data;
+		if (strstr(mod_filename, mod_name)) {
+			module_allowed = true;
+			break;
+		}
+	}
+
+	if (!module_allowed) {
+		ERROR("Check whitelist for '%s' failed!", mod_filename);
+		goto out;
+	}
+
+	// Validate path for module location
+	bool valid_prefix = false;
+	const char *valid_path[2] = { "/lib/modules", "/usr/lib/modules" };
+	for (int i = 0; i < 2 && valid_prefix == false; ++i) {
+		if (0 == strncmp(valid_path[i], mod_filename, strlen(valid_path[i]))) {
+			valid_prefix = true;
+			break;
+		}
+	}
+
+	if (!valid_prefix) {
+		ERROR("Path validation for '%s' failed! %d!", mod_filename, req->pid);
+		goto out;
+	}
+
+	// kernel cmdline and modparams are restricted to 1024 chars
+	int param_max_len = 1024;
+	param_values = mem_alloc0(param_max_len);
+	if (!(param_values = (char *)c_seccomp_fetch_vm_new(
+		      seccomp, req->pid, (void *)req->data.args[1], param_max_len))) {
+		ERROR_ERRNO("Failed to fetch module parameters string");
+		goto out;
+	}
+
+	/*
+	 * unitl we do not have a proper module parameters sanity checking,
+	 * we white out parameters, since there may be dangerous ones.
+	 */
+	param_values = mem_strdup("");
+
+	DEBUG("Executing finit_module on behalf of container using module %s"
+	      " with parameters '%s' from CML",
+	      mod_filename, param_values);
+	cml_mod_fd = open(mod_filename, O_RDONLY);
+	if (cml_mod_fd < 0) {
+		ERROR_ERRNO("Failed to open module %s in CML", mod_filename);
+		goto out;
+	}
+	/*
+	 * for security reasons we strip out flags MODULE_INIT_IGNORE_MODVERSIONS
+	 * MODULE_INIT_IGNORE_VERMAGIC which skips sanity checks and only allow
+	 * @flag_mask (currently this is MODULE_INIT_COMPRESSED_FILE only)
+	 * however to be save on additional introduced module flags, we do not
+	 * explicitly mask out the known bad flags like this:
+	 *
+	 *	flags &= ~(MODULE_INIT_IGNORE_MODVERSIONS | MODULE_INIT_IGNORE_VERMAGIC);
+	 */
+	int flag_mask = MODULE_INIT_COMPRESSED_FILE;
+	flags &= flag_mask;
+
+	if (-1 == (ret_finit_module = finit_module(cml_mod_fd, param_values, flags))) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				SYS_finit_module);
+		ERROR_ERRNO("Failed to execute finit_module");
+		goto out;
+	}
+
+	DEBUG("finit_module returned %d", ret_finit_module);
+
+	// prepare answer
+	resp->id = req->id;
+	resp->error = 0;
+	resp->val = ret_finit_module;
+out:
+	if (cml_mod_fd > 0)
+		close(cml_mod_fd);
+	if (param_values)
+		mem_free0(param_values);
+	if (mod_filename)
+		mem_free0(mod_filename);
+}
+
 struct mknodat_fork_data {
 	int dirfd;
 	const char *pathname;
@@ -480,6 +751,121 @@ c_seccomp_do_mknodat_fork(const void *data)
 	}
 
 	return 0;
+}
+
+static void
+c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			  struct seccomp_notif_resp *resp)
+{
+	int ret_mknodat = -1;
+	const char *syscall_name = req->data.nr == SYS_mknodat ? "mknodat" : "mknod";
+	int dirfd = -1;
+	int arg_offset = 0;
+	char *pathname = NULL;
+	char *cwd = NULL;
+	int cml_dirfd = -1;
+
+	/*
+	 * We emulate mknod() by mknodat() for code dedup:
+	 *
+	 * mknod() and mknodat() have the same arguments, except that
+	 * mknodat has dirfd as first argument:
+	 *   int mknod(const char *pathname, mode_t mode, dev_t dev);
+	 *   int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev);
+	 *
+	 * We therefore use an offset +1 for the data.args array to
+	 * retrieve syscall parameters from seccomp req in case of
+	 * mknodat() and set dirfd to AT_FDCWD in case of mknod()
+	 */
+	if (req->data.nr == SYS_mknodat) {
+		DEBUG("Got %s() from pid %d, fd: %lld, const char *pathname: %p, mode: %lld, dev: %lld",
+		      syscall_name, req->pid, req->data.args[0], (void *)req->data.args[1],
+		      req->data.args[2], req->data.args[3]);
+		dirfd = req->data.args[arg_offset];
+		arg_offset++;
+	} else { // SYS_mknod
+		DEBUG("Got %s() from pid %d, const char *pathname: %p, mode: %lld, dev: %lld",
+		      syscall_name, req->pid, (void *)req->data.args[0], req->data.args[1],
+		      req->data.args[2]);
+		dirfd = AT_FDCWD;
+	}
+
+	mode_t mode = req->data.args[1 + arg_offset];
+	dev_t dev = req->data.args[2 + arg_offset];
+
+	/* Check cap of target pid in its namespace */
+	if (!c_seccomp_capable(req->pid, CAP_MKNOD)) {
+		ERROR("Missing CAP_MKNOD for process %d!", req->pid);
+		goto out;
+	}
+
+	/* We only handle char and block devices, due to our seccomp filter */
+	char dev_type = S_ISCHR(mode) ? 'c' : 'b';
+
+	/* Check if dev is allowed (c_cgroups submodule) */
+	if (!container_is_device_allowed(seccomp->container, dev_type, major(dev), minor(dev))) {
+		ERROR("Missing cgroup permission for device (%c %d:%d) in process %d!", dev_type,
+		      major(dev), minor(dev), req->pid);
+		goto out;
+	}
+
+	int pathname_max_len = PATH_MAX;
+	pathname = mem_alloc0(pathname_max_len);
+	if (!(pathname = (char *)c_seccomp_fetch_vm_new(seccomp, req->pid,
+							(void *)req->data.args[0 + arg_offset],
+							pathname_max_len))) {
+		ERROR_ERRNO("Failed to fetch pathname string");
+		goto out;
+	}
+
+	cml_dirfd = AT_FDCWD;
+	if (dirfd != AT_FDCWD) {
+		int pidfd;
+		if (-1 == (pidfd = pidfd_open(req->pid, 0))) {
+			ERROR_ERRNO("Could not open pidfd for emulating %s()", syscall_name);
+			goto out;
+		}
+
+		cml_dirfd = pidfd_getfd(pidfd, dirfd, 0);
+		if (cml_dirfd < 0) {
+			ERROR_ERRNO("Could not open dirfd in target process for emulating %s()",
+				    syscall_name);
+			goto out;
+		}
+	}
+
+	cwd = proc_get_cwd_new(req->pid);
+
+	DEBUG("Emulating %s by executing mknodat %s on behalf of container", syscall_name,
+	      pathname);
+
+	struct mknodat_fork_data mknodat_params = {
+		.dirfd = cml_dirfd, .pathname = pathname, .cwd = cwd, .mode = mode, .dev = dev
+	};
+	if (-1 == (ret_mknodat = namespace_exec(req->pid, CLONE_NEWNS,
+						container_get_uid(seccomp->container), CAP_MKNOD,
+						c_seccomp_do_mknodat_fork, &mknodat_params))) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				SYS_mknodat);
+		ERROR_ERRNO("Failed to execute mknodat");
+		goto out;
+	}
+
+	DEBUG("mknodat returned %d", ret_mknodat);
+
+	// prepare answer
+	resp->id = req->id;
+	resp->error = 0;
+	resp->val = ret_mknodat;
+
+out:
+	if (cwd)
+		mem_free0(cwd);
+	if (pathname)
+		mem_free0(pathname);
+	if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
+		close(cml_dirfd);
 }
 
 static void
@@ -525,402 +911,34 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 	TRACE("[%llu] Got syscall no. %d by PID %u", req->id, req->data.nr, req->pid);
 
-	if (SYS_clock_adjtime == req->data.nr) {
-		int ret_adjtime = -1;
-
-		if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
-			DEBUG("Blocking call to SYS_clock_adjtime by PID %d", req->pid);
-			goto out;
-		}
-
-		DEBUG("Got clock_adjtime, clk_id: %lld, struct timex *: %p", req->data.args[0],
-		      (void *)req->data.args[1]);
-
-		struct timex *timex = NULL;
-
-		// Check cap of target pid in its namespace
-		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
-			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
-			goto out;
-		}
-
-		if (CLOCK_REALTIME != req->data.args[0]) {
-			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
-			      uuid_string(compartment_get_uuid(seccomp->compartment)),
-			      req->data.args[0]);
-			goto out;
-		}
-
-		if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
-								     (void *)req->data.args[1],
-								     sizeof(struct timex)))) {
-			ERROR_ERRNO("Failed to fetch struct timex");
-			goto out;
-		}
-
-		DEBUG("Executing clock_adjtime on behalf of container");
-		if (-1 == (ret_adjtime = clock_adjtime(CLOCK_REALTIME, timex))) {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-emulation-failed",
-					compartment_get_name(seccomp->compartment), 2, "syscall",
-					SYS_clock_adjtime);
-			ERROR_ERRNO("Failed to execute clock_adjtime");
-			mem_free(timex);
-			goto out;
-		}
-
-		DEBUG("clock_adjtime returned %d", ret_adjtime);
-
-		// prepare answer
-		resp->id = req->id;
-		resp->error = 0;
-		resp->val = ret_adjtime;
-
-		mem_free(timex);
-	} else if (SYS_adjtimex == req->data.nr) {
-		int ret_adjtimex = -1;
-
-		if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
-			DEBUG("Blocking call to SYS_adjtimex by PID %d", req->pid);
-			goto out;
-		}
-
-		DEBUG("Got adjtimex, struct timex *: %p", (void *)req->data.args[0]);
-
-		struct timex *timex = NULL;
-
-		// Check cap of target pid in its namespace
-		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
-			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
-			goto out;
-		}
-
-		if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
-								     (void *)req->data.args[0],
-								     sizeof(struct timex)))) {
-			ERROR_ERRNO("Failed to fetch struct timex");
-			goto out;
-		}
-
-		DEBUG("Executing adjtimex on behalf of container");
-		if (-1 == (ret_adjtimex = adjtimex(timex))) {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-emulation-failed",
-					compartment_get_name(seccomp->compartment), 2, "syscall",
-					SYS_adjtimex);
-			ERROR_ERRNO("Failed to execute adjtimex");
-			mem_free(timex);
-			goto out;
-		}
-
-		DEBUG("adjtimex returned %d", ret_adjtimex);
-
-		// prepare answer
-		resp->id = req->id;
-		resp->error = 0;
-		resp->val = ret_adjtimex;
-
-		mem_free(timex);
-	} else if (SYS_clock_settime == req->data.nr) {
-		int ret_settime = -1;
-
-		if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
-			DEBUG("Blocking call to SYS_clock_settime by PID %d", req->pid);
-			goto out;
-		}
-
-		DEBUG("Got clock_settime, clockid: %lld, struct timespec *: %p", req->data.args[0],
-		      (void *)req->data.args[1]);
-
-		struct timespec *timespec = NULL;
-
-		// Check cap of target pid in its namespace
-		if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
-			ERROR("Missing CAP_SYS_TIME for process %d!", req->pid);
-			goto out;
-		}
-
-		if (CLOCK_REALTIME != req->data.args[0]) {
-			DEBUG("Attempt of container %s to execute clock_settime on clock %llx blocked",
-			      uuid_string(compartment_get_uuid(seccomp->compartment)),
-			      req->data.args[0]);
-			goto out;
-		}
-
-		if (!(timespec = (struct timespec *)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, (void *)req->data.args[1],
-			      sizeof(struct timespec)))) {
-			ERROR_ERRNO("Failed to fetch struct timespec");
-			goto out;
-		}
-
-		DEBUG("Executing clock_settime on behalf of container");
-		if (-1 == (ret_settime = clock_settime(CLOCK_REALTIME, timespec))) {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-emulation-failed",
-					compartment_get_name(seccomp->compartment), 2, "syscall",
-					SYS_clock_settime);
-			ERROR_ERRNO("Failed to execute clock_settime");
-			mem_free(timespec);
-			goto out;
-		}
-
-		DEBUG("clock_settime returned %d", ret_settime);
-
-		// prepare answer
-		resp->id = req->id;
-		resp->error = 0;
-		resp->val = ret_settime;
-
-		mem_free(timespec);
-	} else if (SYS_finit_module == req->data.nr) {
-		int ret_finit_module = -1;
-
-		if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(seccomp->compartment))) {
-			DEBUG("Blocking call to SYS_finit_module by PID %d", req->pid);
-			goto out;
-		}
-
-		DEBUG("Got finit_module from pid %d, fd: %lld, const char params_values *: %p, flags: %lld",
-		      req->pid, req->data.args[0], (void *)req->data.args[1], req->data.args[2]);
-
-		int fd_in_target = req->data.args[0];
-		int flags = req->data.args[2];
-
-		// Check cap of target pid in its namespace
-		if (!c_seccomp_capable(req->pid, CAP_SYS_MODULE)) {
-			ERROR("Missing CAP_SYS_MODULE for process %d!", req->pid);
-			goto out;
-		}
-
-		char *mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
-
-		// Check against list of allowed modules
-		bool module_allowed = false;
-		for (list_t *l = seccomp->module_list; l; l = l->next) {
-			char *mod_name = l->data;
-			if (strstr(mod_filename, mod_name)) {
-				module_allowed = true;
-				break;
-			}
-		}
-
-		if (!module_allowed) {
-			ERROR("Check whitelist for '%s' failed!", mod_filename);
-			mem_free0(mod_filename);
-			goto out;
-		}
-
-		// Validate path for module location
-		bool valid_prefix = false;
-		const char *valid_path[2] = { "/lib/modules", "/usr/lib/modules" };
-		for (int i = 0; i < 2 && valid_prefix == false; ++i) {
-			if (0 == strncmp(valid_path[i], mod_filename, strlen(valid_path[i]))) {
-				valid_prefix = true;
-				break;
-			}
-		}
-
-		if (!valid_prefix) {
-			ERROR("Path validation for '%s' failed! %d!", mod_filename, req->pid);
-			mem_free0(mod_filename);
-			goto out;
-		}
-
-#if 0
-		// kernel cmdline and modparams are restricted to 1024 chars
-		int param_max_len = 1024;
-		char *param_values = mem_alloc0(param_max_len);
-		if (!(param_values = (char *)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, (void *)req->data.args[1], param_max_len))) {
-			ERROR_ERRNO("Failed to fetch module parameters string");
-			mem_free0(param_values);
-			mem_free0(mod_filename);
-			goto out;
-		}
-#endif
-		/*
-		 * unitl we do not have a proper module parameters sanity checking,
-		 * we white out parameters, since there may be dangerous ones.
-		 */
-		char *param_values = mem_strdup("");
-
-		DEBUG("Executing finit_module on behalf of container using module %s"
-		      " with parameters '%s' from CML",
-		      mod_filename, param_values);
-		int cml_mod_fd = open(mod_filename, O_RDONLY);
-		if (cml_mod_fd < 0) {
-			ERROR_ERRNO("Failed to open module %s in CML", mod_filename);
-			mem_free0(param_values);
-			mem_free0(mod_filename);
-			goto out;
-		}
-		/*
-		 * for security reasons we strip out flags MODULE_INIT_IGNORE_MODVERSIONS
-		 * MODULE_INIT_IGNORE_VERMAGIC which skips sanity checks and only allow
-		 * @flag_mask (currently this is MODULE_INIT_COMPRESSED_FILE only)
-		 * however to be save on additional introduced module flags, we do not
-		 * explicitly mask out the known bad flags like this:
-		 *
-		 *	flags &= ~(MODULE_INIT_IGNORE_MODVERSIONS | MODULE_INIT_IGNORE_VERMAGIC);
-		 */
-		int flag_mask = MODULE_INIT_COMPRESSED_FILE;
-		flags &= flag_mask;
-
-		if (-1 == (ret_finit_module = finit_module(cml_mod_fd, param_values, flags))) {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-emulation-failed",
-					compartment_get_name(seccomp->compartment), 2, "syscall",
-					SYS_finit_module);
-			ERROR_ERRNO("Failed to execute finit_module");
-			mem_free0(param_values);
-			mem_free0(mod_filename);
-			close(cml_mod_fd);
-			goto out;
-		}
-		close(cml_mod_fd);
-
-		DEBUG("finit_module returned %d", ret_finit_module);
-
-		// prepare answer
-		resp->id = req->id;
-		resp->error = 0;
-		resp->val = ret_finit_module;
-
-		mem_free0(param_values);
-		mem_free0(mod_filename);
-	} else if (SYS_mknodat == req->data.nr || SYS_mknodat == req->data.nr) {
-		int ret_mknodat = -1;
-		const char *syscall_name = req->data.nr == SYS_mknodat ? "mknodat" : "mknod";
-		int dirfd = -1;
-		int arg_offset = 0;
-
-		/*
-		 * We emulate mknod() by mknodat() for code dedup:
-		 *
-		 * mknod() and mknodat() have the same arguments, except that
-		 * mknodat has dirfd as first argument:
-		 *   int mknod(const char *pathname, mode_t mode, dev_t dev);
-		 *   int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev);
-		 *
-		 * We therefore use an offset +1 for the data.args array to
-		 * retrieve syscall parameters from seccomp req in case of
-		 * mknodat() and set dirfd to AT_FDCWD in case of mknod()
-		 */
-		if (req->data.nr == SYS_mknodat) {
-			DEBUG("Got %s() from pid %d, fd: %lld, const char *pathname: %p, mode: %lld, dev: %lld",
-			      syscall_name, req->pid, req->data.args[0], (void *)req->data.args[1],
-			      req->data.args[2], req->data.args[3]);
-			dirfd = req->data.args[arg_offset];
-			arg_offset++;
-		} else { // SYS_mknod
-			DEBUG("Got %s() from pid %d, const char *pathname: %p, mode: %lld, dev: %lld",
-			      syscall_name, req->pid, (void *)req->data.args[0], req->data.args[1],
-			      req->data.args[2]);
-			dirfd = AT_FDCWD;
-		}
-
-		mode_t mode = req->data.args[1 + arg_offset];
-		dev_t dev = req->data.args[2 + arg_offset];
-
-		/* Check cap of target pid in its namespace */
-		if (!c_seccomp_capable(req->pid, CAP_MKNOD)) {
-			ERROR("Missing CAP_MKNOD for process %d!", req->pid);
-			goto out;
-		}
-
-		/* We only handle char and block devices, due to our seccomp filter */
-		char dev_type = S_ISCHR(mode) ? 'c' : 'b';
-
-		/* Check if dev is allowed (c_cgroups submodule) */
-		if (!container_is_device_allowed(seccomp->container, dev_type, major(dev),
-						 minor(dev))) {
-			ERROR("Missing cgroup permission for device (%c %d:%d) in process %d!",
-			      dev_type, major(dev), minor(dev), req->pid);
-			goto out;
-		}
-
-		int pathname_max_len = PATH_MAX;
-		char *pathname = mem_alloc0(pathname_max_len);
-		if (!(pathname = (char *)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, (void *)req->data.args[0 + arg_offset],
-			      pathname_max_len))) {
-			ERROR_ERRNO("Failed to fetch pathname string");
-			mem_free0(pathname);
-			goto out;
-		}
-
-		int cml_dirfd = AT_FDCWD;
-		if (dirfd != AT_FDCWD) {
-			int pidfd;
-			if (-1 == (pidfd = pidfd_open(req->pid, 0))) {
-				ERROR_ERRNO("Could not open pidfd for emulating %s()",
-					    syscall_name);
-				mem_free0(pathname);
-				goto out;
-			}
-
-			cml_dirfd = pidfd_getfd(pidfd, dirfd, 0);
-			if (cml_dirfd < 0) {
-				ERROR_ERRNO(
-					"Could not open dirfd in target process for emulating %s()",
-					syscall_name);
-				mem_free0(pathname);
-				goto out;
-			}
-		}
-
-		char *cwd = proc_get_cwd_new(req->pid);
-
-		DEBUG("Emulating %s by executing mknodat %s on behalf of container", syscall_name,
-		      pathname);
-
-		struct mknodat_fork_data mknodat_params = { .dirfd = cml_dirfd,
-							    .pathname = pathname,
-							    .cwd = cwd,
-							    .mode = mode,
-							    .dev = dev };
-		if (-1 == (ret_mknodat = namespace_exec(
-				   req->pid, CLONE_NEWNS, container_get_uid(seccomp->container),
-				   CAP_MKNOD, c_seccomp_do_mknodat_fork, &mknodat_params))) {
-			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-					"seccomp-emulation-failed",
-					compartment_get_name(seccomp->compartment), 2, "syscall",
-					SYS_mknodat);
-			ERROR_ERRNO("Failed to execute mknodat");
-			if (cwd)
-				mem_free0(cwd);
-			mem_free0(pathname);
-			if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
-				close(cml_dirfd);
-			goto out;
-		}
-
-		DEBUG("mknodat returned %d", ret_mknodat);
-
-		// prepare answer
-		resp->id = req->id;
-		resp->error = 0;
-		resp->val = ret_mknodat;
-
-		if (cwd)
-			mem_free0(cwd);
-		mem_free0(pathname);
-		if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
-			close(cml_dirfd);
-	} else {
+	switch (req->data.nr) {
+	case SYS_clock_adjtime:
+		c_seccomp_emulate_adjtime(seccomp, req, resp);
+		break;
+	case SYS_adjtimex:
+		c_seccomp_emulate_adjtimex(seccomp, req, resp);
+		break;
+	case SYS_clock_settime:
+		c_seccomp_emulate_settime(seccomp, req, resp);
+		break;
+	case SYS_finit_module:
+		c_seccomp_emulate_finit_module(seccomp, req, resp);
+		break;
+	case SYS_mknod:
+	case SYS_mknodat:
+		c_seccomp_emulate_mknodat(seccomp, req, resp);
+		break;
+	default:
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
 				req->data.nr);
 
 		ERROR("Got syscall not handled by us: %d", req->data.nr);
 
-		resp->id = req->id;
 		resp->error = 0;
 		resp->val = 0;
 		resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
 	}
-out:
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-respone",
