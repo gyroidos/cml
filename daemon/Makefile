@@ -148,7 +148,8 @@ endif
 
 SRC_CSECCOMP = \
 	c_seccomp/seccomp.c \
-	c_seccomp/mknod.c
+	c_seccomp/mknod.c \
+	c_seccomp/init_module.c
 
 SRC_CMODULES += \
 	c_net.c \

@@ -60,4 +60,11 @@ void
 c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp);
 
+list_t *
+c_seccomp_get_module_dependencies_new(const char *module_name);
+
+void
+c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			       struct seccomp_notif_resp *resp);
+
 #endif /* SECCOMP_H */
