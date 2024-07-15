@@ -32,7 +32,6 @@
 
 #include "../compartment.h"
 #include "../container.h"
-#include "../audit.h"
 
 #include <common/macro.h>
 #include <common/mem.h>
@@ -84,11 +83,11 @@ c_seccomp_do_mknodat_fork(const void *data)
 	return 0;
 }
 
-void
+int
 c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp)
 {
-	int ret_mknodat = -1;
+	int ret_mknodat = 0;
 	const char *syscall_name = req->data.nr == SYS_mknodat ? "mknodat" : "mknod";
 	int dirfd = -1;
 	int arg_offset = 0;
@@ -176,9 +175,6 @@ c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	if (-1 == (ret_mknodat = namespace_exec(req->pid, CLONE_NEWNS,
 						container_get_uid(seccomp->container), CAP_MKNOD,
 						c_seccomp_do_mknodat_fork, &mknodat_params))) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
-				compartment_get_name(seccomp->compartment), 2, "syscall",
-				SYS_mknodat);
 		ERROR_ERRNO("Failed to execute mknodat");
 		goto out;
 	}
@@ -197,4 +193,6 @@ out:
 		mem_free0(pathname);
 	if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
 		close(cml_dirfd);
+
+	return ret_mknodat;
 }
