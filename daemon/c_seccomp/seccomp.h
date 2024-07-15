@@ -56,4 +56,8 @@ pidfd_getfd(int pidfd, int targetfd, unsigned int flags);
 void *
 c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size);
 
+void
+c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			  struct seccomp_notif_resp *resp);
+
 #endif /* SECCOMP_H */
