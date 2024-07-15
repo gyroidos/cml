@@ -34,7 +34,6 @@
 
 #include "../compartment.h"
 #include "../container.h"
-#include "../audit.h"
 
 #include <common/macro.h>
 #include <common/mem.h>
@@ -50,11 +49,11 @@
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
-void
+int
 c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp)
 {
-	int ret_adjtime = -1;
+	int ret_adjtime = 0;
 	struct timex *timex = NULL;
 
 	if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
@@ -85,9 +84,6 @@ c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	DEBUG("Executing clock_adjtime on behalf of container");
 	if (-1 == (ret_adjtime = clock_adjtime(CLOCK_REALTIME, timex))) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
-				compartment_get_name(seccomp->compartment), 2, "syscall",
-				SYS_clock_adjtime);
 		ERROR_ERRNO("Failed to execute clock_adjtime");
 		goto out;
 	}
@@ -102,13 +98,15 @@ c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 out:
 	if (timex)
 		mem_free(timex);
+
+	return ret_adjtime;
 }
 
-void
+int
 c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			   struct seccomp_notif_resp *resp)
 {
-	int ret_adjtimex = -1;
+	int ret_adjtimex = 0;
 	struct timex *timex = NULL;
 
 	if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
@@ -132,9 +130,6 @@ c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	DEBUG("Executing adjtimex on behalf of container");
 	if (-1 == (ret_adjtimex = adjtimex(timex))) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
-				compartment_get_name(seccomp->compartment), 2, "syscall",
-				SYS_adjtimex);
 		ERROR_ERRNO("Failed to execute adjtimex");
 		goto out;
 	}
@@ -149,13 +144,15 @@ c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
 out:
 	if (timex)
 		mem_free(timex);
+
+	return ret_adjtimex;
 }
 
-void
+int
 c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp)
 {
-	int ret_settime = -1;
+	int ret_settime = 0;
 	struct timespec *timespec = NULL;
 
 	if (!(COMPARTMENT_FLAG_SYSTEM_TIME & compartment_get_flags(seccomp->compartment))) {
@@ -186,9 +183,6 @@ c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	DEBUG("Executing clock_settime on behalf of container");
 	if (-1 == (ret_settime = clock_settime(CLOCK_REALTIME, timespec))) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
-				compartment_get_name(seccomp->compartment), 2, "syscall",
-				SYS_clock_settime);
 		ERROR_ERRNO("Failed to execute clock_settime");
 		goto out;
 	}
@@ -203,4 +197,6 @@ c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 out:
 	if (timespec)
 		mem_free(timespec);
+
+	return ret_settime;
 }

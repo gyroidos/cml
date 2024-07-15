@@ -56,26 +56,26 @@ pidfd_getfd(int pidfd, int targetfd, unsigned int flags);
 void *
 c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size);
 
-void
+int
 c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp);
 
 list_t *
 c_seccomp_get_module_dependencies_new(const char *module_name);
 
-void
+int
 c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			       struct seccomp_notif_resp *resp);
 
-void
+int
 c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp);
 
-void
+int
 c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			   struct seccomp_notif_resp *resp);
 
-void
+int
 c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp);
 

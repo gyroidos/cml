@@ -353,24 +353,33 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 	TRACE("[%llu] Got syscall no. %d by PID %u", req->id, req->data.nr, req->pid);
 
+	/*
+	 * Emulation helpers set return value to value of the syscall executed by cmld
+	 * on behalf of the container. If early errors occure emulation returns 0.
+	 * If the excuted system call exits with an error (-1) we log the emulation error
+	 * to the audit subsystem.
+	 */
+	int ret_syscall = 0;
+
 	switch (req->data.nr) {
 	case SYS_clock_adjtime:
-		c_seccomp_emulate_adjtime(seccomp, req, resp);
+		ret_syscall = c_seccomp_emulate_adjtime(seccomp, req, resp);
 		break;
 	case SYS_adjtimex:
-		c_seccomp_emulate_adjtimex(seccomp, req, resp);
+		ret_syscall = c_seccomp_emulate_adjtimex(seccomp, req, resp);
 		break;
 	case SYS_clock_settime:
-		c_seccomp_emulate_settime(seccomp, req, resp);
+		ret_syscall = c_seccomp_emulate_settime(seccomp, req, resp);
 		break;
 	case SYS_finit_module:
-		c_seccomp_emulate_finit_module(seccomp, req, resp);
+		ret_syscall = c_seccomp_emulate_finit_module(seccomp, req, resp);
 		break;
 	case SYS_mknod:
 	case SYS_mknodat:
-		c_seccomp_emulate_mknodat(seccomp, req, resp);
+		ret_syscall = c_seccomp_emulate_mknodat(seccomp, req, resp);
 		break;
 	default:
+		ret_syscall = 0;
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
 				req->data.nr);
@@ -380,6 +389,12 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		resp->error = 0;
 		resp->val = 0;
 		resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+	}
+
+	if (-1 == ret_syscall) {
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
+				compartment_get_name(seccomp->compartment), 2, "syscall",
+				req->data.nr);
 	}
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {

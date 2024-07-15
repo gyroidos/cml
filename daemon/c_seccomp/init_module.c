@@ -33,7 +33,6 @@
 
 #include "../compartment.h"
 #include "../container.h"
-#include "../audit.h"
 
 #include <common/macro.h>
 #include <common/mem.h>
@@ -158,11 +157,11 @@ out:
 	return ret_list;
 }
 
-void
+int
 c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			       struct seccomp_notif_resp *resp)
 {
-	int ret_finit_module = -1;
+	int ret_finit_module = 0;
 	char *param_values = NULL;
 	char *mod_filename = NULL;
 	int cml_mod_fd = -1;
@@ -252,9 +251,6 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	flags &= flag_mask;
 
 	if (-1 == (ret_finit_module = finit_module(cml_mod_fd, param_values, flags))) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
-				compartment_get_name(seccomp->compartment), 2, "syscall",
-				SYS_finit_module);
 		ERROR_ERRNO("Failed to execute finit_module");
 		goto out;
 	}
@@ -265,6 +261,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	resp->id = req->id;
 	resp->error = 0;
 	resp->val = ret_finit_module;
+
 out:
 	if (cml_mod_fd > 0)
 		close(cml_mod_fd);
@@ -272,4 +269,6 @@ out:
 		mem_free0(param_values);
 	if (mod_filename)
 		mem_free0(mod_filename);
+
+	return ret_finit_module;
 }
