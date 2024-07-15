@@ -22,7 +22,7 @@
  */
 
 /**
- * @file c_seccomp.c
+ * @file c_seccomp/seccomp.c
  *
  * This module handles system call hooking and emulation through the seccomp notify kernel functionality.
  * It applies a seccomp filter matching relevant system calls before the container init process is executed.
@@ -35,18 +35,20 @@
 
 #define MOD_NAME "c_seccomp"
 
-#include "compartment.h"
-#include "audit.h"
+#include "../compartment.h"
+#include "../audit.h"
 
-#include "common/macro.h"
-#include "common/mem.h"
-#include "common/fd.h"
-#include "common/file.h"
-#include "common/event.h"
-#include "common/audit.h"
-#include "common/kernel.h"
-#include "common/proc.h"
-#include "common/ns.h"
+#include <common/macro.h>
+#include <common/mem.h>
+#include <common/fd.h>
+#include <common/file.h>
+#include <common/event.h>
+#include <common/audit.h>
+#include <common/kernel.h>
+#include <common/proc.h>
+#include <common/ns.h>
+
+#include "seccomp.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -67,7 +69,6 @@
 
 #include <linux/capability.h>
 #include <linux/filter.h>
-#include <linux/seccomp.h>
 #include <linux/audit.h>
 #include <linux/netlink.h>
 #include <linux/module.h>
@@ -135,13 +136,13 @@
 #define MODULE_INIT_COMPRESSED_FILE 4
 #endif
 
-static int
+int
 pidfd_open(pid_t pid, unsigned int flags)
 {
 	return syscall(__NR_pidfd_open, pid, flags);
 }
 
-static int
+int
 pidfd_getfd(int pidfd, int targetfd, unsigned int flags)
 {
 	return syscall(__NR_pidfd_getfd, pidfd, targetfd, flags);
@@ -167,22 +168,12 @@ finit_module(int fd, const char *param_values, int flags)
 	return syscall(__NR_finit_module, fd, param_values, flags);
 }
 
-static int
+int
 capget(cap_user_header_t hdrp, cap_user_data_t datap)
 {
 	return syscall(__NR_capget, hdrp, datap);
 }
 /**************************/
-
-typedef struct c_seccomp {
-	compartment_t *compartment;
-	struct seccomp_notif_sizes *notif_sizes;
-	int notify_fd;
-	event_io_t *event;
-	unsigned int enabled_features;
-	container_t *container;
-	list_t *module_list; /* names of modules loaded by this compartment */
-} c_seccomp_t;
 
 static int
 c_seccomp_install_filter()
@@ -288,7 +279,7 @@ c_seccomp_is_pidfd_supported()
 	return kernel_version_check("5.10.0");
 }
 
-static bool
+bool
 c_seccomp_capable(pid_t pid, uint64_t cap)
 {
 	struct __user_cap_header_struct cap_header = { .version = _LINUX_CAPABILITY_VERSION_3,
@@ -304,31 +295,7 @@ c_seccomp_capable(pid_t pid, uint64_t cap)
 	return cap_data[CAP_TO_INDEX(cap)].effective & CAP_TO_MASK(cap);
 }
 
-static int
-c_seccomp_start_pre_exec_child_early(void *seccompp)
-{
-	ASSERT(seccompp);
-	c_seccomp_t *seccomp = seccompp;
-
-	int notify_fd = -1;
-
-	if (-1 == (notify_fd = c_seccomp_install_filter())) {
-		ERROR("Failed to install seccomp filter");
-		return -1;
-	}
-
-	DEBUG("Installed seccomp filter, sending notify fd %d to parent", notify_fd);
-
-	if (fd_write(compartment_get_sync_sock_child(seccomp->compartment), (char *)&notify_fd,
-		     sizeof(notify_fd)) < 0) {
-		WARN_ERRNO("Could not send notify fd number over sync socket");
-		return -1;
-	}
-
-	return 0;
-}
-
-static void *
+void *
 c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 {
 	IF_NULL_RETVAL(rbuf, NULL);
@@ -950,6 +917,30 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 	mem_free(req);
 	mem_free(resp);
+}
+
+static int
+c_seccomp_start_pre_exec_child_early(void *seccompp)
+{
+	ASSERT(seccompp);
+	c_seccomp_t *seccomp = seccompp;
+
+	int notify_fd = -1;
+
+	if (-1 == (notify_fd = c_seccomp_install_filter())) {
+		ERROR("Failed to install seccomp filter");
+		return -1;
+	}
+
+	DEBUG("Installed seccomp filter, sending notify fd %d to parent", notify_fd);
+
+	if (fd_write(compartment_get_sync_sock_child(seccomp->compartment), (char *)&notify_fd,
+		     sizeof(notify_fd)) < 0) {
+		WARN_ERRNO("Could not send notify fd number over sync socket");
+		return -1;
+	}
+
+	return 0;
 }
 
 static int
