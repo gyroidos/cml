@@ -146,6 +146,9 @@ else
 	LOCAL_CFLAGS += -DCGROUPS_LEGACY
 endif
 
+SRC_CSECCOMP = \
+	c_seccomp/seccomp.c
+
 SRC_CMODULES += \
 	c_net.c \
 	c_vol.c \
@@ -156,7 +159,7 @@ SRC_CMODULES += \
 	c_audit.c \
 	c_cap.c \
 	c_hotplug.c \
-	c_seccomp.c
+	$(SRC_CSECCOMP)
 
 ifeq ($(AUTOMOUNT),y)
     SRC_CMODULES += c_automount.c
