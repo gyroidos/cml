@@ -147,7 +147,8 @@ else
 endif
 
 SRC_CSECCOMP = \
-	c_seccomp/seccomp.c
+	c_seccomp/seccomp.c \
+	c_seccomp/mknod.c
 
 SRC_CMODULES += \
 	c_net.c \
