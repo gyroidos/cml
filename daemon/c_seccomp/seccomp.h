@@ -67,4 +67,16 @@ void
 c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			       struct seccomp_notif_resp *resp);
 
+void
+c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			  struct seccomp_notif_resp *resp);
+
+void
+c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			   struct seccomp_notif_resp *resp);
+
+void
+c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			  struct seccomp_notif_resp *resp);
+
 #endif /* SECCOMP_H */
