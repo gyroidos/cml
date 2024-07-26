@@ -231,7 +231,7 @@ namespace_exec(pid_t namespace_pid, const int namespaces, int uid, int cap,
 		}
 		if (namespaces & CLONE_NEWPID) {
 			TRACE("Join pid namespace");
-			if (do_join_namespace("pid", namespace_pid) == -1)
+			if (do_join_namespace("pid_for_children", namespace_pid) == -1)
 				_exit(-1);
 		}
 		if (namespaces & CLONE_NEWUSER) {
