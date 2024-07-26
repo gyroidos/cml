@@ -29,8 +29,14 @@
 #ifndef NS_H
 #define NS_H
 
+#define _GNU_SOURCE
+#include <sched.h>
 #include <stdbool.h>
 #include <unistd.h>
+
+#define CLONE_NEWALL                                                                               \
+	(CLONE_NEWCGROUP | CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWNS | CLONE_NEWPID |              \
+	 CLONE_NEWUSER | CLONE_NEWTIME)
 
 /**
  * This function tries to gain root privileges.
