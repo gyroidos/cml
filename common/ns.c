@@ -41,6 +41,10 @@
 #include "file.h"
 #include "proc.h"
 
+#ifndef CLONE_NEWTIME
+#define CLONE_NEWTIME 0x00000080
+#endif
+
 static int
 capset(cap_user_header_t hdrp, cap_user_data_t datap)
 {
@@ -237,6 +241,11 @@ namespace_exec(pid_t namespace_pid, const int namespaces, int uid, int cap,
 		if (namespaces & CLONE_NEWUSER) {
 			TRACE("Join user namespace");
 			if (do_join_namespace("user", namespace_pid) == -1)
+				_exit(-1);
+		}
+		if (namespaces & CLONE_NEWTIME) {
+			TRACE("Join time namespace");
+			if (do_join_namespace("time_for_children", namespace_pid) == -1)
 				_exit(-1);
 		}
 		//after joining the mount namespace the container init process has pid 1 in procfs
