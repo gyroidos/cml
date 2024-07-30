@@ -79,4 +79,11 @@ int
 c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			  struct seccomp_notif_resp *resp);
 
+struct sock_filter *
+c_seccomp_ioctl_get_filter(c_seccomp_t *seccomp, int *size);
+
+int
+c_seccomp_emulate_ioctl(c_seccomp_t *seccomp, struct seccomp_notif *req,
+			struct seccomp_notif_resp *resp);
+
 #endif /* SECCOMP_H */
