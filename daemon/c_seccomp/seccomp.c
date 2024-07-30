@@ -161,20 +161,9 @@ capget(cap_user_header_t hdrp, cap_user_data_t datap)
 /**************************/
 
 static int
-c_seccomp_install_filter()
+c_seccomp_install_filter(c_seccomp_t *_seccomp)
 {
-	/*
-	 * This filter allows all system calls other than the explicitly listed
-	 * ones, namely
-	 * - SYS_mknod
-	 * - SYS_mknodat
-	 * - SYS_finit_module
-	 * - SYS_clock_settime
-	 * - SYS_clock_adjtime
-	 * - SYS_adjtimex
-	 * and thus follows a deny-list approach.
-	 */
-	struct sock_filter filter[] = {
+	struct sock_filter filter_head[] = {
 		/**
 		 * Architecture check: load arch from seccomp_data, check if equal
 		 * to the expected syscall ABI and kill process if not.
@@ -198,7 +187,20 @@ c_seccomp_install_filter()
 		BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, (X32_SYSCALL_BIT - 1), 0, 1),
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL),
 #endif
+	};
 
+	/*
+	 * This filter allows all system calls other than the explicitly listed
+	 * ones, namely
+	 * - SYS_mknod
+	 * - SYS_mknodat
+	 * - SYS_finit_module
+	 * - SYS_clock_settime
+	 * - SYS_clock_adjtime
+	 * - SYS_adjtimex
+	 * and thus follows a deny-list approach.
+	 */
+	struct sock_filter filter_tail[] = {
 #if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
 		/*
 		 * Note for future syscalls
@@ -246,15 +248,34 @@ c_seccomp_install_filter()
 		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF),
 	};
 
-	struct sock_fprog prog = { .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
-				   .filter = filter };
+	int filter_ioctl_size = 0;
+	struct sock_filter *filter_ioctl = c_seccomp_ioctl_get_filter(_seccomp, &filter_ioctl_size);
+
+	size_t filter_head_len = sizeof(filter_head) / sizeof(struct sock_filter);
+	size_t filter_tail_len = sizeof(filter_tail) / sizeof(struct sock_filter);
+	size_t filter_ioctl_len =
+		filter_ioctl_size > 0 ? filter_ioctl_size / sizeof(struct sock_filter) : 0;
+
+	size_t filter_len = filter_head_len + filter_ioctl_len + filter_tail_len;
+
+	struct sock_filter *filter = mem_new0(struct sock_filter, filter_len);
+
+	memcpy(filter, &filter_head[0], sizeof(filter_head));
+	if (filter_ioctl && filter_ioctl_size > 0)
+		memcpy(&filter[filter_head_len], filter_ioctl, filter_ioctl_size);
+
+	memcpy(&filter[filter_head_len + filter_ioctl_len], filter_tail, sizeof(filter_tail));
+
+	struct sock_fprog prog = { .len = filter_len, .filter = filter };
 
 	int ret = seccomp(SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
 	if (-1 == ret) {
 		ERROR_ERRNO("SECCOMP_SET_MODE_FILTER: return value was %d", ret);
+		mem_free0(filter);
 		return -1;
 	}
 
+	mem_free0(filter);
 	return ret;
 }
 
@@ -371,6 +392,9 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	case SYS_clock_settime:
 		ret_syscall = c_seccomp_emulate_settime(seccomp, req, resp);
 		break;
+	case SYS_ioctl:
+		ret_syscall = c_seccomp_emulate_ioctl(seccomp, req, resp);
+		break;
 	case SYS_finit_module:
 		ret_syscall = c_seccomp_emulate_finit_module(seccomp, req, resp);
 		break;
@@ -417,7 +441,7 @@ c_seccomp_start_pre_exec_child_early(void *seccompp)
 
 	int notify_fd = -1;
 
-	if (-1 == (notify_fd = c_seccomp_install_filter())) {
+	if (-1 == (notify_fd = c_seccomp_install_filter(seccomp))) {
 		ERROR("Failed to install seccomp filter");
 		return -1;
 	}
