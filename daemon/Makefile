@@ -150,7 +150,8 @@ SRC_CSECCOMP = \
 	c_seccomp/seccomp.c \
 	c_seccomp/mknod.c \
 	c_seccomp/init_module.c \
-	c_seccomp/adjtimex.c
+	c_seccomp/adjtimex.c \
+	c_seccomp/ioctl.c
 
 SRC_CMODULES += \
 	c_net.c \
