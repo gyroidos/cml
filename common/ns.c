@@ -40,10 +40,7 @@
 #include "event.h"
 #include "file.h"
 #include "proc.h"
-
-#ifndef CLONE_NEWTIME
-#define CLONE_NEWTIME 0x00000080
-#endif
+#include "ns.h"
 
 static int
 capset(cap_user_header_t hdrp, cap_user_data_t datap)
