@@ -23,7 +23,7 @@
 #include "token.h"
 #include "usbtoken.h"
 
-#include "sc-hsm-cardservice.h"
+#include "sc-hsm-lib/sc-hsm-cardservice.h"
 #include <ctapi.h>
 
 #include "common/macro.h"
