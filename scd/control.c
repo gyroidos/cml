@@ -777,7 +777,9 @@ scd_control_send_event(scd_event_t event, const char *token_uuid)
 
 	int ret = protobuf_send_message(event_fd, (ProtobufCMessage *)&msg);
 
-	mem_free(msg.token_uuid);
+	if (msg.token_uuid)
+		mem_free(msg.token_uuid);
+
 	return ret;
 }
 
