@@ -46,6 +46,8 @@
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
+#define C_HOTPLUG_USB_TOKEN_DEV_RETRIES 10
+
 typedef struct c_hotplug {
 	container_t *container; // weak reference
 	uevent_uev_t *uev;
@@ -186,6 +188,7 @@ c_hotplug_usbdev_set_sysfs_props(container_usbdev_t *usbdev)
 struct c_hotplug_token_data {
 	container_t *container;
 	char *devname;
+	int retry;
 };
 
 static void
@@ -194,11 +197,9 @@ c_hotplug_token_timer_cb(event_timer_t *timer, void *data)
 	ASSERT(data);
 	struct c_hotplug_token_data *token_data = data;
 
-	static int retries = 10;
-
 	DEBUG("devname: %s", token_data->devname);
 
-	IF_TRUE_GOTO(0 > retries--, out);
+	IF_TRUE_GOTO(token_data->retry++ > C_HOTPLUG_USB_TOKEN_DEV_RETRIES, out);
 
 	// wait for device node to become available
 	IF_TRUE_RETURN(!file_exists(token_data->devname));
@@ -299,6 +300,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 							"/dev/" :
 							"/",
 						uevent_event_get_devname(event));
+					token_data->retry = 0;
 
 					// give devfs some time to create device node for token
 					event_timer_t *e =
