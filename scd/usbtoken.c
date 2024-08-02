@@ -22,6 +22,8 @@
  */
 #include "token.h"
 #include "usbtoken.h"
+#include "scd.h"
+#include "control.h"
 
 #include "sc-hsm-lib/sc-hsm-cardservice.h"
 #include <ctapi.h>
@@ -32,6 +34,7 @@
 #include "common/list.h"
 #include "common/str.h"
 #include "common/ssl_util.h"
+#include "common/event.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -45,6 +48,9 @@
 
 /* TODO: investigate enforcement done by hardware token */
 #define USBTOKEN_MAX_WRONG_UNLOCK_ATTEMPTS 3
+
+#define USBTOKEN_SE_COMM_MAX_RETRIES 5
+#define USBTOKEN_SE_COMM_TIMEOUT 10000 // check if card is still present every 10 sec
 
 #define USBTOKEN_SUCCESS 0x9000
 
@@ -83,6 +89,11 @@ struct usbtoken {
 
 	unsigned char *latr; // ATR of last reset
 	size_t latr_len;
+
+	bool se_comm;	     // state to show if communication to SE (card) is available
+	int se_comm_retries; // retry attempt after card removal (handle power glitches)
+	bool timer_fast;     // switch to fast timer for reconnect
+	event_timer_t *se_comm_watchdog_timer; // timer to check if card is removed
 };
 
 static unsigned short
@@ -192,16 +203,150 @@ requestICC(int ctn, unsigned char *brsp, size_t brsp_len)
 	return lr;
 }
 
+static int
+usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
+{
+	ASSERT(token);
+	ASSERT(brsp);
+
+	int lr = requestICC(token->ctn, brsp, brsp_len);
+	if (lr < 0) {
+		ERROR("requestICC failed for token with ctn: %hu and port: %hu", token->ctn,
+		      token->port);
+		return -1;
+	}
+	if (NULL != token->latr)
+		mem_free0(token->latr);
+	token->latr = mem_memcpy(brsp, lr);
+	token->latr_len = lr;
+
+	int rc = queryPIN(token->ctn);
+	if (rc != USBTOKEN_SUCCESS) {
+		rc = selectHSM(token->ctn);
+		if (rc != 0) {
+			ERROR("selectHSM failed for token with ctn: %hu and port: %hu", token->ctn,
+			      token->port);
+			return -1;
+		}
+		rc = queryPIN(token->ctn);
+		DEBUG("usbtoken_init queryPIN: 0x%04x", rc);
+	}
+
+	token->se_comm = true;
+	return lr;
+}
+
+static void
+usbtoken_se_comm_watchdog_cb(event_timer_t *timer, void *data);
+
+/*
+ * Reconnect to the SE
+ *
+ * @param token usb token on which the SE com should be reconnected
+ * return true on successful reconnect or false otherwise
+ */
+static bool
+usbtoken_se_reconnect(usbtoken_t *token)
+{
+	size_t brsp_len = MAX_APDU_BUF_LEN;
+	unsigned char brsp[MAX_APDU_BUF_LEN] = { 0 };
+
+	int ret = usbtoken_reset_schsm_sess(token, brsp, brsp_len);
+
+	token->se_comm = (ret < 0) ? false : true;
+
+	if (token->se_comm && token->se_comm_watchdog_timer == NULL) {
+		token->se_comm_watchdog_timer =
+			event_timer_new(USBTOKEN_SE_COMM_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER,
+					usbtoken_se_comm_watchdog_cb, token);
+		event_add_timer(token->se_comm_watchdog_timer);
+	}
+
+	return token->se_comm;
+}
+
+static void
+usbtoken_se_comm_switch_timer(usbtoken_t *token, bool fast)
+{
+	if (token->timer_fast == fast)
+		return;
+
+	// remove current timer
+	event_remove_timer(token->se_comm_watchdog_timer);
+	event_timer_free(token->se_comm_watchdog_timer);
+
+	int new_timeout = fast ? 1000 : USBTOKEN_SE_COMM_TIMEOUT;
+
+	/*
+	 * add timer with new timeout:
+	 * fast timer for reconnecting, coarse timer during connection
+	 */
+	token->se_comm_watchdog_timer = event_timer_new(new_timeout, EVENT_TIMER_REPEAT_FOREVER,
+							usbtoken_se_comm_watchdog_cb, token);
+	event_add_timer(token->se_comm_watchdog_timer);
+}
+
+static void
+usbtoken_se_comm_watchdog_cb(UNUSED event_timer_t *timer, void *data)
+{
+	usbtoken_t *token = data;
+	ASSERT(data);
+
+	if (token->se_comm && queryPIN(token->ctn) >= 0)
+		return;
+
+	token->se_comm_retries++;
+	TRACE("Card error retries: %d", token->se_comm_retries);
+
+	if (usbtoken_se_reconnect(token)) {
+		INFO("Successfully reconnected to SE after temporary communication error.");
+		token->se_comm_retries = 0;
+
+		// set coarse timeout, since we are connected again
+		usbtoken_se_comm_switch_timer(token, false);
+		return;
+	}
+
+	// set fast timer for reconnecting
+	usbtoken_se_comm_switch_timer(token, true);
+
+	if (token->se_comm_retries >= USBTOKEN_SE_COMM_MAX_RETRIES) {
+		DEBUG("Notify cmld about removal of SE.");
+
+		scd_token_t *t = scd_get_token_from_int_token(token);
+		const char *uuid = t ? uuid_string(token_get_uuid(t)) : NULL;
+		if (scd_control_send_event(SCD_EVENT_SE_REMOVED, uuid) < 0)
+			WARN("No listener connected, notification not send");
+
+		event_remove_timer(token->se_comm_watchdog_timer);
+		event_timer_free(token->se_comm_watchdog_timer);
+		token->se_comm_watchdog_timer = NULL;
+	}
+}
+
 /**
  * Perform user authentication, potentially including the pairing secret
  *
- * @param ctn the card terminal number
+ * @param token usb token with the SE to which the user should be authenticated
  * @return 0 on success or else -1
  */
 static int
-authenticateUser(int ctn, unsigned char *auth_code, size_t auth_code_len)
+authenticateUser(usbtoken_t *token)
 {
-	int rc = verifyPIN(ctn, auth_code, auth_code_len);
+	int rc;
+
+retry:
+	rc = verifyPIN(token->ctn, token->auth_code, token->auth_code_len);
+	if (rc == ERR_TRANS) {
+		token->se_comm = false;
+		if (usbtoken_se_reconnect(token))
+			goto retry;
+	}
+
+	if (rc < 0) {
+		ERROR("Could not authenticate user to usb token, token rc: %d!", rc);
+		return -1;
+	}
 
 	if (rc != USBTOKEN_SUCCESS) {
 		ERROR("Could not authenticate user to usb token, token rc: 0x%04x", rc);
@@ -224,8 +369,7 @@ produceKey(usbtoken_t *token, unsigned char *label, size_t label_len, unsigned c
 {
 	int rc;
 
-	if ((rc = (authenticateUser(token->ctn, token->auth_code, token->auth_code_len))) < 0) {
-		// this should not possibly happen; TODO: handle properly if it happens anyway
+	if ((rc = authenticateUser(token)) < 0) {
 		ERROR("Failed to authenticate to token");
 		return rc;
 	}
@@ -317,37 +461,6 @@ token_filter_by_serial(const unsigned char *readers, const unsigned short lr, co
 	return -1;
 }
 
-static int
-usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
-{
-	ASSERT(token);
-	ASSERT(brsp);
-
-	int lr = requestICC(token->ctn, brsp, brsp_len);
-	if (lr < 0) {
-		ERROR("requestICC failed for token with ctn: %hu and port: %hu", token->ctn,
-		      token->port);
-		return -1;
-	}
-	if (NULL != token->latr)
-		mem_free0(token->latr);
-	token->latr = mem_memcpy(brsp, lr);
-	token->latr_len = lr;
-
-	int rc = queryPIN(token->ctn);
-	if (rc != USBTOKEN_SUCCESS) {
-		rc = selectHSM(token->ctn);
-		if (rc != 0) {
-			ERROR("selectHSM failed for token with ctn: %hu and port: %hu", token->ctn,
-			      token->port);
-			return -1;
-		}
-		rc = queryPIN(token->ctn);
-		DEBUG("usbtoken_init queryPIN: 0x%04x", rc);
-	}
-	return lr;
-}
-
 /**
  * initializes the ctapi interface to the token reader.
  * If the reader is unplugged during runtime this will ensure it is either
@@ -393,8 +506,12 @@ usbtoken_init_ctapi_int(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 	}
 
 	if (0 > usbtoken_reset_schsm_sess(token, brsp, brsp_len)) {
-		ERROR("Could not initiate schsm session");
-		goto err;
+		WARN("Could not initiate schsm session, SE not yet present.");
+	} else {
+		token->se_comm_watchdog_timer =
+			event_timer_new(USBTOKEN_SE_COMM_TIMEOUT, EVENT_TIMER_REPEAT_FOREVER,
+					usbtoken_se_comm_watchdog_cb, token);
+		event_add_timer(token->se_comm_watchdog_timer);
 	}
 
 	DEBUG("Successfully initialized CTAPI session for reader with serial  %s", token->serial);
@@ -425,6 +542,7 @@ usbtoken_new(const char *serial)
 	IF_NULL_RETVAL_ERROR(token, NULL);
 
 	token->locked = true;
+	token->se_comm = false;
 	token->ctn = ctn_get_unused();
 	token->serial = mem_strdup(serial);
 	IF_NULL_GOTO_ERROR(token->serial, err);
@@ -463,7 +581,14 @@ provision_auth_code(usbtoken_t *token, const char *tpin, const char *newpass,
 	int newcode_len;
 	unsigned char newcode[TOKEN_MAX_AUTH_CODE_LEN];
 
+retry:
 	rc = queryPIN(token->ctn);
+	if (rc == ERR_TRANS) {
+		token->se_comm = false;
+		if (usbtoken_se_reconnect(token))
+			goto retry;
+	}
+
 	if (rc != 0x6984) {
 		ERROR("USBTOKEN: Pin is not in tranport state, rc: 0x%04x. Aborting...", rc);
 		rc = -1;
@@ -541,7 +666,13 @@ change_user_pin(usbtoken_t *token, const char *oldpass, const char *newpass,
 		goto out;
 	}
 
+retry:
 	rc = changePIN(token->ctn, oldcode, oldcode_len, newcode, newcode_len);
+	if (rc == ERR_TRANS) {
+		token->se_comm = false;
+		if (usbtoken_se_reconnect(token))
+			goto retry;
+	}
 
 	mem_memset0(newcode, sizeof(newcode));
 	mem_memset0(oldcode, sizeof(oldcode));
@@ -568,6 +699,12 @@ usbtoken_change_passphrase(usbtoken_t *token, const char *oldpass, const char *n
 	ASSERT(token);
 	ASSERT(oldpass);
 	ASSERT(newpass);
+
+	if (!token->se_comm && (!usbtoken_se_reconnect(token))) {
+		ERROR("SE not present!");
+		token->se_comm = false;
+		return -1;
+	}
 
 	return (is_provisioning ?
 			provision_auth_code(token, oldpass, newpass, pairing_secret,
@@ -596,6 +733,9 @@ usbtoken_free(usbtoken_t *token)
 	TRACE("USBTOKEN: usbtoken_free");
 
 	ASSERT(token);
+
+	event_remove_timer(token->se_comm_watchdog_timer);
+	event_timer_free(token->se_comm_watchdog_timer);
 
 	if (0 != CT_close(token->ctn)) {
 		ERROR("Closing CT interface (ctn=%d) to token failed.", token->ctn);
@@ -632,6 +772,12 @@ usbtoken_wrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 
 	if (usbtoken_is_locked(token)) {
 		ERROR("Trying to wrap key with locked token.");
+		return -1;
+	}
+
+	if (!token->se_comm && (!usbtoken_se_reconnect(token))) {
+		ERROR("SE not present!");
+		token->se_comm = false;
 		return -1;
 	}
 
@@ -672,6 +818,12 @@ usbtoken_unwrap_key(usbtoken_t *token, unsigned char *label, size_t label_len,
 
 	if (usbtoken_is_locked(token)) {
 		ERROR("Trying to unwrap key with locked token.");
+		return -1;
+	}
+
+	if (!token->se_comm && (!usbtoken_se_reconnect(token))) {
+		ERROR("SE not present!");
+		token->se_comm = false;
 		return -1;
 	}
 
@@ -729,6 +881,12 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 		return -1;
 	}
 
+	if (!token->se_comm && (!usbtoken_se_reconnect(token))) {
+		ERROR("SE not present!");
+		token->se_comm = false;
+		return -1;
+	}
+
 	int auth_code_len = 0;
 	unsigned char code[TOKEN_MAX_AUTH_CODE_LEN];
 
@@ -738,20 +896,21 @@ usbtoken_unlock(usbtoken_t *token, char *passwd, unsigned char *pairing_secret,
 		return -1;
 	}
 
-	int rc = authenticateUser(token->ctn, code, auth_code_len);
+	token->auth_code_len = auth_code_len;
+	token->auth_code = mem_memcpy(code, token->auth_code_len);
+
+	int rc = authenticateUser(token);
 	if (rc == -2) { // wrong password
 		token->wrong_unlock_attempts++;
 		ERROR("Usbtoken unlock failed (wrong PW)");
 	} else if (rc == 0) {
 		token->locked = false;
 		token->wrong_unlock_attempts = 0;
-		token->auth_code_len = auth_code_len;
-		token->auth_code = mem_memcpy(code, token->auth_code_len);
 		DEBUG("Usbtoken unlock successful");
 	} else {
 		ERROR("Usbtoken unlock failed");
+		token->wrong_unlock_attempts = 0;
 	}
-	// TODO what to do with wrong_unlock_attempts if unlock failed for some other reason?
 
 	if (rc != 0)
 		usbtoken_free_secrets(token); // just to be sure
@@ -787,11 +946,11 @@ usbtoken_reset_auth(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 		return lr;
 	}
 
-	rc = authenticateUser(token->ctn, token->auth_code, token->auth_code_len);
+	rc = authenticateUser(token);
 	if (rc == -2) { // wrong password
-		ERROR("Usbtoken authenticatio reset failed (wrong PW). This should not happen");
+		ERROR("Usbtoken authentication reset failed (wrong PW). This should not happen");
 	} else if (rc == 0) {
-		DEBUG("Usbtoken authenticatio reset successful");
+		DEBUG("Usbtoken authentication reset successful");
 	} else {
 		ERROR("Usbtoken reset failed");
 	}
@@ -844,7 +1003,21 @@ usbtoken_send_apdu(usbtoken_t *token, unsigned char *apdu, size_t apdu_len, unsi
 	str_free(dump, true);
 #endif
 
-	int rc = CT_data(token->ctn, &dad, &sad, apdu_len, apdu, &lr, brsp);
+	if (!token->se_comm && (!usbtoken_se_reconnect(token))) {
+		ERROR("SE not present!");
+		token->se_comm = false;
+		return -1;
+	}
+
+	int rc;
+retry:
+	rc = CT_data(token->ctn, &dad, &sad, apdu_len, apdu, &lr, brsp);
+	if (rc == ERR_TRANS) {
+		token->se_comm = false;
+		if (usbtoken_se_reconnect(token))
+			goto retry;
+	}
+
 	if (rc != 0) {
 		ERROR("CT_data failed with code: %d", rc);
 		return -1;
