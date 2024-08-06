@@ -115,6 +115,16 @@ uuid_t *
 token_get_uuid(scd_token_t *token);
 
 /**
+ * checks if the int_token is the internal token of the corresponding token.
+ * @param token the token to operate on
+ * @param int_token the token to checked
+ *
+ * @return true if int_token is internal token of token, false otherwise
+ */
+bool
+token_has_internal_token(scd_token_t *token, const void *int_token);
+
+/**
  * creates a new generic token
  * calls the respective create function for the selected type of token and
  * sets the function pointer appropriately
