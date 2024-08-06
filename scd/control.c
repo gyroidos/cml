@@ -58,11 +58,25 @@
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
+int event_fd = -1;
+
 struct scd_control {
 	int sock; // listen socket fd
 };
 
 UNUSED static list_t *control_list = NULL;
+
+TokenToDaemon__Code
+control_event_to_proto(scd_event_t event)
+{
+	switch (event) {
+	case SCD_EVENT_SE_REMOVED:
+		return TOKEN_TO_DAEMON__CODE__TOKEN_SE_REMOVED;
+	default:
+		ERROR("No scd_event_t event: %d", event);
+		return TOKEN_TO_DAEMON__CODE__CMD_UNKNOWN;
+	}
+}
 
 /* keep in sync with offered algorithms by protobuf */
 static const char *
@@ -468,6 +482,18 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		}
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
+	case DAEMON_TO_TOKEN__CODE__REGISTER_EVENT_LISTENER: {
+		TRACE("SCD: Handle messsage REGISTER_EVENT_LISTENER");
+		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
+		if (event_fd > -1) {
+			ERROR("Event listener already connected on fd=%d", event_fd);
+			out.code = TOKEN_TO_DAEMON__CODE__REGISTER_EVENT_LISTENER_ERROR;
+		} else {
+			event_fd = fd;
+			out.code = TOKEN_TO_DAEMON__CODE__REGISTER_EVENT_LISTENER_OK;
+		}
+		protobuf_send_message(fd, (ProtobufCMessage *)&out);
+	} break;
 	default:
 		WARN("DaemonToToken command %d unknown or not implemented yet", msg->code);
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
@@ -696,6 +722,8 @@ connection_err:
 	event_io_free(io);
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected control socket");
+	if (fd == event_fd)
+		event_fd = -1;
 	return;
 }
 /**
@@ -734,6 +762,23 @@ scd_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 
 	event_io_t *event = event_io_new(cfd, EVENT_IO_READ, scd_control_cb_recv_message, control);
 	event_add_io(event);
+}
+
+ssize_t
+scd_control_send_event(scd_event_t event, const char *token_uuid)
+{
+	IF_TRUE_RETVAL(event_fd < 0, -1);
+	IF_TRUE_RETVAL(control_event_to_proto(event) == TOKEN_TO_DAEMON__CODE__CMD_UNKNOWN, -1);
+
+	TokenToDaemon msg = TOKEN_TO_DAEMON__INIT;
+	msg.code = control_event_to_proto(event);
+	if (token_uuid)
+		msg.token_uuid = mem_strdup(token_uuid);
+
+	int ret = protobuf_send_message(event_fd, (ProtobufCMessage *)&msg);
+
+	mem_free(msg.token_uuid);
+	return ret;
 }
 
 scd_control_t *
