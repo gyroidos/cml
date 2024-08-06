@@ -69,6 +69,8 @@ message DaemonToToken {
 		TOKEN_ADD = 90;	// create a new scd token
 		TOKEN_REMOVE = 91;	// free a scd token
 		TOKEN_QUERY_PAIR_STATE = 92;	// query if the token has been paired to the device
+
+		REGISTER_EVENT_LISTENER = 100;	// Tell SCD to send events on this connection
 	}
 
 
@@ -116,16 +118,16 @@ message TokenToDaemon {
 	enum Code {
 		DERIVED_KEY = 20;		// -> [derived_key]
 		UNLOCK_FAILED = 21;		// unlocking the token failed
-		UNLOCK_SUCCESSFUL = 22;	// unlocking the token succeeded
+		UNLOCK_SUCCESSFUL = 22;		// unlocking the token succeeded
 		LOCK_FAILED = 23;		// locking the token failed
-		LOCK_SUCCESSFUL = 24;	// locking the token succeeded
+		LOCK_SUCCESSFUL = 24;		// locking the token succeeded
 		PASSWD_WRONG = 25;		// wrong password to unlock the token
-		WRAPPED_KEY = 26;	// -> [wrapped_key] 
-		UNWRAPPED_KEY = 27;	// -> [unwrapped key]
+		WRAPPED_KEY = 26;		// -> [wrapped_key]
+		UNWRAPPED_KEY = 27;		// -> [unwrapped key]
 		LOCKED_TILL_REBOOT = 28;
 		CHANGE_PIN_FAILED = 29;		// pin change of the token failed
 		CHANGE_PIN_SUCCESSFUL = 30;	// pin change of the token was successful
-		PROVISION_PIN_FAILED = 31;		// provisioning of the token auth code failed
+		PROVISION_PIN_FAILED = 31;	// provisioning of the token auth code failed
 		PROVISION_PIN_SUCCESSFUL = 32;	// provisioning of the token auth code was successful
 
 		DEVICE_CSR = 40; 	// -> [device_csr]
@@ -141,13 +143,16 @@ message TokenToDaemon {
 		CRYPTO_VERIFY_ERROR = 61;		// some error occurred
 		CRYPTO_VERIFY_BAD_SIGNATURE = 62;	// signature on data is invalid
 		CRYPTO_VERIFY_BAD_CERTIFICATE = 63;	// certificate is invalid
-		CRYPTO_VERIFY_LOCALLY_SIGNED = 64;	// sginature is valid for a local CA
+		CRYPTO_VERIFY_LOCALLY_SIGNED = 64;	// signature is valid for a local CA
 
+		REGISTER_EVENT_LISTENER_OK = 70;	// successfully register for events
+		REGISTER_EVENT_LISTENER_ERROR = 71;	// error, e.g., already another listener
 
 		TOKEN_ADD_SUCCESSFUL = 90;	// creating a new scd token succeeded
-		TOKEN_ADD_FAILED	= 91;	// creating a new scd token failed
+		TOKEN_ADD_FAILED = 91;		// creating a new scd token failed
 		TOKEN_REMOVE_SUCCESSFUL = 92;	// freeing the token succeeded
-		TOKEN_REMOVE_FAILED	= 93;// freeing the token failed
+		TOKEN_REMOVE_FAILED = 93;	// freeing the token failed
+		TOKEN_SE_REMOVED = 94;		// Event: SE is removed from token
 
 		CMD_UNKNOWN = 100;	// daemon has issued an unknown command
 	}
@@ -160,6 +165,8 @@ message TokenToDaemon {
 	optional bytes derived_key = 20;	// derived key in response to DERIVE_KEY
 
 	optional bytes device_csr = 40;		// device csr in response to PULL_CSR
-	optional bytes hash_value = 50;		// hash_value in reponse to CRYPTO_HASH_FILE
+	optional bytes hash_value = 50;		// hash_value in response to CRYPTO_HASH_FILE
+
+	optional string token_uuid = 5;		// token_uuid in event TOKEN_SE_REMOVED
 }
 

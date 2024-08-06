@@ -24,9 +24,21 @@
 #ifndef SCD_CONTROL_H
 #define SCD_CONTROL_H
 
+#include <sys/types.h>
+
+/**
+ * Event that may be send to a registered event listener.
+ */
+typedef enum {
+	SCD_EVENT_SE_REMOVED = 1,
+} scd_event_t;
+
 typedef struct scd_control scd_control_t;
 
 scd_control_t *
 scd_control_new(const char *path);
+
+ssize_t
+scd_control_send_event(scd_event_t event, const char *token_uuid);
 
 #endif /* SCD_CONTROL_H */
