@@ -619,6 +619,21 @@ token_get_uuid(scd_token_t *token)
 	return token->token_data->token_uuid;
 }
 
+bool
+token_has_internal_token(scd_token_t *token, const void *int_token)
+{
+	ASSERT(token);
+	ASSERT(token->token_data);
+
+	if (token->token_data->int_token.usbtoken == int_token)
+		return true;
+
+	if (token->token_data->int_token.softtoken == int_token)
+		return true;
+
+	return false;
+}
+
 void
 token_free(scd_token_t *token)
 {

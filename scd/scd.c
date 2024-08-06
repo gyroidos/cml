@@ -473,6 +473,21 @@ scd_get_token_from_msg(const DaemonToToken *msg)
 	return t;
 }
 
+scd_token_t *
+scd_get_token_from_int_token(const void *int_token)
+{
+	for (list_t *l = scd_token_list; l; l = l->next) {
+		scd_token_t *t = (scd_token_t *)l->data;
+		ASSERT(t);
+
+		if (token_has_internal_token(t, int_token)) {
+			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
+			return t;
+		}
+	}
+	return NULL;
+}
+
 /**
  * Creates a new scd token structure and appends it to the global list.
  */

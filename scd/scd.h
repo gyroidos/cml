@@ -59,6 +59,12 @@ scd_token_t *
 scd_get_token_from_msg(const DaemonToToken *msg);
 
 /**
+ * Returns an existing scd token by its internal token pointer
+ */
+scd_token_t *
+scd_get_token_from_int_token(const void *int_token);
+
+/**
  * Frees a generic token structure.
  */
 void
