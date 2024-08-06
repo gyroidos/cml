@@ -21,14 +21,20 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#include "scd.pb-c.h"
+
 #include "scd.h"
 #include "scd_shared.h"
+#include "cmld.h"
 
 #include "common/macro.h"
 #include "common/logf.h"
+#include "common/event.h"
+#include "common/fd.h"
 #include "common/file.h"
 #include "common/sock.h"
 #include "common/proc.h"
+#include "common/protobuf.h"
 #include "common/mem.h"
 
 #include <sys/types.h>
@@ -76,6 +82,93 @@ scd_fork_and_exec(void)
 	return -1;
 }
 
+static int
+scd_register_listener(int fd)
+{
+	int ret = -1;
+	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
+	out.code = DAEMON_TO_TOKEN__CODE__REGISTER_EVENT_LISTENER;
+
+	if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
+		ERROR("Failed to send message to scd on fd %d", fd);
+		return -1;
+	}
+
+	TokenToDaemon *msg =
+		(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+	if (!msg) {
+		ERROR("Failed to get response from scd. Aborting scd_register_listener.");
+		return -1;
+	}
+
+	switch (msg->code) {
+	case TOKEN_TO_DAEMON__CODE__REGISTER_EVENT_LISTENER_OK: {
+		TRACE("Successfully registered this cmld instance as event listener on scd.");
+		ret = 0;
+	} break;
+	case TOKEN_TO_DAEMON__CODE__REGISTER_EVENT_LISTENER_ERROR: {
+		ERROR("Registering this cmld instance as event listener on scd failed!");
+	} break;
+	default:
+		ERROR("TokenToDaemon command %d not expected as answer to REGISTER_EVENT_LISTENER",
+		      msg->code);
+	}
+
+	protobuf_free_message((ProtobufCMessage *)msg);
+	return ret;
+}
+
+static void
+scd_event_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *data)
+{
+	/*
+	 * always check READ flag first, since also if the peer called close()
+	 * and there is pending data on the socket the READ and EXCEPT flags are set.
+	 * Thus, we have to read pending date before handling the EXCEPT event.
+	 */
+	if (events & EVENT_IO_READ) {
+		TokenToDaemon *msg =
+			(TokenToDaemon *)protobuf_recv_message(fd, &token_to_daemon__descriptor);
+
+		// close connection if client EOF, or protocol parse error
+		IF_NULL_GOTO_TRACE(msg, connection_err);
+
+		switch (msg->code) {
+		case TOKEN_TO_DAEMON__CODE__TOKEN_SE_REMOVED:
+			if (msg->token_uuid) {
+				uuid_t *c_uuid = uuid_new(msg->token_uuid);
+				container_t *container = cmld_container_get_by_uuid(c_uuid);
+				mem_free0(c_uuid);
+				if (container)
+					cmld_container_stop(container);
+
+			} else {
+				ERROR("Missing token_uuid in TOKEN_SE_REMOVED event");
+			}
+			break;
+		default:
+			ERROR("Invalid TokenToDaemon event %d", msg->code);
+		}
+		TRACE("Handled scd event connection %d", fd);
+		protobuf_free_message((ProtobufCMessage *)msg);
+	}
+	// also check EXCEPT flag
+	if (events & EVENT_IO_EXCEPT) {
+		INFO("scd closed event connection; reconnect.");
+		goto connection_err;
+	}
+	return;
+
+connection_err:
+	event_remove_io(io);
+	event_io_free(io);
+	if (close(fd) < 0)
+		WARN_ERRNO("Failed to close connected scd event socket");
+	// reconnect
+	scd_init(false);
+	return;
+}
+
 int
 scd_init(bool start_daemon)
 {
@@ -110,8 +203,21 @@ scd_init(bool start_daemon)
 
 	if (sock < 0) {
 		ERROR("Failed to connect to scd");
+		close(sock);
 		return -1;
 	}
+
+	if (scd_register_listener(sock) < 0) {
+		ERROR("Failed to register event listener for scd events");
+		close(sock);
+		return -1;
+	}
+
+	/* register socket for receiving data */
+	fd_make_non_blocking(sock);
+
+	event_io_t *event = event_io_new(sock, EVENT_IO_READ, scd_event_cb_recv_message, NULL);
+	event_add_io(event);
 
 	// allow access from namespaced child before chroot and execv of init
 	if (chmod(scd_sock_path, 00777))
