@@ -281,6 +281,7 @@ usbtoken_se_comm_switch_timer(usbtoken_t *token, bool fast)
 	 * add timer with new timeout:
 	 * fast timer for reconnecting, coarse timer during connection
 	 */
+	token->timer_fast = fast;
 	token->se_comm_watchdog_timer = event_timer_new(new_timeout, EVENT_TIMER_REPEAT_FOREVER,
 							usbtoken_se_comm_watchdog_cb, token);
 	event_add_timer(token->se_comm_watchdog_timer);
