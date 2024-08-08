@@ -84,7 +84,7 @@ dump(unsigned char *mem, int len)
  * @param SW1SW2 Address of short integer to receive SW1SW2
  * @return the number of bytes received, excluding SW1SW2 or < 0 in case of an error
  */
-static int
+int
 processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned char P1,
 	    unsigned char P2, int OutLen, unsigned char *OutData, int InLen, unsigned char *InData,
 	    int InSize, unsigned short *SW1SW2)
