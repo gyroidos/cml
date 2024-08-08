@@ -53,6 +53,7 @@
 #define USBTOKEN_SE_COMM_TIMEOUT 10000 // check if card is still present every 10 sec
 
 #define USBTOKEN_SUCCESS 0x9000
+#define USBTOKEN_WRONG_P1_P2 0x6A86
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -73,6 +74,8 @@ static unsigned char skd_dskkey[] = { 0xA8, 0x2F, 0x30, 0x13, 0x0C, 0x11, 0x44, 
 				      0x80, 0xA1, 0x06, 0x30, 0x04, 0x30, 0x02, 0x04, 0x00 };
 
 static unsigned char algo_dskkey[] = { 0x91, 0x01, 0x99 };
+
+static unsigned char aid_unselectable[] = { 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 struct usbtoken {
 	char *serial;
@@ -203,6 +206,38 @@ requestICC(int ctn, unsigned char *brsp, size_t brsp_len)
 	return lr;
 }
 
+static bool
+usbtoken_is_card_present(usbtoken_t *token)
+{
+	ASSERT(token);
+
+	unsigned char rsp[256] = { 0 };
+	unsigned short SW1SW2 = 0;
+
+	int rc = -1;
+
+	rc = processAPDU(token->ctn, 0, 0x00, 0xA4, 0x04, 0x0C, sizeof(aid_unselectable),
+			 aid_unselectable, 0, rsp, sizeof(rsp), &SW1SW2);
+	if (rc < 0) {
+		ERROR("processAPDU failed with code: %d", rc);
+		return false;
+	}
+
+#ifdef DEBUG_BUILD
+	str_t *dump = str_hexdump_new(rsp, rc);
+	TRACE("Select response: len: %d, apdu_data: '%s' [0x%04x]", rc,
+	      dump ? str_buffer(dump) : "", SW1SW2);
+	str_free(dump, true);
+#endif
+
+	if (SW1SW2 != USBTOKEN_WRONG_P1_P2) {
+		ERROR("SE not present");
+		return false;
+	}
+
+	return true;
+}
+
 static int
 usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_len)
 {
@@ -293,7 +328,7 @@ usbtoken_se_comm_watchdog_cb(UNUSED event_timer_t *timer, void *data)
 	usbtoken_t *token = data;
 	ASSERT(data);
 
-	if (token->se_comm && queryPIN(token->ctn) >= 0)
+	if (token->se_comm && usbtoken_is_card_present(token))
 		return;
 
 	token->se_comm_retries++;
