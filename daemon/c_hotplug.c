@@ -285,11 +285,12 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 			    (0 == strcmp(serial, container_usbdev_get_i_serial(ud)))) {
 				container_usbdev_set_major(ud, major);
 				container_usbdev_set_minor(ud, minor);
-				INFO("%s bound device node %d:%d -> container %s",
-				     (container_usbdev_is_assigned(ud)) ? "assign" : "allow", major,
-				     minor, container_get_name(hotplug->container));
 				if (CONTAINER_USBDEV_TYPE_TOKEN == container_usbdev_get_type(ud)) {
-					INFO("HOTPLUG USB TOKEN added");
+					INFO("HOTPLUG USB TOKEN");
+					DEBUG("Ignoring %s of device node %d:%d -> container %s",
+					      (container_usbdev_is_assigned(ud)) ? "assign" :
+										   "allow",
+					      major, minor, container_get_name(hotplug->container));
 					struct c_hotplug_token_data *token_data =
 						mem_new0(struct c_hotplug_token_data, 1);
 					token_data->container = hotplug->container;
@@ -308,9 +309,15 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 								c_hotplug_token_timer_cb,
 								token_data);
 					event_add_timer(e);
+				} else {
+					INFO("%s bound device node %d:%d -> container %s",
+					     (container_usbdev_is_assigned(ud)) ? "assign" :
+										  "allow",
+					     major, minor, container_get_name(hotplug->container));
+					container_device_allow(hotplug->container, 'c', major,
+							       minor,
+							       container_usbdev_is_assigned(ud));
 				}
-				container_device_allow(hotplug->container, 'c', major, minor,
-						       container_usbdev_is_assigned(ud));
 			}
 		}
 		mem_free0(serial);
