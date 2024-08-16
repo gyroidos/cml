@@ -73,12 +73,14 @@ typedef struct c_cgroups_dev {
 	container_t *container; // weak reference
 	char *path;		// path to cgroup of the container
 
-	list_t *assigned_devs; /* list of 2 element int arrays, representing maj:min of exclusively assigned devices.
-				  wildcard '*' is mapped to -1 */
-	list_t *allowed_devs; /* list of 2 element int arrays, representing maj:min of devices allowed to be accessed.
-				  wildcard '*' is mapped to -1 */
+	list_t *assigned_devs; /* list of dev_item_t, representing maj:min of exclusively assigned devices.
+				   wildcard '*' is mapped to -1 */
+	list_t *allowed_devs; /* list of dev_item_t, representing maj:min of devices allowed to be accessed.
+				   wildcard '*' is mapped to -1 */
+	list_t *denied_devs; /* list of dev_item_t, representing maj:min of devices to be denied.
+				   wildcard '*' is mapped to -1 */
 
-	c_cgroups_bpf_prog_t *bpf_prog; // generated bpf prog from allowed_devs list
+	c_cgroups_bpf_prog_t *bpf_prog; // generated bpf prog from allowed_devs and denied_devs list
 } c_cgroups_dev_t;
 
 /* List of of devices (c_cgroups_dev_item_t) allowed to be used in the running containers.
@@ -316,7 +318,7 @@ c_cgroups_dev_bpf_prog_free(c_cgroups_bpf_prog_t *prog)
  * inspired by implementations of lxc, procd and systemd
  */
 static c_cgroups_bpf_prog_t *
-c_cgroups_dev_bpf_prog_generate(list_t *dev_items)
+c_cgroups_dev_bpf_prog_generate(list_t *dev_items_denied, list_t *dev_items)
 {
 	const struct bpf_insn pre_insn[] = {
 		// load type to R2
@@ -334,8 +336,27 @@ c_cgroups_dev_bpf_prog_generate(list_t *dev_items)
 		BPF_LDX_MEM(BPF_W, BPF_REG_5, BPF_REG_1, 8),
 	};
 
+	const struct bpf_insn deny_insn[] = {
+		// set deny and exit
+		BPF_MOV64_IMM(BPF_REG_0, 0),
+		BPF_EXIT_INSN(),
+	};
+
+	const struct bpf_insn allow_insn[] = {
+		// set allow and exit
+		BPF_MOV64_IMM(BPF_REG_0, 1),
+		BPF_EXIT_INSN(),
+	};
+
 	int total_insn_nr = (sizeof(pre_insn) / sizeof(struct bpf_insn));
 	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_append(NULL, pre_insn, total_insn_nr);
+
+	for (list_t *l = dev_items_denied; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		// instructions for one rule including 2 byte for 'deny' end closing instruction
+		total_insn_nr += INSNR_TYPE(dev_item) + INSNR_ACCESS(dev_item) +
+				 INSNR_MAJOR(dev_item) + INSNR_MINOR(dev_item) + 2;
+	}
 
 	for (list_t *l = dev_items; l; l = l->next) {
 		c_cgroups_dev_item_t *dev_item = l->data;
@@ -348,6 +369,53 @@ c_cgroups_dev_bpf_prog_generate(list_t *dev_items)
 	total_insn_nr += 2;
 
 	DEBUG("Generate BPF prog with total_insn_nr ='%d'", total_insn_nr);
+
+	for (list_t *l = dev_items_denied; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		int next_ins = 1 + INSNR_TYPE(dev_item) + INSNR_ACCESS(dev_item) +
+			       INSNR_MAJOR(dev_item) + INSNR_MINOR(dev_item);
+
+		if (dev_item->type > 0) {
+			struct bpf_insn insn[] = {
+				// compare type (char/block)
+				BPF_JMP_IMM(BPF_JNE, BPF_REG_2, dev_item->type, next_ins),
+			};
+			c_cgroups_dev_bpf_prog_append(prog, insn, 1);
+			next_ins--;
+		}
+
+		if (dev_item->access != LEGACY_DEVCG_ACC_ALL) {
+			struct bpf_insn insn[] = {
+				BPF_MOV32_REG(BPF_REG_1, BPF_REG_3),
+				BPF_ALU32_IMM(BPF_AND, BPF_REG_1, dev_item->access),
+				// compare access (rwm)
+				BPF_JMP_REG(BPF_JNE, BPF_REG_1, BPF_REG_3, next_ins - 2),
+			};
+			c_cgroups_dev_bpf_prog_append(prog, insn, 3);
+			next_ins -= 3;
+		}
+
+		if (dev_item->major >= 0) {
+			struct bpf_insn insn[] = {
+				// compare major
+				BPF_JMP_IMM(BPF_JNE, BPF_REG_4, dev_item->major, next_ins),
+			};
+			c_cgroups_dev_bpf_prog_append(prog, insn, 1);
+			next_ins--;
+		}
+
+		if (dev_item->minor >= 0) {
+			struct bpf_insn insn[] = {
+				// compare minor
+				BPF_JMP_IMM(BPF_JNE, BPF_REG_5, dev_item->minor, next_ins),
+			};
+			c_cgroups_dev_bpf_prog_append(prog, insn, 1);
+			next_ins--;
+		}
+
+		// set deny and exit
+		c_cgroups_dev_bpf_prog_append(prog, deny_insn, 2);
+	}
 
 	for (list_t *l = dev_items; l; l = l->next) {
 		c_cgroups_dev_item_t *dev_item = l->data;
@@ -392,18 +460,11 @@ c_cgroups_dev_bpf_prog_generate(list_t *dev_items)
 			next_ins--;
 		}
 
-		struct bpf_insn allow_insn[] = {
-			// set allow and exit
-			BPF_MOV64_IMM(BPF_REG_0, 1),
-			BPF_EXIT_INSN(),
-		};
+		// set allow and exit
 		c_cgroups_dev_bpf_prog_append(prog, allow_insn, 2);
 	}
-	struct bpf_insn deny_insn[] = {
-		// set deny for everything else and exit
-		BPF_MOV64_IMM(BPF_REG_0, 0),
-		BPF_EXIT_INSN(),
-	};
+
+	// set deny for everything else and exit
 	c_cgroups_dev_bpf_prog_append(prog, deny_insn, 2);
 
 	return prog;
@@ -510,6 +571,14 @@ error:
 	return -1;
 }
 
+static bool
+c_cgroups_dev_item_uses_wildcard(const c_cgroups_dev_item_t *dev_item)
+{
+	IF_NULL_RETVAL(dev_item, false);
+
+	return ((dev_item->minor == -1) || (dev_item->major == -1));
+}
+
 static c_cgroups_dev_item_t *
 c_cgroups_dev_list_match(const list_t *list, const c_cgroups_dev_item_t *dev_item)
 {
@@ -586,6 +655,13 @@ c_cgroups_dev_allow(void *cgroups_devp, const char *rule)
 		return 0;
 	}
 
+	c_cgroups_dev_item_t *matched_dev;
+	// check if an explicit deny entry exists for dev_item and remove it
+	if ((matched_dev = c_cgroups_dev_list_match(cgroups_dev->denied_devs, dev_item))) {
+		cgroups_dev->denied_devs = list_remove(cgroups_dev->denied_devs, matched_dev);
+		mem_free0(matched_dev);
+	}
+
 	c_cgroups_dev_add_allowed(cgroups_dev, dev_item);
 	mem_free0(dev_item);
 
@@ -594,7 +670,8 @@ c_cgroups_dev_allow(void *cgroups_devp, const char *rule)
 	if (state != COMPARTMENT_STATE_BOOTING && state != COMPARTMENT_STATE_RUNNING)
 		return 0;
 
-	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->allowed_devs);
+	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->denied_devs,
+								     cgroups_dev->allowed_devs);
 	IF_NULL_RETVAL(prog, -1);
 
 	return c_cgroups_dev_bpf_prog_activate(cgroups_dev, prog);
@@ -624,7 +701,8 @@ c_cgroups_dev_assign(void *cgroups_devp, const char *rule)
 	if (state != COMPARTMENT_STATE_BOOTING && state != COMPARTMENT_STATE_RUNNING)
 		return 0;
 
-	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->allowed_devs);
+	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->denied_devs,
+								     cgroups_dev->allowed_devs);
 	IF_NULL_RETVAL(prog, -1);
 
 	return c_cgroups_dev_bpf_prog_activate(cgroups_dev, prog);
@@ -637,6 +715,8 @@ c_cgroups_dev_deny(void *cgroups_devp, const char *rule)
 	ASSERT(cgroups_dev);
 	ASSERT(rule);
 
+	compartment_state_t state;
+
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
 	c_cgroups_dev_item_t *matched_dev;
 
@@ -645,6 +725,12 @@ c_cgroups_dev_deny(void *cgroups_devp, const char *rule)
 		// nothing to be done device not allowed anyway
 		mem_free0(dev_item);
 		return 0;
+	}
+
+	// if a more generic wildcard rule is in the allow list, explicitly add to deny list
+	if (c_cgroups_dev_item_uses_wildcard(matched_dev)) {
+		cgroups_dev->denied_devs = list_append(cgroups_dev->denied_devs, dev_item);
+		goto generate;
 	}
 
 	cgroups_dev->allowed_devs = list_remove(cgroups_dev->allowed_devs, matched_dev);
@@ -659,12 +745,15 @@ c_cgroups_dev_deny(void *cgroups_devp, const char *rule)
 
 	mem_free0(dev_item);
 
+generate:
+
 	// regenerate bpf prog and update for running containers only
-	compartment_state_t state = container_get_state(cgroups_dev->container);
+	state = container_get_state(cgroups_dev->container);
 	if (state != COMPARTMENT_STATE_BOOTING && state != COMPARTMENT_STATE_RUNNING)
 		return 0;
 
-	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->allowed_devs);
+	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->denied_devs,
+								     cgroups_dev->allowed_devs);
 	IF_NULL_RETVAL(prog, -1);
 
 	return c_cgroups_dev_bpf_prog_activate(cgroups_dev, prog);
@@ -717,6 +806,7 @@ c_cgroups_dev_new(compartment_t *compartment)
 
 	cgroups_dev->assigned_devs = NULL;
 	cgroups_dev->allowed_devs = NULL;
+	cgroups_dev->denied_devs = NULL;
 
 	return cgroups_dev;
 }
@@ -769,6 +859,14 @@ c_cgroups_dev_start_post_clone(void *cgroups_devp)
 	}
 	DEBUG("Applied containers assign list");
 
+	for (list_t *l = cgroups_dev->denied_devs; l; l = l->next) {
+		c_cgroups_dev_item_t *dl = l->data;
+		DEBUG("device diened: %c %d:%d %s%s%s",
+		      (dl->type == BPF_DEVCG_DEV_CHAR) ? 'c' : 'b', dl->major, dl->minor,
+		      (dl->access & BPF_DEVCG_ACC_READ) ? "r" : "",
+		      (dl->access & BPF_DEVCG_ACC_WRITE) ? "w" : "",
+		      (dl->access & BPF_DEVCG_ACC_MKNOD) ? "m" : "");
+	}
 	for (list_t *l = cgroups_dev->allowed_devs; l; l = l->next) {
 		c_cgroups_dev_item_t *dl = l->data;
 		DEBUG("device allowed: %c %d:%d %s%s%s",
@@ -779,7 +877,8 @@ c_cgroups_dev_start_post_clone(void *cgroups_devp)
 	}
 
 	/* activate actual bpf program */
-	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->allowed_devs);
+	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->denied_devs,
+								     cgroups_dev->allowed_devs);
 	IF_NULL_RETVAL(prog, -COMPARTMENT_ERROR_CGROUPS);
 
 	IF_TRUE_RETVAL(-1 == c_cgroups_dev_bpf_prog_activate(cgroups_dev, prog),
@@ -823,6 +922,14 @@ c_cgroups_dev_cleanup(void *cgroups_devp, UNUSED bool is_rebooting)
 	}
 	list_delete(cgroups_dev->allowed_devs);
 	cgroups_dev->allowed_devs = NULL;
+
+	/* free denied devices */
+	for (list_t *l = cgroups_dev->denied_devs; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		c_cgroups_dev_item_free(dev_item);
+	}
+	list_delete(cgroups_dev->denied_devs);
+	cgroups_dev->denied_devs = NULL;
 }
 
 static bool
@@ -844,6 +951,15 @@ c_cgroups_dev_is_dev_allowed(void *cgroups_devp, char type, int major, int minor
 	}
 	IF_TRUE_RETVAL(type_bpf == 0, false);
 	IF_TRUE_RETVAL_TRACE(major < 0 || minor < 0, false);
+
+	for (list_t *l = cgroups_dev->denied_devs; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		if (dev_item->type != type_bpf)
+			continue;
+		if (dev_item->major == major &&
+		    ((dev_item->minor == minor) || dev_item->minor == -1))
+			return false;
+	}
 
 	for (list_t *l = cgroups_dev->allowed_devs; l; l = l->next) {
 		c_cgroups_dev_item_t *dev_item = l->data;
