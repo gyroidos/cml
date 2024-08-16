@@ -51,7 +51,11 @@
 typedef struct c_hotplug {
 	container_t *container; // weak reference
 	uevent_uev_t *uev;
+	list_t *allow_on_unplug_list; // usb devices, i.e., TOKENs which were denied on plug event
 } c_hotplug_t;
+
+// list which contains usbdev_t items which are used as TOKEN by any container
+static list_t *c_hotplug_token_list = NULL;
 
 static int
 c_hotplug_create_device_node(c_hotplug_t *hotplug, const char *path, int major, int minor,
@@ -224,6 +228,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 {
 	ASSERT(hotplug);
 	ASSERT(event);
+	bool ret = false;
 
 	IF_TRUE_RETVAL_TRACE(strncmp(uevent_event_get_subsystem(event), "usb", 3) ||
 				     strncmp(uevent_event_get_devtype(event), "usb_device", 10),
@@ -241,10 +246,34 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 				if (CONTAINER_USBDEV_TYPE_TOKEN == type) {
 					INFO("HOTPLUG USB TOKEN removed");
 					container_token_detach(hotplug->container);
+				} else {
+					// signal calling handler to deny device access
+					ret = true;
 				}
-				return true;
 			}
 		}
+
+		// reallow access to temporarily occupied device node by TOKEN of other container
+		for (list_t *l = hotplug->allow_on_unplug_list; l;) {
+			list_t *next = l->next;
+			container_usbdev_t *ud = l->data;
+			int major = container_usbdev_get_major(ud);
+			int minor = container_usbdev_get_minor(ud);
+
+			if ((uevent_event_get_major(event) == major) &&
+			    (uevent_event_get_minor(event) == minor)) {
+				INFO("Re%s device node %d:%d -> container %s",
+				     (container_usbdev_is_assigned(ud)) ? "assign" : "allow", major,
+				     minor, container_get_name(hotplug->container));
+				container_device_allow(hotplug->container, 'c', major, minor,
+						       container_usbdev_is_assigned(ud));
+				hotplug->allow_on_unplug_list =
+					list_unlink(hotplug->allow_on_unplug_list, l);
+			}
+			l = next;
+		}
+
+		return ret;
 	}
 
 	if (actions & UEVENT_ACTION_ADD) {
@@ -256,6 +285,21 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 		uint16_t product_id = uevent_event_get_usb_product(event);
 		int major = uevent_event_get_major(event);
 		int minor = uevent_event_get_minor(event);
+
+		for (list_t *l = c_hotplug_token_list; l; l = l->next) {
+			container_usbdev_t *ud = l->data;
+			if ((container_usbdev_get_major(ud) == major) &&
+			    (container_usbdev_get_minor(ud) == minor) &&
+			    container_is_device_allowed(hotplug->container, 'c', major, minor)) {
+				INFO("Deny token device node %d:%d -> container %s", major, minor,
+				     container_get_name(hotplug->container));
+				hotplug->allow_on_unplug_list =
+					list_append(hotplug->allow_on_unplug_list, ud);
+
+				// signal calling handler to deny device access
+				ret = true;
+			}
+		}
 
 		if (file_exists(serial_path))
 			serial = file_read_new(serial_path, 255);
@@ -291,6 +335,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 					      (container_usbdev_is_assigned(ud)) ? "assign" :
 										   "allow",
 					      major, minor, container_get_name(hotplug->container));
+
 					struct c_hotplug_token_data *token_data =
 						mem_new0(struct c_hotplug_token_data, 1);
 					token_data->container = hotplug->container;
@@ -322,7 +367,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 		}
 		mem_free0(serial);
 	}
-	return false;
+	return ret;
 }
 
 static void
@@ -361,6 +406,9 @@ c_hotplug_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 		TRACE("skip not allowed device (%c %d:%d) for container %s", type, major, minor,
 		      container_get_name(hotplug->container));
 		return;
+	} else {
+		TRACE("processing allowed device (%c %d:%d) for container %s", type, major, minor,
+		      container_get_name(hotplug->container));
 	}
 
 	if (hotplugged_do_deny) {
@@ -368,6 +416,8 @@ c_hotplug_handle_event_cb(unsigned actions, uevent_event_t *event, void *data)
 		INFO("Denied access to unbound device node (%c %d:%d)"
 		     " mapped in container %s",
 		     type, major, minor, container_get_name(hotplug->container));
+
+		goto err;
 	}
 
 	// If target container is not running, skip hotplug handling
@@ -448,6 +498,14 @@ c_hotplug_new(compartment_t *compartment)
 		return NULL;
 	}
 
+	// add device to used token list
+	for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
+		container_usbdev_t *usbdev = l->data;
+		if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_TOKEN) {
+			c_hotplug_token_list = list_append(c_hotplug_token_list, usbdev);
+		}
+	}
+
 	return hotplug;
 }
 
@@ -459,6 +517,8 @@ c_hotplug_free(void *hotplugp)
 
 	uevent_remove_uev(hotplug->uev);
 	uevent_uev_free(hotplug->uev);
+
+	c_hotplug_token_list = list_remove(c_hotplug_token_list, c_hotplug_token_list);
 
 	mem_free0(hotplug);
 }
@@ -514,6 +574,32 @@ c_hotplug_start_post_exec(void *hotplugp)
 	return 0;
 }
 
+static void
+c_hotplug_usbdev_deny(c_hotplug_t *hotplug, container_usbdev_t *usbdev)
+{
+	ASSERT(hotplug);
+	ASSERT(usbdev);
+
+	if (0 != c_hotplug_usbdev_set_sysfs_props(usbdev))
+		return;
+
+	int major = container_usbdev_get_major(usbdev);
+	int minor = container_usbdev_get_minor(usbdev);
+
+	if (!container_is_device_allowed(hotplug->container, 'c', major, minor))
+		return;
+
+	if (-1 == container_device_deny(hotplug->container, 'c', major, minor)) {
+		WARN("Could not deny char device %d:%d !", container_usbdev_get_major(usbdev),
+		     container_usbdev_get_minor(usbdev));
+		return;
+	}
+
+	INFO("Denied token device node %d:%d -> container %s", major, minor,
+	     container_get_name(hotplug->container));
+	hotplug->allow_on_unplug_list = list_append(hotplug->allow_on_unplug_list, usbdev);
+}
+
 static int
 c_hotplug_usbdev_allow(c_hotplug_t *hotplug, container_usbdev_t *usbdev)
 {
@@ -543,9 +629,16 @@ c_hotplug_coldplug_usbdevs(void *hotplugp)
 	c_hotplug_t *hotplug = hotplugp;
 	ASSERT(hotplug);
 
-	/* initially allow allready plugged usb devices to devices_subsystem */
+	/* initially deny all connected usb tokens */
+	for (list_t *l = c_hotplug_token_list; l; l = l->next) {
+		container_usbdev_t *usbdev = l->data;
+		c_hotplug_usbdev_deny(hotplug, usbdev);
+	}
+
+	/* initially allow already plugged usb devices to devices_subsystem */
 	for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
 		container_usbdev_t *usbdev = l->data;
+
 		// USB devices of type PIN_READER are only required outside the container to enter the pin
 		// before the container starts and should not be mapped into the container, as they can
 		// be used for multiple containers and a container should not be able to log the pin of
@@ -554,7 +647,8 @@ c_hotplug_coldplug_usbdevs(void *hotplugp)
 			TRACE("Device of type pin reader is not mapped into the container");
 			continue;
 		} else if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_TOKEN) {
-			c_hotplug_usbdev_allow(hotplug, usbdev);
+			TRACE("Device of type token is not mapped into the container");
+			continue;
 		} else if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_GENERIC) {
 			c_hotplug_usbdev_allow(hotplug, usbdev);
 		} else {
