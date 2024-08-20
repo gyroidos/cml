@@ -12,27 +12,38 @@ pipeline {
 
 	stages {
 		stage('build GyroidOS') {
-			steps {
-				script {
-					REPO_NAME = determineRepoName()
+			parallel {
+				stage('build x86') {
+					steps {
+						script {
+							REPO_NAME = determineRepoName()
+							BASE_BRANCH = determineBaseBranch()
+						}
 
-					if (env.CHANGE_TARGET != null) {
-						// in case this is a PR build
-						// set the BASE_BRANCH to the target
-						// e.g. PR-123 -> kirkstone
-						BASE_BRANCH = env.CHANGE_TARGET
-					} else {
-						// in case this is a regular build
-						// let the BASE_BRANCH equal this branch
-						// e.g. kirkstone -> kirkstone
-						BASE_BRANCH = env.BRANCH_NAME
+						build job: "../gyroidos/${BASE_BRANCH}", wait: true, parameters: [
+							string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}"),
+							string(name: "CI_LIB_VERSION", value: "${CI_LIB_VERSION}"),
+							string(name: "GYROID_ARCH", value: "x86"),
+							string(name: "GYROID_MACHINE", value: "genericx86-64")
+						]
 					}
 				}
 
-				build job: "../gyroidos/${BASE_BRANCH}", wait: true, parameters: [
-					string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}"),
-					string(name: "CI_LIB_VERSION", value: "${CI_LIB_VERSION}")
-				]
+				stage('build arm64') {
+					steps {
+						script {
+							REPO_NAME = determineRepoName()
+							BASE_BRANCH = determineBaseBranch()
+						}
+
+						build job: "../gyroidos/${BASE_BRANCH}", wait: true, parameters: [
+							string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}"),
+							string(name: "CI_LIB_VERSION", value: "${CI_LIB_VERSION}"),
+							string(name: "GYROID_ARCH", value: "arm64"),
+							string(name: "GYROID_MACHINE", value: "tqma8mpxl")
+						]
+					}
+				}
 			}
 		}
 	}
@@ -43,4 +54,18 @@ pipeline {
 // Source: https://stackoverflow.com/a/45690925
 String determineRepoName() {
 	return scm.getUserRemoteConfigs()[0].getUrl().tokenize('/').last().split("\\.")[0]
+}
+
+String determineBaseBranch() {
+	if (env.CHANGE_TARGET != null) {
+		// in case this is a PR build
+		// set the BASE_BRANCH to the target
+		// e.g. PR-123 -> kirkstone
+		return env.CHANGE_TARGET
+	} else {
+		// in case this is a regular build
+		// let the BASE_BRANCH equal this branch
+		// e.g. kirkstone -> kirkstone
+		return env.BRANCH_NAME
+	}
 }
