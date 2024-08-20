@@ -398,7 +398,10 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	case SYS_finit_module:
 		ret_syscall = c_seccomp_emulate_finit_module(seccomp, req, resp);
 		break;
+#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
+	// SYS_mknod not defined on arm64
 	case SYS_mknod:
+#endif
 	case SYS_mknodat:
 		ret_syscall = c_seccomp_emulate_mknodat(seccomp, req, resp);
 		break;
