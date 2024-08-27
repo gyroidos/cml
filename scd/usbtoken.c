@@ -53,7 +53,7 @@
 #define USBTOKEN_SE_COMM_TIMEOUT 10000 // check if card is still present every 10 sec
 
 #define USBTOKEN_SUCCESS 0x9000
-#define USBTOKEN_WRONG_P1_P2 0x6A86
+#define USBTOKEN_FUNCTION_NOT_SUPPORTED 0x6A81
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -216,7 +216,7 @@ usbtoken_is_card_present(usbtoken_t *token)
 
 	int rc = -1;
 
-	rc = processAPDU(token->ctn, 0, 0x00, 0xA4, 0x04, 0x0C, sizeof(aid_unselectable),
+	rc = processAPDU(token->ctn, 0, 0x00, 0x70, 0x80, 0x00, sizeof(aid_unselectable),
 			 aid_unselectable, 0, rsp, sizeof(rsp), &SW1SW2);
 	if (rc < 0) {
 		ERROR("processAPDU failed with code: %d", rc);
@@ -230,7 +230,7 @@ usbtoken_is_card_present(usbtoken_t *token)
 	str_free(dump, true);
 #endif
 
-	if (SW1SW2 != USBTOKEN_WRONG_P1_P2) {
+	if (SW1SW2 != USBTOKEN_FUNCTION_NOT_SUPPORTED) {
 		ERROR("SE not present");
 		return false;
 	}
