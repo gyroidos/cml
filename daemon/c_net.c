@@ -1411,6 +1411,71 @@ c_net_cleanup_c0(const c_net_t *net)
 }
 
 /**
+ * Rename physical network interfaces of container before netns destruction
+ */
+static int
+c_net_cleanup_phys(const c_net_t *net)
+{
+	ASSERT(net);
+
+	// no need to cleanup/rename if no phys interfaces where added
+	IF_FALSE_RETVAL(net->pnet_mv_list, 0);
+
+	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
+
+	// rename moved physical interfaces in network namespace of container
+	pid_t c_netns_pid = fork();
+	if (c_netns_pid == -1) {
+		ERROR_ERRNO("Could not fork for switching to netns");
+		return -1;
+	} else if (c_netns_pid == 0) {
+		DEBUG("Renaming netifs in %s", container_get_name(net->container));
+
+		event_reset(); // reset event_loop of cloned from parent
+		if (ns_join_by_path(net->ns_path) < 0)
+			FATAL_ERRNO("Could not join netns of compartment");
+
+		list_t *phys_ifaces = network_get_physical_interfaces_new();
+		// Rename all physical interfaces.
+		int index = 0;
+		for (list_t *l = phys_ifaces; l; l = l->next) {
+			const char *ifname = l->data;
+			const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
+
+			// create collision free name with cmld's main process naming scheme
+			char *newname = mem_printf("%s%08x_%03d", prefix,
+						   container_get_uid(net->container), index++);
+			if (strlen(newname) > IFNAMSIZ) {
+				ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
+				mem_free(newname);
+				mem_free0(l->data);
+				continue;
+			}
+
+			DEBUG("Renaming interface %s to %s in netns of %s ", ifname, newname,
+			      container_get_name(net->container));
+
+			if (network_rename_ifi(ifname, newname))
+				WARN("Failed to rename interface %s", ifname);
+
+			mem_free(newname);
+			mem_free0(l->data);
+		}
+		list_delete(phys_ifaces);
+
+		DEBUG("Renaming ifs in netns of %s done, exiting netns child!",
+		      container_get_name(net->container));
+		_exit(0); // don't call atexit registered cleanup of main process
+	} else {
+		DEBUG("Renaming of ifs should be done by pid=%d", c_netns_pid);
+		// register at sigchild handler for helper clone in netns of container
+		container_wait_for_child(net->container, "c-netns-rename-helper", c_netns_pid);
+	}
+
+	return 0;
+}
+
+/**
  * Cleans up the c_net_t struct and shuts down the network interface.
  */
 static void
@@ -1430,6 +1495,10 @@ c_net_cleanup(void *netp, bool is_rebooting)
 			WARN("Could not keep netns active for reboot!");
 		return;
 	}
+
+	// rename phys interface to avoid name clashes during fallback to rootns
+	if (c_net_cleanup_phys(net) == -1)
+		WARN("Failed to create helper child for cleanup of phys in container's netns");
 
 	// remove bound to filesystem
 	if (net->fd_netns > 0) {
