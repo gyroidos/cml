@@ -67,6 +67,7 @@
 #include <linux/filter.h>
 #include <linux/audit.h>
 #include <linux/netlink.h>
+#include <linux/seccomp.h>
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
