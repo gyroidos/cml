@@ -362,7 +362,8 @@ ssl_get_uid_from_cert_new(const char *file)
 	BIO_get_mem_ptr(ext_bio, &bptr);
 	BIO_set_close(ext_bio, BIO_NOCLOSE); /* So BIO_free() leaves BUF_MEM bptr alone */
 
-	uuid = mem_new0(char, 36);
+	// initialize 36 byte UUID + null terminator
+	uuid = mem_new0(char, 37);
 
 	if (sscanf(bptr->data, "URI:UUID:%36c", uuid) != 1) {
 		ERROR("Failed parsing uuid!");
