@@ -868,8 +868,8 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 
 			sector_str = mem_printf("%llu", sector);
 			audit_log_event(uuid, (res == 1) ? SSA : FSA, CMLD, CONTAINER_MGMT,
-					"dm-integrity", uuid_str, 6, "op", op_buf, "label",
-					dev_name, "sector", sector_str);
+					"dm-audit", uuid_str, 6, "op", op_buf, "label", dev_name,
+					"sector", sector_str);
 
 			mem_free0(sector_str);
 			mem_free0(dev_name);
