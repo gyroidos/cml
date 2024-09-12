@@ -1393,15 +1393,27 @@ c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 				if (pid < 0) {
 					ERROR_ERRNO("Can not fork child for integrity check!");
 					return false;
-				} else if (pid == 0) { // child do check (audit msg in guestos)
+				} else if (pid == 0) { // child do check
 					event_reset();
 					if (guestos_check_mount_image_block(
 						    vol->os, mntent, true) != CHECK_IMAGE_GOOD) {
 						ERROR("Cannot verify image %s: "
 						      "image file is corrupted",
 						      mount_entry_get_img(mntent));
+
+						audit_log_event(
+							container_get_uuid(vol->container), FSA,
+							CMLD, CONTAINER_MGMT, "verify-image",
+							uuid_string(
+								container_get_uuid(vol->container)),
+							2, "name", mount_entry_get_img(mntent));
 						_exit(-1);
 					}
+					audit_log_event(
+						container_get_uuid(vol->container), SSA, CMLD,
+						CONTAINER_MGMT, "verify-image",
+						uuid_string(container_get_uuid(vol->container)), 2,
+						"name", mount_entry_get_img(mntent));
 					_exit(0);
 				} else { // parent
 					INFO("dm-verity active for image %s, "
