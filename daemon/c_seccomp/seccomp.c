@@ -347,6 +347,10 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		event_remove_io(seccomp->event);
 		event_io_free(seccomp->event);
 		close(seccomp->notify_fd);
+
+		seccomp->event = NULL;
+		seccomp->notify_fd = -1;
+
 		return;
 	}
 
@@ -582,6 +586,8 @@ c_seccomp_cleanup(void *seccompp, UNUSED bool is_rebooting)
 
 	if (-1 != seccomp->notify_fd)
 		close(seccomp->notify_fd);
+
+	seccomp->notify_fd = -1;
 }
 
 static compartment_module_t c_seccomp_module = {
