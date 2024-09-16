@@ -753,11 +753,12 @@ iterate_images_cb_download_hash_complete(download_t *dl, bool success, void *dat
 
 err:
 	if (!iterate_images_trigger_download(task)) {
+		task->os->downloading = false;
+
 		// notify caller
 		if (task->on_complete.download_complete)
 			task->on_complete.download_complete(false, task->dl_count, task->os,
 							    task->complete_data);
-		task->os->downloading = false;
 		// cleanup
 		iterate_images_free(task);
 	}
@@ -777,11 +778,12 @@ iterate_images_cb_download_complete(download_t *dl, bool success, void *data)
 	} else {
 		WARN("Download of %s failed!", download_get_url(dl));
 		if (!iterate_images_trigger_download(task)) {
+			task->os->downloading = false;
+
 			// notify caller
 			if (task->on_complete.download_complete)
 				task->on_complete.download_complete(false, task->dl_count, task->os,
 								    task->complete_data);
-			task->os->downloading = false;
 			// cleanup
 			iterate_images_free(task);
 		}
@@ -820,11 +822,12 @@ iterate_images_cb_download_check(iterate_images_t *task, guestos_check_mount_ima
 			return;
 	}
 
+	task->os->downloading = false;
+
 	// notify caller
 	if (task->on_complete.download_complete)
 		task->on_complete.download_complete(good, task->dl_count, task->os,
 						    task->complete_data);
-	task->os->downloading = false;
 	// cleanup
 	iterate_images_free(task);
 }
@@ -854,10 +857,12 @@ guestos_images_download(guestos_t *os, guestos_images_download_complete_cb_t cb,
 				  data)) {
 		DEBUG("No images to download for GuestOS %s v%" PRIu64, guestos_get_name(os),
 		      guestos_get_version(os));
+
+		os->downloading = false;
+
 		// notify caller
 		if (cb)
 			cb(true, 0, os, data);
-		os->downloading = false;
 	}
 	return true;
 }
