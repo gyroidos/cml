@@ -29,6 +29,7 @@
  * Access to global resources on behalf of a container through this module is controlled by compartment
  * flags defined in compartment.h. If access to a particular resource is allowed, this module emulates the
  * syscalls a container issues to access the resource.
+ * This module provides syscall emulation as part of TSF.CML.Isolation
  */
 
 #define _GNU_SOURCE
