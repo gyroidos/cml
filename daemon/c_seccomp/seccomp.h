@@ -26,6 +26,7 @@
  *
  * Internal seccomp header file to define common interal structures
  * of the c_seccomp module.
+ * This module provides syscall emulation as part of TSF.CML.Isolation
  */
 
 #ifndef SECCOMP_H
