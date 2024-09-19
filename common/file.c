@@ -147,7 +147,7 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		return -1;
 	}
 
-	buf = alloca(bs); // TODO: use mem_new for big bs...
+	buf = mem_alloc0(bs);
 
 	ret = lseek(out_fd, seek * bs, SEEK_SET);
 	if (ret < 0) {
@@ -159,6 +159,10 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		ssize_t len;
 
 		len = read(in_fd, buf, bs);
+
+		if (0 == (i % 1024))
+			DEBUG("Copied %ld bytes from %s to %s", MUL_WITH_OVERFLOW_CHECK(bs, i),
+			      in_file, out_file);
 
 		if (len == 0) {
 			goto out;
@@ -178,6 +182,8 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 out:
 	close(out_fd);
 	close(in_fd);
+	mem_free(buf);
+
 	return ret;
 }
 
