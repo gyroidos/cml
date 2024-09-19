@@ -28,7 +28,7 @@
  *
  * @file sc-hsm-cardservice.c
  * @author Andreas Schwier
- * @brief Minimal card service for key generator
+ * @brief Minimal BN-SE card service for the key generator
  */
 
 #include <stdio.h>
@@ -38,27 +38,10 @@
 #include <ctapi.h>
 #include "cardservice.h"
 
-static unsigned char aid[] = { 0xE8, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x81, 0xC3, 0x1F, 0x02, 0x01 };
-
-static unsigned char inittemplate[] = {
-	0x80, 0x02, 0x00, 0x02,					    // Option Transport PIN
-	0x81, 0x06, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31,		    // T-PIN, Offset 6
-	0x82, 0x08, 0x35, 0x37, 0x36, 0x32, 0x31, 0x38, 0x38, 0x30, // SO-PIN, Offset 14
-	0x91, 0x01, 0x03,					    // Retry counter 3
-	0x97, 0x01, 0x01
-}; // One Key Domain
-
-// Generated as PKCS#15 Secret Key Description structure in pinmgnt.js
-static unsigned char skd_dskkey[] = { 0xA8, 0x2F, 0x30, 0x13, 0x0C, 0x11, 0x44, 0x69, 0x73, 0x6B,
-				      0x45, 0x6E, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6F, 0x6E,
-				      0x4B, 0x65, 0x79, 0x30, 0x08, 0x04, 0x01, 0x01, 0x03, 0x03,
-				      0x07, 0xC0, 0x10, 0xA0, 0x06, 0x30, 0x04, 0x02, 0x02, 0x00,
-				      0x80, 0xA1, 0x06, 0x30, 0x04, 0x30, 0x02, 0x04, 0x00 };
-
-static unsigned char algo_dskkey[] = { 0x91, 0x01, 0x99 };
+static unsigned char aid[] = { 0xE8, 0x2B, 0x06, 0x01, 0x04, 0x01, 0x81, 0xC3, 0x1F, 0x01, 0x03 };
 
 /**
- * Select the SmartCard-HSM application on the device
+ * Select the BN-SE application on the device
  *
  * @param ctn the card terminal number
  * @return < 0 in case of an error or SW1/SW2 return by the token.
@@ -72,43 +55,6 @@ selectSE(int ctn)
 
 	rc = processAPDU(ctn, 0, 0x00, 0xA4, 0x04, 0x04, sizeof(aid), aid, 0, rdata, sizeof(rdata),
 			 &SW1SW2);
-
-	if (rc < 0) {
-		return rc;
-	}
-
-	return SW1SW2;
-}
-
-/**
- * Initialize SmartCard-HSM with Transport PIN and one key domain
- *
- * @param ctn the card terminal number
- * @param sopin the Security Officer PIN (SO-PIN)
- * @param sopinlen the length of the SO-PIN (must be 8)
- * @param pin the transport PIN to be set
- * @param pinlen the length of the transport PIN (must be 6)
- * @return < 0 in case of an error or SW1/SW2 return by the token.
- */
-static int
-initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin, int pinlen)
-{
-	unsigned short SW1SW2;
-	unsigned char cdata[32];
-	int rc, len;
-
-	if ((sopin == NULL) || (sopinlen != 8) || (pin == NULL) || (pinlen != 6)) {
-		return -1;
-	}
-
-	len = sizeof(inittemplate);
-	memcpy(cdata, inittemplate, len);
-	memcpy(cdata + 6, pin, pinlen);
-	memcpy(cdata + 14, sopin, sopinlen);
-
-	rc = processAPDU(ctn, 0, 0x80, 0x50, 0x00, 0x00, len, cdata, 0, NULL, 0, &SW1SW2);
-
-	memset(cdata, 0, sizeof(cdata));
 
 	if (rc < 0) {
 		return rc;
@@ -142,13 +88,34 @@ queryPIN(int ctn)
  * Query the Life-Cycle status to check if the SE is operational
  *
  * @param ctn the card terminal number
- * @return < 0 in case of an error or one of LC_OPERATIONAL or LC_CONFIGURED
+ * @return < 0 in case of an error or one of LC_xx
  */
 static int
 getLifeCycleState(int ctn)
 {
-	int sw = queryPIN(ctn);
-	return sw != 0x6984 ? LC_OPERATIONAL : LC_CONFIGURED;
+	unsigned char rdata[256];
+	unsigned short SW1SW2;
+	int rc;
+
+	rc = processAPDU(ctn, 0, 0x80, 0x02, 0x00, 0x00, 0, NULL, 0, rdata, sizeof(rdata), &SW1SW2);
+
+	if (rc < 0) {
+		return rc;
+	}
+
+	if (SW1SW2 == 0x6A81) {
+		return LC_TERMINATED;
+	}
+
+	if (SW1SW2 != 0x9000) {
+		return -1;
+	}
+
+	if (rdata[0] != 0x80 && rdata[1] != 0x01) {
+		return -1;
+	}
+
+	return rdata[2];
 }
 
 /**
@@ -192,7 +159,6 @@ verifyPIN(int ctn, unsigned char *pin, int pinlen)
 static int
 changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, int newpinlen)
 {
-	unsigned char cdata[32];
 	unsigned short SW1SW2;
 	int rc;
 
@@ -200,37 +166,13 @@ changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, 
 		return -1;
 	}
 
-	memcpy(cdata, oldpin, oldpinlen);
-	memcpy(cdata + oldpinlen, newpin, newpinlen);
+	rc = verifyPIN(ctn, oldpin, oldpinlen);
 
-	rc = processAPDU(ctn, 0, 0x00, 0x24, 0x00, 0x81, oldpinlen + newpinlen, cdata, 0, NULL, 0,
-			 &SW1SW2);
-
-	memset(cdata, 0, sizeof(cdata));
-
-	if (rc < 0) {
+	if (rc != 0x9000) {
 		return rc;
 	}
 
-	return SW1SW2;
-}
-
-/**
- * Generate AES-128 key as master secret
- *
- * @param ctn the card terminal number
- * @param id the key id on the device
- * @return < 0 in case of an error or SW1/SW2 return by the token.
- */
-static int
-generateMasterKey(int ctn)
-{
-	unsigned char cdata[256];
-	unsigned short SW1SW2;
-	int rc;
-
-	rc = processAPDU(ctn, 0, 0x00, 0x48, 1, 0xB0, sizeof(algo_dskkey), algo_dskkey, 0, NULL, 0,
-			 &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x00, 0x24, 0x00, 0x81, newpinlen, newpin, 0, NULL, 0, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -240,18 +182,27 @@ generateMasterKey(int ctn)
 		return SW1SW2;
 	}
 
-	int l = 0;
-	cdata[l++] = 0x54;
-	cdata[l++] = 0x02;
-	cdata[l++] = 0x00;
-	cdata[l++] = 0x00;
-	cdata[l++] = 0x53;
-	cdata[l++] = sizeof(skd_dskkey);
+	rc = verifyPIN(ctn, newpin, newpinlen);
 
-	memcpy(cdata + l, skd_dskkey, sizeof(skd_dskkey));
-	l += sizeof(skd_dskkey);
+	return rc;
+}
 
-	rc = processAPDU(ctn, 0, 0x00, 0xD7, 0xC4, 1, l, cdata, 0, NULL, 0, &SW1SW2);
+/**
+ * Generate AES-128 key as master secret
+ *
+ * @param ctn the card terminal number
+ * @param id the key id on the device
+ * @param algo the list of supported algorithms
+ * @param algolen the length of the algorithm list
+ * @return < 0 in case of an error or SW1/SW2
+ */
+static int
+generateMasterKey(int ctn)
+{
+	unsigned short SW1SW2;
+	int rc;
+
+	rc = processAPDU(ctn, 0, 0x00, 0x48, 0x00, 0x00, 0, NULL, 0, NULL, 0, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -268,7 +219,7 @@ generateMasterKey(int ctn)
  * @param labellen the length of the label
  * @param keybuff a 32 byte key buffer
  * @param keybuff the length of the key buffer
- * @return < 0 in case of an error or SW1/SW2 return by the token.
+ * @return < 0 in case of an error or SW1/SW2
  */
 static int
 deriveKey(int ctn, unsigned char *label, int labellen, unsigned char *keybuff, int keybufflen)
@@ -280,8 +231,8 @@ deriveKey(int ctn, unsigned char *label, int labellen, unsigned char *keybuff, i
 		return -1;
 	}
 
-	rc = processAPDU(ctn, 0, 0x80, 0x78, 1, 0x99, labellen, label, 0, keybuff, keybufflen,
-			 &SW1SW2);
+	rc = processAPDU(ctn, 0, 0x80, 0x78, 0, 0x00, labellen, label, keybufflen, keybuff,
+			 keybufflen, &SW1SW2);
 
 	if (rc < 0) {
 		return rc;
@@ -299,38 +250,26 @@ deriveKey(int ctn, unsigned char *label, int labellen, unsigned char *keybuff, i
 static int
 terminate(int ctn)
 {
-	unsigned char badpin[16];
-	int rc, cnt, len;
+	unsigned short SW1SW2;
+	int rc;
 
-	len = 17;
-	do {
-		len--;
-		for (size_t i = 0; i < sizeof(badpin); i++) {
-			badpin[i] = len;
-		}
-		rc = verifyPIN(ctn, badpin, len);
-	} while (rc == 0x6700 && len > 5);
+	rc = processAPDU(ctn, 0, 0x80, 0xF0, 0x00, 0x7F, 0, NULL, 0, NULL, 0, &SW1SW2);
 
-	cnt = 10;
-	while (rc != 0x6983 && cnt > 0) {
-		for (size_t i = 0; i < sizeof(badpin); i++) {
-			badpin[i]++;
-		}
-		rc = verifyPIN(ctn, badpin, len);
-		cnt--;
+	if (rc < 0) {
+		return rc;
 	}
 
-	return rc == 0x6983 ? 0 : -1;
+	return SW1SW2;
 }
 
 struct cardService *
-getSmartCardHSMCardService()
+getBNSECardService()
 {
-	static struct cardService cs = { "SmartCard-HSM",
+	static struct cardService cs = { "BN-SE",
 
-					 selectSE,	    initializeDevice, queryPIN,
-					 getLifeCycleState, verifyPIN,	      changePIN,
-					 generateMasterKey, deriveKey,	      terminate };
+					 selectSE,	    NULL,      queryPIN,
+					 getLifeCycleState, verifyPIN, changePIN,
+					 generateMasterKey, deriveKey, terminate };
 
 	return &cs;
 }

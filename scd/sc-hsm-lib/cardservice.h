@@ -26,33 +26,51 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @file sc-hsm-cardservice.h
+ * @file cardservice.h
  * @author Andreas Schwier
- * @brief Minimal card service for key generator
+ * @brief Card service API
  */
 
+#define LC_LOADED 0x01	     /** Firmware loaded */
+#define LC_PERSONALIZED 0x03 /** SE personalized */
+#define LC_CONFIGURED 0x07   /** SE configured and in transport mode */
+#define LC_OPERATIONAL 0x17  /** SE paired and operational */
+#define LC_TERMINATED 0x7F   /** SE terminated */
+
+struct cardService {
+	const char *name;
+
+	int (*selectSE)(int ctn);
+	int (*initializeDevice)(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin,
+				int pinlen);
+	int (*queryPIN)(int ctn);
+	int (*getLifeCycleState)(int ctn);
+	int (*verifyPIN)(int ctn, unsigned char *pin, int pinlen);
+	int (*changePIN)(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin,
+			 int newpinlen);
+	int (*generateMasterKey)(int ctn);
+	int (*deriveKey)(int ctn, unsigned char *label, int labellen, unsigned char *keybuff,
+			 int keybufflen);
+	int (*terminate)(int ctn);
+};
+
+#ifdef DEBUG_BUILD
 void
-setDebugLevel(int level);
+dump(unsigned char *mem, int len);
+#endif
+
+int
+requestICC(int ctn, unsigned char *atr, int atrbufflen);
 
 int
 processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned char P1,
 	    unsigned char P2, int OutLen, unsigned char *OutData, int InLen, unsigned char *InData,
 	    int InSize, unsigned short *SW1SW2);
 
-int
-selectHSM(int ctn);
-int
-initializeDevice(int ctn, unsigned char *sopin, int sopinlen, unsigned char *pin, int pinlen);
-int
-queryPIN(int ctn);
-int
-verifyPIN(int ctn, unsigned char *pin, int pinlen);
-int
-changePIN(int ctn, unsigned char *oldpin, int oldpinlen, unsigned char *newpin, int newpinlen);
-int
-generateSymmetricKey(int ctn, unsigned char id, unsigned char *algo, int algolen);
-int
-writeKeyDescription(int ctn, unsigned char id, unsigned char *desc, int desclen);
-int
-deriveKey(int ctn, unsigned char id, unsigned char *label, int labellen, unsigned char *keybuff,
-	  int keybufflen);
+struct cardService *
+getCardService(int ctn);
+
+struct cardService *
+getSmartCardHSMCardService();
+struct cardService *
+getBNSECardService();
