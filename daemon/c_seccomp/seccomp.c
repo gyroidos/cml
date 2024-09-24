@@ -336,6 +336,37 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	return lbuf;
 }
 
+int
+c_seccomp_send_vm(c_seccomp_t *seccomp, int pid, void *lbuf, void *rbuf, uint64_t size)
+{
+	IF_NULL_RETVAL(lbuf, -1);
+	IF_NULL_RETVAL(rbuf, -1);
+	IF_TRUE_RETVAL(pid < 0, -1);
+
+	struct iovec local_iov[1] = { 0 };
+	struct iovec remote_iov[1] = { 0 };
+
+	local_iov[0].iov_base = lbuf;
+	local_iov[0].iov_len = size;
+
+	remote_iov[0].iov_base = rbuf;
+	remote_iov[0].iov_len = size;
+
+	ssize_t bytes_written = syscall(SYS_process_vm_writev, pid, local_iov, 1, remote_iov, 1, 0);
+	if (bytes_written < 0) {
+		char *pid_str = mem_printf("%d", pid);
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
+				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
+
+		ERROR_ERRNO("Failed to access memory of remote process, bytes written: %ld",
+			    bytes_written);
+		mem_free(pid_str);
+		return -1;
+	}
+
+	return 0;
+}
+
 static void
 c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 {
