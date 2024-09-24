@@ -82,9 +82,6 @@ message ControllerToDaemon {
 		// Images will be updated later.
 		PUSH_GUESTOS_CONFIG = 20;
 
-		// Reloads containers from config files, e.g. if a new container should be created
-		RELOAD_CONTAINERS = 21;
-
 		// Creates a container, answers with CONTAINER_CONFIGS
 		CREATE_CONTAINER = 22;
 
