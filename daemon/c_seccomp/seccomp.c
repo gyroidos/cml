@@ -54,6 +54,7 @@
 #include <sched.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
@@ -320,11 +321,13 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 
 	ssize_t bytes_read = syscall(SYS_process_vm_readv, pid, local_iov, 1, remote_iov, 1, 0);
 	if (bytes_read < 0) {
+		char *pid_str = mem_printf("%d", pid);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
-				compartment_get_name(seccomp->compartment), 2, "pid", pid);
+				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
 
 		ERROR_ERRNO("Failed to access memory of remote process, bytes read: %ld",
 			    bytes_read);
+		mem_free(pid_str);
 		mem_free(lbuf);
 		return NULL;
 	}
@@ -367,7 +370,8 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		      EINTR == errno ? "SIGCHLD" : "unexpected event");
 
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-rcv-next",
-				compartment_get_name(seccomp->compartment), 2, "errno", errno);
+				compartment_get_name(seccomp->compartment), 2, "errno",
+				strerror(errno));
 		mem_free0(req);
 		mem_free0(resp);
 		return;
@@ -386,21 +390,27 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	 * to the audit subsystem.
 	 */
 	int ret_syscall = 0;
+	char *syscall_str = NULL;
 
 	switch (req->data.nr) {
 	case SYS_clock_adjtime:
+		syscall_str = mem_strdup("SYS_clock_adjtime");
 		ret_syscall = c_seccomp_emulate_adjtime(seccomp, req, resp);
 		break;
 	case SYS_adjtimex:
+		syscall_str = mem_strdup("SYS_adjtimex");
 		ret_syscall = c_seccomp_emulate_adjtimex(seccomp, req, resp);
 		break;
 	case SYS_clock_settime:
+		syscall_str = mem_strdup("SYS_clock_settime");
 		ret_syscall = c_seccomp_emulate_settime(seccomp, req, resp);
 		break;
 	case SYS_ioctl:
+		syscall_str = mem_strdup("SYS_ioctl");
 		ret_syscall = c_seccomp_emulate_ioctl(seccomp, req, resp);
 		break;
 	case SYS_finit_module:
+		syscall_str = mem_strdup("SYS_finit_module");
 		ret_syscall = c_seccomp_emulate_finit_module(seccomp, req, resp);
 		break;
 #if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
@@ -408,13 +418,15 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	case SYS_mknod:
 #endif
 	case SYS_mknodat:
+		syscall_str = mem_strdup("SYS_mknodat");
 		ret_syscall = c_seccomp_emulate_mknodat(seccomp, req, resp);
 		break;
 	default:
 		ret_syscall = 0;
+		syscall_str = mem_printf("_NR: %d", req->data.nr);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
-				req->data.nr);
+				syscall_str);
 
 		ERROR("Got syscall not handled by us: %d", req->data.nr);
 
@@ -426,17 +438,19 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	if (-1 == ret_syscall) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
-				req->data.nr);
+				syscall_str);
 	}
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-respone",
-				compartment_get_name(seccomp->compartment), 2, "errno", errno);
+				compartment_get_name(seccomp->compartment), 2, "errno",
+				strerror(errno));
 		ERROR_ERRNO("Failed to send seccomp notify response");
 	} else {
 		DEBUG("Successfully handled seccomp notification");
 	}
 
+	mem_free(syscall_str);
 	mem_free(req);
 	mem_free(resp);
 }
