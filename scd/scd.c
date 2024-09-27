@@ -100,16 +100,16 @@ is_softtoken(const char *path, const char *file, UNUSED void *data)
 
 	// regular file
 	if (!file_is_regular(location))
-		return 0;
+		goto out;
 	// with fixed extesion
 	if (!(ext = file_get_extension(file)))
-		return 0;
+		goto out;
 	if (!strncmp(ext, TOKEN_DEFAULT_EXT, strlen(TOKEN_DEFAULT_EXT))) {
 		DEBUG("Found token file: %s", location);
 		mem_free0(location);
 		return 1;
 	}
-
+out:
 	mem_free0(location);
 	return 0;
 }
