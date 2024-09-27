@@ -1716,6 +1716,8 @@ error:
 		EVP_PKEY_free(key_evp_pub);
 	if (ext_stack)
 		sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
+	if (cert_name)
+		X509_NAME_free(cert_name);
 	return ret;
 }
 
