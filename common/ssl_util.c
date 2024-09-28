@@ -159,8 +159,8 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 	//	ERROR("PRNG has not been seeded with enough data");
 	return 0;
 error:
-	ENGINE_free(tpm_engine);
 	ENGINE_finish(tpm_engine);
+	ENGINE_free(tpm_engine);
 	tpm_engine = NULL;
 	return -1;
 }
@@ -169,8 +169,8 @@ void
 ssl_free(void)
 {
 	if (tpm_engine) {
-		ENGINE_free(tpm_engine);
 		ENGINE_finish(tpm_engine);
+		ENGINE_free(tpm_engine);
 		tpm_engine = NULL;
 	}
 }
