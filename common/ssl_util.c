@@ -475,10 +475,10 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 		goto error;
 	}
 
-	// free'd when X509_req is free'd
 	char *uri_uuid = mem_printf("URI:UUID:%s", uid);
 	if (add_ext_req(exts, NID_subject_alt_name, uri_uuid) != 0) {
 		ERROR("Error setting CSR extension (NID_subject_alt_name)");
+		mem_free0(uri_uuid);
 		goto error;
 	}
 
@@ -505,6 +505,7 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 
 	DEBUG("Certificate request signed");
 
+	mem_free0(uri_uuid);
 	return req;
 
 error:
