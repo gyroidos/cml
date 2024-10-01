@@ -159,8 +159,8 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 	//	ERROR("PRNG has not been seeded with enough data");
 	return 0;
 error:
-	ENGINE_free(tpm_engine);
 	ENGINE_finish(tpm_engine);
+	ENGINE_free(tpm_engine);
 	tpm_engine = NULL;
 	return -1;
 }
@@ -169,8 +169,8 @@ void
 ssl_free(void)
 {
 	if (tpm_engine) {
-		ENGINE_free(tpm_engine);
 		ENGINE_finish(tpm_engine);
+		ENGINE_free(tpm_engine);
 		tpm_engine = NULL;
 	}
 }
@@ -475,10 +475,10 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 		goto error;
 	}
 
-	// free'd when X509_req is free'd
 	char *uri_uuid = mem_printf("URI:UUID:%s", uid);
 	if (add_ext_req(exts, NID_subject_alt_name, uri_uuid) != 0) {
 		ERROR("Error setting CSR extension (NID_subject_alt_name)");
+		mem_free0(uri_uuid);
 		goto error;
 	}
 
@@ -505,6 +505,7 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 
 	DEBUG("Certificate request signed");
 
+	mem_free0(uri_uuid);
 	return req;
 
 error:
@@ -1716,6 +1717,8 @@ error:
 		EVP_PKEY_free(key_evp_pub);
 	if (ext_stack)
 		sk_X509_EXTENSION_pop_free(ext_stack, X509_EXTENSION_free);
+	if (cert_name)
+		X509_NAME_free(cert_name);
 	return ret;
 }
 

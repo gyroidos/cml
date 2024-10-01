@@ -86,6 +86,10 @@ static void
 scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 {
 	INFO("Received SIGTERM..");
+	if (scd_logfile_p) {
+		logf_unregister(scd_logfile_handler);
+		logf_file_close(scd_logfile_p);
+	}
 	exit(0);
 }
 
@@ -100,16 +104,16 @@ is_softtoken(const char *path, const char *file, UNUSED void *data)
 
 	// regular file
 	if (!file_is_regular(location))
-		return 0;
+		goto out;
 	// with fixed extesion
 	if (!(ext = file_get_extension(file)))
-		return 0;
+		goto out;
 	if (!strncmp(ext, TOKEN_DEFAULT_EXT, strlen(TOKEN_DEFAULT_EXT))) {
 		DEBUG("Found token file: %s", location);
 		mem_free0(location);
 		return 1;
 	}
-
+out:
 	mem_free0(location);
 	return 0;
 }
@@ -276,6 +280,8 @@ provisioning_mode()
 
 	// we now have anything for a clean startup so just die and let us be restarted by init
 	if (need_initialization) {
+		logf_unregister(scd_logfile_handler);
+		logf_file_close(scd_logfile_p);
 		exit(0);
 	}
 
