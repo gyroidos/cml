@@ -70,6 +70,8 @@ ifeq ($(TRUSTME_SCHSM), y)
 	LOCAL_LFLAGS += -lctccid
     SRC_FILES += \
 	sc-hsm-lib/sc-hsm-cardservice.c \
+	sc-hsm-lib/bn-se-cardservice.c \
+	sc-hsm-lib/cardservice.c \
 	usbtoken.c
 endif
 ifeq ($(SYSTEMD),y)
