@@ -388,8 +388,11 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			int ret = token->change_passphrase(token, msg->token_pin, msg->token_newpin,
 							   msg->pairing_secret.data,
 							   msg->pairing_secret.len, false);
-			if (ret == 0)
+			if (ret == 0) {
 				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
+			} else {
+				ERROR("Token change passphrase failed");
+			}
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
