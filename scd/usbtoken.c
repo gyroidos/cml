@@ -25,7 +25,7 @@
 #include "scd.h"
 #include "control.h"
 
-#include "sc-hsm-lib/sc-hsm-cardservice.h"
+#include "sc-hsm-lib/cardservice.h"
 #include <ctapi.h>
 
 #include "common/macro.h"
@@ -61,20 +61,6 @@
 static unsigned short g_ctn = 0;
 static list_t *ctn_available_list = NULL; // already used but closed ctns less than g_ctn
 
-/* following are implementation specific byte arrays used to commuicate with 'sc-hsm' tokens
- * manufactored by CardContact.
- * See https://github.com/CardContact/sc-hsm-embedded for more information.
- */
-static const unsigned char requesticc[] = { 0x20, 0x12, 0x00, 0x01, 0x00 };
-
-static unsigned char skd_dskkey[] = { 0xA8, 0x2F, 0x30, 0x13, 0x0C, 0x11, 0x44, 0x69, 0x73, 0x6B,
-				      0x45, 0x6E, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6F, 0x6E,
-				      0x4B, 0x65, 0x79, 0x30, 0x08, 0x04, 0x01, 0x01, 0x03, 0x03,
-				      0x07, 0xC0, 0x10, 0xA0, 0x06, 0x30, 0x04, 0x02, 0x02, 0x00,
-				      0x80, 0xA1, 0x06, 0x30, 0x04, 0x30, 0x02, 0x04, 0x00 };
-
-static unsigned char algo_dskkey[] = { 0x91, 0x01, 0x99 };
-
 static unsigned char aid_unselectable[] = { 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 struct usbtoken {
@@ -97,6 +83,8 @@ struct usbtoken {
 	int se_comm_retries; // retry attempt after card removal (handle power glitches)
 	bool timer_fast;     // switch to fast timer for reconnect
 	event_timer_t *se_comm_watchdog_timer; // timer to check if card is removed
+
+	struct cardService *cs; // API of underlying SE
 };
 
 static unsigned short
@@ -125,7 +113,7 @@ ctn_set_available(unsigned short ctn)
 }
 
 /**
- * Derive an authentication code from a parining secret and a user pin/passwd.
+ * Derive an authentication code from a pairing secret and a user pin/passwd.
  * TODO: use an actual KDF
  * @param pin the user pin for the token
  * @param pair_sec the platform-bound paring secret
@@ -170,42 +158,6 @@ get_auth_code(const char *pin, const unsigned char *pair_sec, size_t pair_sec_le
 	return ofs;
 }
 
-/*
- * Request card
- * @return the length of brsp on success or < 0 on failure
- */
-static int
-requestICC(int ctn, unsigned char *brsp, size_t brsp_len)
-{
-	unsigned short lr;
-	unsigned char dad, sad;
-	int rc = -1;
-
-	dad = 1; /* Reader */
-	sad = 2; /* Host */
-	lr = brsp_len;
-
-	rc = CT_data((unsigned short)ctn, &dad, &sad, sizeof(requesticc),
-		     (unsigned char *)&requesticc, &lr, brsp);
-	if (rc != 0) {
-		ERROR("CT_data failed with code: %d", rc);
-		return rc;
-	}
-
-#ifdef DEBUG_BUILD
-	str_t *dump = str_hexdump_new(brsp, lr);
-	TRACE("Returning ICC: len: %d, icc: %s", lr, str_buffer(dump));
-	str_free(dump, true);
-#endif
-
-	if ((brsp[0] == 0x64) || (brsp[0] == 0x62)) {
-		ERROR("No card present or card reset error");
-		return -1;
-	}
-
-	return lr;
-}
-
 static bool
 usbtoken_is_card_present(usbtoken_t *token)
 {
@@ -248,27 +200,31 @@ usbtoken_reset_schsm_sess(usbtoken_t *token, unsigned char *brsp, size_t brsp_le
 	if (lr < 0) {
 		ERROR("requestICC failed for token with ctn: %hu and port: %hu", token->ctn,
 		      token->port);
-		return -1;
+		goto err;
 	}
 	if (NULL != token->latr)
 		mem_free0(token->latr);
 	token->latr = mem_memcpy(brsp, lr);
 	token->latr_len = lr;
 
-	int rc = queryPIN(token->ctn);
-	if (rc != USBTOKEN_SUCCESS) {
-		rc = selectHSM(token->ctn);
-		if (rc != 0) {
-			ERROR("selectHSM failed for token with ctn: %hu and port: %hu", token->ctn,
-			      token->port);
-			return -1;
-		}
-		rc = queryPIN(token->ctn);
-		DEBUG("usbtoken_init queryPIN: 0x%04x", rc);
+	// get cardservice
+	struct cardService *cs = getCardService(token->ctn);
+
+	IF_TRUE_GOTO_ERROR(cs == NULL, err);
+	token->cs = cs;
+
+	// check if card is operational
+	int rc = token->cs->getLifeCycleState(token->ctn);
+	if (!(rc == LC_CONFIGURED || rc == LC_OPERATIONAL)) {
+		ERROR("USBTOKEN: card is in unsupported life cycle state: rc: 0x%04x. Aborting...",
+		      rc);
+		goto err;
 	}
 
 	token->se_comm = true;
 	return lr;
+err:
+	return -1;
 }
 
 static void
@@ -372,7 +328,7 @@ authenticateUser(usbtoken_t *token)
 	int rc;
 
 retry:
-	rc = verifyPIN(token->ctn, token->auth_code, token->auth_code_len);
+	rc = token->cs->verifyPIN(token->ctn, token->auth_code, token->auth_code_len);
 	if (rc == ERR_TRANS) {
 		token->se_comm = false;
 		if (usbtoken_se_reconnect(token))
@@ -414,7 +370,7 @@ produceKey(usbtoken_t *token, unsigned char *label, size_t label_len, unsigned c
 		ERROR("No label was provided for key derivation");
 		return -1;
 	} else {
-		rc = deriveKey(token->ctn, 1, label, label_len, key, key_len);
+		rc = token->cs->deriveKey(token->ctn, label, label_len, key, key_len);
 	}
 
 	if (rc < 0) {
@@ -618,15 +574,14 @@ provision_auth_code(usbtoken_t *token, const char *tpin, const char *newpass,
 	unsigned char newcode[TOKEN_MAX_AUTH_CODE_LEN];
 
 retry:
-	rc = queryPIN(token->ctn);
+	rc = token->cs->getLifeCycleState(token->ctn);
 	if (rc == ERR_TRANS) {
 		token->se_comm = false;
-		if (usbtoken_se_reconnect(token))
+		if (usbtoken_se_reconnect(token)) {
 			goto retry;
-	}
-
-	if (rc != 0x6984) {
-		ERROR("USBTOKEN: Pin is not in tranport state, rc: 0x%04x. Aborting...", rc);
+		}
+	} else if (rc != LC_CONFIGURED) {
+		ERROR("USBTOKEN: Token is not in tranport state. Aborting...");
 		rc = -1;
 		goto out;
 	}
@@ -639,7 +594,8 @@ retry:
 		goto out;
 	}
 
-	rc = changePIN(token->ctn, (unsigned char *)tpin, strlen(tpin), newcode, newcode_len);
+	rc = token->cs->changePIN(token->ctn, (unsigned char *)tpin, strlen(tpin), newcode,
+				  newcode_len);
 
 	mem_memset0(newcode, sizeof(newcode));
 
@@ -649,22 +605,15 @@ retry:
 		goto out;
 	}
 
-	/* after pairing (pin should no longer be in transport state), we generate a
-	 * master secret from which the subsequent keys can be derived.
-	 * Device initialization must only be possible for user in possession of SO-PIN
-	 */
-	rc = generateSymmetricKey(token->ctn, 1, algo_dskkey, sizeof(algo_dskkey));
+	rc = token->cs->generateMasterKey(token->ctn);
 	if (rc < 0) {
-		ERROR("USBTOKEN: generateSymmetricKey() failed with code: %d", rc);
+		ERROR("USBTOKEN: generateMasterKey() failed with code: %d", rc);
 		rc = -1;
 		goto out;
 	}
 
-	rc = writeKeyDescription(token->ctn, 1, skd_dskkey, sizeof(skd_dskkey));
-	if (rc < 0) {
-		ERROR("USBTOKEN: writeKeyDescription() failed with code: %d", rc);
-		rc = -1;
-	}
+	// token successfully initialized
+	rc = 0;
 
 out:
 	return rc;
@@ -703,7 +652,7 @@ change_user_pin(usbtoken_t *token, const char *oldpass, const char *newpass,
 	}
 
 retry:
-	rc = changePIN(token->ctn, oldcode, oldcode_len, newcode, newcode_len);
+	rc = token->cs->changePIN(token->ctn, oldcode, oldcode_len, newcode, newcode_len);
 	if (rc == ERR_TRANS) {
 		token->se_comm = false;
 		if (usbtoken_se_reconnect(token))
