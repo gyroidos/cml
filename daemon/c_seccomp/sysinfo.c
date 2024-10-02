@@ -42,9 +42,9 @@
 
 #include "seccomp.h"
 
+#include <linux/sysinfo.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
-#include <sys/sysinfo.h>
 #include <unistd.h>
 
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
@@ -73,6 +73,12 @@
  */
 
 #define SI_LOAD_SHIFT 16
+
+int
+sysinfo(struct sysinfo *info)
+{
+	return syscall(__NR_sysinfo, info);
+}
 
 struct cg_mem_stat {
 	// for sysinfo the only relevant info from memory.stat file is shmem
