@@ -56,4 +56,7 @@ typedef enum control_generic_response { CMD_OK = 1, CMD_FAILED } control_generic
 tpm2d_control_t *
 tpm2d_control_new(const char *path);
 
+void
+tpm2d_control_free(tpm2d_control_t *control);
+
 #endif /* TPM2D_CONTROL_H */
