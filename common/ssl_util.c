@@ -35,10 +35,11 @@
 #include <openssl/conf.h>
 #include <openssl/x509v3.h>
 #include <openssl/rsa.h>
-#include <openssl/engine.h>
+#include <openssl/provider.h>
 #include <openssl/bio.h>
 #include <openssl/x509_vfy.h>
 #include <openssl/evp.h>
+#include <openssl/params.h>
 
 #include <string.h>
 #include <sys/stat.h>
@@ -103,10 +104,9 @@ ssl_add_ext_cert(X509 *cert, int nid, char *value);
 static EVP_PKEY *
 ssl_mkkeypair(rsa_padding_t key_type);
 
-/* creates a CSR of a public key. If tpmkey is set true, openssl-tpm-engine
- * is used to create the request with a TPM-bound key */
+/* creates a CSR of a public key */
 static X509_REQ *
-ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, bool tpmkey);
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid);
 
 /* adds an extension nid with name value to a stack of extensions*/
 static int
@@ -116,62 +116,61 @@ add_ext_req(STACK_OF(X509_EXTENSION) * sk, int nid, char *value);
 static int
 ssl_set_pkey_ctx_rsa_pss(EVP_PKEY_CTX *ctx, const EVP_MD *hash_fct);
 
-ENGINE *tpm_engine = NULL;
+OSSL_PROVIDER *tpm_provider = NULL;
+OSSL_PROVIDER *default_provider = NULL;
 
 #define ssl_print_err()                                                                            \
-	int lineno;                                                                                \
-	const char *filename;                                                                      \
-	unsigned long errnum = ERR_get_error_line(&filename, &lineno);                             \
-	ERROR("OpenSSL: %s (file: %s, line %d)", ERR_error_string(errnum, NULL), filename, lineno);
+	unsigned long e;                                                                           \
+	const char *file, *data, *func;                                                            \
+	int line, flags;                                                                           \
+	e = ERR_get_error_all(&file, &line, &func, &data, &flags);                                 \
+	ERROR("OpenSSL: %s, file %s, line %d, function %s\n", ERR_reason_error_string(e), file,    \
+	      line, func);
 
 int
 ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 {
-	ENGINE_load_builtin_engines(); // load all bundled ENGINEs into memory and make them visible
-	if (use_tpm) {
-		tpm_engine = ENGINE_by_id("tpm2");
-		if (!tpm_engine) {
-			ERROR("Could not find TPM2 engine");
-			return -1;
-		}
+	if ((default_provider = OSSL_PROVIDER_load(NULL, "default")) == NULL) {
+		ERROR("Could not load default provider");
+		goto error;
+	}
 
-		if (!ENGINE_init(tpm_engine)) {
-			ERROR("Failed to initialize TPM2 engine");
-			goto error;
-		}
-		if (!ENGINE_set_default_RSA(tpm_engine) || !ENGINE_set_default_RAND(tpm_engine)) {
-			ERROR("Failed to set defaults for TPM2 engine");
-			goto error;
-		}
-		// TODO proper auth handling for hierarchies
-		// set the SRK passphrase to make storage key usable
+	if (use_tpm) {
 		if (tpm2d_primary_storage_key_pw) {
-			if (!ENGINE_ctrl_cmd(tpm_engine, "PIN", 0, tpm2d_primary_storage_key_pw,
-					     NULL, 0)) {
-				ERROR("Failed to set SRK passphrase with TPM2 engine");
+			OSSL_PARAM provider_params[] = {
+				OSSL_PARAM_utf8_ptr("PIN", tpm2d_primary_storage_key_pw, 0),
+				OSSL_PARAM_END
+			};
+			if ((tpm_provider = OSSL_PROVIDER_load_ex(NULL, "tpm2", provider_params)) ==
+			    NULL) {
+				ERROR("Could not load TPM2 provider with primary storage key pw");
+				goto error;
+			}
+		} else {
+			if ((tpm_provider = OSSL_PROVIDER_load(NULL, "tpm2")) == NULL) {
+				ERROR("Could not load TPM2 provider");
 				goto error;
 			}
 		}
-	} else {
-		ENGINE_register_all_complete(); // register all of them for every algorithm they implement
 	}
-	//if (!RAND_status())
-	//	ERROR("PRNG has not been seeded with enough data");
+
 	return 0;
+
 error:
-	ENGINE_finish(tpm_engine);
-	ENGINE_free(tpm_engine);
-	tpm_engine = NULL;
+	ssl_free();
 	return -1;
 }
 
 void
 ssl_free(void)
 {
-	if (tpm_engine) {
-		ENGINE_finish(tpm_engine);
-		ENGINE_free(tpm_engine);
-		tpm_engine = NULL;
+	if (default_provider) {
+		OSSL_PROVIDER_unload(default_provider);
+		default_provider = NULL;
+	}
+	if (tpm_provider) {
+		OSSL_PROVIDER_unload(tpm_provider);
+		tpm_provider = NULL;
 	}
 }
 
@@ -241,11 +240,13 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 	ASSERT(common_name);
 	ASSERT(uid);
 
-	FILE *fp;
+	FILE *fp = NULL;
 	EVP_PKEY *pkeyp = NULL;
 	X509_REQ *req = NULL;
 	const EVP_CIPHER *cipher = NULL;
 	int pass_len = 0;
+	BIO *bio = NULL;
+	int ret = -1;
 
 	if (!tpmkey) {
 		pkeyp = ssl_mkkeypair(rsa_padding);
@@ -256,14 +257,19 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 		}
 	} else {
 		// TODO need to figure out a way to provide passphrases defined in tpm2d_shared
-		// setting TPM2D_ATT_KEY_PW as cb_data does not work, so right now the engine prompts for the passphrase
-		if ((pkeyp = ENGINE_load_private_key(tpm_engine, key_file, NULL, NULL)) == NULL) {
+		// setting TPM2D_ATT_KEY_PW as cb_data does not work
+		bio = BIO_new_file(key_file, "r");
+		if (!bio) {
+			ERROR("Failed to open PEM key file");
+			goto error;
+		}
+		if ((pkeyp = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL)) == NULL) {
 			ERROR("Error loading key pair in TPM");
 			goto error;
 		}
 	}
 
-	if ((req = ssl_mkreq(pkeyp, common_name, uid, tpmkey)) == NULL) {
+	if ((req = ssl_mkreq(pkeyp, common_name, uid)) == NULL) {
 		ERROR("Error creating CSR");
 		goto error;
 	}
@@ -308,15 +314,16 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 		fclose(fp);
 	}
 
-	EVP_PKEY_free(pkeyp);
-	X509_REQ_free(req);
-	return 0;
+	ret = 0;
+
 error:
 	if (pkeyp)
 		EVP_PKEY_free(pkeyp);
 	if (req)
 		X509_REQ_free(req);
-	return -1;
+	if (bio)
+		BIO_free(bio);
+	return ret;
 }
 
 char *
@@ -382,15 +389,16 @@ error:
 }
 
 static X509_REQ *
-ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool tpmkey)
+ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid)
 {
 	ASSERT(pkeyp);
 	ASSERT(common_name);
 	ASSERT(uid);
 
-	X509_REQ *req;
+	X509_REQ *req = NULL;
 	X509_NAME *name = NULL;
 	STACK_OF(X509_EXTENSION) *exts = NULL;
+	char *uri_uuid = NULL;
 
 	if ((req = X509_REQ_new()) == NULL) {
 		ERROR("Error in creating certificate structure");
@@ -475,10 +483,9 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 		goto error;
 	}
 
-	char *uri_uuid = mem_printf("URI:UUID:%s", uid);
+	uri_uuid = mem_printf("URI:UUID:%s", uid);
 	if (add_ext_req(exts, NID_subject_alt_name, uri_uuid) != 0) {
 		ERROR("Error setting CSR extension (NID_subject_alt_name)");
-		mem_free0(uri_uuid);
 		goto error;
 	}
 
@@ -487,8 +494,6 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 		ERROR("Error adding extensions to CSR");
 		goto error;
 	}
-
-	sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
 
 	DEBUG("Certificate request initialized");
 
@@ -499,18 +504,24 @@ ssl_mkreq(EVP_PKEY *pkeyp, const char *common_name, const char *uid, UNUSED bool
 	}
 
 	if (!X509_REQ_sign(req, pkeyp, hash_fct)) {
+		ssl_print_err();
 		ERROR("Failed to sign certificate request");
 		goto error;
 	}
 
 	DEBUG("Certificate request signed");
 
+	sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
 	mem_free0(uri_uuid);
 	return req;
 
 error:
 	if (req)
 		X509_REQ_free(req);
+	if (uri_uuid)
+		mem_free0(uri_uuid);
+	if (exts)
+		sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
 	return NULL;
 }
 
@@ -1554,9 +1565,9 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 
 	int ret = -1;
 	BIO *csr = NULL;
+	BIO *bio = NULL;
 	BIO *cert = NULL;
 	BIO *key = NULL;
-	RSA *key_rsa = NULL;
 	EVP_PKEY *key_evp_priv = NULL;
 	EVP_PKEY *key_evp_pub = NULL;
 	X509_REQ *csr_x509 = NULL;
@@ -1576,36 +1587,16 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 		goto error;
 	}
 
-	if (!tpmkey) {
-		// read signing key
-		if ((key = BIO_new_file(key_file, "r")) == NULL) {
-			ERROR("Error reading csr signing priv key");
-			goto error;
-		}
-
-		if ((key_evp_priv = EVP_PKEY_new()) == NULL) {
-			ERROR("Error creating evp priv key");
-			goto error;
-		}
-
-		if ((PEM_read_bio_RSAPrivateKey(key, &key_rsa, NULL, NULL)) == NULL) {
-			ERROR("error reading rsa priv key");
-			goto error;
-		}
-
-		if (EVP_PKEY_assign_RSA(key_evp_priv, key_rsa) != 1) {
-			ERROR("error assigning rsa priv key");
-			RSA_free(key_rsa);
-			goto error;
-		}
-	} else {
-		DEBUG("Load key for signing into TPM");
-		// TODO same as above, need proper passphrase handling to avoid input prompt
-		if ((key_evp_priv = ENGINE_load_private_key(tpm_engine, key_file, NULL, NULL)) ==
-		    NULL) {
-			ERROR("Error loading csr signing key pair into TPM");
-			goto error;
-		}
+	DEBUG("Load %s key for signing", tpmkey ? "TPM" : "SW");
+	// TODO same as above, need proper passphrase handling
+	bio = BIO_new_file(key_file, "r");
+	if (!bio) {
+		ERROR("Failed to open PEM key file");
+		goto error;
+	}
+	if ((key_evp_priv = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL)) == NULL) {
+		ERROR("Error loading key pair in TPM");
+		goto error;
 	}
 
 	// create certificate structure
@@ -1702,6 +1693,8 @@ ssl_self_sign_csr(const char *csr_file, const char *cert_file, const char *key_f
 error:
 	if (csr)
 		BIO_free(csr);
+	if (bio)
+		BIO_free(bio);
 	if (cert)
 		BIO_free(cert);
 	if (key)

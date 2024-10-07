@@ -81,7 +81,7 @@ tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 static void
 tpm2d_setup_salt_key(void)
 {
-	// create primary key in NULL hierarchy which is used for session encryption
+	// create primary key in NULL hierarchy wwhcih is used for session encryption
 	int ret;
 	if (TPM_RC_SUCCESS !=
 	    (ret = tpm2_createprimary_asym(TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R, NULL, NULL, NULL,

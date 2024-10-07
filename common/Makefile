@@ -116,7 +116,7 @@ sock-sd.o: sock-sd.c
 	$(CC) -c $(LOCAL_CFLAGS) -DSYSTEMD $< -o $@
 
 ssl_util.o: ssl_util.c
-	$(CC) -c $(LOCAL_CFLAGS) -Wno-deprecated-declarations $< -o $@
+	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
 
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
