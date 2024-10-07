@@ -303,6 +303,9 @@ logf_file_new(const char *name)
 	FILE *f;
 	char *name_with_time_of_day = logf_file_new_name(name);
 	f = fopen(name_with_time_of_day, "w");
+	if (!f) {
+		FATAL_ERRNO("Failed to open log file\n");
+	}
 
 	if (0 != setvbuf(f, NULL, _IOLBF, 0)) {
 		fclose(f);
