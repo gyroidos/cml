@@ -166,6 +166,11 @@ message AssignInterfaceParams {
 	optional bool persistent = 2 [default = false];
 }
 
+message LogMessage {
+	required string name = 1;
+	required string msg = 2;
+}
+
 message DeviceStats {
 	required uint64 disk_system = 1;
 	required uint64 disk_system_free = 2;
@@ -187,9 +192,9 @@ message DeviceStats {
  * Control message sent from the cml-daemon on the device to the backend/cmdline tool/etc.
  */
 message DaemonToController {
-	reserved 10, 12;
+	reserved 10;
 	enum Code {
-		reserved 6, 10, 11, 12;
+		reserved 6, 10;
 		// Push info to other endpoint:
 
 		GUESTOS_CONFIGS_LIST = 1;	// -> [guestos_config]
@@ -202,6 +207,10 @@ message DaemonToController {
 		CONTAINER_IFACES = 5;		// -> [container_ifaces]
 
 		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
+
+		LOG_MESSAGE_FRAGMENT = 11;	// -> [log_message]
+
+		LOG_MESSAGE_FINAL = 12;		// -> [log_message]
 
 		RESPONSE = 13;			// -> [response]
 
@@ -240,6 +249,8 @@ message DaemonToController {
 		GUESTOS_MGR_REGISTER_CA_ERROR = 27;
 		GUESTOS_MGR_REGISTER_CA_OK = 28;
 		CMD_UNSUPPORTED = 7;
+		CMD_OK = 29;
+		CMD_FAILED = 30;
 	}
 
 	required Code code = 1;
@@ -252,10 +263,14 @@ message DaemonToController {
 	repeated string container_ifaces = 9;		// Container network interface(s) for CONTAINER_LIST_IFACES
 	optional bool container_cmld_handles_pin = 11; 	// Indicate that CMLD handles pin input for container start and stop
 
+	optional LogMessage log_message = 12;		// log message received because of GET_LAST_LOG
+
 	optional Response response = 13;
 
 	optional DeviceStats device_stats = 20;		// device_stats for GET_DEVICE_STATS
 
 	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
 	optional bool device_is_provisioned = 41;	// device provisioned state (provisioning)
+
+	optional string device_uuid = 200;		// Device UUID for LOGON_DEVICE and LOG_MESSAGE
 }
