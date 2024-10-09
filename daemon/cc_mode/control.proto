@@ -244,13 +244,13 @@ message DaemonToController {
 
 	required Code code = 1;
 
-	repeated GuestOSConfig guestos_configs = 5;			// GuestOS configs for LIST_GUESTOS_CONFIGS
+	repeated GuestOSConfig guestos_configs = 5;	// GuestOS configs for LIST_GUESTOS_CONFIGS
 
-	repeated string container_uuids = 6;				// UUIDs for LIST_CONTAINERS
-	repeated ContainerStatus container_status = 7;		// ContainerStatus(es) for GET_CONTAINER_STATUS
-	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
-	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
-	optional bool container_cmld_handles_pin = 11; 		// Indicate that CMLD handles pin input for container start and stop
+	repeated string container_uuids = 6;		// UUIDs for LIST_CONTAINERS
+	repeated ContainerStatus container_status = 7;	// ContainerStatus(es) for GET_CONTAINER_STATUS
+	repeated ContainerConfig container_configs = 8;	// ContainerConfig(s) for GET_CONTAINER_CONFIG
+	repeated string container_ifaces = 9;		// Container network interface(s) for CONTAINER_LIST_IFACES
+	optional bool container_cmld_handles_pin = 11; 	// Indicate that CMLD handles pin input for container start and stop
 
 	optional Response response = 13;
 
