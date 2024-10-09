@@ -249,7 +249,7 @@ message DaemonToController {
 
 		CONTAINER_CMLD_HANDLES_PIN = 7; // -> [container_cmld_handles_pin]
 
-		LOG_MESSAGE_FRAGMENT = 11;		// -> [log_message]
+		LOG_MESSAGE_FRAGMENT = 11;	// -> [log_message]
 
 		LOG_MESSAGE_FINAL = 12;		// -> [log_message]
 
@@ -268,7 +268,7 @@ message DaemonToController {
 		// Requests to other endpoint:
 
 		// Log-on the device onto the backend (not applicable for cmdline tool).
-		LOGON_DEVICE = 200;	// [device_uuid] ->
+		LOGON_DEVICE = 200;		// [device_uuid] ->
 	}
 	enum Response {
 		CONTAINER_START_OK = 1;
@@ -305,15 +305,15 @@ message DaemonToController {
 
 	required Code code = 1;
 
-	repeated GuestOSConfig guestos_configs = 5;			// GuestOS configs for LIST_GUESTOS_CONFIGS
+	repeated GuestOSConfig guestos_configs = 5;	// GuestOS configs for LIST_GUESTOS_CONFIGS
 
-	repeated string container_uuids = 6;				// UUIDs for LIST_CONTAINERS
-	repeated ContainerStatus container_status = 7;		// ContainerStatus(es) for GET_CONTAINER_STATUS
-	repeated ContainerConfig container_configs = 8;		// ContainerConfig(s) for GET_CONTAINER_CONFIG
-	repeated string container_ifaces = 9;			// Container network interface(s) for CONTAINER_LIST_IFACES
-	optional bool container_cmld_handles_pin = 11; 		// Indicate that CMLD handles pin input for container start and stop
+	repeated string container_uuids = 6;		// UUIDs for LIST_CONTAINERS
+	repeated ContainerStatus container_status = 7;	// ContainerStatus(es) for GET_CONTAINER_STATUS
+	repeated ContainerConfig container_configs = 8;	// ContainerConfig(s) for GET_CONTAINER_CONFIG
+	repeated string container_ifaces = 9;		// Container network interface(s) for CONTAINER_LIST_IFACES
+	optional bool container_cmld_handles_pin = 11; 	// Indicate that CMLD handles pin input for container start and stop
 
-	optional LogMessage log_message = 12;				// log message received because of OBSERVE_LOG_START
+	optional LogMessage log_message = 12;		// log message received because of GET_LAST_LOG
 
 	optional Response response = 13;
 
@@ -322,12 +322,12 @@ message DaemonToController {
 	optional bytes device_csr = 40;			// device_csr for DEVICE_CSR (provisioning)
 	optional bool device_is_provisioned = 41;	// device provisioned state (provisioning)
 
-	optional string device_uuid = 200;					// Device UUID for LOGON_DEVICE and LOG_MESSAGE
-	optional string logon_hardware_name = 201;			// Hardware name (e.g. "i9505", "hammerhead", ...) for LOGON_DEVICE
-	optional string logon_hardware_serial = 202;		// Hardware serial number for LOGON_DEVICE
-	optional string logon_imei = 203;					// IMEI for LOGON_DEVICE
-	optional string logon_mac_address = 204;			// MAC address for LOGON_DEVICE
-	optional string logon_phone_number = 205;			// Phone number for LOGON_DEVICE
+	optional string device_uuid = 200;		// Device UUID for LOGON_DEVICE and LOG_MESSAGE
+	optional string logon_hardware_name = 201;	// Hardware name (e.g. "i9505", "hammerhead", ...) for LOGON_DEVICE
+	optional string logon_hardware_serial = 202;	// Hardware serial number for LOGON_DEVICE
+	optional string logon_imei = 203;		// IMEI for LOGON_DEVICE
+	optional string logon_mac_address = 204;	// MAC address for LOGON_DEVICE
+	optional string logon_phone_number = 205;	// Phone number for LOGON_DEVICE
 	optional string exec_end_reason = 206;
 	optional bytes exec_output = 207;
 }
