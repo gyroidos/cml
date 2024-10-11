@@ -46,6 +46,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/file.h>
+#include <stdio.h>
 #include <time.h>
 #include <linux/audit.h>
 #include <inttypes.h>
@@ -331,8 +332,11 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 		}
 
 		rewind(file);
-		if (fread(buf, sizeof(char), size, file)) {
-			ERROR("Failed to read audit log file into memory");
+		size_t read_len;
+		if ((size_t)size != (read_len = fread(buf, sizeof(char), size, file))) {
+			ERROR("Failed to read audit log file into memory read %zu "
+			      "expected %zd, [eof: %d, ferror: %d]",
+			      read_len, size, feof(file), ferror(file));
 			goto out;
 		}
 
