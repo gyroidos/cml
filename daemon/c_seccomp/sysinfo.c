@@ -49,8 +49,8 @@
 
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
 
-#undef LOGF_LOG_MIN_PRIO
-#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 /*
  *  According to man sysinfo(2) the sysinfo struct looks like this:
