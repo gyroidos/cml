@@ -159,7 +159,7 @@ do_join_namespace(const char *namespace, const int pid)
 
 	current_namespace_id[len] = 0;
 
-	DEBUG("Joining namespace with identifier %s, current namespace identifier is %s",
+	TRACE("Joining namespace with identifier %s, current namespace identifier is %s",
 	      target_namespace_id, current_namespace_id);
 
 	if (-1 == (ns_fd = open(target_namespace_path, O_RDONLY))) {
@@ -271,7 +271,7 @@ namespace_exec(pid_t namespace_pid, const int namespaces, int uid, int cap,
 	} else {
 		int status;
 
-		DEBUG("Waiting for namespace child %i to exit", pid);
+		TRACE("Waiting for namespace child %i to exit", pid);
 		if (proc_waitpid(pid, &status, 0) != pid) {
 			if (!WIFEXITED(status))
 				ERROR_ERRNO("Namespaced child %d did not exit cleanly", pid);
