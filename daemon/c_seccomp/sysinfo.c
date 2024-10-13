@@ -274,7 +274,7 @@ c_seccomp_do_sysinfo_fork(const void *data)
 	}
 
 	// initialize struct sysinfo with host values
-	DEBUG("Executing sysinfo in namespaces of container");
+	TRACE("Executing sysinfo in namespaces of container");
 	if (-1 == sysinfo(sysinfo_params->info)) {
 		ERROR_ERRNO("Failed to execute sysinfo");
 		return -1;
@@ -378,10 +378,10 @@ c_seccomp_emulate_sysinfo(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	int ret_sysinfo = 0;
 	struct sysinfo *info;
 
-	DEBUG("Got sysinfo, struct sysinfo *: %p", (void *)req->data.args[0]);
+	TRACE("Got sysinfo, struct sysinfo *: %p", (void *)req->data.args[0]);
 	info = mem_new0(struct sysinfo, 1);
 
-	DEBUG("Executing sysinfo on behalf of container");
+	TRACE("Executing sysinfo on behalf of container");
 	// Join all namespaces but pidns; thus, the helper process won't show up inside the container
 	// Uptime will then already be correctly handled by time namespace
 	struct sysinfo_fork_data sysinfo_params = { .seccomp = seccomp,
@@ -394,7 +394,7 @@ c_seccomp_emulate_sysinfo(c_seccomp_t *seccomp, struct seccomp_notif *req,
 		goto out;
 	}
 
-	DEBUG("sysinfo returned %d", ret_sysinfo);
+	TRACE("sysinfo returned %d", ret_sysinfo);
 
 	// prepare answer
 	resp->id = req->id;
