@@ -485,7 +485,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 				strerror(errno));
 		ERROR_ERRNO("Failed to send seccomp notify response");
 	} else {
-		DEBUG("Successfully handled seccomp notification");
+		TRACE("Successfully handled seccomp notification");
 	}
 
 	mem_free(syscall_str);
