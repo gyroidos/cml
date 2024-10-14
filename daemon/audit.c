@@ -392,14 +392,10 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	int audit_file_lock = -1;
 	int fd = -1;
 
-	char *dir = mem_printf("%s/audit", AUDIT_LOGDIR);
-
-	if (!file_is_dir(dir) && dir_mkdir_p(dir, 0600)) {
+	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
 		ERROR("Failed to create logdir");
-		mem_free0(dir);
 		return -1;
 	}
-	mem_free0(dir);
 
 	char *file = audit_log_file_new(uuid_string(uuid));
 
