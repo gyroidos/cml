@@ -161,7 +161,7 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		len = read(in_fd, buf, bs);
 
 		if (0 == (i % 1024))
-			DEBUG("Copied %ld bytes from %s to %s", MUL_WITH_OVERFLOW_CHECK(bs, i),
+			TRACE("Copied %ld bytes from %s to %s", MUL_WITH_OVERFLOW_CHECK(bs, i),
 			      in_file, out_file);
 
 		if (len == 0) {
