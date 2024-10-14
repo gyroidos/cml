@@ -1729,13 +1729,13 @@ control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 		WARN("Could not accept control connection");
 		return;
 	}
-	DEBUG("Accepted control connection %d", cfd);
+	TRACE("Accepted control connection %d", cfd);
 
 	fd_make_non_blocking(cfd);
 
 	event_io_t *event =
 		event_io_new(cfd, EVENT_IO_READ, control_cb_recv_message_local, control);
-	DEBUG("local control client connected on fd=%d", cfd);
+	TRACE("local control client connected on fd=%d", cfd);
 
 	event_add_io(event);
 }
