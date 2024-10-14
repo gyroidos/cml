@@ -753,9 +753,6 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		}
 		TRACE("Logging audit message %s", record_text ? record_text : "");
 		mem_free0(record_text);
-	} else {
-		DEBUG("Logging %s for component %s", audit_category_to_string(category),
-		      audit_component_to_string(component));
 	}
 
 	ret = audit_record_log(audit_get_log_container(uuid), record);
