@@ -69,6 +69,7 @@ enum ContainerTokenType {
 	NONE = 1;
 	SOFT = 2;
 	USB = 3;
+	PKCS11 = 4;
 }
 
 message ContainerConfig {
@@ -133,6 +134,10 @@ message ContainerConfig {
 	required ContainerTokenType token_type = 30 [ default = SOFT ];
 
 	optional bool usb_pin_entry = 31 [ default = false ];
+
+	// Specify PKCS#11 module the container should use
+	// if the token_type is PKCS11
+	optional string pkcs11_module = 32;
 }
 
 /**
