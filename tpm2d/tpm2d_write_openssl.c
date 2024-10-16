@@ -66,6 +66,10 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *priv
 		k.tssl.policy = sk;
 
 		PEM_write_bio_TSSLOADABLE(outb, &k.tssl);
+
+		ASN1_INTEGER_free(k.tssl.parent);
+		ASN1_STRING_free(k.tssl.pubkey);
+		ASN1_STRING_free(k.tssl.privkey);
 	} else {
 		if (secret) {
 			k.tpk.type = OBJ_txt2obj(OID_importableKey, 1);
@@ -85,6 +89,13 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *priv
 		k.tpk.policy = sk;
 
 		PEM_write_bio_TSSPRIVKEY(outb, &k.tpk);
+
+		if (secret) {
+			ASN1_STRING_free(k.tpk.secret);
+		}
+		ASN1_INTEGER_free(k.tpk.parent);
+		ASN1_STRING_free(k.tpk.pubkey);
+		ASN1_STRING_free(k.tpk.privkey);
 	}
 
 	BIO_free(outb);

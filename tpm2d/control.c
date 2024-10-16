@@ -292,6 +292,8 @@ tpm2d_control_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 	event_add_io(event);
 }
 
+static event_io_t *event;
+
 tpm2d_control_t *
 tpm2d_control_new(const char *path)
 {
@@ -308,9 +310,16 @@ tpm2d_control_new(const char *path)
 	tpm2d_control_t *tpm2d_control = mem_new0(tpm2d_control_t, 1);
 	tpm2d_control->sock = sock;
 
-	event_io_t *event =
-		event_io_new(sock, EVENT_IO_READ, tpm2d_control_cb_accept, tpm2d_control);
+	event = event_io_new(sock, EVENT_IO_READ, tpm2d_control_cb_accept, tpm2d_control);
 	event_add_io(event);
 
 	return tpm2d_control;
+}
+
+void
+tpm2d_control_free(tpm2d_control_t *control)
+{
+	event_remove_io(event);
+	event_io_free(event);
+	mem_free0(control);
 }

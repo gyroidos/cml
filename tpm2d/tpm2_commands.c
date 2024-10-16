@@ -679,7 +679,7 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	// save the public key
 	if (file_name_pub_key) {
 		rc = TSS_File_WriteStructure(&out.outPublic,
-					     (MarshalFunction_t)TSS_TPM2B_PUBLIC_Marshal,
+					     (MarshalFunction_t)TSS_TPM2B_PUBLIC_Marshalu,
 					     file_name_pub_key);
 	}
 
@@ -735,7 +735,7 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32
 	if (file_name_priv_key) {
 		if (TPM_RC_SUCCESS !=
 		    (rc = TSS_File_WriteStructure(&out.outPrivate,
-						  (MarshalFunction_t)TSS_TPM2B_PRIVATE_Marshal,
+						  (MarshalFunction_t)TSS_TPM2B_PRIVATE_Marshalu,
 						  file_name_priv_key))) {
 			return rc;
 		}
@@ -744,7 +744,7 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32
 	// save the public key
 	if (file_name_pub_key) {
 		rc = TSS_File_WriteStructure(&out.outPublic,
-					     (MarshalFunction_t)TSS_TPM2B_PUBLIC_Marshal,
+					     (MarshalFunction_t)TSS_TPM2B_PUBLIC_Marshalu,
 					     file_name_pub_key);
 	}
 
@@ -753,16 +753,16 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32
 		TPM2B_PUBLIC *pub = &out.outPublic;
 		TPM2B_PRIVATE *priv = &out.outPrivate;
 		uint16_t pubkey_len, privkey_len;
-		int32_t size;
+		uint32_t size;
 
 		buffer = pubkey;
 		pubkey_len = 0;
 		size = sizeof(pubkey);
-		TSS_TPM2B_PUBLIC_Marshal(pub, &pubkey_len, &buffer, &size);
+		TSS_TPM2B_PUBLIC_Marshalu(pub, &pubkey_len, &buffer, &size);
 		buffer = privkey;
 		privkey_len = 0;
 		size = sizeof(privkey);
-		TSS_TPM2B_PRIVATE_Marshal(priv, &privkey_len, &buffer, &size);
+		TSS_TPM2B_PRIVATE_Marshalu(priv, &privkey_len, &buffer, &size);
 		tpm2d_openssl_write_tpmfile(file_name_tss_key, pubkey, pubkey_len, privkey,
 					    privkey_len, key_pwd == NULL, parent_handle, NULL);
 	}
@@ -907,7 +907,7 @@ tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_k
 	memcpy(quote->quoted_value, out.quoted.t.attestationData, out.quoted.t.size);
 	size_t signature_size;
 	quote->signature_value = tpm2d_marshal_structure_new(
-		&out.signature, (MarshalFunction_t)TSS_TPMT_SIGNATURE_Marshal, &signature_size);
+		&out.signature, (MarshalFunction_t)TSS_TPMT_SIGNATURE_Marshalu, &signature_size);
 	quote->signature_size = signature_size;
 
 	if (in.inScheme.scheme == TPM_ALG_RSASSA) {

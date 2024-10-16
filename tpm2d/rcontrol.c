@@ -360,6 +360,8 @@ tpm2d_rcontrol_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 	event_add_io(event);
 }
 
+static event_io_t *event;
+
 tpm2d_rcontrol_t *
 tpm2d_rcontrol_new(const char *ip, int port)
 {
@@ -372,9 +374,16 @@ tpm2d_rcontrol_new(const char *ip, int port)
 	tpm2d_rcontrol_t *tpm2d_rcontrol = mem_new0(tpm2d_rcontrol_t, 1);
 	tpm2d_rcontrol->sock = sock;
 
-	event_io_t *event =
-		event_io_new(sock, EVENT_IO_READ, tpm2d_rcontrol_cb_accept, tpm2d_rcontrol);
+	event = event_io_new(sock, EVENT_IO_READ, tpm2d_rcontrol_cb_accept, tpm2d_rcontrol);
 	event_add_io(event);
 
 	return tpm2d_rcontrol;
+}
+
+void
+tpm2d_rcontrol_free(tpm2d_rcontrol_t *rcontrol)
+{
+	event_remove_io(event);
+	event_io_free(event);
+	mem_free0(rcontrol);
 }
