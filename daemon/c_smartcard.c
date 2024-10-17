@@ -347,7 +347,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 				      container_get_name(smartcard->container), keyfile);
 				unsigned char key[TOKEN_MAX_WRAPPED_KEY_LEN];
 				int keylen = file_read(keyfile, (char *)key, sizeof(key));
-				DEBUG("Length of existing key: %d", keylen);
+				TRACE("Length of existing key: %d", keylen);
 				if (keylen < TOKEN_KEY_LEN) {
 					audit_log_event(container_get_uuid(smartcard->container),
 							FSA, CMLD, TOKEN_MGMT, "read-wrapped-key",
@@ -446,7 +446,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 		 */
 		case TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY: {
 			if (!msg->has_unwrapped_key) {
-				WARN("Expected derived key, but none was returned!");
+				ERROR("Expected derived key, but none was returned!");
 				audit_log_event(
 					container_get_uuid(smartcard->container), FSA, CMLD,
 					TOKEN_MGMT, "unwrap-container-key",
@@ -492,7 +492,7 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 					container_get_uuid(smartcard->container), FSA, CMLD,
 					TOKEN_MGMT, "wrap-key",
 					uuid_string(container_get_uuid(smartcard->container)), 0);
-				WARN("Expected wrapped key, but none was returned!");
+				ERROR("Expected wrapped key, but none was returned!");
 				c_smartcard_error(smartcard, CONTAINER_SMARTCARD_WRAPPING_ERROR);
 				done = true;
 				break;

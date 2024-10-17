@@ -1599,7 +1599,7 @@ c_vol_start_child_early(void *volp)
 
 	return 0;
 error:
-	ERROR("Failed to execute star child early hook for c_vol");
+	ERROR("Failed to execute start child early hook for c_vol");
 	return -COMPARTMENT_ERROR_VOL;
 }
 

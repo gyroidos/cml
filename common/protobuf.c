@@ -131,7 +131,7 @@ protobuf_recv_message_packed_new(int fd, ssize_t *ret_len)
 
 	if (0 == bytes_read ||
 	    (-1 == bytes_read && ECONNRESET == errno)) { // EOF / remote end closed the connection
-		DEBUG("client on fd %d closed connection.", fd);
+		TRACE("client on fd %d closed connection.", fd);
 		*ret_len = -2;
 		return NULL;
 	}
