@@ -636,7 +636,7 @@ nl_eval_ack(const nl_sock_t *nl, UNUSED uint32_t seq)
 					ERROR_ERRNO("ACK reports an error!");
 					break;
 				} else {
-					DEBUG("ACK successfully found");
+					TRACE("ACK successfully found");
 					mem_free0(buf);
 					return 0;
 				}
@@ -667,7 +667,7 @@ nl_msg_send_kernel_verify(const nl_sock_t *nl_sock, const nl_msg_t *req)
 	if (nl_msg_send_kernel(nl_sock, req) < 0)
 		return -1;
 
-	DEBUG("Netlink message sent, waiting for ACK");
+	TRACE("Netlink message sent, waiting for ACK");
 
 	/* Wait for and receive acknowledgment */
 	return nl_eval_ack(nl_sock, req->nlmsghdr.nlmsg_seq);

@@ -59,7 +59,7 @@ crypto_send_recv_block(const DaemonToToken *out)
 		return NULL;
 	}
 
-	DEBUG("crypto_send_recv_block: connected to sock %d", sock);
+	TRACE("crypto_send_recv_block: connected to sock %d", sock);
 
 	if (protobuf_send_message(sock, (ProtobufCMessage *)out) < 0) {
 		ERROR("Failed to send message to scd on sock %d", sock);
@@ -373,7 +373,7 @@ crypto_send_msg(const DaemonToToken *out, crypto_callback_task_t *task)
 		return -1;
 	}
 
-	DEBUG("crypto_send_msg: connected to sock %d", sock);
+	TRACE("crypto_send_msg: connected to sock %d", sock);
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, crypto_cb, task);
 	event_add_io(event);
 
@@ -408,7 +408,7 @@ crypto_generic_send_msg(const DaemonToToken *out, int resp_fd)
 	int *fd = mem_new0(int, 1);
 	*fd = resp_fd;
 
-	DEBUG("crypto_generic_send_msg: connected to sock %d", sock);
+	TRACE("crypto_generic_send_msg: connected to sock %d", sock);
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, crypto_generic_cb, fd);
 	event_add_io(event);
 
@@ -686,14 +686,14 @@ crypto_match_hash(size_t hash_len, const char *expected_hash, const char *hash)
 	//TODO harden against hash algorithms with NULL bytes in digest
 	size_t len = strlen(expected_hash);
 	if (len != 2 * hash_len) {
-		ERROR("Invalid hash length %zu/2, expected %zu/2 bytes", len, 2 * hash_len);
+		TRACE("Invalid hash length %zu/2, expected %zu/2 bytes", len, 2 * hash_len);
 		return false;
 	}
 	if (strncasecmp(expected_hash, hash, len + 1)) {
 		DEBUG("Hash mismatch");
 		return false;
 	}
-	DEBUG("Hashes match");
+	TRACE("Hashes match");
 	return true;
 }
 
