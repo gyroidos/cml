@@ -21,7 +21,7 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#define LOGF_LOG_MIN_PRIO 2
+//#define LOGF_LOG_MIN_PRIO 2
 #define _GNU_SOURCE
 
 #include "network.h"

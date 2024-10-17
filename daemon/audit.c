@@ -324,7 +324,7 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 	if (purge) {
 		// delete record from file
 		if (read + strlen(AUDIT_DELIMITER) == (size_t)size) {
-			DEBUG("Audit log empty, removing file");
+			TRACE("Audit log empty, removing file");
 			if (-1 == unlink(filename)) {
 				ERROR_ERRNO("Failed to remove audit log file");
 			}
@@ -571,7 +571,7 @@ audit_send_next_stored(const container_t *c)
 	TRACE("send_next_stored log file: %s", file);
 
 	if (!file_exists(file)) {
-		DEBUG("Sent all stored audit messages");
+		TRACE("Sent all stored audit messages");
 		mem_free0(file);
 
 		if (0 > container_audit_notify_complete(c)) {
@@ -658,7 +658,7 @@ audit_record_log(container_t *c, AuditRecord *record)
 			goto out;
 		}
 	} else {
-		ERROR("No audit logging container available, will log to file %s",
+		TRACE("No audit logging container available, will log to file %s",
 		      AUDIT_DEFAULT_CONTAINER);
 		uuid_t *default_uuid = uuid_new(AUDIT_DEFAULT_CONTAINER);
 		if (0 != (ret = audit_write_file(default_uuid, record))) {

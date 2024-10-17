@@ -111,35 +111,35 @@
 #define IF_NULL_RETURN_TRACE(ptr)                                                                  \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			TRACE("Check failed: pointer `%s' is NULL", #ptr);                         \
+			TRACE("Check matched: pointer `%s' is NULL", #ptr);                        \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_DEBUG(ptr)                                                                  \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			DEBUG("Check failed: pointer `%s' is NULL", #ptr);                         \
+			DEBUG("Check matched: pointer `%s' is NULL", #ptr);                        \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_INFO(ptr)                                                                   \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			INFO("Check failed: pointer `%s' is NULL", #ptr);                          \
+			INFO("Check matched: pointer `%s' is NULL", #ptr);                         \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_WARN(ptr)                                                                   \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			WARN("Check failed: pointer `%s' is NULL", #ptr);                          \
+			WARN("Check matched: pointer `%s' is NULL", #ptr);                         \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_ERROR(ptr)                                                                  \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			ERROR("Check failed: pointer `%s' is NULL", #ptr);                         \
+			ERROR("Check matched: pointer `%s' is NULL", #ptr);                        \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
@@ -147,35 +147,35 @@
 #define IF_NULL_RETVAL_TRACE(ptr, val)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			TRACE("Check failed: pointer `%s' is NULL", #ptr);                         \
+			TRACE("Check matched: pointer `%s' is NULL", #ptr);                        \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_DEBUG(ptr, val)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			DEBUG("Check failed: pointer `%s' is NULL", #ptr);                         \
+			DEBUG("Check matched: pointer `%s' is NULL", #ptr);                        \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_INFO(ptr, val)                                                              \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			INFO("Check failed: pointer `%s' is NULL", #ptr);                          \
+			INFO("Check matched: pointer `%s' is NULL", #ptr);                         \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_WARN(ptr, val)                                                              \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			WARN("Check failed: pointer `%s' is NULL", #ptr);                          \
+			WARN("Check matched: pointer `%s' is NULL", #ptr);                         \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_ERROR(ptr, val)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			ERROR("Check failed: pointer `%s' is NULL", #ptr);                         \
+			ERROR("Check matched: pointer `%s' is NULL", #ptr);                        \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
@@ -183,35 +183,35 @@
 #define IF_NULL_GOTO_TRACE(ptr, label)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			TRACE("Check failed: pointer `%s' is NULL", #ptr);                         \
+			TRACE("Check matched: pointer `%s' is NULL", #ptr);                        \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_DEBUG(ptr, label)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			DEBUG("Check failed: pointer `%s' is NULL", #ptr);                         \
+			DEBUG("Check matched: pointer `%s' is NULL", #ptr);                        \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_INFO(ptr, label)                                                              \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			INFO("Check failed: pointer `%s' is NULL", #ptr);                          \
+			INFO("Check matched: pointer `%s' is NULL", #ptr);                         \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_WARN(ptr, label)                                                              \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			WARN("Check failed: pointer `%s' is NULL", #ptr);                          \
+			WARN("Check matched: pointer `%s' is NULL", #ptr);                         \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_ERROR(ptr, label)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			ERROR("Check failed: pointer `%s' is NULL", #ptr);                         \
+			ERROR("Check matched: pointer `%s' is NULL", #ptr);                        \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
@@ -219,35 +219,35 @@
 #define IF_TRUE_RETURN_TRACE(expr)                                                                 \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			TRACE("Check failed: expression `%s' is true", #expr);                     \
+			TRACE("Check matched: expression `%s' is true", #expr);                    \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_DEBUG(expr)                                                                 \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			DEBUG("Check failed: expression `%s' is true", #expr);                     \
+			DEBUG("Check matched: expression `%s' is true", #expr);                    \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_INFO(expr)                                                                  \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			INFO("Check failed: expression `%s' is true", #expr);                      \
+			INFO("Check matched: expression `%s' is true", #expr);                     \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_WARN(expr)                                                                  \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			WARN("Check failed: expression `%s' is true", #expr);                      \
+			WARN("Check matched: expression `%s' is true", #expr);                     \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_ERROR(expr)                                                                 \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			ERROR("Check failed: expression `%s' is true", #expr);                     \
+			ERROR("Check matched: expression `%s' is true", #expr);                    \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
@@ -255,35 +255,35 @@
 #define IF_TRUE_RETVAL_TRACE(expr, val)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			TRACE("Check failed: expression `%s' is true", #expr);                     \
+			TRACE("Check matched: expression `%s' is true", #expr);                    \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_DEBUG(expr, val)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			DEBUG("Check failed: expression `%s' is true", #expr);                     \
+			DEBUG("Check matched: expression `%s' is true", #expr);                    \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_INFO(expr, val)                                                             \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			INFO("Check failed: expression `%s' is true", #expr);                      \
+			INFO("Check matched: expression `%s' is true", #expr);                     \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_WARN(expr, val)                                                             \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			WARN("Check failed: expression `%s' is true", #expr);                      \
+			WARN("Check matched: expression `%s' is true", #expr);                     \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_ERROR(expr, val)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			ERROR("Check failed: expression `%s' is true", #expr);                     \
+			ERROR("Check matched: expression `%s' is true", #expr);                    \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
@@ -291,35 +291,35 @@
 #define IF_TRUE_GOTO_TRACE(expr, label)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			TRACE("Check failed: expression `%s' is true", #expr);                     \
+			TRACE("Check matched: expression `%s' is true", #expr);                    \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_DEBUG(expr, label)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			DEBUG("Check failed: expression `%s' is true", #expr);                     \
+			DEBUG("Check matched: expression `%s' is true", #expr);                    \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_INFO(expr, label)                                                             \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			INFO("Check failed: expression `%s' is true", #expr);                      \
+			INFO("Check matched: expression `%s' is true", #expr);                     \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_WARN(expr, label)                                                             \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			WARN("Check failed: expression `%s' is true", #expr);                      \
+			WARN("Check matched: expression `%s' is true", #expr);                     \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_ERROR(expr, label)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			ERROR("Check failed: expression `%s' is true", #expr);                     \
+			ERROR("Check matched: expression `%s' is true", #expr);                    \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
@@ -327,35 +327,35 @@
 #define IF_FALSE_RETURN_TRACE(expr)                                                                \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			TRACE("Check failed: expression `%s' is false", #expr);                    \
+			TRACE("Check matched: expression `%s' is false", #expr);                   \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_DEBUG(expr)                                                                \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			DEBUG("Check failed: expression `%s' is false", #expr);                    \
+			DEBUG("Check matched: expression `%s' is false", #expr);                   \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_INFO(expr)                                                                 \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			INFO("Check failed: expression `%s' is false", #expr);                     \
+			INFO("Check matched: expression `%s' is false", #expr);                    \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_WARN(expr)                                                                 \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			WARN("Check failed: expression `%s' is false", #expr);                     \
+			WARN("Check matched: expression `%s' is false", #expr);                    \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_ERROR(expr)                                                                \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			ERROR("Check failed: expression `%s' is false", #expr);                    \
+			ERROR("Check matched: expression `%s' is false", #expr);                   \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
@@ -363,35 +363,35 @@
 #define IF_FALSE_RETVAL_TRACE(expr, val)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			TRACE("Check failed: expression `%s' is false", #expr);                    \
+			TRACE("Check matched: expression `%s' is false", #expr);                   \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_DEBUG(expr, val)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			DEBUG("Check failed: expression `%s' is false", #expr);                    \
+			DEBUG("Check matched: expression `%s' is false", #expr);                   \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_INFO(expr, val)                                                            \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			INFO("Check failed: expression `%s' is false", #expr);                     \
+			INFO("Check matched: expression `%s' is false", #expr);                    \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_WARN(expr, val)                                                            \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			WARN("Check failed: expression `%s' is false", #expr);                     \
+			WARN("Check matched: expression `%s' is false", #expr);                    \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_ERROR(expr, val)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			ERROR("Check failed: expression `%s' is false", #expr);                    \
+			ERROR("Check matched: expression `%s' is false", #expr);                   \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
@@ -399,35 +399,35 @@
 #define IF_FALSE_GOTO_TRACE(expr, label)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			TRACE("Check failed: expression `%s' is false", #expr);                    \
+			TRACE("Check matched: expression `%s' is false", #expr);                   \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_DEBUG(expr, label)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			DEBUG("Check failed: expression `%s' is false", #expr);                    \
+			DEBUG("Check matched: expression `%s' is false", #expr);                   \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_INFO(expr, label)                                                            \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			INFO("Check failed: expression `%s' is false", #expr);                     \
+			INFO("Check matched: expression `%s' is false", #expr);                    \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_WARN(expr, label)                                                            \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			WARN("Check failed: expression `%s' is false", #expr);                     \
+			WARN("Check matched: expression `%s' is false", #expr);                    \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_ERROR(expr, label)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			ERROR("Check failed: expression `%s' is false", #expr);                    \
+			ERROR("Check matched: expression `%s' is false", #expr);                   \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
@@ -435,35 +435,35 @@
 #define IF_NULL_RETURN_TRACE_ERRNO(ptr)                                                            \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			TRACE_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			TRACE_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_DEBUG_ERRNO(ptr)                                                            \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			DEBUG_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			DEBUG_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_INFO_ERRNO(ptr)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			INFO_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                    \
+			INFO_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                   \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_WARN_ERRNO(ptr)                                                             \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			WARN_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                    \
+			WARN_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                   \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETURN_ERROR_ERRNO(ptr)                                                            \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			ERROR_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			ERROR_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
@@ -471,35 +471,35 @@
 #define IF_NULL_RETVAL_TRACE_ERRNO(ptr, val)                                                       \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			TRACE_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			TRACE_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_DEBUG_ERRNO(ptr, val)                                                       \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			DEBUG_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			DEBUG_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_INFO_ERRNO(ptr, val)                                                        \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			INFO_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                    \
+			INFO_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                   \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_WARN_ERRNO(ptr, val)                                                        \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			WARN_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                    \
+			WARN_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                   \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_RETVAL_ERROR_ERRNO(ptr, val)                                                       \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			ERROR_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			ERROR_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
@@ -507,35 +507,35 @@
 #define IF_NULL_GOTO_TRACE_ERRNO(ptr, label)                                                       \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			TRACE_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			TRACE_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_DEBUG_ERRNO(ptr, label)                                                       \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			DEBUG_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			DEBUG_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_INFO_ERRNO(ptr, label)                                                        \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			INFO_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                    \
+			INFO_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                   \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_WARN_ERRNO(ptr, label)                                                        \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			WARN_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                    \
+			WARN_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                   \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_NULL_GOTO_ERROR_ERRNO(ptr, label)                                                       \
 	do {                                                                                       \
 		if ((ptr) == NULL) {                                                               \
-			ERROR_ERRNO("Check failed: pointer `%s' is NULL", #ptr);                   \
+			ERROR_ERRNO("Check matched: pointer `%s' is NULL", #ptr);                  \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
@@ -543,35 +543,35 @@
 #define IF_TRUE_RETURN_TRACE_ERRNO(expr)                                                           \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			TRACE_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			TRACE_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_DEBUG_ERRNO(expr)                                                           \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			DEBUG_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			DEBUG_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_INFO_ERRNO(expr)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			INFO_ERRNO("Check failed: expression `%s' is true", #expr);                \
+			INFO_ERRNO("Check matched: expression `%s' is true", #expr);               \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_WARN_ERRNO(expr)                                                            \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			WARN_ERRNO("Check failed: expression `%s' is true", #expr);                \
+			WARN_ERRNO("Check matched: expression `%s' is true", #expr);               \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETURN_ERROR_ERRNO(expr)                                                           \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			ERROR_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			ERROR_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
@@ -579,35 +579,35 @@
 #define IF_TRUE_RETVAL_TRACE_ERRNO(expr, val)                                                      \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			TRACE_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			TRACE_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_DEBUG_ERRNO(expr, val)                                                      \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			DEBUG_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			DEBUG_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_INFO_ERRNO(expr, val)                                                       \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			INFO_ERRNO("Check failed: expression `%s' is true", #expr);                \
+			INFO_ERRNO("Check matched: expression `%s' is true", #expr);               \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_WARN_ERRNO(expr, val)                                                       \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			WARN_ERRNO("Check failed: expression `%s' is true", #expr);                \
+			WARN_ERRNO("Check matched: expression `%s' is true", #expr);               \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_RETVAL_ERROR_ERRNO(expr, val)                                                      \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			ERROR_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			ERROR_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
@@ -615,35 +615,35 @@
 #define IF_TRUE_GOTO_TRACE_ERRNO(expr, label)                                                      \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			TRACE_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			TRACE_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_DEBUG_ERRNO(expr, label)                                                      \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			DEBUG_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			DEBUG_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_INFO_ERRNO(expr, label)                                                       \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			INFO_ERRNO("Check failed: expression `%s' is true", #expr);                \
+			INFO_ERRNO("Check matched: expression `%s' is true", #expr);               \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_WARN_ERRNO(expr, label)                                                       \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			WARN_ERRNO("Check failed: expression `%s' is true", #expr);                \
+			WARN_ERRNO("Check matched: expression `%s' is true", #expr);               \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_TRUE_GOTO_ERROR_ERRNO(expr, label)                                                      \
 	do {                                                                                       \
 		if (expr) {                                                                        \
-			ERROR_ERRNO("Check failed: expression `%s' is true", #expr);               \
+			ERROR_ERRNO("Check matched: expression `%s' is true", #expr);              \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
@@ -651,35 +651,35 @@
 #define IF_FALSE_RETURN_TRACE_ERRNO(expr)                                                          \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			TRACE_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			TRACE_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_DEBUG_ERRNO(expr)                                                          \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			DEBUG_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			DEBUG_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_INFO_ERRNO(expr)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			INFO_ERRNO("Check failed: expression `%s' is false", #expr);               \
+			INFO_ERRNO("Check matched: expression `%s' is false", #expr);              \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_WARN_ERRNO(expr)                                                           \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			WARN_ERRNO("Check failed: expression `%s' is false", #expr);               \
+			WARN_ERRNO("Check matched: expression `%s' is false", #expr);              \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETURN_ERROR_ERRNO(expr)                                                          \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			ERROR_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			ERROR_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			return;                                                                    \
 		}                                                                                  \
 	} while (0)
@@ -687,35 +687,35 @@
 #define IF_FALSE_RETVAL_TRACE_ERRNO(expr, val)                                                     \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			TRACE_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			TRACE_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_DEBUG_ERRNO(expr, val)                                                     \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			DEBUG_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			DEBUG_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_INFO_ERRNO(expr, val)                                                      \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			INFO_ERRNO("Check failed: expression `%s' is false", #expr);               \
+			INFO_ERRNO("Check matched: expression `%s' is false", #expr);              \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_WARN_ERRNO(expr, val)                                                      \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			WARN_ERRNO("Check failed: expression `%s' is false", #expr);               \
+			WARN_ERRNO("Check matched: expression `%s' is false", #expr);              \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_RETVAL_ERROR_ERRNO(expr, val)                                                     \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			ERROR_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			ERROR_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			return (val);                                                              \
 		}                                                                                  \
 	} while (0)
@@ -723,35 +723,35 @@
 #define IF_FALSE_GOTO_TRACE_ERRNO(expr, label)                                                     \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			TRACE_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			TRACE_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_DEBUG_ERRNO(expr, label)                                                     \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			DEBUG_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			DEBUG_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_INFO_ERRNO(expr, label)                                                      \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			INFO_ERRNO("Check failed: expression `%s' is false", #expr);               \
+			INFO_ERRNO("Check matched: expression `%s' is false", #expr);              \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_WARN_ERRNO(expr, label)                                                      \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			WARN_ERRNO("Check failed: expression `%s' is false", #expr);               \
+			WARN_ERRNO("Check matched: expression `%s' is false", #expr);              \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
 #define IF_FALSE_GOTO_ERROR_ERRNO(expr, label)                                                     \
 	do {                                                                                       \
 		if (!(expr)) {                                                                     \
-			ERROR_ERRNO("Check failed: expression `%s' is false", #expr);              \
+			ERROR_ERRNO("Check matched: expression `%s' is false", #expr);             \
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)

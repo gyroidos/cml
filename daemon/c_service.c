@@ -144,8 +144,8 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__AUDIT_ACK: {
-		INFO("Got ACK from Container %s",
-		     uuid_string(container_get_uuid(service->container)));
+		TRACE("Got ACK from Container %s",
+		      uuid_string(container_get_uuid(service->container)));
 
 		if (0 > audit_process_ack(service->container, message->audit_ack)) {
 			ERROR("Failed to process audit ACK from container %s",
