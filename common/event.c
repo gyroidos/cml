@@ -285,7 +285,7 @@ event_epoll_fd(int reset)
 
 		ASSERT(fd >= 0);
 
-		DEBUG("epoll_create returned %d", fd);
+		TRACE_ERRNO("epoll_create returned %d", fd);
 
 		// set close-on-exec flag
 		int oldflags;
