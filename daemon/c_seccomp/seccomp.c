@@ -241,7 +241,7 @@ c_seccomp_install_filter(c_seccomp_t *_seccomp)
 		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 7, 0),
 		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 6, 0),
 
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_sysinfo, 5, 0),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_sysinfo, 4, 0),
 
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_finit_module, 4, 0),
 
