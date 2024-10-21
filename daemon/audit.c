@@ -331,7 +331,12 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 			goto out;
 		}
 
+		errno = 0;
 		rewind(file);
+		if (errno != 0) {
+			ERROR_ERRNO("Rewind for reading of file %s failed!", filename);
+			goto out;
+		}
 		size_t read_len;
 		if ((size_t)size != (read_len = fread(buf, sizeof(char), size, file))) {
 			ERROR("Failed to read audit log file into memory read %zu "
@@ -340,9 +345,20 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 			goto out;
 		}
 
+		errno = 0;
+		rewind(file);
+		if (errno != 0) {
+			ERROR_ERRNO("Rewind for writing of file %s failed!", filename);
+			goto out;
+		}
 		size_t offset = read + strlen(AUDIT_DELIMITER);
-		if (-1 == fd_write(fd, buf + offset, strlen(buf + offset))) {
+		size_t write_len = read_len - offset;
+		if (-1 == fd_write(fd, buf + offset, write_len)) {
 			ERROR_ERRNO("Failed to remove message from file: %s", filename);
+			goto out;
+		}
+		if (ftruncate(fd, write_len)) {
+			ERROR_ERRNO("Failed to truncate size of file: %s", filename);
 		}
 	}
 
