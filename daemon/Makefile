@@ -33,6 +33,7 @@ CGROUP_V2 ?= y
 CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
+XORG_COMPAT ?= n
 
 # Enable experimental not yet completed features for testing/debugging purpose only!
 CC_MODE_EXPERIMENTAL ?= n
@@ -178,6 +179,9 @@ ifeq ($(OCI),y)
     SRC_CMODULES += c_oci.c
 endif
 
+ifeq ($(XORG_COMPAT),y)
+    SRC_CMODULES += c_xorg_compat.c
+endif
 
 ifeq ($(CC_MODE),y)
 protobuf: container.proto control.proto guestos.proto device.proto scd.proto common/audit.proto c_service.proto
