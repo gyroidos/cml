@@ -106,7 +106,7 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 	      list_t *pnet_cfg_list, list_t *allowed_module_list, char **allowed_devices,
 	      char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
 	      char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
-	      container_token_type_t ttype, bool usb_pin_entry)
+	      container_token_type_t ttype, bool usb_pin_entry, bool xorg_compat)
 {
 	container_t *container = mem_new0(container_t, 1);
 
@@ -174,10 +174,14 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 		flags |= COMPARTMENT_FLAG_NS_USER;
 	if (ns_net)
 		flags |= COMPARTMENT_FLAG_NS_NET;
+
+	// set feature flags
 	if (allow_system_time)
 		flags |= COMPARTMENT_FLAG_SYSTEM_TIME;
 	if (allowed_module_list)
 		flags |= COMPARTMENT_FLAG_MODULE_LOAD;
+	if (xorg_compat)
+		flags |= COMPARTMENT_FLAG_XORG_COMPAT;
 
 	// create internal compartment object with container as extension data
 	compartment_extension_t *extension =

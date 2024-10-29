@@ -713,6 +713,15 @@ container_config_get_allow_system_time(const container_config_t *config)
 	return config->cfg->allow_system_time;
 }
 
+bool
+container_config_get_enable_xorg_compat(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->enable_xorg_compat;
+}
+
 // hardcode some restricted config otpions in CC Mode
 #ifdef CC_MODE
 uint32_t

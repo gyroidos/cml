@@ -154,7 +154,7 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 	      list_t *pnet_cfg_list, list_t *allowed_module_list, char **allowed_devices,
 	      char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
 	      char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
-	      container_token_type_t ttype, bool usb_pin_entry);
+	      container_token_type_t ttype, bool usb_pin_entry, bool xorg_compat);
 
 /**
  * Free a container data structure.
