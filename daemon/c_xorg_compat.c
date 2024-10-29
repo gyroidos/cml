@@ -41,13 +41,45 @@
 #include <sys/mount.h>
 #include <unistd.h>
 
-/******************************************************************************/
-
 #define SYS_DIR "/sys/class/graphics"
 
-static int
-c_xorg_compat_start_child(UNUSED void *unused)
+typedef struct c_xorg_compat {
+	bool enabled;
+} c_xorg_compat_t;
+
+/******************************************************************************/
+
+static void *
+c_xorg_compat_new(compartment_t *compartment)
 {
+	ASSERT(compartment);
+
+	c_xorg_compat_t *xorg_compat = mem_new0(c_xorg_compat_t, 1);
+	xorg_compat->enabled = COMPARTMENT_FLAG_XORG_COMPAT & compartment_get_flags(compartment);
+
+	return xorg_compat;
+}
+
+static void
+c_xorg_compat_free(void *xorg_compatp)
+{
+	c_xorg_compat_t *xorg_compat = xorg_compatp;
+	ASSERT(xorg_compat);
+	mem_free0(xorg_compat);
+}
+
+static int
+c_xorg_compat_start_child(void *xorg_compatp)
+{
+	c_xorg_compat_t *xorg_compat = xorg_compatp;
+	ASSERT(xorg_compat);
+
+	// if not enabled in config just skip for this compartment
+	if (!xorg_compat->enabled)
+		return 0;
+
+	INFO("Enable xorg compat module");
+
 	char link[PATH_MAX] = { 0 };
 	if (readlink(SYS_DIR "/fb0", link, PATH_MAX) < 0) {
 		WARN_ERRNO("Readlink of " SYS_DIR "/fb0 failed, no compat mode will be setup.");
@@ -86,6 +118,8 @@ c_xorg_compat_start_child(UNUSED void *unused)
 		goto err_fb_lnk;
 	}
 
+	INFO("Successfully setup xorg compat module");
+
 	mem_free0(fb_lnk_target);
 	return 0;
 
@@ -107,8 +141,8 @@ c_xorg_compat_cleanup(UNUSED void *xorg_compatp, UNUSED bool is_rebooting)
 
 static compartment_module_t c_xorg_compat_module = {
 	.name = MOD_NAME,
-	.compartment_new = NULL,
-	.compartment_free = NULL,
+	.compartment_new = c_xorg_compat_new,
+	.compartment_free = c_xorg_compat_free,
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
