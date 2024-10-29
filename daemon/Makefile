@@ -33,7 +33,7 @@ CGROUP_V2 ?= y
 CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
-XORG_COMPAT ?= n
+XORG_COMPAT ?= y
 
 # Enable experimental not yet completed features for testing/debugging purpose only!
 CC_MODE_EXPERIMENTAL ?= n
