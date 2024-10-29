@@ -126,6 +126,9 @@ message ContainerConfig {
 	required ContainerTokenType token_type = 30 [ default = SOFT ];
 
 	optional bool usb_pin_entry = 31 [ default = false ];
+
+	// enable module to support legacy xorg server
+	optional bool enable_xorg_compat = 32 [ default = false ];
 }
 
 /**
