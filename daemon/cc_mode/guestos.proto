@@ -75,7 +75,7 @@ message GuestOSMount {
 
 
 message GuestOSConfig {
-	reserved 9, 12, 13, 20 to 29, 40; // legacy or only available in non-CC Mode
+	reserved 9, 13, 20 to 29, 40; // legacy or only available in non-CC Mode
 	// The following three fields together should UNIQUELY identify the actual guestos image files and config:
 	required string name = 1;       // unique name of the operating system
 	required string hardware = 2;   // target hardware; must match hardware_get_name(), e.g. "i9505", etc.
@@ -98,6 +98,7 @@ message GuestOSConfig {
 
 	required I18NString description = 10;    // description/full name
 	optional I18NString description_long = 11;    // help text
+	optional string upstream_version = 12;  // upstream version
 	optional string build_date = 14;        // build date
 
 	optional string	update_base_url = 15; // provide url to file server which hosts the actual image data (overwrites device.conf)
