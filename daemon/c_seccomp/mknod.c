@@ -109,14 +109,14 @@ c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	 */
 	if (req->data.nr == SYS_mknodat) {
 		DEBUG("Got %s() from pid %d, fd: %lld, const char *pathname: %p, mode: %lld, dev: %lld",
-		      syscall_name, req->pid, req->data.args[0], (void *)req->data.args[1],
-		      req->data.args[2], req->data.args[3]);
+		      syscall_name, req->pid, req->data.args[0],
+		      CAST_UINT_VOIDPTR req->data.args[1], req->data.args[2], req->data.args[3]);
 		dirfd = req->data.args[arg_offset];
 		arg_offset++;
 	} else { // SYS_mknod
 		DEBUG("Got %s() from pid %d, const char *pathname: %p, mode: %lld, dev: %lld",
-		      syscall_name, req->pid, (void *)req->data.args[0], req->data.args[1],
-		      req->data.args[2]);
+		      syscall_name, req->pid, CAST_UINT_VOIDPTR req->data.args[0],
+		      req->data.args[1], req->data.args[2]);
 		dirfd = AT_FDCWD;
 	}
 
@@ -141,9 +141,9 @@ c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	int pathname_max_len = PATH_MAX;
 	pathname = mem_alloc0(pathname_max_len);
-	if (!(pathname = (char *)c_seccomp_fetch_vm_new(seccomp, req->pid,
-							(void *)req->data.args[0 + arg_offset],
-							pathname_max_len))) {
+	if (!(pathname = (char *)c_seccomp_fetch_vm_new(
+		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[0 + arg_offset],
+		      pathname_max_len))) {
 		ERROR_ERRNO("Failed to fetch pathname string");
 		goto out;
 	}

@@ -177,25 +177,25 @@ c_seccomp_emulate_ioctl(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	switch (cmd) {
 	case RTC_EPOCH_SET:
 		TRACE("handling RTC_EPOCH_SET!");
-		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(seccomp, req->pid,
-								    (void *)req->data.args[2],
-								    sizeof(unsigned long)))) {
+		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(
+			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[2],
+			      sizeof(unsigned long)))) {
 			ERROR_ERRNO("Failed to fetch struct rtc_time");
 		}
 		break;
 	case RTC_SET_TIME:
 		TRACE("handling RTC_SET_TIME!");
-		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(seccomp, req->pid,
-								    (void *)req->data.args[2],
-								    sizeof(struct rtc_time)))) {
+		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(
+			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[2],
+			      sizeof(struct rtc_time)))) {
 			ERROR_ERRNO("Failed to fetch struct rtc_time");
 		}
 		break;
 	case RTC_PARAM_SET:
 		TRACE("handling RTC_PARAM_SET!");
-		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(seccomp, req->pid,
-								    (void *)req->data.args[2],
-								    sizeof(struct rtc_param)))) {
+		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(
+			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[2],
+			      sizeof(struct rtc_param)))) {
 			ERROR_ERRNO("Failed to fetch struct rtc_time");
 		}
 		break;
