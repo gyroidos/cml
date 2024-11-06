@@ -378,7 +378,7 @@ c_seccomp_emulate_sysinfo(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	int ret_sysinfo = 0;
 	struct sysinfo *info;
 
-	TRACE("Got sysinfo, struct sysinfo *: %p", (void *)req->data.args[0]);
+	TRACE("Got sysinfo, struct sysinfo *: %p", CAST_UINT_VOIDPTR req->data.args[0]);
 	info = mem_new0(struct sysinfo, 1);
 
 	TRACE("Executing sysinfo on behalf of container");
@@ -387,7 +387,8 @@ c_seccomp_emulate_sysinfo(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	struct sysinfo_fork_data sysinfo_params = { .seccomp = seccomp,
 						    .info = info,
 						    .target_pid = req->pid,
-						    .target_datap = (void *)req->data.args[0] };
+						    .target_datap =
+							    CAST_UINT_VOIDPTR req->data.args[0] };
 	if (-1 == (ret_sysinfo = namespace_exec(req->pid, CLONE_NEWALL & (~CLONE_NEWPID), 0, 0,
 						c_seccomp_do_sysinfo_fork, &sysinfo_params))) {
 		ERROR_ERRNO("Failed to execute sysinfo");

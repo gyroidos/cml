@@ -172,7 +172,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	DEBUG("Got finit_module from pid %d, fd: %lld, const char params_values *: %p, flags: %lld",
-	      req->pid, req->data.args[0], (void *)req->data.args[1], req->data.args[2]);
+	      req->pid, req->data.args[0], CAST_UINT_VOIDPTR req->data.args[1], req->data.args[2]);
 
 	int fd_in_target = req->data.args[0];
 	int flags = req->data.args[2];
@@ -219,7 +219,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	int param_max_len = 1024;
 	param_values = mem_alloc0(param_max_len);
 	if (!(param_values = (char *)c_seccomp_fetch_vm_new(
-		      seccomp, req->pid, (void *)req->data.args[1], param_max_len))) {
+		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[1], param_max_len))) {
 		ERROR_ERRNO("Failed to fetch module parameters string");
 		goto out;
 	}
