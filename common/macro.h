@@ -771,7 +771,7 @@
 #define UNUSED __attribute__((unused))
 
 /**
- * Indicates that a funtion is executed in constructor context before main.
+ * Indicates that a function is executed in constructor context before main.
  * We use this to handle optional modules during build
  */
 #define INIT __attribute__((constructor))
@@ -786,6 +786,11 @@
 #define CAST(type) (type)
 #define CAST_FUNCPTR_VOIDPTR (void *)
 #endif
+
+/**
+ * Helper macro to cast an unsigned integer containing a pointer to a void pointer.
+ */
+#define CAST_UINT_VOIDPTR (void *)(uintptr_t)
 
 // math helpers
 #ifndef MIN

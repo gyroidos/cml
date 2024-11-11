@@ -62,7 +62,7 @@ c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	DEBUG("Got clock_adjtime, clk_id: %lld, struct timex *: %p", req->data.args[0],
-	      (void *)req->data.args[1]);
+	      CAST_UINT_VOIDPTR req->data.args[1]);
 
 	// Check cap of target pid in its namespace
 	if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
@@ -76,8 +76,9 @@ c_seccomp_emulate_adjtime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 		goto out;
 	}
 
-	if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
-		      seccomp, req->pid, (void *)req->data.args[1], sizeof(struct timex)))) {
+	if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
+							     CAST_UINT_VOIDPTR req->data.args[1],
+							     sizeof(struct timex)))) {
 		ERROR_ERRNO("Failed to fetch struct timex");
 		goto out;
 	}
@@ -114,7 +115,7 @@ c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
 		goto out;
 	}
 
-	DEBUG("Got adjtimex, struct timex *: %p", (void *)req->data.args[0]);
+	DEBUG("Got adjtimex, struct timex *: %p", CAST_UINT_VOIDPTR req->data.args[0]);
 
 	// Check cap of target pid in its namespace
 	if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
@@ -122,8 +123,9 @@ c_seccomp_emulate_adjtimex(c_seccomp_t *seccomp, struct seccomp_notif *req,
 		goto out;
 	}
 
-	if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(
-		      seccomp, req->pid, (void *)req->data.args[0], sizeof(struct timex)))) {
+	if (!(timex = (struct timex *)c_seccomp_fetch_vm_new(seccomp, req->pid,
+							     CAST_UINT_VOIDPTR req->data.args[0],
+							     sizeof(struct timex)))) {
 		ERROR_ERRNO("Failed to fetch struct timex");
 		goto out;
 	}
@@ -161,7 +163,7 @@ c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	DEBUG("Got clock_settime, clockid: %lld, struct timespec *: %p", req->data.args[0],
-	      (void *)req->data.args[1]);
+	      CAST_UINT_VOIDPTR req->data.args[1]);
 
 	// Check cap of target pid in its namespace
 	if (!c_seccomp_capable(req->pid, CAP_SYS_TIME)) {
@@ -176,7 +178,8 @@ c_seccomp_emulate_settime(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	if (!(timespec = (struct timespec *)c_seccomp_fetch_vm_new(
-		      seccomp, req->pid, (void *)req->data.args[1], sizeof(struct timespec)))) {
+		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[1],
+		      sizeof(struct timespec)))) {
 		ERROR_ERRNO("Failed to fetch struct timespec");
 		goto out;
 	}

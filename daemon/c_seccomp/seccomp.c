@@ -227,8 +227,8 @@ c_seccomp_install_filter(c_seccomp_t *_seccomp)
 		 */
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mknod, 0, 3),
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, args[1]))),
-		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 11, 0),
-		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 10, 0),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 12, 0),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 11, 0),
 #endif
 
 		/*
@@ -238,8 +238,10 @@ c_seccomp_install_filter(c_seccomp_t *_seccomp)
 		 */
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mknodat, 0, 3),
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, args[2]))),
-		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 7, 0),
-		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 6, 0),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFCHR, 8, 0),
+		BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, S_IFBLK, 7, 0),
+
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mount, 6, 0),
 
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_sysinfo, 4, 0),
 
@@ -458,6 +460,10 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	case SYS_sysinfo:
 		syscall_str = mem_strdup("SYS_sysinfo");
 		ret_syscall = c_seccomp_emulate_sysinfo(seccomp, req, resp);
+		break;
+	case SYS_mount:
+		syscall_str = mem_strdup("SYS_mount");
+		ret_syscall = c_seccomp_emulate_mount(seccomp, req, resp);
 		break;
 	default:
 		ret_syscall = 0;
