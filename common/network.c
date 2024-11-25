@@ -95,7 +95,7 @@ network_list_link_ns(pid_t pid, list_t **link_list)
 {
 	char *command = mem_printf("%s -t %d -n %s link", NSENTER_PATH, pid, IP_PATH);
 	FILE *fp;
-	int line_size = 1024;
+	size_t line_size = 1024;
 	char *line = mem_new0(char, line_size);
 
 	fp = popen(command, "r");
@@ -105,14 +105,18 @@ network_list_link_ns(pid_t pid, list_t **link_list)
 		return -1;
 	}
 
-	int n = 0;
-	while (fgets(line + n, line_size - n, fp) != NULL) {
-		if (n != 0) {
-			line[strnlen(line, line_size) - 1] = 0;
+	while (getline(&line, &line_size, fp) != -1) {
+		int ifindex;
+		if (sscanf(line, "%d: %*s", &ifindex) == 1) {
+			// found line with ifindex at beginning, create new list entry
+			TRACE("Adding interface with ifindex: %d to list", ifindex);
 			*link_list = list_append(*link_list, mem_strdup(line));
-			n = 0;
-		} else {
-			n = strnlen(line, line_size);
+		} else if (*link_list != NULL) {
+			// no new interface just append string in existing list entry
+			list_t *list_end = list_tail(*link_list);
+			char *_line = list_end->data;
+			list_end->data = mem_printf("%s%s", _line, line);
+			mem_free0(_line);
 		}
 	}
 	pclose(fp);
