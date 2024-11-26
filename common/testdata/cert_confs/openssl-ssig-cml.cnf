@@ -4,7 +4,7 @@ RANDFILE        = $ENV::HOME/.rnd
 ####################################################################
 [ req ]
 default_bits        = 4096
-default_keyfile     = selfsigned.key
+default_keyfile     = ssig_cml.key
 distinguished_name  = user_distinguished_name
 req_extensions      = user_req_extensions
 string_mask         = utf8only

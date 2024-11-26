@@ -7,7 +7,7 @@ default_ca  = CA_default        # The default ca section
 
 [ CA_default ]
 
-default_days    = 2190          # how long to certify for
+default_days    = 1095          # how long to certify for
 default_md  = sha256       # use public key default MD
 preserve    = no            # keep passed DN ordering
 
@@ -16,12 +16,12 @@ x509_extensions = ca_extensions     # The extensions to add to the cert
 email_in_dn = no            # Don't concat the email in the DN
 copy_extensions = copy          # Required to copy SANs from CSR to cert
 
-base_dir    = testpki
-certificate = $base_dir/ssig_rootca.cert  # The CA certifcate
-private_key = $base_dir/ssig_rootca.key   # The CA private key
+base_dir    = .
+certificate = $base_dir/ssig_subca_cml.cert  # The CA certifcate
+private_key = $base_dir/ssig_subca_cml.key   # The CA private key
 new_certs_dir   = $base_dir     # Location for new certs after signing
-database    = $base_dir/ssig_rootca_index.txt   # Database index file
-serial      = $base_dir/ssig_rootca_serial.txt  # The current serial number
+database    = $base_dir/ssig_subca_cml_index.txt   # Database index file
+serial      = $base_dir/ssig_subca_cml_serial.txt  # The current serial number
 
 unique_subject  = no            # Set to 'no' to allow creation of
                 # several certificates with same subject.
@@ -29,9 +29,9 @@ unique_subject  = no            # Set to 'no' to allow creation of
 ####################################################################
 [ req ]
 default_bits        = 4096
-default_keyfile     = ssig_rootca.key
+default_keyfile     = ssig_subca_cml.key
 distinguished_name  = ca_distinguished_name
-x509_extensions     = ca_extensions
+req_extensions     = ca_extensions
 string_mask         = utf8only
 
 ####################################################################
@@ -46,14 +46,16 @@ organizationalUnitName		= Organizational Unit Name (eg, section)
 organizationalUnitName_default	= Development
 
 commonName          = Common Name (e.g. server FQDN or YOUR name)
-commonName_default      = trustme Software Signing Root CA
+commonName_default      = trustme CML Signing Sub CA
 
 ####################################################################
 [ ca_extensions ]
+
 subjectKeyIdentifier=hash
+#authorityKeyIdentifier=keyid:always, issuer:always
 basicConstraints = critical, CA:true
 keyUsage = critical, keyCertSign, cRLSign
-authorityInfoAccess=caIssuers;URI:http://localhost/ssig-dummy.cer
+authorityInfoAccess=caIssuers;URI:http://localhost/ssig-dummy.cer,OCSP;URI:http://localhost/ssig-dummy-ocsp
 crlDistributionPoints=URI:http://localhost/ssig-dummy.crl
 
 ####################################################################
@@ -64,13 +66,13 @@ localityName        = optional
 organizationName    = supplied
 organizationalUnitName  = supplied
 commonName      = supplied
-emailAddress        = optional
+emailAddress = optional
 
 ####################################################################
-[ signing_req_CA ]
+[ signing_req ]
 subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid:always, issuer:always
-basicConstraints = critical, CA:true
-keyUsage = critical, keyCertSign, cRLSign
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, nonRepudiation, digitalSignature, keyEncipherment
 authorityInfoAccess=caIssuers;URI:http://localhost/ssig-dummy.cer,OCSP;URI:http://localhost/ssig-dummy-ocsp
 crlDistributionPoints=URI:http://localhost/ssig-dummy.crl
