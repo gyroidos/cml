@@ -486,7 +486,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	}
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-respone",
+		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-response",
 				compartment_get_name(seccomp->compartment), 2, "errno",
 				strerror(errno));
 		ERROR_ERRNO("Failed to send seccomp notify response");
