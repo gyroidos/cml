@@ -852,7 +852,7 @@ cmld_audit_compartment_state_cb(container_t *container, container_callback_t *cb
 					uuid_string(container_get_uuid(container)), 0);
 		} else {
 			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-					"stop", uuid_string(container_get_uuid(container)), 0);
+					"container-stop", uuid_string(container_get_uuid(container)), 0);
 		}
 		container_unregister_observer(container, cb);
 		break;
@@ -1669,7 +1669,7 @@ cmld_container_stop(container_t *container)
 	// otherwise the container_stop command is regarded
 	// as failed
 	if (!container_is_stoppable(container)) {
-		WARN("Container is already in a stopped state. Aborting");
+		WARN("Container is not stoppable. Aborting");
 		audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 				"container-stop", uuid_string(container_get_uuid(container)), 0);
 		return -1;
