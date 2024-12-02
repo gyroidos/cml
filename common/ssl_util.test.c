@@ -206,8 +206,9 @@ test_ssl_read_pkcs12_token_pss(UNUSED const MunitParameter params[], UNUSED void
 static UNUSED MunitResult
 test_ssl_verify_signature_ssa(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert",
-				       "testdata/test-quote", "SHA256");
+	int ret = ssl_verify_signature("testdata/testpki/ssig_single.cert",
+				       "testdata/sigssa_ssacert_sha256", "testdata/test-quote",
+				       "SHA256");
 
 	munit_assert(0 == ret);
 
@@ -217,9 +218,9 @@ test_ssl_verify_signature_ssa(UNUSED const MunitParameter params[], UNUSED void 
 static UNUSED MunitResult
 test_ssl_verify_signature_ssa_sha512(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret =
-		ssl_verify_signature("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert_sha512",
-				     "testdata/test-quote", "SHA512");
+	int ret = ssl_verify_signature("testdata/testpki/ssig_single.cert",
+				       "testdata/sigssa_ssacert_sha512", "testdata/test-quote",
+				       "SHA512");
 
 	munit_assert(0 == ret);
 
@@ -229,8 +230,9 @@ test_ssl_verify_signature_ssa_sha512(UNUSED const MunitParameter params[], UNUSE
 static UNUSED MunitResult
 test_ssl_verify_signature_pss(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki/ssig_cml.cert", "testdata/sigpss_psscert",
-				       "testdata/test-quote", "SHA256");
+	int ret = ssl_verify_signature("testdata/testpki/ssig_cml_single.cert",
+				       "testdata/sigpss_psscert_sha256", "testdata/test-quote",
+				       "SHA256");
 
 	munit_assert(0 == ret);
 
@@ -240,7 +242,7 @@ test_ssl_verify_signature_pss(UNUSED const MunitParameter params[], UNUSED void 
 static UNUSED MunitResult
 test_ssl_verify_signature_pss_sha512(UNUSED const MunitParameter params[], UNUSED void *data)
 {
-	int ret = ssl_verify_signature("testdata/testpki/ssig_cml.cert",
+	int ret = ssl_verify_signature("testdata/testpki/ssig_cml_single.cert",
 				       "testdata/sigpss_psscert_sha512", "testdata/test-quote",
 				       "SHA512");
 
@@ -258,9 +260,10 @@ test_ssl_verify_signature_from_buf_ssa_ssacert(UNUSED const MunitParameter param
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert",
-					  "testdata/test-quote", &cert_buf, &cert_len, &sig_buf,
-					  &sig_len, &buf, &buf_len));
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_single.cert",
+					  "testdata/sigssa_ssacert_sha256", "testdata/test-quote",
+					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
+					  &buf_len));
 
 	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
 						sig_len, (unsigned char *)buf, buf_len, "SHA256");
@@ -286,7 +289,7 @@ test_ssl_verify_signature_from_buf_ssa_ssacert_sha512(UNUSED const MunitParamete
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_single.cert",
 					  "testdata/sigssa_ssacert_sha512", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -307,64 +310,6 @@ test_ssl_verify_signature_from_buf_ssa_ssacert_sha512(UNUSED const MunitParamete
 }
 
 static UNUSED MunitResult
-test_ssl_verify_signature_from_buf_ssa_psscert(UNUSED const MunitParameter params[],
-					       UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
-					  "testdata/sigssa_psscert", "testdata/test-quote",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
-
-	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
-						sig_len, (unsigned char *)buf, buf_len, "SHA256");
-
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static UNUSED MunitResult
-test_ssl_verify_signature_from_buf_ssa_psscert_sha512(UNUSED const MunitParameter params[],
-						      UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
-					  "testdata/sigssa_psscert_sha512", "testdata/test-quote",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
-
-	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
-						sig_len, (unsigned char *)buf, buf_len, "SHA512");
-
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static UNUSED MunitResult
 test_ssl_verify_signature_from_buf_pss_psscert(UNUSED const MunitParameter params[],
 					       UNUSED void *data)
 {
@@ -373,8 +318,8 @@ test_ssl_verify_signature_from_buf_pss_psscert(UNUSED const MunitParameter param
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
-					  "testdata/sigpss_psscert", "testdata/test-quote",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml_single.cert",
+					  "testdata/sigpss_psscert_sha256", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
 
@@ -402,7 +347,7 @@ test_ssl_verify_signature_from_buf_pss_psscert_sha512(UNUSED const MunitParamete
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml_single.cert",
 					  "testdata/sigpss_psscert_sha512", "testdata/test-quote",
 					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
 					  &buf_len));
@@ -411,63 +356,6 @@ test_ssl_verify_signature_from_buf_pss_psscert_sha512(UNUSED const MunitParamete
 						sig_len, (unsigned char *)buf, buf_len, "SHA512");
 
 	munit_assert(ret == 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static UNUSED MunitResult
-test_ssl_verify_signature_from_buf_pss_ssacert(UNUSED const MunitParameter params[],
-					       UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigpss_ssacert",
-					  "testdata/test-quote", &cert_buf, &cert_len, &sig_buf,
-					  &sig_len, &buf, &buf_len));
-
-	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
-						sig_len, (unsigned char *)buf, buf_len, "SHA256");
-
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static UNUSED MunitResult
-test_ssl_verify_signature_from_buf_pss_ssacert_sha512(UNUSED const MunitParameter params[],
-						      UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
-					  "testdata/sigpss_ssacert_sha512", "testdata/test-quote",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
-
-	int ret = ssl_verify_signature_from_buf((unsigned char *)cert_buf, cert_len, sig_buf,
-						sig_len, (unsigned char *)buf, buf_len, "SHA512");
-
-	munit_assert(ret < 0);
 
 	if (cert_buf)
 		mem_free(cert_buf);
@@ -590,10 +478,10 @@ test_ssl_verify_signature_from_digest_pss_psscert(UNUSED const MunitParameter pa
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
-					  "testdata/sigpss_psscert", "testdata/test-quote-hash",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml_single.cert",
+					  "testdata/sigpss_psscert_sha256",
+					  "testdata/test-quote-hash_sha256", &cert_buf, &cert_len,
+					  &sig_buf, &sig_len, &buf, &buf_len));
 
 	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
 						   sig_len, (const uint8_t *)buf,
@@ -621,7 +509,7 @@ test_ssl_verify_signature_from_digest_pss_psscert_sha512(UNUSED const MunitParam
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml_single.cert",
 					  "testdata/sigpss_psscert_sha512",
 					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
@@ -644,129 +532,6 @@ test_ssl_verify_signature_from_digest_pss_psscert_sha512(UNUSED const MunitParam
 }
 
 static MunitResult
-test_ssl_verify_signature_from_digest_pss_ssacert(UNUSED const MunitParameter params[],
-						  UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigpss_ssacert",
-					  "testdata/test-quote-hash", &cert_buf, &cert_len,
-					  &sig_buf, &sig_len, &buf, &buf_len));
-
-	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
-						   sig_len, (const uint8_t *)buf,
-						   SHA256_DIGEST_LENGTH, "SHA256");
-
-	// Check if verification was successful
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static MunitResult
-test_ssl_verify_signature_from_digest_pss_ssacert_sha512(UNUSED const MunitParameter params[],
-							 UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
-					  "testdata/sigpss_ssacert_sha512",
-					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
-					  &sig_buf, &sig_len, &buf, &buf_len));
-
-	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
-						   sig_len, (const uint8_t *)buf,
-						   SHA512_DIGEST_LENGTH, "SHA512");
-
-	// Check if verification was successful
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static MunitResult
-test_ssl_verify_signature_from_digest_ssa_psscert(UNUSED const MunitParameter params[],
-						  UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
-					  "testdata/sigssa_psscert", "testdata/test-quote-hash",
-					  &cert_buf, &cert_len, &sig_buf, &sig_len, &buf,
-					  &buf_len));
-
-	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
-						   sig_len, (const uint8_t *)buf,
-						   SHA256_DIGEST_LENGTH, "SHA256");
-
-	// Check if verification was successful
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static MunitResult
-test_ssl_verify_signature_from_digest_ssa_psscert_sha512(UNUSED const MunitParameter params[],
-							 UNUSED void *data)
-{
-	off_t cert_len, sig_len, buf_len;
-	char *cert_buf = NULL;
-	unsigned char *sig_buf = NULL;
-	unsigned char *buf = NULL;
-
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig_cml.cert",
-					  "testdata/sigssa_psscert_sha512",
-					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
-					  &sig_buf, &sig_len, &buf, &buf_len));
-
-	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
-						   sig_len, (const uint8_t *)buf,
-						   SHA256_DIGEST_LENGTH, "SHA512");
-
-	// Check if verification was successful
-	munit_assert(ret < 0);
-
-	if (cert_buf)
-		mem_free(cert_buf);
-	if (sig_buf)
-		mem_free(sig_buf);
-	if (buf)
-		mem_free(buf);
-
-	return MUNIT_OK;
-}
-
-static MunitResult
 test_ssl_verify_signature_from_digest_ssa_ssacert(UNUSED const MunitParameter params[],
 						  UNUSED void *data)
 {
@@ -775,8 +540,9 @@ test_ssl_verify_signature_from_digest_ssa_ssacert(UNUSED const MunitParameter pa
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert", "testdata/sigssa_ssacert",
-					  "testdata/test-quote-hash", &cert_buf, &cert_len,
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_single.cert",
+					  "testdata/sigssa_ssacert_sha256",
+					  "testdata/test-quote-hash_sha256", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
 
 	int ret = ssl_verify_signature_from_digest(cert_buf, cert_len, (const uint8_t *)sig_buf,
@@ -805,7 +571,7 @@ test_ssl_verify_signature_from_digest_ssa_ssacert_sha512(UNUSED const MunitParam
 	unsigned char *sig_buf = NULL;
 	unsigned char *buf = NULL;
 
-	munit_assert(0 == test_read_certs("testdata/testpki/ssig.cert",
+	munit_assert(0 == test_read_certs("testdata/testpki/ssig_single.cert",
 					  "testdata/sigssa_ssacert_sha512",
 					  "testdata/test-quote-hash_sha512", &cert_buf, &cert_len,
 					  &sig_buf, &sig_len, &buf, &buf_len));
@@ -827,9 +593,10 @@ test_ssl_verify_signature_from_digest_ssa_ssacert_sha512(UNUSED const MunitParam
 	return MUNIT_OK;
 }
 
-// Test with valid SubCA
+// Test <trusted chain> against <trusted rootca>
 static MunitResult
-test_ssl_verify_certificate_trusted_subca(UNUSED const MunitParameter params[], UNUSED void *data)
+test_ssl_verify_cert_trusted_chain_trusted_rootca(UNUSED const MunitParameter params[],
+						  UNUSED void *data)
 {
 	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml.cert",
 					 "testdata/testpki/ssig_rootca.cert", false);
@@ -840,9 +607,10 @@ test_ssl_verify_certificate_trusted_subca(UNUSED const MunitParameter params[], 
 	return MUNIT_OK;
 }
 
-// Test with untrusted SubCA
+// Test <untrusted chain> against <trusted rootca>
 static MunitResult
-test_ssl_verify_certificate_untrusted_subca(UNUSED const MunitParameter params[], UNUSED void *data)
+test_ssl_verify_cert_untrusted_chain_trusted_rootca(UNUSED const MunitParameter params[],
+						    UNUSED void *data)
 {
 	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml.cert",
 					 "testdata/testpki/ssig_rootca.cert", false);
@@ -853,111 +621,12 @@ test_ssl_verify_certificate_untrusted_subca(UNUSED const MunitParameter params[]
 	return MUNIT_OK;
 }
 
-// Test with correct RootCA inside testcert
+// Test <valid signingcert> without <valid subca>
 static MunitResult
-test_ssl_verify_certificate_combined_correct_root(UNUSED const MunitParameter params[],
-						  UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_correct_rootca.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == 0);
-
-	return MUNIT_OK;
-}
-
-// Test with untrusted RootCA inside testcert
-static MunitResult
-test_ssl_verify_certificate_combined_untrusted_root(UNUSED const MunitParameter params[],
-						    UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_untrusted_rootca.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == -1);
-
-	return MUNIT_OK;
-}
-
-// Test with untrusted SubCA appended to ssig_cml.cert
-static MunitResult
-test_ssl_verify_certificate_ssig_cml_untrusted_subca_appended(UNUSED const MunitParameter params[],
-							      UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_untrusted_subca.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == 0);
-
-	return MUNIT_OK;
-}
-
-// Test with valid SubCA appended to untrusted software signing certificate
-static MunitResult
-test_ssl_verify_certificate_valid_subca_with_untrusted_signing_cert(
-	UNUSED const MunitParameter params[], UNUSED void *data)
-{
-	int ret = ssl_verify_certificate(
-		"testdata/testpki/valid_subca_with_untrusted_signing_cert.cert",
-		"testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == -1);
-
-	return MUNIT_OK;
-}
-
-// Test with SubCA removed from ssig_cml.cert
-static MunitResult
-test_ssl_verify_certificate_ssig_cml_cert_without_subca(UNUSED const MunitParameter params[],
-							UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_without_subca.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == -1);
-
-	return MUNIT_OK;
-}
-
-// Test with duplicate certificate chains
-static MunitResult
-test_ssl_verify_certificate_ssig_cml_duplicate_chain(UNUSED const MunitParameter params[],
-						     UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_duplicate_chains.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == 0);
-
-	return MUNIT_OK;
-}
-
-// Test ssig cml cert signed directly with trusted RootCA
-static MunitResult
-test_ssl_verify_certificate_ssig_cml_rootsigned(UNUSED const MunitParameter params[],
+test_ssl_verify_cert_ssig_single_trusted_rootca(UNUSED const MunitParameter params[],
 						UNUSED void *data)
 {
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_rootsigned.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == 0);
-
-	return MUNIT_OK;
-}
-
-// Test ssig cml cert signed directly with untrusted RootCA
-static MunitResult
-test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted(UNUSED const MunitParameter params[],
-							  UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_rootsigned.cert",
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_single.cert",
 					 "testdata/testpki/ssig_rootca.cert", false);
 
 	// Check if verification was successful
@@ -966,26 +635,26 @@ test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted(UNUSED const MunitPara
 	return MUNIT_OK;
 }
 
-// Test trusted ssig cml cert with appended self-signed cert
+// Test <trusted subca> against <trusted rootca>
 static MunitResult
-test_ssl_verify_certificate_trusted_ssig_cml_with_selfsigned(UNUSED const MunitParameter params[],
+test_ssl_verify_cert_trusted_subca_trusted_rootca(UNUSED const MunitParameter params[],
+						  UNUSED void *data)
+{
+	int ret = ssl_verify_certificate("testdata/testpki/ssig_subca.cert",
+					 "testdata/testpki/ssig_rootca.cert", false);
+
+	// Check if verification was successful
+	munit_assert(ret == 0);
+
+	return MUNIT_OK;
+}
+
+// Test <untrusted chain>+<untrusted rootca> against <valid rootca>
+static MunitResult
+test_ssl_verify_cert_untrusted_complete_chain_trusted_rootca(UNUSED const MunitParameter params[],
 							     UNUSED void *data)
 {
-	int ret = ssl_verify_certificate("testdata/testpki/ssig_cml_with_selfsigned.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
-
-	// Check if verification was successful
-	munit_assert(ret == 0);
-
-	return MUNIT_OK;
-}
-
-// Test untrusted ssig cml cert with appended self-signed cert
-static MunitResult
-test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned(UNUSED const MunitParameter params[],
-							       UNUSED void *data)
-{
-	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_with_selfsigned.cert",
+	int ret = ssl_verify_certificate("testdata/untrusted_chain_including_rootca.cert",
 					 "testdata/testpki/ssig_rootca.cert", false);
 
 	// Check if verification was successful
@@ -994,27 +663,27 @@ test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned(UNUSED const Muni
 	return MUNIT_OK;
 }
 
-// Test complete untrusted chain against trusted root CA
+// Test <untrusted chain>+<untrusted rootca> with parameter root CA == NULL
 static MunitResult
-test_ssl_verify_certificate_untrusted_complete_chain(UNUSED const MunitParameter params[],
-						     UNUSED void *data)
+test_ssl_verify_cert_untrusted_complete_chain_null(UNUSED const MunitParameter params[],
+						   UNUSED void *data)
 {
-	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_complete_chain.cert",
-					 "testdata/testpki/ssig_rootca.cert", false);
+	int ret = ssl_verify_certificate("testdata/untrusted_chain_including_rootca.cert", NULL,
+					 false);
 
 	// Check if verification was successful
-	munit_assert(ret == -1);
+	munit_assert(ret == -2);
 
 	return MUNIT_OK;
 }
 
-// Test complete untrusted chain against trusted root CA
+// Test <trusted chain>+<trusted rootca> with test cert == NULL
 static MunitResult
-test_ssl_verify_certificate_untrusted_complete_chain_null(UNUSED const MunitParameter params[],
-							  UNUSED void *data)
+test_ssl_verify_cert_null_untrusted_complete_chain(UNUSED const MunitParameter params[],
+						   UNUSED void *data)
 {
-	int ret = ssl_verify_certificate("testdata/testpki_untrusted/ssig_cml_complete_chain.cert",
-					 NULL, false);
+	int ret = ssl_verify_certificate(NULL, "testdata/untrusted_chain_including_rootca.cert",
+					 false);
 
 	// Check if verification was successful
 	munit_assert(ret == -2);
@@ -1311,23 +980,11 @@ static MunitTest tests[] = {
 	{ "test_ssl_verify_signature_from_buf_ssa_ssacert_sha512",
 	  test_ssl_verify_signature_from_buf_ssa_ssacert_sha512, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_signature_from_buf_ssa_psscert",
-	  test_ssl_verify_signature_from_buf_ssa_psscert, setup, tear_down, MUNIT_TEST_OPTION_NONE,
-	  NULL },
-	{ "test_ssl_verify_signature_from_buf_ssa_psscert_sha512",
-	  test_ssl_verify_signature_from_buf_ssa_psscert_sha512, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_verify_signature_from_buf_pss_psscert",
 	  test_ssl_verify_signature_from_buf_pss_psscert, setup, tear_down, MUNIT_TEST_OPTION_NONE,
 	  NULL },
 	{ "test_ssl_verify_signature_from_buf_pss_psscert_sha512",
 	  test_ssl_verify_signature_from_buf_pss_psscert_sha512, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_signature_from_buf_pss_ssacert",
-	  test_ssl_verify_signature_from_buf_pss_ssacert, setup, tear_down, MUNIT_TEST_OPTION_NONE,
-	  NULL },
-	{ "test_ssl_verify_signature_from_buf_pss_ssacert_sha512",
-	  test_ssl_verify_signature_from_buf_pss_ssacert_sha512, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_verify_signature_ssa", test_ssl_verify_signature_ssa, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
@@ -1342,18 +999,6 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "ssl_verify_signature_from_digest sigpss_psscert_sha512",
 	  test_ssl_verify_signature_from_digest_pss_psscert_sha512, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "ssl_verify_signature_from_digest sigpss_ssacert",
-	  test_ssl_verify_signature_from_digest_pss_ssacert, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "ssl_verify_signature_from_digest sigpss_ssacert_sha512",
-	  test_ssl_verify_signature_from_digest_pss_ssacert_sha512, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "ssl_verify_signature_from_digest sigssa_psscert",
-	  test_ssl_verify_signature_from_digest_ssa_psscert, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "ssl_verify_signature_from_digest sigssa_psscert_sha512",
-	  test_ssl_verify_signature_from_digest_ssa_psscert_sha512, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "ssl_verify_signature_from_digest sigssa_ssacert",
 	  test_ssl_verify_signature_from_digest_ssa_ssacert, setup, tear_down,
@@ -1375,46 +1020,26 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_create_pkcs12_token_ssa", test_ssl_create_pkcs12_token_ssa, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_trusted_subca", test_ssl_verify_certificate_trusted_subca,
-	  setup, tear_down, MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_untrusted_subca",
-	  test_ssl_verify_certificate_untrusted_subca, setup, tear_down, MUNIT_TEST_OPTION_NONE,
+	{ "test_ssl_verify_cert_trusted_chain_trusted_rootca",
+	  test_ssl_verify_cert_trusted_chain_trusted_rootca, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_cert_untrusted_chain_trusted_rootca",
+	  test_ssl_verify_cert_untrusted_chain_trusted_rootca, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_cert_ssig_single_trusted_rootca",
+	  test_ssl_verify_cert_ssig_single_trusted_rootca, setup, tear_down, MUNIT_TEST_OPTION_NONE,
 	  NULL },
-	{ "test_ssl_verify_certificate_combined_correct_root",
-	  test_ssl_verify_certificate_combined_correct_root, setup, tear_down,
+	{ "test_ssl_verify_cert_trusted_subca_trusted_rootca",
+	  test_ssl_verify_cert_trusted_subca_trusted_rootca, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_combined_untrusted_root",
-	  test_ssl_verify_certificate_combined_untrusted_root, setup, tear_down,
+	{ "test_ssl_verify_cert_untrusted_complete_chain_trusted_rootca",
+	  test_ssl_verify_cert_untrusted_complete_chain_trusted_rootca, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_ssig_cml_untrusted_subca_appended",
-	  test_ssl_verify_certificate_ssig_cml_untrusted_subca_appended, setup, tear_down,
+	{ "test_ssl_verify_cert_untrusted_complete_chain_null",
+	  test_ssl_verify_cert_untrusted_complete_chain_null, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_valid_subca_with_untrusted_signing_cert",
-	  test_ssl_verify_certificate_valid_subca_with_untrusted_signing_cert, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_ssig_cml_cert_without_subca",
-	  test_ssl_verify_certificate_ssig_cml_cert_without_subca, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_ssig_cml_duplicate_chain",
-	  test_ssl_verify_certificate_ssig_cml_duplicate_chain, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_ssig_cml_rootsigned",
-	  test_ssl_verify_certificate_ssig_cml_rootsigned, setup, tear_down, MUNIT_TEST_OPTION_NONE,
-	  NULL },
-	{ "test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted",
-	  test_ssl_verify_certificate_ssig_cml_rootsigned_untrusted, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_trusted_ssig_cml_with_selfsigned",
-	  test_ssl_verify_certificate_trusted_ssig_cml_with_selfsigned, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned",
-	  test_ssl_verify_certificate_untrusted_ssig_cml_with_selfsigned, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_untrusted_complete_chain",
-	  test_ssl_verify_certificate_untrusted_complete_chain, setup, tear_down,
-	  MUNIT_TEST_OPTION_NONE, NULL },
-	{ "test_ssl_verify_certificate_untrusted_complete_chain_null",
-	  test_ssl_verify_certificate_untrusted_complete_chain_null, setup, tear_down,
+	{ "test_ssl_verify_cert_null_untrusted_complete_chain",
+	  test_ssl_verify_cert_null_untrusted_complete_chain, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_aes_ecb_pad_success", test_ssl_aes_ecb_pad_success, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
@@ -1430,8 +1055,7 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_aes_ctr_fail_key", test_ssl_aes_ctr_fail_key, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
-
-	// Mark the end of the array with an entry where the test function is NULL
+	//Mark the end of the array with an entry where the test function is NULL
 	{ NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
