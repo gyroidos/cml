@@ -4,7 +4,7 @@ RANDFILE        = $ENV::HOME/.rnd
 ####################################################################
 [ req ]
 default_bits        = 4096
-default_keyfile     = testpki_untrusted/ssig_cml_rootsigned.key
+default_keyfile     = ssig.key
 distinguished_name  = user_distinguished_name
 req_extensions      = user_req_extensions
 string_mask         = utf8only
@@ -21,7 +21,7 @@ organizationalUnitName	= Organizational Unit Name (department, division)
 organizationalUnitName_default 	= Development
 
 commonName          = Common Name (e.g. server FQDN or YOUR name)
-commonName_default      = trustme CML Signing Certificate
+commonName_default      = trustme Software Signing Certificate
 
 ####################################################################
 [ user_req_extensions ]
