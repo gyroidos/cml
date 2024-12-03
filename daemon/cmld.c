@@ -852,7 +852,8 @@ cmld_audit_compartment_state_cb(container_t *container, container_callback_t *cb
 					uuid_string(container_get_uuid(container)), 0);
 		} else {
 			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-					"container-stop", uuid_string(container_get_uuid(container)), 0);
+					"container-stop",
+					uuid_string(container_get_uuid(container)), 0);
 		}
 		container_unregister_observer(container, cb);
 		break;
