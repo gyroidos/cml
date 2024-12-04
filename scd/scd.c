@@ -304,20 +304,20 @@ scd_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 }
 
-int
-main(int argc, char **argv)
+static void INIT
+main_init(void)
 {
-	ASSERT(argc >= 1);
-
-	if (file_exists("/dev/log/main"))
-		logf_register(&logf_android_write, logf_android_new(argv[0]));
-	else
-		logf_register(&logf_klog_write, logf_klog_new(argv[0]));
 	logf_register(&logf_file_write, stdout);
 
 	scd_logfile_p = logf_file_new(LOGFILE_DIR "/cml-scd");
 	scd_logfile_handler = logf_register(&logf_file_write, scd_logfile_p);
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
+}
+
+int
+main(int argc, char **argv)
+{
+	ASSERT(argc >= 1);
 
 	event_timer_t *logfile_timer = event_timer_new(
 		HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, scd_logfile_rename_cb, NULL);
@@ -325,11 +325,6 @@ main(int argc, char **argv)
 
 	event_signal_t *sig_term = event_signal_new(SIGTERM, &scd_sigterm_cb, NULL);
 	event_add_signal(sig_term);
-
-#if defined ENABLESCHSM && defined DEBUG_BUILD
-	DEBUG("Creating libctccid log directory at /var/tmp/sc-hsm-embedded");
-	dir_mkdir_p("/var/tmp/sc-hsm-embedded", 0755);
-#endif
 
 	provisioning_mode();
 

@@ -31,7 +31,7 @@
 
 typedef struct usbtoken usbtoken_t;
 
-#ifdef ENABLESCHSM
+#ifdef SC_CARDSERVICE
 
 /**
  * Initializes a usb token, iff the serial number of the usb token reader matches
@@ -173,6 +173,6 @@ usbtoken_reset_auth(usbtoken_t *token, unsigned char *brsp, size_t brsp_len);
 int
 usbtoken_get_atr(usbtoken_t *token, unsigned char *brsp, size_t brsp_len);
 
-#endif
+#endif // SC_CARDSERVICE
 
-#endif // ENABLESCHSM
+#endif // USBTOKEN_H

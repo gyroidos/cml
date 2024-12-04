@@ -30,6 +30,7 @@
 
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/dir.h"
 #include "common/file.h"
 #include "common/list.h"
 #include "common/str.h"
@@ -1032,3 +1033,12 @@ usbtoken_get_atr(usbtoken_t *token, unsigned char *buf, size_t buflen)
 
 	return token->latr_len;
 }
+
+#ifdef DEBUG_BUILD
+static void INIT
+usbtoken_init(void)
+{
+	DEBUG("Creating libctccid log directory at /var/tmp/sc-hsm-embedded");
+	dir_mkdir_p("/var/tmp/sc-hsm-embedded", 0755);
+}
+#endif

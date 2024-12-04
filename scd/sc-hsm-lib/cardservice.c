@@ -223,12 +223,12 @@ getCardService(int ctn)
 	struct cardService *cs;
 
 	cs = getBNSECardService();
-	if ((cs->selectSE)(ctn) == 0x9000) {
+	if (cs && (cs->selectSE)(ctn) == 0x9000) {
 		return cs;
 	}
 
 	cs = getSmartCardHSMCardService();
-	if ((cs->selectSE)(ctn) == 0x9000) {
+	if (cs && (cs->selectSE)(ctn) == 0x9000) {
 		return cs;
 	}
 

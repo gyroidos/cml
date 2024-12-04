@@ -70,7 +70,24 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 struct cardService *
 getCardService(int ctn);
 
+#ifdef CARDSERVICE_SCHSM
 struct cardService *
 getSmartCardHSMCardService();
+#else
+static inline struct cardService *
+getSmartCardHSMCardService();
+{
+	return NULL;
+}
+#endif
+
+#ifdef CARDSERVICE_BNSE
 struct cardService *
 getBNSECardService();
+#else
+static inline struct cardService *
+getBNSECardService()
+{
+	return NULL;
+}
+#endif
