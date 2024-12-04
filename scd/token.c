@@ -34,7 +34,7 @@
 #include "common/list.h"
 #include "common/str.h"
 #include "common/fd.h"
-#include "file.h"
+#include "common/file.h"
 #include "unistd.h"
 
 #define SCD_TOKENCONTROL_SOCK_LISTEN_BACKLOG 1
@@ -60,7 +60,7 @@ struct scd_token_data {
 	tctrl_t *tctrl;
 };
 
-#ifdef ENABLESCHSM // tokencontrol socket only relevant for usbtoken
+#ifdef SC_CARDSERVICE // tokencontrol socket only relevant for usbtoken
 static void
 wrapped_remove_event_io(void *elem)
 {
@@ -332,7 +332,7 @@ scd_tokencontrol_free(scd_token_t *token)
 
 	mem_free0(token->token_data->tctrl);
 }
-#endif // ENABLESCHSM
+#endif // SC_CARDSERVICE
 
 /*** internal helper functions ***/
 
@@ -408,7 +408,7 @@ int_get_atr_st(UNUSED scd_token_t *token, UNUSED unsigned char *brsp, UNUSED siz
 	return -1;
 }
 
-#ifdef ENABLESCHSM
+#ifdef SC_CARDSERVICE
 
 int
 int_lock_usb(scd_token_t *token)
@@ -482,7 +482,7 @@ int_get_atr_usb(scd_token_t *token, unsigned char *brsp, size_t brsp_len)
 {
 	return usbtoken_get_atr(token->token_data->int_token.usbtoken, brsp, brsp_len);
 }
-#endif // ENABLESCHSM
+#endif // SC_CARDSERVICE
 
 scd_token_t *
 token_new(const token_constr_data_t *constr_data)
@@ -552,7 +552,7 @@ token_new(const token_constr_data_t *constr_data)
 		new_token->send_apdu = int_send_apdu_st;
 		break;
 	}
-#ifdef ENABLESCHSM
+#ifdef SC_CARDSERVICE
 	case (USB): {
 		DEBUG("Create scd_token with internal type 'USB'");
 
@@ -584,7 +584,7 @@ token_new(const token_constr_data_t *constr_data)
 		new_token->send_apdu = int_send_apdu_usb;
 		break;
 	}
-#endif // ENABLESCHSM
+#endif // SC_CARDSERVICE
 	default:
 		ERROR("Unrecognized token type");
 		goto err;
@@ -648,12 +648,12 @@ token_free(scd_token_t *token)
 			softtoken_remove_p12(token->token_data->int_token.softtoken);
 			softtoken_free(token->token_data->int_token.softtoken);
 			break;
-#ifdef ENABLESCHSM
+#ifdef SC_CARDSERVICE
 		case (USB):
 			scd_tokencontrol_free(token);
 			usbtoken_free(token->token_data->int_token.usbtoken);
 			break;
-#endif // ENABLESCHSM
+#endif // SC_CARDSERVICE
 		default:
 			ERROR("Failed to determine token type. Cannot clean up");
 			return;
