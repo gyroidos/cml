@@ -269,6 +269,7 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 						       container_usbdev_is_assigned(ud));
 				hotplug->allow_on_unplug_list =
 					list_unlink(hotplug->allow_on_unplug_list, l);
+				container_usbdev_free(ud);
 			}
 			l = next;
 		}
@@ -293,8 +294,14 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 			    container_is_device_allowed(hotplug->container, 'c', major, minor)) {
 				INFO("Deny token device node %d:%d -> container %s", major, minor,
 				     container_get_name(hotplug->container));
+				container_usbdev_t *ud_plugged =
+					container_usbdev_new(container_usbdev_get_type(ud),
+							     container_usbdev_get_id_vendor(ud),
+							     container_usbdev_get_id_product(ud),
+							     container_usbdev_get_i_serial(ud),
+							     container_usbdev_is_assigned(ud));
 				hotplug->allow_on_unplug_list =
-					list_append(hotplug->allow_on_unplug_list, ud);
+					list_append(hotplug->allow_on_unplug_list, ud_plugged);
 
 				// signal calling handler to deny device access
 				ret = true;
@@ -464,7 +471,7 @@ send:
 		WARN("Could not inject uevent into netns of container %s!",
 		     container_get_name(hotplug->container));
 	} else {
-		TRACE("Sucessfully injected hotplug into netns of container %s!",
+		TRACE("Successfully injected hotplug into netns of container %s!",
 		      container_get_name(hotplug->container));
 	}
 err:
@@ -518,7 +525,20 @@ c_hotplug_free(void *hotplugp)
 	uevent_remove_uev(hotplug->uev);
 	uevent_uev_free(hotplug->uev);
 
-	c_hotplug_token_list = list_remove(c_hotplug_token_list, c_hotplug_token_list);
+	// remove used tokens by this compartment from global list
+	for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
+		container_usbdev_t *usbdev = l->data;
+		if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_TOKEN) {
+			c_hotplug_token_list = list_remove(c_hotplug_token_list, usbdev);
+		}
+	}
+
+	// remove any duped usbdevs which were registered for unplug
+	for (list_t *l = hotplug->allow_on_unplug_list; l; l = l->next) {
+		container_usbdev_t *usbdev = l->data;
+		container_usbdev_free(usbdev);
+	}
+	list_delete(hotplug->allow_on_unplug_list);
 
 	mem_free0(hotplug);
 }
@@ -597,7 +617,12 @@ c_hotplug_usbdev_deny(c_hotplug_t *hotplug, container_usbdev_t *usbdev)
 
 	INFO("Denied token device node %d:%d -> container %s", major, minor,
 	     container_get_name(hotplug->container));
-	hotplug->allow_on_unplug_list = list_append(hotplug->allow_on_unplug_list, usbdev);
+
+	container_usbdev_t *ud_plugged = container_usbdev_new(
+		container_usbdev_get_type(usbdev), container_usbdev_get_id_vendor(usbdev),
+		container_usbdev_get_id_product(usbdev), container_usbdev_get_i_serial(usbdev),
+		container_usbdev_is_assigned(usbdev));
+	hotplug->allow_on_unplug_list = list_append(hotplug->allow_on_unplug_list, ud_plugged);
 }
 
 static int
