@@ -25,7 +25,6 @@ CC ?= gcc
 DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
-CC_MODE ?= n
 WCAST_ALIGN ?= y
 OCI ?= n
 IDMAPPED ?= y
@@ -35,6 +34,8 @@ SYSTEMD ?= n
 AUTOMOUNT ?= y
 XORG_COMPAT ?= y
 
+# build for restrictive CC mode
+CC_MODE ?= n
 # Enable experimental not yet completed features for testing/debugging purpose only!
 CC_MODE_EXPERIMENTAL ?= n
 
@@ -64,9 +65,12 @@ ifeq ($(SANITIZERS),y)
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
 ifeq ($(CC_MODE),y)
-    # build for restrictive CC mode
     LOCAL_CFLAGS += -DCC_MODE
 endif
+ifeq ($(CC_MODE_EXPERIMENTAL),y)
+    LOCAL_CFLAGS += -DCC_MODE_EXPERIMENTAL
+endif
+
 
 LDLIBS := -lc -Lcommon
 ifeq ($(SYSTEMD),y)

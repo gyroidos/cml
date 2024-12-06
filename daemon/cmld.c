@@ -620,6 +620,8 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 
 		cmld_containers_list = list_remove(cmld_containers_list, c_current);
 		container_free(c_current);
+		// container_free() releases the token in scd, thus reattach it
+		container_token_attach(c);
 	}
 
 	DEBUG("Loaded config for container %s", container_get_name(c));
@@ -852,7 +854,8 @@ cmld_audit_compartment_state_cb(container_t *container, container_callback_t *cb
 					uuid_string(container_get_uuid(container)), 0);
 		} else {
 			audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
-					"container-stop", uuid_string(container_get_uuid(container)), 0);
+					"container-stop",
+					uuid_string(container_get_uuid(container)), 0);
 		}
 		container_unregister_observer(container, cb);
 		break;

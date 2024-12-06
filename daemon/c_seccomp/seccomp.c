@@ -81,6 +81,8 @@
 
 #if defined __x86_64__
 	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_X86_64
+#elif defined __arm__
+	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_ARM
 #elif defined __aarch64__
 	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_AARCH64
 #elif defined __riscv
@@ -129,6 +131,12 @@
 	#endif
 #endif
 // clang-format on
+
+#ifndef SYS_clock_settime
+#ifdef SYS_clock_settime64
+#define SYS_clock_settime SYS_clock_settime64
+#endif
+#endif
 
 int
 pidfd_open(pid_t pid, unsigned int flags)
@@ -330,7 +338,7 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
 				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
 
-		ERROR_ERRNO("Failed to access memory of remote process, bytes read: %ld",
+		ERROR_ERRNO("Failed to access memory of remote process, bytes read: %zd",
 			    bytes_read);
 		mem_free(pid_str);
 		mem_free(lbuf);
@@ -362,7 +370,7 @@ c_seccomp_send_vm(c_seccomp_t *seccomp, int pid, void *lbuf, void *rbuf, uint64_
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
 				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
 
-		ERROR_ERRNO("Failed to access memory of remote process, bytes written: %ld",
+		ERROR_ERRNO("Failed to access memory of remote process, bytes written: %zd",
 			    bytes_written);
 		mem_free(pid_str);
 		return -1;
