@@ -218,7 +218,7 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		WARN("Failed to parse received protobuf message");
 	}
 
-	TRACE("Received protobuf message with len %ld", buflen);
+	TRACE("Received protobuf message with len %zd", buflen);
 	TRACE_HEXDUMP(buf, buflen, "Message");
 
 	mem_free0(buf);
