@@ -854,13 +854,8 @@ test_ssl_aes_ctr_success(UNUSED const MunitParameter params[], UNUSED void *data
 		}
 
 		// Get the actual IV
-#if OPENSSL_API_LEVEL >= 30000
 		uint8_t eiv[16] = { 0 };
 		EVP_CIPHER_CTX_get_updated_iv(e_ctx, eiv, sizeof(eiv));
-#else
-		// TODO remove, as soon as openssl3 is used on all platforms
-		const uint8_t *eiv = EVP_CIPHER_CTX_iv(e_ctx);
-#endif
 
 		// Compare
 		munit_assert_memory_equal(sizeof(iv), iv, eiv);
@@ -870,13 +865,8 @@ test_ssl_aes_ctr_success(UNUSED const MunitParameter params[], UNUSED void *data
 		munit_assert(ret == 0);
 
 		// Get the actual IV
-#if OPENSSL_API_LEVEL >= 30000
 		uint8_t div[16] = { 0 };
 		EVP_CIPHER_CTX_get_updated_iv(d_ctx, div, sizeof(div));
-#else
-		// TODO remove, as soon as openssl3 is used on all platforms
-		const uint8_t *div = EVP_CIPHER_CTX_iv(d_ctx);
-#endif
 
 		// Compare
 		munit_assert_memory_equal(sizeof(iv), iv, div);

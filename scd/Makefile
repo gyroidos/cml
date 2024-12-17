@@ -27,6 +27,7 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
 TRUSTME_SCHSM ?= n
+BNSE ?= n
 SYSTEMD ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
@@ -65,12 +66,24 @@ ifeq ($(SANITIZERS),y)
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
 ifeq ($(TRUSTME_SCHSM), y)
-    # If requested, we build sc-hsm support into trustme
-    LOCAL_CFLAGS += -DENABLESCHSM
+    # If requested, we build sc-cardservice with sc-hsm support into the scd
+    LOCAL_CFLAGS += -DCARDSERVICE_SCHSM
+    SC_CARDSERVICE = y
+    SRC_FILES += sc-hsm-lib/sc-hsm-cardservice.c
+endif
+ifeq ($(BNSE), y)
+    # If requested, we build sc-cardservice with bn-se support into the scd
+    SC_CARDSERVICE = y
+    LOCAL_CFLAGS += -DCARDSERVICE_BNSE
+    SRC_FILES += sc-hsm-lib/bn-se-cardservice.c
+endif
+ifeq ($(SC_CARDSERVICE), y)
+    # If requested, we build generic sc-cardservice support into the scd
+    # SC_CARDSERVICE is set internally by TRUSTE_SCHSM or BNSE.
+    # The direct use of SC_CARDSERVICE is not intended.
+    LOCAL_CFLAGS += -DSC_CARDSERVICE
 	LOCAL_LFLAGS += -lctccid
     SRC_FILES += \
-	sc-hsm-lib/sc-hsm-cardservice.c \
-	sc-hsm-lib/bn-se-cardservice.c \
 	sc-hsm-lib/cardservice.c \
 	usbtoken.c
 endif
