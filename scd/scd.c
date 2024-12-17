@@ -315,10 +315,8 @@ main_init(void)
 }
 
 int
-main(int argc, char **argv)
+main(UNUSED int argc, UNUSED char **argv)
 {
-	ASSERT(argc >= 1);
-
 	event_timer_t *logfile_timer = event_timer_new(
 		HOURS_TO_MILLISECONDS(24), EVENT_TIMER_REPEAT_FOREVER, scd_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
