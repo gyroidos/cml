@@ -44,6 +44,16 @@ make
 make install
 ```
 
+### Create symlinks
+
+It may be required to symlink the `protobuf-c` and `libibmtss` binaries from `/usr/local/lib` to `/user/lib64` so `make` can can find them.
+```
+# Create symlink for protobuf-c
+sudo ln -s /usr/local/lib/libprotobuf-c-text.so.2  /usr/lib64/
+
+# Create symlink for libibmtss
+sudo ln -s /usr/local/lib/libibmtss.so /usr/lib64/libibmtss.so.1
+```
 
 ## Compile
 
@@ -60,3 +70,4 @@ config_file, you can put these as additional arguments:
 ```sh
 ./attestation [remote_host config_file]
 ```
+
