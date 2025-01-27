@@ -587,7 +587,7 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 }
 
 static void
-cmld_container_reload_delayed_free(void *data)
+cmld_container_delayed_free(void *data)
 {
 	ASSERT(data);
 
@@ -629,8 +629,7 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 
 		cmld_containers_list = list_remove(cmld_containers_list, c_current);
 		// delayed free to allow all observers to finish up
-		container_finish_observers(c_current, cmld_container_reload_delayed_free,
-					   c_current);
+		container_finish_observers(c_current, cmld_container_delayed_free, c_current);
 	}
 
 	DEBUG("Loaded config for container %s", container_get_name(c));
@@ -1639,7 +1638,13 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	cmld_containers_list = list_remove(cmld_containers_list, container);
 	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
 			"container-remove", uuid_string(container_get_uuid(container)), 0);
-	container_free(container);
+
+	if (cb) {
+		// delayed free to allow all observers to finish up
+		container_finish_observers(container, cmld_container_delayed_free, container);
+	} else {
+		container_free(container);
+	}
 }
 
 int
