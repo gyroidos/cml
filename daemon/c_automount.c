@@ -242,22 +242,13 @@ c_automount_start_post_exec(void *automountp)
 	return 0;
 }
 
-static int
-c_automount_stop(void *automountp)
-{
-	c_automount_t *automount = automountp;
-	ASSERT(automount);
-
-	event_remove_inotify(automount->inotify_dev);
-
-	return 0;
-}
-
 static void
 c_automount_cleanup(void *automountp, UNUSED bool rebooting)
 {
 	c_automount_t *automount = automountp;
 	ASSERT(automount);
+
+	event_remove_inotify(automount->inotify_dev);
 
 	char *mnt_media = mem_printf("%s/media", container_get_rootdir(automount->container));
 	if (umount(mnt_media) < 0)
@@ -279,7 +270,7 @@ static compartment_module_t c_automount_module = {
 	.start_post_exec = c_automount_start_post_exec,
 	.start_child = c_automount_start_child,
 	.start_pre_exec_child = NULL,
-	.stop = c_automount_stop,
+	.stop = NULL,
 	.cleanup = c_automount_cleanup,
 	.join_ns = NULL,
 };
