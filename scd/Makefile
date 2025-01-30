@@ -26,7 +26,7 @@ DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
-TRUSTME_SCHSM ?= n
+SCHSM ?= n
 BNSE ?= n
 SYSTEMD ?= n
 
@@ -65,7 +65,7 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
-ifeq ($(TRUSTME_SCHSM), y)
+ifeq ($(SCHSM), y)
     # If requested, we build sc-cardservice with sc-hsm support into the scd
     LOCAL_CFLAGS += -DCARDSERVICE_SCHSM
     SC_CARDSERVICE = y
@@ -79,7 +79,7 @@ ifeq ($(BNSE), y)
 endif
 ifeq ($(SC_CARDSERVICE), y)
     # If requested, we build generic sc-cardservice support into the scd
-    # SC_CARDSERVICE is set internally by TRUSTE_SCHSM or BNSE.
+    # SC_CARDSERVICE is set internally by SCHSM or BNSE.
     # The direct use of SC_CARDSERVICE is not intended.
     LOCAL_CFLAGS += -DSC_CARDSERVICE
 	LOCAL_LFLAGS += -lctccid
