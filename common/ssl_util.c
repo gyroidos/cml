@@ -53,7 +53,7 @@
 //#define CITY_L_CSR "Muenchen"
 #define ORGANIZATION_O_CSR "Fraunhofer"
 #define ORG_UNIT_OU1_CSR "AISEC"
-//#define ORG_UNIT_OU2_CSR "trustme"
+//#define ORG_UNIT_OU2_CSR "gyroidos"
 #define KEY_USAGE_CSR "critical, digitalSignature,keyEncipherment,nonRepudiation"
 #define EXT_KEY_USAGE_CSR "clientAuth"
 #define REQ_VERSION_CSR 0L
@@ -80,7 +80,7 @@
 #define TEST_L "Muenchen"
 #define TEST_O "Fraunhofer"
 #define TEST_OU1 "AISEC"
-#define TEST_OU2 "trustme"
+#define TEST_OU2 "gyroidos"
 #define TEST_BASIC_CONSTRAINTS "critical,CA:FALSE"
 #define TEST_KEY_USAGE_CERT "critical,keyCertSign,cRLSign"
 #define TEST_KEY_IDENTIFIER "hash"
@@ -88,7 +88,7 @@
 #define TEST_NOT_BEFORE 0
 #define TEST_NOT_AFTER (60 * 60 * 24 * 365)
 #define TEST_CERT_VERSION 2
-#define TEST_FRIENDLY_NAME "trust-me test user"
+#define TEST_FRIENDLY_NAME "gyroidos test user"
 
 /* creates a certificate containing the public key pkeyp with
  * serial number and validity in days (for user.p12) */

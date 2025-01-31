@@ -21,7 +21,7 @@ organizationalUnitName	= Organizational Unit Name (department, division)
 organizationalUnitName_default 	= Development
 
 commonName          = Common Name (e.g. server FQDN or YOUR name)
-commonName_default      = trustme Software Signing Certificate
+commonName_default      = unittest Software Signing Certificate
 
 ####################################################################
 [ user_req_extensions ]
