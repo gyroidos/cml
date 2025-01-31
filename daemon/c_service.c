@@ -24,10 +24,10 @@
 /**
  * @file c_service.c
  *
- * Submodule for communicating with the Java Trustme Service located in the
+ * Submodule for communicating with the service located in the
  * associated container. It is possible to either send commands to the
- * Trustme Service and wait for asynchronous responses or to receive commands
- * from the Trustme Service.
+ * service and wait for asynchronous responses or to receive commands
+ * from the service.
  */
 
 #define MOD_NAME "c_service"
@@ -76,7 +76,7 @@ c_service_send_container_cfg_name_proto(c_service_t *service, int sock_client)
 	INFO("Sending container config name %s to container %s",
 	     container_get_name(service->container), container_get_description(service->container));
 
-	/* fill connectivity and send to TrustmeService */
+	/* fill message and send to service */
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
 	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__CONTAINER_CFG_NAME;
 
@@ -98,7 +98,7 @@ c_service_send_container_cfg_dns_proto(c_service_t *service, int sock_client)
 	     container_get_dns_server(service->container),
 	     container_get_description(service->container));
 
-	/* fill connectivity and send to TrustmeService */
+	/* fill message and send to service */
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
 	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__CONTAINER_CFG_DNS;
 
@@ -123,7 +123,7 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 		return;
 	}
 
-	TRACE("Received message code from Trustme Service: %d", message->code);
+	TRACE("Received message code from service: %d", message->code);
 	switch (message->code) {
 	case SERVICE_TO_CMLD_MESSAGE__CODE__BOOT_COMPLETED:
 		container_set_state(service->container, COMPARTMENT_STATE_RUNNING);
@@ -155,13 +155,13 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 	}
 
 	default:
-		WARN("Received unknown message code from Trustme Service: %d", message->code);
+		WARN("Received unknown message code from service: %d", message->code);
 		return;
 	}
 }
 
 /**
- * Invoked whenever the TrustmeService writes (a protobuf ServiceToCmldMessage)
+ * Invoked whenever the service writes (a protobuf ServiceToCmldMessage)
  * to the _connected_ socket.
  */
 static void
@@ -183,7 +183,7 @@ c_service_cb_receive_message(int fd, unsigned events, event_io_t *io, void *data
 
 	// also check EXCEPT flag
 	if (events & EVENT_IO_EXCEPT) {
-		WARN("Exception on connected socket to TrustmeService; "
+		WARN("Exception on connected socket to service; "
 		     "closing socket and deregistering c_service_cb_receive_message");
 		goto connection_err;
 	}
@@ -205,7 +205,7 @@ connection_err:
 }
 
 /**
- * Invoked when the TrustmeService (initially) connects to the predefined UNIX socket.
+ * Invoked when the service (initially) connects to the predefined UNIX socket.
  */
 static void
 c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
@@ -241,13 +241,13 @@ c_service_cb_accept(int fd, unsigned events, event_io_t *io, void *data)
 	service->event_io_sock_connected_list =
 		list_append(service->event_io_sock_connected_list, event);
 
-	// We leave service->sock open so the TrustmeService instances could connect
+	// We leave service->sock open so the service instances could connect
 	// again in the future
 
 	return;
 
 error:
-	WARN("Exception on socket while waiting for TrustmeService to connect;"
+	WARN("Exception on socket while waiting for service to connect;"
 	     " closing socket and deregistering c_service_cb_accept");
 	event_remove_io(io);
 	event_io_free(io);
@@ -335,7 +335,7 @@ c_service_stop(void *servicep)
 	c_service_t *service = servicep;
 	ASSERT(service);
 
-	INFO("Send container stop command to TrustmeService");
+	INFO("Send container stop command to service");
 
 	CmldToServiceMessage message_proto = CMLD_TO_SERVICE_MESSAGE__INIT;
 	message_proto.code = CMLD_TO_SERVICE_MESSAGE__CODE__SHUTDOWN;
@@ -418,7 +418,7 @@ c_service_start_pre_exec(void *servicep)
 	if (sock_unix_listen(service->sock) < 0)
 		return -COMPARTMENT_ERROR_SERVICE;
 
-	// Now wait for initial connect from TrustmeService to socket.
+	// Now wait for initial connect from service to socket.
 	service->event_io_sock =
 		event_io_new(service->sock, EVENT_IO_READ, &c_service_cb_accept, service);
 	event_add_io(service->event_io_sock);
