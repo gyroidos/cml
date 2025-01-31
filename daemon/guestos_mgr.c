@@ -47,8 +47,8 @@
 #define GUESTOS_MGR_VERIFY_HASH_ALGO SHA512
 #define GUESTOS_MGR_FILE_MOVE_BLOCKSIZE 4096
 
-// Log title and messages regarding trustme system updates.
-#define GUESTOS_MGR_UPDATE_TITLE "Trustme Update"
+// Log title and messages regarding gyroidos system updates.
+#define GUESTOS_MGR_UPDATE_TITLE "GyroidOS Update"
 #define GUESTOS_MGR_UPDATE_DOWNLOAD "Downloading..."
 #define GUESTOS_MGR_UPDATE_SUCCESS "Reboot to install/activate"
 #define GUESTOS_MGR_UPDATE_FLASH_FAILED "Flashing to device partitions failed"
