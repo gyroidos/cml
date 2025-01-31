@@ -25,12 +25,7 @@
 #include "tpm2d_shared.h"
 
 #include "control.h"
-#ifdef ANDROID
-#include <cutils/properties.h>
-#include "device/fraunhofer/common/cml/scd/device.pb-c.h"
-#else
 #include "device.pb-c.h"
-#endif
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -61,13 +56,8 @@
 // Do not edit! This path is also configured in cmld.c
 #define DEVICE_ID_CONF DEFAULT_BASE_PATH "/device_id.conf"
 
-#ifdef ANDROID
-#define PROP_SERIALNO "ro.boot.serialno"
-#define PROP_HARDWARE "ro.hardware"
-#else
 #define DMI_PRODUCT_SERIAL "/sys/devices/virtual/dmi/id/product_serial"
 #define DMI_PRODUCT_NAME "/sys/devices/virtual/dmi/id/product_name"
-#endif
 
 #define TOKEN_DEFAULT_PASS "trustme"
 #define TOKEN_DEFAULT_NAME "testuser"
@@ -184,24 +174,6 @@ provisioning_mode()
 				FATAL("Failed to create CSR directory");
 			}
 
-#ifdef ANDROID
-			char *hw_serial = mem_alloc0(PROPERTY_VALUE_MAX);
-			char *hw_name = mem_alloc0(PROPERTY_VALUE_MAX);
-			bool property_read_failure = false;
-			if (!(property_get(PROP_SERIALNO, hw_serial, NULL) > 0)) {
-				ERROR("Failed to read hardware serialno property");
-				property_read_failure = true;
-			}
-			if (!(property_get(PROP_HARDWARE, hw_name, NULL) > 0)) {
-				ERROR("Failed to read hardware name property");
-				property_read_failure = true;
-			}
-			char *common_name;
-			if (!property_read_failure)
-				common_name = mem_printf("%s %s", hw_name, hw_serial);
-			else
-				common_name = mem_printf("%s %s", "generic", "0000");
-#else
 			char *hw_serial = NULL;
 			char *hw_name = NULL;
 
@@ -216,7 +188,6 @@ provisioning_mode()
 				hw_name = mem_strdup("generic");
 
 			char *common_name = mem_printf("%s %s", hw_name, hw_serial);
-#endif
 			DEBUG("Using common name %s", common_name);
 
 			// create device uuid and write to csr
@@ -253,7 +224,7 @@ provisioning_mode()
 	} else {
 		INFO("Device certificate found");
 		if (file_exists(DEVICE_CSR_FILE)) {
-			// this is the case when a non-provisioned trustme phone
+			// this is the case when a non-provisioned gyroidos device
 			// created its own device.cert and user.p12
 			WARN("Device CSR still exists. Device was not correctly provisioned!");
 		}
@@ -368,13 +339,6 @@ main(UNUSED int argc, UNUSED char **argv)
 	if (dir_mkdir_p(SCD_TOKENCONTROL_SOCKET, 0755) < 0) {
 		FATAL("Could not create directory for scd_control socket");
 	}
-
-#ifdef ANDROID
-	/* trigger start of cmld */
-	if (property_set("trustme.provisioning.mode", "no") != 0) {
-		FATAL("Unable to set property. Cannot trigger CMLD");
-	}
-#endif
 
 	event_loop();
 	ssl_free();
