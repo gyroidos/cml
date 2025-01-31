@@ -23,7 +23,7 @@
 
 #ifdef DEBUG_BUILD
 // prevent reboot in debug build
-#define TRUSTME_DEBUG
+#define NO_REBOOT_ON_EXIT
 #endif
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -1119,12 +1119,12 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 static void
 cmld_handle_device_shutdown(void)
 {
-#ifdef TRUSTME_DEBUG
+#ifdef NO_REBOOT_ON_EXIT
 	if (cmld_device_reboot == POWER_OFF) {
 		DEBUG("Device shutdown: keep CML running, just exit cmld for debugging.");
 		exit(0);
 	}
-#endif /* TRUSTME_DEBUG */
+#endif /* NO_REBOOT_ON_EXIT */
 
 	reboot_reboot(cmld_device_reboot);
 	// should never arrive here, but in case the shutdown fails somehow, we exit
