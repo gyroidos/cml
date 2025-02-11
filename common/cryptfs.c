@@ -48,6 +48,7 @@
 #include "proc.h"
 #include "file.h"
 #include "dm.h"
+#include "fd.h"
 
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
@@ -58,6 +59,8 @@
 #define DEVMAPPER_BUFFER_SIZE 4096
 #define DM_CRYPT_BUF_SIZE 4096
 #define DM_INTEGRITY_BUF_SIZE 4096
+
+#define ZERO_BUF_SIZE 100 * 1024 * 1024
 
 /* FIXME Rejig library to record & use errno instead */
 #ifndef DM_EXISTS_FLAG
@@ -493,12 +496,62 @@ errout:
 	return provided_data_sectors;
 }
 
+static int
+cryptfs_write_zeros(char *crypto_blkdev, size_t size)
+{
+	int fd = -1, ret = -1;
+	char *zeros = NULL;
+	ssize_t towrite = -1, res = -1, written = 0;
+
+	IF_NULL_RETVAL(crypto_blkdev, -1);
+
+	if (!(zeros = calloc(1, ZERO_BUF_SIZE))) {
+		ERROR_ERRNO("Failed to allocate zero buffer with size %zd", size);
+		goto error;
+	}
+
+	if (0 > (fd = open(crypto_blkdev, O_WRONLY))) {
+		ERROR("Cannot open volume %s", crypto_blkdev);
+		goto error;
+	}
+
+	while (0 < (size - written)) {
+		towrite = MIN(size - written, ZERO_BUF_SIZE);
+
+		if (0 > (res = fd_write(fd, zeros, towrite))) {
+			ERROR("Failed to write: %zd bytes", towrite);
+			goto error;
+		}
+		TRACE("res: %zd, written %zd, towrite %zd\n", res, written, towrite);
+
+		written += res;
+	}
+
+	INFO("Syncing volume '%s' to disk after MAC generation", crypto_blkdev);
+	if (0 != fsync(fd)) {
+		ERROR_ERRNO("Failed to sync fd %d", fd);
+		goto error;
+	}
+	INFO("Successfully generated initial MACs on volume '%s'", crypto_blkdev);
+
+	ret = 0;
+
+error:
+	if (0 <= fd)
+		close(fd);
+
+	if (zeros)
+		free(zeros);
+
+	return ret;
+}
+
 static char *
 cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 				   const char *meta_blkdev, const char *key, unsigned long fs_size)
 {
 	bool initial_format = false;
-	char *crypto_blkdev = NULL;
+	char *crypto_blkdev = NULL, *integrity_dev = NULL;
 	char *integrity_dev_label = mem_printf("%s-%s", label, "integrity");
 	TRACE("cryptfs_setup_volume_integrity_new");
 
@@ -507,11 +560,13 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 
 	if (create_integrity_blk_dev(real_blkdev, meta_blkdev, integrity_dev_label, fs_size) < 0) {
 		DEBUG("create_integrity_blk_dev failed!");
+		mem_free0(integrity_dev_label);
 		goto error;
 	}
 
-	char *integrity_dev = create_device_node(integrity_dev_label);
+	integrity_dev = create_device_node(integrity_dev_label);
 	mem_free0(integrity_dev_label);
+
 	if (!integrity_dev) {
 		ERROR("Could not create device node");
 		return NULL;
@@ -521,10 +576,18 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 
 	if (create_crypto_blk_dev(integrity_dev, key, label, fs_size, true) < 0) {
 		ERROR("Could not create crypto block device");
+		mem_free0(integrity_dev);
 		return NULL;
 	}
 
 	crypto_blkdev = create_device_node(label);
+	if (!crypto_blkdev) {
+		ERROR("Could not create device node");
+		mem_free0(integrity_dev);
+		return NULL;
+	} else {
+		DEBUG("Successfully created device node");
+	}
 
 	if (initial_format) {
 		/*
@@ -536,26 +599,36 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 		DEBUG("Formatting crypto blkdev %s. Generating initial MAC on "
 		      "integrity_dev %s",
 		      crypto_blkdev, integrity_dev);
-		int fd;
-		if ((fd = open(crypto_blkdev, O_WRONLY | O_DIRECT)) < 0) {
-			ERROR("Cannot open volume %s", crypto_blkdev);
-			goto error;
-		}
-		char zeros[DM_INTEGRITY_BUF_SIZE] __attribute__((__aligned__(512)));
-		for (unsigned long i = 0; i < fs_size / 8; ++i) {
-			if (write(fd, zeros, DM_INTEGRITY_BUF_SIZE) < DM_INTEGRITY_BUF_SIZE) {
-				ERROR_ERRNO("Could not write empty block %lu to %s", i,
-					    crypto_blkdev);
-				close(fd);
+
+		if (0 != cryptfs_write_zeros(crypto_blkdev, fs_size * 512)) {
+			WARN("Failed to format volume %s using calloc, falling back to stack-allocated buffer",
+			     crypto_blkdev);
+
+			int fd;
+			if ((fd = open(crypto_blkdev, O_WRONLY | O_DIRECT)) < 0) {
+				ERROR("Cannot open volume %s", crypto_blkdev);
 				goto error;
 			}
+
+			char zeros[DM_INTEGRITY_BUF_SIZE] __attribute__((__aligned__(512))) = { 0 };
+			for (unsigned long i = 0; i < fs_size / 8; ++i) {
+				if (write(fd, zeros, DM_INTEGRITY_BUF_SIZE) <
+				    DM_INTEGRITY_BUF_SIZE) {
+					ERROR_ERRNO("Could not write empty block %lu to %s", i,
+						    crypto_blkdev);
+					close(fd);
+					goto error;
+				}
+			}
+			close(fd);
+
+			DEBUG("Successfully formated volume %s using file_copy", crypto_blkdev);
 		}
-		close(fd);
 	}
 	return crypto_blkdev;
 error:
-	mem_free0(integrity_dev_label);
 	mem_free0(crypto_blkdev);
+	mem_free0(integrity_dev);
 	return NULL;
 }
 
