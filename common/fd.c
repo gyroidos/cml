@@ -30,7 +30,7 @@
 #include "macro.h"
 #include "fd.h"
 
-int
+ssize_t
 fd_write(int fd, const char *buf, size_t len)
 {
 	size_t remain = len;
