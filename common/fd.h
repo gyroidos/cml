@@ -41,7 +41,7 @@
  * @param buf pointer to the buffer
  * @param len length of the buffer
  */
-int
+ssize_t
 fd_write(const int fd, const char *buf, size_t len);
 
 /*
