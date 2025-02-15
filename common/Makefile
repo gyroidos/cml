@@ -61,7 +61,10 @@ endif
 all: libcommon
 
 .PHONY: protobuf
-protobuf: audit.pb-c.c
+protobuf audit.pb-c.h audit.pb-c.c: audit.proto
+	protoc-c --c_out=. audit.proto
+
+audit.c: audit.pb-c.h
 
 OBJS_COMMON := \
 	event.o \
@@ -115,14 +118,8 @@ libcommon_full_systemd: $(OBJS_COMMON_FULL) sock-sd.o
 sock-sd.o: sock-sd.c
 	$(CC) -c $(LOCAL_CFLAGS) -DSYSTEMD $< -o $@
 
-ssl_util.o: ssl_util.c
-	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
-
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
-
-audit.pb-c.c: audit.proto
-	protoc-c --c_out=. $<
 
 LFLAGS_TEST := \
 	-L. -lcommon_full \
