@@ -38,6 +38,8 @@
 #include <sys/statvfs.h>
 #include <fcntl.h>
 #include <alloca.h>
+#include <sys/sendfile.h>
+#include <errno.h>
 
 /******************************************************************************/
 
@@ -127,7 +129,8 @@ int
 file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek)
 {
 	int in_fd, out_fd, ret = 0;
-	ssize_t i;
+
+	ssize_t i = 0;
 	unsigned char *buf;
 
 	IF_NULL_RETVAL(in_file, -1);
@@ -147,13 +150,43 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		return -1;
 	}
 
-	buf = mem_alloc0(bs);
-
 	ret = lseek(out_fd, seek * bs, SEEK_SET);
 	if (ret < 0) {
 		DEBUG_ERRNO("Could not lseek in output file %s", out_file);
 		goto out;
 	}
+
+	ssize_t len = 0;
+	struct stat stat;
+	if (fstat(in_fd, &stat) != 0) {
+		DEBUG_ERRNO("fstat on %s failed", in_file);
+		// use fallback
+		goto fallback;
+	}
+	len = (count < 0) ? stat.st_size :
+			    MIN(stat.st_size, (off_t)MUL_WITH_OVERFLOW_CHECK(count, bs));
+
+	while (len > 0) {
+		ssize_t num_bytes = sendfile(out_fd, in_fd, NULL, len);
+		if (num_bytes < 0) {
+			DEBUG_ERRNO("sendfile failed");
+			if (errno == EINVAL) {
+				goto fallback;
+			} else {
+				ret = -1;
+				goto out;
+			}
+		}
+
+		len -= num_bytes;
+	}
+
+	ret = 0;
+	goto out;
+
+	// slow copy as fallback
+fallback:
+	buf = mem_alloc0(bs);
 
 	for (i = 0; i != count; i++) {
 		ssize_t len;
@@ -165,24 +198,25 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 			      in_file, out_file);
 
 		if (len == 0) {
-			goto out;
+			goto out_fallback;
 		} else if (len < 0) {
 			DEBUG_ERRNO("Could not read from input file %s", in_file);
 			ret = -1;
-			goto out;
+			goto out_fallback;
 		} else /* if (len > 0) */ {
 			if (write(out_fd, buf, len) < 0) {
 				DEBUG_ERRNO("Could not write to output file %s", out_file);
 				ret = -1;
-				goto out;
+				goto out_fallback;
 			}
 		}
 	}
 
+out_fallback:
+	mem_free(buf);
 out:
 	close(out_fd);
 	close(in_fd);
-	mem_free(buf);
 
 	return ret;
 }
