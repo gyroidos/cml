@@ -75,7 +75,7 @@ struct cardService *
 getSmartCardHSMCardService();
 #else
 static inline struct cardService *
-getSmartCardHSMCardService();
+getSmartCardHSMCardService()
 {
 	return NULL;
 }
