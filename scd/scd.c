@@ -80,8 +80,6 @@ scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 		logf_unregister(scd_logfile_handler);
 		logf_file_close(scd_logfile_p);
 	}
-
-	SYNC_INFO()
 	exit(0);
 }
 
@@ -287,6 +285,12 @@ main_init(void)
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 }
 
+static void
+main_sync_fs()
+{
+	SYNC_INFO();
+}
+
 int
 main(UNUSED int argc, UNUSED char **argv)
 {
@@ -296,6 +300,9 @@ main(UNUSED int argc, UNUSED char **argv)
 
 	event_signal_t *sig_term = event_signal_new(SIGTERM, &scd_sigterm_cb, NULL);
 	event_add_signal(sig_term);
+
+	if (atexit(&main_sync_fs))
+		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
 
 	provisioning_mode();
 
