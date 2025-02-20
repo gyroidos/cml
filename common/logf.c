@@ -378,7 +378,12 @@ logf_file_write(logf_prio_t prio, const char *msg, void *data)
 
 	logf_file_write_timestamp(data);
 	fprintf(data, "[%u] %s %s\n", getpid(), prio_str(prio), msg);
-	fflush(data);
+
+	int res = -1;
+	if (0 != (res = fflush(data))) {
+		ERROR_ERRNO("Failed to flush log file for PID %d after message %s: %d", getpid(),
+			    msg, res);
+	}
 }
 
 void
@@ -388,7 +393,12 @@ logf_test_write(logf_prio_t prio, const char *msg, void *data)
 		return;
 
 	fprintf(data, "[%u] %s %s\n", getpid(), prio_str(prio), msg);
-	fflush(data);
+
+	int res = -1;
+	if (0 != (res = fflush(data))) {
+		ERROR_ERRNO("Failed to flush log file for PID %d after message %s: %d", getpid(),
+			    msg, res);
+	}
 }
 
 void *
