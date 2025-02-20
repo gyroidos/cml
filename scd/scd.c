@@ -345,6 +345,10 @@ main(UNUSED int argc, UNUSED char **argv)
 	event_loop();
 	ssl_free();
 
+	sync();
+	INFO("Synced file systems");
+	sync();
+
 	return 0;
 }
 
