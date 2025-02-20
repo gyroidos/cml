@@ -109,6 +109,14 @@ main_init(void)
 	main_core_dump_enable();
 }
 
+static void
+main_sync_fs()
+{
+	if (!cmld_is_hostedmode_active()) {
+		SYNC_INFO()
+	}
+}
+
 /******************************************************************************/
 
 int
@@ -141,6 +149,9 @@ main(int argc, char **argv)
 		FATAL("Could not init cmld");
 
 	if (atexit(&cmld_cleanup))
+		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
+
+	if (atexit(&main_sync_fs))
 		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
 
 	event_loop();

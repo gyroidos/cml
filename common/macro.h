@@ -41,9 +41,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include <time.h>
 
 #include "logf.h"
+
+// sync fs
+#define SYNC_INFO()                                                                                \
+	{                                                                                          \
+		sync();                                                                            \
+		INFO("Synced file systems");                                                       \
+		sync();                                                                            \
+	}
 
 //sleep
 #define NANOSLEEP(sec, nsec)                                                                       \
