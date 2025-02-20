@@ -30,6 +30,9 @@
 #include "macro.h"
 #include "fd.h"
 
+//#undef LOGF_LOG_MIN_PRIO
+//#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
+
 ssize_t
 fd_write(int fd, const char *buf, size_t len)
 {
@@ -59,6 +62,10 @@ fd_write(int fd, const char *buf, size_t len)
 
 		if (ret == 0)
 			break;
+	}
+
+	if (0 != fsync(fd)) {
+		TRACE("Could not sync fd %d", fd);
 	}
 
 	return len - remain;
