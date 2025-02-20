@@ -42,7 +42,7 @@
  * @param len length of the buffer
  */
 ssize_t
-fd_write(const int fd, const char *buf, size_t len);
+fd_write(const int fd, const char *buf, ssize_t len);
 
 /*
  * Reads the specified amount of bytes from the given file descriptor to the given buffer,
