@@ -34,7 +34,7 @@
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 ssize_t
-fd_write(int fd, const char *buf, size_t len)
+fd_write(int fd, const char *buf, ssize_t len)
 {
 	size_t remain = len;
 
