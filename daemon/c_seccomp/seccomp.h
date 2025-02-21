@@ -33,6 +33,7 @@
 #define SECCOMP_H
 
 #include <common/event.h>
+#include <common/pidfd.h>
 #include <linux/seccomp.h>
 
 typedef struct c_seccomp {
@@ -47,12 +48,6 @@ typedef struct c_seccomp {
 
 bool
 c_seccomp_capable(pid_t pid, uint64_t cap);
-
-int
-pidfd_open(pid_t pid, unsigned int flags);
-
-int
-pidfd_getfd(int pidfd, int targetfd, unsigned int flags);
 
 void *
 c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size);
