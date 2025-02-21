@@ -135,7 +135,7 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 
 	IF_NULL_RETVAL(in_file, -1);
 	IF_NULL_RETVAL(out_file, -1);
-	IF_FALSE_RETVAL(bs, -1);
+	IF_FALSE_RETVAL((bs > 0), -1);
 
 	in_fd = open(in_file, O_RDONLY);
 	if (in_fd < 0) {
@@ -156,6 +156,9 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		goto out;
 	}
 
+	// reset ret
+	ret = 0;
+
 	ssize_t len = 0;
 	struct stat stat;
 	if (fstat(in_fd, &stat) != 0) {
@@ -163,25 +166,24 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		// use fallback
 		goto fallback;
 	}
-	len = (count < 0) ? stat.st_size :
-			    MIN(stat.st_size, (off_t)MUL_WITH_OVERFLOW_CHECK(count, bs));
+	len = (count < 0) ? stat.st_size : MUL_WITH_OVERFLOW_CHECK(count, bs);
 
 	while (len > 0) {
 		ssize_t num_bytes = sendfile(out_fd, in_fd, NULL, len);
-		if (num_bytes < 0) {
+		if (num_bytes == 0) {
+			goto out;
+		} else if (num_bytes < 0) {
 			DEBUG_ERRNO("sendfile failed");
-			if (errno == EINVAL) {
+			if (errno == EINVAL || errno == ENOSYS) {
 				goto fallback;
 			} else {
 				ret = -1;
 				goto out;
 			}
 		}
-
 		len -= num_bytes;
 	}
 
-	ret = 0;
 	goto out;
 
 	// slow copy as fallback
