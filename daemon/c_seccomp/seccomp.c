@@ -90,46 +90,6 @@
 #endif
 
 /**************************/
-
-#ifndef __NR_pidfd_open
-	#if defined __alpha__
-		#define __NR_pidfd_open 544
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_pidfd_open (434 + 4000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_pidfd_open (434 + 6000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_pidfd_open (434 + 5000)
-		#endif
-	#elif defined __ia64__
-		#define __NR_pidfd_open (434 + 1024)
-	#else
-		#define __NR_pidfd_open 434
-	#endif
-#endif
-
-#ifndef __NR_pidfd_getfd
-	#if defined __alpha__
-		#define __NR_pidfd_getfd 548
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_pidfd_getfd (438 + 4000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_pidfd_getfd (438 + 6000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_pidfd_getfd (438 + 5000)
-		#endif
-	#elif defined __ia64__
-		#define __NR_pidfd_getfd (438 + 1024)
-	#else
-		#define __NR_pidfd_getfd 438
-	#endif
-#endif
 // clang-format on
 
 #ifndef SYS_clock_settime
@@ -137,18 +97,6 @@
 #define SYS_clock_settime SYS_clock_settime64
 #endif
 #endif
-
-int
-pidfd_open(pid_t pid, unsigned int flags)
-{
-	return syscall(__NR_pidfd_open, pid, flags);
-}
-
-int
-pidfd_getfd(int pidfd, int targetfd, unsigned int flags)
-{
-	return syscall(__NR_pidfd_getfd, pidfd, targetfd, flags);
-}
 
 static int
 seccomp(unsigned int op, unsigned int flags, void *args)
