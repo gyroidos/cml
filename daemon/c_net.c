@@ -1314,28 +1314,27 @@ static void
 c_net_interface_down(c_net_interface_t *ni)
 {
 	ASSERT(ni);
+	char current_if_name[IF_NAMESIZE];
+
+	/*
+	 * if interface was renamed during runtime, we have to get the
+	 * current name by index
+	 */
+	if (if_indextoname(ni->veth_cmld_idx, current_if_name)) {
+		ERROR("veth interface name could not be resolved for "
+		      "ifidx=%d (startup name '%s')",
+		      ni->veth_cmld_idx, ni->veth_cmld_name);
+		return;
+	}
 
 	/* shut the network interface down */
 	// check if iface was allready destroyed by kernel
-	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
-		char current_if_name[IF_NAMESIZE];
-
-		/*
-		 * if interface was renamed during runtime, we have to get the
-		 * current name by index
-		 */
-		if (if_indextoname(ni->veth_cmld_idx, current_if_name)) {
-			ERROR("veth interface name could not be resolved for "
-			      "ifidx=%d (startup name '%s')",
-			      ni->veth_cmld_idx, ni->veth_cmld_name);
-			return;
-		}
-
-		if (network_set_flag(ni->veth_cmld_name, IFF_DOWN))
+	if (c_net_is_veth_used(current_if_name)) {
+		if (network_set_flag(current_if_name, IFF_DOWN))
 			WARN("network interface could not be gracefully shut down");
 
-		if (network_delete_link(ni->veth_cmld_name))
-			WARN("network interface %s could not be destroyed", ni->veth_cmld_name);
+		if (network_delete_link(current_if_name))
+			WARN("network interface %s could not be destroyed", current_if_name);
 	}
 }
 
