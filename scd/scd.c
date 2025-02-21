@@ -80,6 +80,8 @@ scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 		logf_unregister(scd_logfile_handler);
 		logf_file_close(scd_logfile_p);
 	}
+
+	SYNC_INFO()
 	exit(0);
 }
 
@@ -342,6 +344,10 @@ main(UNUSED int argc, UNUSED char **argv)
 
 	event_loop();
 	ssl_free();
+
+	sync();
+	INFO("Synced file systems");
+	sync();
 
 	return 0;
 }

@@ -181,6 +181,10 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		len -= num_bytes;
 	}
 
+	if (0 != fsync(out_fd)) {
+		TRACE_ERRNO("Could not sync fd %d", out_fd);
+	}
+
 	ret = 0;
 	goto out;
 
@@ -210,6 +214,10 @@ fallback:
 				goto out_fallback;
 			}
 		}
+	}
+
+	if (0 != fsync(out_fd)) {
+		TRACE_ERRNO("Could not sync fd %d", out_fd);
 	}
 
 out_fallback:
@@ -259,6 +267,10 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 		DEBUG("Could not write to output file %s", file);
 		close(fd);
 		return -1;
+	}
+
+	if (0 != fsync(fd)) {
+		TRACE_ERRNO("Could not sync fd %d", fd);
 	}
 
 	close(fd);

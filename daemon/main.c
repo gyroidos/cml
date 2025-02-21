@@ -75,6 +75,10 @@ main_sigint_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 	is_handling_sigint = true;
 	if (cmld_containers_stop(&exit, 0) < 0)
 		ERROR("Could not stop all containers");
+
+	if (!cmld_is_hostedmode_active()) {
+		SYNC_INFO()
+	}
 }
 
 static void
@@ -83,6 +87,8 @@ main_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data
 	INFO("Received SIGTERM..");
 	if (cmld_containers_stop(&exit, 0) < 0)
 		ERROR("Could not stop all containers");
+
+	SYNC_INFO()
 }
 
 static void
@@ -144,6 +150,10 @@ main(int argc, char **argv)
 		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
 
 	event_loop();
+
+	if (!cmld_is_hostedmode_active()) {
+		SYNC_INFO()
+	}
 
 	return 0;
 }
