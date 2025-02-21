@@ -122,4 +122,14 @@ ns_join_by_path(const char *ns_path);
 bool
 ns_cmp_pidns_by_pid(pid_t pid1, pid_t pid2);
 
+/**
+ * Join the namespace of process with given pid
+ *
+ * @param pid pid of process whose namespace will be joined
+ * @param nstype type of the namespace, as defined by CLONE_NEW* flags, see man(2) setns
+ * @return 0 if process successfully joined the namespace, -1 otherwise.
+ */
+int
+ns_join_by_pid(pid_t pid, int nstype);
+
 #endif //NS_H
