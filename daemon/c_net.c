@@ -1431,7 +1431,7 @@ c_net_cleanup_phys(const c_net_t *net)
 		DEBUG("Renaming netifs in %s", container_get_name(net->container));
 
 		event_reset(); // reset event_loop of cloned from parent
-		if (ns_join_by_path(net->ns_path) < 0)
+		if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0)
 			FATAL_ERRNO("Could not join netns of compartment");
 
 		list_t *phys_ifaces = network_get_physical_interfaces_new();
