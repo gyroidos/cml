@@ -39,6 +39,7 @@
 #include "dir.h"
 #include "event.h"
 #include "file.h"
+#include "pidfd.h"
 #include "proc.h"
 #include "ns.h"
 
@@ -451,4 +452,24 @@ out:
 	mem_free0(ns_file1);
 	mem_free0(ns_file2);
 	return ret;
+}
+
+int
+ns_join_by_pid(pid_t pid, int nstype)
+{
+	int fd = pidfd_open(pid, 0);
+	if (fd == -1) {
+		ERROR_ERRNO("Could not open pidfd for pid %d", pid);
+		return -1;
+	}
+
+	if (setns(fd, nstype) == -1) {
+		ERROR_ERRNO("Could not join namespace by pidfd %d!", fd);
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+	INFO("Sucessfully joined ns of pid by pid: %d.", pid);
+	return 0;
 }
