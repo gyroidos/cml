@@ -140,7 +140,7 @@ message ContainerConfig {
 
 	// Specify PKCS#11 module the container should use
 	// if the token_type is PKCS11
-	optional string pkcs11_module = 32;
+	optional string pkcs11_module = 33;
 }
 
 /**
