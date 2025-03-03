@@ -647,6 +647,8 @@ c_cgroups_dev_allow(void *cgroups_devp, const char *rule)
 	ASSERT(rule);
 
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
+	IF_NULL_RETVAL(dev_item, -1);
+
 	if (c_cgroups_dev_list_match(global_assigned_devs_list, dev_item)) {
 		WARN("Unable to allow rule %s: device busy (already assigned to another container)",
 		     rule);
@@ -684,6 +686,8 @@ c_cgroups_dev_assign(void *cgroups_devp, const char *rule)
 	ASSERT(rule);
 
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
+	IF_NULL_RETVAL(dev_item, -1);
+
 	if (c_cgroups_dev_list_match(global_allowed_devs_list, dev_item)) {
 		ERROR("Unable to exclusively assign device according to rule %s: device busy (already available to another container)",
 		      rule);
@@ -717,6 +721,8 @@ c_cgroups_dev_deny(void *cgroups_devp, const char *rule)
 	compartment_state_t state;
 
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
+	IF_NULL_RETVAL(dev_item, -1);
+
 	c_cgroups_dev_item_t *matched_dev;
 
 	// an entry for an allowed device should only be present once in the list
