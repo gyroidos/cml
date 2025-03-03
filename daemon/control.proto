@@ -177,6 +177,9 @@ message ControllerToDaemon {
 		// Request if CMLD handles pin input
 		CONTAINER_CMLD_HANDLES_PIN = 117;
 
+		// Allow/Deny access to a char or block device by cgroup rule. Also needs [dev_rule]
+		CONTAINER_DEV_ACCESS = 118;
+
 	}
 	required Command command = 1;
 
@@ -198,6 +201,7 @@ message ControllerToDaemon {
 	optional string exec_input = 17; // input to be sent to already executing command
 	optional string device_pin = 42;	// pin for token for CONTAINER_CHANGE_TOKEN_PIN
 	optional string device_newpin = 43;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN)
+	optional string dev_rule = 44; // device access rule n form of dev-type major:minor read-write-mknod, e.g., "c 42:42 rwm"
 
 	// Daemon
 	optional bytes guestos_config_file = 20;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
