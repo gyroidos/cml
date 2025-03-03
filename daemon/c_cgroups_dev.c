@@ -1009,6 +1009,26 @@ c_cgroups_dev_device_deny(void *cgroups_devp, char type, int major, int minor)
 	return ret;
 }
 
+static int
+c_cgroups_dev_device_set_access(void *cgroups_devp, const char *rule)
+{
+	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
+	ASSERT(cgroups_dev);
+
+	int ret;
+
+	/*
+	 * check if last char is either rwm, otherwise no access should
+	 * be given and we just call deny
+	 */
+	if (rule[strlen(rule)] == 'r' || rule[strlen(rule)] == 'w' || rule[strlen(rule) - 1] == 'm')
+		ret = c_cgroups_dev_allow(cgroups_dev, rule);
+	else
+		ret = c_cgroups_dev_deny(cgroups_dev, rule);
+
+	return ret;
+}
+
 static compartment_module_t c_cgroups_dev_module = {
 	.name = MOD_NAME,
 	.compartment_new = c_cgroups_dev_new,
@@ -1037,5 +1057,6 @@ c_cgroups_dev_init(void)
 	// register relevant handlers implemented by this module
 	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);
 	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
+	container_register_device_set_access_handler(MOD_NAME, c_cgroups_dev_device_set_access);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
 }
