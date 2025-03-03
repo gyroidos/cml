@@ -187,7 +187,8 @@ c_cgroups_dev_from_rule_new(const char *rule)
 
 	// strtok manipulates string thus use a copy here;
 	char *rule_cp = mem_strdup(rule);
-	char *pointer;
+	char *pointer, *pointer2;
+	pointer = pointer2 = NULL;
 
 	char *type = strtok_r(rule_cp, " ", &pointer);
 	IF_NULL_GOTO_TRACE(type, error);
@@ -210,9 +211,7 @@ c_cgroups_dev_from_rule_new(const char *rule)
 	char *dev = strtok_r(NULL, " ", &pointer);
 	IF_NULL_GOTO_TRACE(dev, error);
 
-	pointer = NULL;
-
-	char *maj_str = strtok_r(dev, ":", &pointer);
+	char *maj_str = strtok_r(dev, ":", &pointer2);
 	IF_NULL_GOTO_TRACE(maj_str, error);
 
 	// default wildcard
@@ -226,7 +225,7 @@ c_cgroups_dev_from_rule_new(const char *rule)
 		dev_item->major = (int)parsed_int;
 	}
 
-	char *min_str = strtok_r(NULL, " ", &pointer);
+	char *min_str = strtok_r(NULL, ":", &pointer2);
 	IF_NULL_GOTO_TRACE(min_str, error);
 
 	// default wildcard
@@ -240,7 +239,7 @@ c_cgroups_dev_from_rule_new(const char *rule)
 		dev_item->minor = (int)parsed_int;
 	}
 
-	char *access = strtok_r(NULL, ":", &pointer);
+	char *access = strtok_r(NULL, " ", &pointer);
 	if (!access) {
 		dev_item->access = LEGACY_DEVCG_ACC_ALL;
 	} else {
