@@ -105,6 +105,8 @@ print_usage(const char *cmd)
 	       "        Grant audio access to the specified container (cgroups).\n\n");
 	printf("   deny_audio <container-uuid>\n"
 	       "        Deny audio access to the specified container (cgroups).\n\n");
+	printf("   dev_access <container-uuid>\n"
+	       "        Set Access rule of a device for the specified container (cgroups).\n\n");
 	printf("   wipe <container-uuid>\n"
 	       "        Wipes the specified container.\n\n");
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n"
@@ -759,6 +761,17 @@ main(int argc, char *argv[])
 
 		mem_memset0(newpin_verify, strlen(newpin_verify));
 		mem_free0(newpin_verify);
+	} else if (!strcasecmp(command, "dev_access")) {
+		optind++;
+		// need at least one more argument (dev access rule)
+		if (optind >= argc)
+			print_usage(argv[0]);
+
+		char *dev_rule = argv[optind++];
+
+		INFO("Setting device access rule %s", dev_rule);
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DEV_ACCESS;
+		msg.dev_rule = dev_rule;
 	} else
 		print_usage(argv[0]);
 
