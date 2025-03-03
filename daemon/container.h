@@ -571,6 +571,11 @@ CONTAINER_MODULE_WRAPPER_DECLARE(device_deny, int, char type, int major, int min
 CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, char type, int major, int minor)
 
 /**
+ * Set device access by rule "dev-type major:minor read-write-mknod", e.g., "c 42:42 rwm"
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(device_set_access, int, const char *rule)
+
+/**
  * Prepares a mount for shifted uid and gids of directory/file for the container's userns.
  *
  * Needs to be called in rootns for each file system image which should be mounted

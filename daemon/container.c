@@ -960,6 +960,8 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(device_deny, int, void *, char, int, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(device_deny, int, 0, char, int, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_device_allowed, bool, void *, char, int, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(is_device_allowed, bool, true, char, int, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(device_set_access, int, void *, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(device_set_access, int, 0, const char *)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(add_pid_to_cgroups, int, void *, pid_t)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(add_pid_to_cgroups, int, 0, pid_t)
 
