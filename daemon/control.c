@@ -1644,6 +1644,20 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DEV_ACCESS: {
+		IF_NULL_RETURN(container);
+		if (!msg->dev_rule) {
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
+			break;
+		}
+		res = container_device_set_access(container, msg->dev_rule);
+		if (res) {
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
+		} else {
+			control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+		}
+	} break;
+
 	default:
 		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
 		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))
