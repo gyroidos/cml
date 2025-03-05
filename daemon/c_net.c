@@ -1490,16 +1490,12 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		return;
 	}
 
+	if (c_net_cleanup_c0(net) == -1)
+		WARN("Failed to create helper child for cleanup in c0's netns");
+
 	// rename phys interface to avoid name clashes during fallback to rootns
 	if (c_net_cleanup_container(net) == -1)
 		WARN("Failed to create helper child for cleanup of container's netns");
-
-	// remove bound to filesystem
-	if (net->fd_netns > 0) {
-		close(net->fd_netns);
-		net->fd_netns = -1;
-	}
-	ns_unbind(net->ns_path);
 
 	/* remove phys network intrefaces from container */
 	uint8_t if_mac[6];
@@ -1519,14 +1515,18 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		}
 	}
 
-	if (c_net_cleanup_c0(net) == -1)
-		WARN("Failed to create helper child for cleanup in c0's netns");
-
 	/* release ip offsets and names of veths */
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 		c_net_cleanup_interface(ni);
 	}
+
+	// remove bound to filesystem
+	if (net->fd_netns > 0) {
+		close(net->fd_netns);
+		net->fd_netns = -1;
+	}
+	ns_unbind(net->ns_path);
 }
 
 /**
