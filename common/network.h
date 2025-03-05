@@ -147,6 +147,12 @@ int
 network_list_link_ns(pid_t pid, list_t **link_list);
 
 /*
+ * Generates a list containing names of all available network interfaces
+ */
+list_t *
+network_get_interfaces_new(void);
+
+/*
  * Generates a list containing names of all available physical network interfaces
  */
 list_t *
