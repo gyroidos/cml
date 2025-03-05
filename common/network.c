@@ -435,14 +435,31 @@ network_interface_is_wifi(const char *if_name)
 }
 
 list_t *
+network_get_interfaces_new()
+{
+	struct if_nameindex *if_ni, *i;
+	if_ni = if_nameindex();
+
+	IF_NULL_RETVAL_ERROR_ERRNO(if_ni, NULL);
+
+	list_t *if_name_list = NULL;
+
+	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
+		if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+	}
+	if_freenameindex(if_ni);
+	return if_name_list;
+}
+
+list_t *
 network_get_physical_interfaces_new()
 {
 	struct if_nameindex *if_ni, *i;
 	if_ni = if_nameindex();
 
-	list_t *if_name_list = NULL;
+	IF_NULL_RETVAL_ERROR_ERRNO(if_ni, NULL);
 
-	IF_NULL_RETVAL(if_ni, NULL);
+	list_t *if_name_list = NULL;
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
