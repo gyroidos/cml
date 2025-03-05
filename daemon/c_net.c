@@ -1311,34 +1311,6 @@ c_net_start_child(void *netp)
 }
 
 static void
-c_net_interface_down(c_net_interface_t *ni)
-{
-	ASSERT(ni);
-	char current_if_name[IF_NAMESIZE];
-
-	/*
-	 * if interface was renamed during runtime, we have to get the
-	 * current name by index
-	 */
-	if (if_indextoname(ni->veth_cmld_idx, current_if_name)) {
-		ERROR("veth interface name could not be resolved for "
-		      "ifidx=%d (startup name '%s')",
-		      ni->veth_cmld_idx, ni->veth_cmld_name);
-		return;
-	}
-
-	/* shut the network interface down */
-	// check if iface was allready destroyed by kernel
-	if (c_net_is_veth_used(current_if_name)) {
-		if (network_set_flag(current_if_name, IFF_DOWN))
-			WARN("network interface could not be gracefully shut down");
-
-		if (network_delete_link(current_if_name))
-			WARN("network interface %s could not be destroyed", current_if_name);
-	}
-}
-
-static void
 c_net_cleanup_interface(c_net_interface_t *ni)
 {
 	TRACE("cleanup c_net_t structure");
@@ -1375,14 +1347,8 @@ c_net_do_cleanup_host(const void *data)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
-		if (!ni->configure) {
-			c_net_interface_down(ni);
-			continue;
-		}
-		if (network_setup_masquerading(ni->subnet, false))
+		if (ni->configure && network_setup_masquerading(ni->subnet, false))
 			WARN("Failed to remove masquerading from %s", ni->subnet);
-
-		c_net_interface_down(ni);
 	}
 	return 0;
 }
@@ -1407,6 +1373,16 @@ c_net_cleanup_c0(const c_net_t *net)
 
 	DEBUG("Cleanup of net ifs in netns of %s done!", hostns);
 	return ret;
+}
+
+static void
+c_net_interface_down(const char *iface)
+{
+	if (network_set_flag(iface, IFF_DOWN))
+		WARN("Network interface %s could not be stopped gracefully", iface);
+
+	if (network_delete_link(iface))
+		WARN("Network interface %s could not be destroyed", iface);
 }
 
 /**
