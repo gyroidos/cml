@@ -1385,11 +1385,35 @@ c_net_interface_down(const char *iface)
 		WARN("Network interface %s could not be destroyed", iface);
 }
 
+static int
+c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index)
+{
+	const char *prefix = (network_interface_is_wifi(iface)) ? "wlan" : "eth";
+
+	// create collision free name with cmld's main process naming scheme
+	char *newname = mem_printf("%s%08x_%03d", prefix, container_get_uid(net->container), index);
+	if (strlen(newname) > IFNAMSIZ) {
+		ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
+		mem_free(newname);
+		return -1;
+	}
+	DEBUG("Renaming physical interface %s to %s from container %s", iface, newname,
+	      uuid_string(container_get_uuid(net->container)));
+
+	if (network_rename_ifi(iface, newname)) {
+		WARN("Failed to rename interface %s", iface);
+		mem_free(newname);
+		return -1;
+	}
+	mem_free(newname);
+	return 0;
+}
+
 /**
  * Rename physical network interfaces of container before netns destruction
  */
 static int
-c_net_cleanup_phys(const c_net_t *net)
+c_net_cleanup_container(const c_net_t *net)
 {
 	ASSERT(net);
 
@@ -1415,25 +1439,7 @@ c_net_cleanup_phys(const c_net_t *net)
 		int index = 0;
 		for (list_t *l = phys_ifaces; l; l = l->next) {
 			const char *ifname = l->data;
-			const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
-
-			// create collision free name with cmld's main process naming scheme
-			char *newname = mem_printf("%s%08x_%03d", prefix,
-						   container_get_uid(net->container), index++);
-			if (strlen(newname) > IFNAMSIZ) {
-				ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
-				mem_free(newname);
-				mem_free0(l->data);
-				continue;
-			}
-
-			DEBUG("Renaming interface %s to %s in netns of %s ", ifname, newname,
-			      container_get_name(net->container));
-
-			if (network_rename_ifi(ifname, newname))
-				WARN("Failed to rename interface %s", ifname);
-
-			mem_free(newname);
+			c_net_cleanup_phys(net, ifname, index);
 			mem_free0(l->data);
 		}
 		list_delete(phys_ifaces);
@@ -1472,8 +1478,8 @@ c_net_cleanup(void *netp, bool is_rebooting)
 	}
 
 	// rename phys interface to avoid name clashes during fallback to rootns
-	if (c_net_cleanup_phys(net) == -1)
 		WARN("Failed to create helper child for cleanup of phys in container's netns");
+	if (c_net_cleanup_container(net) == -1)
 
 	// remove bound to filesystem
 	if (net->fd_netns > 0) {
