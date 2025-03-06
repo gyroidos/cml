@@ -1313,7 +1313,7 @@ c_net_start_child(void *netp)
 static void
 c_net_cleanup_interface(c_net_interface_t *ni)
 {
-	TRACE("cleanup c_net_t structure");
+	TRACE("cleanup c_net_interface_t structure");
 
 	DEBUG("shut network interface %s down", ni->veth_cont_name);
 
@@ -1410,19 +1410,18 @@ c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index)
 }
 
 /**
- * Rename physical network interfaces of container before netns destruction
+ * Cleanup network interfaces inside container.
+ * Includes renaming physical interfaces to avoid nameclashes
+ * and removing veth interfaces.
  */
 static int
 c_net_cleanup_container(const c_net_t *net)
 {
 	ASSERT(net);
 
-	// no need to cleanup/rename if no phys interfaces where added
-	IF_FALSE_RETVAL(net->pnet_mv_list, 0);
 
 	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
 
-	// rename moved physical interfaces in network namespace of container
 	pid_t c_netns_pid = fork();
 	if (c_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to netns");
@@ -1434,17 +1433,28 @@ c_net_cleanup_container(const c_net_t *net)
 		if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0)
 			FATAL_ERRNO("Could not join netns of compartment");
 
-		list_t *phys_ifaces = network_get_physical_interfaces_new();
-		// Rename all physical interfaces.
+		list_t *ifaces = network_get_interfaces_new();
 		int index = 0;
-		for (list_t *l = phys_ifaces; l; l = l->next) {
-			const char *ifname = l->data;
-			c_net_cleanup_phys(net, ifname, index);
+		for (list_t *l = ifaces; l; l = l->next) {
+			const char *iface = l->data;
+			char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", iface);
+
+			if (file_exists(dev_drv_path) && iface != NULL) {
+				// rename moved physical interfaces in network namespace of container
+				c_net_cleanup_phys(net, iface, index);
+			} else if (file_exists(dev_drv_path)) {
+				DEBUG("Skipping unnamed network interface");
+			} else {
+				DEBUG("Removing veth interface %s", iface);
+				c_net_interface_down(iface);
+			}
+
+			mem_free0(dev_drv_path);
 			mem_free0(l->data);
 		}
-		list_delete(phys_ifaces);
+		list_delete(ifaces);
 
-		DEBUG("Renaming ifs in netns of %s done, exiting netns child!",
+		DEBUG("Removing ifs in netns of %s done, exiting netns child!",
 		      container_get_name(net->container));
 		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
@@ -1478,8 +1488,8 @@ c_net_cleanup(void *netp, bool is_rebooting)
 	}
 
 	// rename phys interface to avoid name clashes during fallback to rootns
-		WARN("Failed to create helper child for cleanup of phys in container's netns");
 	if (c_net_cleanup_container(net) == -1)
+		WARN("Failed to create helper child for cleanup of container's netns");
 
 	// remove bound to filesystem
 	if (net->fd_netns > 0) {
