@@ -1311,37 +1311,9 @@ c_net_start_child(void *netp)
 }
 
 static void
-c_net_interface_down(c_net_interface_t *ni)
-{
-	ASSERT(ni);
-	char current_if_name[IF_NAMESIZE];
-
-	/*
-	 * if interface was renamed during runtime, we have to get the
-	 * current name by index
-	 */
-	if (if_indextoname(ni->veth_cmld_idx, current_if_name)) {
-		ERROR("veth interface name could not be resolved for "
-		      "ifidx=%d (startup name '%s')",
-		      ni->veth_cmld_idx, ni->veth_cmld_name);
-		return;
-	}
-
-	/* shut the network interface down */
-	// check if iface was allready destroyed by kernel
-	if (c_net_is_veth_used(current_if_name)) {
-		if (network_set_flag(current_if_name, IFF_DOWN))
-			WARN("network interface could not be gracefully shut down");
-
-		if (network_delete_link(current_if_name))
-			WARN("network interface %s could not be destroyed", current_if_name);
-	}
-}
-
-static void
 c_net_cleanup_interface(c_net_interface_t *ni)
 {
-	TRACE("cleanup c_net_t structure");
+	TRACE("cleanup c_net_interface_t structure");
 
 	DEBUG("shut network interface %s down", ni->veth_cont_name);
 
@@ -1375,14 +1347,8 @@ c_net_do_cleanup_host(const void *data)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
-		if (!ni->configure) {
-			c_net_interface_down(ni);
-			continue;
-		}
-		if (network_setup_masquerading(ni->subnet, false))
+		if (ni->configure && network_setup_masquerading(ni->subnet, false))
 			WARN("Failed to remove masquerading from %s", ni->subnet);
-
-		c_net_interface_down(ni);
 	}
 	return 0;
 }
@@ -1409,20 +1375,52 @@ c_net_cleanup_c0(const c_net_t *net)
 	return ret;
 }
 
+static void
+c_net_interface_down(const char *iface)
+{
+	if (network_set_flag(iface, IFF_DOWN))
+		WARN("Network interface %s could not be stopped gracefully", iface);
+
+	if (network_delete_link(iface))
+		WARN("Network interface %s could not be destroyed", iface);
+}
+
+static int
+c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index)
+{
+	const char *prefix = (network_interface_is_wifi(iface)) ? "wlan" : "eth";
+
+	// create collision free name with cmld's main process naming scheme
+	char *newname = mem_printf("%s%08x_%03d", prefix, container_get_uid(net->container), index);
+	if (strlen(newname) > IFNAMSIZ) {
+		ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
+		mem_free(newname);
+		return -1;
+	}
+	DEBUG("Renaming physical interface %s to %s from container %s", iface, newname,
+	      uuid_string(container_get_uuid(net->container)));
+
+	if (network_rename_ifi(iface, newname)) {
+		WARN("Failed to rename interface %s", iface);
+		mem_free(newname);
+		return -1;
+	}
+	mem_free(newname);
+	return 0;
+}
+
 /**
- * Rename physical network interfaces of container before netns destruction
+ * Cleanup network interfaces inside container.
+ * Includes renaming physical interfaces to avoid nameclashes
+ * and removing veth interfaces.
  */
 static int
-c_net_cleanup_phys(const c_net_t *net)
+c_net_cleanup_container(const c_net_t *net)
 {
 	ASSERT(net);
 
-	// no need to cleanup/rename if no phys interfaces where added
-	IF_FALSE_RETVAL(net->pnet_mv_list, 0);
-
 	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
 
-	// rename moved physical interfaces in network namespace of container
 	pid_t c_netns_pid = fork();
 	if (c_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to netns");
@@ -1431,38 +1429,35 @@ c_net_cleanup_phys(const c_net_t *net)
 		DEBUG("Renaming netifs in %s", container_get_name(net->container));
 
 		event_reset(); // reset event_loop of cloned from parent
-		if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0)
-			FATAL_ERRNO("Could not join netns of compartment");
+		if (ns_join_by_path(net->ns_path) < 0) {
+			WARN("Could not join netns of compartment by path, trying pid");
 
-		list_t *phys_ifaces = network_get_physical_interfaces_new();
-		// Rename all physical interfaces.
+			if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0)
+				FATAL_ERRNO("Could not join netns of compartment");
+		}
+
+		list_t *ifaces = network_get_interfaces_new();
 		int index = 0;
-		for (list_t *l = phys_ifaces; l; l = l->next) {
-			const char *ifname = l->data;
-			const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
+		for (list_t *l = ifaces; l; l = l->next) {
+			const char *iface = l->data;
+			char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", iface);
 
-			// create collision free name with cmld's main process naming scheme
-			char *newname = mem_printf("%s%08x_%03d", prefix,
-						   container_get_uid(net->container), index++);
-			if (strlen(newname) > IFNAMSIZ) {
-				ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
-				mem_free(newname);
-				mem_free0(l->data);
-				continue;
+			if (file_exists(dev_drv_path) && iface != NULL) {
+				// rename moved physical interfaces in network namespace of container
+				c_net_cleanup_phys(net, iface, index);
+			} else if (file_exists(dev_drv_path)) {
+				DEBUG("Skipping unnamed network interface");
+			} else {
+				DEBUG("Removing veth interface %s", iface);
+				c_net_interface_down(iface);
 			}
 
-			DEBUG("Renaming interface %s to %s in netns of %s ", ifname, newname,
-			      container_get_name(net->container));
-
-			if (network_rename_ifi(ifname, newname))
-				WARN("Failed to rename interface %s", ifname);
-
-			mem_free(newname);
+			mem_free0(dev_drv_path);
 			mem_free0(l->data);
 		}
-		list_delete(phys_ifaces);
+		list_delete(ifaces);
 
-		DEBUG("Renaming ifs in netns of %s done, exiting netns child!",
+		DEBUG("Removing ifs in netns of %s done, exiting netns child!",
 		      container_get_name(net->container));
 		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
@@ -1495,16 +1490,12 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		return;
 	}
 
-	// rename phys interface to avoid name clashes during fallback to rootns
-	if (c_net_cleanup_phys(net) == -1)
-		WARN("Failed to create helper child for cleanup of phys in container's netns");
+	if (c_net_cleanup_c0(net) == -1)
+		WARN("Failed to create helper child for cleanup in c0's netns");
 
-	// remove bound to filesystem
-	if (net->fd_netns > 0) {
-		close(net->fd_netns);
-		net->fd_netns = -1;
-	}
-	ns_unbind(net->ns_path);
+	// rename phys interface to avoid name clashes during fallback to rootns
+	if (c_net_cleanup_container(net) == -1)
+		WARN("Failed to create helper child for cleanup of container's netns");
 
 	/* remove phys network intrefaces from container */
 	uint8_t if_mac[6];
@@ -1524,14 +1515,18 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		}
 	}
 
-	if (c_net_cleanup_c0(net) == -1)
-		WARN("Failed to create helper child for cleanup in c0's netns");
-
 	/* release ip offsets and names of veths */
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 		c_net_cleanup_interface(ni);
 	}
+
+	// remove bound to filesystem
+	if (net->fd_netns > 0) {
+		close(net->fd_netns);
+		net->fd_netns = -1;
+	}
+	ns_unbind(net->ns_path);
 }
 
 /**
