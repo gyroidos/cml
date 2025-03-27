@@ -73,22 +73,35 @@ struct control {
 
 static list_t *control_list = NULL;
 
+struct log_cb_data {
+	int fd;
+	list_t *current_logs;
+	bool remove_logs;
+};
+
 /**
  * @brief callback for the dir_foreach function sending a file as LogMessage to the Controller
  * @path: Expects path string without trailing "/" at the end
  * @return 1 on error, 0 else
  */
 static int
-control_send_file_as_log_message_cb(const char *path, const char *file, void UNUSED *data)
+control_send_file_as_log_message_cb(const char *path, const char *file, void *data)
 {
 	IF_NULL_RETVAL(path, 1);
 	IF_NULL_RETVAL(file, 1);
 
-	int *fd = (int *)data;
+	struct log_cb_data *cbdata = data;
+	ASSERT(cbdata);
+
 	int ret = 0;
-	str_t *path_str = str_new(path);
-	str_append(path_str, "/");
-	str_append(path_str, file);
+	char *file_path = mem_printf("%s/%s", path, file);
+
+	// current logfile link and lock file shall not be processed.
+	if ((file_is_link(file_path)) || (strstr(file, ".current") != NULL) ||
+	    (strstr(file, ".lock-delete-old") != NULL)) {
+		mem_free0(file_path);
+		return ret;
+	}
 
 	LogMessage message = LOG_MESSAGE__INIT;
 
@@ -99,10 +112,9 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 		out.device_uuid = mem_strdup(cmld_get_device_uuid());
 	}
 
-	DEBUG("Opening and sending %s", str_buffer(path_str));
+	DEBUG("Opening and sending %s", file_path);
 
-	char *file_buf =
-		file_read_new(str_buffer(path_str), (size_t)file_size(str_buffer(path_str)));
+	char *file_buf = file_read_new(file_path, (size_t)file_size(file_path));
 
 	if (file_buf) {
 		int max_fragment_size = PROTOBUF_MAX_MESSAGE_SIZE - PROTOBUF_MAX_OVERHEAD;
@@ -121,13 +133,13 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 					(char *)mem_strndup(file_buf + sent, max_fragment_size);
 
 				DEBUG("Sending fragment of logfile %s, sent: %d, remaining: %d",
-				      str_buffer(path_str), sent, size - sent);
+				      file_path, sent, size - sent);
 
 				out.log_message = &message;
-				if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
-					ERROR_ERRNO("Could not finish sending %s",
-						    str_buffer(path_str));
-					ret = 1;
+				if (protobuf_send_message(cbdata->fd, (ProtobufCMessage *)&out) <
+				    0) {
+					ERROR_ERRNO("Could not finish sending %s", file_path);
+					ret = -1;
 					break;
 				}
 
@@ -135,15 +147,15 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 				mem_free0(message.msg);
 			} else {
 				DEBUG("Sending final fragment of logfile %s, sent: %d, remaining: %d",
-				      str_buffer(path_str), sent, size - sent);
+				      file_path, sent, size - sent);
 				out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE_FINAL;
 				message.msg = (char *)mem_strndup(file_buf + sent, size - sent);
 
 				out.log_message = &message;
-				if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
-					ERROR_ERRNO("Could not finish sending %s",
-						    str_buffer(path_str));
-					ret = 1;
+				if (protobuf_send_message(cbdata->fd, (ProtobufCMessage *)&out) <
+				    0) {
+					ERROR_ERRNO("Could not finish sending %s", file_path);
+					ret = -1;
 					break;
 				}
 
@@ -152,16 +164,42 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 			}
 		}
 		mem_free0(file_buf);
-	} else {
-		DEBUG("File %s could not be read to buffer.", str_buffer(path_str));
+
+		if (cbdata->remove_logs) {
+			bool is_current_log = false;
+			for (list_t *l = cbdata->current_logs; l; l = l->next) {
+				char *logfile = l->data;
+				if (logfile) {
+					if (strcmp(logfile, file_path) == 0) {
+						is_current_log = true;
+						break;
+					}
+				}
+			}
+
+			if (!is_current_log) {
+				int remove_ret = remove(file_path);
+
+				if (remove_ret != 0) {
+					ERROR("Failed to remove %s. Return code: %d", file_path,
+					      remove_ret);
+				}
+
+				DEBUG("Removed log file %s", file_path);
+			}
+		}
+
 		ret = 1;
+	} else {
+		DEBUG("File %s could not be read to buffer.", file_path);
+		ret = -1;
 	}
 
 	if (out.device_uuid != NULL) {
 		mem_free0(out.device_uuid);
 	}
 
-	str_free(path_str, true);
+	mem_free0(file_path);
 
 	return ret;
 }
@@ -1104,16 +1142,42 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		out.has_response = true;
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_FAILED;
 
-		int dir_ret =
-			dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb, (void *)&fd);
+		int dir_ret = 0;
+		bool remove_logs = (!msg->has_remove_logs) ? false : msg->remove_logs;
+
+		if (remove_logs) {
+			int lock_fd = logf_lock_apply(LOGFILE_DIR);
+			if (lock_fd < 0) {
+				break;
+			}
+
+			list_t *current_logs = logf_get_current_log_files_new(LOGFILE_DIR);
+
+			struct log_cb_data cbdata = { .fd = fd,
+						      .current_logs = current_logs,
+						      .remove_logs = true };
+
+			dir_ret = dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb,
+					      &cbdata);
+
+			logf_lock_release(LOGFILE_DIR, lock_fd);
+			logf_log_files_list_free(current_logs);
+		} else {
+			struct log_cb_data cbdata = { .fd = fd,
+						      .current_logs = NULL,
+						      .remove_logs = false };
+
+			dir_ret = dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb,
+					      &cbdata);
+		}
 
 		if (dir_ret < 0) {
-			WARN("Something went wrong during traversal of LOGFILE_DIR");
+			ERROR("An error occured during traversal of %s", LOGFILE_DIR);
 		} else if (dir_ret > 0) {
-			WARN("%d logs could not be sent.", dir_ret);
-		} else {
+			TRACE("%d logs were sent.", dir_ret);
 			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_OK;
 		}
+
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR_ERRNO("Could not finish send LOG_END message");
 			break;
