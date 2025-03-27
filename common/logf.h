@@ -355,6 +355,20 @@ list_t *
 logf_get_current_log_files_new(const char *path);
 
 /**
+ * Apply the lock to the log folder.
+ * @param path The path to the log folder
+ */
+int
+logf_lock_apply(const char *path);
+
+/**
+ * Release the lock to the log folder.
+ * @param path The path to the log folder
+ */
+int
+logf_lock_release(const char *path, int lock_fd);
+
+/**
  * Deep free the log file list.
  * @param head The start of the linked list.
  */

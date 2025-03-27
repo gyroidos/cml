@@ -132,9 +132,9 @@ print_usage(const char *cmd)
 	       "        Prints the list of network interfaces assigned to the specified container.\n\n");
 	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
-	printf("   retrieve_logs [<path_to_logstore_dir>]\n"
-	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the given directory"
-	       " or in the current directory if no directory was given.\n\n");
+	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
+	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the given directory.\n"
+	       "If the 'remove' option was given, all log files are removed upon successful retrieval. The currrently used log file is not removed.\n\n");
 	printf("\n");
 	exit(-1);
 }
@@ -246,6 +246,8 @@ static const struct option assign_iface_options[] = { { "iface", required_argume
 						      { "persistent", no_argument, 0, 'p' },
 						      { 0, 0, 0, 0 } };
 
+static const struct option log_options[] = { { "remove", no_argument, 0, 'r' }, { 0, 0, 0, 0 } };
+
 static char *
 get_password_new(const char *prompt)
 {
@@ -321,20 +323,35 @@ main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "retrieve_logs")) {
-		// need at most one more argument (path to store logs)
-		if (optind < argc - 1)
+		// need at least one more argument (container config)
+		if (optind >= argc)
 			print_usage(argv[0]);
 
-		if (optind == argc) {
-			INFO("No target directory specified. Copying logs to current directory.");
-			log_dir = str_new("./");
-		} else {
-			log_dir = str_new(argv[optind++]);
-			if (str_buffer(log_dir)[str_length(log_dir)] != '/') {
-				str_append(log_dir, "/");
-			}
-			INFO("Copy logs to %s", str_buffer(log_dir));
+		log_dir = str_new(argv[optind++]);
+		if (str_buffer(log_dir)[str_length(log_dir)] != '/') {
+			str_append(log_dir, "/");
 		}
+		INFO("Copy logs to %s", str_buffer(log_dir));
+
+		// parse specific options for retrieve_logs command
+		optind--;
+		char **start_argv = &argv[optind];
+		int start_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     - 1 !=
+		     (c = getopt_long(start_argc, start_argv, "r", log_options, &option_index));) {
+			switch (c) {
+			case 'r':
+				msg.has_remove_logs = true;
+				msg.remove_logs = true;
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
+		optind += argc - start_argc; // adjust optind to be used with argv
 
 		if (file_exists(str_buffer(log_dir)) && file_is_dir(str_buffer(log_dir))) {
 			msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG;

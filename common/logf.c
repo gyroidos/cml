@@ -25,6 +25,7 @@
 #include "file.h"
 #include "logf.h"
 #include "list.h"
+#include "macro.h"
 #include "mem.h"
 
 #ifdef ANDROID
@@ -32,16 +33,19 @@
 #include <android/log.h>
 #endif
 
-#include <time.h>
 #include <errno.h>
-#include <stdio.h>
+#include <fcntl.h>
+#include <linux/limits.h>
 #include <stdarg.h>
-#include <syslog.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/file.h>
+#include <time.h>
 #include <unistd.h>
-#include <stdint.h>
 
 // TODO: we should not include this in production builds...
 #ifndef LOGF_FILE_STRIP
@@ -268,6 +272,7 @@ logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 	ASSERT(handler);
 	handler->prio = prio;
 }
+
 void
 logf_log_files_list_free(list_t *head)
 {
@@ -320,6 +325,46 @@ logf_get_current_log_files_new(const char *path)
 	}
 
 	return current_log_files;
+}
+
+int
+logf_lock_apply(const char *path)
+{
+	char *file_path = mem_printf("%s/%s", path, ".lock-delete-old");
+
+	int lock_fd = open(file_path, O_RDONLY | O_CREAT, 0644);
+	if (lock_fd < 0) {
+		ERROR_ERRNO("Failed to open %s", file_path);
+		lock_fd = -1;
+		goto out;
+	}
+	if (flock(lock_fd, LOCK_EX) < 0) {
+		ERROR_ERRNO("Failed to get lock on %s", file_path);
+		close(lock_fd);
+		lock_fd = -1;
+		goto out;
+	}
+
+out:
+	mem_free0(file_path);
+	return lock_fd;
+}
+
+int
+logf_lock_release(const char *path, int lock_fd)
+{
+	int result = 0;
+	char *file_path = mem_printf("%s/%s", path, ".lock-delete-old");
+
+	if (flock(lock_fd, LOCK_UN)) {
+		ERROR_ERRNO("Failed to release lock on %s", file_path);
+		result = -1;
+	}
+
+	close(lock_fd);
+	mem_free0(file_path);
+
+	return result;
 }
 
 /******************************************************************************/
