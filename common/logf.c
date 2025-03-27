@@ -21,6 +21,7 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#include "dir.h"
 #include "file.h"
 #include "logf.h"
 #include "list.h"
@@ -266,6 +267,59 @@ logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 {
 	ASSERT(handler);
 	handler->prio = prio;
+}
+void
+logf_log_files_list_free(list_t *head)
+{
+	while (head) {
+		list_t *next = head->next;
+		mem_free0(head->data);
+		mem_free0(head);
+		head = next;
+	}
+}
+
+static int
+logf_current_log_cb(const char *path, const char *file, void *data)
+{
+	list_t **log_file_list = (list_t **)data;
+	char *file_path = mem_printf("%s/%s", path, file);
+
+	// only process .current symlinks.
+	if ((!file_is_link(file_path)) || (strstr(file, ".current") == NULL)) {
+		return 0;
+	}
+
+	char *buffer = mem_alloc0(PATH_MAX);
+	ssize_t len = readlink(file_path, buffer, PATH_MAX);
+
+	if (len < 0 || len > PATH_MAX - 1) {
+		ERROR_ERRNO("readlink on %s returned %zd", file_path, len);
+		return -1;
+	} else {
+		DEBUG("Adding currently used logfile to list %s", buffer);
+		*log_file_list = list_append(*log_file_list, mem_strdup(buffer));
+	}
+
+	mem_free0(file_path);
+	mem_free0(buffer);
+
+	return 1;
+}
+
+list_t *
+logf_get_current_log_files_new(const char *path)
+{
+	list_t *current_log_files = NULL;
+	int dir_ret = dir_foreach(path, &logf_current_log_cb, &current_log_files);
+
+	if (dir_ret < 0) {
+		WARN("Something went wrong during traversal of %s", path);
+	} else if (dir_ret > 0) {
+		TRACE("%d logs have been analyzed.", dir_ret);
+	}
+
+	return current_log_files;
 }
 
 /******************************************************************************/

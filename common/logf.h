@@ -57,6 +57,8 @@
 #ifndef LOGF_H
 #define LOGF_H
 
+#include "list.h"
+
 typedef enum {
 	LOGF_PRIO_TRACE = 1,
 	LOGF_PRIO_DEBUG,
@@ -344,5 +346,19 @@ logf_klog_new(const char *name);
  */
 void
 logf_klog_write(logf_prio_t prio, const char *msg, void *data);
+
+/**
+ * Provides a list with currently used log files.
+ * @param path The path to the log folder.
+ */
+list_t *
+logf_get_current_log_files_new(const char *path);
+
+/**
+ * Deep free the log file list.
+ * @param head The start of the linked list.
+ */
+void
+logf_log_files_list_free(list_t *head);
 
 #endif /* LOGF_H */
