@@ -153,6 +153,7 @@ message ControllerToDaemon {
 	optional bytes guestos_rootcert = 23;	// rootca certificate for local or new CAs to verify GuestOSes
 	optional string guestos_name = 24;	// name of a GuestOS (e.g. used in remove command)
 	optional bytes device_cert = 41;	// device cert for PUSH_DEVICE_CERT
+	optional bool remove_logs = 45 [ default = false ]; // remove logs after retrieval (except current log files)
 }
 
 message ContainerStartParams {
