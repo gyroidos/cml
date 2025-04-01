@@ -33,7 +33,7 @@ message DeviceConfig {
 	// e.g. http://server:port/trustme/operatingsystems/<device>/<name>-<version>/<filename.img>
 
 	// configure os of the management container
-	optional string c0os = 7 [default = "trustx-coreos"];
+	optional string c0os = 7 [default = "gyroidos-coreos"];
 
 	// configure network
 	optional string host_addr = 8 [default = ""];
