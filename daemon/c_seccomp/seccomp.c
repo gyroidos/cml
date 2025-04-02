@@ -86,7 +86,11 @@
 #elif defined __aarch64__
 	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_AARCH64
 #elif defined __riscv
-	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV64
+	#if (__riscv_xlen == 32)
+		#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV32
+	#else
+		#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV64
+	#endif
 #endif
 
 /**************************/
@@ -96,6 +100,11 @@
 #ifdef SYS_clock_settime64
 #define SYS_clock_settime SYS_clock_settime64
 #endif
+#endif
+
+#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64 && C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_RISCV32 &&   \
+     C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_RISCV64)
+#define C_SECCOMP_ARCH_HAS_MKNOD
 #endif
 
 static int
@@ -160,7 +169,7 @@ c_seccomp_install_filter(c_seccomp_t *_seccomp)
 	 * and thus follows a deny-list approach.
 	 */
 	struct sock_filter filter_tail[] = {
-#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
+#ifdef C_SECCOMP_ARCH_HAS_MKNOD
 		/*
 		 * Note for future syscalls
 		 * ========================
@@ -405,8 +414,8 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		syscall_str = mem_strdup("SYS_finit_module");
 		ret_syscall = c_seccomp_emulate_finit_module(seccomp, req, resp);
 		break;
-#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
-	// SYS_mknod not defined on arm64
+#ifdef C_SECCOMP_ARCH_HAS_MKNOD
+	// SYS_mknod not defined on some architectures
 	case SYS_mknod:
 #endif
 	case SYS_mknodat:
