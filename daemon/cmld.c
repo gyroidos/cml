@@ -185,7 +185,6 @@ cmld_container_get_by_uuid(const uuid_t *uuid)
 	return NULL;
 }
 
-#define UID_MAX 65535
 container_t *
 cmld_container_get_by_uid(int uid)
 {
