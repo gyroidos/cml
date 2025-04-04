@@ -94,7 +94,7 @@ ifeq ($(SYSTEMD),y)
 		-DSCD_CONTROL_SOCKET=NULL
 endif
 ifeq ($(PKCS11), y)
-    # If requested, we build sc-hsm support into trustme
+    # If requested, we build pkcs11 support into the scd
     LOCAL_CFLAGS += -DENABLEPKCS11 -I../pkcs11-lib 
 	LOCAL_LDFLAGS += -ldl
     SRC_FILES += \
