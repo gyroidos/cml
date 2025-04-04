@@ -66,14 +66,108 @@ struct p11token {
 };
 
 // Helper Functions
-ck_slot_id_t *
-int_get_free_slot_id_new(struct ck_function_list *ctx);
+/**
+ * get next free slot id
+*/
+static ck_slot_id_t *
+int_get_free_slot_id_new(struct ck_function_list *ctx)
+{
+	ASSERT(ctx);
 
-ck_slot_id_t *
-int_get_token_slot_id_new(struct ck_function_list *ctx, const unsigned char *label);
+	unsigned long slot_count = 0;
+	ck_slot_id_t *p_slots = NULL;
 
-unsigned char *
-int_p11_token_label_new(const char *label);
+	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(false, NULL, &slot_count), error);
+	p_slots = (ck_slot_id_t *)mem_alloc(slot_count * sizeof(ck_slot_id_t));
+	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(false, p_slots, &slot_count), error);
+
+	for (unsigned long i = 0; i < slot_count; i++) {
+		ck_rv_t rv = CKR_OK;
+		struct ck_slot_info slot_info;
+		if ((rv = ctx->C_GetSlotInfo(p_slots[i], &slot_info)) == CKR_OK) {
+			if ((i == p_slots[i])) {
+				ck_slot_id_t *free_slot = mem_alloc(sizeof(ck_slot_id_t));
+				*free_slot = p_slots[i];
+
+				mem_free(p_slots);
+				return free_slot;
+			}
+		} else {
+			WARN("Retrieving Info for slot %lu failed with %lu", p_slots[i], rv);
+		}
+	}
+
+error:
+	if (p_slots) {
+		mem_free(p_slots);
+	}
+	return NULL;
+}
+
+/**
+ * find token by label
+*/
+static ck_slot_id_t *
+int_get_token_slot_id_new(struct ck_function_list *ctx, const unsigned char *label)
+{
+	ASSERT(ctx);
+	ASSERT(label);
+
+	// get slot list
+	ck_slot_id_t *p_slots = NULL;
+	unsigned long slot_count = 0;
+	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(true, NULL, &slot_count), error);
+	p_slots = (ck_slot_id_t *)mem_alloc(slot_count * sizeof(ck_slot_id_t));
+	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(false, p_slots, &slot_count), error);
+
+	for (unsigned long i = 0; i < slot_count; i++) {
+		ck_rv_t rv = CKR_OK;
+		struct ck_token_info token_info;
+		if ((rv = ctx->C_GetTokenInfo(p_slots[i], &token_info)) == CKR_OK) {
+			if (0 ==
+			    strncmp((char *)token_info.label, (char *)label, P11_LABEL_MAX_LEN)) {
+				ck_slot_id_t *slot_id =
+					(ck_slot_id_t *)mem_alloc(sizeof(ck_slot_id_t));
+				*slot_id = p_slots[i];
+
+				mem_free(p_slots);
+				return slot_id;
+			}
+		} else {
+			WARN("Retrieving Info for slot %lu failed with %lu", p_slots[i], rv);
+		}
+	}
+error:
+	if (p_slots) {
+		mem_free(p_slots);
+	}
+	return NULL;
+}
+
+/**
+ * Converts a string into a token label: must not be null-terminated according to spec
+*/
+static unsigned char *
+int_p11_token_label_new(const char *label)
+{
+	ASSERT(label);
+
+	size_t len_label = strlen(label);
+	unsigned char *token_label = mem_alloc0(P11_LABEL_MAX_LEN);
+	if (len_label <= P11_LABEL_MAX_LEN) {
+		memcpy(token_label, label, len_label);
+
+		// pad remaining space
+		for (size_t i = len_label + 1; i < P11_LABEL_MAX_LEN; i++) {
+			token_label[i] = ' ';
+		}
+	} else {
+		// label is too long: truncate
+		memcpy(token_label, label, P11_LABEL_MAX_LEN);
+	}
+
+	return token_label;
+}
 
 /**
  * create a new pkcs11 token
@@ -515,109 +609,4 @@ p11token_change_pin(p11token_t *token, const char *old_pin, const char *new_pin)
 	return p11token_lock(token);
 error:
 	return -1;
-}
-
-// internal helper functions
-
-/**
- * get next free slot id
-*/
-ck_slot_id_t *
-int_get_free_slot_id_new(struct ck_function_list *ctx)
-{
-	ASSERT(ctx);
-
-	unsigned long slot_count = 0;
-	ck_slot_id_t *p_slots = NULL;
-
-	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(false, NULL, &slot_count), error);
-	p_slots = (ck_slot_id_t *)mem_alloc(slot_count * sizeof(ck_slot_id_t));
-	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(false, p_slots, &slot_count), error);
-
-	for (unsigned long i = 0; i < slot_count; i++) {
-		ck_rv_t rv = CKR_OK;
-		struct ck_slot_info slot_info;
-		if ((rv = ctx->C_GetSlotInfo(p_slots[i], &slot_info)) == CKR_OK) {
-			if ((i == p_slots[i])) {
-				ck_slot_id_t *free_slot = mem_alloc(sizeof(ck_slot_id_t));
-				*free_slot = p_slots[i];
-
-				mem_free(p_slots);
-				return free_slot;
-			}
-		} else {
-			WARN("Retrieving Info for slot %lu failed with %lu", p_slots[i], rv);
-		}
-	}
-
-error:
-	if (p_slots) {
-		mem_free(p_slots);
-	}
-	return NULL;
-}
-
-/**
- * find token by label
-*/
-ck_slot_id_t *
-int_get_token_slot_id_new(struct ck_function_list *ctx, const unsigned char *label)
-{
-	ASSERT(ctx);
-	ASSERT(label);
-
-	// get slot list
-	ck_slot_id_t *p_slots = NULL;
-	unsigned long slot_count = 0;
-	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(true, NULL, &slot_count), error);
-	p_slots = (ck_slot_id_t *)mem_alloc(slot_count * sizeof(ck_slot_id_t));
-	P11_CHECK_RV_GOTO(ctx->C_GetSlotList(false, p_slots, &slot_count), error);
-
-	for (unsigned long i = 0; i < slot_count; i++) {
-		ck_rv_t rv = CKR_OK;
-		struct ck_token_info token_info;
-		if ((rv = ctx->C_GetTokenInfo(p_slots[i], &token_info)) == CKR_OK) {
-			if (0 ==
-			    strncmp((char *)token_info.label, (char *)label, P11_LABEL_MAX_LEN)) {
-				ck_slot_id_t *slot_id =
-					(ck_slot_id_t *)mem_alloc(sizeof(ck_slot_id_t));
-				*slot_id = p_slots[i];
-
-				mem_free(p_slots);
-				return slot_id;
-			}
-		} else {
-			WARN("Retrieving Info for slot %lu failed with %lu", p_slots[i], rv);
-		}
-	}
-error:
-	if (p_slots) {
-		mem_free(p_slots);
-	}
-	return NULL;
-}
-
-/**
- * Converts a string into a token label: must not be null-terminated according to spec
-*/
-unsigned char *
-int_p11_token_label_new(const char *label)
-{
-	ASSERT(label);
-
-	size_t len_label = strlen(label);
-	unsigned char *token_label = mem_alloc0(P11_LABEL_MAX_LEN);
-	if (len_label <= P11_LABEL_MAX_LEN) {
-		memcpy(token_label, label, len_label);
-
-		// pad remaining space
-		for (size_t i = len_label + 1; i < P11_LABEL_MAX_LEN; i++) {
-			token_label[i] = ' ';
-		}
-	} else {
-		// label is too long: truncate
-		memcpy(token_label, label, P11_LABEL_MAX_LEN);
-	}
-
-	return token_label;
 }
