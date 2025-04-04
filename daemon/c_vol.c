@@ -140,7 +140,7 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 }
 
 static char *
-c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
+c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent, const char *suffix)
 {
 	const char *dir;
 
@@ -162,7 +162,8 @@ c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		return NULL;
 	}
 
-	return mem_printf("%s/%s.meta.img", dir, mount_entry_get_img(mntent));
+	return mem_printf("%s/%s.meta.img%s", dir, mount_entry_get_img(mntent),
+			  suffix ? suffix : "");
 }
 
 static char *
@@ -347,7 +348,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 		return 0;
 	case MOUNT_TYPE_OVERLAY_RW:
 	case MOUNT_TYPE_EMPTY: {
-		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 		int ret = c_vol_create_image_empty(img, img_meta, mount_entry_get_size(mntent));
 		mem_free0(img_meta);
 		return ret;
@@ -840,6 +841,18 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (encrypted) {
 		TRACE("Creating encrypted image");
 		char *label, *crypt;
+		char *not_stacked_file = c_vol_meta_image_path_new(vol, mntent, ".not-stacked");
+		/*
+		 * if new image is created persist stacking policy to setup without stacking
+		 * to support TRIM on SSDs
+		 */
+		if (new_image)
+			file_touch(not_stacked_file);
+
+		cryptfs_mode_t mode = (new_image || file_exists(not_stacked_file)) ?
+					      CRYPTFS_MODE_INTEGRITY_ENCRYPT :
+					      CRYPTFS_MODE_AUTHENC;
+		mem_free0(not_stacked_file);
 
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				   mount_entry_get_img(mntent));
@@ -858,16 +871,17 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
-			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
+			DEBUG("Setting up cryptfs volume %s for %s (%s)", label, dev,
+			      mode == CRYPTFS_MODE_AUTHENC ? "AUTHENC" : "INTEGRITY_CRYPT ");
 
-			img_meta = c_vol_meta_image_path_new(vol, mntent);
+			img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 			dev_meta = loopdev_create_new(&fd_meta, img_meta, 0, 0);
 
 			IF_NULL_GOTO(dev_meta, error);
 
 			mem_free0(crypt);
 			crypt = cryptfs_setup_volume_new(
-				label, dev, container_get_key(vol->container), dev_meta);
+				label, dev, container_get_key(vol->container), dev_meta, mode);
 
 			// release loopdev fd (crypt device should keep it open now)
 			close(fd_meta);
