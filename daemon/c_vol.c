@@ -92,6 +92,7 @@ typedef struct c_vol {
 	const guestos_t *os;
 	mount_t *mnt;
 	mount_t *mnt_setup;
+	cryptfs_mode_t mode;
 } c_vol_t;
 
 /******************************************************************************/
@@ -140,7 +141,7 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 }
 
 static char *
-c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
+c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent, const char *suffix)
 {
 	const char *dir;
 
@@ -162,7 +163,8 @@ c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		return NULL;
 	}
 
-	return mem_printf("%s/%s.meta.img", dir, mount_entry_get_img(mntent));
+	return mem_printf("%s/%s.meta.img%s", dir, mount_entry_get_img(mntent),
+			  suffix ? suffix : "");
 }
 
 static char *
@@ -347,7 +349,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 		return 0;
 	case MOUNT_TYPE_OVERLAY_RW:
 	case MOUNT_TYPE_EMPTY: {
-		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 		int ret = c_vol_create_image_empty(img, img_meta, mount_entry_get_size(mntent));
 		mem_free0(img_meta);
 		return ret;
@@ -858,16 +860,17 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
-			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
+			DEBUG("Setting up cryptfs volume %s for %s (%s)", label, dev,
+			      vol->mode == CRYPTFS_MODE_AUTHENC ? "AUTHENC" : "INTEGRITY_ENCRYPT");
 
-			img_meta = c_vol_meta_image_path_new(vol, mntent);
+			img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 			dev_meta = loopdev_create_new(&fd_meta, img_meta, 0, 0);
 
 			IF_NULL_GOTO(dev_meta, error);
 
 			mem_free0(crypt);
 			crypt = cryptfs_setup_volume_new(
-				label, dev, container_get_key(vol->container), dev_meta);
+				label, dev, container_get_key(vol->container), dev_meta, vol->mode);
 
 			// release loopdev fd (crypt device should keep it open now)
 			close(fd_meta);
@@ -1430,6 +1433,35 @@ c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 	return true;
 }
 
+/*
+ * If images_dir does not have stacked images, persist policy without stacking
+ * using cryptfs_mode INTEGRITY_ENCRYPT to support TRIM on SSDs.
+ * Call this function on container start to allow switching the policy by container
+ * wipe.
+ */
+static void
+c_vol_set_dm_mode(c_vol_t *vol)
+{
+	ASSERT(vol);
+
+	const char *images_dir = container_get_images_dir(vol->container);
+	ASSERT(images_dir);
+
+	char *not_stacked_file = mem_printf("%s/not-stacked", images_dir);
+	if (file_exists(not_stacked_file)) {
+		TRACE("file exists %s -> CRYPTFS_MODE_INTEGRITY_ENCRYPT", not_stacked_file);
+		vol->mode = CRYPTFS_MODE_INTEGRITY_ENCRYPT;
+	} else if (container_images_dir_contains_image(vol->container)) {
+		TRACE("previous image files exists -> CRYPTFS_MODE_AUTHENC");
+		vol->mode = CRYPTFS_MODE_AUTHENC;
+	} else {
+		TRACE("new image files -> CRYPTFS_MODE_INTEGRITY_ENCRYPT");
+		vol->mode = CRYPTFS_MODE_INTEGRITY_ENCRYPT;
+		file_touch(not_stacked_file);
+	}
+	mem_free0(not_stacked_file);
+}
+
 /******************************************************************************/
 
 static void *
@@ -1581,6 +1613,9 @@ c_vol_start_child_early(void *volp)
 		ERROR_ERRNO("Could not mkdir root dir %s for container start", vol->root);
 		goto error;
 	}
+
+	// set device mapper mode for data integrity and encryption
+	c_vol_set_dm_mode(vol);
 
 	DEBUG("Mounting images");
 	if (c_vol_mount_images(vol) < 0) {
