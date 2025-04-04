@@ -867,7 +867,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 			mem_free0(crypt);
 			crypt = cryptfs_setup_volume_new(
-				label, dev, container_get_key(vol->container), dev_meta);
+				label, dev, container_get_key(vol->container), dev_meta, false);
 
 			// release loopdev fd (crypt device should keep it open now)
 			close(fd_meta);
