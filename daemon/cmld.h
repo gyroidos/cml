@@ -52,6 +52,8 @@
 
 #define CMLD_STORAGE_FREE_THRESHOLD 0.2 // 20% reserved space
 
+#define UID_MAX 65536
+
 /**
  * Enum represents different commands to control a container
  */

@@ -47,7 +47,7 @@
 
 #define UID_RANGE 100000
 #define UID_RANGES_START 100000
-#define UID_MAX 65535
+
 #define MAX_UID_RANGES ((int)((UINT_MAX - UID_RANGES_START) / UID_RANGE))
 
 /* Paths for controling mappings */
