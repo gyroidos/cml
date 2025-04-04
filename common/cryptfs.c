@@ -54,6 +54,8 @@
 #define INTEGRITY_TAG_SIZE 32
 #define CRYPTO_TYPE_AUTHENC "capi:authenc(hmac(sha256),xts(aes))-random"
 #define CRYPTO_TYPE "aes-xts-plain64"
+#define CRYPTO_JOURNAL_TYPE "aes(ctr)"
+#define INTEGRITY_TYPE "hmac(sha256)"
 
 /* taken from vold */
 #define DEVMAPPER_BUFFER_SIZE 4096
@@ -106,7 +108,8 @@ convert_key_to_hex_ascii(unsigned char *master_key, unsigned int keysize,
 
 static int
 load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta_blk_name,
-			     const char *name, int fs_size)
+			     const char *integrity_key_ascii, const char *name,
+			     int fs_size, bool stacked)
 {
 	// General variables
 	int ioctl_ret;
@@ -116,8 +119,14 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	struct dm_target_spec *tgt;
 	struct dm_ioctl *mapping_io;
 	char *integrity_params;
-	char *extra_params = mem_printf("1 meta_device:%s", meta_blk_name);
+	char *extra_params = stacked ?
+				     mem_printf("1 meta_device:%s", meta_blk_name) :
+				     mem_printf("3 meta_device:%s internal_hash:%s:%s allow_discards",
+						meta_blk_name, INTEGRITY_TYPE, integrity_key_ascii);
+						//CRYPTO_JOURNAL_TYPE, integrity_key_ascii);
 	int mapping_counter;
+
+	DEBUG("integrity_extra_params: %s", extra_params);
 
 	mapping_io = (struct dm_ioctl *)mapping_buffer;
 
@@ -209,6 +218,8 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 		 "%s %s 0 %s 0 %s", crypto_type, master_key_ascii, real_blk_name, extra_params);
 	mem_free0(extra_params);
 
+	DEBUG("crypt_params: %s", crypt_params);
+
 	crypt_params += strlen(crypt_params) + 1;
 	crypt_params =
 		(char *)(((unsigned long)crypt_params + 7) & ~8); /* Align to an 8 byte boundary */
@@ -242,8 +253,8 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
  * @return int 0 if successful, otherwise -1
  */
 static int
-create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *name,
-			 const unsigned long fs_size)
+create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *key,
+			 const char *name, const unsigned long fs_size, bool stacked)
 {
 	int fd;
 	int ioctl_ret;
@@ -281,7 +292,8 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	// Load Integrity map table
 	DEBUG("Loading Integrity mapping table");
 
-	load_count = load_integrity_mapping_table(fd, real_blk_name, meta_blk_name, name, fs_size);
+	load_count = load_integrity_mapping_table(fd, real_blk_name, meta_blk_name, key, name,
+						  fs_size, stacked);
 	if (load_count < 0) {
 		ERROR("Error while loading mapping table");
 		goto errout;
@@ -548,20 +560,35 @@ error:
 
 static char *
 cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
-				   const char *meta_blkdev, const char *key, unsigned long fs_size)
+				   const char *meta_blkdev, const char *key, unsigned long fs_size,
+				   bool initial_format, bool stacked)
 {
-	bool initial_format = false;
 	char *crypto_blkdev = NULL, *integrity_dev = NULL;
+	char crypto_key[CRYPTFS_FDE_KEY_LEN*2 + 1];
+	char integrity_key[INTEGRITY_TAG_SIZE*2 + 1];
 	char *integrity_dev_label = mem_printf("%s-%s", label, "integrity");
 	TRACE("cryptfs_setup_volume_integrity_new");
+
+	/* Use the first 128 hex digits (64 byte) of master key for 512 bit xts mode */
+	IF_TRUE_RETVAL(strlen(key) < CRYPTFS_FDE_KEY_LEN*2, NULL);
+	memcpy(crypto_key, key, CRYPTFS_FDE_KEY_LEN*2);
+	crypto_key[CRYPTFS_FDE_KEY_LEN*2] = '\0';
+
+	/* Use the following 64 hex digits (32 byte) of master key for 256 bit hmac */
+	IF_TRUE_RETVAL(strlen(key) < CRYPTFS_FDE_KEY_LEN*2 + INTEGRITY_TAG_SIZE*2, NULL);
+	memcpy(integrity_key, key + CRYPTFS_FDE_KEY_LEN*2, INTEGRITY_TAG_SIZE*2);
+	integrity_key[INTEGRITY_TAG_SIZE*2] = '\0';
+
+	DEBUG("KEYS:\n\t key:\t %s\n\t split:\t %s:%s", key, crypto_key, integrity_key);
 
 	/* check if meta device is initialized */
 	initial_format = get_provided_data_sectors(meta_blkdev) != fs_size;
 
-	if (create_integrity_blk_dev(real_blkdev, meta_blkdev, integrity_dev_label, fs_size) < 0) {
+	if (create_integrity_blk_dev(real_blkdev, meta_blkdev, integrity_key, integrity_dev_label,
+				     fs_size, stacked) < 0) {
 		DEBUG("create_integrity_blk_dev failed!");
 		mem_free0(integrity_dev_label);
-		goto error;
+		return NULL;
 	}
 
 	integrity_dev = create_device_node(integrity_dev_label);
@@ -574,9 +601,8 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 		DEBUG("Successfully created device node");
 	}
 
-	if (create_crypto_blk_dev(integrity_dev, key, label, fs_size, true) < 0) {
+	if (create_crypto_blk_dev(integrity_dev, crypto_key, label, fs_size, false) < 0) {
 		ERROR("Could not create crypto block device");
-		mem_free0(integrity_dev);
 		return NULL;
 	}
 
@@ -625,6 +651,8 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 			DEBUG("Successfully formated volume %s using file_copy", crypto_blkdev);
 		}
 	}
+
+	mem_free0(integrity_dev);
 	return crypto_blkdev;
 error:
 	mem_free0(crypto_blkdev);
@@ -634,7 +662,7 @@ error:
 
 char *
 cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key,
-			 const char *meta_blkdev)
+			 const char *meta_blkdev, bool stacked)
 {
 	int fd;
 	// The file system size in sectors
@@ -662,7 +690,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 
 	if (meta_blkdev)
 		return cryptfs_setup_volume_integrity_new(label, real_blkdev, meta_blkdev, key,
-							  fs_size);
+							  fs_size, true, stacked);
 
 	// do dmcrypt device setup only
 

@@ -52,11 +52,16 @@ cryptfs_get_device_path_new(const char *label);
  * @param real_blk_dev The name of the loop device
  * @param ascii_key The key for the volume
  * @param meta_blk_dev The meta loop device
+ * @param stacked use dm-integrity and dm-crypt stacked on dm-crypt with AEAD algorithm
+ *    If set to false dm-integrity will be used as standalone with internal hash
+ *    and dm-crypt is set up individualy with non-aead algortihm. In stacked mode the
+ *    TRIM support for SSD is not available.
+ *
  * @return char* The path of the newly created volume
  */
 char *
 cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key,
-			 const char *meta_blk_dev);
+			 const char *meta_blk_dev, bool stacked);
 
 /**
  * Close a device-mapper volume
