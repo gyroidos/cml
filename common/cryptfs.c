@@ -55,6 +55,8 @@
 #define CRYPTO_TYPE_AUTHENC "capi:authenc(hmac(sha256),xts(aes))-random"
 #define CRYPTO_TYPE "aes-xts-plain64"
 
+#define CRYPTO_HEXKEY_LEN 2 * CRYPTFS_FDE_KEY_LEN
+
 /* taken from vold */
 #define DEVMAPPER_BUFFER_SIZE 4096
 #define DM_CRYPT_BUF_SIZE 4096
@@ -666,11 +668,11 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 
 	// do dmcrypt device setup only
 
-	/* Use only the first 64 hex digits of master key for 512 bit xts mode */
-	IF_TRUE_RETVAL(strlen(key) < CRYPTFS_FDE_KEY_LEN, NULL);
-	char enc_key[CRYPTFS_FDE_KEY_LEN + 1];
-	memcpy(enc_key, key, CRYPTFS_FDE_KEY_LEN);
-	enc_key[CRYPTFS_FDE_KEY_LEN] = '\0';
+	/* Use the first 128 hex digits (64 byte) of master key for 512 bit xts mode */
+	IF_TRUE_RETVAL(strlen(key) < CRYPTO_HEXKEY_LEN, NULL);
+	char enc_key[CRYPTO_HEXKEY_LEN + 1];
+	memcpy(enc_key, key, CRYPTO_HEXKEY_LEN);
+	enc_key[CRYPTO_HEXKEY_LEN] = '\0';
 
 	if (create_crypto_blk_dev(real_blkdev, enc_key, label, fs_size, false) < 0)
 		return NULL;
