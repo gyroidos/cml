@@ -634,7 +634,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	// The file system size in sectors
 	uint64_t fs_size;
 
-	bool integrity, stacked;
+	bool encrypt, integrity, stacked;
 
 	char *crypto_blkdev = NULL, *integrity_blkdev = NULL;
 	char *crypto_key = NULL, *integrity_key = NULL;
@@ -656,6 +656,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 			     AUTHENC_HEXKEY_LEN, crypto_key_len);
 		}
 		integrity_key_len = 0;
+		encrypt = true;
 		integrity = true;
 		stacked = true;
 		break;
@@ -666,6 +667,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 			     CRYPTO_HEXKEY_LEN, crypto_key_len);
 		}
 		integrity_key_len = 0;
+		encrypt = true;
 		integrity = false;
 		stacked = false;
 		break;
@@ -674,6 +676,15 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		IF_TRUE_RETVAL(strlen(key) != CRYPTO_HEXKEY_LEN + INTEGRITY_HEXKEY_LEN, NULL);
 		crypto_key_len = CRYPTO_HEXKEY_LEN;
 		integrity_key_len = INTEGRITY_HEXKEY_LEN;
+		encrypt = true;
+		integrity = true;
+		stacked = false;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		IF_TRUE_RETVAL(strlen(key) != INTEGRITY_HEXKEY_LEN, NULL);
+		crypto_key_len = 0;
+		integrity_key_len = INTEGRITY_HEXKEY_LEN;
+		encrypt = false;
 		integrity = true;
 		stacked = false;
 		break;
@@ -732,10 +743,15 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		}
 	}
 
-	if (!(crypto_blkdev = create_crypto_blk_dev(meta_blkdev ? integrity_blkdev : real_blkdev,
+	if (encrypt) {
+		if (!(crypto_blkdev =
+			      create_crypto_blk_dev(meta_blkdev ? integrity_blkdev : real_blkdev,
 						    crypto_key, label, fs_size, stacked))) {
-		ERROR("Could not create crypto block device");
-		goto error;
+			ERROR("Could not create crypto block device");
+			goto error;
+		}
+	} else {
+		crypto_blkdev = integrity_blkdev;
 	}
 
 	if (initial_format) {
@@ -785,7 +801,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	}
 	if (integrity_dev_label)
 		mem_free0(integrity_dev_label);
-	if (integrity_blkdev)
+	if (integrity_blkdev && integrity_blkdev != crypto_blkdev)
 		mem_free0(integrity_blkdev);
 
 	return crypto_blkdev;
@@ -814,16 +830,45 @@ error:
 }
 
 int
-cryptfs_delete_blk_dev(int fd, const char *name)
+cryptfs_delete_blk_dev(int fd, const char *name, cryptfs_mode_t mode)
 {
-	IF_TRUE_RETVAL_ERROR(delete_crypto_blk_dev(fd, name) < 0, -1);
+	bool encrypt, integrity;
 
-	char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
-	if (delete_integrity_blk_dev(integrity_dev_name) < 0) {
-		mem_free0(integrity_dev_name);
+	switch (mode) {
+	case CRYPTFS_MODE_AUTHENC:
+	case CRYPTFS_MODE_INTEGRITY_ENCRYPT:
+		encrypt = true;
+		integrity = true;
+		break;
+	case CRYPTFS_MODE_ENCRYPT_ONLY:
+		encrypt = true;
+		integrity = false;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		encrypt = false;
+		integrity = true;
+		break;
+	default:
+		ERROR("Unsupported mode.");
 		return -1;
 	}
 
-	mem_free0(integrity_dev_name);
+	if (encrypt) {
+		if (delete_crypto_blk_dev(fd, name) < 0) {
+			ERROR("Failed to delete crypto dev: %s", name);
+			return -1;
+		}
+	}
+
+	if (integrity) {
+		char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
+		if (delete_integrity_blk_dev(integrity_dev_name) < 0) {
+			ERROR("Failed to delete integrity dev: %s", integrity_dev_name);
+			mem_free0(integrity_dev_name);
+			return -1;
+		}
+		mem_free0(integrity_dev_name);
+	}
+
 	return 0;
 }
