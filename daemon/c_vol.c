@@ -1097,9 +1097,9 @@ c_vol_cleanup_dm(c_vol_t *vol)
 
 		DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
 
-		if (!strcmp(type, "crypt")) {
-			if (cryptfs_delete_blk_dev(fd, label) < 0)
-				DEBUG("Could not delete dm-crypt dev %s", label);
+		if (!strcmp(type, "crypt") || !strcmp(type, "integrity")) {
+			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
+				DEBUG("Could not delete dm-%s dev %s", type, label);
 		} else if (!strcmp(type, "verity")) {
 			if (verity_delete_blk_dev(label) < 0)
 				DEBUG("Could not delete dm-verity dev %s", label);
@@ -1614,9 +1614,6 @@ c_vol_start_child_early(void *volp)
 		goto error;
 	}
 
-	// set device mapper mode for data integrity and encryption
-	c_vol_set_dm_mode(vol);
-
 	DEBUG("Mounting images");
 	if (c_vol_mount_images(vol) < 0) {
 		ERROR("Could not mount images for container start");
@@ -1636,6 +1633,18 @@ c_vol_start_child_early(void *volp)
 error:
 	ERROR("Failed to execute start child early hook for c_vol");
 	return -COMPARTMENT_ERROR_VOL;
+}
+
+static int
+c_vol_start_pre_clone(void *volp)
+{
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
+	// set device mapper mode for data integrity and encryption
+	c_vol_set_dm_mode(vol);
+
+	return 0;
 }
 
 static int
@@ -2019,7 +2028,7 @@ static compartment_module_t c_vol_module = {
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = c_vol_start_child_early,
-	.start_pre_clone = NULL,
+	.start_pre_clone = c_vol_start_pre_clone,
 	.start_post_clone = c_vol_start_post_clone,
 	.start_pre_exec = c_vol_start_pre_exec,
 	.start_post_exec = NULL,
