@@ -1109,7 +1109,12 @@ c_vol_cleanup_dm(c_vol_t *vol)
 		DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
 
 		if (!strcmp(type, "crypt")) {
-			if (cryptfs_delete_blk_dev(fd, label) < 0)
+			char *not_stacked_file = c_vol_meta_image_path_new(vol, mntent, ".not-stacked");
+			cryptfs_mode_t mode = file_exists(not_stacked_file) ?
+						CRYPTFS_MODE_INTEGRITY_ENCRYPT :
+						CRYPTFS_MODE_AUTHENC;
+			mem_free0(not_stacked_file);
+			if (cryptfs_delete_blk_dev(fd, label, mode) < 0)
 				DEBUG("Could not delete dm-crypt dev %s", label);
 		} else if (!strcmp(type, "verity")) {
 			if (verity_delete_blk_dev(label) < 0)
