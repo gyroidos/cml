@@ -632,7 +632,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	size_t crypto_key_len = 0, integrity_key_len = 0;
 	char *integrity_dev_label = NULL;
 	bool initial_format = false;
-	bool integrity = false, stacked = false;
+	bool encrypt = true, integrity = false, stacked = false;
 
 	/* do parameter validation */
 	IF_NULL_RETVAL_ERROR(label, NULL);
@@ -658,6 +658,13 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		crypto_key_len = CRYPTO_HEXKEY_LEN;
 		integrity_key_len = INTEGRITY_HEXKEY_LEN;
 		integrity = true;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		IF_TRUE_RETVAL(strlen(key) != INTEGRITY_HEXKEY_LEN, NULL);
+		crypto_key_len = 0;
+		integrity_key_len = INTEGRITY_HEXKEY_LEN;
+		integrity = true;
+		encrypt = false;
 		break;
 	default:
 		ERROR("Unsupported type and or parameter combination");
@@ -713,10 +720,14 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		}
 	}
 
-	if (!(crypto_blkdev = create_crypto_blk_dev(meta_blkdev ? integrity_blkdev : real_blkdev,
-						    crypto_key, label, fs_size, stacked))) {
-		ERROR("Could not create crypto block device");
-		goto error;
+	if (encrypt) {
+		if (!(crypto_blkdev = create_crypto_blk_dev(meta_blkdev ? integrity_blkdev : real_blkdev,
+							    crypto_key, label, fs_size, stacked))) {
+			ERROR("Could not create crypto block device");
+			goto error;
+		}
+	} else {
+		crypto_blkdev = integrity_blkdev;
 	}
 
 	if (initial_format) {
@@ -766,7 +777,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	}
 	if (integrity_dev_label)
 		mem_free0(integrity_dev_label);
-	if (integrity_blkdev)
+	if (integrity_blkdev && integrity_blkdev != crypto_blkdev)
 		mem_free0(integrity_blkdev);
 
 	return crypto_blkdev;
@@ -795,9 +806,32 @@ error:
 }
 
 int
-cryptfs_delete_blk_dev(int fd, const char *name)
+cryptfs_delete_blk_dev(int fd, const char *name, cryptfs_mode_t mode)
 {
-	IF_TRUE_RETVAL_ERROR(delete_crypto_blk_dev(fd, name) < 0, -1);
+	bool encrypt = true, integrity = false;
+
+	switch (mode) {
+	case CRYPTFS_MODE_AUTHENC:
+		integrity = true;
+		break;
+	case CRYPTFS_MODE_ENCRYPT_ONLY:
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ENCRYPT:
+		integrity = true;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		integrity = true;
+		encrypt = false;
+		break;
+	default:
+		ERROR("Unsupported mode.");
+		return -1;
+	}
+
+	if (encrypt)
+		IF_TRUE_RETVAL_ERROR(delete_crypto_blk_dev(fd, name) < 0, -1);
+
+	IF_FALSE_RETVAL_TRACE(integrity, 0);
 
 	char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
 	if (delete_integrity_blk_dev(integrity_dev_name) < 0) {

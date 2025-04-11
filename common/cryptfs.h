@@ -42,7 +42,8 @@
 typedef enum {
 	CRYPTFS_MODE_AUTHENC,
 	CRYPTFS_MODE_ENCRYPT_ONLY,
-	CRYPTFS_MODE_INTEGRITY_ENCRYPT
+	CRYPTFS_MODE_INTEGRITY_ENCRYPT,
+	CRYPTFS_MODE_INTEGRITY_ONLY
 } cryptfs_mode_t;
 
 /**
@@ -74,9 +75,10 @@ cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char
  *
  * @param fd The filedescriptor of the device
  * @param name The name of the device
+ * @param mode cryptfs mode which was used for the device with name 'name'
  * @return int 0 if successful, otherwise -1
  */
 int
-cryptfs_delete_blk_dev(int fd, const char *name);
+cryptfs_delete_blk_dev(int fd, const char *name, cryptfs_mode_t mode);
 
 #endif /* CRYPTFS_H */
