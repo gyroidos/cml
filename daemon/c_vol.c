@@ -1099,10 +1099,10 @@ c_vol_cleanup_dm(c_vol_t *vol)
 
 		if (!strcmp(type, "crypt") || !strcmp(type, "integrity")) {
 			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
-				DEBUG("Could not delete dm-%s dev %s", type, label);
+				WARN("Could not delete dm-%s dev %s", type, label);
 		} else if (!strcmp(type, "verity")) {
 			if (verity_delete_blk_dev(label) < 0)
-				DEBUG("Could not delete dm-verity dev %s", label);
+				WARN("Could not delete dm-verity dev %s", label);
 		}
 		mem_free0(label);
 		mem_free0(type);
