@@ -251,12 +251,12 @@ static char *
 create_device_node(const char *name)
 {
 	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
+	char *device = NULL;
 
 	int fd = open(DM_CONTROL, O_RDWR);
 	if (fd < 0) {
 		ERROR_ERRNO("Error opening devmapper");
-		mem_free0(buffer);
-		return NULL;
+		goto errout;
 	}
 
 	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
@@ -266,26 +266,28 @@ create_device_node(const char *name)
 		if (errno != ENXIO) {
 			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
 		}
-		mem_free0(buffer);
-		close(fd);
-		return NULL;
+		goto errout;
 	}
-	close(fd);
 
-	/* should not be necassery for android */
-	mkdir("/dev/block", 00777);
+	if (mkdir("/dev/block", 00777) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /dev/block");
+		goto errout;
+	}
 
-	char *device = cryptfs_get_device_path_new(name);
+	device = cryptfs_get_device_path_new(name);
 
 	if (mknod(device, S_IFBLK | 00777, io->dev) != 0 && errno != EEXIST) {
 		ERROR_ERRNO("Cannot mknod device %s", device);
-		mem_free0(buffer);
 		mem_free0(device);
-		return NULL;
 	} else if (errno == EEXIST) {
 		DEBUG("Device %s already exists, continuing", device);
 	}
+
+errout:
+
+	close(fd);
 	mem_free0(buffer);
+
 	return device;
 }
 
