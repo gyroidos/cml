@@ -1447,16 +1447,21 @@ c_vol_set_dm_mode(c_vol_t *vol)
 	const char *images_dir = container_get_images_dir(vol->container);
 	ASSERT(images_dir);
 
+	bool is_c0 = container_uuid_is_c0id(container_get_uuid(vol->container));
+
 	char *not_stacked_file = mem_printf("%s/not-stacked", images_dir);
 	if (file_exists(not_stacked_file)) {
-		TRACE("file exists %s -> CRYPTFS_MODE_INTEGRITY_ENCRYPT", not_stacked_file);
-		vol->mode = CRYPTFS_MODE_INTEGRITY_ENCRYPT;
+		TRACE("file exists %s %s", not_stacked_file,
+		      is_c0 ? "(c0) -> CRYPTFS_MODE_INTEGRITY_ONLY" :
+			      "-> CRYPTFS_MODE_INTEGRITY_ENCRYPT");
+		vol->mode = is_c0 ? CRYPTFS_MODE_INTEGRITY_ONLY : CRYPTFS_MODE_INTEGRITY_ENCRYPT;
 	} else if (container_images_dir_contains_image(vol->container)) {
 		TRACE("previous image files exists -> CRYPTFS_MODE_AUTHENC");
 		vol->mode = CRYPTFS_MODE_AUTHENC;
 	} else {
-		TRACE("new image files -> CRYPTFS_MODE_INTEGRITY_ENCRYPT");
-		vol->mode = CRYPTFS_MODE_INTEGRITY_ENCRYPT;
+		TRACE("new image files %s", is_c0 ? "(c0) -> CRYPTFS_MODE_INTEGRITY_ONLY" :
+						    "-> CRYPTFS_MODE_INTEGRITY_ENCRYPT");
+		vol->mode = is_c0 ? CRYPTFS_MODE_INTEGRITY_ONLY : CRYPTFS_MODE_INTEGRITY_ENCRYPT;
 		file_touch(not_stacked_file);
 	}
 	mem_free0(not_stacked_file);
