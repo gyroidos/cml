@@ -42,6 +42,7 @@
 #include "common/dir.h"
 #include "common/network.h"
 #include "common/reboot.h"
+#include "common/hex.h"
 #include "mount.h"
 #include "device_config.h"
 #include "device_id.h"
@@ -60,6 +61,7 @@
 #include "container.h"
 #include "input.h"
 #include "oci.h"
+#include "crypto.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -96,12 +98,14 @@
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
 /*
- * dummy key used for unecnrypted c0 and for reboots where the real key
- * is already in kernel
+ * dummy key used for unencrypted c0 (legacy dm ondisk format)
+ * and for reboots where the real key is already in kernel
  */
 #define DUMMY_KEY                                                                                  \
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
+#define CMLD_C0_KEY_BUF_SIZE 256
+#define CMLD_C0_KEY_LEN 32
 #define CMLD_C0_UUID "00000000-0000-0000-0000-000000000000"
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
@@ -1284,6 +1288,67 @@ out:
 }
 
 static int
+cmld_set_key_c0(container_t *new_c0)
+{
+	int ret = -1;
+
+	int c0_key_len;
+	char *c0_key, *c0_ascii_key;
+
+	char *c0_key_file = mem_printf("%s/%s.key", cmld_get_wrapped_keys_dir(), CMLD_C0_UUID);
+	if (file_exists(c0_key_file)) {
+		c0_key = mem_alloc0(CMLD_C0_KEY_BUF_SIZE);
+		c0_key_len = file_read(c0_key_file, c0_key, CMLD_C0_KEY_BUF_SIZE);
+		if (c0_key_len < CMLD_C0_KEY_LEN) {
+			ERROR("Failed to read key from %s for c0", c0_key_file);
+			goto out;
+		}
+	} else {
+		if (container_images_dir_contains_image(new_c0)) {
+			// set legacy mode where we used the dummy key for c0
+			c0_key_len = strlen(DUMMY_KEY) / 2;
+			c0_key = mem_alloc0(c0_key_len);
+			if (convert_hex_to_bin(DUMMY_KEY, strlen(DUMMY_KEY), (uint8_t *)c0_key,
+					       c0_key_len) < 0) {
+				ERROR("Failed to generate key for c0 (using legacy DUMMY_KEY)");
+				goto out;
+			}
+		} else {
+			// for new images we use a random key for integrity protection of c0
+			c0_key_len = CMLD_C0_KEY_LEN;
+			c0_key = mem_alloc0(c0_key_len);
+			int bytes_read = crypto_random_get_bytes((uint8_t *)c0_key, c0_key_len);
+			if (bytes_read != c0_key_len) {
+				ERROR("Failed to generate key for c0");
+				goto out;
+			}
+		}
+
+		int bytes_written = file_write(c0_key_file, c0_key, c0_key_len);
+		if (bytes_written != c0_key_len) {
+			ERROR("Failed to write c0 key to file, bytes written: %d", bytes_written);
+			goto out;
+		}
+	}
+
+	c0_ascii_key = convert_bin_to_hex_new((uint8_t *)c0_key, c0_key_len);
+	container_set_key(new_c0, c0_ascii_key);
+
+	mem_memset0(c0_key, c0_key_len);
+	mem_memset0(c0_ascii_key, strlen(c0_ascii_key));
+	mem_free0(c0_ascii_key);
+
+	ret = 0;
+
+out:
+	if (c0_key)
+		mem_free0(c0_key);
+	mem_free0(c0_key_file);
+
+	return ret;
+}
+
+static int
 cmld_start_c0(container_t *new_c0)
 {
 	IF_TRUE_RETVAL_TRACE(cmld_hostedmode, 0);
@@ -1306,7 +1371,8 @@ cmld_start_c0(container_t *new_c0)
 		return -1;
 	}
 
-	container_set_key(new_c0, DUMMY_KEY);
+	IF_TRUE_RETVAL_ERROR(cmld_set_key_c0(new_c0), -1);
+
 	if (container_start(new_c0)) {
 		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
 				uuid_string(container_get_uuid(new_c0)), 0);
