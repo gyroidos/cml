@@ -181,6 +181,12 @@ const char *
 container_get_images_dir(const container_t *container);
 
 /**
+ * Return true if the container images directory contains image files.
+ */
+bool
+container_images_dir_contains_image(const container_t *container);
+
+/**
  * Get the container config filename.
  */
 const char *
