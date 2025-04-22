@@ -549,6 +549,20 @@ container_get_images_dir(const container_t *container)
 }
 
 static int
+container_images_exist_cb(UNUSED const char *path, const char *name, UNUSED void *data)
+{
+	int len = strlen(name);
+	return (len >= 4 && !strcmp(name + len - 4, ".img")) ? 1 : 0;
+}
+
+bool
+container_images_dir_contains_image(const container_t *container)
+{
+	ASSERT(container);
+	return dir_foreach(container->images_dir, container_images_exist_cb, NULL) > 0;
+}
+
+static int
 container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 {
 	ASSERT(data);
