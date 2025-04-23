@@ -40,6 +40,7 @@
  * Mode of encryption/integrity setup which should be used
  */
 typedef enum {
+	CRYPTFS_MODE_NOT_IMPLEMENTED = 1,
 	CRYPTFS_MODE_AUTHENC,
 	CRYPTFS_MODE_ENCRYPT_ONLY,
 	CRYPTFS_MODE_INTEGRITY_ENCRYPT,
