@@ -36,6 +36,7 @@
 
 #include "container_module.h"
 
+#include "common/cryptfs.h"
 #include "common/uuid.h"
 #include "common/list.h"
 #include "compartment.h"
@@ -616,6 +617,12 @@ CONTAINER_MODULE_WRAPPER_DECLARE(get_rootdir, char *)
  * Returns a generic pointer to the mount table
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(get_mnt, void *)
+
+/**
+ * Returns the cryptfs mode which is used for the persistent data
+ * images of this container
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(get_cryptfs_mode, cryptfs_mode_t)
 
 /**
  * Returns the last ACK hash that has been received from this container
