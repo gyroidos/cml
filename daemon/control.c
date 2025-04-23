@@ -235,8 +235,8 @@ control_compartment_state_to_proto(compartment_state_t state)
 		FATAL("Unhandled value for compartment_state_t: %d", state);
 	}
 }
-/**
 
+/**
  * The usual identity map between two corresponding C and protobuf enums.
  */
 ContainerType
@@ -249,6 +249,28 @@ control_container_type_to_proto(container_type_t type)
 		return CONTAINER_TYPE__KVM;
 	default:
 		FATAL("Unhandled value for container_type_t: %d", type);
+	}
+}
+
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+CryptfsMode
+control_cryptfs_mode_to_proto(cryptfs_mode_t mode)
+{
+	switch (mode) {
+	case CRYPTFS_MODE_NOT_IMPLEMENTED:
+		return CRYPTFS_MODE__NOT_IMPLEMENTED;
+	case CRYPTFS_MODE_AUTHENC:
+		return CRYPTFS_MODE__AUTHENC;
+	case CRYPTFS_MODE_ENCRYPT_ONLY:
+		return CRYPTFS_MODE__ENCRYPT_ONLY;
+	case CRYPTFS_MODE_INTEGRITY_ENCRYPT:
+		return CRYPTFS_MODE__INTEGRITY_ENCRYPT;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		return CRYPTFS_MODE__INTEGRITY_ONLY;
+	default:
+		FATAL("Unhandled value for cryptfs_mode_t: %d", mode);
 	}
 }
 
@@ -288,6 +310,9 @@ control_container_status_new(const container_t *container)
 			c_status->trust_level = CONTAINER_TRUST__UNSIGNED;
 		}
 	}
+
+	c_status->cryptfs_mode =
+		control_cryptfs_mode_to_proto(container_get_cryptfs_mode(container));
 
 	return c_status;
 }
