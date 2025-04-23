@@ -2012,6 +2012,18 @@ c_vol_is_encrypted(void *volp)
 	return false;
 }
 
+static cryptfs_mode_t
+c_vol_get_mode(void *volp)
+{
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
+	// update internal mode variable if container did not run or was wiped
+	c_vol_set_dm_mode(vol);
+
+	return vol->mode;
+}
+
 static void
 c_vol_cleanup(void *volp, bool is_rebooting)
 {
@@ -2055,4 +2067,5 @@ c_vol_init(void)
 	container_register_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);
 	container_register_get_mnt_handler(MOD_NAME, c_vol_get_mnt);
 	container_register_is_encrypted_handler(MOD_NAME, c_vol_is_encrypted);
+	container_register_get_cryptfs_mode_handler(MOD_NAME, c_vol_get_mode);
 }
