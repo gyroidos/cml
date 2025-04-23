@@ -648,6 +648,9 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	IF_NULL_RETVAL_ERROR(key, NULL);
 
 	switch (mode) {
+	case CRYPTFS_MODE_NOT_IMPLEMENTED:
+		WARN("cyrptfs mode NOT_IMPLEMENTED! just returning real_blkdev %s!", real_blkdev);
+		return mem_strdup(real_blkdev);
 	case CRYPTFS_MODE_AUTHENC:
 		IF_NULL_RETVAL_ERROR(meta_blkdev, NULL);
 		crypto_key_len = strlen(key);
