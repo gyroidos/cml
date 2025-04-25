@@ -114,6 +114,22 @@ tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 	}
 }
 
+static int
+tpm2d_control_get_fdekeylen_from_proto(ControllerToTpm__FdeKeyType type)
+{
+	switch (type) {
+	case CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES128:
+		return 32;
+	case CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES192:
+		return 48;
+	case CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES256:
+		return 64;
+	default:
+		WARN("Unsupported value for FdeKeyType: %d, using default (XTS-AES256)", type);
+		return 64;
+	}
+}
+
 static void
 tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t *control)
 {
