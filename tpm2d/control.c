@@ -158,7 +158,9 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
 		out.code = TPM_TO_CONTROLLER__CODE__FDE_RESPONSE;
 		out.has_fde_response = true;
-		nvmcrypt_fde_state_t state = nvmcrypt_dm_setup(msg->dmcrypt_device, msg->password);
+		nvmcrypt_fde_state_t state = nvmcrypt_dm_setup(
+			msg->dmcrypt_device, msg->password,
+			tpm2d_control_get_fdekeylen_from_proto(msg->dmcrypt_key_type));
 		out.fde_response = tpm2d_control_fdestate_to_proto(state);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
