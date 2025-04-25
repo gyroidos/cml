@@ -242,6 +242,7 @@ tpm2d_init(void)
 #else
 	// initialize nvm_crypt_submodule
 	nvmcrypt_init(false);
+	no_setup_keys = true;
 #endif
 
 	mem_free0(session_dir);
