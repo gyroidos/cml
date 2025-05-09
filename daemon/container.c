@@ -549,6 +549,20 @@ container_get_images_dir(const container_t *container)
 }
 
 static int
+container_images_exist_cb(UNUSED const char *path, const char *name, UNUSED void *data)
+{
+	int len = strlen(name);
+	return (len >= 4 && !strcmp(name + len - 4, ".img")) ? 1 : 0;
+}
+
+bool
+container_images_dir_contains_image(const container_t *container)
+{
+	ASSERT(container);
+	return dir_foreach(container->images_dir, container_images_exist_cb, NULL) > 0;
+}
+
+static int
 container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 {
 	ASSERT(data);
@@ -970,6 +984,9 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_rootdir, char *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_rootdir, char *, NULL)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_mnt, void *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_mnt, void *, NULL)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_cryptfs_mode, cryptfs_mode_t, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_cryptfs_mode, cryptfs_mode_t,
+				       CRYPTFS_MODE_NOT_IMPLEMENTED)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_encrypted, bool, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(is_encrypted, bool, false)
 

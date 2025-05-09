@@ -211,7 +211,7 @@ err:
 }
 
 nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len)
 {
 	IF_TRUE_RETVAL(device_path == NULL || !file_exists(device_path), FDE_NO_DEVICE);
 	char *dev_name = basename(device_path);
@@ -219,12 +219,18 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 	uint8_t *key = nvmcrypt_load_key_new(fde_pw);
 	IF_NULL_RETVAL(key, fde_state);
 
+	// truncate key to provided max_key_len
+	size_t key_len = (0 < max_key_len) && (max_key_len < CRYPTFS_FDE_KEY_LEN) ?
+				 max_key_len :
+				 CRYPTFS_FDE_KEY_LEN;
+
 	// cryptfs_setup_volume_new expects an ascii string as key
-	char *ascii_key = convert_bin_to_hex_new(key, CRYPTFS_FDE_KEY_LEN);
+	char *ascii_key = convert_bin_to_hex_new(key, key_len);
 
 	INFO("Setting up crypto device mapping for %s to %s", device_path, dev_name);
 
-	char *mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key, NULL);
+	char *mapped_path = cryptfs_setup_volume_new(dev_name, device_path, ascii_key, NULL,
+						     CRYPTFS_MODE_ENCRYPT_ONLY);
 
 	if (mapped_path == NULL) {
 		ERROR("Failed to setup device mapping for %s", device_path);
@@ -232,6 +238,8 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw)
 	}
 
 	mem_free0(mapped_path);
+	mem_memset0(ascii_key, strlen(ascii_key));
+	mem_memset0(key, CRYPTFS_FDE_KEY_LEN);
 	mem_free0(ascii_key);
 	mem_free0(key);
 	return fde_state;

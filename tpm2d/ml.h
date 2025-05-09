@@ -26,6 +26,7 @@
 
 #include "tpm2d.h"
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 int
 ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
 			   size_t datahash_len);
@@ -53,5 +54,32 @@ ml_get_container_list_new(size_t *len);
  */
 void
 ml_container_list_free(MlContainerEntry **entries, size_t len);
+#else
+#include "common/macro.h"
+
+static inline int
+ml_measurement_list_append(UNUSED const char *filename, UNUSED TPM_ALG_ID algid,
+			   UNUSED const uint8_t *datahash, UNUSED size_t datahash_len)
+{
+	return 0;
+}
+
+static inline uint8_t *
+ml_get_ima_list_new(UNUSED size_t *len)
+{
+	return 0;
+}
+
+static inline MlContainerEntry **
+ml_get_container_list_new(UNUSED size_t *len)
+{
+	return NULL;
+}
+
+static inline void
+ml_container_list_free(UNUSED MlContainerEntry **entries, UNUSED size_t len)
+{
+}
+#endif /* TPM2D_NVMCRYPT_ONLY */
 
 #endif /* ML_H */

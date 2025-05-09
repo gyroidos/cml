@@ -26,6 +26,7 @@ DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
+NVMCRYPT_ONLY ?= n
 
 tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
@@ -33,7 +34,6 @@ tss_cflags := \
 
 LOCAL_CFLAGS := -std=gnu99 -I. -I.. -I../include -Icommon $(tss_cflags) -O2
 LOCAL_CFLAGS += -Wextra -Wformat -Wformat-security -fstack-protector-all -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -fpic -pie
-#LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
 ifeq ($(WCAST_ALIGN),y)
     LOCAL_CFLAGS += -Wcast-align
 endif
@@ -51,6 +51,9 @@ ifeq ($(AGGRESSIVE_WARNINGS),y)
     # pure builds are better than polluted builds.
     LOCAL_CFLAGS += -Werror
 endif
+ifeq ($(NVMCRYPT_ONLY),y)
+    LOCAL_CFLAGS += -DTPM2D_NVMCRYPT_ONLY
+endif
 ifeq ($(SANITIZERS),y)
     # if requested, we enable sanitization for easier debugging
     # this requires libasan libasan-static libubsan libubsan-static
@@ -63,15 +66,18 @@ SRC_FILES := \
 	attestation.pb-c.c \
 	tpm2d.pb-c.c \
 	control.c \
-	rcontrol.c \
 	tpm2_commands.c \
 	nvmcrypt.c \
-	ml.c \
 	ek.c \
 	tpm2-asn.c \
 	tpm2d.c \
 	tpm2d_write_openssl.c
 
+ifeq ($(NVMCRYPT_ONLY),n)
+SRC_FILES += \
+	rcontrol.c \
+	ml.c
+endif
 
 .PHONY: all
 all: tpm2d

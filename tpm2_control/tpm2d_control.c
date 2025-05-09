@@ -48,12 +48,18 @@ print_usage(const char *cmd)
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("\tdmcrypt_setup <device path> <passwd>\n\t\tSetup device mapper with tpm2d's internal disk encryption key, password for corresponding nvindex\n");
-	printf("\tdmcrypt_lock <passwd>\n\t\tLocks further dmsetup attampts by locking tpm2d's internal disk encryption key, password for corresponding nvindex\n");
+	printf("\tdmcrypt_setup [-l|--key_len <len>] <device path> [<passwd>]\n"
+	       "\t\tSetup device mapper with tpm2d's internal disk encryption key,\n"
+	       "\t\tpassword for corresponding nvindex,\n"
+	       "\t\tif -l is set, use len bytes of nvindex as key\n");
+	printf("\tdmcrypt_lock <passwd>\n"
+	       "\t\tLocks further dmsetup attampts by locking tpm2d's internal disk encryption key,\n"
+	       "\t\tpassword for corresponding nvindex\n");
 	printf("\texit\n\t\tStop TPM2D daemon\n");
-	printf("\tgetrandom <size>\n\t\tRequest some random date of size size from TPM\n");
+	printf("\tgetrandom <size>\n\t\tRequest some random data of size size from TPM\n");
 	printf("\tclear <passwd>\n\t\tClear TPM using lockout password\n");
-	printf("\tchange_owner <passwd> <new passwd>\n\t\tiChanges the password for the owner hierarchy of the TPM\n");
+	printf("\tchange_owner <passwd> <new passwd>\n"
+	       "\t\tChanges the password for the owner hierarchy of the TPM\n");
 	printf("\n");
 	exit(-1);
 }
@@ -92,6 +98,27 @@ static const struct option global_options[] = { { "socket", required_argument, 0
 						{ "help", no_argument, 0, 'h' },
 						{ 0, 0, 0, 0 } };
 
+static const struct option dmsetup_options[] = { { "key_len", required_argument, 0, 'l' },
+						 { 0, 0, 0, 0 } };
+
+static ControllerToTpm__FdeKeyType
+get_fde_key_type(int len)
+{
+	INFO("Get FdeKeyType for len: %d", len);
+
+	switch (len) {
+	case 32:
+		return CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES128;
+	case 48:
+		return CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES192;
+	case 64:
+		return CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES256;
+	default:
+		INFO("Unsupported len %d for FdeKeyType, using default (XTS-AES256)", len);
+		return CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES256;
+	}
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -116,8 +143,10 @@ main(int argc, char *argv[])
 	}
 
 	// need at least one more argument (i.e. command string)
-	if (optind >= argc)
+	if (optind >= argc) {
+		INFO("need at least one more argument (i.e. command string)");
 		print_usage(argv[0]);
+	}
 
 	// build ControllerToTpm message
 	ControllerToTpm msg = CONTROLLER_TO_TPM__INIT;
@@ -128,6 +157,25 @@ main(int argc, char *argv[])
 		msg.code = CONTROLLER_TO_TPM__CODE__DMCRYPT_SETUP;
 		if (optind >= argc)
 			print_usage(argv[0]);
+
+		optind--;
+		char **dm_argv = &argv[optind];
+		int dm_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     - 1 !=
+		     (c = getopt_long(dm_argc, dm_argv, "+l:", dmsetup_options, &option_index));) {
+			switch (c) {
+			case 'l':
+				msg.has_dmcrypt_key_type = true;
+				msg.dmcrypt_key_type = get_fde_key_type(atoi(optarg));
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
+		optind += argc - dm_argc; // adjust optind to be used with argv
 
 		msg.dmcrypt_device = argv[optind++];
 		if (optind < argc)

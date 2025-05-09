@@ -52,8 +52,14 @@
 
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
+#define AUTHENC_KEY_LEN 96
 #define CRYPTO_TYPE_AUTHENC "capi:authenc(hmac(sha256),xts(aes))-random"
 #define CRYPTO_TYPE "aes-xts-plain64"
+#define INTEGRITY_TYPE "hmac(sha256)"
+
+#define CRYPTO_HEXKEY_LEN 2 * CRYPTFS_FDE_KEY_LEN
+#define INTEGRITY_HEXKEY_LEN 2 * INTEGRITY_TAG_SIZE
+#define AUTHENC_HEXKEY_LEN 2 * AUTHENC_KEY_LEN
 
 /* taken from vold */
 #define DEVMAPPER_BUFFER_SIZE 4096
@@ -106,17 +112,23 @@ convert_key_to_hex_ascii(unsigned char *master_key, unsigned int keysize,
 
 static int
 load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta_blk_name,
-			     const char *name, int fs_size)
+			     const char *integrity_key_ascii, const char *name, int fs_size,
+			     bool stacked)
 {
 	// General variables
 	int ioctl_ret;
 
+	IF_TRUE_RETVAL_ERROR(!stacked && !integrity_key_ascii, -1);
+
 	// Load mapping variables
-	char mapping_buffer[DM_INTEGRITY_BUF_SIZE];
+	char *mapping_buffer = mem_new(char, DM_INTEGRITY_BUF_SIZE);
 	struct dm_target_spec *tgt;
 	struct dm_ioctl *mapping_io;
 	char *integrity_params;
-	char *extra_params = mem_printf("1 meta_device:%s", meta_blk_name);
+	char *extra_params =
+		stacked ? mem_printf("1 meta_device:%s", meta_blk_name) :
+			  mem_printf("3 meta_device:%s internal_hash:%s:%s allow_discards",
+				     meta_blk_name, INTEGRITY_TYPE, integrity_key_ascii);
 	int mapping_counter;
 
 	mapping_io = (struct dm_ioctl *)mapping_buffer;
@@ -162,6 +174,8 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 		NANOSLEEP(0, 500000000)
 	}
 
+	mem_free0(mapping_buffer);
+
 	// Check that loading the table worked
 	if (mapping_counter >= TABLE_LOAD_RETRIES) {
 		ERROR_ERRNO("Loading integrity mapping table did not work after %d tries",
@@ -175,7 +189,7 @@ static int
 load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_key_ascii,
 			  const char *name, int fs_size, bool integrity)
 {
-	char buffer[DM_CRYPT_BUF_SIZE];
+	char *buffer = mem_new(char, DM_CRYPT_BUF_SIZE);
 	struct dm_ioctl *io;
 	struct dm_target_spec *tgt;
 	char *crypt_params;
@@ -223,6 +237,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 		NANOSLEEP(0, 500000000)
 	}
 
+	mem_free0(buffer);
 	if (i == TABLE_LOAD_RETRIES) {
 		/* We failed to load the table, return an error */
 		ERROR_ERRNO("Loading crypto mapping table did not work after %d tries", i);
@@ -232,6 +247,50 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	}
 }
 
+static char *
+create_device_node(const char *name)
+{
+	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
+	char *device = NULL;
+
+	int fd = open(DM_CONTROL, O_RDWR);
+	if (fd < 0) {
+		ERROR_ERRNO("Error opening devmapper");
+		goto errout;
+	}
+
+	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
+
+	dm_ioctl_init(io, INDEX_DM_DEV_STATUS, DEVMAPPER_BUFFER_SIZE, name, NULL, 0, 0, 0, 0);
+	if (dm_ioctl(fd, DM_DEV_STATUS, io)) {
+		if (errno != ENXIO) {
+			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
+		}
+		goto errout;
+	}
+
+	if (mkdir("/dev/block", 00777) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir /dev/block");
+		goto errout;
+	}
+
+	device = cryptfs_get_device_path_new(name);
+
+	if (mknod(device, S_IFBLK | 00777, io->dev) != 0 && errno != EEXIST) {
+		ERROR_ERRNO("Cannot mknod device %s", device);
+		mem_free0(device);
+	} else if (errno == EEXIST) {
+		DEBUG("Device %s already exists, continuing", device);
+	}
+
+errout:
+
+	close(fd);
+	mem_free0(buffer);
+
+	return device;
+}
+
 /**
  * Creates an integrity block device with DM_DEV_CREATE ioctl, reloads the mapping
  * table with DM_TABLE_LOADE ioctl and resumes the device with DM_DEV_SUSPEND ioctl
@@ -239,11 +298,11 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
  * [1] https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/dm-integrity.html
  * [2] https://wiki.gentoo.org/wiki/Device-mapper#Integrity
  *
- * @return int 0 if successful, otherwise -1
+ * @return device name if successful, otherwise NULL
  */
-static int
-create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *name,
-			 const unsigned long fs_size)
+static char *
+create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *key,
+			 const char *name, const unsigned long fs_size, bool stacked)
 {
 	int fd;
 	int ioctl_ret;
@@ -251,10 +310,12 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	char create_buffer[DM_INTEGRITY_BUF_SIZE];
 	struct dm_ioctl *create_io;
 	int create_counter;
+	char *integrity_dev = NULL;
 
 	// Open device mapper
 	if ((fd = open(DM_CONTROL, O_RDWR)) < 0) {
 		ERROR_ERRNO("Cannot open device-mapper");
+		goto error;
 	}
 
 	// Create blk device
@@ -275,16 +336,17 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 
 	if (create_counter >= TABLE_LOAD_RETRIES) {
 		ERROR_ERRNO("Failed to create block device after %d tries", create_counter);
-		goto errout;
+		goto error;
 	}
 
 	// Load Integrity map table
 	DEBUG("Loading Integrity mapping table");
 
-	load_count = load_integrity_mapping_table(fd, real_blk_name, meta_blk_name, name, fs_size);
+	load_count = load_integrity_mapping_table(fd, real_blk_name, meta_blk_name, key, name,
+						  fs_size, stacked);
 	if (load_count < 0) {
 		ERROR("Error while loading mapping table");
-		goto errout;
+		goto error;
 	} else {
 		INFO("Loading integrity map took %d tries", load_count);
 	}
@@ -298,34 +360,42 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("Cannot resume the dm-integrity device (ioctl ret: %d, errno:%d)",
 			    ioctl_ret, errno);
-		goto errout;
+		goto error;
+	}
+
+	integrity_dev = create_device_node(name);
+	if (!integrity_dev) {
+		ERROR("Could not create device node (integrity)");
+		goto error;
+	} else {
+		DEBUG("Successfully created device node (integrity)");
 	}
 
 	close(fd);
-	return 0;
+	return integrity_dev;
 
-errout:
+error:
 	ERROR("Failed integrity block creation");
 	close(fd);
-	return -1;
+	return NULL;
 }
 
-static int
+static char *
 create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name,
 		      unsigned long fs_size, bool integrity)
 {
 	char buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
 	int fd;
-	int retval = -1;
 	int load_count;
 	int i;
 	int ioctl_ret;
+	char *crypto_blkdev = NULL;
 
 	DEBUG("Creating crypto blk device");
 	if ((fd = open(DM_CONTROL, O_RDWR)) < 0) {
 		ERROR("Cannot open device-mapper\n");
-		goto errout;
+		goto error;
 	}
 
 	io = (struct dm_ioctl *)buffer;
@@ -344,14 +414,14 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	if (i == TABLE_LOAD_RETRIES) {
 		/* We failed to load the table, return an error */
 		ERROR("Cannot create dm-crypt device");
-		goto errout;
+		goto error;
 	}
 
 	load_count =
 		load_crypto_mapping_table(fd, real_blk_name, master_key, name, fs_size, integrity);
 	if (load_count < 0) {
 		ERROR("Cannot load dm-crypt mapping table");
-		goto errout;
+		goto error;
 	} else if (load_count > 1) {
 		INFO("Took %d tries to load dmcrypt table.\n", load_count);
 	}
@@ -361,70 +431,34 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 
 	if (dm_ioctl(fd, DM_DEV_SUSPEND, io)) {
 		ERROR_ERRNO("Cannot resume the dm-crypt device\n");
-		goto errout;
+		goto error;
 	}
 
-	/* We made it here with no errors.  Woot! */
-	retval = 0;
-
-errout:
-	close(fd); /* If fd is <0 from a failed open call, it's safe to just ignore the close error */
-	DEBUG("Returning %d from create_crypte_bkl_dev", retval);
-	return retval;
-}
-
-/* TODO:
- * maybe we need to wait a bit before device is created
- */
-static char *
-create_device_node(const char *name)
-{
-	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
-
-	int fd = open(DM_CONTROL, O_RDWR);
-	if (fd < 0) {
-		ERROR_ERRNO("Error opening devmapper");
-		mem_free0(buffer);
-		return NULL;
+	crypto_blkdev = create_device_node(name);
+	if (!crypto_blkdev) {
+		ERROR("Could not create device node (crypt)");
+		goto error;
+	} else {
+		DEBUG("Successfully created device node (crypt)");
 	}
 
-	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
-
-	dm_ioctl_init(io, INDEX_DM_DEV_STATUS, DEVMAPPER_BUFFER_SIZE, name, NULL, 0, 0, 0, 0);
-	if (dm_ioctl(fd, DM_DEV_STATUS, io)) {
-		if (errno != ENXIO) {
-			ERROR_ERRNO("DM_DEV_STATUS ioctl failed for lookup");
-		}
-		mem_free0(buffer);
-		close(fd);
-		return NULL;
-	}
 	close(fd);
+	return crypto_blkdev;
 
-	/* should not be necassery for android */
-	mkdir("/dev/block", 00777);
-
-	char *device = cryptfs_get_device_path_new(name);
-
-	if (mknod(device, S_IFBLK | 00777, io->dev) != 0 && errno != EEXIST) {
-		ERROR_ERRNO("Cannot mknod device %s", device);
-		mem_free0(buffer);
-		mem_free0(device);
-		return NULL;
-	} else if (errno == EEXIST) {
-		DEBUG("Device %s already exists, continuing", device);
-	}
-	mem_free0(buffer);
-	return device;
+error:
+	close(fd); /* If fd is <0 from a failed open call, it's safe to just ignore the close error */
+	ERROR("Failed crypto block creation wiht name '%s'", name);
+	return NULL;
 }
 
 static int
 delete_integrity_blk_dev(const char *name)
 {
 	int fd;
-	char buffer[DM_INTEGRITY_BUF_SIZE];
+	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
 	struct dm_ioctl *io;
 	int ret = -1;
+	char *device = NULL;
 
 	fd = open(DM_CONTROL, O_RDWR);
 	if (fd < 0) {
@@ -438,21 +472,67 @@ delete_integrity_blk_dev(const char *name)
 	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
 		ret = errno;
 		if (errno != ENXIO)
-			ERROR_ERRNO("Cannot remove dm-integrity device");
+			ERROR_ERRNO("Cannot remove dm-integrity device '%s'", name);
 		goto error;
 	}
 
 	/* remove device node if necessary */
-	char *device = cryptfs_get_device_path_new(name);
+	device = cryptfs_get_device_path_new(name);
 	unlink(device);
-	mem_free0(device);
 
-	DEBUG("Successfully deleted dm-integrity device");
-	/* We made it here with no errors.  Woot! */
+	DEBUG("Successfully deleted dm-integrity device '%s'", name);
 	ret = 0;
 
 error:
+	if (device)
+		mem_free0(device);
+	mem_free(buffer);
 	close(fd);
+	return ret;
+}
+
+static int
+delete_crypto_blk_dev(int fd, const char *name)
+{
+	char *buffer = mem_new(char, DM_CRYPT_BUF_SIZE);
+	struct dm_ioctl *io;
+	int ret = -1;
+	char *device = NULL;
+	bool internally_opend = false;
+
+	if (fd == -1) {
+		fd = open(DM_CONTROL, O_RDWR);
+		internally_opend = true;
+	}
+	if (fd < 0) {
+		ERROR_ERRNO("Cannot open device-mapper");
+		goto error;
+	}
+
+	io = (struct dm_ioctl *)buffer;
+
+	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
+	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
+		ret = errno;
+		if (errno != ENXIO)
+			ERROR_ERRNO("Cannot remove dm-crypt device '%s'", name);
+		goto error;
+	}
+
+	/* remove device node if necessary */
+	device = cryptfs_get_device_path_new(name);
+	unlink(device);
+	mem_free0(device);
+
+	DEBUG("Successfully deleted dm-crypt device '%s'", name);
+	ret = 0;
+
+error:
+	if (device)
+		mem_free0(device);
+	mem_free(buffer);
+	if (internally_opend)
+		close(fd);
 	return ret;
 }
 
@@ -546,47 +626,135 @@ error:
 	return ret;
 }
 
-static char *
-cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
-				   const char *meta_blkdev, const char *key, unsigned long fs_size)
+char *
+cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key,
+			 const char *meta_blkdev, cryptfs_mode_t mode)
 {
+	int fd;
+	// The file system size in sectors
+	uint64_t fs_size;
+
+	bool encrypt, integrity, stacked;
+
+	char *crypto_blkdev = NULL, *integrity_blkdev = NULL;
+	char *crypto_key = NULL, *integrity_key = NULL;
+	size_t crypto_key_len = 0, integrity_key_len = 0;
+	char *integrity_dev_label = NULL;
 	bool initial_format = false;
-	char *crypto_blkdev = NULL, *integrity_dev = NULL;
-	char *integrity_dev_label = mem_printf("%s-%s", label, "integrity");
-	TRACE("cryptfs_setup_volume_integrity_new");
 
-	/* check if meta device is initialized */
-	initial_format = get_provided_data_sectors(meta_blkdev) != fs_size;
+	/* do parameter validation */
+	IF_NULL_RETVAL_ERROR(label, NULL);
+	IF_NULL_RETVAL_ERROR(real_blkdev, NULL);
+	IF_NULL_RETVAL_ERROR(key, NULL);
 
-	if (create_integrity_blk_dev(real_blkdev, meta_blkdev, integrity_dev_label, fs_size) < 0) {
-		DEBUG("create_integrity_blk_dev failed!");
-		mem_free0(integrity_dev_label);
+	switch (mode) {
+	case CRYPTFS_MODE_NOT_IMPLEMENTED:
+		WARN("cyrptfs mode NOT_IMPLEMENTED! just returning real_blkdev %s!", real_blkdev);
+		return mem_strdup(real_blkdev);
+	case CRYPTFS_MODE_AUTHENC:
+		IF_NULL_RETVAL_ERROR(meta_blkdev, NULL);
+		crypto_key_len = strlen(key);
+		if (strlen(key) != AUTHENC_HEXKEY_LEN) {
+			WARN("strlen(key) != AUTHENC_HEXKEY_LEN [%d]) using len=%zu",
+			     AUTHENC_HEXKEY_LEN, crypto_key_len);
+		}
+		integrity_key_len = 0;
+		encrypt = true;
+		integrity = true;
+		stacked = true;
+		break;
+	case CRYPTFS_MODE_ENCRYPT_ONLY:
+		crypto_key_len = strlen(key);
+		if (strlen(key) != CRYPTO_HEXKEY_LEN) {
+			WARN("strlen(key) != CRYPTO_HEXKEY_LEN [%d]) using len=%zu",
+			     CRYPTO_HEXKEY_LEN, crypto_key_len);
+		}
+		integrity_key_len = 0;
+		encrypt = true;
+		integrity = false;
+		stacked = false;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ENCRYPT:
+		IF_NULL_RETVAL_ERROR(meta_blkdev, NULL);
+		IF_TRUE_RETVAL(strlen(key) != CRYPTO_HEXKEY_LEN + INTEGRITY_HEXKEY_LEN, NULL);
+		crypto_key_len = CRYPTO_HEXKEY_LEN;
+		integrity_key_len = INTEGRITY_HEXKEY_LEN;
+		encrypt = true;
+		integrity = true;
+		stacked = false;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		IF_TRUE_RETVAL(strlen(key) != INTEGRITY_HEXKEY_LEN, NULL);
+		crypto_key_len = 0;
+		integrity_key_len = INTEGRITY_HEXKEY_LEN;
+		encrypt = false;
+		integrity = true;
+		stacked = false;
+		break;
+	default:
+		ERROR("Unsupported type and or parameter combination");
+		return NULL;
+	}
+	/* validated parameters */
+
+	/*
+	 * Use the first 128 hex digits (64 byte) of master key for 512 bit xts mode
+	 * or full master key for AUTHENC mode
+	 */
+	crypto_key = crypto_key_len > 0 ? mem_strndup(key, crypto_key_len) : NULL;
+
+	/* Use the following 64 hex digits (32 byte) of master key for 256 bit hmac */
+	integrity_key =
+		integrity_key_len > 0 ? mem_strndup(key + crypto_key_len, integrity_key_len) : NULL;
+
+	//DEBUG("KEYS:\n\t key:\t %s\n\t split:\t %s:%s", key, crypto_key ? crypto_key : "(null)",
+	//      integrity_key ? integrity_key : "(null)");
+
+	/* Update the fs_size field to be the size of the volume */
+	if ((fd = open(real_blkdev, O_RDONLY)) < 0) {
+		ERROR("Cannot open volume %s", real_blkdev);
 		goto error;
 	}
+	// BLKGETSIZE64 returns size in bytes, we require size in sectors
+	int sector_size = dm_get_blkdev_sector_size(fd);
+	if (!(sector_size > 0)) {
+		ERROR("dm_get_blkdev_sector_size returned %d\n", sector_size);
+		close(fd);
+		goto error;
+	}
+	fs_size = dm_get_blkdev_size64(fd) / sector_size;
+	close(fd);
 
-	integrity_dev = create_device_node(integrity_dev_label);
-	mem_free0(integrity_dev_label);
+	if (fs_size == 0) {
+		ERROR("Cannot get size of volume %s", real_blkdev);
+		goto error;
+	}
+	DEBUG("Crypto blk device size: %" PRIu64, fs_size);
 
-	if (!integrity_dev) {
-		ERROR("Could not create device node");
-		return NULL;
-	} else {
-		DEBUG("Successfully created device node");
+	if (integrity) {
+		integrity_dev_label = mem_printf("%s-%s", label, "integrity");
+		TRACE("Going to create integrity blk dev with label: %s", integrity_dev_label);
+
+		/* check if meta device is initialized */
+		initial_format = get_provided_data_sectors(meta_blkdev) != fs_size;
+
+		if (!(integrity_blkdev =
+			      create_integrity_blk_dev(real_blkdev, meta_blkdev, integrity_key,
+						       integrity_dev_label, fs_size, stacked))) {
+			ERROR("create_integrity_blk_dev '%s' failed!", integrity_dev_label);
+			goto error;
+		}
 	}
 
-	if (create_crypto_blk_dev(integrity_dev, key, label, fs_size, true) < 0) {
-		ERROR("Could not create crypto block device");
-		mem_free0(integrity_dev);
-		return NULL;
-	}
-
-	crypto_blkdev = create_device_node(label);
-	if (!crypto_blkdev) {
-		ERROR("Could not create device node");
-		mem_free0(integrity_dev);
-		return NULL;
+	if (encrypt) {
+		if (!(crypto_blkdev =
+			      create_crypto_blk_dev(meta_blkdev ? integrity_blkdev : real_blkdev,
+						    crypto_key, label, fs_size, stacked))) {
+			ERROR("Could not create crypto block device");
+			goto error;
+		}
 	} else {
-		DEBUG("Successfully created device node");
+		crypto_blkdev = integrity_blkdev;
 	}
 
 	if (initial_format) {
@@ -597,8 +765,8 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 		 * This is due to the block has to be read first than.
 		 */
 		DEBUG("Formatting crypto blkdev %s. Generating initial MAC on "
-		      "integrity_dev %s",
-		      crypto_blkdev, integrity_dev);
+		      "integrity blkdev %s",
+		      crypto_blkdev, integrity_blkdev);
 
 		if (0 != cryptfs_write_zeros(crypto_blkdev, fs_size * 512)) {
 			WARN("Failed to format volume %s using calloc, falling back to stack-allocated buffer",
@@ -622,97 +790,88 @@ cryptfs_setup_volume_integrity_new(const char *label, const char *real_blkdev,
 			}
 			close(fd);
 
-			DEBUG("Successfully formated volume %s using file_copy", crypto_blkdev);
+			DEBUG("Successfully formatted volume %s using file_copy", crypto_blkdev);
 		}
 	}
+
+	if (crypto_key) {
+		mem_memset0(crypto_key, crypto_key_len);
+		mem_free0(crypto_key);
+	}
+	if (integrity_key) {
+		mem_memset0(integrity_key, integrity_key_len);
+		mem_free0(integrity_key);
+	}
+	if (integrity_dev_label)
+		mem_free0(integrity_dev_label);
+	if (integrity_blkdev && integrity_blkdev != crypto_blkdev)
+		mem_free0(integrity_blkdev);
+
 	return crypto_blkdev;
+
 error:
-	mem_free0(crypto_blkdev);
-	mem_free0(integrity_dev);
+	if (crypto_key) {
+		mem_memset0(crypto_key, crypto_key_len);
+		mem_free0(crypto_key);
+	}
+	if (integrity_key) {
+		mem_memset0(integrity_key, integrity_key_len);
+		mem_free0(integrity_key);
+	}
+	if (integrity_dev_label)
+		mem_free0(integrity_dev_label);
+	if (integrity_blkdev) {
+		delete_integrity_blk_dev(label);
+		mem_free0(integrity_blkdev);
+	}
+	if (crypto_blkdev) {
+		delete_crypto_blk_dev(-1, label);
+		mem_free0(crypto_blkdev);
+	}
+
 	return NULL;
 }
 
-char *
-cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key,
-			 const char *meta_blkdev)
-{
-	int fd;
-	// The file system size in sectors
-	uint64_t fs_size;
-
-	/* Update the fs_size field to be the size of the volume */
-	if ((fd = open(real_blkdev, O_RDONLY)) < 0) {
-		ERROR("Cannot open volume %s", real_blkdev);
-		return NULL;
-	}
-	// BLKGETSIZE64 returns size in bytes, we require size in sectors
-	int sector_size = dm_get_blkdev_sector_size(fd);
-	if (!(sector_size > 0)) {
-		ERROR("dm_get_blkdev_sector_size returned %d\n", sector_size);
-		return NULL;
-	}
-	fs_size = dm_get_blkdev_size64(fd) / sector_size;
-	close(fd);
-
-	if (fs_size == 0) {
-		ERROR("Cannot get size of volume %s", real_blkdev);
-		return NULL;
-	}
-	DEBUG("Crypto blk device size: %" PRIu64, fs_size);
-
-	if (meta_blkdev)
-		return cryptfs_setup_volume_integrity_new(label, real_blkdev, meta_blkdev, key,
-							  fs_size);
-
-	// do dmcrypt device setup only
-
-	/* Use only the first 64 hex digits of master key for 512 bit xts mode */
-	IF_TRUE_RETVAL(strlen(key) < CRYPTFS_FDE_KEY_LEN, NULL);
-	char enc_key[CRYPTFS_FDE_KEY_LEN + 1];
-	memcpy(enc_key, key, CRYPTFS_FDE_KEY_LEN);
-	enc_key[CRYPTFS_FDE_KEY_LEN] = '\0';
-
-	if (create_crypto_blk_dev(real_blkdev, enc_key, label, fs_size, false) < 0)
-		return NULL;
-
-	return create_device_node(label);
-}
-
 int
-cryptfs_delete_blk_dev(int fd, const char *name)
+cryptfs_delete_blk_dev(int fd, const char *name, cryptfs_mode_t mode)
 {
-	char buffer[DM_CRYPT_BUF_SIZE];
-	struct dm_ioctl *io;
-	int ret = -1;
+	bool encrypt, integrity;
 
-	io = (struct dm_ioctl *)buffer;
-
-	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
-	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
-		ret = errno;
-		if (errno != ENXIO)
-			ERROR_ERRNO("Cannot remove dm-crypt device");
-		goto error;
+	switch (mode) {
+	case CRYPTFS_MODE_AUTHENC:
+	case CRYPTFS_MODE_INTEGRITY_ENCRYPT:
+		encrypt = true;
+		integrity = true;
+		break;
+	case CRYPTFS_MODE_ENCRYPT_ONLY:
+		encrypt = true;
+		integrity = false;
+		break;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		encrypt = false;
+		integrity = true;
+		break;
+	default:
+		ERROR("Unsupported mode.");
+		return -1;
 	}
 
-	/* remove device node if necessary */
-	char *device = cryptfs_get_device_path_new(name);
-	unlink(device);
-	mem_free0(device);
+	if (encrypt) {
+		if (delete_crypto_blk_dev(fd, name) < 0) {
+			ERROR("Failed to delete crypto dev: %s", name);
+			return -1;
+		}
+	}
 
-	DEBUG("Successfully deleted dm-crypt device");
-
-	char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
-	if (delete_integrity_blk_dev(integrity_dev_name) < 0) {
+	if (integrity) {
+		char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
+		if (delete_integrity_blk_dev(integrity_dev_name) < 0) {
+			ERROR("Failed to delete integrity dev: %s", integrity_dev_name);
+			mem_free0(integrity_dev_name);
+			return -1;
+		}
 		mem_free0(integrity_dev_name);
-		goto error;
 	}
 
-	mem_free0(integrity_dev_name);
-
-	/* We made it here with no errors.  Woot! */
-	ret = 0;
-
-error:
-	return ret;
+	return 0;
 }

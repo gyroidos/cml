@@ -73,7 +73,7 @@ libcommon:
 $(SRC_FILES): protobuf
 
 tpm2_control: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -Lcommon -lcommon_full -o tpm2_control
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -Lcommon -lcommon_full -lprotobuf-c -lprotobuf-c-text -o tpm2_control
 
 .PHONY: clean
 clean:

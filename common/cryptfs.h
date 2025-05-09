@@ -37,6 +37,17 @@
 #define CRYPTFS_FDE_KEY_LEN 64
 
 /**
+ * Mode of encryption/integrity setup which should be used
+ */
+typedef enum {
+	CRYPTFS_MODE_NOT_IMPLEMENTED = 1,
+	CRYPTFS_MODE_AUTHENC,
+	CRYPTFS_MODE_ENCRYPT_ONLY,
+	CRYPTFS_MODE_INTEGRITY_ENCRYPT,
+	CRYPTFS_MODE_INTEGRITY_ONLY
+} cryptfs_mode_t;
+
+/**
  * Get the full path of a cryptfs device with the specified name
  *
  * @param label The name to get the path for
@@ -52,20 +63,23 @@ cryptfs_get_device_path_new(const char *label);
  * @param real_blk_dev The name of the loop device
  * @param ascii_key The key for the volume
  * @param meta_blk_dev The meta loop device
+ * @param mode mode used for encryption, e.g. stacked use of dm-crypt on dm-integrity
+ *     with AEAD algorithm or individual dm-integrity and dm-crypt usage.
  * @return char* The path of the newly created volume
  */
 char *
 cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key,
-			 const char *meta_blk_dev);
+			 const char *meta_blk_dev, cryptfs_mode_t mode);
 
 /**
  * Close a device-mapper volume
  *
  * @param fd The filedescriptor of the device
  * @param name The name of the device
+ * @param mode cryptfs mode which was used for the device with name 'name'
  * @return int 0 if successful, otherwise -1
  */
 int
-cryptfs_delete_blk_dev(int fd, const char *name);
+cryptfs_delete_blk_dev(int fd, const char *name, cryptfs_mode_t mode);
 
 #endif /* CRYPTFS_H */

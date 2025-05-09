@@ -36,6 +36,7 @@
 
 #include "container_module.h"
 
+#include "common/cryptfs.h"
 #include "common/uuid.h"
 #include "common/list.h"
 #include "compartment.h"
@@ -179,6 +180,12 @@ container_is_startable(container_t *container);
  */
 const char *
 container_get_images_dir(const container_t *container);
+
+/**
+ * Return true if the container images directory contains image files.
+ */
+bool
+container_images_dir_contains_image(const container_t *container);
 
 /**
  * Get the container config filename.
@@ -610,6 +617,12 @@ CONTAINER_MODULE_WRAPPER_DECLARE(get_rootdir, char *)
  * Returns a generic pointer to the mount table
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(get_mnt, void *)
+
+/**
+ * Returns the cryptfs mode which is used for the persistent data
+ * images of this container
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(get_cryptfs_mode, cryptfs_mode_t)
 
 /**
  * Returns the last ACK hash that has been received from this container
