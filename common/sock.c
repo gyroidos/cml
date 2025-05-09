@@ -35,6 +35,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h> // inet_addr
 #include <netdb.h>
+#include <sys/stat.h>
 
 #define MAKE_SOCKADDR_UN(addr, path)                                                               \
 	struct sockaddr_un addr = { .sun_family = AF_UNIX };                                       \
