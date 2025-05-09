@@ -35,6 +35,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h> // inet_addr
 #include <netdb.h>
+#include <sys/stat.h>
 
 #define MAKE_SOCKADDR_UN(addr, path)                                                               \
 	struct sockaddr_un addr = { .sun_family = AF_UNIX };                                       \
@@ -54,6 +55,12 @@ sock_unix_bind(int sock, const char *path)
 	int res = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
 	if (-1 == res)
 		WARN_ERRNO("Failed to bind UNIX socket to %s.", path);
+
+	mode_t socket_permissions = S_IRUSR | S_IWUSR | S_IXUSR;
+	res = chmod(path, socket_permissions);
+	if (-1 == res)
+		WARN_ERRNO("Failed to change UNIX socket (%s) permissions to %3o.", path,
+			   socket_permissions & 0777);
 	return res;
 }
 
