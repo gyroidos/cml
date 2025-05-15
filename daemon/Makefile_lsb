@@ -43,6 +43,7 @@ install:
 	install -m 0644 guestos.proto ${DESTDIR}${DATADIR}/doc/cml/
 ifeq ($(SYSTEMD), y)
 	install -d ${DESTDIR}${LIBDIR}/systemd/system/
+	sed "s|{{PREFIX}}|${PREFIX}|g" systemd/cmld.service.template > systemd/cmld.service
 	install -m 0644 systemd/cmld.service ${DESTDIR}${LIBDIR}/systemd/system/
 	install -m 0644 systemd/cmld.socket ${DESTDIR}${LIBDIR}/systemd/system/
 else

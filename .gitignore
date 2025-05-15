@@ -10,6 +10,7 @@ tags
 *.a
 /control/control
 /daemon/cmld
+/daemon/systemd/cmld.service
 /scd/scd
 /service/cml-service-container
 /service/cml-service-container-static
