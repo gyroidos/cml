@@ -29,19 +29,22 @@ LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" \
 		-DSCD_BINARY_NAME=\"cml-scd\"
 		-DTPM2D_BINARY_NAME=\"cml-tpm2d\"
 
-SBINDIR := /usr/sbin
+PREFIX ?= /usr
+SBINDIR := ${PREFIX}/sbin
+LIBDIR := ${PREFIX}/lib
+DATADIR := ${PREFIX}/share
 install:
 	install -d ${DESTDIR}${SBINDIR}
 	install cmld ${DESTDIR}${SBINDIR}/
 	install -d ${DESTDIR}/var/lib/cml
 	install -d ${DESTDIR}/etc/cml
 	echo "hostedmode: true\ntpm_enabled: false" >> ${DESTDIR}/etc/cml/device.conf
-	install -d ${DESTDIR}/usr/share/doc/cml
-	install -m 0644 guestos.proto ${DESTDIR}/usr/share/doc/cml/
+	install -d ${DESTDIR}${DATADIR}/doc/cml
+	install -m 0644 guestos.proto ${DESTDIR}${DATADIR}/doc/cml/
 ifeq ($(SYSTEMD), y)
-	install -d ${DESTDIR}/lib/systemd/system/
-	install -m 0644 systemd/cmld.service ${DESTDIR}/lib/systemd/system/
-	install -m 0644 systemd/cmld.socket ${DESTDIR}/lib/systemd/system/
+	install -d ${DESTDIR}${LIBDIR}/systemd/system/
+	install -m 0644 systemd/cmld.service ${DESTDIR}${LIBDIR}/systemd/system/
+	install -m 0644 systemd/cmld.socket ${DESTDIR}${LIBDIR}/systemd/system/
 else
 	install -d ${DESTDIR}/etc/init.d
 	install init.d/cmld ${DESTDIR}/etc/init.d/

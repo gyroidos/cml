@@ -23,7 +23,8 @@
 
 include Makefile
 
-SBINDIR := /usr/sbin
+PREFIX ?= /usr
+SBINDIR := ${PREFIX}/sbin
 install:
 	install -d ${DESTDIR}${SBINDIR}
 	install cml-service-container-static ${DESTDIR}${SBINDIR}/

@@ -27,14 +27,16 @@ LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" \
 		-DLOGFILE_DIR=\"/var/log/cml\" \
 		-DDEFAULT_CONF_BASE_PATH=\"/etc/cml\"
 
-SBINDIR := /usr/sbin
+PREFIX ?= /usr
+SBINDIR := ${PREFIX}/sbin
+LIBDIR := ${PREFIX}/lib
 install:
 	install -d ${DESTDIR}${SBINDIR}
 	install scd ${DESTDIR}${SBINDIR}/cml-scd
 ifeq ($(SYSTEMD), y)
-	install -d ${DESTDIR}/lib/systemd/system/
-	install -m 0644 systemd/cml-scd.service ${DESTDIR}/lib/systemd/system/
-	install -m 0644 systemd/cml-scd.socket ${DESTDIR}/lib/systemd/system/
+	install -d ${DESTDIR}${LIBDIR}/systemd/system/
+	install -m 0644 systemd/cml-scd.service ${DESTDIR}${LIBDIR}/systemd/system/
+	install -m 0644 systemd/cml-scd.socket ${DESTDIR}${LIBDIR}/systemd/system/
 else
 	install -d ${DESTDIR}/etc/init.d
 	install init.d/cml-scd ${DESTDIR}/etc/init.d/
