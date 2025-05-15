@@ -27,8 +27,8 @@ LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" \
 		-DLOGFILE_DIR=\"/var/log/cml\" \
 		-DDEFAULT_CONF_BASE_PATH=\"/etc/cml\"
 
-SBINDIR := /usr/sbin
-
+PREFIX ?= /usr
+SBINDIR := ${PREFIX}/sbin
 install:
 	install -d ${DESTDIR}${SBINDIR}
 	install tpm2d ${DESTDIR}${SBINDIR}/
