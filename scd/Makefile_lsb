@@ -35,6 +35,7 @@ install:
 	install scd ${DESTDIR}${SBINDIR}/cml-scd
 ifeq ($(SYSTEMD), y)
 	install -d ${DESTDIR}${LIBDIR}/systemd/system/
+	sed "s|{{PREFIX}}|${PREFIX}|g" systemd/cml-scd.service.template > systemd/cml-scd.service
 	install -m 0644 systemd/cml-scd.service ${DESTDIR}${LIBDIR}/systemd/system/
 	install -m 0644 systemd/cml-scd.socket ${DESTDIR}${LIBDIR}/systemd/system/
 else

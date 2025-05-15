@@ -12,6 +12,7 @@ tags
 /daemon/cmld
 /daemon/systemd/cmld.service
 /scd/scd
+/scd/systemd/cml-scd.service
 /service/cml-service-container
 /service/cml-service-container-static
 /control/cc_mode
