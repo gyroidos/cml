@@ -6,5 +6,5 @@ Requires=cml-scd.socket
 
 [Service]
 Type=exec
-ExecStart=/usr/sbin/cml-scd
+ExecStart={{PREFIX}}/sbin/cml-scd
 NonBlocking=true
