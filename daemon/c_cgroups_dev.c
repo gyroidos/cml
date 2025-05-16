@@ -701,7 +701,8 @@ c_cgroups_dev_assign(void *cgroups_devp, const char *rule)
 
 	// regenerate bpf prog and update for running containers only
 	compartment_state_t state = container_get_state(cgroups_dev->container);
-	if (state != COMPARTMENT_STATE_BOOTING && state != COMPARTMENT_STATE_RUNNING)
+	if (state != COMPARTMENT_STATE_STARTING && state != COMPARTMENT_STATE_BOOTING &&
+	    state != COMPARTMENT_STATE_RUNNING)
 		return 0;
 
 	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->denied_devs,

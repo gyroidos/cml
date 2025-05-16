@@ -82,7 +82,7 @@ struct event_timer {
 	struct timespec diff;	  /**< interval, relative value */
 	struct timespec next;	  /**< next timeout, absolute value */
 	int repeat;		  /**< how often to repeat, -1 means repeat indefinitely */
-	int repeated;		  /**< how often the timer already expired */
+	int repeated;		  /**< how many repetitions the timer has left */
 };
 
 struct event_io {
