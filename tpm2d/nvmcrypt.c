@@ -32,6 +32,7 @@
 #include "common/mem.h"
 #include "common/file.h"
 #include "common/cryptfs.h"
+#include "common/hex.h"
 
 static nvmcrypt_fde_state_t fde_state = FDE_RESET;
 static bool secure_boot = false;

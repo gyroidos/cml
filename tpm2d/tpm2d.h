@@ -85,19 +85,6 @@ void
 tss2_destroy(void);
 
 /**
- * Helper function to convert a binary buffer to an hex string
- *
- * This function allocates a new buffer containing the
- * resulting hex representation containing a terminating '\0'
- * of the binary buffer.
- *
- * @param bin binary buffer
- * @param length of the binary buffer
- */
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length);
-
-/**
  * Helper function to convert a hex string into binary
  *
  * This function allocates a new buffer containing the

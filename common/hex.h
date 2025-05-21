@@ -31,6 +31,6 @@ int
 convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
 char *
-convert_bin_to_hex_new(const uint8_t *bin, int length);
+convert_bin_to_hex_new(const uint8_t *bin, int len_bytes);
 
 #endif // HEX_H_

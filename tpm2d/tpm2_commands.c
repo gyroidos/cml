@@ -81,22 +81,6 @@ tss2_destroy(void)
 	tss_context = NULL;
 }
 
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
-{
-	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
-	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
-	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
-	char *hex = mem_alloc0(len);
-
-	for (int i = 0; i < length; ++i) {
-		// remember snprintf additionally writs a '0' byte
-		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
-	}
-
-	return hex;
-}
-
 uint8_t *
 convert_hex_to_bin_new(const char *hex_str, int *out_length)
 {
