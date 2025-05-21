@@ -78,16 +78,16 @@ convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen)
 }
 
 char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
+convert_bin_to_hex_new(const uint8_t *bin, int len_bytes)
 {
-	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
-	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
-	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
-	char *hex = mem_alloc0(len);
+	size_t len_hex = MUL_WITH_OVERFLOW_CHECK(len_bytes, (size_t)2);
+	len_hex = MUL_WITH_OVERFLOW_CHECK(len_hex, sizeof(char));
+	len_hex = ADD_WITH_OVERFLOW_CHECK(len_hex, 1);
+	char *hex = mem_alloc0(len_hex);
 
-	for (int i = 0; i < length; ++i) {
+	for (int i = 0; i < len_bytes; i++) {
 		// remember snprintf additionally writes a '0' byte
-		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
+		snprintf(hex + (i * 2), 3, "%.2x", bin[i]);
 	}
 
 	return hex;

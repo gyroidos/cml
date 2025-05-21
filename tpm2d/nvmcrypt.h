@@ -72,12 +72,12 @@ nvmcrypt_init(bool use_secure_boot_policy);
  * nvram and binding the autorization to the given fde_pw.
  *
  *  @param device_path path to the real blockdevice
- *  @param max_key_len truncate to provided key len
+ *  @param max_key_len truncate to provided key len in bytes
  *  @param fde_pw password which will authorize the access to the
  *  		real key stored inside an nvindex of the TPM.
  */
 nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len);
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len_bytes);
 
 /**
  * This function locks the nvm key inside the TPM for further reading
