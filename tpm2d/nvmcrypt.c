@@ -212,7 +212,7 @@ err:
 }
 
 nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len)
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len_bytes)
 {
 	IF_TRUE_RETVAL(device_path == NULL || !file_exists(device_path), FDE_NO_DEVICE);
 	char *dev_name = basename(device_path);
@@ -220,13 +220,14 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len)
 	uint8_t *key = nvmcrypt_load_key_new(fde_pw);
 	IF_NULL_RETVAL(key, fde_state);
 
-	// truncate key to provided max_key_len
-	size_t key_len = (0 < max_key_len) && (max_key_len < CRYPTFS_FDE_KEY_LEN) ?
-				 max_key_len :
-				 CRYPTFS_FDE_KEY_LEN;
+	// truncate key to provided max_key_len_bytes
+	size_t key_len_bytes =
+		(0 < max_key_len_bytes) && (max_key_len_bytes < CRYPTFS_FDE_KEY_LEN) ?
+			max_key_len_bytes :
+			CRYPTFS_FDE_KEY_LEN;
 
 	// cryptfs_setup_volume_new expects an ascii string as key
-	char *ascii_key = convert_bin_to_hex_new(key, key_len);
+	char *ascii_key = convert_bin_to_hex_new(key, key_len_bytes);
 
 	INFO("Setting up crypto device mapping for %s to %s", device_path, dev_name);
 

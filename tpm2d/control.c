@@ -116,15 +116,15 @@ tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 }
 
 static int
-tpm2d_control_get_fdekeylen_from_proto(ControllerToTpm__FdeKeyType type)
+tpm2d_control_get_fdekeylen_bytes_from_proto(ControllerToTpm__FdeKeyType type)
 {
 	switch (type) {
 	case CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES128:
-		return 32;
+		return 16;
 	case CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES192:
-		return 48;
+		return 24;
 	case CONTROLLER_TO_TPM__FDE_KEY_TYPE__XTS_AES256:
-		return 64;
+		return 32;
 	default:
 		WARN("Unsupported value for FdeKeyType: %d, using default (XTS-AES256)", type);
 		return 64;
@@ -161,7 +161,7 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		out.has_fde_response = true;
 		nvmcrypt_fde_state_t state = nvmcrypt_dm_setup(
 			msg->dmcrypt_device, msg->password,
-			tpm2d_control_get_fdekeylen_from_proto(msg->dmcrypt_key_type));
+			tpm2d_control_get_fdekeylen_bytes_from_proto(msg->dmcrypt_key_type));
 		out.fde_response = tpm2d_control_fdestate_to_proto(state);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;

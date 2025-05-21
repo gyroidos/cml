@@ -26,6 +26,7 @@
 #include "common/mem.h"
 #include "common/macro.h"
 #include "common/file.h"
+#include "common/hex.h"
 
 #include <ibmtss/tss.h>
 #include <ibmtss/tssutils.h>
