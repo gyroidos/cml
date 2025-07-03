@@ -50,6 +50,8 @@
 int
 sock_unix_bind(int sock, const char *path)
 {
+	IF_NULL_RETVAL(path, -1);
+
 	unlink(path);
 	MAKE_SOCKADDR_UN(addr, path);
 	int res = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
