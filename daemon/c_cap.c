@@ -84,7 +84,6 @@ c_cap_set_current_process(void *capp)
 	///* 7 */ C_CAP_DROP(CAP_SETUID); /* does NOT work */
 
 	/* 9 */ C_CAP_DROP(CAP_LINUX_IMMUTABLE);
-	/* 14 */ C_CAP_DROP(CAP_IPC_LOCK);
 	/* 15 */ C_CAP_DROP(CAP_IPC_OWNER);
 	if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(cap->compartment)))
 		/* 16 */ C_CAP_DROP(CAP_SYS_MODULE);
@@ -114,6 +113,7 @@ c_cap_set_current_process(void *capp)
 		return 0;
 
 	/* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
+	/* 14 */ C_CAP_DROP(CAP_IPC_LOCK);
 
 	/* Use the following for dropping caps only in unprivileged containers */
 	if (!container_is_privileged(container) &&
