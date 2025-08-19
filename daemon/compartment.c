@@ -485,8 +485,11 @@ compartment_init_env_prepend(compartment_t *compartment, char **init_env, size_t
 	IF_TRUE_RETURN(init_env == NULL || init_env_len <= 0);
 
 	// construct a NULL terminated env buffer for execve
+	// If comparment->init_env_len was initialized by a previous call to this function
+	// (i.e. is not zero) do subtract the trailing NULL pointer from the length
 	size_t total_len;
-	if (__builtin_add_overflow(compartment->init_env_len, init_env_len, &total_len)) {
+	if (__builtin_add_overflow(compartment->init_env_len ? compartment->init_env_len - 1 : 0,
+				   init_env_len, &total_len)) {
 		WARN("Overflow detected when calculating buffer size for compartment's env");
 		return;
 	}
@@ -500,13 +503,11 @@ compartment_init_env_prepend(compartment_t *compartment, char **init_env, size_t
 	size_t i = 0;
 	for (; i < init_env_len; i++)
 		compartment->init_env[i] = mem_strdup(init_env[i]);
-	for (size_t j = 0; j < compartment->init_env_len; ++j)
-		compartment->init_env[i + j] = mem_strdup(init_env_old[j]);
 
 	if (init_env_old) {
-		for (char **arg = init_env_old; *arg; arg++) {
-			mem_free0(*arg);
-		}
+		// append init_env_old items to new init_env
+		for (char **arg = init_env_old; *arg; arg++, i++)
+			compartment->init_env[i] = *arg;
 		mem_free0(init_env_old);
 	}
 	compartment->init_env_len = total_len;
