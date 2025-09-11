@@ -1362,11 +1362,13 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
-			if (mount_entry_get_verity_sha256(mntent)) {
-				// skip, handled in c_vol_verify_mount_entries_bg()
-				continue;
-			}
-			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
+			/*
+			 * Skip thorough check if dm-vertiy device.
+			 * In this case, this is done in c_vol_verify_mount_entries_bg()
+			 */
+			bool thorough = mount_entry_get_verity_sha256(mntent) ? false : true;
+
+			if (guestos_check_mount_image_block(vol->os, mntent, thorough) !=
 			    CHECK_IMAGE_GOOD) {
 				ERROR("Cannot verify image %s: image file is corrupted",
 				      mount_entry_get_img(mntent));
@@ -1381,6 +1383,14 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
  * This Function verifies integrity of base images in background as part of
  * TSF.CML.SecureCompartmentInit.
  */
+#ifdef DM_LAZY_CHECK_ONLY
+// disable full image checking in background. Just rely on dm-verity.
+static bool
+c_vol_verify_mount_entries_bg(const c_vol_t *vol)
+{
+	return true;
+}
+#else
 static bool
 c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 {
@@ -1438,6 +1448,7 @@ c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 	}
 	return true;
 }
+#endif /* DM_LAZY_CHECK_ONLY */
 
 /*
  * If images_dir does not have stacked images, persist policy without stacking
