@@ -1315,10 +1315,11 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 {
 	TRACE("cleanup c_net_interface_t structure");
 
-	DEBUG("shut network interface %s down", ni->veth_cont_name);
+	DEBUG("shut network interface %s down", ni->veth_cont_name ? ni->veth_cont_name : "'NA'");
 
 	/* Release the offset, as the ip addresses are no more occupied */
-	c_net_unset_offset(ni->cont_offset);
+	if (ni->cont_offset >= 0)
+		c_net_unset_offset(ni->cont_offset);
 
 	if (ni->subnet) {
 		mem_free0(ni->subnet);
