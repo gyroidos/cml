@@ -137,7 +137,7 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_DNS_REQ:
-		INFO("Received a request for the container name from container %s",
+		INFO("Received a request for the DNS server to be used from container %s",
 		     container_get_description(service->container));
 		if (c_service_send_container_cfg_dns_proto(service, sock_client))
 			INFO("sent reply to container");
