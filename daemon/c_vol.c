@@ -93,6 +93,7 @@ typedef struct c_vol {
 	mount_t *mnt;
 	mount_t *mnt_setup;
 	cryptfs_mode_t mode;
+	bool corrupted_image;
 } c_vol_t;
 
 /******************************************************************************/
@@ -467,6 +468,11 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	 */
 	if (mount(upper_dev, overlayfs_mount_dir, upper_fstype, mount_flags, mount_data) < 0) {
 		ERROR_ERRNO("Could not mount %s to %s", upper_dev, overlayfs_mount_dir);
+
+		// dm-integrity error, wrong key usage (wrapped-key was overwritten) -> irrecoverable state
+		if (errno == EIO)
+			vol->corrupted_image = true;
+
 		goto error;
 	}
 
@@ -674,6 +680,7 @@ c_vol_setup_busybox_install(void)
 static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
+	int ret = -1;
 	char *img, *dev, *img_meta, *dev_meta, *dir, *img_hash;
 	int fd = 0, fd_meta = 0;
 	bool new_image = false;
@@ -777,6 +784,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (c_vol_check_image(vol, img) < 0) {
 		new_image = true;
 		if (c_vol_create_image(vol, img, mntent) < 0) {
+			goto error;
+		}
+	}
+
+	if (mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) {
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
+		if (c_vol_check_image(vol, img_meta) < 0) {
+			vol->corrupted_image = true;
 			goto error;
 		}
 	}
@@ -976,6 +991,13 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		goto final;
 	}
 
+	// dm-integrity error, wrong key usage (wrapped-key was overwritten) -> irrecoverable state
+	if (errno == EIO) {
+		ERROR_ERRNO("Could not mount image %s using %s to %s", img, dev, dir);
+		vol->corrupted_image = true;
+		goto error;
+	}
+
 	// retry with default options
 	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags, NULL) >= 0) {
 		DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
@@ -994,7 +1016,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (mount_entry_get_type(mntent) != MOUNT_TYPE_EMPTY)
 		goto error;
 
-	/* TODO better password handling before in order to remove this condition. */
 	if (encrypted && !new_image) {
 		DEBUG("Possibly the wrong password was specified. Abort container start.");
 		goto error;
@@ -1032,24 +1053,7 @@ final:
 	}
 
 final_noshift:
-
-	if (dev)
-		loopdev_free(dev);
-	if (dev_meta)
-		loopdev_free(dev_meta);
-	if (img)
-		mem_free0(img);
-	if (img_meta)
-		mem_free0(img_meta);
-	if (dir)
-		mem_free0(dir);
-	if (fd)
-		close(fd);
-	if (fd_meta)
-		close(fd_meta);
-	if (img_hash)
-		mem_free0(img_hash);
-	return 0;
+	ret = 0;
 
 error:
 	if (dev)
@@ -1066,7 +1070,9 @@ error:
 		close(fd);
 	if (fd_meta)
 		close(fd_meta);
-	return -1;
+	if (img_hash)
+		mem_free0(img_hash);
+	return ret;
 }
 
 static int
@@ -1500,6 +1506,8 @@ c_vol_new(compartment_t *compartment)
 		mount_add_entry(vol->mnt, MOUNT_TYPE_BIND_DIR, "/lib/modules", "/lib/modules",
 				"none", 0);
 
+	vol->corrupted_image = false;
+
 	return vol;
 }
 
@@ -1637,7 +1645,7 @@ c_vol_start_child_early(void *volp)
 	return 0;
 error:
 	ERROR("Failed to execute start child early hook for c_vol");
-	return -COMPARTMENT_ERROR_VOL;
+	return vol->corrupted_image ? -COMPARTMENT_ERROR_VOL_CORRUPTED : -COMPARTMENT_ERROR_VOL;
 }
 
 static int
