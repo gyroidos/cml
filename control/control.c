@@ -290,7 +290,7 @@ main(int argc, char *argv[])
 	tcgetattr(STDIN_FILENO, &termios_before);
 
 	for (int c, option_index = 0;
-	     - 1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
+	     -1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			socket_file = optarg;
@@ -339,7 +339,7 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 !=
+		     -1 !=
 		     (c = getopt_long(start_argc, start_argv, "r", log_options, &option_index));) {
 			switch (c) {
 			case 'r':
@@ -566,8 +566,8 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(start_argc, start_argv, "k::s", start_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(start_argc, start_argv, "k::s", start_options,
+					    &option_index));) {
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg;
@@ -603,8 +603,8 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(start_argc, start_argv, "k", start_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(start_argc, start_argv, "k", start_options,
+					    &option_index));) {
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg;
@@ -700,8 +700,8 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(start_argc, start_argv, "i::p", assign_iface_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(start_argc, start_argv, "i::p", assign_iface_options,
+					    &option_index));) {
 			switch (c) {
 			case 'i':
 				assign_iface_params.iface_name = optarg;

@@ -87,7 +87,7 @@ c_cap_set_current_process(void *capp)
 	/* 15 */ C_CAP_DROP(CAP_IPC_OWNER);
 	if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(cap->compartment)))
 		/* 16 */ C_CAP_DROP(CAP_SYS_MODULE);
-		///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
+	///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
 #ifndef DEBUG_BUILD
 	/* 19 */ C_CAP_DROP(CAP_SYS_PTRACE);
 #endif

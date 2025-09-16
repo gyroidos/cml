@@ -134,7 +134,7 @@ main(int argc, char *argv[])
 	int sock = 0;
 
 	for (int c, option_index = 1;
-	     - 1 != (c = getopt_long(argc, argv, "+s:r:l:f:h", global_options, &option_index));) {
+	     -1 != (c = getopt_long(argc, argv, "+s:r:l:f:h", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			socket_file = optarg;
@@ -162,7 +162,7 @@ main(int argc, char *argv[])
 		if (optind >= argc)
 			print_usage(argv[0]);
 		for (int c, option_index = optind;
-		     - 1 !=
+		     -1 !=
 		     (c = getopt_long(argc, argv, "+b:p:c:h", create_options, &option_index));) {
 			switch (c) {
 			case 'b':
@@ -187,7 +187,7 @@ main(int argc, char *argv[])
 		if (optind >= argc)
 			print_usage(argv[0]);
 		for (int c, option_index = optind;
-		     - 1 != (c = getopt_long(argc, argv, "+f", delete_options, &option_index));) {
+		     -1 != (c = getopt_long(argc, argv, "+f", delete_options, &option_index));) {
 			switch (c) {
 			case 'f':
 				// fallthrough

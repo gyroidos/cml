@@ -304,7 +304,7 @@ main(UNUSED int argc, char **argv)
 	logf_register(&logf_file_write, stdout);
 
 	for (int c, option_index = 0;
-	     - 1 != (c = getopt_long(argc, argv, ":snh", global_options, &option_index));) {
+	     -1 != (c = getopt_long(argc, argv, ":snh", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			use_simulator = true;
