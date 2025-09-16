@@ -1169,7 +1169,7 @@ c_net_start_post_clone(void *netp)
 				if (network_setup_masquerading(ni->subnet, true))
 					FATAL_ERRNO("Could not setup masquerading for %s!",
 						    ni->veth_cmld_name);
-					// configuration of interface is done in root netns below
+				// configuration of interface is done in root netns below
 
 #ifdef DEBUG_BUILD
 				/* setup port forwarding for ssh in debug build */

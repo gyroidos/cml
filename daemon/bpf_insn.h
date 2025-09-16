@@ -220,4 +220,4 @@ struct bpf_insn;
 			    .dst_reg = 0,                                                          \
 			    .src_reg = 0,                                                          \
 			    .off = 0,                                                              \
-			    .imm = ((FUNC)-BPF_FUNC_unspec) })
+			    .imm = ((FUNC) - BPF_FUNC_unspec) })

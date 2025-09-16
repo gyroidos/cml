@@ -369,8 +369,8 @@ main(UNUSED int argc, char **argv)
 		image_arch = "amd64";
 		image_tag = "latest";
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(pull_argc, pull_argv, "t:r:a:", pull_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(pull_argc, pull_argv, "t:r:a:", pull_options,
+					    &option_index));) {
 			switch (c) {
 			case 'r':
 				url = optarg ? optarg : "registry-1.docker.io";
@@ -403,8 +403,8 @@ main(UNUSED int argc, char **argv)
 		const char *user = NULL;
 		const char *password = NULL;
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(login_argc, login_argv, ":r:u:p", login_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(login_argc, login_argv, ":r:u:p", login_options,
+					    &option_index));) {
 			switch (c) {
 			case 'r':
 				url = optarg;
