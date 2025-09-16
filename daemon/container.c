@@ -592,6 +592,10 @@ container_wipe_finish(container_t *container)
 		     container_get_description(container));
 		return -1;
 	}
+
+	if (container_get_state(container) == COMPARTMENT_STATE_ZOMBIE)
+		container_set_state(container, COMPARTMENT_STATE_STOPPED);
+
 	return 0;
 }
 
@@ -621,20 +625,21 @@ container_wipe(container_t *container)
 
 	INFO("Wiping container %s", container_get_description(container));
 
-	if (container_get_state(container) != COMPARTMENT_STATE_STOPPED) {
-		container_kill(container);
-
-		/* Register observer to wait for completed compartment_stop */
-		if (!compartment_register_observer(container->compartment, &container_wipe_cb,
-						   container)) {
-			DEBUG("Could not register wipe callback");
-			return -1;
-		}
-		return 0;
-	} else {
+	if (container_get_state(container) == COMPARTMENT_STATE_STOPPED ||
+	    container_get_state(container) == COMPARTMENT_STATE_ZOMBIE) {
 		/* Container is already stopped */
 		return container_wipe_finish(container);
 	}
+
+	/* Container is running kill it before wipe */
+	container_kill(container);
+
+	/* Register observer to wait for completed compartment_stop */
+	if (!compartment_register_observer(container->compartment, &container_wipe_cb, container)) {
+		DEBUG("Could not register wipe callback");
+		return -1;
+	}
+	return 0;
 }
 
 int
