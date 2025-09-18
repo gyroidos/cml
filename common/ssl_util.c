@@ -689,6 +689,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 	int iv_len = EVP_CIPHER_iv_length(type);
 	if (wrapped_key_len < 2 * sizeof(int) + iv_len) {
 		WARN("Given wrapped key is invalid/corrupted.");
+		res = -2;
 		return res;
 	}
 	int tmpkeylen = *((int *)wrapped_key);
@@ -697,6 +698,7 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 	wrapped_key += sizeof(int);
 	if (wrapped_key_len != 2 * sizeof(int) + iv_len + tmpkeylen + keylen) {
 		WARN("Given wrapped key is invalid/corrupted.");
+		res = -2;
 		return res;
 	}
 	const unsigned char *iv_buf = wrapped_key;
