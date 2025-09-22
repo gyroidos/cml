@@ -445,7 +445,8 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 		 * This case handles key unwrapping as part of TSF.CML.CompartmentDataStorage.
 		 */
 		case TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY: {
-			if (!msg->has_unwrapped_key) {
+			if (!msg->has_unwrapped_key ||
+			    (msg->has_unwrapped_key && msg->unwrapped_key.len == 0)) {
 				ERROR("Expected derived key, but none was returned!");
 				audit_log_event(
 					container_get_uuid(smartcard->container), FSA, CMLD,
@@ -455,6 +456,12 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 				// lock token via scd and unregister io callback to avoid to trigger success_cb
 				c_smartcard_send_token_lock_cmd(smartcard);
 				done = true;
+				// keysize 0 indicates keyfile corruption
+				if (msg->has_unwrapped_key && msg->unwrapped_key.len == 0) {
+					ERROR("Keyfile corruption, setting state ZOMBIE!");
+					container_set_state(smartcard->container,
+							    COMPARTMENT_STATE_ZOMBIE);
+				}
 				break;
 			}
 			// set the key
@@ -1019,6 +1026,11 @@ c_smartcard_container_ctrl(void *smartcardp, int (*success_cb)(container_t *cont
 {
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
+
+	if (container_get_state(smartcard->container) == COMPARTMENT_STATE_ZOMBIE) {
+		ERROR("Do not handle unlock requests for container in state ZOMBIE!");
+		return -2;
+	}
 
 	smartcard->success_cb = success_cb;
 	return c_smartcard_token_unlock_handler(smartcard, passwd, c_smartcard_cb_ctrl_container);
