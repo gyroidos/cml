@@ -113,6 +113,7 @@ typedef struct {
 	int cont_offset;	       //!< gives information about the adresses to be set
 	uint8_t veth_mac[6];	       //!< generated or configured mac of nic in container
 	int veth_cmld_idx;	       //!< Index of veth endpoint in rootns
+	bool created;		       //!< veth pair was created sucessfully
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -507,6 +508,7 @@ c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_ma
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
 	ni->cont_offset = -1;
+	ni->created = false;
 
 	return ni;
 }
@@ -949,6 +951,8 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	/* Create veth pair */
 	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name, ni->veth_mac))
 		goto err;
+
+	ni->created = true;
 
 	/* Get the interface index of the interface name */
 	if (!(ni->veth_cmld_idx = if_nametoindex(ni->veth_cmld_name))) {
@@ -1495,8 +1499,17 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		WARN("Failed to create helper child for cleanup in c0's netns");
 
 	// rename phys interface to avoid name clashes during fallback to rootns
-	if (c_net_cleanup_container(net) == -1)
-		WARN("Failed to create helper child for cleanup of container's netns");
+	if (c_net_cleanup_container(net) == -1) {
+		DEBUG("Failed to create helper child for cleanup of container's netns, still in rootns?");
+		for (list_t *l = net->interface_list; l; l = l->next) {
+			c_net_interface_t *ni = l->data;
+			// delete veth pair if it was created!
+			if (ni->created && c_net_is_veth_used(ni->veth_cmld_name)) {
+				DEBUG("Removing veth interface %s", ni->veth_cmld_name);
+				c_net_interface_down(ni->veth_cmld_name);
+			}
+		}
+	}
 
 	/* remove phys network intrefaces from container */
 	uint8_t if_mac[6];
