@@ -1316,7 +1316,7 @@ compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, v
 	if (pid_msg[0] == COMPARTMENT_START_SYNC_MSG_ERROR) {
 		WARN("Early child died with error!");
 		mem_free0(pid_msg);
-		goto error_pre_clone;
+		goto error_child_exit;
 	}
 
 	// release post_clone_early io handler
@@ -1366,10 +1366,12 @@ compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, v
 	return;
 
 error_pre_clone:
+	compartment_kill_early_child(compartment);
+
+error_child_exit:
 	event_remove_io(io);
 	event_io_free(io);
 	close(fd);
-	compartment_kill_early_child(compartment);
 	return;
 
 error_post_clone:
