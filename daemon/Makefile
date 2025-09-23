@@ -33,6 +33,7 @@ CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
 XORG_COMPAT ?= y
+DM_LAZY_CHECK_ONLY ?=n
 
 # build for restrictive CC mode
 CC_MODE ?= n
@@ -69,6 +70,9 @@ ifeq ($(CC_MODE),y)
 endif
 ifeq ($(CC_MODE_EXPERIMENTAL),y)
     LOCAL_CFLAGS += -DCC_MODE_EXPERIMENTAL
+endif
+ifeq ($(DM_LAZY_CHECK_ONLY),y)
+    LOCAL_CFLAGS += -DDM_LAZY_CHECK_ONLY
 endif
 
 
