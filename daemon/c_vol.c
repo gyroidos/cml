@@ -2079,8 +2079,8 @@ static compartment_module_t c_vol_module = {
 static void INIT
 c_vol_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_vol_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_vol_module);
 
 	// register relevant handlers implemented by this module
 	container_register_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);

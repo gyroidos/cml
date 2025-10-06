@@ -35,6 +35,7 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "compartment.h"
+#include "container.h"
 
 #include <limits.h>
 #include <string.h>
@@ -161,6 +162,6 @@ static compartment_module_t c_xorg_compat_module = {
 static void INIT
 c_xorg_compat_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_xorg_compat_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_xorg_compat_module);
 }
