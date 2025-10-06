@@ -94,6 +94,7 @@ PROTO_SRC := \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
+	unit.c \
 	cmld.c \
 	hotplug.c \
 	container.c \
@@ -115,6 +116,10 @@ SRC_FILES := main.c \
 	lxcfs.c \
 	input.c \
 	audit.c
+
+SRC_UMODULES += \
+	u_user.c \
+	u_net.c
 
 # module order is crucial
 SRC_CMODULES := \
@@ -229,7 +234,7 @@ else
 endif
 
 cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_UMODULES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
 
 
 .PHONY: clean
