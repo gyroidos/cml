@@ -137,9 +137,6 @@ typedef struct compartment_module {
  */
 #define COMPARTMENT_MODULE_F_CLEANUP_LATE (1U << 0)
 
-void
-compartment_register_module(compartment_module_t *mod);
-
 void *
 compartment_module_get_instance_by_name(const compartment_t *compartment, const char *mod_name);
 
@@ -162,7 +159,7 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
  */
 compartment_extension_t *
 compartment_extension_new(void (*set_compartment)(void *extension_data, compartment_t *compartment),
-			  void *extension_data);
+			  list_t *(*get_compartment_module_list)(void), void *extension_data);
 
 /**
  * Free a compartment_extension data structure.

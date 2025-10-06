@@ -88,6 +88,15 @@ struct container_usbdev {
 	container_usbdev_type_t type;
 };
 
+// list of compartments modules for all container objects
+static list_t *compartment_module_list = NULL;
+
+static list_t *
+container_get_compartment_modules(void)
+{
+	return compartment_module_list;
+}
+
 static void
 container_set_extension(void *extension_data, compartment_t *compartment)
 {
@@ -96,6 +105,16 @@ container_set_extension(void *extension_data, compartment_t *compartment)
 
 	container_t *container = extension_data;
 	container->compartment = compartment;
+}
+
+void
+container_register_compartment_module(compartment_module_t *mod)
+{
+	ASSERT(mod);
+
+	compartment_module_list = list_append(compartment_module_list, mod);
+	DEBUG("Container module %s registered, nr of hooks: %d)", mod->name,
+	      list_length(compartment_module_list));
 }
 
 container_t *
@@ -184,8 +203,8 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 		flags |= COMPARTMENT_FLAG_XORG_COMPAT;
 
 	// create internal compartment object with container as extension data
-	compartment_extension_t *extension =
-		compartment_extension_new(container_set_extension, container);
+	compartment_extension_t *extension = compartment_extension_new(
+		container_set_extension, container_get_compartment_modules, container);
 	container->compartment = compartment_new(uuid, name, flags, init, init_argv, init_env,
 						 init_env_len, extension);
 
