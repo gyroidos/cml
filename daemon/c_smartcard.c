@@ -1321,8 +1321,8 @@ static compartment_module_t c_smartcard_module = {
 static void INIT
 c_smartcard_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_smartcard_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_smartcard_module);
 
 	// register relevant handlers implemented by this module
 	container_register_ctrl_with_smartcard_handler(MOD_NAME, c_smartcard_container_ctrl);

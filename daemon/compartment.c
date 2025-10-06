@@ -139,6 +139,7 @@ struct compartment_callback {
 
 struct compartment_extension {
 	void (*set_compartment)(void *extension_data, compartment_t *compartment);
+	list_t *(*get_compartment_module_list)(void);
 	void *data;
 };
 
@@ -161,8 +162,6 @@ enum compartment_start_sync_msg {
 	COMPARTMENT_START_SYNC_MSG_SUCCESS,
 	COMPARTMENT_START_SYNC_MSG_ERROR,
 };
-
-static list_t *compartment_module_list = NULL;
 
 bool
 compartment_is_stoppable(compartment_t *compartment)
@@ -193,16 +192,6 @@ compartment_is_startable(compartment_t *compartment)
 
 	DEBUG("Compartment is in unstartable state.(%d)", compartment_get_state(compartment));
 	return false;
-}
-
-void
-compartment_register_module(compartment_module_t *mod)
-{
-	ASSERT(mod);
-
-	compartment_module_list = list_append(compartment_module_list, mod);
-	DEBUG("Container module %s registered, nr of hooks: %d)", mod->name,
-	      list_length(compartment_module_list));
 }
 
 typedef struct {
@@ -300,11 +289,12 @@ compartment_free_key(compartment_t *compartment)
 
 compartment_extension_t *
 compartment_extension_new(void (*set_compartment)(void *extension_data, compartment_t *compartment),
-			  void *extension_data)
+			  list_t *(*get_compartment_module_list)(void), void *extension_data)
 {
 	compartment_extension_t *extension = mem_new0(compartment_extension_t, 1);
 
 	extension->set_compartment = set_compartment;
+	extension->get_compartment_module_list = get_compartment_module_list;
 	extension->data = extension_data;
 
 	return extension;
@@ -334,6 +324,7 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
 		char **init_argv, char **init_env, size_t init_env_len,
 		const compartment_extension_t *extension)
 {
+	list_t *compartment_module_list = NULL;
 	compartment_t *compartment = mem_new0(compartment_t, 1);
 
 	if (extension) {
@@ -341,6 +332,9 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
 		/* register compartment in extension data early */
 		if (extension->set_compartment)
 			extension->set_compartment(extension->data, compartment);
+		/* get modules from extension */
+		if (extension->get_compartment_module_list)
+			compartment_module_list = extension->get_compartment_module_list();
 	}
 
 	compartment->state = COMPARTMENT_STATE_STOPPED;

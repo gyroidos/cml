@@ -514,8 +514,8 @@ static compartment_module_t c_service_module = {
 static void INIT
 c_service_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_service_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_service_module);
 
 	// register relevant handlers implemented by this module
 	container_register_audit_record_send_handler(MOD_NAME, c_service_audit_send_record);

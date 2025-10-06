@@ -141,6 +141,12 @@ enum container_smartcard_error {
 };
 
 /**
+ * Register a compartment module for all container objects.
+ */
+void
+container_register_compartment_module(compartment_module_t *mod);
+
+/**
  * constructor that creates a new container instance
  * with the given parameters.
  *
