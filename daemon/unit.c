@@ -23,6 +23,7 @@
 
 #include "unit.h"
 #include "u_user.h"
+#include "u_perm.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -293,6 +294,23 @@ unit_get_uid(const unit_t *unit)
 	u_user_t *user = compartment_module_get_instance_by_name(unit->compartment, "c_user");
 
 	return u_user_get_uid(user);
+}
+
+int
+unit_device_allow(unit_t *unit, char *name, char type, int major, int minor)
+{
+	ASSERT(unit);
+	u_perm_t *perm = compartment_module_get_instance_by_name(unit->compartment, "c_perm");
+
+	return u_perm_allow_dev(perm, type, major, minor, name);
+}
+
+int
+unit_device_deny(unit_t *unit, char *name)
+{
+	u_perm_t *perm = compartment_module_get_instance_by_name(unit->compartment, "c_perm");
+
+	return u_perm_deny_dev(perm, name);
 }
 
 int
