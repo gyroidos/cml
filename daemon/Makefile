@@ -125,6 +125,13 @@ SRC_UMODULES += \
 	u_user.c \
 	u_net.c
 
+ifeq ($(UNIT_MODULE_PERM),y)
+SRC_UMODULES += \
+	u_perm.c
+LOCAL_CFLAGS += \
+	-DUNIT_MODULE_PERM
+endif
+
 # module order is crucial
 SRC_CMODULES := \
 	c_smartcard.c \

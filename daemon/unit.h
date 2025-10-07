@@ -61,6 +61,12 @@ int
 unit_get_uid(const unit_t *unit);
 
 int
+unit_device_allow(unit_t *unit, char *name, char type, int major, int minor);
+
+int
+unit_device_deny(unit_t *unit, char *name);
+
+int
 unit_start(unit_t *unit);
 
 int
