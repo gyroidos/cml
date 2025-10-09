@@ -23,11 +23,17 @@
 
 #define MOD_NAME "c_user"
 
+#define _GNU_SOURCE
+#include <sched.h>
+#include <sys/mount.h>
+
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/dir.h"
 #include "common/file.h"
 #include "common/ns.h"
 #include "unit.h"
+#include "u_user.h"
 
 #define UID_RANGE 1
 #define UID_RANGES_START 65537
@@ -41,11 +47,12 @@
 #define U_USER_MAP_FORMAT "%d %d %d"
 
 /* User structure with specific usernamespace mappings */
-typedef struct u_user {
+struct u_user {
 	unit_t *unit;  //!< unit which the u_user struct is associated to
 	int offset;    //!< gives information about the uid mapping to be set
 	int uid_start; //!< this is the start of uids and gids in the root namespace
-} u_user_t;
+	char *sock_dir;
+};
 
 /**
  * bool array, which globally holds assigend ranges in order to
@@ -131,6 +138,7 @@ u_user_new(compartment_t *compartment)
 	user->unit = compartment_get_extension_data(compartment);
 
 	user->uid_start = 0;
+	user->sock_dir = mem_printf("/run/socket/cml_unit/%s", unit_get_name(user->unit));
 
 	TRACE("new u_user struct was allocated");
 
@@ -191,6 +199,7 @@ u_user_free(void *usr)
 	u_user_t *user = usr;
 	ASSERT(user);
 
+	mem_free0(user->sock_dir);
 	mem_free0(user);
 }
 
@@ -203,6 +212,28 @@ u_user_setuid0(void)
 	return namespace_setuid0();
 }
 
+/*
+ * Move mount of socket tmpfs to /run/socket in child namespace
+ */
+static int
+u_user_start_child_early(void *usr)
+{
+	u_user_t *user = usr;
+	ASSERT(user);
+
+	if (unshare(CLONE_NEWNS) == -1) {
+		WARN_ERRNO("Could not unshare mount namespace!");
+		return -COMPARTMENT_ERROR_USER;
+	}
+
+	if (mount(user->sock_dir, "/run/socket", NULL, MS_MOVE, NULL) < 0) {
+		ERROR_ERRNO("Could not move mount '%s' to '/run/socket'!", user->sock_dir);
+		return -COMPARTMENT_ERROR_USER;
+	}
+
+	return 0;
+}
+
 static int
 u_user_start_child(void *usr)
 {
@@ -212,6 +243,12 @@ u_user_start_child(void *usr)
 	if (u_user_setuid0() < 0) {
 		return -COMPARTMENT_ERROR_USER;
 	}
+
+	if (mount("proc", "/proc", "proc", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not remount /proc in unit %s", unit_get_description(user->unit));
+		return -COMPARTMENT_ERROR_USER;
+	}
+
 	return 0;
 }
 
@@ -224,12 +261,31 @@ u_user_start_pre_clone(void *usr)
 	u_user_t *user = usr;
 	ASSERT(user);
 
+	int ret = 0;
+
 	// reserve a new mapping
 	if (u_user_set_next_uid_range_start(user)) {
 		ERROR("Reserving uid range for userns for unit %s", unit_get_name(user->unit));
 		return -COMPARTMENT_ERROR_USER;
 	}
-	return 0;
+
+	char *sock_dir_parent = mem_printf("/run/socket/cml_unit/%s", unit_get_name(user->unit));
+	if (dir_mkdir_p(sock_dir_parent, 00777) < 0) {
+		ERROR_ERRNO("Could not mkdir %s", sock_dir_parent);
+		ret = -COMPARTMENT_ERROR_USER;
+		goto out;
+	}
+
+	if (mount("tmpfs", sock_dir_parent, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not mount %s in unit %s", sock_dir_parent,
+			    unit_get_description(user->unit));
+		ret = -COMPARTMENT_ERROR_USER;
+		goto out;
+	}
+
+out:
+	mem_free0(sock_dir_parent);
+	return ret;
 }
 
 /**
@@ -252,13 +308,19 @@ u_user_start_post_clone(void *usr)
 	return 0;
 }
 
+const char *
+u_user_get_sock_dir(const u_user_t *user)
+{
+	return user->sock_dir;
+}
+
 static compartment_module_t u_user_module = {
 	.name = MOD_NAME,
 	.compartment_new = u_user_new,
 	.compartment_free = u_user_free,
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
-	.start_child_early = NULL,
+	.start_child_early = u_user_start_child_early,
 	.start_pre_clone = u_user_start_pre_clone,
 	.start_post_clone = u_user_start_post_clone,
 	.start_pre_exec = NULL,
