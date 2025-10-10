@@ -36,7 +36,8 @@ unit_register_compartment_module(compartment_module_t *mod);
 
 unit_t *
 unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv, char **env,
-	 size_t env_len, bool netns);
+	 size_t env_len, bool netns, const char *sock_name,
+	 void (*on_sock_connect_cb)(int sock, const char *sock_path), bool restart);
 
 void
 unit_free(unit_t *unit);
@@ -52,6 +53,9 @@ unit_has_netns(const unit_t *unit);
 
 pid_t
 unit_get_pid(const unit_t *unit);
+
+const char *
+unit_get_sock_dir(const unit_t *unit);
 
 int
 unit_start(unit_t *unit);
