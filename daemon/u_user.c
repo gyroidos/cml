@@ -32,6 +32,7 @@
 #include "common/dir.h"
 #include "common/file.h"
 #include "common/ns.h"
+#include "common/sock.h"
 #include "unit.h"
 #include "u_user.h"
 
@@ -88,7 +89,7 @@ u_user_set_next_offset(void)
 	if (!uid_offsets) {
 		uid_offsets = mem_new0(bool, MAX_UID_RANGES);
 		uid_offsets[0] = true;
-		TRACE("UID offset 0 ocupied by an unit");
+		TRACE("UID offset 0 occupied by an unit");
 		return 0;
 	}
 
@@ -138,7 +139,7 @@ u_user_new(compartment_t *compartment)
 	user->unit = compartment_get_extension_data(compartment);
 
 	user->uid_start = 0;
-	user->sock_dir = mem_printf("/run/socket/cml_unit/%s", unit_get_name(user->unit));
+	user->sock_dir = mem_printf("%s/cml_unit/%s", CMLD_SOCKET_DIR, unit_get_name(user->unit));
 
 	TRACE("new u_user struct was allocated");
 
@@ -213,7 +214,7 @@ u_user_setuid0(void)
 }
 
 /*
- * Move mount of socket tmpfs to /run/socket in child namespace
+ * Move mount of socket tmpfs to CMLD_SOCKET_DIR (usually /run/socket) in child namespace
  */
 static int
 u_user_start_child_early(void *usr)
@@ -226,8 +227,8 @@ u_user_start_child_early(void *usr)
 		return -COMPARTMENT_ERROR_USER;
 	}
 
-	if (mount(user->sock_dir, "/run/socket", NULL, MS_MOVE, NULL) < 0) {
-		ERROR_ERRNO("Could not move mount '%s' to '/run/socket'!", user->sock_dir);
+	if (mount(user->sock_dir, CMLD_SOCKET_DIR, NULL, MS_MOVE, NULL) < 0) {
+		ERROR_ERRNO("Could not move mount '%s' to '%s'!", user->sock_dir, CMLD_SOCKET_DIR);
 		return -COMPARTMENT_ERROR_USER;
 	}
 
