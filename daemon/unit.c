@@ -22,17 +22,28 @@
  */
 
 #include "unit.h"
+#include "u_user.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/event.h"
+#include "common/fd.h"
 #include "common/list.h"
+#include "common/sock.h"
 #include "common/uuid.h"
 #include "compartment.h"
 
 #include <stdint.h>
+#include <sys/inotify.h>
+#include <sys/stat.h>
 
 struct unit {
 	compartment_t *compartment;
+	char *sock_name;
+	event_inotify_t *inotify_sock_dir;
+	void (*on_sock_connect_cb)(int sock, const char *sock_path);
+	compartment_callback_t *state_observer;
+	bool restart;
 };
 
 static char *unit_bin_path[] = { "/usr/sbin", "/sbin", "/usr/bin", "/bin" };
@@ -56,6 +67,93 @@ unit_set_extension(void *extension_data, compartment_t *compartment)
 	unit->compartment = compartment;
 }
 
+const char *
+unit_get_sock_dir(const unit_t *unit)
+{
+	ASSERT(unit);
+	u_user_t *u_user = compartment_module_get_instance_by_name(unit->compartment, "c_user");
+
+	return u_user_get_sock_dir(u_user);
+}
+
+static void
+unit_do_create_cb(const char *path, uint32_t mask, UNUSED event_inotify_t *inotify, void *data)
+{
+	IF_FALSE_RETURN(mask & IN_CREATE);
+
+	unit_t *unit = data;
+	ASSERT(unit);
+
+	int sock = -1;
+
+	struct stat s;
+	mem_memset(&s, 0, sizeof(s));
+
+	if (stat(path, &s) == -1) {
+		WARN_ERRNO("Could not stat %s", path);
+		return;
+	}
+
+	IF_FALSE_RETURN((s.st_mode & S_IFMT) == S_IFSOCK);
+
+	IF_FALSE_RETURN(strstr(path, unit->sock_name));
+
+	size_t retries = 0;
+	sock = sock_unix_create_and_connect(SOCK_SEQPACKET, path);
+	while (sock < 0 && retries < 10) {
+		TRACE("Retry %zu connecting to %s", retries, path);
+		NANOSLEEP(0, 500000000)
+		sock = sock_unix_create_and_connect(SOCK_SEQPACKET, path);
+		retries++;
+	}
+
+	if (sock < 0) {
+		ERROR("Failed to connect to %s", unit->sock_name);
+		return;
+	}
+
+	char *sock_path = mem_strdup(path);
+	(unit->on_sock_connect_cb)(sock, sock_path);
+	mem_free0(sock_path);
+}
+
+static void
+unit_state_observer_cb(compartment_t *compartment, UNUSED compartment_callback_t *cb, void *data)
+{
+	ASSERT(compartment && data);
+	unit_t *unit = data;
+
+	switch (compartment_get_state(compartment)) {
+	case COMPARTMENT_STATE_RUNNING: {
+		// watch sock_dir for scd control socket to appear in filesystem
+		unit->inotify_sock_dir = event_inotify_new(unit_get_sock_dir(unit), IN_CREATE,
+							   unit_do_create_cb, unit);
+
+		/* start watching for unit socket creation */
+		int error = event_add_inotify(unit->inotify_sock_dir);
+		if (error && error != -EEXIST) {
+			WARN("Could not register inotify event for unit %s socket events!",
+			     unit_get_description(unit));
+		}
+	} break;
+	case COMPARTMENT_STATE_STOPPED: {
+		event_remove_inotify(unit->inotify_sock_dir);
+		event_inotify_free(unit->inotify_sock_dir);
+		unit->inotify_sock_dir = NULL;
+
+		/* auto restart unit if it was stopped */
+		if (unit->restart) {
+			INFO("unit %s stopped, restarting unit ...", unit_get_description(unit));
+			if (unit_start(unit) < 0)
+				WARN("unit %s could not be restarted!", unit_get_description(unit));
+		}
+
+	} break;
+	default:
+		return;
+	}
+}
+
 void
 unit_register_compartment_module(compartment_module_t *mod)
 {
@@ -68,7 +166,8 @@ unit_register_compartment_module(compartment_module_t *mod)
 
 unit_t *
 unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv, char **env,
-	 size_t env_len, bool netns)
+	 size_t env_len, bool netns, const char *sock_name,
+	 void (*on_sock_connect_cb)(int sock, const char *sock_path), bool restart)
 {
 	// set type specific flags for compartment
 	uint64_t flags = 0;
@@ -119,6 +218,20 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 		return NULL;
 	}
 
+	unit->sock_name = mem_strdup(sock_name);
+	unit->on_sock_connect_cb = on_sock_connect_cb;
+
+	unit->restart = restart;
+
+	if (unit->on_sock_connect_cb) {
+		unit->state_observer = compartment_register_observer(unit->compartment,
+								     &unit_state_observer_cb, unit);
+		if (!unit->state_observer) {
+			WARN("Could not register unit state observer callback for %s",
+			     unit_get_description(unit));
+		}
+	}
+
 	return unit;
 }
 
@@ -133,6 +246,14 @@ unit_free(unit_t *unit)
 	 */
 	if (unit->compartment)
 		compartment_free(unit->compartment);
+
+	if (unit->sock_name)
+		mem_free0(unit->sock_name);
+
+	if (unit->inotify_sock_dir) {
+		event_remove_inotify(unit->inotify_sock_dir);
+		event_inotify_free(unit->inotify_sock_dir);
+	}
 
 	mem_free0(unit);
 }
@@ -183,5 +304,10 @@ void
 unit_kill(unit_t *unit)
 {
 	ASSERT(unit);
+
+	unit->restart = false;
 	compartment_kill(unit->compartment);
+
+	if (unit->on_sock_connect_cb)
+		compartment_unregister_observer(unit->compartment, unit->state_observer);
 }
