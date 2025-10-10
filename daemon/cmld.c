@@ -1455,7 +1455,6 @@ cmld_init_stage_reached(cmld_init_stage_t stage)
 	case CMLD_INIT_STAGE_UNIT:
 		INFO("CMLD_INIT_STAGE_UNIT completed.");
 		cmld_init_stage = stage;
-		cmld_init_stage_container();
 		break;
 	case CMLD_INIT_STAGE_CONTAINER:
 		INFO("CMLD_INIT_STAGE_CONTAINER completed.");
@@ -1523,7 +1522,7 @@ cmld_init_stage_unit(const char *path)
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
 	mem_free0(btime);
 
-	if (scd_init(!cmld_is_hostedmode_active()) < 0)
+	if (scd_init() < 0)
 		FATAL("Could not init scd module");
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))

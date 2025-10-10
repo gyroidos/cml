@@ -28,11 +28,10 @@
 
 /**
  * Initializes the scd subsystem (starts the corresponding daemon)
- * @param start_daemon Fork and execute the scd daemon
  * @return 0 on success, -1 on error
  */
 int
-scd_init(bool start_daemon);
+scd_init(void);
 
 /**
  * Cleans up the scd subsystem (stops the corresponding daemon)
