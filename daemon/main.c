@@ -145,8 +145,8 @@ main(int argc, char **argv)
 				main_logfile_rename_cb, NULL);
 	event_add_timer(logfile_timer);
 
-	if (cmld_init(path) < 0)
-		FATAL("Could not init cmld");
+	if (cmld_init_stage_unit(path) < 0)
+		FATAL("Could not init cmld (unit stage)");
 
 	if (atexit(&cmld_cleanup))
 		WARN("could not register on exit cleanup method 'cmld_cleanup()'");

@@ -62,11 +62,24 @@ typedef enum { CMLD_CONTAINER_CTRL_START, CMLD_CONTAINER_CTRL_STOP } cmld_contai
 /**
  * Initialize the CMLD module.
  *
+ * 1st stage initialization including startup of SCD
+ *
  * @param path The path of the CMLD configuration file.
  * @return 0 on success, -1 on error
  */
 int
-cmld_init(const char *path);
+cmld_init_stage_unit(const char *path);
+
+/**
+ * Initialize the CMLD module.
+ *
+ * 2nd stage initialization which already needs SCD running
+ * Triggered by SCD module
+ *
+ * @return 0 on success, -1 on error
+ */
+int
+cmld_init_stage_container(void);
 
 /**
  * Cleans up the CMLD module.
