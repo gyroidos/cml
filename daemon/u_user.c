@@ -309,9 +309,17 @@ u_user_start_post_clone(void *usr)
 	return 0;
 }
 
+int
+u_user_get_uid(const u_user_t *user)
+{
+	ASSERT(user);
+	return user->uid_start;
+}
+
 const char *
 u_user_get_sock_dir(const u_user_t *user)
 {
+	ASSERT(user);
 	return user->sock_dir;
 }
 
