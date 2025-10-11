@@ -58,6 +58,9 @@ const char *
 unit_get_sock_dir(const unit_t *unit);
 
 int
+unit_get_uid(const unit_t *unit);
+
+int
 unit_start(unit_t *unit);
 
 int

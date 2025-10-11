@@ -287,6 +287,15 @@ unit_get_pid(const unit_t *unit)
 }
 
 int
+unit_get_uid(const unit_t *unit)
+{
+	ASSERT(unit);
+	u_user_t *user = compartment_module_get_instance_by_name(unit->compartment, "c_user");
+
+	return u_user_get_uid(user);
+}
+
+int
 unit_start(unit_t *unit)
 {
 	ASSERT(unit);
