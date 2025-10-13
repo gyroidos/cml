@@ -36,6 +36,10 @@
 #include "unit.h"
 #include "u_user.h"
 
+#ifndef LOGFILE_DIR
+#define LOGFILE_DIR "/data/logs"
+#endif
+
 #define UID_RANGE 1
 #define UID_RANGES_START 65537
 
@@ -398,4 +402,7 @@ u_user_init(void)
 {
 	// register this module in unit.c
 	unit_register_compartment_module(&u_user_module);
+
+	if (chmod(LOGFILE_DIR, 00777))
+		FATAL_ERRNO("Could not chmod %s", LOGFILE_DIR);
 }
