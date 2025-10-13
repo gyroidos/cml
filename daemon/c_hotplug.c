@@ -41,6 +41,7 @@
 #include "common/uevent.h"
 
 #include "container.h"
+#include "scd.h"
 
 #include <libgen.h>
 #include <sys/sysmacros.h>
@@ -246,6 +247,15 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 				if (CONTAINER_USBDEV_TYPE_TOKEN == type) {
 					INFO("HOTPLUG USB TOKEN removed");
 					container_token_detach(hotplug->container);
+					char *devname = mem_printf(
+						"%s%s",
+						strncmp("/dev/", uevent_event_get_devname(event),
+							5) ?
+							"/dev/" :
+							"/",
+						uevent_event_get_devname(event));
+					unit_device_deny(scd_get_unit(), devname);
+					mem_free0(devname);
 				} else {
 					// signal calling handler to deny device access
 					ret = true;
@@ -361,6 +371,8 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 								c_hotplug_token_timer_cb,
 								token_data);
 					event_add_timer(e);
+					unit_device_allow(scd_get_unit(), token_data->devname, 'c',
+							  major, minor);
 				} else {
 					INFO("%s bound device node %d:%d -> container %s",
 					     (container_usbdev_is_assigned(ud)) ? "assign" :
