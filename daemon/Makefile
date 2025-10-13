@@ -33,6 +33,7 @@ CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
 XORG_COMPAT ?= y
+UNIT_MODULE_PERM ?= y
 
 # build for restrictive CC mode
 CC_MODE ?= n
