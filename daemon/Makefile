@@ -213,24 +213,24 @@ protobuf: container.proto control.proto guestos.proto device.proto scd.proto com
 	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
 	ln -sf cc_mode/device.pb-c.c device.pb-c.c
 	ln -sf cc_mode/device.pb-c.h device.pb-c.h
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. c_service.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
+	protoc --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 
 else
 protobuf: container.proto control.proto guestos.proto device.proto scd.proto common/audit.proto c_service.proto oci_control.proto
-	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. guestos.proto
-	protoc-c --c_out=. device.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. c_service.proto
-	protoc-c --c_out=. oci_control.proto
+	protoc --c_out=. container.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. guestos.proto
+	protoc --c_out=. device.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
+	protoc --c_out=. c_service.proto
+	protoc --c_out=. oci_control.proto
 	$(MAKE) -C common protobuf
 
 endif
