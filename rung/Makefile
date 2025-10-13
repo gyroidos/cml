@@ -61,7 +61,7 @@ SRC_FILES := \
 all: control
 
 protobuf: oci_control.proto
-	protoc-c --c_out=. oci_control.proto
+	protoc --c_out=. oci_control.proto
 	$(MAKE) -C common protobuf
 
 libcommon:
