@@ -26,6 +26,8 @@
 
 #include <stdbool.h>
 
+#include "unit.h"
+
 /**
  * Initializes the scd subsystem (starts the corresponding daemon)
  * @return 0 on success, -1 on error
@@ -38,5 +40,11 @@ scd_init(void);
  */
 void
 scd_cleanup(void);
+
+/**
+ * Returns the scd subsystems unit instance
+ */
+unit_t *
+scd_get_unit(void);
 
 #endif /* CML_SCD_H */

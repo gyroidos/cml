@@ -188,3 +188,9 @@ scd_cleanup(void)
 		mem_free0(scd_sock_path);
 	unit_free(scd_unit);
 }
+
+unit_t *
+scd_get_unit(void)
+{
+	return scd_unit;
+}
