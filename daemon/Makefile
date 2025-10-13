@@ -34,6 +34,7 @@ SYSTEMD ?= n
 AUTOMOUNT ?= y
 XORG_COMPAT ?= y
 DM_LAZY_CHECK_ONLY ?=n
+UNIT_MODULE_PERM ?= y
 
 # build for restrictive CC mode
 CC_MODE ?= n
