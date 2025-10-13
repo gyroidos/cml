@@ -253,6 +253,51 @@ u_user_start_child(void *usr)
 	return 0;
 }
 
+static int
+u_user_chown_dir_cb(const char *path, const char *file, void *data)
+{
+	struct stat s;
+	int ret = 0;
+	u_user_t *user = data;
+	ASSERT(user);
+
+	char *file_to_chown = mem_printf("%s/%s", path, file);
+	if (lstat(file_to_chown, &s) == -1) {
+		mem_free0(file_to_chown);
+		return -1;
+	}
+
+	uid_t uid = user->uid_start;
+	gid_t gid = user->uid_start;
+
+	if (file_is_dir(file_to_chown)) {
+		TRACE("Path %s is dir", file_to_chown);
+		if (dir_foreach(file_to_chown, &u_user_chown_dir_cb, user) < 0) {
+			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
+			ret--;
+		}
+		if (chown(file_to_chown, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
+			ret--;
+		}
+	} else {
+		if (lchown(file_to_chown, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
+				    gid);
+			ret--;
+		}
+	}
+	TRACE("Chown file '%s' to (%d:%d)", file_to_chown, uid, gid);
+
+	// chown .
+	if (chown(path, uid, gid) < 0) {
+		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
+		ret--;
+	}
+	mem_free0(file_to_chown);
+	return ret;
+}
+
 /**
  * Reserves a mapping for uids and gids of the user namespace in rootns
  */
@@ -280,6 +325,13 @@ u_user_start_pre_clone(void *usr)
 	if (mount("tmpfs", sock_dir_parent, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 		ERROR_ERRNO("Could not mount %s in unit %s", sock_dir_parent,
 			    unit_get_description(user->unit));
+		ret = -COMPARTMENT_ERROR_USER;
+		goto out;
+	}
+
+	if (dir_foreach(unit_get_data_path(user->unit), &u_user_chown_dir_cb, user) < 0) {
+		ERROR("Could not chown %s to target uid:gid (%d:%d)",
+		      unit_get_data_path(user->unit), user->uid_start, user->uid_start);
 		ret = -COMPARTMENT_ERROR_USER;
 		goto out;
 	}
