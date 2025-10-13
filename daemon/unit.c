@@ -41,6 +41,7 @@
 struct unit {
 	compartment_t *compartment;
 	char *sock_name;
+	char *data_path;
 	event_inotify_t *inotify_sock_dir;
 	void (*on_sock_connect_cb)(int sock, const char *sock_path);
 	compartment_callback_t *state_observer;
@@ -167,7 +168,7 @@ unit_register_compartment_module(compartment_module_t *mod)
 
 unit_t *
 unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv, char **env,
-	 size_t env_len, bool netns, const char *sock_name,
+	 size_t env_len, bool netns, const char *data_path, const char *sock_name,
 	 void (*on_sock_connect_cb)(int sock, const char *sock_path), bool restart)
 {
 	// set type specific flags for compartment
@@ -221,6 +222,8 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 		return NULL;
 	}
 
+	unit->data_path = mem_strdup(data_path);
+
 	unit->sock_name = mem_strdup(sock_name);
 	unit->on_sock_connect_cb = on_sock_connect_cb;
 
@@ -257,6 +260,9 @@ unit_free(unit_t *unit)
 		event_remove_inotify(unit->inotify_sock_dir);
 		event_inotify_free(unit->inotify_sock_dir);
 	}
+
+	if (unit->data_path)
+		mem_free0(unit->data_path);
 
 	mem_free0(unit);
 }
@@ -296,6 +302,13 @@ unit_get_uid(const unit_t *unit)
 	u_user_t *user = compartment_module_get_instance_by_name(unit->compartment, "c_user");
 
 	return u_user_get_uid(user);
+}
+
+const char *
+unit_get_data_path(const unit_t *unit)
+{
+	ASSERT(unit);
+	return unit->data_path;
 }
 
 int
