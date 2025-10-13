@@ -1362,11 +1362,13 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
-			if (mount_entry_get_verity_sha256(mntent)) {
-				// skip, handled in c_vol_verify_mount_entries_bg()
-				continue;
-			}
-			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
+			/*
+			 * Skip thorough check if dm-vertiy device.
+			 * In this case, this is done in c_vol_verify_mount_entries_bg()
+			 */
+			bool thorough = mount_entry_get_verity_sha256(mntent) ? false : true;
+
+			if (guestos_check_mount_image_block(vol->os, mntent, thorough) !=
 			    CHECK_IMAGE_GOOD) {
 				ERROR("Cannot verify image %s: image file is corrupted",
 				      mount_entry_get_img(mntent));
@@ -1660,6 +1662,14 @@ c_vol_start_pre_clone(void *volp)
 	return 0;
 }
 
+#ifdef DM_LAZY_CHECK_ONLY
+// disable full image checking in background. Just rely on dm-verity.
+static int
+c_vol_start_post_clone(void *volp)
+{
+	return 0;
+}
+#else
 static int
 c_vol_start_post_clone(void *volp)
 {
@@ -1673,6 +1683,7 @@ c_vol_start_post_clone(void *volp)
 	ERROR("Failed to execute post clone hook for c_vol");
 	return -COMPARTMENT_ERROR_VOL;
 }
+#endif /* DM_LAZY_CHECK_ONLY */
 
 struct tty_cb_data {
 	bool found;
