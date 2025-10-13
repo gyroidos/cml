@@ -1,6 +1,6 @@
-#
-# This file is part of GyroidOS
-# Copyright(c) 2013 - 2020 Fraunhofer AISEC
+#oc
+#-c This file is part of GyroidOS
+#-c Copyright(c) 2013 - 2020 Fraunhofer AISEC
 # Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -74,10 +74,10 @@ LD_LIB_FLAGS := \
 all: service service-static
 
 protobuf: c_service.proto container.proto control.proto guestos.proto
-	protoc-c --c_out=. c_service.proto
-	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. guestos.proto
+	protoc --c_out=. c_service.proto
+	protoc --c_out=. container.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. guestos.proto
 	$(MAKE) -C common protobuf
 
 $(SRC_FILES): protobuf

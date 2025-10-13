@@ -72,15 +72,15 @@ protobuf: container.proto control.proto guestos.proto
 	ln -sf cc_mode/container.pb-c.h container.pb-c.h
 	ln -sf cc_mode/guestos.pb-c.c guestos.pb-c.c
 	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
-	protoc-c --c_out=. control.proto
+	protoc --c_out=. control.proto
 	$(MAKE) -C common protobuf
 
 else
 protobuf: container.proto control.proto guestos.proto
 	echo "Using dev/production protos"
-	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. guestos.proto
+	protoc --c_out=. container.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. guestos.proto
 	$(MAKE) -C common protobuf
 
 endif
