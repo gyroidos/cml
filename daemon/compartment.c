@@ -823,9 +823,26 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 }
 
 static int
-compartment_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED void *data)
+compartment_close_all_fds_cb(UNUSED const char *path, const char *file, void *data)
 {
 	int fd = atoi(file);
+	compartment_t *compartment = data;
+
+	// store cmld's standard fds for possible reopening in compartment
+	if (compartment && (compartment->flags & COMPARTMENT_FLAG_CONNECT_STDFDS)) {
+		switch (fd) {
+		case STDIN_FILENO:
+			close(fd);
+			open("/dev/null", O_RDONLY); // stdin be will not be reopened
+			return 0;
+		case STDOUT_FILENO:
+		case STDERR_FILENO:
+			return 0;
+		default:
+			close(fd);
+			return 0;
+		}
+	}
 
 	close(fd);
 
@@ -833,12 +850,12 @@ compartment_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED v
 }
 
 static int
-compartment_close_all_fds()
+compartment_close_all_fds(compartment_t *compartment)
 {
 	DEBUG("Closing all fds");
 	logf_unregister(cml_daemon_logfile_handler);
 
-	if (dir_foreach("/proc/self/fd", &compartment_close_all_fds_cb, NULL) < 0) {
+	if (dir_foreach("/proc/self/fd", &compartment_close_all_fds_cb, compartment) < 0) {
 		return -1;
 	}
 
@@ -991,7 +1008,7 @@ compartment_start_child(void *data)
 
 	if (compartment_get_state(compartment) != COMPARTMENT_STATE_SETUP) {
 		DEBUG("After closing all file descriptors no further debugging info can be printed");
-		if (compartment_close_all_fds()) {
+		if (compartment_close_all_fds(compartment)) {
 			WARN("Closing all file descriptors failed, continuing anyway...");
 		}
 	}
@@ -1024,7 +1041,7 @@ error:
 
 	// TODO call c_<module>_cleanup_child() hooks
 
-	if (compartment_close_all_fds()) {
+	if (compartment_close_all_fds(NULL)) {
 		WARN("Closing all file descriptors in compartment start error failed");
 	}
 	return ret < 0 ? -ret : ret; // exit the child process
@@ -1123,7 +1140,7 @@ error:
 		WARN_ERRNO("write to sync socket failed");
 	}
 
-	if (compartment_close_all_fds()) {
+	if (compartment_close_all_fds(NULL)) {
 		WARN("Closing all file descriptors in compartment start error failed");
 	}
 	return ret < 0 ? -ret : ret; // exit the child process
