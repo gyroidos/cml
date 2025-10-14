@@ -177,6 +177,8 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 	flags |= COMPARTMENT_FLAG_NS_USER;
 	if (netns)
 		flags |= COMPARTMENT_FLAG_NS_NET;
+	// connect stdout and stderr in compartment
+	flags |= COMPARTMENT_FLAG_CONNECT_STDFDS;
 
 	unit_t *unit = mem_new0(unit_t, 1);
 
