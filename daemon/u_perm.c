@@ -196,6 +196,8 @@ u_perm_start_child_early(void *permp)
 	int dev_array_len = sizeof(unit_dev_whitelist) / sizeof(struct device_rule);
 	for (int i = 0; i < dev_array_len; i++) {
 		struct device_rule d = unit_dev_whitelist[i];
+		ASSERT(d.dst); // make sanitizers happy
+
 		if (mknod(d.dst, d.mode, makedev(d.major, d.minor)) < 0) {
 			ERROR_ERRNO("Could not mknod (%d:%d) at %s", d.major, d.minor, d.dst);
 			return -COMPARTMENT_ERROR_VOL;
