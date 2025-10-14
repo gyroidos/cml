@@ -72,6 +72,7 @@ typedef struct compartment_extension compartment_extension_t;
 #define COMPARTMENT_FLAG_SYSTEM_TIME 0x0000000000000020
 #define COMPARTMENT_FLAG_MODULE_LOAD 0x0000000000000040
 #define COMPARTMENT_FLAG_XORG_COMPAT 0x0000000000000080
+#define COMPARTMENT_FLAG_CONNECT_STDFDS 0x0000000000000100
 
 /**
  * Represents the current compartment state.
