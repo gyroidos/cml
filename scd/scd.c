@@ -54,7 +54,7 @@
 // clang-format on
 
 // Do not edit! This path is also configured in cmld.c
-#define DEVICE_ID_CONF DEFAULT_BASE_PATH "/device_id.conf"
+#define DEVICE_ID_CONF SCD_TOKEN_DIR "/device_id.conf"
 
 #define DMI_PRODUCT_SERIAL "/sys/devices/virtual/dmi/id/product_serial"
 #define DMI_PRODUCT_NAME "/sys/devices/virtual/dmi/id/product_name"
