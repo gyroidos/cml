@@ -46,6 +46,8 @@
 #define SCD_BINARY_NAME "scd"
 #endif
 
+#define SCD_DEVICE_ID_CONF SCD_TOKEN_DIR "/device_id.conf"
+
 #define SCD_UUID "00000000-0000-0000-0000-000000000001"
 
 char *scd_sock_path = NULL;
@@ -166,6 +168,17 @@ scd_on_connect_cb(int sock, const char *sock_path)
 int
 scd_init(void)
 {
+	// ensure device_id configuration file is located in SCD_TOKEN_DIR
+	char *legacy_device_id_path = mem_printf("%s/%s", cmld_get_cmld_dir(), "device_id.conf");
+	if (file_is_regular(legacy_device_id_path) &&
+	    file_move(legacy_device_id_path, SCD_DEVICE_ID_CONF, 512) < 0) {
+		ERROR("Moving device_id.conf from old location %s to %s failed!",
+		      legacy_device_id_path, SCD_DEVICE_ID_CONF);
+		mem_free(legacy_device_id_path);
+		return -1;
+	}
+	mem_free(legacy_device_id_path);
+
 	// if device.cert is not present, scd will die. Hence, we set autorestart in unit_new
 	scd_unit = unit_new(uuid_new(SCD_UUID), "SCD", SCD_BINARY_NAME, NULL, NULL, 0, false,
 			    SCD_TOKEN_DIR, SCD_CONTROL_SOCKET, &scd_on_connect_cb, true);

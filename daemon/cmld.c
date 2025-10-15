@@ -85,11 +85,11 @@
 
 // files and directories in cmld's home path /data/cml
 #define CMLD_PATH_DEVICE_CONF "device.conf"
-#define CMLD_PATH_DEVICE_ID "device_id.conf"
 #define CMLD_PATH_GUESTOS_DIR "operatingsystems"
 #define CMLD_PATH_CONTAINERS_DIR "containers"
 #define CMLD_PATH_CONTAINER_KEYS_DIR "keys"
 #define CMLD_PATH_CONTAINER_TOKENS_DIR "tokens"
+#define CMLD_PATH_DEVICE_ID CMLD_PATH_CONTAINER_TOKENS_DIR "/device_id.conf"
 #define CMLD_PATH_SHARED_DATA_DIR "shared"
 
 #define CMLD_WAKE_LOCK_STARTUP "ContainerStartup"
