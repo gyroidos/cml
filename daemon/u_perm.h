@@ -32,6 +32,9 @@ u_perm_allow_dev(u_perm_t *perm, char type, int major, int minor, const char *na
 
 int
 u_perm_deny_dev(u_perm_t *perm, const char *name);
+
+int
+u_perm_set_initial_allow_dev(u_perm_t *perm, list_t *device_names);
 #else
 inline int
 u_perm_allow_dev(UNUSED u_perm_t *perm, UNUSED char type, UNUSED int major, UNUSED int minor,
@@ -42,6 +45,12 @@ u_perm_allow_dev(UNUSED u_perm_t *perm, UNUSED char type, UNUSED int major, UNUS
 
 inline int
 u_perm_deny_dev(UNUSED u_perm_t *perm, UNUSED const char *name)
+{
+	return 0;
+}
+
+int
+u_perm_set_initial_allow_dev(UNUSED u_perm_t *perm, UNUSED list_t *device_names)
 {
 	return 0;
 }

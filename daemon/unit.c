@@ -329,6 +329,14 @@ unit_device_deny(unit_t *unit, char *name)
 }
 
 int
+unit_device_set_initial_allow(unit_t *unit, list_t *device_names)
+{
+	u_perm_t *perm = compartment_module_get_instance_by_name(unit->compartment, "c_perm");
+
+	return u_perm_set_initial_allow_dev(perm, device_names);
+}
+
+int
 unit_start(unit_t *unit)
 {
 	ASSERT(unit);
