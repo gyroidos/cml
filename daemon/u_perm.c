@@ -55,6 +55,12 @@ struct device_rule {
 	const char *dst;
 };
 
+typedef struct {
+	mode_t mode;
+	dev_t dev;
+	char *dst;
+} device_rule_t;
+
 /**
  * Whitelist of devices to be available for all units
  */
@@ -66,8 +72,30 @@ static const struct device_rule unit_dev_whitelist[] = {
 
 /* Permission structure */
 struct u_perm {
-	unit_t *unit; //!< unit which the u_perm struct is associated to
+	unit_t *unit;	       //!< unit which the u_perm struct is associated to
+	list_t *dev_whitelist; //!< additional devices which should be allowed for this unit
 };
+
+static device_rule_t *
+device_rule_new(mode_t mode, dev_t rdev, const char *node_name)
+{
+	device_rule_t *d = mem_new0(device_rule_t, 1);
+
+	d->mode = mode;
+	d->dev = rdev;
+	d->dst = mem_strdup(node_name);
+
+	return d;
+}
+
+void
+device_rule_free(device_rule_t *rule)
+{
+	if (rule->dst)
+		mem_free0(rule->dst);
+
+	mem_free0(rule);
+}
 
 int
 do_mknod_in_unit(const void *data)
@@ -144,6 +172,38 @@ u_perm_deny_dev(u_perm_t *perm, const char *name)
 			      do_unlink_in_unit, name);
 }
 
+int
+u_perm_set_initial_allow_dev(u_perm_t *perm, list_t *device_names)
+{
+	ASSERT(perm);
+
+	IF_FALSE_RETVAL(device_names, -1);
+
+	for (list_t *l = device_names; l; l = l->next) {
+		char *dev_node = l->data;
+		struct stat s;
+		if (stat(dev_node, &s))
+			continue;
+
+		mode_t mode = 0666;
+		switch (s.st_mode & S_IFMT) {
+		case S_IFBLK:
+			mode |= S_IFBLK;
+			break;
+		case S_IFCHR:
+			mode |= S_IFCHR;
+			break;
+		default:
+			continue;
+		}
+
+		device_rule_t *d = device_rule_new(mode, s.st_rdev, dev_node);
+		perm->dev_whitelist = list_append(perm->dev_whitelist, d);
+	}
+
+	return 0;
+}
+
 /**
  * This function allocates a new u_perm_t instance, associated to a specific unit object.
  * @return the u_perm_t permission structure which holds permission access rules for an unit.
@@ -206,6 +266,19 @@ u_perm_start_child_early(void *permp)
 
 		if (chown(d.dst, uid, gid) < 0)
 			WARN_ERRNO("Could not chown device node '%s' to (%d:%d)", d.dst, uid, gid);
+	}
+
+	for (list_t *l = perm->dev_whitelist; l; l = l->next) {
+		device_rule_t *d = l->data;
+		if (mknod(d->dst, d->mode, d->dev) < 0) {
+			ERROR_ERRNO("Could not mknod (%d:%d) at %s", major(d->dev), minor(d->dev),
+				    d->dst);
+			return -COMPARTMENT_ERROR_VOL;
+		}
+		DEBUG("mknod (%d:%d) at %s done", major(d->dev), minor(d->dev), d->dst);
+
+		if (chown(d->dst, uid, gid) < 0)
+			WARN_ERRNO("Could not chown device node '%s' to (%d:%d)", d->dst, uid, gid);
 	}
 
 	return 0;
