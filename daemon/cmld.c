@@ -86,7 +86,6 @@
 // files and directories in cmld's home path /data/cml
 #define CMLD_PATH_DEVICE_CONF "device.conf"
 #define CMLD_PATH_DEVICE_ID "device_id.conf"
-#define CMLD_PATH_USERS_DIR "users"
 #define CMLD_PATH_GUESTOS_DIR "operatingsystems"
 #define CMLD_PATH_CONTAINERS_DIR "containers"
 #define CMLD_PATH_CONTAINER_KEYS_DIR "keys"
@@ -1488,11 +1487,6 @@ cmld_init_stage_unit(const char *path)
 	 * the config file. */
 	if (mkdir(path, 0755) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir base path %s", path);
-
-	char *users_path = mem_printf("%s/%s", path, CMLD_PATH_USERS_DIR);
-	if (mkdir(users_path, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir users directory %s", users_path);
-	mem_free0(users_path);
 
 	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
 	device_config_t *device_config = device_config_new(device_path);
