@@ -33,6 +33,7 @@
 #include "common/event.h"
 #include "common/fd.h"
 #include "common/file.h"
+#include "common/list.h"
 #include "common/proc.h"
 #include "common/protobuf.h"
 #include "common/mem.h"
@@ -170,6 +171,11 @@ scd_init(void)
 			    SCD_TOKEN_DIR, SCD_CONTROL_SOCKET, &scd_on_connect_cb, true);
 
 	IF_NULL_RETVAL(scd_unit, -1);
+
+	// scd also accesses the tpm for device cert signing
+	list_t *dev_nodes = list_append(NULL, "/dev/tpm0");
+	unit_device_set_initial_allow(scd_unit, dev_nodes);
+	list_delete(dev_nodes);
 
 	if (unit_start(scd_unit)) {
 		unit_free(scd_unit);
