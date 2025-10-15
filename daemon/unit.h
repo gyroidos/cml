@@ -70,6 +70,9 @@ int
 unit_device_deny(unit_t *unit, char *name);
 
 int
+unit_device_set_initial_allow(unit_t *unit, list_t *device_names);
+
+int
 unit_start(unit_t *unit);
 
 int
