@@ -286,7 +286,7 @@ c_seccomp_do_sysinfo_fork(const void *data)
 	// overwrite loads from procfs (if lxcfs is enabled, we get the container values)
 	unsigned long load[6] = { 0 };
 
-	char *loadavg = file_read_new("/proc/loadavg", _SC_PAGE_SIZE);
+	char *loadavg = file_read_new("/proc/loadavg", sysconf(_SC_PAGE_SIZE));
 	if (6 != sscanf(loadavg, "%lu.%lu %lu.%lu %lu.%lu", &load[0], &load[1], &load[2], &load[3],
 			&load[4], &load[5])) {
 		WARN("Could not parse '/proc/loadavg' in namespace of container!");
