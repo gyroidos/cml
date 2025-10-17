@@ -131,6 +131,7 @@ endif
 
 # module order is crucial
 SRC_CMODULES := \
+	c_hotplug.c \
 	c_smartcard.c \
 	c_user.c
 
@@ -182,7 +183,6 @@ SRC_CMODULES += \
 	c_time.c \
 	c_audit.c \
 	c_cap.c \
-	c_hotplug.c \
 	$(SRC_CSECCOMP)
 
 ifeq ($(AUTOMOUNT),y)
