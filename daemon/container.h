@@ -308,6 +308,9 @@ container_usbdev_get_i_serial(container_usbdev_t *usbdev);
 container_usbdev_type_t
 container_usbdev_get_type(container_usbdev_t *usbdev);
 
+char *
+container_usbdev_get_devpath_new(container_usbdev_t *usbdev);
+
 bool
 container_usbdev_is_assigned(container_usbdev_t *usbdev);
 
