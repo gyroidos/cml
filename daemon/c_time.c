@@ -285,7 +285,7 @@ static void INIT
 c_time_init(void)
 {
 	// register this module in container.c
-	compartment_register_module(&c_time_module);
+	container_register_compartment_module(&c_time_module);
 
 	// register relevant handlers implemented by this module
 	container_register_get_creation_time_handler(MOD_NAME, c_time_get_creation_time);

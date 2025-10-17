@@ -1652,8 +1652,8 @@ static compartment_module_t c_net_module = {
 static void INIT
 c_net_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_net_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_net_module);
 
 	// register relevant handlers implemented by this module
 	container_register_add_net_interface_handler(MOD_NAME, c_net_add_interface);

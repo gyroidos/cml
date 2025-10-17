@@ -33,6 +33,7 @@ CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
 XORG_COMPAT ?= y
+UNIT_MODULE_PERM ?= y
 
 # build for restrictive CC mode
 CC_MODE ?= n
@@ -94,6 +95,7 @@ PROTO_SRC := \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
+	unit.c \
 	cmld.c \
 	hotplug.c \
 	container.c \
@@ -116,8 +118,20 @@ SRC_FILES := main.c \
 	input.c \
 	audit.c
 
+SRC_UMODULES += \
+	u_user.c \
+	u_net.c
+
+ifeq ($(UNIT_MODULE_PERM),y)
+SRC_UMODULES += \
+	u_perm.c
+LOCAL_CFLAGS += \
+	-DUNIT_MODULE_PERM
+endif
+
 # module order is crucial
 SRC_CMODULES := \
+	c_hotplug.c \
 	c_smartcard.c \
 	c_user.c
 
@@ -169,7 +183,6 @@ SRC_CMODULES += \
 	c_time.c \
 	c_audit.c \
 	c_cap.c \
-	c_hotplug.c \
 	$(SRC_CSECCOMP)
 
 ifeq ($(AUTOMOUNT),y)
@@ -197,24 +210,24 @@ protobuf: container.proto control.proto guestos.proto device.proto scd.proto com
 	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
 	ln -sf cc_mode/device.pb-c.c device.pb-c.c
 	ln -sf cc_mode/device.pb-c.h device.pb-c.h
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. c_service.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
+	protoc --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 
 else
 protobuf: container.proto control.proto guestos.proto device.proto scd.proto common/audit.proto c_service.proto oci_control.proto
-	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. guestos.proto
-	protoc-c --c_out=. device.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. c_service.proto
-	protoc-c --c_out=. oci_control.proto
+	protoc --c_out=. container.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. guestos.proto
+	protoc --c_out=. device.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
+	protoc --c_out=. c_service.proto
+	protoc --c_out=. oci_control.proto
 	$(MAKE) -C common protobuf
 
 endif
@@ -229,7 +242,7 @@ else
 endif
 
 cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_UMODULES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
 
 
 .PHONY: clean

@@ -541,8 +541,8 @@ static compartment_module_t c_shiftid_module = {
 static void INIT
 c_shiftid_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_shiftid_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_shiftid_module);
 
 	// register relevant handlers implemented by this module
 	container_register_shift_ids_handler(MOD_NAME, c_shiftid_shift_ids);

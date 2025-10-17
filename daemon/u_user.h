@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2021 Fraunhofer AISEC
+ * Copyright(c) 2025 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,30 +21,12 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#ifndef CML_SCD_H
-#define CML_SCD_H
-
-#include <stdbool.h>
-
 #include "unit.h"
 
-/**
- * Initializes the scd subsystem (starts the corresponding daemon)
- * @return 0 on success, -1 on error
- */
+typedef struct u_user u_user_t;
+
 int
-scd_init(void);
+u_user_get_uid(const u_user_t *user);
 
-/**
- * Cleans up the scd subsystem (stops the corresponding daemon)
- */
-void
-scd_cleanup(void);
-
-/**
- * Returns the scd subsystems unit instance
- */
-unit_t *
-scd_get_unit(void);
-
-#endif /* CML_SCD_H */
+const char *
+u_user_get_sock_dir(const u_user_t *user);

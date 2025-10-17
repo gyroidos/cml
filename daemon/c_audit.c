@@ -214,8 +214,8 @@ static compartment_module_t c_audit_module = {
 static void INIT
 c_audit_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_audit_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_audit_module);
 
 	// register relevant handlers implemented by this module
 	container_register_audit_get_last_ack_handler(MOD_NAME, c_audit_get_last_ack);

@@ -62,7 +62,7 @@ all: libcommon
 
 .PHONY: protobuf
 protobuf audit.pb-c.h audit.pb-c.c: audit.proto
-	protoc-c --c_out=. audit.proto
+	protoc --c_out=. audit.proto
 
 audit.c: audit.pb-c.h
 

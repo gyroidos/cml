@@ -160,8 +160,8 @@ static compartment_module_t c_cap_module = {
 static void INIT
 c_cap_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_cap_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_cap_module);
 
 	// register relevant handlers implemented by this module
 	container_register_set_cap_current_process_handler(MOD_NAME, c_cap_set_current_process);

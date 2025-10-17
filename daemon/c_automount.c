@@ -278,6 +278,6 @@ static compartment_module_t c_automount_module = {
 static void INIT
 c_automount_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_automount_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_automount_module);
 }

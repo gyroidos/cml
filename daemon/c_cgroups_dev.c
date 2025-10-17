@@ -1058,8 +1058,8 @@ static compartment_module_t c_cgroups_dev_module = {
 static void INIT
 c_cgroups_dev_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_cgroups_dev_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_cgroups_dev_module);
 
 	// register relevant handlers implemented by this module
 	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);

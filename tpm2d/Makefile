@@ -83,8 +83,8 @@ endif
 all: tpm2d
 
 protobuf: attestation.proto tpm2d.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
 
 $(SRC_FILES): protobuf
 

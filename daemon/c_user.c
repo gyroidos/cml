@@ -481,8 +481,8 @@ static compartment_module_t c_user_module = {
 static void INIT
 c_user_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_user_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_user_module);
 
 	// register relevant handlers implemented by this module
 	container_register_setuid0_handler(MOD_NAME, c_user_setuid0);
