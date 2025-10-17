@@ -31,8 +31,10 @@
 #include "common/uuid.h"
 #include "compartment.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
 
 struct container {
@@ -852,6 +854,40 @@ container_usbdev_get_minor(container_usbdev_t *usbdev)
 {
 	ASSERT(usbdev);
 	return usbdev->minor;
+}
+
+char *
+container_usbdev_get_devpath_new(container_usbdev_t *usbdev)
+{
+	int n;
+	char *dev_path = NULL;
+	char *event_str = NULL;
+	char *tmp = NULL;
+	char *buf = NULL;
+	char *sys_path = mem_printf("/sys/dev/char/%d:%d/uevent", usbdev->major, usbdev->minor);
+
+	IF_FALSE_GOTO(file_exists(sys_path), out);
+
+	event_str = file_read_new(sys_path, 4096);
+	IF_NULL_GOTO(event_str, out);
+
+	tmp = strstr(event_str, "\nDEVNAME=");
+	IF_NULL_GOTO(tmp, out);
+
+	buf = mem_new0(char, PATH_MAX);
+	n = sscanf(tmp, "\nDEVNAME=%s\n", buf);
+	IF_FALSE_GOTO(n == 1, out);
+
+	dev_path = (0 == strncmp("/dev", buf, 4)) ? mem_strdup(buf) : mem_printf("/dev/%s", buf);
+out:
+
+	if (event_str)
+		mem_free0(event_str);
+	if (buf)
+		mem_free0(buf);
+	mem_free0(sys_path);
+
+	return dev_path;
 }
 
 container_vnet_cfg_t *
