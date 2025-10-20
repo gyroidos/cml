@@ -30,6 +30,8 @@
 #include "hotplug.h"
 #include "scd_shared.h"
 #include "crypto.h"
+#include "scd.h"
+#include "unit.h"
 
 #include "common/macro.h"
 #include "common/event.h"
@@ -52,9 +54,7 @@
 #include <sys/mount.h>
 #include <unistd.h>
 
-// clang-format off
-#define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
-// clang-format on
+#define SCD_TOKENCONTROL_DIR SOCKET_PREFIX "tokencontrol"
 
 #ifndef SCD_BINARY_NAME
 #define SCD_BINARY_NAME "scd"
@@ -1185,8 +1185,9 @@ c_smartcard_bind_token(c_smartcard_t *smartcard)
 	int ret = -1;
 	uid_t uid = container_get_uid(smartcard->container);
 
-	char *src_path = mem_printf("%s/%s.sock", SCD_TOKENCONTROL_SOCKET,
-				    uuid_string(container_get_uuid(smartcard->container)));
+	char *src_path =
+		mem_printf("%s/%s/%s.sock", unit_get_sock_dir(scd_get_unit()), SCD_TOKENCONTROL_DIR,
+			   uuid_string(container_get_uuid(smartcard->container)));
 	char *dest_dir = mem_printf("%s/dev/tokens", container_get_rootdir(smartcard->container));
 
 	if (NULL == smartcard->token_relay_path)
