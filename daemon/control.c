@@ -82,7 +82,7 @@ struct log_cb_data {
 /**
  * @brief callback for the dir_foreach function sending a file as LogMessage to the Controller
  * @path: Expects path string without trailing "/" at the end
- * @return 1 on error, 0 else
+ * @return 0 on error, 1 on success. Does not return -1 to not stop loop.
  */
 static int
 control_send_file_as_log_message_cb(const char *path, const char *file, void *data)
@@ -93,14 +93,13 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void *da
 	struct log_cb_data *cbdata = data;
 	ASSERT(cbdata);
 
-	int ret = 0;
 	char *file_path = mem_printf("%s/%s", path, file);
 
 	// current logfile link and lock file shall not be processed.
 	if ((file_is_link(file_path)) || (strstr(file, ".current") != NULL) ||
 	    (strstr(file, ".lock-delete-old") != NULL)) {
 		mem_free0(file_path);
-		return ret;
+		return 0;
 	}
 
 	LogMessage message = LOG_MESSAGE__INIT;
@@ -114,6 +113,7 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void *da
 
 	DEBUG("Opening and sending %s", file_path);
 
+	int ret = 1;
 	char *file_buf = file_read_new(file_path, (size_t)file_size(file_path));
 
 	if (file_buf) {
@@ -139,7 +139,10 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void *da
 				if (protobuf_send_message(cbdata->fd, (ProtobufCMessage *)&out) <
 				    0) {
 					ERROR_ERRNO("Could not finish sending %s", file_path);
-					ret = -1;
+					// do not return -1, because this would stopp log retrieval entirely.
+					// only because this file failed, this does not mean the others won't succeed.
+					ret = 0;
+					mem_free0(message.msg);
 					break;
 				}
 
@@ -155,7 +158,10 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void *da
 				if (protobuf_send_message(cbdata->fd, (ProtobufCMessage *)&out) <
 				    0) {
 					ERROR_ERRNO("Could not finish sending %s", file_path);
-					ret = -1;
+					// do not return -1, because this would stopp log retrieval entirely.
+					// only because this file failed, this does not mean the others won't succeed.
+					ret = 0;
+					mem_free0(message.msg);
 					break;
 				}
 
@@ -165,7 +171,8 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void *da
 		}
 		mem_free0(file_buf);
 
-		if (cbdata->remove_logs) {
+		// Only remove the file, if its was sent successfully.
+		if ((ret == 1) && cbdata->remove_logs) {
 			bool is_current_log = false;
 			for (list_t *l = cbdata->current_logs; l; l = l->next) {
 				char *logfile = l->data;
@@ -188,11 +195,11 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void *da
 				DEBUG("Removed log file %s", file_path);
 			}
 		}
-
-		ret = 1;
 	} else {
-		DEBUG("File %s could not be read to buffer.", file_path);
-		ret = -1;
+		WARN("File %s could not be read to buffer.", file_path);
+		// do not return -1, because this would stopp log retrieval entirely.
+		// only because this file failed, this does not mean the others won't succeed.
+		ret = 0;
 	}
 
 	if (out.device_uuid != NULL) {
@@ -1196,8 +1203,8 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 					      &cbdata);
 		}
 
-		if (dir_ret < 0) {
-			ERROR("An error occured during traversal of %s", LOGFILE_DIR);
+		if (dir_ret == 0) {
+			ERROR("No log files in folder %s could be sent.", LOGFILE_DIR);
 		} else if (dir_ret > 0) {
 			TRACE("%d logs were sent.", dir_ret);
 			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_OK;
