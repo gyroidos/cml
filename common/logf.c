@@ -414,11 +414,11 @@ logf_file_new(const char *name)
 	}
 
 	if (file_exists(current) && unlink(current)) {
-		WARN_ERRNO("could not unlink %s", current);
+		FATAL_ERRNO("could not unlink %s", current);
 	}
 
 	if (symlink(name_with_time_of_day, current) < 0) {
-		WARN_ERRNO("Could not create symlink %s to %s", name_with_time_of_day, current);
+		FATAL_ERRNO("Could not create symlink %s to %s", name_with_time_of_day, current);
 	}
 
 	mem_free0(current);
