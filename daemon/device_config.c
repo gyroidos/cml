@@ -233,7 +233,7 @@ device_config_get_host_if(const device_config_t *config)
 	return config->cfg->host_if;
 }
 
-bool
+uint64_t
 device_config_get_audit_size(const device_config_t *config)
 {
 	ASSERT(config);
