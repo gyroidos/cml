@@ -1116,6 +1116,9 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 		cmld_rename_logfiles();
 		container_unregister_observer(container, cb);
 
+		// swap boot order
+		a_b_update_set_boot_order();
+
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
 			container_t *container = l->data;
 			if (container_get_allow_autostart(container)) {
