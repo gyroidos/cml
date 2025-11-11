@@ -35,6 +35,8 @@ AUTOMOUNT ?= y
 XORG_COMPAT ?= y
 DM_LAZY_CHECK_ONLY ?=n
 UNIT_MODULE_PERM ?= y
+A_B_UPDATE ?= n
+A_B_UPDATE_EFI ?= y
 
 # build for restrictive CC mode
 CC_MODE ?= n
@@ -169,6 +171,19 @@ else
 	LOCAL_CFLAGS += -DCGROUPS_LEGACY
 endif
 
+ifeq ($(A_B_UPDATE),y)
+	SRC_FILES += \
+		a_b_update/a_b_update.c
+	LOCAL_CFLAGS += -DA_B_UPDATE
+
+ifeq ($(A_B_UPDATE_EFI),y)
+	SRC_FILES += \
+		a_b_update/a_b_update_efi.c
+	LDLIBS += -lefivar -lefiboot
+	COMMON_EFIVARS = y
+endif
+endif
+
 SRC_CSECCOMP = \
 	c_seccomp/seccomp.c \
 	c_seccomp/mknod.c \
@@ -240,9 +255,9 @@ $(PROTO_SRC): protobuf
 
 libcommon:
 ifeq ($(SYSTEMD),y)
-	$(MAKE) -C common libcommon_full_systemd WITH_PROTOBUF_TEXT=y
+	$(MAKE) -C common libcommon_full_systemd WITH_PROTOBUF_TEXT=y WITH_EFIVAR=${COMMON_EFIVARS}
 else
-	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y WITH_EFIVAR=${COMMON_EFIVARS}
 endif
 
 cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
