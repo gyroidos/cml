@@ -35,6 +35,7 @@ AUTOMOUNT ?= y
 XORG_COMPAT ?= y
 DM_LAZY_CHECK_ONLY ?=n
 UNIT_MODULE_PERM ?= y
+A_B_UPDATE ?= n
 
 # build for restrictive CC mode
 CC_MODE ?= n
@@ -167,6 +168,12 @@ else
 	SRC_CMODULES += \
 		c_cgroups.c
 	LOCAL_CFLAGS += -DCGROUPS_LEGACY
+endif
+
+ifeq ($(A_B_UPDATE),y)
+	SRC_CMODULES += \
+		a_b_update.c
+	LOCAL_CFLAGS += -DA_B_UPDATE
 endif
 
 SRC_CSECCOMP = \
