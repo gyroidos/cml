@@ -43,6 +43,7 @@
 #include "common/network.h"
 #include "common/reboot.h"
 #include "common/hex.h"
+#include "a_b_update/a_b_update.h"
 #include "mount.h"
 #include "device_config.h"
 #include "device_id.h"
@@ -1488,8 +1489,11 @@ cmld_init_stage_unit(const char *path)
 	if (mkdir(path, 0755) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir base path %s", path);
 
-	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
+	char *device_path =
+		a_b_update_get_path_new(DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF);
+	INFO("device.conf path is %s", device_path);
 	device_config_t *device_config = device_config_new(device_path);
+	mem_free0(device_path);
 
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);
@@ -1544,8 +1548,11 @@ cmld_init_stage_container(void)
 	cmld_device_uuid = mem_strdup(device_id_get_uuid(device_id));
 	mem_free0(device_id_path);
 
-	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
+	char *device_path =
+		a_b_update_get_path_new(DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF);
+	INFO("device.conf path is %s", device_path);
 	device_config_t *device_config = device_config_new(device_path);
+	mem_free0(device_path);
 
 	// activate signature checking of container configs if enabled
 	cmld_signed_configs = device_config_get_signed_configs(device_config);
