@@ -58,6 +58,8 @@
 
 #define DMI_PRODUCT_SERIAL "/sys/devices/virtual/dmi/id/product_serial"
 #define DMI_PRODUCT_NAME "/sys/devices/virtual/dmi/id/product_name"
+#define DMI_PRODUCT_SERIAL_LEN 40
+#define DMI_PRODUCT_NAME_LEN 20
 
 #define TOKEN_DEFAULT_EXT ".p12"
 
@@ -134,13 +136,15 @@ provisioning_mode()
 			char *hw_serial = NULL;
 			char *hw_name = NULL;
 
+			// file_read_new of max length of SERIAL and NAME is limited due to the character limit of RFC5280
 			if (file_exists(DMI_PRODUCT_SERIAL))
-				hw_serial = file_read_new(DMI_PRODUCT_SERIAL, 512);
+				hw_serial =
+					file_read_new(DMI_PRODUCT_SERIAL, DMI_PRODUCT_SERIAL_LEN);
 			if (!hw_serial)
 				hw_serial = mem_strdup("0000");
 
 			if (file_exists(DMI_PRODUCT_NAME))
-				hw_name = file_read_new(DMI_PRODUCT_NAME, 512);
+				hw_name = file_read_new(DMI_PRODUCT_NAME, DMI_PRODUCT_NAME_LEN);
 			if (!hw_name)
 				hw_name = mem_strdup("generic");
 
