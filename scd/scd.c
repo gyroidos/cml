@@ -178,12 +178,12 @@ provisioning_mode()
 			char *hw_name = NULL;
 
 			if (file_exists(DMI_PRODUCT_SERIAL))
-				hw_serial = file_read_new(DMI_PRODUCT_SERIAL, 512);
+				hw_serial = file_read_new(DMI_PRODUCT_SERIAL, 40);
 			if (!hw_serial)
 				hw_serial = mem_strdup("0000");
 
 			if (file_exists(DMI_PRODUCT_NAME))
-				hw_name = file_read_new(DMI_PRODUCT_NAME, 512);
+				hw_name = file_read_new(DMI_PRODUCT_NAME, 20);
 			if (!hw_name)
 				hw_name = mem_strdup("generic");
 
