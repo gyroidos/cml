@@ -104,7 +104,8 @@ OBJS_COMMON_FULL := \
 	hex.o \
 	reboot.o \
 	uuid.o \
-	verity.o
+	verity.o \
+	efivars.o
 
 libcommon: $(OBJS_COMMON)
 	$(AR) rcs libcommon.a $^
