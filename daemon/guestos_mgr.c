@@ -179,6 +179,62 @@ guestos_mgr_is_this_guestos_used_by_containers(guestos_t *os)
 	return false;
 }
 
+#ifdef A_B_UPDATE
+static bool
+guestos_mgr_is_this_guestos_kernel_used_by_boot_option(guestos_t *os)
+{
+	ASSERT(os);
+	bool ret = true; // when in doubt (i.e. sth fails), keep guestos
+
+	IF_TRUE_RETVAL(strcmp(guestos_get_name(os), "kernel"), ret);
+
+	mount_t *mnt = mount_new();
+	guestos_fill_mount(os, mnt);
+
+	mount_entry_t *e = mount_get_entry_by_img(mnt, "kernel");
+	IF_NULL_GOTO(e, out_mnt);
+
+	char *mount_point_a = mem_printf("%s.A", mount_entry_get_dir(e));
+	char *mount_point_b = mem_printf("%s.B", mount_entry_get_dir(e));
+
+	char *hash_a = crypto_hash_file_block_new(mount_point_a, SHA256);
+	IF_NULL_GOTO(hash_a, out_mnt_points);
+
+	char *hash_b = crypto_hash_file_block_new(mount_point_b, SHA256);
+	IF_NULL_GOTO(hash_b, out_hash_a);
+
+	if (!strcmp(hash_a, mount_entry_get_sha256(e))) {
+		INFO("GuestOS kernel-%ld is in use at %s", guestos_get_version(os), mount_point_a);
+		goto out_hash_b;
+	}
+
+	if (!strcmp(hash_b, mount_entry_get_sha256(e))) {
+		INFO("GuestOS kernel-%ld is in use at %s", guestos_get_version(os), mount_point_b);
+		goto out_hash_b;
+	}
+
+	INFO("Found unused kernel version %ld", guestos_get_version(os));
+	ret = false;
+
+out_hash_b:
+	mem_free0(hash_a);
+out_hash_a:
+	mem_free0(hash_b);
+out_mnt_points:
+	mem_free0(mount_point_a);
+	mem_free0(mount_point_b);
+out_mnt:
+	mount_free(mnt);
+	return ret;
+}
+#else
+static inline bool
+guestos_mgr_is_this_guestos_kernel_used_by_boot_option(UNUSED guestos_t *os)
+{
+	return false;
+}
+#endif
+
 /******************************************************************************/
 
 int
@@ -241,7 +297,8 @@ guestos_mgr_purge_obsolete(void)
 		guestos_t *os = l->data;
 		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
 		if (latest && guestos_get_version(os) < guestos_get_version(latest) &&
-		    !guestos_mgr_is_this_guestos_used_by_containers(os)) {
+		    !guestos_mgr_is_this_guestos_used_by_containers(os) &&
+		    !guestos_mgr_is_this_guestos_kernel_used_by_boot_option(os)) {
 			guestos_list = list_unlink(guestos_list, l);
 			guestos_purge(os);
 			guestos_free(os);
