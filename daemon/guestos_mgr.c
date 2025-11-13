@@ -179,6 +179,69 @@ guestos_mgr_is_this_guestos_used_by_containers(guestos_t *os)
 	return false;
 }
 
+#ifdef A_B_UPDATE
+static bool
+guestos_mgr_is_this_guestos_kernel_used_by_boot_option(guestos_t *os)
+{
+	ASSERT(os);
+	bool ret = false;
+
+	if (strcmp(guestos_get_name(os), "kernel")) {
+		return false;
+	}
+
+	mount_t *mnt = mount_new();
+	guestos_fill_mount(os, mnt);
+
+	mount_entry_t *e = mount_get_entry_by_img(mnt, "kernel");
+	if (!e) {
+		goto out_mnt;
+	}
+
+	char *mount_point_a = mem_printf("%s.A", mount_entry_get_dir(e));
+	char *mount_point_b = mem_printf("%s.B", mount_entry_get_dir(e));
+
+	char *hash_mount_a = crypto_hash_file_block_new(mount_point_a, SHA256);
+	if (!hash_mount_a) {
+		goto out_mnt_points;
+	}
+
+	char *hash_mount_b = crypto_hash_file_block_new(mount_point_b, SHA256);
+	if (!hash_mount_b) {
+		mem_free0(hash_mount_a);
+		goto out_mnt_points;
+	}
+
+	if (!strcmp(hash_mount_a, mount_entry_get_sha256(e))) {
+		ret = true;
+		goto out_hashes;
+	}
+
+	if (!strcmp(hash_mount_b, mount_entry_get_sha256(e))) {
+		ret = true;
+		goto out_hashes;
+	}
+
+	DEBUG("Found unused kernel version %ld", guestos_get_version(os));
+
+out_hashes:
+	mem_free0(hash_mount_a);
+	mem_free0(hash_mount_b);
+out_mnt_points:
+	mem_free0(mount_point_a);
+	mem_free0(mount_point_b);
+out_mnt:
+	mount_free(mnt);
+	return ret;
+}
+#else
+static inline bool
+guestos_mgr_is_this_guestos_kernel_used_by_boot_option(UNUSED guestos_t *os)
+{
+	return false;
+}
+#endif
+
 /******************************************************************************/
 
 int
@@ -241,7 +304,8 @@ guestos_mgr_purge_obsolete(void)
 		guestos_t *os = l->data;
 		guestos_t *latest = guestos_mgr_get_latest_by_name(guestos_get_name(os), true);
 		if (latest && guestos_get_version(os) < guestos_get_version(latest) &&
-		    !guestos_mgr_is_this_guestos_used_by_containers(os)) {
+		    !guestos_mgr_is_this_guestos_used_by_containers(os) &&
+		    !guestos_mgr_is_this_guestos_kernel_used_by_boot_option(os)) {
 			guestos_list = list_unlink(guestos_list, l);
 			guestos_purge(os);
 			guestos_free(os);
