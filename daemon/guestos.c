@@ -372,7 +372,7 @@ guestos_images_are_complete(guestos_t *os, bool thorough)
 		mount_entry_t *e = mount_get_entry(mnt, i);
 		enum mount_type t = mount_entry_get_type(e);
 		if (t != MOUNT_TYPE_SHARED && t != MOUNT_TYPE_FLASH && t != MOUNT_TYPE_OVERLAY_RO &&
-		    t != MOUNT_TYPE_SHARED_RW)
+		    t != MOUNT_TYPE_SHARED_RW && t != MOUNT_TYPE_STORE_ONLY)
 			continue;
 		if (guestos_check_mount_image_block(os, e, thorough) != CHECK_IMAGE_GOOD) {
 			res = false;
@@ -501,7 +501,7 @@ iterate_images_trigger_check(iterate_images_t *task)
 		mount_entry_t *e = mount_get_entry(task->mnt, task->i);
 		enum mount_type t = mount_entry_get_type(e);
 		if (t == MOUNT_TYPE_SHARED || t == MOUNT_TYPE_FLASH || t == MOUNT_TYPE_OVERLAY_RO ||
-		    t == MOUNT_TYPE_SHARED_RW) {
+		    t == MOUNT_TYPE_SHARED_RW || t == MOUNT_TYPE_STORE_ONLY) {
 			DEBUG("Found next image %s.img for GuestOS %s v%" PRIu64
 			      ", triggering check.",
 			      mount_entry_get_img(e), guestos_get_name(task->os),

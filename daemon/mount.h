@@ -68,6 +68,7 @@ enum mount_type {
 	MOUNT_TYPE_BIND_FILE_RW = 11, /**< file is bind mounted to container (RW) */
 	MOUNT_TYPE_BIND_DIR = 12,     /**< dir is bind mounted to container (RO) */
 	MOUNT_TYPE_BIND_DIR_RW = 13,  /**< dir is bind mounted to container (RW) */
+	MOUNT_TYPE_STORE_ONLY = 14,   /**< image is only held in guestos store */
 };
 
 mount_t *
