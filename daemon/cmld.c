@@ -1565,6 +1565,16 @@ cmld_init_stage_unit(const char *path)
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
 
+	if (device_config_get_tpm_enabled(device_config)) {
+		if (tss_init() < 0) {
+			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
+		} else {
+			INFO("tss initialized.");
+			if (atexit(&tss_cleanup))
+				WARN("could not register on exit cleanup method 'tss_cleanup()'");
+		}
+	}
+
 	device_config_free(device_config);
 
 	return 0;
@@ -1622,16 +1632,6 @@ cmld_init_stage_container(void)
 		WARN("Could not init ksm module");
 	else
 		INFO("ksm initialized.");
-
-	if (device_config_get_tpm_enabled(device_config)) {
-		if (tss_init(!cmld_is_hostedmode_active()) < 0) {
-			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
-		} else {
-			INFO("tss initialized.");
-			if (atexit(&tss_cleanup))
-				WARN("could not register on exit cleanup method 'tss_cleanup()'");
-		}
-	}
 
 	if (lxcfs_init() < 0) {
 		WARN("Plattform does not support LXCFS");
