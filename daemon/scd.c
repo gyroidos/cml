@@ -162,8 +162,7 @@ scd_on_connect_cb(int sock, const char *sock_path)
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
 	event_add_io(event);
 
-	if (cmld_init_stage_container() < 0)
-		FATAL("Could not init cmld (container stage)!");
+	cmld_init_stage_unit_notify(scd_unit);
 }
 
 int
@@ -192,11 +191,13 @@ scd_init(void)
 	unit_device_set_initial_allow(scd_unit, dev_nodes);
 	list_delete(dev_nodes);
 
-	if (unit_start(scd_unit)) {
+	if (unit_start(scd_unit) < 0) {
 		unit_free(scd_unit);
 		ERROR("Could nor start unit for scd!");
 		return -1;
 	}
+
+	cmld_init_stage_unit_notify(scd_unit);
 
 	return 0;
 }
