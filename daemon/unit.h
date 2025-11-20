@@ -89,6 +89,12 @@ unit_device_deny(unit_t *unit, char *name);
 int
 unit_device_set_initial_allow(unit_t *unit, list_t *device_names);
 
+time_t
+unit_get_creation_time(const unit_t *unit);
+
+time_t
+unit_get_uptime(const unit_t *unit);
+
 int
 unit_start(unit_t *unit);
 
