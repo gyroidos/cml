@@ -113,6 +113,7 @@ static const char *cmld_container_path = NULL;
 static const char *cmld_wrapped_keys_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
+static list_t *cmld_units_list = NULL;
 
 static control_t *cmld_control_gui = NULL;
 static control_t *cmld_control_cml = NULL;
@@ -1079,6 +1080,30 @@ cmld_container_ctrl_with_smartcard(container_t *container, const char *passwd,
 	return -2;
 }
 
+int
+cmld_units_get_count(void)
+{
+	return list_length(cmld_units_list);
+}
+
+unit_t *
+cmld_unit_get_by_index(int index)
+{
+	return list_nth_data(cmld_units_list, index);
+}
+
+unit_t *
+cmld_unit_get_by_uuid(const uuid_t *uuid)
+{
+	ASSERT(uuid);
+
+	for (list_t *l = cmld_units_list; l; l = l->next)
+		if (uuid_equals(unit_get_uuid(l->data), uuid))
+			return l->data;
+
+	return NULL;
+}
+
 /******************************************************************************/
 
 static void
@@ -1454,10 +1479,15 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 static void
 cmld_init_stage_reached(cmld_init_stage_t stage)
 {
+	// skip if a completed stage is reached again, e.g., due to an unit restart
+	if (cmld_init_stage >= stage)
+		return;
+
 	switch (stage) {
 	case CMLD_INIT_STAGE_UNIT:
 		INFO("CMLD_INIT_STAGE_UNIT completed.");
 		cmld_init_stage = stage;
+		cmld_init_stage_container();
 		break;
 	case CMLD_INIT_STAGE_CONTAINER:
 		INFO("CMLD_INIT_STAGE_CONTAINER completed.");
@@ -1533,9 +1563,6 @@ cmld_init_stage_unit(const char *path)
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
 
 	device_config_free(device_config);
-
-	// set init stage UNIT completed
-	cmld_init_stage_reached(CMLD_INIT_STAGE_UNIT);
 
 	return 0;
 }
@@ -1678,6 +1705,31 @@ cmld_init_stage_container(void)
 	// set init stage CONTAINER completed
 	cmld_init_stage_reached(CMLD_INIT_STAGE_CONTAINER);
 	return 0;
+}
+
+void
+cmld_init_stage_unit_notify(unit_t *unit)
+{
+	if (!list_find(cmld_units_list, unit))
+		cmld_units_list = list_append(cmld_units_list, unit);
+
+	bool units_pending = false;
+	for (list_t *l = cmld_units_list; l; l = l->next) {
+		unit_t *u = l->data;
+		if (unit_get_state(u) != COMPARTMENT_STATE_RUNNING) {
+			units_pending = true;
+			break;
+		}
+	}
+
+	DEBUG("Unit notify: unit '%s' is pending %s", unit_get_name(unit),
+	      units_pending ? "true" : "false");
+
+	if (units_pending)
+		return;
+
+	// set init stage UNIT completed
+	cmld_init_stage_reached(CMLD_INIT_STAGE_UNIT);
 }
 
 container_t *
@@ -1970,6 +2022,8 @@ cmld_cleanup(void)
 		container_free(container);
 	}
 	list_delete(cmld_containers_list);
+
+	list_delete(cmld_units_list);
 
 	if (cmld_control_gui)
 		control_free(cmld_control_gui);
