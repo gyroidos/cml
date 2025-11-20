@@ -62,8 +62,8 @@ print_usage(const char *cmd)
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("   list\n"
-	       "        Lists all containers.\n\n");
+	printf("   list [-s | --system]\n"
+	       "        Lists all containers. If 'system' option is set, include system services (units)\n\n");
 	printf("   list_guestos\n"
 	       "        Lists all installed guestos configs.\n\n");
 	printf("   reload\n"
@@ -196,11 +196,15 @@ get_container_usb_pin_entry(uuid_t *uuid, int sock)
 }
 
 static uuid_t *
-get_container_uuid_new(const char *identifier, int sock)
+get_container_uuid_new(const char *identifier, int sock, bool system)
 {
 	uuid_t *valid_uuid = NULL;
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
 	msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+	if (system) {
+		msg.has_system_services = true;
+		msg.system_services = true;
+	}
 	send_message(sock, &msg);
 
 	DaemonToController *resp = recv_message(sock);
@@ -247,6 +251,8 @@ static const struct option assign_iface_options[] = { { "iface", required_argume
 						      { 0, 0, 0, 0 } };
 
 static const struct option log_options[] = { { "remove", no_argument, 0, 'r' }, { 0, 0, 0, 0 } };
+
+static const struct option list_options[] = { { "system", no_argument, 0, 's' }, { 0, 0, 0, 0 } };
 
 static char *
 get_password_new(const char *prompt)
@@ -316,6 +322,24 @@ main(int argc, char *argv[])
 	 */
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+		// parse specific options for list command
+		optind--;
+		char **list_argv = &argv[optind];
+		int list_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     -1 !=
+		     (c = getopt_long(list_argc, list_argv, "s", list_options, &option_index));) {
+			switch (c) {
+			case 's':
+				msg.has_system_services = true;
+				msg.system_services = true;
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
 		goto send_message;
 	}
 	if (!strcasecmp(command, "list_guestos")) {
@@ -550,7 +574,17 @@ main(int argc, char *argv[])
 		print_usage(argv[0]);
 
 	sock = sock_connect(socket_file);
-	uuid = get_container_uuid_new(argv[optind], sock);
+
+	if (!strcasecmp(command, "state")) {
+		uuid = get_container_uuid_new(argv[optind], sock, true);
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+		msg.n_container_uuids = 1;
+		msg.container_uuids = mem_new(char *, 1);
+		msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
+		goto send_message;
+	}
+
+	uuid = get_container_uuid_new(argv[optind], sock, false);
 
 	ContainerStartParams container_start_params = CONTAINER_START_PARAMS__INIT;
 	if (!strcasecmp(command, "remove")) {
@@ -637,8 +671,6 @@ main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ALLOWAUDIO;
 	} else if (!strcasecmp(command, "deny_audio")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DENYAUDIO;
-	} else if (!strcasecmp(command, "state")) {
-		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 	} else if (!strcasecmp(command, "config")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 	} else if (!strcasecmp(command, "update_config")) {
