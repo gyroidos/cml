@@ -36,6 +36,7 @@
 #define CMLD_H
 
 #include "container.h"
+#include "unit.h"
 #include "control.h"
 
 #ifndef DEFAULT_BASE_PATH
@@ -69,6 +70,12 @@ typedef enum { CMLD_CONTAINER_CTRL_START, CMLD_CONTAINER_CTRL_STOP } cmld_contai
  */
 int
 cmld_init_stage_unit(const char *path);
+
+/**
+ * Notify cmld about unit state change during early init stage
+ */
+void
+cmld_init_stage_unit_notify(unit_t *unit);
 
 /**
  * Initialize the CMLD module.
@@ -228,6 +235,15 @@ cmld_containers_get_count();
 
 container_t *
 cmld_container_get_by_index(int index);
+
+int
+cmld_units_get_count(void);
+
+unit_t *
+cmld_unit_get_by_index(int index);
+
+unit_t *
+cmld_unit_get_by_uuid(const uuid_t *uuid);
 
 /**
  * Get the device UUID.
