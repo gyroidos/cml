@@ -202,6 +202,7 @@ message ControllerToDaemon {
 	optional string device_pin = 42;	// pin for token for CONTAINER_CHANGE_TOKEN_PIN
 	optional string device_newpin = 43;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN)
 	optional string dev_rule = 44; // device access rule n form of dev-type major:minor read-write-mknod, e.g., "c 42:42 rwm"
+	optional bool system_services = 46;	// parameter for LIST_CONTAINERS list to also show units
 
 	// Daemon
 	optional bytes guestos_config_file = 20;	// new/updated GuestOS config for PUSH_GUESTOS_CONFIG
