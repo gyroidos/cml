@@ -127,7 +127,8 @@ SRC_FILES := main.c \
 SRC_UMODULES += \
 	u_user.c \
 	u_service.c \
-	u_net.c
+	u_net.c \
+	u_time.c
 
 ifeq ($(UNIT_MODULE_PERM),y)
 SRC_UMODULES += \
