@@ -34,6 +34,7 @@
 #include "common/ns.h"
 #include "common/sock.h"
 #include "unit.h"
+#include "mount.h"
 #include "u_user.h"
 
 #ifndef LOGFILE_DIR
@@ -320,8 +321,13 @@ u_user_start_pre_clone(void *usr)
 	}
 
 	char *sock_dir_parent = mem_printf("/run/socket/cml_unit/%s", unit_get_name(user->unit));
-	if (dir_mkdir_p(sock_dir_parent, 00777) < 0) {
-		ERROR_ERRNO("Could not mkdir %s", sock_dir_parent);
+	/*
+	 * set world rwx only if idmapped mount is not supported
+	 * otherwise only allow root to write sock_dir
+	 */
+	mode_t mode = mount_is_idmapping_supported() ? 00755 : 00777;
+	if (dir_mkdir_p(sock_dir_parent, mode) < 0) {
+		ERROR_ERRNO("Could not mkdir %s (%o)", sock_dir_parent, mode);
 		ret = -COMPARTMENT_ERROR_USER;
 		goto out;
 	}
@@ -332,6 +338,10 @@ u_user_start_pre_clone(void *usr)
 		ret = -COMPARTMENT_ERROR_USER;
 		goto out;
 	}
+
+	// skip chowning if idmapping is supported
+	if (mount_is_idmapping_supported())
+		goto out;
 
 	if (dir_foreach(unit_get_data_path(user->unit), &u_user_chown_dir_cb, user) < 0) {
 		ERROR("Could not chown %s to target uid:gid (%d:%d)",
@@ -403,6 +413,12 @@ u_user_init(void)
 	// register this module in unit.c
 	unit_register_compartment_module(&u_user_module);
 
-	if (chmod(LOGFILE_DIR, 00777))
-		FATAL_ERRNO("Could not chmod %s", LOGFILE_DIR);
+	/*
+	 * set world rwx only if idmapped mount is not supported
+	 * otherwise only allow root to write LOGFILE_DIR (revert any
+	 * possible world rwx which was set before)
+	 */
+	mode_t mode = mount_is_idmapping_supported() ? 00755 : 00777;
+	if (chmod(LOGFILE_DIR, mode))
+		WARN_ERRNO("Could not chmod %s (%o)", LOGFILE_DIR, mode);
 }
