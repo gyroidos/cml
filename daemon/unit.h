@@ -36,7 +36,7 @@ unit_register_compartment_module(compartment_module_t *mod);
 
 unit_t *
 unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv, char **env,
-	 size_t env_len, bool netns, const char *data_path, const char *sock_name,
+	 size_t env_len, bool netns, const char *data_path, const char *sock_name, int sock_type,
 	 void (*on_sock_connect_cb)(int sock, const char *sock_path), bool restart);
 
 void
@@ -47,6 +47,9 @@ unit_get_name(const unit_t *unit);
 
 const char *
 unit_get_description(const unit_t *unit);
+
+const uuid_t *
+unit_get_uuid(const unit_t *unit);
 
 bool
 unit_has_netns(const unit_t *unit);
@@ -62,6 +65,20 @@ unit_get_uid(const unit_t *unit);
 
 const char *
 unit_get_data_path(const unit_t *unit);
+
+const char *
+unit_get_sock_name(const unit_t *unit);
+
+int
+unit_get_sock_type(const unit_t *unit);
+
+void (*unit_get_on_sock_connect_cb(const unit_t *unit))(int, const char *);
+
+bool
+unit_get_restart(const unit_t *unit);
+
+compartment_state_t
+unit_get_state(const unit_t *unit);
 
 int
 unit_device_allow(unit_t *unit, char *name, char type, int major, int minor);
