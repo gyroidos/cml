@@ -25,12 +25,14 @@
 #include <sched.h>
 
 #include "mount.h"
+#include "mount_idmapped.h"
 #include "crypto.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/list.h"
 #include "common/file.h"
+#include "common/kernel.h"
 
 #include <errno.h>
 #include <string.h>
@@ -534,4 +536,70 @@ error:
 	umount(MOUNT_CGROUPS_FOLDER "/systemd");
 	umount(MOUNT_CGROUPS_FOLDER);
 	return -1;
+}
+
+/**************************/
+int
+mount_setattr(int dirfd, const char *path, unsigned int flags, struct mount_attr *attr, size_t size)
+{
+	return syscall(__NR_mount_setattr, dirfd, path, flags, attr, size);
+}
+
+int
+open_tree(int dirfd, const char *path, unsigned int flags)
+{
+	return syscall(__NR_open_tree, dirfd, path, flags);
+}
+
+int
+move_mount(int from_dirfd, const char *from_path, int to_dirfd, const char *to_path,
+	   unsigned int flags)
+{
+	return syscall(__NR_move_mount, from_dirfd, from_path, to_dirfd, to_path, flags);
+}
+/**************************/
+
+bool
+mount_is_idmapping_supported(void)
+{
+	return kernel_version_check("6.3");
+}
+
+int
+mount_idmapped(char *src, char *dst, int userns_fd)
+{
+	ASSERT(src);
+
+	IF_TRUE_RETVAL(!mount_is_idmapping_supported(), -1);
+	IF_TRUE_RETVAL(userns_fd < 0, -1);
+
+	int mapped_tree_fd = -1;
+
+	struct mount_attr attr = { 0 };
+	attr.userns_fd = userns_fd;
+	attr.attr_set = MOUNT_ATTR_IDMAP;
+
+	if ((mapped_tree_fd =
+		     open_tree(-1, src, OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC | AT_EMPTY_PATH)) < 0) {
+		ERROR_ERRNO("Could not open_tree path '%s'", src);
+		return -1;
+	}
+
+	if (mount_setattr(mapped_tree_fd, "", AT_EMPTY_PATH, &attr, sizeof(struct mount_attr))) {
+		ERROR_ERRNO("Could not setattr for src path '%s'", src);
+		close(mapped_tree_fd);
+		return -1;
+	}
+
+	INFO("Sucessfully applied idmapping from src path %s on fd=%d for %s", src, mapped_tree_fd,
+	     dst);
+
+	if (move_mount(mapped_tree_fd, "", -1, dst, MOVE_MOUNT_F_EMPTY_PATH) == -1) {
+		ERROR_ERRNO("Could not move_mount %s on %s!", src, dst);
+		return -1;
+	}
+
+	INFO("Successfully move_mount %s on %s.", src, dst);
+
+	return 0;
 }

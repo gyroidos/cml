@@ -264,4 +264,10 @@ mount_private_tmp(void);
 int
 mount_cgroups(list_t *cgroups_subsystems);
 
+bool
+mount_is_idmapping_supported(void);
+
+int
+mount_idmapped(char *src, char *dst, int userns_fd);
+
 #endif /* MOUNT_H */
