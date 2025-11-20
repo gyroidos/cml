@@ -73,20 +73,12 @@ cmld_init_stage_unit(const char *path);
 
 /**
  * Notify cmld about unit state change during early init stage
+ *
+ * Triggers internal 2nd stage initialization if all units including SCD,
+ * are running.
  */
 void
 cmld_init_stage_unit_notify(unit_t *unit);
-
-/**
- * Initialize the CMLD module.
- *
- * 2nd stage initialization which already needs SCD running
- * Triggered by SCD module
- *
- * @return 0 on success, -1 on error
- */
-int
-cmld_init_stage_container(void);
 
 /**
  * Cleans up the CMLD module.
