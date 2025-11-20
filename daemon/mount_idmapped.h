@@ -24,9 +24,6 @@
 #ifndef MOUNT_IDMAPPED_H
 #define MOUNT_IDMAPPED_H
 
-#include "common/kernel.h"
-
-#include <linux/mount.h>
 #include <sys/mount.h>
 #include <unistd.h>
 
