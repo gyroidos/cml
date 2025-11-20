@@ -154,6 +154,9 @@ static oci_control_t *cmld_oci_control_cml = NULL;
 static int
 cmld_start_c0(container_t *new_c0);
 
+static int
+cmld_init_stage_container(void);
+
 /******************************************************************************/
 
 container_t *
@@ -1567,7 +1570,7 @@ cmld_init_stage_unit(const char *path)
 	return 0;
 }
 
-int
+static int
 cmld_init_stage_container(void)
 {
 	if (cmld_init_stage > CMLD_INIT_STAGE_UNIT) {
