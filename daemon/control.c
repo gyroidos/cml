@@ -27,6 +27,7 @@
 #include "container.pb-c.h"
 
 #include "container.h"
+#include "unit.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "cmld.h"
@@ -325,8 +326,33 @@ control_container_status_new(const container_t *container)
 }
 
 /**
+ * Get the ContainerStatus for the given unit
+ *
+ * @param unit the unit object from which to generate the ContainerStatus
+ * @return  a new ContainerStatus object with information about the given unit;
+ *          has to be free'd with control_container_status_free()
+ */
+static ContainerStatus *
+control_unit_status_new(const unit_t *unit)
+{
+	ContainerStatus *c_status = mem_new(ContainerStatus, 1);
+	container_status__init(c_status);
+	c_status->uuid = mem_strdup(uuid_string(unit_get_uuid(unit)));
+	c_status->name = mem_strdup(unit_get_name(unit));
+	c_status->type = CONTAINER_TYPE__CONTAINER;
+	c_status->state = control_compartment_state_to_proto(unit_get_state(unit));
+	c_status->uptime = unit_get_uptime(unit);
+	c_status->created = unit_get_creation_time(unit);
+	c_status->guestos = mem_strdup("host");
+	c_status->trust_level = CONTAINER_TRUST__SIGNED;
+	c_status->cryptfs_mode = CRYPTFS_MODE__NOT_IMPLEMENTED;
+
+	return c_status;
+}
+
+/**
  * Free the given ContainerStatus object that was previously allocated
- * by control_container_status_new().
+ * by control_container_status_new() or control_unit_status_new()
  *
  * @param c_status the previously allocated ContainerStatus object
  */
@@ -450,6 +476,48 @@ control_build_container_list_from_uuids(size_t n_uuids, char **uuids)
 		}
 	}
 	return containers;
+}
+
+static unit_t *
+control_get_unit_by_uuid_string(const char *uuid_str)
+{
+	uuid_t *uuid = uuid_new(uuid_str);
+	if (!uuid) {
+		WARN("Could not get UUID");
+		return NULL;
+	}
+	unit_t *unit = cmld_unit_get_by_uuid(uuid);
+	if (!unit) {
+		WARN("Could not find unit for UUID %s", uuid_string(uuid));
+		uuid_free(uuid);
+		return NULL;
+	}
+	uuid_free(uuid);
+	return unit;
+}
+
+/**
+ * Returns a list of units for all given UUIDs, or a list with all
+ * available units if the given UUID list is empty.
+ */
+static list_t *
+control_build_unit_list_from_uuids(size_t n_uuids, char **uuids)
+{
+	list_t *units = NULL;
+	if (n_uuids > 0) { // uuid list given in incoming message
+		for (size_t i = 0; i < n_uuids; i++) {
+			unit_t *unit = control_get_unit_by_uuid_string(uuids[i]);
+			if (unit != NULL)
+				units = list_append(units, unit);
+		}
+	} else { // empty uuid list, return status for all units
+		n_uuids = cmld_units_get_count();
+		for (size_t i = 0; i < n_uuids; i++) {
+			unit_t *unit = cmld_unit_get_by_index(i);
+			units = list_append(units, unit);
+		}
+	}
+	return units;
 }
 
 int
@@ -1006,15 +1074,26 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS: {
-		// assemble list of relevant containers and allocate memory for result
-		size_t n = cmld_containers_get_count();
+		// assemble list of relevant units + containers and allocate memory for result
+		size_t n_container = cmld_containers_get_count();
+		size_t n_unit = 0;
+		if (msg->has_system_services && msg->system_services)
+			n_unit += cmld_units_get_count();
+		size_t n = n_unit + n_container;
 		char **results = mem_new(char *, n);
 
-		// fill result with data from guestos
+		// units
+		for (size_t i = 0; i < n_unit; i++) {
+			unit_t *unit = cmld_unit_get_by_index(i);
+			const char *uuid = uuid_string(unit_get_uuid(unit));
+			results[i] = mem_strdup(uuid);
+		}
+
+		// container
 		for (size_t i = 0; i < n; i++) {
 			container_t *container = cmld_container_get_by_index(i);
 			const char *uuid = uuid_string(container_get_uuid(container));
-			results[i] = mem_strdup(uuid);
+			results[n_unit + i] = mem_strdup(uuid);
 		}
 
 		// build and send response message to controller
@@ -1033,16 +1112,31 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS: {
-		// assemble list of relevant containers and allocate memory for result
+		bool include_units = (msg->n_container_uuids > 0) ? true : false;
+		// assemble list of relevant units + containers and allocate memory for result
 		list_t *containers = control_build_container_list_from_uuids(msg->n_container_uuids,
 									     msg->container_uuids);
-		size_t n = list_length(containers);
+		list_t *units = NULL;
+		size_t n_container = list_length(containers);
+		size_t n_unit = 0;
+		if (include_units || (msg->has_system_services && msg->system_services)) {
+			units = control_build_unit_list_from_uuids(msg->n_container_uuids,
+								   msg->container_uuids);
+			n_unit += list_length(units);
+		}
+		size_t n = n_unit + n_container;
 		ContainerStatus **results = mem_new(ContainerStatus *, n);
 
 		// fill result with data from container
-		for (size_t i = 0; i < n; i++) {
+		for (size_t i = 0; i < n_unit; i++) {
+			unit_t *unit = list_nth_data(units, i);
+			results[i] = control_unit_status_new(unit);
+		}
+
+		// fill result with data from container
+		for (size_t i = 0; i < n_container; i++) {
 			container_t *container = list_nth_data(containers, i);
-			results[i] = control_container_status_new(container);
+			results[n_unit + i] = control_container_status_new(container);
 		}
 
 		// build and send response message to controller
@@ -1055,6 +1149,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 
 		// collect garbage
+		list_delete(units);
 		list_delete(containers);
 		for (size_t i = 0; i < n; i++)
 			control_container_status_free(results[i]);
