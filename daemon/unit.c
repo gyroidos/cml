@@ -24,6 +24,7 @@
 #include "unit.h"
 #include "u_user.h"
 #include "u_perm.h"
+#include "u_time.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -305,4 +306,22 @@ unit_kill(unit_t *unit)
 
 	unit->restart = false;
 	compartment_kill(unit->compartment);
+}
+
+time_t
+unit_get_creation_time(const unit_t *unit)
+{
+	ASSERT(unit);
+	u_time_t *time = compartment_module_get_instance_by_name(unit->compartment, "c_time");
+
+	return u_time_get_creation_time(time);
+}
+
+time_t
+unit_get_uptime(const unit_t *unit)
+{
+	ASSERT(unit);
+	u_time_t *time = compartment_module_get_instance_by_name(unit->compartment, "c_time");
+
+	return u_time_get_uptime(time);
 }
