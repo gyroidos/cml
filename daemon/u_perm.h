@@ -21,6 +21,9 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#ifndef U_PERM_H
+#define U_PERM_H
+
 #include "unit.h"
 #include "common/macro.h"
 
@@ -55,3 +58,4 @@ u_perm_set_initial_allow_dev(UNUSED u_perm_t *perm, UNUSED list_t *device_names)
 	return 0;
 }
 #endif /* UNIT_MODULE_PERM */
+#endif /* U_PERM_H */
