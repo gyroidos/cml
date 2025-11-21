@@ -21,6 +21,9 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#ifndef U_USER_H
+#define U_USER_H
+
 #include "unit.h"
 
 typedef struct u_user u_user_t;
@@ -30,3 +33,5 @@ u_user_get_uid(const u_user_t *user);
 
 const char *
 u_user_get_sock_dir(const u_user_t *user);
+
+#endif /* U_USER_H */
