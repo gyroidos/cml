@@ -133,8 +133,9 @@ print_usage(const char *cmd)
 	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
 	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
-	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the given directory.\n"
-	       "If the 'remove' option was given, all log files are removed upon successful retrieval. The currrently used log file is not removed.\n\n");
+	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the\n"
+	       "        given directory. If the 'remove' option was given, all log files are removed upon\n"
+	       "        successful retrieval. The currrently used log file is not removed.\n\n");
 	printf("\n");
 	exit(-1);
 }
