@@ -112,6 +112,7 @@ static const char *cmld_container_path = NULL;
 static const char *cmld_wrapped_keys_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
+static list_t *cmld_units_list = NULL;
 
 static control_t *cmld_control_gui = NULL;
 static control_t *cmld_control_cml = NULL;
@@ -151,6 +152,9 @@ static oci_control_t *cmld_oci_control_cml = NULL;
 
 static int
 cmld_start_c0(container_t *new_c0);
+
+static int
+cmld_init_stage_container(void);
 
 /******************************************************************************/
 
@@ -1078,6 +1082,30 @@ cmld_container_ctrl_with_smartcard(container_t *container, const char *passwd,
 	return -2;
 }
 
+int
+cmld_units_get_count(void)
+{
+	return list_length(cmld_units_list);
+}
+
+unit_t *
+cmld_unit_get_by_index(int index)
+{
+	return list_nth_data(cmld_units_list, index);
+}
+
+unit_t *
+cmld_unit_get_by_uuid(const uuid_t *uuid)
+{
+	ASSERT(uuid);
+
+	for (list_t *l = cmld_units_list; l; l = l->next)
+		if (uuid_equals(unit_get_uuid(l->data), uuid))
+			return l->data;
+
+	return NULL;
+}
+
 /******************************************************************************/
 
 static void
@@ -1454,6 +1482,7 @@ cmld_init_stage_reached(cmld_init_stage_t stage)
 	case CMLD_INIT_STAGE_UNIT:
 		INFO("CMLD_INIT_STAGE_UNIT completed.");
 		cmld_init_stage = stage;
+		cmld_init_stage_container();
 		break;
 	case CMLD_INIT_STAGE_CONTAINER:
 		INFO("CMLD_INIT_STAGE_CONTAINER completed.");
@@ -1522,15 +1551,22 @@ cmld_init_stage_unit(const char *path)
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
 
-	device_config_free(device_config);
+	if (device_config_get_tpm_enabled(device_config)) {
+		if (tss_init() < 0) {
+			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
+		} else {
+			INFO("tss initialized.");
+			if (atexit(&tss_cleanup))
+				WARN("could not register on exit cleanup method 'tss_cleanup()'");
+		}
+	}
 
-	// set init stage UNIT completed
-	cmld_init_stage_reached(CMLD_INIT_STAGE_UNIT);
+	device_config_free(device_config);
 
 	return 0;
 }
 
-int
+static int
 cmld_init_stage_container(void)
 {
 	if (cmld_init_stage > CMLD_INIT_STAGE_UNIT) {
@@ -1579,16 +1615,6 @@ cmld_init_stage_container(void)
 		WARN("Could not init ksm module");
 	else
 		INFO("ksm initialized.");
-
-	if (device_config_get_tpm_enabled(device_config)) {
-		if (tss_init(!cmld_is_hostedmode_active()) < 0) {
-			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
-		} else {
-			INFO("tss initialized.");
-			if (atexit(&tss_cleanup))
-				WARN("could not register on exit cleanup method 'tss_cleanup()'");
-		}
-	}
 
 	if (lxcfs_init() < 0) {
 		WARN("Plattform does not support LXCFS");
@@ -1665,6 +1691,31 @@ cmld_init_stage_container(void)
 	// set init stage CONTAINER completed
 	cmld_init_stage_reached(CMLD_INIT_STAGE_CONTAINER);
 	return 0;
+}
+
+void
+cmld_init_stage_unit_notify(unit_t *unit)
+{
+	if (!list_find(cmld_units_list, unit))
+		cmld_units_list = list_append(cmld_units_list, unit);
+
+	bool units_pending = false;
+	for (list_t *l = cmld_units_list; l; l = l->next) {
+		unit_t *u = l->data;
+		if (unit_get_state(u) != COMPARTMENT_STATE_RUNNING) {
+			units_pending = true;
+			break;
+		}
+	}
+
+	DEBUG("Unit notify: unit '%s' is pending %s", unit_get_name(unit),
+	      units_pending ? "true" : "false");
+
+	if (units_pending)
+		return;
+
+	// set init stage UNIT completed
+	cmld_init_stage_reached(CMLD_INIT_STAGE_UNIT);
 }
 
 container_t *
@@ -1957,6 +2008,8 @@ cmld_cleanup(void)
 		container_free(container);
 	}
 	list_delete(cmld_containers_list);
+
+	list_delete(cmld_units_list);
 
 	if (cmld_control_gui)
 		control_free(cmld_control_gui);

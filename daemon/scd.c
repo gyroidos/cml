@@ -37,6 +37,7 @@
 #include "common/proc.h"
 #include "common/protobuf.h"
 #include "common/mem.h"
+#include "common/sock.h"
 
 // clang-format off
 #define SCD_CONTROL_SOCKET "scd_control"
@@ -161,8 +162,7 @@ scd_on_connect_cb(int sock, const char *sock_path)
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
 	event_add_io(event);
 
-	if (cmld_init_stage_container() < 0)
-		FATAL("Could not init cmld (container stage)!");
+	cmld_init_stage_unit_notify(scd_unit);
 }
 
 int
@@ -181,7 +181,8 @@ scd_init(void)
 
 	// if device.cert is not present, scd will die. Hence, we set autorestart in unit_new
 	scd_unit = unit_new(uuid_new(SCD_UUID), "SCD", SCD_BINARY_NAME, NULL, NULL, 0, false,
-			    SCD_TOKEN_DIR, SCD_CONTROL_SOCKET, &scd_on_connect_cb, true);
+			    SCD_TOKEN_DIR, SCD_CONTROL_SOCKET, SOCK_SEQPACKET, &scd_on_connect_cb,
+			    true);
 
 	IF_NULL_RETVAL(scd_unit, -1);
 
@@ -190,11 +191,13 @@ scd_init(void)
 	unit_device_set_initial_allow(scd_unit, dev_nodes);
 	list_delete(dev_nodes);
 
-	if (unit_start(scd_unit)) {
+	if (unit_start(scd_unit) < 0) {
 		unit_free(scd_unit);
 		ERROR("Could nor start unit for scd!");
 		return -1;
 	}
+
+	cmld_init_stage_unit_notify(scd_unit);
 
 	return 0;
 }

@@ -40,179 +40,11 @@
 #include "common/dir.h"
 #include "common/kernel.h"
 #include "container.h"
+#include "mount.h"
+#include "mount_idmapped.h"
 
 #define IDMAPPED_SRC_DIR "/tmp/idmapped_mnts"
 #define UID_RANGE 100000
-
-/**************************/
-#ifndef MOUNT_ATTR_RDONLY
-#define MOUNT_ATTR_RDONLY 0x00000001
-#endif
-
-#ifndef MOUNT_ATTR_NOSUID
-#define MOUNT_ATTR_NOSUID 0x00000002
-#endif
-
-#ifndef MOUNT_ATTR_NOEXEC
-#define MOUNT_ATTR_NOEXEC 0x00000008
-#endif
-
-#ifndef MOUNT_ATTR_NODIRATIME
-#define MOUNT_ATTR_NODIRATIME 0x00000080
-#endif
-
-#ifndef MOUNT_ATTR__ATIME
-#define MOUNT_ATTR__ATIME 0x00000070
-#endif
-
-#ifndef MOUNT_ATTR_RELATIME
-#define MOUNT_ATTR_RELATIME 0x00000000
-#endif
-
-#ifndef MOUNT_ATTR_NOATIME
-#define MOUNT_ATTR_NOATIME 0x00000010
-#endif
-
-#ifndef MOUNT_ATTR_STRICTATIME
-#define MOUNT_ATTR_STRICTATIME 0x00000020
-#endif
-
-#ifndef MOUNT_ATTR_IDMAP
-#define MOUNT_ATTR_IDMAP 0x00100000
-#endif
-
-#ifndef AT_RECURSIVE
-#define AT_RECURSIVE 0x8000
-#endif
-
-// clang-format off
-#ifndef __NR_mount_setattr
-	#if defined __alpha__
-		#define __NR_mount_setattr 552
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_mount_setattr (442 + 4000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_mount_setattr (442 + 6000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_mount_setattr (442 + 5000)
-		#endif
-	#elif defined __ia64__
-		#define __NR_mount_setattr (442 + 1024)
-	#else
-		#define __NR_mount_setattr 442
-	#endif
-// clang-format on
-
-struct mount_attr {
-	__u64 attr_set;
-	__u64 attr_clr;
-	__u64 propagation;
-	__u64 userns_fd;
-};
-#endif
-
-#ifndef OPEN_TREE_CLONE
-#define OPEN_TREE_CLONE 1
-#endif
-
-#ifndef OPEN_TREE_CLOEXEC
-#define OPEN_TREE_CLOEXEC O_CLOEXEC
-#endif
-
-// clang-format off
-#ifndef __NR_open_tree
-	#if defined __alpha__
-		#define __NR_open_tree 538
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_open_tree 4428
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_open_tree 6428
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_open_tree 5428
-		#endif
-	#elif defined __ia64__
-		#define __NR_open_tree (428 + 1024)
-	#else
-		#define __NR_open_tree 428
-	#endif
-#endif
-// clang-format on
-
-#ifndef MOVE_MOUNT_F_SYMLINKS
-#define MOVE_MOUNT_F_SYMLINKS 0x00000001
-#endif
-
-#ifndef MOVE_MOUNT_F_AUTOMOUNTS
-#define MOVE_MOUNT_F_AUTOMOUNTS 0x00000002
-#endif
-
-#ifndef MOVE_MOUNT_F_EMPTY_PATH
-#define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
-#endif
-
-#ifndef MOVE_MOUNT_T_SYMLINKS
-#define MOVE_MOUNT_T_SYMLINKS 0x00000010
-#endif
-
-#ifndef MOVE_MOUNT_T_AUTOMOUNTS
-#define MOVE_MOUNT_T_AUTOMOUNTS 0x00000020
-#endif
-
-#ifndef MOVE_MOUNT_T_EMPTY_PATH
-#define MOVE_MOUNT_T_EMPTY_PATH 0x00000040
-#endif
-
-#ifndef MOVE_MOUNT__MASK
-#define MOVE_MOUNT__MASK 0x00000077
-#endif
-
-// clang-format off
-#ifndef __NR_move_mount
-	#if defined __alpha__
-		#define __NR_move_mount 539
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32
-			#define __NR_move_mount 4429
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32
-			#define __NR_move_mount 6429
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64
-			#define __NR_move_mount 5429
-		#endif
-	#elif defined __ia64__
-		#define __NR_move_mount (428 + 1024)
-	#else
-		#define __NR_move_mount 429
-	#endif
-#endif
-// clang-format on
-
-int
-mount_setattr(int dirfd, const char *path, unsigned int flags, struct mount_attr *attr, size_t size)
-{
-	return syscall(__NR_mount_setattr, dirfd, path, flags, attr, size);
-}
-
-int
-open_tree(int dirfd, const char *path, unsigned int flags)
-{
-	return syscall(__NR_open_tree, dirfd, path, flags);
-}
-
-int
-move_mount(int from_dirfd, const char *from_path, int to_dirfd, const char *to_path,
-	   unsigned int flags)
-{
-	return syscall(__NR_move_mount, from_dirfd, from_path, to_dirfd, to_path, flags);
-}
-/**************************/
 
 struct c_idmapped_mnt {
 	char *target;
@@ -456,12 +288,6 @@ error:
 	return -1;
 }
 
-static bool
-is_idmapping_supported()
-{
-	return kernel_version_check("6.3");
-}
-
 static int
 c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const char *dir)
 {
@@ -473,7 +299,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 	struct statfs dir_statfs;
 	statfs(dir, &dir_statfs);
 
-	if (!is_idmapping_supported()) {
+	if (!mount_is_idmapping_supported()) {
 		if (dir_statfs.f_flags & MS_RDONLY) {
 			char *tmpfs_dir =
 				mem_printf("%s/%s/tmp%d", IDMAPPED_SRC_DIR,
@@ -532,7 +358,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 		return -1;
 	}
 
-	if (!is_idmapping_supported())
+	if (!mount_is_idmapping_supported())
 		return 0;
 
 	/*
@@ -595,7 +421,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
-		if (!is_idmapping_supported()) {
+		if (!mount_is_idmapping_supported()) {
 			if (c_idmapped_mount_ovl(src, src, ovl_lower, false)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      src, ovl_lower, dst);
@@ -749,7 +575,7 @@ c_idmapped_start_child(void *idmappedp)
 
 		// if explictly set to bind inchild (e.g. /dev on tmpfs) or
 		// kernel does not support idmapped mounts just do bind mount
-		if (mnt->bind_in_child || (!is_idmapping_supported())) {
+		if (mnt->bind_in_child || (!mount_is_idmapping_supported())) {
 			if (!file_exists(mnt->target))
 				dir_mkdir_p(mnt->target, 0755);
 
