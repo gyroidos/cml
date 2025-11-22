@@ -25,7 +25,6 @@ syntax = "proto2";
 
 option java_package = "de.fraunhofer.aisec.trustme.service";
 
-import "container.proto";
 import "common/audit.proto";
 
 message CmldToServiceMessage {
