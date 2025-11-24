@@ -27,7 +27,6 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
 OCI ?= n
-IDMAPPED ?= y
 CGROUP_V2 ?= y
 CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
@@ -142,15 +141,8 @@ endif
 SRC_CMODULES := \
 	c_hotplug.c \
 	c_smartcard.c \
-	c_user.c
-
-ifeq ($(IDMAPPED),y)
-SRC_CMODULES += \
+	c_user.c \
 	c_idmapped.c
-else
-SRC_CMODULES += \
-	c_shiftid.c
-endif
 
 ifeq ($(SYSTEMD),y)
 	SRC_CMODULES += \
