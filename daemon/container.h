@@ -708,6 +708,13 @@ CONTAINER_MODULE_WRAPPER_DECLARE(has_token_changed, bool, container_token_type_t
 				 const char *serial)
 
 /**
+ * Handles scd connect/reconnect.
+ *
+ * @return 0 if the connection to scd was established, -1 otherwise
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(scd_connect, int)
+
+/**
  * Registers the corresponding handler for container_get_uptime
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(get_uptime, time_t)
