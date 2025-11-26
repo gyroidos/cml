@@ -1111,3 +1111,5 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(has_token_changed, bool, void *, containe
 				       const char *)
 CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(has_token_changed, bool, false, container_token_type_t,
 					const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_connect, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_connect, int, 0)
