@@ -1054,6 +1054,33 @@ c_smartcard_scd_release_pairing(void *smartcardp)
 	return ret;
 }
 
+static int
+c_smartcard_scd_connect(void *smartcardp)
+{
+	c_smartcard_t *smartcard = smartcardp;
+	ASSERT(smartcard);
+
+	if (smartcard->sock >= 0)
+		close(smartcard->sock);
+
+	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
+	if (smartcard->sock < 0) {
+		ERROR("Failed to connect to scd");
+		return -1;
+	}
+
+	if (0 != c_smartcard_token_init(smartcard)) {
+		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, CONTAINER_MGMT,
+				"container-create-token-uninit",
+				uuid_string(container_get_uuid(smartcard->container)), 0);
+		WARN("Could not initialize token associated with container %s (uuid=%s).",
+		     container_get_name(smartcard->container),
+		     uuid_string(container_get_uuid(smartcard->container)));
+	}
+
+	return 0;
+}
+
 static void *
 c_smartcard_new(compartment_t *compartment)
 {
@@ -1091,20 +1118,10 @@ c_smartcard_new(compartment_t *compartment)
 	smartcard->err_cb = NULL;
 	smartcard->err_cbdata = NULL;
 
-	smartcard->sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
-	if (smartcard->sock < 0) {
+	smartcard->sock = -1;
+	if (c_smartcard_scd_connect(smartcard)) {
 		mem_free0(smartcard);
-		ERROR("Failed to connect to scd");
 		return NULL;
-	}
-
-	if (0 != c_smartcard_token_init(smartcard)) {
-		audit_log_event(container_get_uuid(smartcard->container), FSA, CMLD, CONTAINER_MGMT,
-				"container-create-token-uninit",
-				uuid_string(container_get_uuid(smartcard->container)), 0);
-		WARN("Could not initialize token associated with container %s (uuid=%s).",
-		     container_get_name(smartcard->container),
-		     uuid_string(container_get_uuid(smartcard->container)));
 	}
 
 	smartcard->token_relay_path = NULL;
@@ -1333,4 +1350,5 @@ c_smartcard_init(void)
 	container_register_token_attach_handler(MOD_NAME, c_smartcard_token_attach);
 	container_register_token_detach_handler(MOD_NAME, c_smartcard_token_detach);
 	container_register_has_token_changed_handler(MOD_NAME, c_smartcard_has_token_changed);
+	container_register_scd_connect_handler(MOD_NAME, c_smartcard_scd_connect);
 }
