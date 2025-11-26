@@ -162,6 +162,14 @@ scd_on_connect_cb(int sock, const char *sock_path)
 	event_io_t *event = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
 	event_add_io(event);
 
+	/* notify containers about (re-)connection of the scd */
+	for (int i = 0; i < cmld_containers_get_count(); i++) {
+		container_t *container = cmld_container_get_by_index(i);
+		if (container_scd_connect(container))
+			ERROR("could not reconnect icontainer %s to scd!",
+			      container_get_description(container));
+	}
+
 	cmld_init_stage_unit_notify(scd_unit);
 }
 
