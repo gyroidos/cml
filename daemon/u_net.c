@@ -83,7 +83,7 @@ u_net_start_child(void *netp)
 	if (!unit_has_netns(net->unit))
 		return 0;
 
-	if (mount("sys", "/sys", "sys", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+	if (mount("sys", "/sys", "sysfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
 		ERROR_ERRNO("Could not remount /sys in unit %s", unit_get_description(net->unit));
 		return -COMPARTMENT_ERROR_NET;
 	}
