@@ -1513,6 +1513,14 @@ cmld_init_stage_unit(const char *path)
 	cmld_path = path;
 	cmld_container_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
 
+	// ensure data directory in CML is root owned
+	struct stat s;
+	if (!stat(cmld_path, &s) && s.st_uid != 0) {
+		if (dir_chown_folder(cmld_path, 0, 0) < 0) {
+			FATAL("Could not chown %s to root:root failed.", cmld_path);
+		}
+	}
+
 	if (prctl(PR_SET_CHILD_SUBREAPER, 1))
 		FATAL("Could not setup cmld as child subreaper!");
 
