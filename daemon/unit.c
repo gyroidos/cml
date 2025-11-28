@@ -130,9 +130,9 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 	for (char **arg = argv; arg && *arg; arg++, i++)
 		init_argv[i] = mem_strdup(*arg);
 
-	unit->data_path = mem_strdup(data_path);
+	unit->data_path = data_path ? mem_strdup(data_path) : NULL;
 
-	unit->sock_name = mem_strdup(sock_name);
+	unit->sock_name = sock_name ? mem_strdup(sock_name) : NULL;
 	unit->sock_type = sock_type;
 	unit->on_sock_connect_cb = on_sock_connect_cb;
 
