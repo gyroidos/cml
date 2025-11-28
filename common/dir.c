@@ -302,3 +302,71 @@ dir_copy_folder(const char *source, const char *target,
 	dir_copy_params_free(params);
 	return ret;
 }
+
+struct chown_data {
+	uid_t uid;
+	gid_t gid;
+};
+
+static int
+dir_chown_contents_cb(const char *path, const char *file, void *data)
+{
+	struct stat s;
+	int ret = 0;
+	struct chown_data *cb_data = data;
+	ASSERT(cb_data);
+
+	char *file_to_chown = mem_printf("%s/%s", path, file);
+	if (lstat(file_to_chown, &s) == -1) {
+		mem_free0(file_to_chown);
+		return -1;
+	}
+
+	uid_t uid = cb_data->uid;
+	gid_t gid = cb_data->gid;
+
+	if (file_is_dir(file_to_chown)) {
+		TRACE("Path %s is dir", file_to_chown);
+		if (dir_foreach(file_to_chown, &dir_chown_contents_cb, cb_data) < 0) {
+			ERROR_ERRNO("Could not chown all dir contents in '%s' to (%d:%d)",
+				    file_to_chown, uid, gid);
+			ret--;
+		}
+		if (chown(file_to_chown, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
+			ret--;
+		}
+	} else {
+		if (lchown(file_to_chown, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
+				    gid);
+			ret--;
+		}
+	}
+	TRACE("Chown file '%s' to (%d:%d)", file_to_chown, uid, gid);
+
+	// chown .
+	if (chown(path, uid, gid) < 0) {
+		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
+		ret--;
+	}
+	mem_free0(file_to_chown);
+	return ret;
+}
+
+int
+dir_chown_folder(const char *path, uid_t uid, gid_t gid)
+{
+	struct stat s;
+	IF_TRUE_RETVAL(stat(path, &s), -1);
+
+	int ret = 0;
+
+	struct chown_data cb_data = { .uid = uid, .gid = gid };
+	if (dir_foreach(path, &dir_chown_contents_cb, &cb_data) < 0) {
+		ERROR("Could not chown %s to uid:gid (%d:%d)", path, uid, gid);
+		ret--;
+	}
+
+	return ret;
+}
