@@ -39,6 +39,7 @@
 #include "common/protobuf-text.h"
 #include "common/list.h"
 #include "common/ssl_util.h"
+#include "common/str.h"
 #include "token.h"
 
 #include <sys/stat.h>
@@ -62,6 +63,10 @@
 #define DMI_PRODUCT_NAME_LEN 20
 
 #define TOKEN_DEFAULT_EXT ".p12"
+
+#ifndef PKCS11_MODULE_DIR
+#define PKCS11_MODULE_DIR DEFAULT_BASE_PATH "/pkcs11/"
+#endif // PKCS11_MODULE_DIR
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -337,6 +342,8 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
 		return SOFT;
 	case TOKEN_TYPE__USB:
 		return USB;
+	case TOKEN_TYPE__PKCS11:
+		return PKCS11;
 	default:
 		ERROR("Invalid token type value");
 	} // fallthrough
@@ -421,16 +428,27 @@ scd_token_new(const DaemonToToken *msg)
 
 	create_data.type = scd_proto_to_tokentype(msg);
 
-	if (create_data.type == NONE) {
+	switch (create_data.type) {
+	case NONE:
 		create_data.init_str.softtoken_dir = NULL;
-	} else if (create_data.type == SOFT) {
+		break;
+	case SOFT:
 		create_data.init_str.softtoken_dir = SCD_TOKEN_DIR;
-	} else if (create_data.type == USB) {
+		break;
+	case USB:
 		ASSERT(msg->usbtoken_serial);
 		create_data.init_str.usbtoken_serial = msg->usbtoken_serial;
-	} else {
+		break;
+	case PKCS11:
+		ASSERT(msg->pkcs11_module);
+		str_t *module_path = str_new(PKCS11_MODULE_DIR);
+		str_append(module_path, msg->pkcs11_module);
+		create_data.init_str.pkcs11_module = str_free(module_path, false);
+		break;
+	default:
 		ERROR("Type of token not recognized");
 		return -1;
+		break;
 	}
 
 	create_data.uuid = msg->token_uuid;
