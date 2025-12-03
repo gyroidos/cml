@@ -39,6 +39,7 @@
 #include "common/protobuf-text.h"
 #include "common/list.h"
 #include "common/ssl_util.h"
+#include "common/str.h"
 #include "token.h"
 
 #include <sys/stat.h>
@@ -62,6 +63,10 @@
 #define DMI_PRODUCT_NAME_LEN 20
 
 #define TOKEN_DEFAULT_EXT ".p12"
+
+#ifndef PKCS11_MODULE_DIR
+#define PKCS11_MODULE_DIR DEFAULT_BASE_PATH "/pkcs11/"
+#endif // PKCS11_MODULE_DIR
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -436,7 +441,9 @@ scd_token_new(const DaemonToToken *msg)
 		break;
 	case PKCS11:
 		ASSERT(msg->pkcs11_module);
-		create_data.init_str.pkcs11_module = msg->pkcs11_module;
+		str_t *module_path = str_new(PKCS11_MODULE_DIR);
+		str_append(module_path, msg->pkcs11_module);
+		create_data.init_str.pkcs11_module = str_free(module_path, false);
 		break;
 	default:
 		ERROR("Type of token not recognized");
