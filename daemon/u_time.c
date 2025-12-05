@@ -22,88 +22,98 @@
  */
 
 /**
- * @file u_net.c
+ * @file u_time.c
  *
- * This module is responsible for a private network without external connectivity for units.
+ * This module is responsible for provideing uptime and creation time for units.
  */
 
 #define _GNU_SOURCE
 
-#define MOD_NAME "c_net"
+#define MOD_NAME "c_time"
 
 #include "common/macro.h"
 #include "common/mem.h"
 #include "compartment.h"
+#include "u_time.h"
 #include "unit.h"
 
-#include <sys/mount.h>
+#include <sys/time.h>
 
-/* Dummy Network structure */
-typedef struct u_net {
-	unit_t *unit; //!< unit which the u_net struct is associated to
-} u_net_t;
+struct u_time {
+	time_t time_created;
+	time_t time_started;
+};
 
 /**
- * This function allocates a new u_net_t instance, associated to a specific unit object.
- * @return the u_net_t network structure which holds networking information for an unit.
+ * This function allocates a new u_time_t instance, associated to a specific unit object.
+ * @return the u_time_t time structure which holds  for an unit.
  */
 static void *
-u_net_new(compartment_t *compartment)
+u_time_new(compartment_t *compartment)
 {
 	ASSERT(compartment);
 	IF_NULL_RETVAL(compartment_get_extension_data(compartment), NULL);
 
-	u_net_t *net = mem_new0(u_net_t, 1);
-	net->unit = compartment_get_extension_data(compartment);
+	u_time_t *_time = mem_new0(u_time_t, 1);
+	_time->time_created = time(NULL);
 
-	return net;
+	return _time;
 }
 
 /**
- * Frees the u_net_t structure
+ * Frees the u_time_t structure
  */
 static void
-u_net_free(void *netp)
+u_time_free(void *timep)
 {
-	u_net_t *net = netp;
-	ASSERT(net);
+	u_time_t *time = timep;
+	ASSERT(time);
 
-	mem_free0(net);
+	mem_free0(time);
 }
 
-/*
- * Mount sys in namspaced child
- */
 static int
-u_net_start_child(void *netp)
+u_time_start_post_exec(void *timep)
 {
-	u_net_t *net = netp;
-	ASSERT(net);
-
-	if (!unit_has_netns(net->unit))
-		return 0;
-
-	if (mount("sys", "/sys", "sysfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
-		ERROR_ERRNO("Could not remount /sys in unit %s", unit_get_description(net->unit));
-		return -COMPARTMENT_ERROR_NET;
-	}
-
+	u_time_t *_time = timep;
+	ASSERT(_time);
+	_time->time_started = time(NULL);
 	return 0;
 }
 
-static compartment_module_t u_net_module = {
+time_t
+u_time_get_creation_time(const u_time_t *u_time)
+{
+	ASSERT(u_time);
+	if (u_time->time_created < 0)
+		return 0;
+	return u_time->time_created;
+}
+
+time_t
+u_time_get_uptime(const u_time_t *u_time)
+{
+	ASSERT(u_time);
+	if (u_time->time_started < 0)
+		return 0;
+
+	time_t uptime = time(NULL) - u_time->time_started;
+	return (uptime < 0) ? 0 : uptime;
+}
+
+static compartment_module_t u_time_module = {
 	.name = MOD_NAME,
-	.compartment_new = u_net_new,
-	.compartment_free = u_net_free,
+	.compartment_new = u_time_new,
+	.compartment_free = u_time_free,
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
 	.start_post_clone = NULL,
 	.start_pre_exec = NULL,
-	.start_post_exec = NULL,
+	.start_post_exec = u_time_start_post_exec,
 	.start_pre_exec_child_early = NULL,
-	.start_child = u_net_start_child,
+	.start_child = NULL,
 	.start_pre_exec_child = NULL,
 	.stop = NULL,
 	.cleanup = NULL,
@@ -111,8 +121,8 @@ static compartment_module_t u_net_module = {
 };
 
 static void INIT
-u_net_init(void)
+u_time_init(void)
 {
 	// register this module in unit.c
-	unit_register_compartment_module(&u_net_module);
+	unit_register_compartment_module(&u_time_module);
 }
