@@ -413,8 +413,10 @@ logf_file_new(const char *name)
 		f = NULL;
 	}
 
-	if (file_exists(current) && unlink(current)) {
-		FATAL_ERRNO("could not unlink %s", current);
+	if ((file_is_link(current) && !file_exists(current)) || file_exists(current)) {
+		if (unlink(current)) {
+			FATAL_ERRNO("could not unlink %s", current);
+		}
 	}
 
 	if (symlink(name_with_time_of_day, current) < 0) {
