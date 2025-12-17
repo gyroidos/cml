@@ -203,7 +203,6 @@ c_run_cleanup(void *runp, UNUSED bool is_rebooting)
 	for (list_t *l = run->sessions; l; l = l->next) {
 		c_run_session_t *session = l->data;
 		c_run_session_cleanup(session);
-		c_run_session_free(session);
 	}
 	list_delete(run->sessions);
 	run->sessions = NULL;
@@ -486,10 +485,7 @@ c_run_cb_read_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 	TRACE("Entering PTY master reading loop");
 	if (-1 == readloop(session->pty_master, session->console_sock_container)) {
 		ERROR("Readloop returned an error, cleanup!");
-		c_run_t *run = session->run;
-		run->sessions = list_remove(run->sessions, session);
 		c_run_session_cleanup(session);
-		c_run_session_free(session);
 	}
 }
 
@@ -510,10 +506,7 @@ c_run_cb_write_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 	TRACE("Entering console sock reading loop");
 	if (-1 == readloop(session->console_sock_container, session->pty_master)) {
 		ERROR("Readloop returned an error, cleanup!");
-		c_run_t *run = session->run;
-		run->sessions = list_remove(run->sessions, session);
 		c_run_session_cleanup(session);
-		c_run_session_free(session);
 	}
 }
 
