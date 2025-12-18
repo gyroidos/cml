@@ -40,7 +40,7 @@ pipeline {
 							string(name: "PR_BRANCHES", value: "${REPO_NAME}=${env.BRANCH_NAME},${env.PR_BRANCHES}"),
 							string(name: "CI_LIB_VERSION", value: "${CI_LIB_VERSION}"),
 							string(name: "GYROID_ARCH", value: "arm64"),
-							string(name: "GYROID_MACHINE", value: "tqma8mpxl")
+							string(name: "GYROID_MACHINE", value: "tqmlx2160a")
 						]
 					}
 				}
