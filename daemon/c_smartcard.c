@@ -30,6 +30,8 @@
 #include "hotplug.h"
 #include "scd_shared.h"
 #include "crypto.h"
+#include "scd.h"
+#include "unit.h"
 
 #include "common/macro.h"
 #include "common/event.h"
@@ -52,9 +54,7 @@
 #include <sys/mount.h>
 #include <unistd.h>
 
-// clang-format off
-#define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
-// clang-format on
+#define SCD_TOKENCONTROL_DIR SOCKET_PREFIX "tokencontrol"
 
 #ifndef SCD_BINARY_NAME
 #define SCD_BINARY_NAME "scd"
@@ -445,7 +445,8 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 		 * This case handles key unwrapping as part of TSF.CML.CompartmentDataStorage.
 		 */
 		case TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY: {
-			if (!msg->has_unwrapped_key) {
+			if (!msg->has_unwrapped_key ||
+			    (msg->has_unwrapped_key && msg->unwrapped_key.len == 0)) {
 				ERROR("Expected derived key, but none was returned!");
 				audit_log_event(
 					container_get_uuid(smartcard->container), FSA, CMLD,
@@ -455,6 +456,12 @@ c_smartcard_cb_ctrl_container(int fd, unsigned events, event_io_t *io, void *dat
 				// lock token via scd and unregister io callback to avoid to trigger success_cb
 				c_smartcard_send_token_lock_cmd(smartcard);
 				done = true;
+				// keysize 0 indicates keyfile corruption
+				if (msg->has_unwrapped_key && msg->unwrapped_key.len == 0) {
+					ERROR("Keyfile corruption, setting state ZOMBIE!");
+					container_set_state(smartcard->container,
+							    COMPARTMENT_STATE_ZOMBIE);
+				}
 				break;
 			}
 			// set the key
@@ -1020,6 +1027,11 @@ c_smartcard_container_ctrl(void *smartcardp, int (*success_cb)(container_t *cont
 	c_smartcard_t *smartcard = smartcardp;
 	ASSERT(smartcard);
 
+	if (container_get_state(smartcard->container) == COMPARTMENT_STATE_ZOMBIE) {
+		ERROR("Do not handle unlock requests for container in state ZOMBIE!");
+		return -2;
+	}
+
 	smartcard->success_cb = success_cb;
 	return c_smartcard_token_unlock_handler(smartcard, passwd, c_smartcard_cb_ctrl_container);
 }
@@ -1173,8 +1185,9 @@ c_smartcard_bind_token(c_smartcard_t *smartcard)
 	int ret = -1;
 	uid_t uid = container_get_uid(smartcard->container);
 
-	char *src_path = mem_printf("%s/%s.sock", SCD_TOKENCONTROL_SOCKET,
-				    uuid_string(container_get_uuid(smartcard->container)));
+	char *src_path =
+		mem_printf("%s/%s/%s.sock", unit_get_sock_dir(scd_get_unit()), SCD_TOKENCONTROL_DIR,
+			   uuid_string(container_get_uuid(smartcard->container)));
 	char *dest_dir = mem_printf("%s/dev/tokens", container_get_rootdir(smartcard->container));
 
 	if (NULL == smartcard->token_relay_path)
@@ -1309,8 +1322,8 @@ static compartment_module_t c_smartcard_module = {
 static void INIT
 c_smartcard_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_smartcard_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_smartcard_module);
 
 	// register relevant handlers implemented by this module
 	container_register_ctrl_with_smartcard_handler(MOD_NAME, c_smartcard_container_ctrl);

@@ -27,6 +27,7 @@
 #include "download.h"
 #include "cmld.h"
 #include "crypto.h"
+#include "a_b_update/a_b_update.h"
 #include "tss.h"
 
 #include "common/macro.h"
@@ -372,7 +373,7 @@ guestos_images_are_complete(guestos_t *os, bool thorough)
 		mount_entry_t *e = mount_get_entry(mnt, i);
 		enum mount_type t = mount_entry_get_type(e);
 		if (t != MOUNT_TYPE_SHARED && t != MOUNT_TYPE_FLASH && t != MOUNT_TYPE_OVERLAY_RO &&
-		    t != MOUNT_TYPE_SHARED_RW)
+		    t != MOUNT_TYPE_SHARED_RW && t != MOUNT_TYPE_STORE_ONLY)
 			continue;
 		if (guestos_check_mount_image_block(os, e, thorough) != CHECK_IMAGE_GOOD) {
 			res = false;
@@ -501,7 +502,7 @@ iterate_images_trigger_check(iterate_images_t *task)
 		mount_entry_t *e = mount_get_entry(task->mnt, task->i);
 		enum mount_type t = mount_entry_get_type(e);
 		if (t == MOUNT_TYPE_SHARED || t == MOUNT_TYPE_FLASH || t == MOUNT_TYPE_OVERLAY_RO ||
-		    t == MOUNT_TYPE_SHARED_RW) {
+		    t == MOUNT_TYPE_SHARED_RW || t == MOUNT_TYPE_STORE_ONLY) {
 			DEBUG("Found next image %s.img for GuestOS %s v%" PRIu64
 			      ", triggering check.",
 			      mount_entry_get_img(e), guestos_get_name(task->os),
@@ -959,6 +960,10 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 	ASSERT(img_name);
 	ASSERT(flash_partition);
 
+#ifdef A_B_UPDATE
+	bool is_kernel = !strncmp(os->cfg->name, "kernel", strlen("kernel"));
+#endif
+
 	if (mount_entry_get_type(e) != MOUNT_TYPE_FLASH) {
 		WARN("Image %s of GuestOS %s is not a FLASH image. Skipping.", img_name,
 		     guestos_get_name(os));
@@ -972,7 +977,12 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 
 	int res = -1;
 	char *img_path = mem_printf("%s/%s.img", guestos_get_dir(os), img_name);
+#ifdef A_B_UPDATE
+	char *flash_path = is_kernel ? a_b_update_get_flash_path_new(flash_partition) :
+				       mem_strdup(flash_partition);
+#else
 	char *flash_path = mem_strdup(flash_partition);
+#endif
 	DEBUG("Flashing image %s to partition %s", img_path, flash_path);
 
 	switch (verify_partition(img_path, flash_path)) {
@@ -1024,6 +1034,11 @@ verify_flash_mount_entry(guestos_t *os, mount_entry_t *e)
 		ERROR("Failed to verify partition %s against image %s", flash_path, img_path);
 		break;
 	}
+
+#ifdef A_B_UPDATE
+	if (is_kernel && res >= 0)
+		a_b_update_boot_new_once();
+#endif
 
 	mem_free0(flash_path);
 	mem_free0(img_path);

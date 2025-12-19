@@ -113,6 +113,7 @@ typedef struct {
 	int cont_offset;	       //!< gives information about the adresses to be set
 	uint8_t veth_mac[6];	       //!< generated or configured mac of nic in container
 	int veth_cmld_idx;	       //!< Index of veth endpoint in rootns
+	bool created;		       //!< veth pair was created sucessfully
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -507,6 +508,7 @@ c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_ma
 	memcpy(ni->veth_mac, if_mac, 6);
 	ni->configure = configure;
 	ni->cont_offset = -1;
+	ni->created = false;
 
 	return ni;
 }
@@ -950,6 +952,8 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name, ni->veth_mac))
 		goto err;
 
+	ni->created = true;
+
 	/* Get the interface index of the interface name */
 	if (!(ni->veth_cmld_idx = if_nametoindex(ni->veth_cmld_name))) {
 		ERROR("veth interface name could not be resolved");
@@ -1169,7 +1173,7 @@ c_net_start_post_clone(void *netp)
 				if (network_setup_masquerading(ni->subnet, true))
 					FATAL_ERRNO("Could not setup masquerading for %s!",
 						    ni->veth_cmld_name);
-					// configuration of interface is done in root netns below
+				// configuration of interface is done in root netns below
 
 #ifdef DEBUG_BUILD
 				/* setup port forwarding for ssh in debug build */
@@ -1315,10 +1319,11 @@ c_net_cleanup_interface(c_net_interface_t *ni)
 {
 	TRACE("cleanup c_net_interface_t structure");
 
-	DEBUG("shut network interface %s down", ni->veth_cont_name);
+	DEBUG("shut network interface %s down", ni->veth_cont_name ? ni->veth_cont_name : "'NA'");
 
 	/* Release the offset, as the ip addresses are no more occupied */
-	c_net_unset_offset(ni->cont_offset);
+	if (ni->cont_offset >= 0)
+		c_net_unset_offset(ni->cont_offset);
 
 	if (ni->subnet) {
 		mem_free0(ni->subnet);
@@ -1494,8 +1499,17 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		WARN("Failed to create helper child for cleanup in c0's netns");
 
 	// rename phys interface to avoid name clashes during fallback to rootns
-	if (c_net_cleanup_container(net) == -1)
-		WARN("Failed to create helper child for cleanup of container's netns");
+	if (c_net_cleanup_container(net) == -1) {
+		DEBUG("Failed to create helper child for cleanup of container's netns, still in rootns?");
+		for (list_t *l = net->interface_list; l; l = l->next) {
+			c_net_interface_t *ni = l->data;
+			// delete veth pair if it was created!
+			if (ni->created && c_net_is_veth_used(ni->veth_cmld_name)) {
+				DEBUG("Removing veth interface %s", ni->veth_cmld_name);
+				c_net_interface_down(ni->veth_cmld_name);
+			}
+		}
+	}
 
 	/* remove phys network intrefaces from container */
 	uint8_t if_mac[6];
@@ -1638,8 +1652,8 @@ static compartment_module_t c_net_module = {
 static void INIT
 c_net_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_net_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_net_module);
 
 	// register relevant handlers implemented by this module
 	container_register_add_net_interface_handler(MOD_NAME, c_net_add_interface);

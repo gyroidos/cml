@@ -139,6 +139,7 @@ struct compartment_callback {
 
 struct compartment_extension {
 	void (*set_compartment)(void *extension_data, compartment_t *compartment);
+	list_t *(*get_compartment_module_list)(void);
 	void *data;
 };
 
@@ -161,8 +162,6 @@ enum compartment_start_sync_msg {
 	COMPARTMENT_START_SYNC_MSG_SUCCESS,
 	COMPARTMENT_START_SYNC_MSG_ERROR,
 };
-
-static list_t *compartment_module_list = NULL;
 
 bool
 compartment_is_stoppable(compartment_t *compartment)
@@ -193,16 +192,6 @@ compartment_is_startable(compartment_t *compartment)
 
 	DEBUG("Compartment is in unstartable state.(%d)", compartment_get_state(compartment));
 	return false;
-}
-
-void
-compartment_register_module(compartment_module_t *mod)
-{
-	ASSERT(mod);
-
-	compartment_module_list = list_append(compartment_module_list, mod);
-	DEBUG("Container module %s registered, nr of hooks: %d)", mod->name,
-	      list_length(compartment_module_list));
 }
 
 typedef struct {
@@ -300,11 +289,12 @@ compartment_free_key(compartment_t *compartment)
 
 compartment_extension_t *
 compartment_extension_new(void (*set_compartment)(void *extension_data, compartment_t *compartment),
-			  void *extension_data)
+			  list_t *(*get_compartment_module_list)(void), void *extension_data)
 {
 	compartment_extension_t *extension = mem_new0(compartment_extension_t, 1);
 
 	extension->set_compartment = set_compartment;
+	extension->get_compartment_module_list = get_compartment_module_list;
 	extension->data = extension_data;
 
 	return extension;
@@ -334,6 +324,7 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
 		char **init_argv, char **init_env, size_t init_env_len,
 		const compartment_extension_t *extension)
 {
+	list_t *compartment_module_list = NULL;
 	compartment_t *compartment = mem_new0(compartment_t, 1);
 
 	if (extension) {
@@ -341,6 +332,9 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
 		/* register compartment in extension data early */
 		if (extension->set_compartment)
 			extension->set_compartment(extension->data, compartment);
+		/* get modules from extension */
+		if (extension->get_compartment_module_list)
+			compartment_module_list = extension->get_compartment_module_list();
 	}
 
 	compartment->state = COMPARTMENT_STATE_STOPPED;
@@ -485,8 +479,11 @@ compartment_init_env_prepend(compartment_t *compartment, char **init_env, size_t
 	IF_TRUE_RETURN(init_env == NULL || init_env_len <= 0);
 
 	// construct a NULL terminated env buffer for execve
+	// If comparment->init_env_len was initialized by a previous call to this function
+	// (i.e. is not zero) do subtract the trailing NULL pointer from the length
 	size_t total_len;
-	if (__builtin_add_overflow(compartment->init_env_len, init_env_len, &total_len)) {
+	if (__builtin_add_overflow(compartment->init_env_len ? compartment->init_env_len - 1 : 0,
+				   init_env_len, &total_len)) {
 		WARN("Overflow detected when calculating buffer size for compartment's env");
 		return;
 	}
@@ -500,13 +497,11 @@ compartment_init_env_prepend(compartment_t *compartment, char **init_env, size_t
 	size_t i = 0;
 	for (; i < init_env_len; i++)
 		compartment->init_env[i] = mem_strdup(init_env[i]);
-	for (size_t j = 0; j < compartment->init_env_len; ++j)
-		compartment->init_env[i + j] = mem_strdup(init_env_old[j]);
 
 	if (init_env_old) {
-		for (char **arg = init_env_old; *arg; arg++) {
-			mem_free0(*arg);
-		}
+		// append init_env_old items to new init_env
+		for (char **arg = init_env_old; *arg; arg++, i++)
+			compartment->init_env[i] = *arg;
 		mem_free0(init_env_old);
 	}
 	compartment->init_env_len = total_len;
@@ -813,7 +808,13 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			if (compartment->pid == -1)
 				compartment_cleanup(compartment, false);
 
-			compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
+			INFO("exit status: %d, %d", WEXITSTATUS(status), status);
+
+			if ((WIFEXITED(status) &&
+			     WEXITSTATUS(status) == COMPARTMENT_ERROR_VOL_CORRUPTED))
+				compartment_set_state(compartment, COMPARTMENT_STATE_ZOMBIE);
+			else
+				compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
 		}
 	}
 
@@ -822,9 +823,26 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 }
 
 static int
-compartment_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED void *data)
+compartment_close_all_fds_cb(UNUSED const char *path, const char *file, void *data)
 {
 	int fd = atoi(file);
+	compartment_t *compartment = data;
+
+	// store cmld's standard fds for possible reopening in compartment
+	if (compartment && (compartment->flags & COMPARTMENT_FLAG_CONNECT_STDFDS)) {
+		switch (fd) {
+		case STDIN_FILENO:
+			close(fd);
+			open("/dev/null", O_RDONLY); // stdin be will not be reopened
+			return 0;
+		case STDOUT_FILENO:
+		case STDERR_FILENO:
+			return 0;
+		default:
+			close(fd);
+			return 0;
+		}
+	}
 
 	close(fd);
 
@@ -832,12 +850,12 @@ compartment_close_all_fds_cb(UNUSED const char *path, const char *file, UNUSED v
 }
 
 static int
-compartment_close_all_fds()
+compartment_close_all_fds(compartment_t *compartment)
 {
 	DEBUG("Closing all fds");
 	logf_unregister(cml_daemon_logfile_handler);
 
-	if (dir_foreach("/proc/self/fd", &compartment_close_all_fds_cb, NULL) < 0) {
+	if (dir_foreach("/proc/self/fd", &compartment_close_all_fds_cb, compartment) < 0) {
 		return -1;
 	}
 
@@ -990,7 +1008,7 @@ compartment_start_child(void *data)
 
 	if (compartment_get_state(compartment) != COMPARTMENT_STATE_SETUP) {
 		DEBUG("After closing all file descriptors no further debugging info can be printed");
-		if (compartment_close_all_fds()) {
+		if (compartment_close_all_fds(compartment)) {
 			WARN("Closing all file descriptors failed, continuing anyway...");
 		}
 	}
@@ -1023,10 +1041,10 @@ error:
 
 	// TODO call c_<module>_cleanup_child() hooks
 
-	if (compartment_close_all_fds()) {
+	if (compartment_close_all_fds(NULL)) {
 		WARN("Closing all file descriptors in compartment start error failed");
 	}
-	return ret; // exit the child process
+	return ret < 0 ? -ret : ret; // exit the child process
 }
 
 static int
@@ -1122,10 +1140,10 @@ error:
 		WARN_ERRNO("write to sync socket failed");
 	}
 
-	if (compartment_close_all_fds()) {
+	if (compartment_close_all_fds(NULL)) {
 		WARN("Closing all file descriptors in compartment start error failed");
 	}
-	return ret; // exit the child process
+	return ret < 0 ? -ret : ret; // exit the child process
 }
 
 static void
@@ -1222,8 +1240,8 @@ compartment_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *d
 	compartment_free_key(compartment);
 
 	/* Notify child to do its exec */
-	char msg_go = COMPARTMENT_START_SYNC_MSG_GO;
-	if (write(fd, &msg_go, 1) < 0) {
+	msg = COMPARTMENT_START_SYNC_MSG_GO;
+	if (write(fd, &msg, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");
 		goto error;
 	}
@@ -1253,8 +1271,8 @@ compartment_start_post_clone_cb(int fd, unsigned events, event_io_t *io, void *d
 
 error_pre_exec:
 	DEBUG("A pre-exec compartment start error occured, stopping compartment");
-	char msg_stop = COMPARTMENT_START_SYNC_MSG_STOP;
-	if (write(fd, &msg_stop, 1) < 0) {
+	msg = COMPARTMENT_START_SYNC_MSG_STOP;
+	if (write(fd, &msg, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");
 		goto error;
 	}
@@ -1287,8 +1305,8 @@ static void
 compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, void *data)
 {
 	ASSERT(data);
-	int ret = 0;
 
+	char msg;
 	compartment_t *compartment = data;
 
 	DEBUG("Received event from child process %u", events);
@@ -1309,7 +1327,7 @@ compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, v
 	if (pid_msg[0] == COMPARTMENT_START_SYNC_MSG_ERROR) {
 		WARN("Early child died with error!");
 		mem_free0(pid_msg);
-		goto error_pre_clone;
+		goto error_child_exit;
 	}
 
 	// release post_clone_early io handler
@@ -1343,15 +1361,15 @@ compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, v
 		if (NULL == module->start_post_clone)
 			continue;
 
-		if ((ret = module->start_post_clone(c_mod->instance)) < 0) {
+		if (module->start_post_clone(c_mod->instance) < 0) {
 			goto error_post_clone;
 		}
 	}
 
 	/*********************************************************/
 	/* NOTIFY CHILD TO START */
-	char msg_go = COMPARTMENT_START_SYNC_MSG_GO;
-	if (write(compartment->sync_sock_parent, &msg_go, 1) < 0) {
+	msg = COMPARTMENT_START_SYNC_MSG_GO;
+	if (write(compartment->sync_sock_parent, &msg, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");
 		goto error_post_clone;
 	}
@@ -1359,17 +1377,17 @@ compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, v
 	return;
 
 error_pre_clone:
+	compartment_kill_early_child(compartment);
+
+error_child_exit:
 	event_remove_io(io);
 	event_io_free(io);
 	close(fd);
-	compartment_kill_early_child(compartment);
 	return;
 
 error_post_clone:
-	if (ret == 0)
-		ret = COMPARTMENT_ERROR;
-	char msg_stop = COMPARTMENT_START_SYNC_MSG_STOP;
-	if (write(compartment->sync_sock_parent, &msg_stop, 1) < 0) {
+	msg = COMPARTMENT_START_SYNC_MSG_STOP;
+	if (write(compartment->sync_sock_parent, &msg, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");
 		compartment_kill(compartment);
 	}
@@ -1481,7 +1499,7 @@ error_pre_clone:
 
 error_post_clone:
 	if (ret == 0)
-		ret = COMPARTMENT_ERROR;
+		ret = -COMPARTMENT_ERROR;
 	char msg_stop = COMPARTMENT_START_SYNC_MSG_STOP;
 	if (write(compartment->sync_sock_parent, &msg_stop, 1) < 0) {
 		WARN_ERRNO("write to sync socket failed");

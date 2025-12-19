@@ -43,6 +43,7 @@
 #include "common/network.h"
 #include "common/reboot.h"
 #include "common/hex.h"
+#include "a_b_update/a_b_update.h"
 #include "mount.h"
 #include "device_config.h"
 #include "device_id.h"
@@ -85,12 +86,11 @@
 
 // files and directories in cmld's home path /data/cml
 #define CMLD_PATH_DEVICE_CONF "device.conf"
-#define CMLD_PATH_DEVICE_ID "device_id.conf"
-#define CMLD_PATH_USERS_DIR "users"
 #define CMLD_PATH_GUESTOS_DIR "operatingsystems"
 #define CMLD_PATH_CONTAINERS_DIR "containers"
 #define CMLD_PATH_CONTAINER_KEYS_DIR "keys"
 #define CMLD_PATH_CONTAINER_TOKENS_DIR "tokens"
+#define CMLD_PATH_DEVICE_ID CMLD_PATH_CONTAINER_TOKENS_DIR "/device_id.conf"
 #define CMLD_PATH_SHARED_DATA_DIR "shared"
 
 #define CMLD_WAKE_LOCK_STARTUP "ContainerStartup"
@@ -132,6 +132,14 @@ static bool cmld_signed_configs = false;
 static bool cmld_device_provisioned = false;
 
 static enum command cmld_device_reboot = POWER_OFF;
+
+typedef enum {
+	CMLD_INIT_STAGE_ZERO = 0,
+	CMLD_INIT_STAGE_UNIT,
+	CMLD_INIT_STAGE_CONTAINER,
+} cmld_init_stage_t;
+
+static cmld_init_stage_t cmld_init_stage = CMLD_INIT_STAGE_ZERO;
 
 #ifdef OCI
 // clang-format off
@@ -1108,6 +1116,9 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 		cmld_rename_logfiles();
 		container_unregister_observer(container, cb);
 
+		// swap boot order
+		a_b_update_set_boot_order();
+
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
 			container_t *container = l->data;
 			if (container_get_allow_autostart(container)) {
@@ -1440,9 +1451,31 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	network_enable_ip_forwarding();
 }
 
-int
-cmld_init(const char *path)
+static void
+cmld_init_stage_reached(cmld_init_stage_t stage)
 {
+	switch (stage) {
+	case CMLD_INIT_STAGE_UNIT:
+		INFO("CMLD_INIT_STAGE_UNIT completed.");
+		cmld_init_stage = stage;
+		break;
+	case CMLD_INIT_STAGE_CONTAINER:
+		INFO("CMLD_INIT_STAGE_CONTAINER completed.");
+		cmld_init_stage = stage;
+		break;
+	default:
+		return;
+	}
+}
+
+int
+cmld_init_stage_unit(const char *path)
+{
+	if (cmld_init_stage > CMLD_INIT_STAGE_ZERO) {
+		TRACE("cmld init stage UNIT already done. Skip.");
+		return 0;
+	}
+
 	INFO("Storage path is %s", path);
 	cmld_path = path;
 	cmld_container_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
@@ -1459,38 +1492,14 @@ cmld_init(const char *path)
 	if (mkdir(path, 0755) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir base path %s", path);
 
-	char *users_path = mem_printf("%s/%s", path, CMLD_PATH_USERS_DIR);
-	if (mkdir(users_path, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir users directory %s", users_path);
-	mem_free0(users_path);
-
-	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
+	char *device_path =
+		a_b_update_get_path_new(DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF);
+	INFO("device.conf path is %s", device_path);
 	device_config_t *device_config = device_config_new(device_path);
+	mem_free0(device_path);
 
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);
-
-	// activate signature checking of container configs if enabled
-	cmld_signed_configs = device_config_get_signed_configs(device_config);
-
-	cmld_tune_network(device_config_get_host_addr(device_config),
-			  device_config_get_host_subnet(device_config),
-			  device_config_get_host_if(device_config),
-			  device_config_get_host_gateway(device_config),
-			  device_config_get_host_dns(device_config));
-
-	cmld_shared_data_dir = mem_printf("%s/%s", path, CMLD_PATH_SHARED_DATA_DIR);
-	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir shared data directory %s", cmld_shared_data_dir);
-
-	const char *update_base_url = device_config_get_update_base_url(device_config);
-	cmld_device_update_base_url = update_base_url ? mem_strdup(update_base_url) : NULL;
-
-	const char *host_dns = device_config_get_host_dns(device_config);
-	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
-
-	const char *c0os_name = device_config_get_c0os(device_config);
-	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
 	if (mount_remount_root_ro() < 0 && !cmld_hostedmode)
 		FATAL("Could not remount rootfs read-only");
@@ -1499,6 +1508,9 @@ cmld_init(const char *path)
 		WARN("Could not mount debugfs (already mounted?)");
 	else
 		INFO("mounted debugfs");
+
+	if (!cmld_hostedmode)
+		a_b_update_init();
 
 	// init audit and set max audit log file size
 	if (audit_init(device_config_get_audit_size(device_config)) < 0)
@@ -1514,17 +1526,61 @@ cmld_init(const char *path)
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
 	mem_free0(btime);
 
-	if (scd_init(!cmld_is_hostedmode_active()) < 0)
+	if (scd_init() < 0)
 		FATAL("Could not init scd module");
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
+
+	device_config_free(device_config);
+
+	// set init stage UNIT completed
+	cmld_init_stage_reached(CMLD_INIT_STAGE_UNIT);
+
+	return 0;
+}
+
+int
+cmld_init_stage_container(void)
+{
+	if (cmld_init_stage > CMLD_INIT_STAGE_UNIT) {
+		TRACE("cmld init stage CONTAINER already done. Skip.");
+		return 0;
+	}
 
 	// set device uuid from device_id configuration file (initially generated by scd)
 	char *device_id_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_DEVICE_ID);
 	device_id_t *device_id = device_id_new(device_id_path);
 	cmld_device_uuid = mem_strdup(device_id_get_uuid(device_id));
 	mem_free0(device_id_path);
+
+	char *device_path =
+		a_b_update_get_path_new(DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF);
+	INFO("device.conf path is %s", device_path);
+	device_config_t *device_config = device_config_new(device_path);
+	mem_free0(device_path);
+
+	// activate signature checking of container configs if enabled
+	cmld_signed_configs = device_config_get_signed_configs(device_config);
+
+	cmld_tune_network(device_config_get_host_addr(device_config),
+			  device_config_get_host_subnet(device_config),
+			  device_config_get_host_if(device_config),
+			  device_config_get_host_gateway(device_config),
+			  device_config_get_host_dns(device_config));
+
+	cmld_shared_data_dir = mem_printf("%s/%s", cmld_path, CMLD_PATH_SHARED_DATA_DIR);
+	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
+		FATAL_ERRNO("Could not mkdir shared data directory %s", cmld_shared_data_dir);
+
+	const char *update_base_url = device_config_get_update_base_url(device_config);
+	cmld_device_update_base_url = update_base_url ? mem_strdup(update_base_url) : NULL;
+
+	const char *host_dns = device_config_get_host_dns(device_config);
+	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
+
+	const char *c0os_name = device_config_get_c0os(device_config);
+	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
 	if (hotplug_init() < 0)
 		FATAL("Could not init hotplug module");
@@ -1586,7 +1642,7 @@ cmld_init(const char *path)
 	INFO("created oci control socket.");
 #endif
 
-	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
+	char *guestos_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
 		FATAL("Could not load guest operating systems");
@@ -1594,11 +1650,11 @@ cmld_init(const char *path)
 	INFO("guestos initialized.");
 	guestos_mgr_update_images();
 
-	char *containers_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINERS_DIR);
+	char *containers_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir containers directory %s", containers_path);
 
-	cmld_wrapped_keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
+	cmld_wrapped_keys_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINER_KEYS_DIR);
 	if (mkdir(cmld_wrapped_keys_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
 
@@ -1618,6 +1674,9 @@ cmld_init(const char *path)
 
 	device_config_free(device_config);
 	device_id_free(device_id);
+
+	// set init stage CONTAINER completed
+	cmld_init_stage_reached(CMLD_INIT_STAGE_CONTAINER);
 	return 0;
 }
 

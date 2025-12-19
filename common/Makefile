@@ -30,6 +30,7 @@ SANITIZERS ?= n
 WCAST_ALIGN ?= y
 WITH_OPENSSL ?= n
 WITH_PROTOBUF_TEXT ?= n
+WITH_EFIVAR ?= n
 
 LOCAL_CFLAGS += -I../include -pedantic -std=gnu99 -D _POSIX_C_SOURCE=200809L -D _XOPEN_SOURCE=700 -D _DEFAULT_SOURCE -O2
 LOCAL_CFLAGS += -Wall -Wextra -Wformat -Wformat-security -fstack-protector-all -fPIC
@@ -62,7 +63,7 @@ all: libcommon
 
 .PHONY: protobuf
 protobuf audit.pb-c.h audit.pb-c.c: audit.proto
-	protoc-c --c_out=. audit.proto
+	protoc --c_out=. audit.proto
 
 audit.c: audit.pb-c.h
 
@@ -86,6 +87,10 @@ endif
 ifeq ($(WITH_PROTOBUF_TEXT),y)
     OBJS_COMMON += protobuf-text.o
 	LOCAL_CFLAGS += -DWITH_PROTOBUF_TEXT
+endif
+
+ifeq ($(WITH_EFIVAR),y)
+    OBJS_COMMON += efivars.o
 endif
 
 OBJS_COMMON_FULL := \

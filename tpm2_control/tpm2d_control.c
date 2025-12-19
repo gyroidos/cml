@@ -127,7 +127,7 @@ main(int argc, char *argv[])
 	bool has_response = false;
 	const char *socket_file = TPM2D_SOCKET;
 	for (int c, option_index = 0;
-	     - 1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
+	     -1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			socket_file = optarg;
@@ -163,7 +163,7 @@ main(int argc, char *argv[])
 		int dm_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 !=
+		     -1 !=
 		     (c = getopt_long(dm_argc, dm_argv, "+l:", dmsetup_options, &option_index));) {
 			switch (c) {
 			case 'l':

@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2021 Fraunhofer AISEC
+ * Copyright(c) 2025 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,30 +21,34 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#ifndef CML_SCD_H
-#define CML_SCD_H
+#ifndef EFIVARS_H
+#define EFIVARS_H
 
+#include <inttypes.h>
 #include <stdbool.h>
-
-#include "unit.h"
-
-/**
- * Initializes the scd subsystem (starts the corresponding daemon)
- * @return 0 on success, -1 on error
- */
-int
-scd_init(void);
+#include <stddef.h>
 
 /**
- * Cleans up the scd subsystem (stops the corresponding daemon)
+ * @brief Returns the index of the current boot entry
+ *
+ * @return uint16_t* allocated boot index
  */
+uint16_t *
+efivars_get_boot_current_new(void);
+
+uint16_t *
+efivars_get_boot_order_new(size_t *len_out);
+
 void
-scd_cleanup(void);
+efivars_set_boot_order(const uint16_t *order, size_t len);
 
-/**
- * Returns the scd subsystems unit instance
- */
-unit_t *
-scd_get_unit(void);
+int
+efivars_set_boot_next(uint16_t next);
 
-#endif /* CML_SCD_H */
+bool
+efivars_boot_entry_initialized(uint16_t idx, const char *label, const char *path);
+
+void
+efivars_set_boot_entry(uint16_t idx, const char *label, const char *path);
+
+#endif // EFIVARS_H

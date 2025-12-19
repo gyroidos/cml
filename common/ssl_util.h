@@ -80,7 +80,8 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 /**
  * This function unwraps a (symmetric) key wrapped_key of length wrapped_key_len into an unwrapped key
  * plain_key of length plain_key_len using the (private) key pkey.
- * @return returns 0 on success, -1 in case of a failure. */
+ * @return returns 0 on success, -1 in case of a generic failure, -2 in case of a currupted wrapping keyfile.
+ */
 int
 ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_key_len,
 	       unsigned char **plain_key, int *plain_key_len);

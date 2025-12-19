@@ -72,6 +72,7 @@ typedef struct compartment_extension compartment_extension_t;
 #define COMPARTMENT_FLAG_SYSTEM_TIME 0x0000000000000020
 #define COMPARTMENT_FLAG_MODULE_LOAD 0x0000000000000040
 #define COMPARTMENT_FLAG_XORG_COMPAT 0x0000000000000080
+#define COMPARTMENT_FLAG_CONNECT_STDFDS 0x0000000000000100
 
 /**
  * Represents the current compartment state.
@@ -105,7 +106,8 @@ enum compartment_error {
 	COMPARTMENT_ERROR_FIFO,
 	COMPARTMENT_ERROR_TIME,
 	COMPARTMENT_ERROR_AUDIT,
-	COMPARTMENT_ERROR_SMARTCARD
+	COMPARTMENT_ERROR_SMARTCARD,
+	COMPARTMENT_ERROR_VOL_CORRUPTED,
 };
 
 typedef struct compartment_module {
@@ -136,9 +138,6 @@ typedef struct compartment_module {
  */
 #define COMPARTMENT_MODULE_F_CLEANUP_LATE (1U << 0)
 
-void
-compartment_register_module(compartment_module_t *mod);
-
 void *
 compartment_module_get_instance_by_name(const compartment_t *compartment, const char *mod_name);
 
@@ -161,7 +160,7 @@ compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char
  */
 compartment_extension_t *
 compartment_extension_new(void (*set_compartment)(void *extension_data, compartment_t *compartment),
-			  void *extension_data);
+			  list_t *(*get_compartment_module_list)(void), void *extension_data);
 
 /**
  * Free a compartment_extension data structure.

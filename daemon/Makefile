@@ -33,6 +33,10 @@ CGROUP_SOCKOPT ?= n
 SYSTEMD ?= n
 AUTOMOUNT ?= y
 XORG_COMPAT ?= y
+DM_LAZY_CHECK_ONLY ?=n
+UNIT_MODULE_PERM ?= y
+A_B_UPDATE ?= n
+A_B_UPDATE_EFI ?= y
 
 # build for restrictive CC mode
 CC_MODE ?= n
@@ -70,6 +74,9 @@ endif
 ifeq ($(CC_MODE_EXPERIMENTAL),y)
     LOCAL_CFLAGS += -DCC_MODE_EXPERIMENTAL
 endif
+ifeq ($(DM_LAZY_CHECK_ONLY),y)
+    LOCAL_CFLAGS += -DDM_LAZY_CHECK_ONLY
+endif
 
 
 LDLIBS := -lc -Lcommon
@@ -94,6 +101,7 @@ PROTO_SRC := \
 	c_service.pb-c.c
 
 SRC_FILES := main.c \
+	unit.c \
 	cmld.c \
 	hotplug.c \
 	container.c \
@@ -116,8 +124,20 @@ SRC_FILES := main.c \
 	input.c \
 	audit.c
 
+SRC_UMODULES += \
+	u_user.c \
+	u_net.c
+
+ifeq ($(UNIT_MODULE_PERM),y)
+SRC_UMODULES += \
+	u_perm.c
+LOCAL_CFLAGS += \
+	-DUNIT_MODULE_PERM
+endif
+
 # module order is crucial
 SRC_CMODULES := \
+	c_hotplug.c \
 	c_smartcard.c \
 	c_user.c
 
@@ -151,6 +171,19 @@ else
 	LOCAL_CFLAGS += -DCGROUPS_LEGACY
 endif
 
+ifeq ($(A_B_UPDATE),y)
+	SRC_FILES += \
+		a_b_update/a_b_update.c
+	LOCAL_CFLAGS += -DA_B_UPDATE
+
+ifeq ($(A_B_UPDATE_EFI),y)
+	SRC_FILES += \
+		a_b_update/a_b_update_efi.c
+	LDLIBS += -lefivar -lefiboot
+	COMMON_EFIVARS = y
+endif
+endif
+
 SRC_CSECCOMP = \
 	c_seccomp/seccomp.c \
 	c_seccomp/mknod.c \
@@ -169,7 +202,6 @@ SRC_CMODULES += \
 	c_time.c \
 	c_audit.c \
 	c_cap.c \
-	c_hotplug.c \
 	$(SRC_CSECCOMP)
 
 ifeq ($(AUTOMOUNT),y)
@@ -197,24 +229,24 @@ protobuf: container.proto control.proto guestos.proto device.proto scd.proto com
 	ln -sf cc_mode/guestos.pb-c.h guestos.pb-c.h
 	ln -sf cc_mode/device.pb-c.c device.pb-c.c
 	ln -sf cc_mode/device.pb-c.h device.pb-c.h
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. c_service.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
+	protoc --c_out=. c_service.proto
 	$(MAKE) -C common protobuf
 
 else
 protobuf: container.proto control.proto guestos.proto device.proto scd.proto common/audit.proto c_service.proto oci_control.proto
-	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. control.proto
-	protoc-c --c_out=. guestos.proto
-	protoc-c --c_out=. device.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. attestation.proto
-	protoc-c --c_out=. tpm2d.proto
-	protoc-c --c_out=. c_service.proto
-	protoc-c --c_out=. oci_control.proto
+	protoc --c_out=. container.proto
+	protoc --c_out=. control.proto
+	protoc --c_out=. guestos.proto
+	protoc --c_out=. device.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. attestation.proto
+	protoc --c_out=. tpm2d.proto
+	protoc --c_out=. c_service.proto
+	protoc --c_out=. oci_control.proto
 	$(MAKE) -C common protobuf
 
 endif
@@ -223,13 +255,13 @@ $(PROTO_SRC): protobuf
 
 libcommon:
 ifeq ($(SYSTEMD),y)
-	$(MAKE) -C common libcommon_full_systemd WITH_PROTOBUF_TEXT=y
+	$(MAKE) -C common libcommon_full_systemd WITH_PROTOBUF_TEXT=y WITH_EFIVAR=${COMMON_EFIVARS}
 else
-	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y
+	$(MAKE) -C common libcommon_full WITH_PROTOBUF_TEXT=y WITH_EFIVAR=${COMMON_EFIVARS}
 endif
 
 cmld: libcommon $(PROTO_SRC) $(SRC_FILES) $(SRC_CMODULES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(SRC_UMODULES) $(SRC_CMODULES) $(PROTO_SRC) $(LDLIBS) -o cmld
 
 
 .PHONY: clean

@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2021 Fraunhofer AISEC
+ * Copyright(c) 2025 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,30 +21,37 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#ifndef CML_SCD_H
-#define CML_SCD_H
-
-#include <stdbool.h>
-
 #include "unit.h"
+#include "common/macro.h"
 
-/**
- * Initializes the scd subsystem (starts the corresponding daemon)
- * @return 0 on success, -1 on error
- */
+typedef struct u_perm u_perm_t;
+
+#ifdef UNIT_MODULE_PERM
 int
-scd_init(void);
+u_perm_allow_dev(u_perm_t *perm, char type, int major, int minor, const char *name);
 
-/**
- * Cleans up the scd subsystem (stops the corresponding daemon)
- */
-void
-scd_cleanup(void);
+int
+u_perm_deny_dev(u_perm_t *perm, const char *name);
 
-/**
- * Returns the scd subsystems unit instance
- */
-unit_t *
-scd_get_unit(void);
+int
+u_perm_set_initial_allow_dev(u_perm_t *perm, list_t *device_names);
+#else
+inline int
+u_perm_allow_dev(UNUSED u_perm_t *perm, UNUSED char type, UNUSED int major, UNUSED int minor,
+		 UNUSED const char *name)
+{
+	return 0;
+}
 
-#endif /* CML_SCD_H */
+inline int
+u_perm_deny_dev(UNUSED u_perm_t *perm, UNUSED const char *name)
+{
+	return 0;
+}
+
+int
+u_perm_set_initial_allow_dev(UNUSED u_perm_t *perm, UNUSED list_t *device_names)
+{
+	return 0;
+}
+#endif /* UNIT_MODULE_PERM */

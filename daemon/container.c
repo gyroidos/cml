@@ -31,8 +31,10 @@
 #include "common/uuid.h"
 #include "compartment.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
 
 struct container {
@@ -88,6 +90,15 @@ struct container_usbdev {
 	container_usbdev_type_t type;
 };
 
+// list of compartments modules for all container objects
+static list_t *compartment_module_list = NULL;
+
+static list_t *
+container_get_compartment_modules(void)
+{
+	return compartment_module_list;
+}
+
 static void
 container_set_extension(void *extension_data, compartment_t *compartment)
 {
@@ -96,6 +107,16 @@ container_set_extension(void *extension_data, compartment_t *compartment)
 
 	container_t *container = extension_data;
 	container->compartment = compartment;
+}
+
+void
+container_register_compartment_module(compartment_module_t *mod)
+{
+	ASSERT(mod);
+
+	compartment_module_list = list_append(compartment_module_list, mod);
+	DEBUG("Container module %s registered, nr of hooks: %d)", mod->name,
+	      list_length(compartment_module_list));
 }
 
 container_t *
@@ -184,8 +205,8 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 		flags |= COMPARTMENT_FLAG_XORG_COMPAT;
 
 	// create internal compartment object with container as extension data
-	compartment_extension_t *extension =
-		compartment_extension_new(container_set_extension, container);
+	compartment_extension_t *extension = compartment_extension_new(
+		container_set_extension, container_get_compartment_modules, container);
 	container->compartment = compartment_new(uuid, name, flags, init, init_argv, init_env,
 						 init_env_len, extension);
 
@@ -592,6 +613,10 @@ container_wipe_finish(container_t *container)
 		     container_get_description(container));
 		return -1;
 	}
+
+	if (container_get_state(container) == COMPARTMENT_STATE_ZOMBIE)
+		container_set_state(container, COMPARTMENT_STATE_STOPPED);
+
 	return 0;
 }
 
@@ -621,20 +646,21 @@ container_wipe(container_t *container)
 
 	INFO("Wiping container %s", container_get_description(container));
 
-	if (container_get_state(container) != COMPARTMENT_STATE_STOPPED) {
-		container_kill(container);
-
-		/* Register observer to wait for completed compartment_stop */
-		if (!compartment_register_observer(container->compartment, &container_wipe_cb,
-						   container)) {
-			DEBUG("Could not register wipe callback");
-			return -1;
-		}
-		return 0;
-	} else {
+	if (container_get_state(container) == COMPARTMENT_STATE_STOPPED ||
+	    container_get_state(container) == COMPARTMENT_STATE_ZOMBIE) {
 		/* Container is already stopped */
 		return container_wipe_finish(container);
 	}
+
+	/* Container is running kill it before wipe */
+	container_kill(container);
+
+	/* Register observer to wait for completed compartment_stop */
+	if (!compartment_register_observer(container->compartment, &container_wipe_cb, container)) {
+		DEBUG("Could not register wipe callback");
+		return -1;
+	}
+	return 0;
 }
 
 int
@@ -828,6 +854,40 @@ container_usbdev_get_minor(container_usbdev_t *usbdev)
 {
 	ASSERT(usbdev);
 	return usbdev->minor;
+}
+
+char *
+container_usbdev_get_devpath_new(container_usbdev_t *usbdev)
+{
+	int n;
+	char *dev_path = NULL;
+	char *event_str = NULL;
+	char *tmp = NULL;
+	char *buf = NULL;
+	char *sys_path = mem_printf("/sys/dev/char/%d:%d/uevent", usbdev->major, usbdev->minor);
+
+	IF_FALSE_GOTO(file_exists(sys_path), out);
+
+	event_str = file_read_new(sys_path, 4096);
+	IF_NULL_GOTO(event_str, out);
+
+	tmp = strstr(event_str, "\nDEVNAME=");
+	IF_NULL_GOTO(tmp, out);
+
+	buf = mem_new0(char, PATH_MAX);
+	n = sscanf(tmp, "\nDEVNAME=%s\n", buf);
+	IF_FALSE_GOTO(n == 1, out);
+
+	dev_path = (0 == strncmp("/dev", buf, 4)) ? mem_strdup(buf) : mem_printf("/dev/%s", buf);
+out:
+
+	if (event_str)
+		mem_free0(event_str);
+	if (buf)
+		mem_free0(buf);
+	mem_free0(sys_path);
+
+	return dev_path;
 }
 
 container_vnet_cfg_t *

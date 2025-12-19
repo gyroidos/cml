@@ -54,13 +54,13 @@
 // clang-format on
 
 // Do not edit! This path is also configured in cmld.c
-#define DEVICE_ID_CONF DEFAULT_BASE_PATH "/device_id.conf"
+#define DEVICE_ID_CONF SCD_TOKEN_DIR "/device_id.conf"
 
 #define DMI_PRODUCT_SERIAL "/sys/devices/virtual/dmi/id/product_serial"
 #define DMI_PRODUCT_NAME "/sys/devices/virtual/dmi/id/product_name"
+#define DMI_PRODUCT_SERIAL_LEN 40
+#define DMI_PRODUCT_NAME_LEN 20
 
-#define TOKEN_DEFAULT_PASS "trustme"
-#define TOKEN_DEFAULT_NAME "testuser"
 #define TOKEN_DEFAULT_EXT ".p12"
 
 //#undef LOGF_LOG_MIN_PRIO
@@ -83,47 +83,6 @@ scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 	exit(0);
 }
 
-/**
- * returns 1 if a given file is a p12 token, otherwise 0
- */
-static int
-is_softtoken(const char *path, const char *file, UNUSED void *data)
-{
-	char *location = mem_printf("%s/%s", path, file);
-	char *ext;
-
-	// regular file
-	if (!file_is_regular(location))
-		goto out;
-	// with fixed extesion
-	if (!(ext = file_get_extension(file)))
-		goto out;
-	if (!strncmp(ext, TOKEN_DEFAULT_EXT, strlen(TOKEN_DEFAULT_EXT))) {
-		DEBUG("Found token file: %s", location);
-		mem_free0(location);
-		return 1;
-	}
-out:
-	mem_free0(location);
-	return 0;
-}
-
-/**
- * returns >0 if one or more token files exist
- */
-static int
-token_file_exists()
-{
-	int ret = dir_foreach(SCD_TOKEN_DIR, &is_softtoken, NULL);
-
-	if (ret < 0)
-		FATAL("Could not open token directory");
-	else {
-		DEBUG("%d Token files exist", ret);
-		return ret;
-	}
-}
-
 bool
 scd_in_provisioning_mode(void)
 {
@@ -133,9 +92,9 @@ scd_in_provisioning_mode(void)
 static void
 provisioning_mode()
 {
-	INFO("Check for existence of device certificate and user token");
+	INFO("Check for existence of device certificate");
 
-	bool need_initialization = (!file_exists(DEVICE_CERT_FILE) || !token_file_exists());
+	bool need_initialization = (!file_exists(DEVICE_CERT_FILE));
 	bool use_tpm = false;
 	char *dev_key_file = DEVICE_KEY_FILE;
 
@@ -177,13 +136,15 @@ provisioning_mode()
 			char *hw_serial = NULL;
 			char *hw_name = NULL;
 
+			// file_read_new of max length of SERIAL and NAME is limited due to the character limit of RFC5280
 			if (file_exists(DMI_PRODUCT_SERIAL))
-				hw_serial = file_read_new(DMI_PRODUCT_SERIAL, 512);
+				hw_serial =
+					file_read_new(DMI_PRODUCT_SERIAL, DMI_PRODUCT_SERIAL_LEN);
 			if (!hw_serial)
 				hw_serial = mem_strdup("0000");
 
 			if (file_exists(DMI_PRODUCT_NAME))
-				hw_name = file_read_new(DMI_PRODUCT_NAME, 512);
+				hw_name = file_read_new(DMI_PRODUCT_NAME, DMI_PRODUCT_NAME_LEN);
 			if (!hw_name)
 				hw_name = mem_strdup("generic");
 
@@ -230,25 +191,6 @@ provisioning_mode()
 		}
 	}
 
-	// self-create a user token to bring the device up
-	// is removed during provisioning
-	if (!token_file_exists()) {
-		DEBUG("Create initial soft token");
-		// TPM not used for soft token
-		if (ssl_init(false, NULL) == -1) {
-			FATAL("Failed to initialize OpenSSL stack for softtoken");
-		}
-
-		char *token_file =
-			mem_printf("%s/%s%s", SCD_TOKEN_DIR, TOKEN_DEFAULT_NAME, TOKEN_DEFAULT_EXT);
-		if (ssl_create_pkcs12_token(token_file, NULL, TOKEN_DEFAULT_PASS,
-					    TOKEN_DEFAULT_NAME, RSA_SSA_PADDING) != 0) {
-			FATAL("Unable to create initial user token");
-		}
-		mem_free0(token_file);
-		ssl_free();
-	}
-
 	// we now have anything for a clean startup so just die and let us be restarted by init
 	if (need_initialization) {
 		logf_unregister(scd_logfile_handler);
@@ -257,9 +199,8 @@ provisioning_mode()
 	}
 
 	// remark: no certificate validation checks are carried out
-	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT) ||
-	    !token_file_exists()) {
-		FATAL("Missing certificate chains, user token, or private key for device certificate");
+	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT)) {
+		FATAL("Missing certificate chains, or private key for device certificate");
 	}
 }
 

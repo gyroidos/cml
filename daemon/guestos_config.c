@@ -97,6 +97,8 @@ guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 		return MOUNT_TYPE_SHARED_RW;
 	case GUEST_OSMOUNT__TYPE__OVERLAY_RW:
 		return MOUNT_TYPE_OVERLAY_RW;
+	case GUEST_OSMOUNT__TYPE__STORE_ONLY:
+		return MOUNT_TYPE_STORE_ONLY;
 	default:
 		FATAL("Invalid protobuf mount type %d in CC Mode.", mt);
 	}
@@ -129,6 +131,8 @@ guestos_config_mount_type_from_protobuf(GuestOSMount__Type mt)
 		return MOUNT_TYPE_BIND_FILE;
 	case GUEST_OSMOUNT__TYPE__BIND_FILE_RW:
 		return MOUNT_TYPE_BIND_FILE_RW;
+	case GUEST_OSMOUNT__TYPE__STORE_ONLY:
+		return MOUNT_TYPE_STORE_ONLY;
 	default:
 		FATAL("Invalid protobuf mount type %d.", mt);
 	}

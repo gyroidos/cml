@@ -337,6 +337,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
 		TRACE("SCD: Handle messsage UNWRAP_KEY");
+		int ret_unwrap = 0;
 		int unwrapped_key_len;
 		unsigned char *unwrapped_key;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
@@ -349,18 +350,24 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("Token is locked. Unlock first.");
 		} else if (!msg->has_wrapped_key) {
 			ERROR("Wrapped key not specified.");
-		} else if (token->unwrap_key(token, msg->container_uuid, msg->wrapped_key.data,
-					     msg->wrapped_key.len, &unwrapped_key,
-					     &unwrapped_key_len) == 0) {
+		} else if ((ret_unwrap =
+				    token->unwrap_key(token, msg->container_uuid,
+						      msg->wrapped_key.data, msg->wrapped_key.len,
+						      &unwrapped_key, &unwrapped_key_len)) == 0) {
 			out.has_unwrapped_key = true;
 			out.unwrapped_key.len = unwrapped_key_len;
 			out.unwrapped_key.data = unwrapped_key;
+		} else if (ret_unwrap == -2) {
+			ERROR("Keyfile which contains wrapped key is corrupted!");
+			out.has_unwrapped_key = true;
+			out.unwrapped_key.len = 0;
+			out.unwrapped_key.data = NULL;
 		} else {
 			ERROR("Key unwrapping failed");
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-		if (out.has_unwrapped_key) {
+		if (out.has_unwrapped_key && ret_unwrap == 0) {
 			mem_memset0(unwrapped_key, unwrapped_key_len);
 			mem_free0(unwrapped_key);
 		}

@@ -137,7 +137,7 @@ c_service_handle_received_message(c_service_t *service, int sock_client,
 		break;
 
 	case SERVICE_TO_CMLD_MESSAGE__CODE__CONTAINER_CFG_DNS_REQ:
-		INFO("Received a request for the container name from container %s",
+		INFO("Received a request for the DNS server to be used from container %s",
 		     container_get_description(service->container));
 		if (c_service_send_container_cfg_dns_proto(service, sock_client))
 			INFO("sent reply to container");
@@ -514,8 +514,8 @@ static compartment_module_t c_service_module = {
 static void INIT
 c_service_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_service_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_service_module);
 
 	// register relevant handlers implemented by this module
 	container_register_audit_record_send_handler(MOD_NAME, c_service_audit_send_record);

@@ -41,6 +41,7 @@
 #include "common/uevent.h"
 
 #include "container.h"
+#include "scd.h"
 
 #include <libgen.h>
 #include <sys/sysmacros.h>
@@ -246,6 +247,15 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 				if (CONTAINER_USBDEV_TYPE_TOKEN == type) {
 					INFO("HOTPLUG USB TOKEN removed");
 					container_token_detach(hotplug->container);
+					char *devname = mem_printf(
+						"%s%s",
+						strncmp("/dev/", uevent_event_get_devname(event),
+							5) ?
+							"/dev/" :
+							"/",
+						uevent_event_get_devname(event));
+					unit_device_deny(scd_get_unit(), devname);
+					mem_free0(devname);
 				} else {
 					// signal calling handler to deny device access
 					ret = true;
@@ -361,6 +371,8 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 								c_hotplug_token_timer_cb,
 								token_data);
 					event_add_timer(e);
+					unit_device_allow(scd_get_unit(), token_data->devname, 'c',
+							  major, minor);
 				} else {
 					INFO("%s bound device node %d:%d -> container %s",
 					     (container_usbdev_is_assigned(ud)) ? "assign" :
@@ -510,6 +522,22 @@ c_hotplug_new(compartment_t *compartment)
 		container_usbdev_t *usbdev = l->data;
 		if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_TOKEN) {
 			c_hotplug_token_list = list_append(c_hotplug_token_list, usbdev);
+			// and allow access to token by the scd unit
+			if (0 != c_hotplug_usbdev_set_sysfs_props(usbdev)) {
+				WARN("Failed to find usbdev in sysfs");
+				continue;
+			}
+			char *dev_name = container_usbdev_get_devpath_new(usbdev);
+			if (dev_name) {
+				unit_device_allow(scd_get_unit(), dev_name, 'c',
+						  container_usbdev_get_major(usbdev),
+						  container_usbdev_get_minor(usbdev));
+				mem_free0(dev_name);
+			} else {
+				WARN("Can't get dev name for device 'c %d:%d'.",
+				     container_usbdev_get_major(usbdev),
+				     container_usbdev_get_minor(usbdev));
+			}
 		}
 	}
 
@@ -530,6 +558,12 @@ c_hotplug_free(void *hotplugp)
 		container_usbdev_t *usbdev = l->data;
 		if (container_usbdev_get_type(usbdev) == CONTAINER_USBDEV_TYPE_TOKEN) {
 			c_hotplug_token_list = list_remove(c_hotplug_token_list, usbdev);
+			// and deny access to token by the scd unit
+			char *dev_name = container_usbdev_get_devpath_new(usbdev);
+			if (dev_name) {
+				unit_device_deny(scd_get_unit(), dev_name);
+				mem_free0(dev_name);
+			}
 		}
 	}
 
@@ -709,6 +743,6 @@ static compartment_module_t c_hotplug_module = {
 static void INIT
 c_hotplug_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_hotplug_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_hotplug_module);
 }
