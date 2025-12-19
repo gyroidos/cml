@@ -36,6 +36,7 @@
 #define CMLD_H
 
 #include "container.h"
+#include "unit.h"
 #include "control.h"
 
 #ifndef DEFAULT_BASE_PATH
@@ -71,15 +72,13 @@ int
 cmld_init_stage_unit(const char *path);
 
 /**
- * Initialize the CMLD module.
+ * Notify cmld about unit state change during early init stage
  *
- * 2nd stage initialization which already needs SCD running
- * Triggered by SCD module
- *
- * @return 0 on success, -1 on error
+ * Triggers internal 2nd stage initialization if all units including SCD,
+ * are running.
  */
-int
-cmld_init_stage_container(void);
+void
+cmld_init_stage_unit_notify(unit_t *unit);
 
 /**
  * Cleans up the CMLD module.
@@ -228,6 +227,15 @@ cmld_containers_get_count();
 
 container_t *
 cmld_container_get_by_index(int index);
+
+int
+cmld_units_get_count(void);
+
+unit_t *
+cmld_unit_get_by_index(int index);
+
+unit_t *
+cmld_unit_get_by_uuid(const uuid_t *uuid);
 
 /**
  * Get the device UUID.

@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2018 Fraunhofer AISEC
+ * Copyright(c) 2025 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,31 +21,19 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#ifndef TSS_H
-#define TSS_H
+#ifndef U_TIME_H
+#define U_TIME_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "unit.h"
 
-/*
- * type of supported hashes
- */
-typedef enum { TSS_SHA1 = 0, TSS_SHA256, TSS_SHA384 } tss_hash_algo_t;
+#include <sys/time.h>
 
-/**
- * Initializes the tss subsystem (starts the corresponding daemon)
- * @return 0 on success, -1 on error
- */
-int
-tss_init(void);
+typedef struct u_time u_time_t;
 
-/**
- * Cleanup the tss submodule, mainly stop tpm2d daemon.
- */
-void
-tss_cleanup(void);
+time_t
+u_time_get_creation_time(const u_time_t *u_time);
 
-void
-tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo);
+time_t
+u_time_get_uptime(const u_time_t *u_time);
 
-#endif /* TSS_H */
+#endif /* U_TIME_H */
