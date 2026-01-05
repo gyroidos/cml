@@ -102,15 +102,52 @@ void
 a_b_update_init(void)
 {
 	a_b_update_init_stage_t stage = a_b_update_get_init_stage();
+	int ret = 0;
 
 	switch (stage) {
 	case A_B_UPDATE_INIT_NONE:
-		file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
-			  platform_get_file_path(KERNEL_BINARY_A), -1, 1, 0);
-		file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
-			  platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
-		file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
-		file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
+		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
+				platform_get_file_path(KERNEL_BINARY_A), -1, 1, 0);
+		if (ret) {
+			// if file_copy failed, check if the file was (partially)
+			// created and, if so, clean it up.
+			if (file_exists(platform_get_file_path(KERNEL_BINARY_A))) {
+				unlink(platform_get_file_path(KERNEL_BINARY_A));
+			}
+			return;
+		}
+
+		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
+				platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
+		if (ret) {
+			// if file_copy failed, check if the file was (partially)
+			// created and, if so, clean it up.
+			if (file_exists(platform_get_file_path(KERNEL_BINARY_B))) {
+				unlink(platform_get_file_path(KERNEL_BINARY_B));
+			}
+			return;
+		}
+
+		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
+		if (ret) {
+			// if file_copy failed, check if the file was (partially)
+			// created and, if so, clean it up.
+			if (file_exists(DEVICE_CONF_A)) {
+				unlink(DEVICE_CONF_A);
+			}
+			return;
+		}
+
+		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
+		if (ret) {
+			// if file_copy failed, check if the file was (partially)
+			// created and, if so, clean it up.
+			if (file_exists(DEVICE_CONF_B)) {
+				unlink(DEVICE_CONF_B);
+			}
+			return;
+		}
+
 		platform_init_boot_entries();
 		/* intentional fallthrough */
 	case A_B_UPDATE_INIT_STAGE_1:
