@@ -47,7 +47,7 @@ extern const char *
 platform_get_file_path(a_b_update_kernel_path_t p);
 extern bool
 platform_boot_entries_initialized(void);
-extern void
+extern int
 platform_init_boot_entries();
 
 /*****************************************************************************/
@@ -146,7 +146,9 @@ a_b_update_init(void)
 			return;
 		}
 
-		platform_init_boot_entries();
+		ret = platform_init_boot_entries();
+		IF_TRUE_RETURN_ERROR(ret);
+
 		/* intentional fallthrough */
 	case A_B_UPDATE_INIT_STAGE_1:
 		INFO("Rebooting into A/B update configuration.");

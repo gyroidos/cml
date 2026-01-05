@@ -74,12 +74,22 @@ platform_boot_entries_initialized(void)
 					      "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B");
 }
 
-void
+int
 platform_init_boot_entries(void)
 {
-	efivars_set_boot_entry(0, "GyroidosA", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".A");
-	efivars_set_boot_entry(1, "GyroidosB", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B");
-	efivars_set_boot_order((uint16_t[]){ 0000, 0001 }, 2);
+	int ret = 0;
+
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(
+				      0, "GyroidosA", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".A")),
+			     ret);
+
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(
+				      1, "GyroidosB", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B")),
+			     ret);
+
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_order((uint16_t[]){ 0000, 0001 }, 2)), ret);
+
+	return 0;
 }
 
 a_b_update_option_t
