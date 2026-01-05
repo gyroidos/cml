@@ -39,7 +39,7 @@ efivars_get_boot_current_new(void);
 uint16_t *
 efivars_get_boot_order_new(size_t *len_out);
 
-void
+int
 efivars_set_boot_order(const uint16_t *order, size_t len);
 
 int
@@ -48,7 +48,7 @@ efivars_set_boot_next(uint16_t next);
 bool
 efivars_boot_entry_initialized(uint16_t idx, const char *label, const char *path);
 
-void
+int
 efivars_set_boot_entry(uint16_t idx, const char *label, const char *path);
 
 #endif // EFIVARS_H

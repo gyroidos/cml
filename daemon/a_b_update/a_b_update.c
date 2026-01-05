@@ -109,8 +109,8 @@ a_b_update_init(void)
 		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
 				platform_get_file_path(KERNEL_BINARY_A), -1, 1, 0);
 		if (ret) {
-			// if file_copy failed, check if the file was (partially)
-			// created and, if so, clean it up.
+			ERROR("Copy of %s failed. Cleanup.",
+			      platform_get_file_path(KERNEL_BINARY_A));
 			if (file_exists(platform_get_file_path(KERNEL_BINARY_A))) {
 				unlink(platform_get_file_path(KERNEL_BINARY_A));
 			}
@@ -120,8 +120,8 @@ a_b_update_init(void)
 		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
 				platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
 		if (ret) {
-			// if file_copy failed, check if the file was (partially)
-			// created and, if so, clean it up.
+			ERROR("Copy of %s failed. Cleanup.",
+			      platform_get_file_path(KERNEL_BINARY_B));
 			if (file_exists(platform_get_file_path(KERNEL_BINARY_B))) {
 				unlink(platform_get_file_path(KERNEL_BINARY_B));
 			}
@@ -130,8 +130,7 @@ a_b_update_init(void)
 
 		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
 		if (ret) {
-			// if file_copy failed, check if the file was (partially)
-			// created and, if so, clean it up.
+			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_A);
 			if (file_exists(DEVICE_CONF_A)) {
 				unlink(DEVICE_CONF_A);
 			}
@@ -140,8 +139,7 @@ a_b_update_init(void)
 
 		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
 		if (ret) {
-			// if file_copy failed, check if the file was (partially)
-			// created and, if so, clean it up.
+			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_B);
 			if (file_exists(DEVICE_CONF_B)) {
 				unlink(DEVICE_CONF_B);
 			}
