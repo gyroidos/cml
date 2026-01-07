@@ -470,6 +470,15 @@ readloop(int from_fd, int to_fd, char *buf, int *count)
 	TRACE("[EXEC] Starting read loop in process %d; from fd %d, to fd %d, PPID: %d", getpid(),
 	      from_fd, to_fd, getppid());
 
+	// write pending null
+	if (*count == -1) {
+		if (write(to_fd, "\0", 1) < 0) {
+			TRACE_ERRNO("[READLOOP] write failed.");
+			return -1;
+		}
+		*count = 0;
+	}
+
 	// write pending data
 	if (*count > 0) {
 		TRACE("[READLOOP] Pending %d bytes from fd: %d: %s", *count, from_fd, buf);
@@ -487,12 +496,19 @@ readloop(int from_fd, int to_fd, char *buf, int *count)
 	while (0 < (*count = read(from_fd, buf, SESSION_WBUF_SIZE - 1))) {
 		buf[*count] = 0;
 		TRACE("[READLOOP] Read %d bytes from fd: %d: %s", *count, from_fd, buf);
-		if (write(to_fd, buf, *count + 1) < 0) {
+		int written = write(to_fd, buf, *count + 1);
+		if (written < 0) {
 			if (errno == EAGAIN)
 				return 0; // try again;
 
 			TRACE_ERRNO("[READLOOP] write failed.");
 			return -1;
+		}
+		if (written == *count) {
+			*count = -1;
+		} else if (written < *count + 1) {
+			*count -= written;
+			memmove(buf, buf + written, written);
 		}
 	}
 	if (*count < 0 && errno != EAGAIN) {
