@@ -130,6 +130,14 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 	for (char **arg = argv; arg && *arg; arg++, i++)
 		init_argv[i] = mem_strdup(*arg);
 
+	unit->data_path = mem_strdup(data_path);
+
+	unit->sock_name = mem_strdup(sock_name);
+	unit->sock_type = sock_type;
+	unit->on_sock_connect_cb = on_sock_connect_cb;
+
+	unit->restart = restart;
+
 	// create internal compartment object with unit as extension data
 	compartment_extension_t *extension =
 		compartment_extension_new(unit_set_extension, unit_get_compartment_modules, unit);
@@ -142,14 +150,6 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 		unit_free(unit);
 		return NULL;
 	}
-
-	unit->data_path = mem_strdup(data_path);
-
-	unit->sock_name = mem_strdup(sock_name);
-	unit->sock_type = sock_type;
-	unit->on_sock_connect_cb = on_sock_connect_cb;
-
-	unit->restart = restart;
 
 	return unit;
 }
