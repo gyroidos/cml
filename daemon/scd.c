@@ -188,7 +188,7 @@ scd_init(void)
 	mem_free(legacy_device_id_path);
 
 	// if device.cert is not present, scd will die. Hence, we set autorestart in unit_new
-	scd_unit = unit_new(uuid_new(SCD_UUID), "SCD", SCD_BINARY_NAME, NULL, NULL, 0, false,
+	scd_unit = unit_new(uuid_new(SCD_UUID), "SCD", SCD_BINARY_NAME, NULL, NULL, 0, true,
 			    SCD_TOKEN_DIR, SCD_CONTROL_SOCKET, SOCK_SEQPACKET, &scd_on_connect_cb,
 			    true);
 
