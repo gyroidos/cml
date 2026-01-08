@@ -31,6 +31,7 @@
 
 #define MOD_NAME "c_idmapped"
 
+#include "common/dir.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/ns.h"
@@ -100,6 +101,15 @@ u_idmapped_new(compartment_t *compartment)
 
 	u_idmapped_t *idmapped = mem_new0(u_idmapped_t, 1);
 	idmapped->unit = compartment_get_extension_data(compartment);
+
+	// ensure data directory of unit in CML is root owned
+	struct stat s;
+	if (!stat(unit_get_data_path(idmapped->unit), &s) && s.st_uid != 0) {
+		if (dir_chown_folder(unit_get_data_path(idmapped->unit), 0, 0) < 0) {
+			FATAL("Could not chown %s to root:root failed.",
+			      unit_get_data_path(idmapped->unit));
+		}
+	}
 
 	return idmapped;
 }
