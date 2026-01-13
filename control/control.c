@@ -910,13 +910,16 @@ send_message:
 						}
 						fflush(stdout);
 					}
+					protobuf_free_message((ProtobufCMessage *)resp);
 				} else if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_END) {
 					TRACE("[CLIENT] Got notification of command termination. Exiting...");
 					kill(pid, SIGTERM);
 					waitpid(pid, NULL, 0);
+					protobuf_free_message((ProtobufCMessage *)resp);
 					goto exit;
 				} else {
 					ERROR("Detected unexpected message from cmld. Exiting");
+					protobuf_free_message((ProtobufCMessage *)resp);
 					goto exit;
 				}
 			}
