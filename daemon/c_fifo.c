@@ -407,6 +407,35 @@ error:
 }
 
 static int
+c_fifo_start_pre_exec_child(void *fifop)
+{
+	c_fifo_t *fifo = fifop;
+	ASSERT(fifo);
+
+	int ret = -COMPARTMENT_ERROR_FIFO;
+	container_t *c0 = cmld_containers_get_c0();
+
+	if (fifo->container != c0)
+		return 0;
+
+	/*
+	 * avoid race where container is already started and the corresponding
+	 * fifo dir in c0 is not ready yet.
+	 */
+	DEBUG("Creating dir for FIFOs in c0");
+
+	if (dir_mkdir_p(FIFO_PATH, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not create fifo parent dir at %s", FIFO_PATH);
+		ret = -COMPARTMENT_ERROR_FIFO;
+	} else {
+		DEBUG("Created dir for FIFOs at path %s", FIFO_PATH);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+static int
 c_fifo_stop(void *fifop)
 {
 	c_fifo_t *fifo = fifop;
@@ -438,7 +467,7 @@ static compartment_module_t c_fifo_module = {
 	.start_post_exec = NULL,
 	.start_child = NULL,
 	.start_pre_exec_child_early = NULL,
-	.start_pre_exec_child = NULL,
+	.start_pre_exec_child = c_fifo_start_pre_exec_child,
 	.stop = c_fifo_stop,
 	.cleanup = c_fifo_cleanup,
 	.join_ns = NULL,
