@@ -82,6 +82,57 @@ int
 network_setup_route_table(const char *table_id, const char *net_dst, const char *dev, bool add);
 
 /**
+ * Adds a routing policy rule using netlink.
+ * Creates a rule like: "from all lookup <table_id> priority <priority>"
+ *
+ * @param table_id Routing table ID
+ * @param family Address family (AF_INET or AF_INET6)
+ * @param priority Rule priority (lower = higher priority)
+ * @return 0 on success, -1 on failure
+ */
+int
+network_add_routing_rule(uint32_t table_id, int family, uint32_t priority);
+
+/**
+ * Removes a routing policy rule using netlink.
+ *
+ * @param table_id Routing table ID
+ * @param family Address family (AF_INET or AF_INET6)
+ * @param priority Rule priority (must match the rule to remove)
+ * @return 0 on success, -1 on failure
+ */
+int
+network_remove_routing_rule(uint32_t table_id, int family, uint32_t priority);
+
+/**
+ * Adds a route to a routing table using netlink.
+ *
+ * @param table_id Routing table ID
+ * @param dest_network Destination network address (e.g., "9.9.9.0" or "2001:db8::")
+ * @param prefix_len Network prefix length (e.g., 24 for IPv4 /24, 64 for IPv6 /64)
+ * @param gateway Gateway IP address
+ * @param dev Network device name
+ * @return 0 on success, -1 on failure
+ */
+int
+network_add_route_to_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+			   const char *gateway, const char *dev);
+
+/**
+ * Removes a route from a routing table using netlink.
+ *
+ * @param table_id Routing table ID
+ * @param dest_network Destination network address
+ * @param prefix_len Network prefix length
+ * @param gateway Gateway IP address
+ * @param dev Network device name
+ * @return 0 on success, -1 on failure
+ */
+int
+network_remove_route_from_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+				const char *gateway, const char *dev);
+
+/**
  * Add (or remove) simple iptables rule.
  */
 int

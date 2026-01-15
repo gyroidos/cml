@@ -31,6 +31,8 @@
 #include <sys/socket.h>
 #include <asm/types.h>
 #include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <linux/fib_rules.h>
 #include <linux/genetlink.h>
 #include <linux/xfrm.h>
 
@@ -769,6 +771,17 @@ nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg)
 
 	int size = sizeof(struct rtmsg);
 	memcpy(NLMSG_DATA(&msg->nlmsghdr), rtmsg, size);
+
+	return nl_msg_set_len(msg, size);
+}
+
+int
+nl_msg_set_rule_req(nl_msg_t *msg, const struct fib_rule_hdr *rule)
+{
+	ASSERT(msg);
+
+	int size = sizeof(struct fib_rule_hdr);
+	memcpy(NLMSG_DATA(&msg->nlmsghdr), rule, size);
 
 	return nl_msg_set_len(msg, size);
 }

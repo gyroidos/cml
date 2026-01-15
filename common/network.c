@@ -32,11 +32,15 @@
 #include "proc.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <net/if.h>
 #include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <linux/fib_rules.h>
 #include <linux/genetlink.h>
 #include <linux/nl80211.h>
 
@@ -62,6 +66,32 @@
 #define LOOPBACK_OLD_PREFIX 8
 #define LOOPBACK_PREFIX 16
 #define LOCALHOST_IP "127.0.0.1"
+
+/**
+ * Parses an IP address string and detects its address family.
+ *
+ * @param addr_str The IP address string to parse
+ * @param addr Output buffer for parsed address
+ * @param family Output: AF_INET or AF_INET6
+ * @param addr_size Input: size of the buffer, Output: size of the address (4 for IPv4, 16 for IPv6)
+ * @return 0 on success, -1 on failure (including if buffer is too small)
+ */
+static int
+network_parse_addr(const char *addr_str, void *addr, int *family, size_t *addr_size)
+{
+	IF_TRUE_RETVAL(*addr_size < sizeof(struct in6_addr), -1);
+
+	if (inet_pton(AF_INET, addr_str, addr) == 1) {
+		*family = AF_INET;
+		*addr_size = sizeof(struct in_addr);
+		return 0;
+	} else if (inet_pton(AF_INET6, addr_str, addr) == 1) {
+		*family = AF_INET6;
+		*addr_size = sizeof(struct in6_addr);
+		return 0;
+	}
+	return -1;
+}
 
 static int
 network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *action)
@@ -186,6 +216,328 @@ network_setup_route(const char *net_dst, const char *dev, bool add)
 	const char *const argv[] = { IP_PATH, "route", add ? "replace" : "del", net_dst, "dev",
 				     dev,     "table", IP_ROUTING_TABLE,	NULL };
 	return proc_fork_and_execvp(argv);
+}
+
+int
+network_add_routing_rule(uint32_t table_id, int family, uint32_t priority)
+{
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+
+	DEBUG("Adding routing policy rule: from all lookup %u priority %u (family %s)", table_id,
+	      priority, (family == AF_INET6) ? "inet6" : "inet");
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to allocate netlink message for routing rule");
+		goto err;
+	}
+
+	struct fib_rule_hdr rule = { .family = family,
+				     .dst_len = 0,
+				     .src_len = 0,
+				     .tos = 0,
+				     .table = RT_TABLE_UNSPEC,
+				     .action = FR_ACT_TO_TBL,
+				     .flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_NEWRULE), err);
+	IF_TRUE_GOTO_ERROR(
+		nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rule_req(req, &rule), err);
+
+	if (nl_msg_add_u32(req, FRA_TABLE, table_id) < 0) {
+		ERROR("Failed to add FRA_TABLE attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, FRA_PRIORITY, priority) < 0) {
+		ERROR("Failed to add FRA_PRIORITY attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		if (errno == EEXIST) {
+			DEBUG("Routing rule for table %u already exists (family %s), continuing",
+			      table_id, (family == AF_INET6) ? "inet6" : "inet");
+		} else {
+			ERROR("Failed to add routing rule for table %u", table_id);
+			goto err;
+		}
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_remove_routing_rule(uint32_t table_id, int family, uint32_t priority)
+{
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+
+	DEBUG("Removing routing policy rule: from all lookup %u priority %u (family %s)", table_id,
+	      priority, (family == AF_INET6) ? "inet6" : "inet");
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to create netlink message for rule deletion");
+		goto err;
+	}
+
+	struct fib_rule_hdr rule = { .family = family,
+				     .dst_len = 0,
+				     .src_len = 0,
+				     .tos = 0,
+				     .table = RT_TABLE_UNSPEC,
+				     .action = FR_ACT_TO_TBL,
+				     .flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_DELRULE), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rule_req(req, &rule), err);
+
+	if (nl_msg_add_u32(req, FRA_TABLE, table_id) < 0) {
+		ERROR("Failed to add FRA_TABLE attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, FRA_PRIORITY, priority) < 0) {
+		ERROR("Failed to add FRA_PRIORITY attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		if (errno == ENOENT || errno == ESRCH) {
+			DEBUG("Routing rule for table %u doesn't exist (family %s), continuing",
+			      table_id, (family == AF_INET6) ? "inet6" : "inet");
+		} else {
+			WARN("Failed to delete routing rule for table %u", table_id);
+			goto err;
+		}
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_add_route_to_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+			   const char *gateway, const char *dev)
+{
+	ASSERT(dest_network);
+	ASSERT(gateway);
+	ASSERT(dev);
+
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+	int family;
+	size_t addr_size = sizeof(struct in6_addr);
+	struct in6_addr dst_addr, gw_addr;
+
+	if (network_parse_addr(dest_network, &dst_addr, &family, &addr_size) < 0) {
+		ERROR("Invalid destination network address: %s", dest_network);
+		return -1;
+	}
+
+	if (inet_pton(family, gateway, &gw_addr) != 1) {
+		ERROR("Invalid gateway address %s (expected %s)", gateway,
+		      (family == AF_INET) ? "IPv4" : "IPv6");
+		return -1;
+	}
+
+	unsigned int if_index = if_nametoindex(dev);
+	if (if_index == 0) {
+		ERROR("Failed to get interface index for %s", dev);
+		return -1;
+	}
+
+	DEBUG("Adding route %s/%u via %s dev %s to table %u", dest_network, prefix_len, gateway,
+	      dev, table_id);
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to allocate netlink message for route");
+		goto err;
+	}
+
+	struct rtmsg rtmsg = { .rtm_family = family,
+			       .rtm_dst_len = prefix_len,
+			       .rtm_src_len = 0,
+			       .rtm_tos = 0,
+			       .rtm_table = RT_TABLE_UNSPEC,
+			       .rtm_protocol = RTPROT_STATIC,
+			       .rtm_scope = RT_SCOPE_UNIVERSE,
+			       .rtm_type = RTN_UNICAST,
+			       .rtm_flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_NEWROUTE), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE |
+							 NLM_F_REPLACE),
+			   err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rt_req(req, &rtmsg), err);
+
+	if (nl_msg_add_buffer(req, RTA_DST, (const char *)&dst_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_DST attribute");
+		goto err;
+	}
+	if (nl_msg_add_buffer(req, RTA_GATEWAY, (const char *)&gw_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_GATEWAY attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_OIF, if_index) < 0) {
+		ERROR("Failed to add RTA_OIF attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_TABLE, table_id) < 0) {
+		ERROR("Failed to add RTA_TABLE attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		ERROR("Failed to add route to table %u", table_id);
+		goto err;
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	DEBUG("Successfully added route %s/%u via %s dev %s to table %u", dest_network, prefix_len,
+	      gateway, dev, table_id);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_remove_route_from_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+				const char *gateway, const char *dev)
+{
+	ASSERT(dest_network);
+	ASSERT(gateway);
+	ASSERT(dev);
+
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+	int family;
+	size_t addr_size = sizeof(struct in6_addr);
+	struct in6_addr dst_addr, gw_addr;
+
+	if (network_parse_addr(dest_network, &dst_addr, &family, &addr_size) < 0) {
+		ERROR("Invalid destination network address: %s", dest_network);
+		return -1;
+	}
+
+	if (inet_pton(family, gateway, &gw_addr) != 1) {
+		ERROR("Invalid gateway address %s (expected %s)", gateway,
+		      (family == AF_INET) ? "IPv4" : "IPv6");
+		return -1;
+	}
+
+	unsigned int if_index = if_nametoindex(dev);
+	if (if_index == 0) {
+		ERROR_ERRNO("Failed to get interface index for %s", dev);
+		return -1;
+	}
+
+	DEBUG("Removing route %s/%u via %s dev %s from table %u", dest_network, prefix_len, gateway,
+	      dev, table_id);
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to create netlink message");
+		goto err;
+	}
+
+	struct rtmsg rtmsg = { .rtm_family = family,
+			       .rtm_dst_len = prefix_len,
+			       .rtm_src_len = 0,
+			       .rtm_tos = 0,
+			       .rtm_table = RT_TABLE_UNSPEC,
+			       .rtm_protocol = RTPROT_STATIC,
+			       .rtm_scope = RT_SCOPE_UNIVERSE,
+			       .rtm_type = RTN_UNICAST,
+			       .rtm_flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_DELROUTE), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rt_req(req, &rtmsg), err);
+
+	if (nl_msg_add_buffer(req, RTA_DST, (const char *)&dst_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_DST attribute");
+		goto err;
+	}
+	if (nl_msg_add_buffer(req, RTA_GATEWAY, (const char *)&gw_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_GATEWAY attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_OIF, if_index) < 0) {
+		ERROR("Failed to add RTA_OIF attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_TABLE, table_id) < 0) {
+		ERROR("Failed to add RTA_TABLE attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		ERROR("Failed to delete route from table %u", table_id);
+		goto err;
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	DEBUG("Successfully deleted route %s/%u from table %u", dest_network, prefix_len, table_id);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
 }
 
 int
