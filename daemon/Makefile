@@ -128,7 +128,8 @@ SRC_UMODULES += \
 	u_idmapped.c \
 	u_service.c \
 	u_net.c \
-	u_time.c
+	u_time.c \
+	u_usb.c
 
 ifeq ($(UNIT_MODULE_PERM),y)
 SRC_UMODULES += \
