@@ -116,12 +116,18 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 			DEBUG("Found command '%s' in path '%s'", command, unit_bin_path[i]);
 			break;
 		}
+		mem_free0(command_path);
 	}
 	if (command_path == NULL) {
 		ERROR("Binary '%s' not found in valid path.", command);
 		unit_free(unit);
 		return NULL;
 	}
+
+	/*
+	 * init_argv will be deep-freed by compartment_free(), thus do not free
+	 * command_path here as we set it as init_argv[0].
+	 */
 
 	char **init_argv = mem_new0(char *, argv_len);
 	init_argv[0] = command_path;
