@@ -33,6 +33,12 @@
 
 #include "scd_shared.h"
 
+//has to be kept in sync with smartcard.h
+// clang-format off
+#define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
+// clang-format on
+#define SCD_TOKENCONTROL_SOCK_LISTEN_BACKLOG 1
+
 /**
  * Returns the type of the token
  */

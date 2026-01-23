@@ -29,6 +29,7 @@
 
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
+#include "token.h"
 
 #define STOKEN_DEFAULT_EXT ".p12"
 
@@ -106,5 +107,16 @@ softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t pl
 int
 softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
 		     unsigned char **plain_key, int *plain_key_len);
+
+/**
+ * creates a new generic token of type softtoken
+ * 
+ * @param softtoken_dir path to the directory where softtoken files are stored
+ * @param uuid the uuid of the new softtoken
+ *
+ * @return pointer to the newly created generic token on success or else NULL
+ */
+scd_token_t *
+softtoken_token_new(const char *softtoken_dir, const char *uuid);
 
 #endif /* SOFTTOKEN_H */

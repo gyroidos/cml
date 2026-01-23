@@ -26,8 +26,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-
-#define MAX_APDU_BUF_LEN 4096
+#include "token.h"
 
 typedef struct usbtoken usbtoken_t;
 
@@ -39,7 +38,7 @@ typedef struct usbtoken usbtoken_t;
  * @return pointer to the usbtoken structure on success or NULL on error
  */
 usbtoken_t *
-usbtoken_new(const char *serial);
+usbtoken_new(const char *serial, uuid_t *token_uuid);
 
 /**
  * unlocks a usbtoken with a password.
@@ -172,6 +171,17 @@ usbtoken_reset_auth(usbtoken_t *token, unsigned char *brsp, size_t brsp_len);
  */
 int
 usbtoken_get_atr(usbtoken_t *token, unsigned char *brsp, size_t brsp_len);
+
+/**
+ * creates a new generic token of type usbtoken
+ * 
+ * @param serial serial number of the usbtoken reader
+ * @param uuid the uuid of the new usbtoken
+ *
+ * @return pointer to the newly created generic token on success or else NULL
+ */
+scd_token_t *
+usbtoken_token_new(const char *serial, const char *uuid);
 
 #endif // SC_CARDSERVICE
 
