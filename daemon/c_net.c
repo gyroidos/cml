@@ -254,7 +254,7 @@ c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
 static int
 c_net_is_veth_used(const char *if_name)
 {
-	ASSERT(if_name);
+	IF_NULL_RETVAL(if_name, -1);
 
 	DIR *dirp = opendir(SYS_NET_PATH);
 	struct dirent *dp;
