@@ -99,7 +99,6 @@ SRC_FILES += \
 	scd.pb-c.c \
 	control.c \
 	softtoken.c \
-	token.c \
 	scd.c \
 	tokencontrol.pb-c.c
 

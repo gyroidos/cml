@@ -24,30 +24,18 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
-#include "softtoken.h"
-#include "usbtoken.h"
-
 #include "common/uuid.h"
+#include "common/list.h"
 
 #include <stdbool.h>
 #include <stddef.h>
 
 #define STOKEN_DEFAULT_PASS "trustme"
 
-//has to be kept in sync with smartcard.h
-// clang-format off
-#define SCD_TOKENCONTROL_SOCKET SOCK_PATH(tokencontrol)
-// clang-format on
-
 /**
  *  Generic token type
  */
 typedef struct scd_token scd_token_t;
-
-/**
- * Internal data of the generic scd token.
- */
-typedef struct scd_token_data scd_token_data_t;
 
 /**
  * Choice of supported token types.
@@ -56,23 +44,10 @@ typedef struct scd_token_data scd_token_data_t;
 typedef enum scd_tokentype { NONE, SOFT, USB } scd_tokentype_t;
 
 /**
- * Data used by the constructor scd_token_new
- */
-typedef struct token_constr_data {
-	scd_tokentype_t type;
-	char *uuid;
-
-	union {
-		const char *softtoken_dir;
-		const char *usbtoken_serial;
-	} init_str;
-} token_constr_data_t;
-
-/**
  *  generic scd_token.
  */
 struct scd_token {
-	scd_token_data_t *token_data;
+	void *int_token; // internal token implementation
 
 	int (*lock)(scd_token_t *token);
 	int (*unlock)(scd_token_t *token, char *passwd, unsigned char *pairing_secret,
@@ -94,54 +69,11 @@ struct scd_token {
 			 unsigned char *brsp, size_t brsp_len);
 	int (*reset_auth)(scd_token_t *token, unsigned char *brsp, size_t brsp_len);
 	int (*get_atr)(scd_token_t *token, unsigned char *brsp, size_t brsp_len);
+
+	scd_tokentype_t (*get_type)(scd_token_t *token);
+	uuid_t *(*get_uuid)(scd_token_t *token);
+	bool (*has_internal_token)(scd_token_t *token, const void *int_token);
+	void (*free)(scd_token_t *token);
 };
-
-/**
- * returns the token's type.
- * @param token the token to operate on
- *
- * @return the type of the scd token
- */
-scd_tokentype_t
-token_get_type(scd_token_t *token);
-
-/**
- * returns the token's uuid.
- * @param token the token to operate on
- *
- * @return pointer to the uuid of the token on success or else NULL
- */
-uuid_t *
-token_get_uuid(scd_token_t *token);
-
-/**
- * checks if the int_token is the internal token of the corresponding token.
- * @param token the token to operate on
- * @param int_token the token to checked
- *
- * @return true if int_token is internal token of token, false otherwise
- */
-bool
-token_has_internal_token(scd_token_t *token, const void *int_token);
-
-/**
- * creates a new generic token
- * calls the respective create function for the selected type of token and
- * sets the function pointer appropriately
- * @param constr_data data used by the constructor
- *
- * @return pointer to the newly created generic token on success or else NULL
- */
-scd_token_t *
-token_new(const token_constr_data_t *constr_data);
-
-/**
- * frees a generic scd token
- * @param token the token to be freed
- *
- * @return void
- */
-void
-token_free(scd_token_t *token);
 
 #endif /* TOKEN_H */
