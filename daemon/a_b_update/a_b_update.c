@@ -53,21 +53,6 @@ platform_init_boot_entries();
 /*****************************************************************************/
 /* Generic functions */
 
-static char *
-a_b_update_option_str(a_b_update_option_t opt)
-{
-	ASSERT(opt == A_B_UPDATE_OPTION_A || opt == A_B_UPDATE_OPTION_B);
-
-	switch (opt) {
-	case A_B_UPDATE_OPTION_A:
-		return "A";
-	case A_B_UPDATE_OPTION_B:
-		return "B";
-	default:
-		return "UNDEFINED"; // never reached due to assert
-	}
-}
-
 a_b_update_init_stage_t
 a_b_update_get_init_stage(void)
 {
@@ -172,7 +157,7 @@ a_b_update_get_path_new(char *base_path)
 		WARN("Resilient update is not set up. Default to plain values.");
 		return mem_strdup(base_path);
 	} else {
-		return mem_printf("%s.%s", base_path, a_b_update_option_str(cur));
+		return mem_printf("%s%s", base_path, cur == A_B_UPDATE_OPTION_B ? FILE_SUFFIX_B : FILE_SUFFIX_A);
 	}
 }
 
@@ -189,8 +174,7 @@ a_b_update_get_flash_path_new(const char *partition)
 		WARN("Resilient update is not set up. Default to plain values.");
 		return mem_strdup(partition);
 	} else {
-		return mem_printf("%s.%s", partition,
-				  a_b_update_option_str(
-					  a_b_update_boot_prio_invert(a_b_update_get_current())));
+		return mem_printf("%s%s", partition,
+					a_b_update_boot_prio_invert(a_b_update_get_current()) == A_B_UPDATE_OPTION_B ? FILE_SUFFIX_B : FILE_SUFFIX_A);
 	}
 }
