@@ -46,6 +46,8 @@ extern a_b_update_option_t
 a_b_update_boot_prio_invert(a_b_update_option_t in);
 extern a_b_update_init_stage_t
 a_b_update_get_init_stage(void);
+extern char *
+a_b_update_option_str(a_b_update_option_t opt);
 
 /*****************************************************************************/
 /* EFI specific functions */
@@ -74,12 +76,22 @@ platform_boot_entries_initialized(void)
 					      "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B");
 }
 
-void
+int
 platform_init_boot_entries(void)
 {
-	efivars_set_boot_entry(0, "GyroidosA", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".A");
-	efivars_set_boot_entry(1, "GyroidosB", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B");
-	efivars_set_boot_order((uint16_t[]){ 0000, 0001 }, 2);
+	int ret = 0;
+
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(
+				      0, "GyroidosA", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".A")),
+			     ret);
+
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(
+				      1, "GyroidosB", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B")),
+			     ret);
+
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_order((uint16_t[]){ 0000, 0001 }, 2)), ret);
+
+	return 0;
 }
 
 a_b_update_option_t
@@ -112,7 +124,7 @@ a_b_update_get_current(void)
 void
 a_b_update_set_boot_order(void)
 {
-	IF_FALSE_RETURN(a_b_update_get_init_stage() == A_B_UPDATE_INIT_COMPLETE);
+	IF_FALSE_RETURN_ERROR(a_b_update_get_init_stage() == A_B_UPDATE_INIT_COMPLETE);
 
 	size_t boot_order_len;
 	uint16_t *boot_current = NULL;
@@ -155,5 +167,9 @@ out:
 void
 a_b_update_boot_new_once(void)
 {
-	efivars_set_boot_next(a_b_update_boot_prio_invert(a_b_update_get_current()));
+	IF_FALSE_RETURN_ERROR(a_b_update_get_init_stage() == A_B_UPDATE_INIT_COMPLETE);
+
+	a_b_update_option_t next = a_b_update_boot_prio_invert(a_b_update_get_current());
+	INFO("Set next boot once to option %s", a_b_update_option_str(next));
+	efivars_set_boot_next(next);
 }

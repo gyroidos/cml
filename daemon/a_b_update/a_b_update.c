@@ -47,13 +47,13 @@ extern const char *
 platform_get_file_path(a_b_update_kernel_path_t p);
 extern bool
 platform_boot_entries_initialized(void);
-extern void
+extern int
 platform_init_boot_entries();
 
 /*****************************************************************************/
 /* Generic functions */
 
-static char *
+char *
 a_b_update_option_str(a_b_update_option_t opt)
 {
 	ASSERT(opt == A_B_UPDATE_OPTION_A || opt == A_B_UPDATE_OPTION_B);
@@ -102,16 +102,53 @@ void
 a_b_update_init(void)
 {
 	a_b_update_init_stage_t stage = a_b_update_get_init_stage();
+	int ret = 0;
 
 	switch (stage) {
 	case A_B_UPDATE_INIT_NONE:
-		file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
-			  platform_get_file_path(KERNEL_BINARY_A), -1, 1, 0);
-		file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
-			  platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
-		file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
-		file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
-		platform_init_boot_entries();
+		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
+				platform_get_file_path(KERNEL_BINARY_A), -1, 1, 0);
+		if (ret) {
+			ERROR("Copy of %s failed. Cleanup.",
+			      platform_get_file_path(KERNEL_BINARY_A));
+			if (file_exists(platform_get_file_path(KERNEL_BINARY_A))) {
+				unlink(platform_get_file_path(KERNEL_BINARY_A));
+			}
+			return;
+		}
+
+		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
+				platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
+		if (ret) {
+			ERROR("Copy of %s failed. Cleanup.",
+			      platform_get_file_path(KERNEL_BINARY_B));
+			if (file_exists(platform_get_file_path(KERNEL_BINARY_B))) {
+				unlink(platform_get_file_path(KERNEL_BINARY_B));
+			}
+			return;
+		}
+
+		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
+		if (ret) {
+			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_A);
+			if (file_exists(DEVICE_CONF_A)) {
+				unlink(DEVICE_CONF_A);
+			}
+			return;
+		}
+
+		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
+		if (ret) {
+			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_B);
+			if (file_exists(DEVICE_CONF_B)) {
+				unlink(DEVICE_CONF_B);
+			}
+			return;
+		}
+
+		ret = platform_init_boot_entries();
+		IF_TRUE_RETURN_ERROR(ret);
+
 		/* intentional fallthrough */
 	case A_B_UPDATE_INIT_STAGE_1:
 		INFO("Rebooting into A/B update configuration.");
