@@ -165,5 +165,9 @@ out:
 void
 a_b_update_boot_new_once(void)
 {
-	efivars_set_boot_next(a_b_update_boot_prio_invert(a_b_update_get_current()));
+	IF_FALSE_RETURN_ERROR(a_b_update_get_init_stage() == A_B_UPDATE_INIT_COMPLETE);
+
+	a_b_update_option_t next = a_b_update_boot_prio_invert(a_b_update_get_current());
+	INFO("Set next boot once to option %s", next == A_B_UPDATE_OPTION_A ? "A" : "B");
+	efivars_set_boot_next(next);
 }
