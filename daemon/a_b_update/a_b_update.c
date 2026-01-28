@@ -53,7 +53,7 @@ platform_init_boot_entries();
 /*****************************************************************************/
 /* Generic functions */
 
-static char *
+char *
 a_b_update_option_str(a_b_update_option_t opt)
 {
 	ASSERT(opt == A_B_UPDATE_OPTION_A || opt == A_B_UPDATE_OPTION_B);

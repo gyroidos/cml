@@ -46,6 +46,8 @@ extern a_b_update_option_t
 a_b_update_boot_prio_invert(a_b_update_option_t in);
 extern a_b_update_init_stage_t
 a_b_update_get_init_stage(void);
+extern char *
+a_b_update_option_str(a_b_update_option_t opt);
 
 /*****************************************************************************/
 /* EFI specific functions */
