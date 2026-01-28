@@ -122,7 +122,7 @@ a_b_update_get_current(void)
 void
 a_b_update_set_boot_order(void)
 {
-	IF_FALSE_RETURN(a_b_update_get_init_stage() == A_B_UPDATE_INIT_COMPLETE);
+	IF_FALSE_RETURN_ERROR(a_b_update_get_init_stage() == A_B_UPDATE_INIT_COMPLETE);
 
 	size_t boot_order_len;
 	uint16_t *boot_current = NULL;
