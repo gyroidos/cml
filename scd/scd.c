@@ -40,6 +40,10 @@
 #include "common/list.h"
 #include "common/ssl_util.h"
 #include "token.h"
+#include "softtoken.h"
+#ifdef SC_CARDSERVICE
+#include "usbtoken.h"
+#endif // SC_CARDSERVICE
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -284,11 +288,12 @@ main(UNUSED int argc, UNUSED char **argv)
 	}
 
 	INFO("created control socket.");
-
+#ifdef SC_CARDSERVICE
 	DEBUG("Try to create directory for tokencontrl sockets if not existing");
 	if (dir_mkdir_p(SCD_TOKENCONTROL_SOCKET, 0755) < 0) {
 		FATAL("Could not create directory for scd_control socket");
 	}
+#endif // SC_CARDSERVICE
 
 	event_loop();
 	ssl_free();
@@ -353,12 +358,12 @@ scd_get_token(scd_tokentype_t type, char *tuuid)
 		scd_token_t *t = (scd_token_t *)l->data;
 		ASSERT(t);
 
-		if (type != token_get_type(t)) {
+		if (type != t->get_type(t)) {
 			continue;
 		}
 
-		if (strcmp(tuuid, uuid_string(token_get_uuid(t))) == 0) {
-			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
+		if (strcmp(tuuid, uuid_string(t->get_uuid(t))) == 0) {
+			TRACE("Token %s found in scd_token_list", uuid_string(t->get_uuid(t)));
 			return t;
 		}
 	}
@@ -393,8 +398,8 @@ scd_get_token_from_int_token(const void *int_token)
 		scd_token_t *t = (scd_token_t *)l->data;
 		ASSERT(t);
 
-		if (token_has_internal_token(t, int_token)) {
-			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
+		if (t->has_internal_token(t, int_token)) {
+			TRACE("Token %s found in scd_token_list", uuid_string(t->get_uuid(t)));
 			return t;
 		}
 	}
@@ -412,30 +417,29 @@ scd_token_new(const DaemonToToken *msg)
 	ASSERT(msg->token_uuid);
 
 	scd_token_t *ntoken;
-	token_constr_data_t create_data;
 
 	if (NULL != (ntoken = scd_get_token_from_msg(msg))) {
 		WARN("SCD: Token %s already exists. Aborting creation...", msg->token_uuid);
 		return -1; // TODO: is this the correct behaviour?
 	}
 
-	create_data.type = scd_proto_to_tokentype(msg);
-
-	if (create_data.type == NONE) {
-		create_data.init_str.softtoken_dir = NULL;
-	} else if (create_data.type == SOFT) {
-		create_data.init_str.softtoken_dir = SCD_TOKEN_DIR;
-	} else if (create_data.type == USB) {
-		ASSERT(msg->usbtoken_serial);
-		create_data.init_str.usbtoken_serial = msg->usbtoken_serial;
-	} else {
-		ERROR("Type of token not recognized");
+	switch (scd_proto_to_tokentype(msg)) {
+	case NONE:
+		WARN("SCD: Cannot create token of type NONE");
+		return -1;
+	case SOFT:
+		ntoken = softtoken_token_new(SCD_TOKEN_DIR, msg->token_uuid);
+		break;
+#ifdef SC_CARDSERVICE
+	case USB:
+		ntoken = usbtoken_token_new(msg->usbtoken_serial, msg->token_uuid);
+		break;
+#endif // SC_CARDSERVICE
+	default:
+		ERROR("SCD: Token type not recognized");
 		return -1;
 	}
 
-	create_data.uuid = msg->token_uuid;
-
-	ntoken = token_new(&create_data);
 	if (!ntoken) {
 		ERROR("Could not create new scd_token");
 		return -1;
@@ -454,5 +458,5 @@ scd_token_free(scd_token_t *token)
 	IF_NULL_RETURN(token);
 	scd_token_t *t = token;
 	scd_token_list = list_remove(scd_token_list, token);
-	token_free(t);
+	t->free(t);
 }
