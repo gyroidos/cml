@@ -141,7 +141,7 @@ tpm2d_setup_keys(void)
 	}
 
 	if (!file_is_dir(token_dir)) {
-		if (mkdir(token_dir, 0700) < 0) {
+		if (mkdir(token_dir, 0755) < 0) {
 			FATAL_ERRNO("Could not mkdir tpm tokens dir: %s", token_dir);
 		}
 	}
@@ -202,7 +202,7 @@ tpm2d_init(void)
 	char *session_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_SESSION_DIR);
 
 	if (!file_is_dir(TPM2D_BASE_DIR)) {
-		if (dir_mkdir_p(TPM2D_BASE_DIR, 0700) < 0) {
+		if (dir_mkdir_p(TPM2D_BASE_DIR, 0755) < 0) {
 			FATAL_ERRNO("Could not mkdir tpm2d's working dir: %s", TPM2D_BASE_DIR);
 		}
 	}
