@@ -132,8 +132,17 @@ tss_init(void)
 
 	// create data dir if not existing
 	if (!file_is_dir(TPM2D_BASE_DIR)) {
-		if (dir_mkdir_p(TPM2D_BASE_DIR, 0700) < 0) {
+		if (dir_mkdir_p(TPM2D_BASE_DIR, 0755) < 0) {
 			FATAL_ERRNO("Could not mkdir tpm2d's data dir: %s", TPM2D_BASE_DIR);
+		}
+	} else {
+		// ensure scd can access the file which stores the TPM-wrapped device key
+		if (chmod(TPM2D_BASE_DIR, 00755) < 0) {
+			FATAL_ERRNO("Could not chmod '%s' to 755!", TPM2D_BASE_DIR);
+		}
+		const char *token_dir = TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR;
+		if (file_is_dir(token_dir) && chmod(token_dir, 00755) < 0) {
+			FATAL_ERRNO("Could not chmod '%s' to 755!", token_dir);
 		}
 	}
 
