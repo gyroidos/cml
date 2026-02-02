@@ -29,82 +29,20 @@
 
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
+#include "token.h"
 
 #define STOKEN_DEFAULT_EXT ".p12"
 
 typedef struct softtoken softtoken_t;
 
 /**
- * creates new p12 token file.
+ * Initializes a usb token, iff the serial number of the usb token reader matches
+ * @param token ptr for scd token
+ * @param ops ptr to store token operation callbacks
+ * @param softtoken_dir storage directory of the softtoken
+ * @return pointer to the softtoken structure on success or NULL on error
  */
-int
-softtoken_create_p12(const char *filename, const char *passwd, const char *name);
-
-/**
- * removes a pkcs12 token file.
- */
-void
-softtoken_remove_p12(softtoken_t *token);
-
-/**
- * instantiates a new softtoken structure
- */
-softtoken_t *
-softtoken_new_from_p12(const char *filename);
-
-/**
- * Changes the pasphrase/pin of the underlying low level structure
- * of the softtoken token.
- */
-int
-softtoken_change_passphrase(softtoken_t *token, const char *oldpass, const char *newpass);
-
-/**
- * unlocks a softtoken with a password.
- * stores the token private key in the structure
- */
-int
-softtoken_unlock(softtoken_t *token, char *passphrase);
-
-/**
- * locks a softtoken by freeing the private key
- * reference in the softtoken
- */
-int
-softtoken_lock(softtoken_t *token);
-
-/**
- * checks whether the softtoken is locked or not
- */
-bool
-softtoken_is_locked(softtoken_t *token);
-
-/**
- * checks whether the softtoken is locked or not till next reboot
- */
-bool
-softtoken_is_locked_till_reboot(softtoken_t *token);
-
-/**
- * frees a softtoken structure
- */
-void
-softtoken_free(softtoken_t *token);
-
-/**
- * wraps a symmetric container key plain_key of length plain_key_len with a
- * user public key pubkey into a wrapped key wrapped_key of length wrapped_key_len
- */
-int
-softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
-		   unsigned char **wrapped_key, int *wrapped_key_len);
-
-/**
- * unwraps a symmetric container key wrapped_key of length wrapped_key_len with a
- * user's private key into the plain key plain_key of length plain_key_len
- */
-int
-softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
-		     unsigned char **plain_key, int *plain_key_len);
+void *
+softtoken_new(token_t *token, token_operations_t **ops, const char *softtoken_dir);
 
 #endif /* SOFTTOKEN_H */
