@@ -27,18 +27,18 @@
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/file.h"
+#include "common/uuid.h"
 
 #include <string.h>
 
 #define SOFTTOKEN_MAX_WRONG_UNLOCK_ATTEMPTS 3
 
 struct softtoken {
-	char *token_file;		// absolute path to softtoken w. filename
-	bool locked;			// whether the token is locked or not
-	unsigned wrong_unlock_attempts; // wrong consecutive password attempts
-	EVP_PKEY *pkey;			// holds the token public key pair when unlocked
-	X509 *cert;			// holds the token's certificate, if available
-	STACK_OF(X509) * ca;		// holds the token's certificate chain, if available
+	const token_t *token; // token to which holds this internal softtoken (1:1 reference)
+	char *token_file;     // absolute path to softtoken w. filename
+	EVP_PKEY *pkey;	      // holds the token public key pair when unlocked
+	X509 *cert;	      // holds the token's certificate, if available
+	STACK_OF(X509) * ca;  // holds the token's certificate chain, if available
 };
 
 /**
@@ -86,8 +86,6 @@ softtoken_new_from_p12(const char *filename)
 
 	softtoken_t *token = mem_new0(softtoken_t, 1);
 	token->token_file = mem_strdup(filename);
-	token->locked = true;
-	token->wrong_unlock_attempts = 0;
 	token->pkey = NULL;
 	token->cert = NULL;
 	token->ca = NULL;
@@ -95,11 +93,17 @@ softtoken_new_from_p12(const char *filename)
 	return token;
 }
 
-int
-softtoken_change_passphrase(softtoken_t *token, const char *oldpass, const char *newpass)
+token_err_t
+softtoken_change_passphrase(void *int_token, const char *oldpass, const char *newpass,
+			    UNUSED unsigned char *pairing_secret, UNUSED size_t pairing_sec_len,
+			    UNUSED bool is_provisioning)
 {
-	ASSERT(token);
-	return ssl_newpass_pkcs12_token(token->token_file, oldpass, newpass);
+	softtoken_t *st_token = int_token;
+	ASSERT(st_token);
+	if (ssl_newpass_pkcs12_token(st_token->token_file, oldpass, newpass) == 0) {
+		return TOKEN_ERR_OK;
+	}
+	return TOKEN_ERR_FATAL;
 }
 
 /**
@@ -127,103 +131,151 @@ softtoken_free_secrets(softtoken_t *token)
 }
 
 void
-softtoken_free(softtoken_t *token)
+softtoken_free(void *int_token)
 {
-	ASSERT(token);
+	softtoken_t *st_token = int_token;
+	IF_NULL_RETURN(st_token);
+	softtoken_remove_p12(st_token);
+	softtoken_free_secrets(st_token);
 
-	softtoken_free_secrets(token);
+	if (st_token->token_file)
+		mem_free0(st_token->token_file);
 
-	if (token->token_file)
-		mem_free0(token->token_file);
-
-	mem_free0(token);
+	mem_free0(st_token);
 }
 
-int
-softtoken_wrap_key(softtoken_t *token, const unsigned char *plain_key, size_t plain_key_len,
-		   unsigned char **wrapped_key, int *wrapped_key_len)
+token_err_t
+softtoken_wrap_key(void *int_token, UNUSED char *label, unsigned char *plain_key,
+		   size_t plain_key_len, unsigned char **wrapped_key, int *wrapped_key_len)
 {
-	ASSERT(token);
+	softtoken_t *st_token = int_token;
+	ASSERT(st_token);
 	// TODO allow wrapping (encryption with public key) even with locked token?
-	if (softtoken_is_locked(token)) {
+	if (token_is_locked(st_token->token)) {
 		WARN("Trying to wrap key with locked token.");
-		return -1;
+		return TOKEN_ERR_LOCKED;
 	}
-	return ssl_wrap_key(token->pkey, plain_key, plain_key_len, wrapped_key, wrapped_key_len);
+
+	if (ssl_wrap_key(st_token->pkey, plain_key, plain_key_len, wrapped_key, wrapped_key_len) ==
+	    0) {
+		return TOKEN_ERR_OK;
+	}
+	return TOKEN_ERR_FATAL;
 }
 
-int
-softtoken_unwrap_key(softtoken_t *token, const unsigned char *wrapped_key, size_t wrapped_key_len,
-		     unsigned char **plain_key, int *plain_key_len)
+token_err_t
+softtoken_unwrap_key(void *int_token, UNUSED char *label, unsigned char *wrapped_key,
+		     size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len)
 {
-	ASSERT(token);
-	if (softtoken_is_locked(token)) {
+	softtoken_t *st_token = int_token;
+	ASSERT(st_token);
+
+	if (token_is_locked(st_token->token)) {
 		WARN("Trying to unwrap key with locked token.");
-		return -1;
+		return TOKEN_ERR_LOCKED;
 	}
-	return ssl_unwrap_key(token->pkey, wrapped_key, wrapped_key_len, plain_key, plain_key_len);
+
+	if (ssl_unwrap_key(st_token->pkey, wrapped_key, wrapped_key_len, plain_key,
+			   plain_key_len) == 0) {
+		return TOKEN_ERR_OK;
+	}
+	return TOKEN_ERR_FATAL;
 }
 
-bool
-softtoken_is_locked_till_reboot(softtoken_t *token)
+token_err_t
+softtoken_unlock(void *int_token, char *passphrase, UNUSED unsigned char *pairing_secret,
+		 UNUSED size_t pairing_sec_len)
 {
-	ASSERT(token);
-	return token->wrong_unlock_attempts >= SOFTTOKEN_MAX_WRONG_UNLOCK_ATTEMPTS;
-}
+	softtoken_t *st_token = int_token;
+	ASSERT(st_token);
 
-bool
-softtoken_is_locked(softtoken_t *token)
-{
-	ASSERT(token);
-	return token->locked;
-}
-
-int
-softtoken_unlock(softtoken_t *token, char *passphrase)
-{
-	ASSERT(token);
-
-	if (!softtoken_is_locked(token)) {
+	if (!token_is_locked(st_token->token)) {
 		WARN("Token is alread unlocked, returning");
-		return 0;
-	}
-
-	if (softtoken_is_locked_till_reboot(token)) {
+		return TOKEN_ERR_OK;
+	} else if (token_is_locked_till_reboot(st_token->token)) {
 		WARN("Token is locked till reboot, returning");
-		return -1;
+		return TOKEN_ERR_LOCKED_TILL_REBOOT;
 	}
 
-	if (!file_exists(token->token_file)) {
+	if (!file_exists(st_token->token_file)) {
 		ERROR("No token present");
-		return -1;
+		return TOKEN_ERR_FATAL;
 	}
-	int res = ssl_read_pkcs12_token(token->token_file, passphrase, &token->pkey, &token->cert,
-					&token->ca);
-	if (res == -1) // wrong password
-		token->wrong_unlock_attempts++;
-	else if (res == 0) {
-		token->locked = false;
-		token->wrong_unlock_attempts = 0;
+	int res = ssl_read_pkcs12_token(st_token->token_file, passphrase, &st_token->pkey,
+					&st_token->cert, &st_token->ca);
+	if (res == -1) {
+		// wrong password
+		softtoken_free_secrets(st_token); // just to be sure
+		return TOKEN_ERR_PW;
+	} else if (res == 0) {
+		return TOKEN_ERR_OK;
 	}
-	// TODO what to do with wrong_unlock_attempts if unlock failed for some other reason?
 
-	if (res != 0)
-		softtoken_free_secrets(token); // just to be sure
-
-	return res;
+	// should not be reached
+	return TOKEN_ERR_FATAL;
 }
 
-int
-softtoken_lock(softtoken_t *token)
+token_err_t
+softtoken_lock(void *int_token)
 {
-	ASSERT(token);
-
-	if (softtoken_is_locked(token)) {
+	softtoken_t *st_token = int_token;
+	ASSERT(st_token);
+	if (token_is_locked(st_token->token)) {
 		DEBUG("Token is already locked, returning.");
-		return 0;
+		return TOKEN_ERR_OK;
 	}
 
-	softtoken_free_secrets(token);
-	token->locked = true;
-	return 0;
+	softtoken_free_secrets(st_token);
+
+	return TOKEN_ERR_OK;
+}
+
+tokentype_t
+softtoken_get_type()
+{
+	return TOKEN_TYPE_SOFT;
+}
+
+static token_operations_t softtoken_ops = {
+	.lock = softtoken_lock,
+	.unlock = softtoken_unlock,
+	.wrap_key = softtoken_wrap_key,
+	.unwrap_key = softtoken_unwrap_key,
+	.change_passphrase = softtoken_change_passphrase,
+	.send_apdu = NULL,
+	.reset_auth = NULL,
+	.get_atr = NULL,
+	.get_type = softtoken_get_type,
+	.token_free = softtoken_free,
+};
+
+void *
+softtoken_new(token_t *token, token_operations_t **ops, const char *softtoken_dir)
+{
+	ASSERT(token);
+	ASSERT(softtoken_dir);
+	char *token_file = NULL;
+
+	token_file = mem_printf("%s/%s%s", softtoken_dir, uuid_string(token_get_uuid(token)),
+				STOKEN_DEFAULT_EXT);
+	if (!file_exists(token_file)) {
+		if (softtoken_create_p12(token_file, TOKEN_DEFAULT_PASS,
+					 uuid_string(token_get_uuid(token))) != 0) {
+			ERROR("Could not create new softtoken file");
+			mem_free0(token_file);
+			goto err;
+		}
+	}
+	softtoken_t *st_token = softtoken_new_from_p12(token_file);
+	if (!st_token) {
+		ERROR("Creation of softtoken failed");
+		mem_free0(token_file);
+		goto err;
+	}
+	st_token->token = token;
+	*ops = &softtoken_ops;
+	mem_free0(token_file);
+	return st_token;
+err:
+	return NULL;
 }
