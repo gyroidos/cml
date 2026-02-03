@@ -528,7 +528,7 @@ scd_crypto_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		event_signal_free(sig);
 
 		if ((WIFEXITED(status) && WEXITSTATUS(status)) || WIFSIGNALED(status)) {
-			WARN("asyn crypto handler reurned with error");
+			WARN("asyn crypto handler returned with error");
 		}
 		mem_free0(pid);
 	}
@@ -609,7 +609,7 @@ scd_control_handle_crypto_message(const DaemonToToken *msg, int fd)
 
 		hash_algo = switch_proto_hash_algo(msg->hash_algo);
 
-		if (hash_algo) {
+		if (hash_algo && msg->has_hash_buf && msg->hash_buf.data) {
 			if ((hash = ssl_hash_buf(msg->hash_buf.data, msg->hash_buf.len, &hash_len,
 						 hash_algo)) == NULL) {
 				ERROR("Hashing buffer failed");
