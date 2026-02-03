@@ -34,15 +34,18 @@ typedef enum {
 typedef enum {
 	A_B_UPDATE_INIT_NONE = 0,
 	A_B_UPDATE_INIT_STAGE_1,
-	A_B_UPDATE_INIT_STAGE_2,
 	A_B_UPDATE_INIT_COMPLETE,
 } a_b_update_init_stage_t;
 
 typedef enum {
-	KERNEL_BINARY_PLAIN,
 	KERNEL_BINARY_A,
 	KERNEL_BINARY_B,
 } a_b_update_kernel_path_t;
+
+/*****************************************************************************/
+
+#define A_B_UPDATE_FILE_SUFFIX_A ""
+#define A_B_UPDATE_FILE_SUFFIX_B ".B"
 
 /*****************************************************************************/
 
