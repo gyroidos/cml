@@ -54,12 +54,10 @@ const char *
 platform_get_file_path(a_b_update_kernel_path_t p)
 {
 	switch (p) {
-	case KERNEL_BINARY_PLAIN:
-		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY;
 	case KERNEL_BINARY_A:
-		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY ".A";
+		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_A;
 	case KERNEL_BINARY_B:
-		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY ".B";
+		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_B;
 	default:
 		__builtin_unreachable();
 	}
@@ -68,10 +66,12 @@ platform_get_file_path(a_b_update_kernel_path_t p)
 bool
 platform_boot_entries_initialized(void)
 {
-	return efivars_boot_entry_initialized(0, "GyroidosA",
-					      "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".A") &&
-	       efivars_boot_entry_initialized(1, "GyroidosB",
-					      "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B");
+	return efivars_boot_entry_initialized(
+		       0, "GyroidosA",
+		       "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_A) &&
+	       efivars_boot_entry_initialized(
+		       1, "GyroidosB",
+		       "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_B);
 }
 
 int
@@ -79,13 +79,17 @@ platform_init_boot_entries(void)
 {
 	int ret = 0;
 
-	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(
-				      0, "GyroidosA", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".A")),
-			     ret);
+	IF_TRUE_RETVAL_ERROR(
+		(ret = efivars_set_boot_entry(
+			 0, "GyroidosA",
+			 "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_A)),
+		ret);
 
-	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(
-				      1, "GyroidosB", "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY ".B")),
-			     ret);
+	IF_TRUE_RETVAL_ERROR(
+		(ret = efivars_set_boot_entry(
+			 1, "GyroidosB",
+			 "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_B)),
+		ret);
 
 	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_order((uint16_t[]){ 0000, 0001 }, 2)), ret);
 

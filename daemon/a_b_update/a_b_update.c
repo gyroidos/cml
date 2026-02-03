@@ -36,9 +36,8 @@
 
 /*****************************************************************************/
 
-#define DEVICE_CONF_PLAIN DEFAULT_CONF_BASE_PATH "/device.conf"
-#define DEVICE_CONF_A DEFAULT_CONF_BASE_PATH "/device.conf.A"
-#define DEVICE_CONF_B DEFAULT_CONF_BASE_PATH "/device.conf.B"
+#define DEVICE_CONF_A DEFAULT_CONF_BASE_PATH "/device.conf" A_B_UPDATE_FILE_SUFFIX_A
+#define DEVICE_CONF_B DEFAULT_CONF_BASE_PATH "/device.conf" A_B_UPDATE_FILE_SUFFIX_B
 
 /*****************************************************************************/
 /* Platform functions that should not be exported outside the a_b_update code*/
@@ -71,15 +70,10 @@ a_b_update_get_init_stage(void)
 	/* need to check: did the A kernel start? 
                       was the A config loaded? */
 	DEBUG("Successfully booted into resilient update option.");
-	ret = A_B_UPDATE_INIT_STAGE_2;
-
-	IF_TRUE_GOTO(file_exists(platform_get_file_path(KERNEL_BINARY_PLAIN)), out);
-	IF_TRUE_GOTO(file_exists(DEVICE_CONF_PLAIN), out);
-	DEBUG("Non-redundant kernel/device.conf already removed.");
 	ret = A_B_UPDATE_INIT_COMPLETE;
 
 out:
-	INFO("Resilient update setup is in stage %d/3", ret);
+	INFO("Resilient update setup is in stage %d/%d", ret, A_B_UPDATE_INIT_COMPLETE);
 	return ret;
 }
 
@@ -91,18 +85,7 @@ a_b_update_init(void)
 
 	switch (stage) {
 	case A_B_UPDATE_INIT_NONE:
-		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
-				platform_get_file_path(KERNEL_BINARY_A), -1, 1, 0);
-		if (ret) {
-			ERROR("Copy of %s failed. Cleanup.",
-			      platform_get_file_path(KERNEL_BINARY_A));
-			if (file_exists(platform_get_file_path(KERNEL_BINARY_A))) {
-				unlink(platform_get_file_path(KERNEL_BINARY_A));
-			}
-			return;
-		}
-
-		ret = file_copy(platform_get_file_path(KERNEL_BINARY_PLAIN),
+		ret = file_copy(platform_get_file_path(KERNEL_BINARY_A),
 				platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
 		if (ret) {
 			ERROR("Copy of %s failed. Cleanup.",
@@ -113,16 +96,7 @@ a_b_update_init(void)
 			return;
 		}
 
-		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
-		if (ret) {
-			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_A);
-			if (file_exists(DEVICE_CONF_A)) {
-				unlink(DEVICE_CONF_A);
-			}
-			return;
-		}
-
-		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
+		ret = file_copy(DEVICE_CONF_A, DEVICE_CONF_B, -1, 1, 0);
 		if (ret) {
 			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_B);
 			if (file_exists(DEVICE_CONF_B)) {
@@ -139,10 +113,6 @@ a_b_update_init(void)
 		INFO("Rebooting into A/B update configuration.");
 		reboot_reboot(REBOOT);
 		return; /* must reboot after this */
-	case A_B_UPDATE_INIT_STAGE_2:
-		unlink(platform_get_file_path(KERNEL_BINARY_PLAIN));
-		unlink(DEVICE_CONF_PLAIN);
-		/* intentional fallthrough */
 	case A_B_UPDATE_INIT_COMPLETE:
 		return;
 	}
@@ -153,11 +123,13 @@ a_b_update_get_path_new(char *base_path)
 {
 	a_b_update_option_t cur = a_b_update_get_current();
 
-	if (a_b_update_get_init_stage() < A_B_UPDATE_INIT_STAGE_2 || cur == A_B_UPDATE_UNDEFINED) {
+	if (a_b_update_get_init_stage() < A_B_UPDATE_INIT_COMPLETE || cur == A_B_UPDATE_UNDEFINED) {
 		WARN("Resilient update is not set up. Default to plain values.");
 		return mem_strdup(base_path);
 	} else {
-		return mem_printf("%s%s", base_path, cur == A_B_UPDATE_OPTION_B ? FILE_SUFFIX_B : FILE_SUFFIX_A);
+		return mem_printf("%s%s", base_path,
+				  cur == A_B_UPDATE_OPTION_B ? A_B_UPDATE_FILE_SUFFIX_B :
+							       A_B_UPDATE_FILE_SUFFIX_A);
 	}
 }
 
@@ -170,11 +142,14 @@ a_b_update_boot_prio_invert(a_b_update_option_t in)
 char *
 a_b_update_get_flash_path_new(const char *partition)
 {
-	if (a_b_update_get_init_stage() < A_B_UPDATE_INIT_STAGE_2) {
+	if (a_b_update_get_init_stage() < A_B_UPDATE_INIT_COMPLETE) {
 		WARN("Resilient update is not set up. Default to plain values.");
 		return mem_strdup(partition);
 	} else {
 		return mem_printf("%s%s", partition,
-					a_b_update_boot_prio_invert(a_b_update_get_current()) == A_B_UPDATE_OPTION_B ? FILE_SUFFIX_B : FILE_SUFFIX_A);
+				  a_b_update_boot_prio_invert(a_b_update_get_current()) ==
+						  A_B_UPDATE_OPTION_B ?
+					  A_B_UPDATE_FILE_SUFFIX_B :
+					  A_B_UPDATE_FILE_SUFFIX_A);
 	}
 }
