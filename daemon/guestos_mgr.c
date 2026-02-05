@@ -204,16 +204,18 @@ guestos_mgr_is_this_guestos_kernel_used_by_boot_option(guestos_t *os)
 	IF_NULL_GOTO(hash_b, out_hash_a);
 
 	if (!strcmp(hash_a, mount_entry_get_sha256(e))) {
-		INFO("GuestOS kernel-%ld is in use at %s", guestos_get_version(os), mount_point_a);
+		INFO("GuestOS kernel-%" PRIu64 " is in use at %s", guestos_get_version(os),
+		     mount_point_a);
 		goto out_hash_b;
 	}
 
 	if (!strcmp(hash_b, mount_entry_get_sha256(e))) {
-		INFO("GuestOS kernel-%ld is in use at %s", guestos_get_version(os), mount_point_b);
+		INFO("GuestOS kernel-%" PRIu64 " is in use at %s", guestos_get_version(os),
+		     mount_point_b);
 		goto out_hash_b;
 	}
 
-	INFO("Found unused kernel version %ld", guestos_get_version(os));
+	INFO("Found unused kernel version %" PRIu64, guestos_get_version(os));
 	ret = false;
 
 out_hash_b:
