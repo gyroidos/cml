@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2020 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2026 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -20,28 +20,16 @@
  * Contact Information:
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
-
-#ifndef USBTOKEN_H
-#define USBTOKEN_H
-
-#include <stdbool.h>
-#include <stddef.h>
+#ifndef TOKENCONTROL_H
+#define TOKENCONTROL_H
+#include "common/list.h"
 #include "token.h"
 
-typedef struct usbtoken usbtoken_t;
+typedef struct tokencontrol tctrl_t;
 
-#ifdef SC_CARDSERVICE
+tctrl_t *
+tokencontrol_new(const token_t *token);
 
-/**
- * Initializes a usb token, iff the serial number of the usb token reader matches
- * @param token ptr for scd token
- * @param ops ptr to store token operation callbacks
- * @param serial the iSerial of the usb reader of the token
- * @return pointer to the usbtoken structure on success or NULL on error
- */
-void *
-usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial);
-
-#endif // SC_CARDSERVICE
-
-#endif // USBTOKEN_H
+void
+tokencontrol_free(tctrl_t *tctrl);
+#endif // TOKENCONTROL_H
