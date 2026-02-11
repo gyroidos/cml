@@ -93,8 +93,9 @@ c_time_get_creation_time_from_file(c_time_t *_time)
 			     uuid_string(container_get_uuid(_time->container)));
 		}
 	}
+	char ctime_str[26] = { 0 };
 	INFO("container %s was created at %s", uuid_string(container_get_uuid(_time->container)),
-	     ctime(&ret));
+	     ctime_r(&ret, ctime_str) ? ctime_str : "N/A");
 
 	mem_free0(file_name_created);
 	return ret;
