@@ -374,20 +374,19 @@ logf_file_new_name(const char *name)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
-	struct tm *tm;
+	struct tm _tm;
 	char *n;
 
 	if (gettimeofday(&tv, NULL) < 0)
 		FATAL_ERRNO("Failed to get time of day. Aborting.\n");
 
-	tm = localtime(&tv.tv_sec);
-	if (tm == NULL)
+	if (NULL == localtime_r(&tv.tv_sec, &_tm))
 		FATAL_ERRNO("Failed to get local time. Aborting.\n");
 
-	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", tm))
+	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", &_tm))
 		buf1[0] = '\0';
 
-	if (!strftime(buf2, sizeof(buf2) - 1, "%z", tm))
+	if (!strftime(buf2, sizeof(buf2) - 1, "%z", &_tm))
 		buf2[0] = '\0';
 
 	// rfc3339 format: <name>.2014-05-23T21:29:11.150495+02:00
@@ -441,20 +440,19 @@ logf_file_write_timestamp(FILE *stream)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
-	struct tm *tm;
+	struct tm _tm;
 
 	IF_TRUE_RETURN_ERROR_ERRNO((gettimeofday(&tv, NULL) < 0));
 
-	tm = localtime(&tv.tv_sec);
-	IF_NULL_RETURN_ERROR_ERRNO(tm);
+	IF_NULL_RETURN_ERROR_ERRNO(localtime_r(&tv.tv_sec, &_tm));
 
 	if (!stream)
 		return;
 
-	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", tm))
+	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", &_tm))
 		return;
 
-	if (!strftime(buf2, sizeof(buf2) - 1, "%z", tm))
+	if (!strftime(buf2, sizeof(buf2) - 1, "%z", &_tm))
 		return;
 
 	// rfc3339 format: 2014-05-23T21:29:11.150495+02:00
