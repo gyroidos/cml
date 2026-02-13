@@ -63,20 +63,20 @@ typedef enum tokentype { TOKEN_TYPE_NONE, TOKEN_TYPE_SOFT, TOKEN_TYPE_USB } toke
 
 typedef struct token_operations {
 	token_err_t (*lock)(void *int_token);
-	token_err_t (*unlock)(void *int_token, char *passwd, unsigned char *pairing_secret,
-			      size_t pairing_sec_len);
+	token_err_t (*unlock)(void *int_token, const char *passwd,
+			      const unsigned char *pairing_secret, size_t pairing_sec_len);
 
-	token_err_t (*wrap_key)(void *int_token, char *label, unsigned char *plain_key,
+	token_err_t (*wrap_key)(void *int_token, const char *label, unsigned char *plain_key,
 				size_t plain_key_len, unsigned char **wrapped_key,
 				int *wrapped_key_len);
 
-	token_err_t (*unwrap_key)(void *int_token, char *label, unsigned char *wrapped_key,
+	token_err_t (*unwrap_key)(void *int_token, const char *label, unsigned char *wrapped_key,
 				  size_t wrapped_key_len, unsigned char **plain_key,
 				  int *plain_key_len);
 
 	token_err_t (*change_passphrase)(void *int_token, const char *oldpass, const char *newpass,
-					 unsigned char *pairing_secret, size_t pairing_sec_len,
-					 bool is_provisioning);
+					 const unsigned char *pairing_secret,
+					 size_t pairing_sec_len, bool is_provisioning);
 	token_err_t (*send_apdu)(void *int_token, unsigned char *apdu, size_t apdu_len,
 				 unsigned char *brsp, size_t brsp_len);
 	token_err_t (*reset_auth)(void *int_token, unsigned char *brsp, size_t brsp_len);
@@ -104,7 +104,8 @@ token_lock(token_t *token);
  * @return 0 on success or < 0 on error
  */
 token_err_t
-token_unlock(token_t *token, char *passwd, unsigned char *pairing_secret, size_t pairing_sec_len);
+token_unlock(token_t *token, const char *passwd, const unsigned char *pairing_secret,
+	     size_t pairing_sec_len);
 
 /**
  * checks whether the token is locked or not
@@ -136,7 +137,7 @@ token_is_locked_till_reboot(const token_t *token);
  * @return 0 on success or < 0 on error
  */
 token_err_t
-token_wrap_key(token_t *token, char *label, unsigned char *plain_key, size_t plain_key_len,
+token_wrap_key(token_t *token, const char *label, unsigned char *plain_key, size_t plain_key_len,
 	       unsigned char **wrapped_key, int *wrapped_key_len);
 
 /**
@@ -152,8 +153,8 @@ token_wrap_key(token_t *token, char *label, unsigned char *plain_key, size_t pla
  * @return 0 on success or < 0 on error
  */
 token_err_t
-token_unwrap_key(token_t *token, char *label, unsigned char *wrapped_key, size_t wrapped_key_len,
-		 unsigned char **plain_key, int *plain_key_len);
+token_unwrap_key(token_t *token, const char *label, unsigned char *wrapped_key,
+		 size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len);
 
 /**
  * Changes the pasphrase/pin of the underlying low level structure
@@ -172,7 +173,7 @@ token_unwrap_key(token_t *token, char *label, unsigned char *wrapped_key, size_t
  */
 token_err_t
 token_change_passphrase(token_t *token, const char *oldpass, const char *newpass,
-			unsigned char *pairing_secret, size_t pairing_sec_len,
+			const unsigned char *pairing_secret, size_t pairing_sec_len,
 			bool is_provisioning);
 
 /**
