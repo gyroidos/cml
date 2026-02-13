@@ -63,7 +63,8 @@ token_lock(token_t *token)
 }
 
 token_err_t
-token_unlock(token_t *token, char *passwd, unsigned char *pairing_secret, size_t pairing_sec_len)
+token_unlock(token_t *token, const char *passwd, const unsigned char *pairing_secret,
+	     size_t pairing_sec_len)
 {
 	ASSERT(token);
 	ASSERT(token->ops->unlock);
@@ -92,7 +93,7 @@ token_is_locked_till_reboot(const token_t *token)
 }
 
 token_err_t
-token_wrap_key(token_t *token, char *label, unsigned char *plain_key, size_t plain_key_len,
+token_wrap_key(token_t *token, const char *label, unsigned char *plain_key, size_t plain_key_len,
 	       unsigned char **wrapped_key, int *wrapped_key_len)
 {
 	ASSERT(token);
@@ -102,8 +103,8 @@ token_wrap_key(token_t *token, char *label, unsigned char *plain_key, size_t pla
 }
 
 token_err_t
-token_unwrap_key(token_t *token, char *label, unsigned char *wrapped_key, size_t wrapped_key_len,
-		 unsigned char **plain_key, int *plain_key_len)
+token_unwrap_key(token_t *token, const char *label, unsigned char *wrapped_key,
+		 size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len)
 {
 	ASSERT(token);
 	ASSERT(token->ops->unwrap_key);
@@ -113,7 +114,8 @@ token_unwrap_key(token_t *token, char *label, unsigned char *wrapped_key, size_t
 
 token_err_t
 token_change_passphrase(token_t *token, const char *oldpass, const char *newpass,
-			unsigned char *pairing_secret, size_t pairing_sec_len, bool is_provisioning)
+			const unsigned char *pairing_secret, size_t pairing_sec_len,
+			bool is_provisioning)
 {
 	ASSERT(token);
 	ASSERT(token->ops->change_passphrase);
