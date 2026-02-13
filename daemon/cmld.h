@@ -338,6 +338,16 @@ cmld_netif_phys_remove_by_name(const char *if_name);
 void
 cmld_netif_phys_add_by_name(const char *if_name);
 
+/**
+ * Checks if a network interface (by kernel name) is explicitly assigned
+ * to any container configuration.
+ *
+ * @param if_name kernel name of the interface to check.
+ * @return true if the interface is assigned to a container, false otherwise.
+ */
+bool
+cmld_is_netif_assigned(const char *if_name);
+
 /*
  * Reboot device by trying to gracfully stop or killing containers otherwise.
  */

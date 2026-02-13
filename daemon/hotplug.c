@@ -223,6 +223,13 @@ hotplug_netdev_move(uevent_event_t *event)
 		goto error;
 	}
 
+	/* Interface is confirmed to be in root ns, add to available tracking list.
+	*  This is done here (not in hotplug_handle_uevent_cb) to avoid a race
+	*  where an interface transiently passing through root ns (e.g. during
+	*  reclaim core container -> root -> service container) gets tracked as available.
+	*/
+	cmld_netif_phys_add_by_name(event_ifname);
+
 	container_t *container = NULL;
 	container_pnet_cfg_t *pnet_cfg = NULL;
 	for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
@@ -334,9 +341,6 @@ hotplug_handle_uevent_cb(unsigned actions, uevent_event_t *event, UNUSED void *d
 	/* move network ifaces to containers */
 	if (actions & UEVENT_ACTION_ADD && !strcmp(uevent_event_get_subsystem(event), "net") &&
 	    !strstr(uevent_event_get_devpath(event), "virtual")) {
-		// got new physical interface, initially add to cmld tracking list
-		cmld_netif_phys_add_by_name(uevent_event_get_interface(event));
-
 		// give sysfs some time to settle if iface is wifi
 		event_timer_t *e =
 			event_timer_new(100, EVENT_TIMER_REPEAT_FOREVER,
