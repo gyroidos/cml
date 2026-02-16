@@ -420,6 +420,20 @@ container_is_privileged(const container_t *container)
 	return compartment_is_privileged(container->compartment);
 }
 
+bool
+container_is_interface_in_config(container_t *container, const char *if_name)
+{
+	ASSERT(container);
+	ASSERT(if_name);
+
+	for (list_t *l = container_get_pnet_cfg_list(container); l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+		if (strcmp(cfg->pnet_name, if_name) == 0)
+			return true;
+	}
+	return false;
+}
+
 int
 container_start(container_t *container)
 {

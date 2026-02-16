@@ -223,10 +223,11 @@ hotplug_netdev_move(uevent_event_t *event)
 		goto error;
 	}
 
-	/* Interface is confirmed to be in root ns, add to available tracking list.
-	*  This is done here (not in hotplug_handle_uevent_cb) to avoid a race
-	*  where an interface transiently passing through root ns (e.g. during
-	*  reclaim core container -> root -> service container) gets tracked as available.
+	/*
+	 * Interface is confirmed to be in root ns, add to available tracking list.
+	 *  This is done here (not in hotplug_handle_uevent_cb) to avoid a race
+	 *  where an interface transiently passing through root ns (e.g. during
+	 *  reclaim core container -> root -> service container) gets tracked as available.
 	*/
 	cmld_netif_phys_add_by_name(event_ifname);
 

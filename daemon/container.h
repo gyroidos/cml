@@ -445,6 +445,9 @@ container_set_sync_state(container_t *container, bool state);
 bool
 container_is_privileged(const container_t *container);
 
+bool
+container_is_interface_in_config(container_t *container, const char *if_name);
+
 int
 container_start(container_t *container);
 

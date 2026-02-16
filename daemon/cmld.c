@@ -1751,23 +1751,6 @@ cmld_container_create_clone(container_t *container)
 	return NULL;
 }
 
-/**
- * Checks if a network interface is explicitly assigned to a container.
- */
-static bool
-cmld_is_interface_in_config(container_t *container, const char *if_name)
-{
-	ASSERT(container);
-	ASSERT(if_name);
-
-	for (list_t *l = container_get_pnet_cfg_list(container); l; l = l->next) {
-		container_pnet_cfg_t *cfg = l->data;
-		if (strcmp(cfg->pnet_name, if_name) == 0)
-			return true;
-	}
-	return false;
-}
-
 container_t *
 cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint8_t *sig,
 				  size_t sig_len, uint8_t *cert, size_t cert_len)
@@ -1801,19 +1784,6 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 			     container_get_description(c));
 		}
 
-		//Remove interfaces immediately from core container, if they are explicitly assigned to a service container.
-		container_t *c0 = cmld_containers_get_c0();
-		if (c0 && c0 != c && container_is_stoppable(c0)) {
-			for (list_t *l = container_get_pnet_cfg_list(c); l; l = l->next) {
-				container_pnet_cfg_t *cfg = l->data;
-				if (cmld_is_interface_in_config(c0, cfg->pnet_name))
-					continue;
-				INFO("Container created. Removing former implicitly assigned interface %s from core container",
-				     cfg->pnet_name);
-				container_remove_net_interface(c0, cfg->pnet_name);
-			}
-		}
-
 		audit_log_event(container_get_uuid(c), SSA, CMLD, CONTAINER_MGMT,
 				"container-create", uuid_string(container_get_uuid(c)), 0);
 		INFO("Created container %s (uuid=%s).", container_get_name(c),
@@ -1841,25 +1811,6 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	/* unregister observer */
 	if (cb)
 		container_unregister_observer(container, cb);
-
-	//Move interfaces which are no longer explicitly assigned to a service container to core container.
-	container_t *c0 = cmld_containers_get_c0();
-	if (c0 && container_is_stoppable(c0)) {
-		list_t *pnet_list = container_get_pnet_cfg_list(container);
-		for (list_t *l = pnet_list; l; l = l->next) {
-			container_pnet_cfg_t *cfg = l->data;
-			INFO("Container removed. Moving former explicitly assigned interface %s to core container",
-			     cfg->pnet_name);
-			container_pnet_cfg_t *c0_cfg =
-				container_pnet_cfg_new(cfg->pnet_name, false, NULL);
-			if (container_add_net_interface(c0, c0_cfg) < 0) {
-				WARN("Failed to add interface %s to core container",
-				     cfg->pnet_name);
-				container_pnet_cfg_free(c0_cfg);
-			}
-			//On success c_net_add_interface takes ownership of c0_cfg
-		}
-	}
 
 	/* destroy the container */
 	if (container_destroy(container) < 0) {
@@ -2064,7 +2015,8 @@ cmld_netif_phys_add_by_name(const char *if_name)
 {
 	IF_NULL_RETURN(if_name);
 
-	/* Only track interfaces that are actually present in root ns.
+	/*
+	 * Only track interfaces that are actually present in root ns.
 	 * This prevents races where an interface transiently passes
 	 * through root ns (e.g. during reclaim core container -> root -> service container)
 	 * and a deferred event tries to re-add it after it has
@@ -2180,11 +2132,12 @@ cmld_sync_container_net_ifaces(container_t *container, list_t *new_pnet_cfg_list
 	ASSERT(container);
 
 	list_t *current_list = container_get_pnet_cfg_list(container);
-	container_t *core_container = cmld_containers_get_c0();
-	bool core_container_is_up = core_container && container_is_stoppable(core_container);
+	container_t *c0 = cmld_containers_get_c0();
+	bool c0_is_up = c0 && container_is_stoppable(c0);
 	bool service_container_is_up = container_is_stoppable(container);
 
-	/* Find interfaces REMOVED from config (in current but not in new).
+	/*
+	 * Find interfaces REMOVED from config (in current but not in new).
 	 * These become unassigned and should move to core container as implicit.
 	 */
 	for (list_t *l = current_list; l; l = l->next) {
@@ -2207,16 +2160,17 @@ cmld_sync_container_net_ifaces(container_t *container, list_t *new_pnet_cfg_list
 			}
 
 			// Add to core container as implicit (if running)
-			if (core_container_is_up) {
+			if (c0_is_up) {
 				container_pnet_cfg_t *c0_cfg =
 					container_pnet_cfg_new(cfg->pnet_name, false, NULL);
-				if (container_add_net_interface(core_container, c0_cfg) < 0)
+				if (container_add_net_interface(c0, c0_cfg) < 0)
 					container_pnet_cfg_free(c0_cfg);
 			}
 		}
 	}
 
-	/* Find interfaces ADDED to config (in new but not in current).
+	/*
+	 * Find interfaces ADDED to config (in new but not in current).
 	 * These become assigned and should be removed from core container (only if implicit).
 	 */
 	for (list_t *l = new_pnet_cfg_list; l; l = l->next) {
@@ -2230,26 +2184,22 @@ cmld_sync_container_net_ifaces(container_t *container, list_t *new_pnet_cfg_list
 			}
 		}
 		if (!found) {
-			/* Check if interface is explicitly assigned to core container */
-			if (core_container &&
-			    cmld_is_interface_in_config(core_container, new_cfg->pnet_name)) {
-				WARN("Interface %s is explicitly assigned to core container, "
-				     "cannot assign to service container",
-				     new_cfg->pnet_name);
-				continue;
-			}
-
 			INFO("Interface %s added to config, now assigned to service container",
 			     new_cfg->pnet_name);
 
-			/* Remove from core container first (if running) - it was implicit */
-			if (core_container_is_up) {
-				container_remove_net_interface(core_container, new_cfg->pnet_name);
-			}
-
-			/* Add to service container (if running), otherwise it stays in root ns */
 			if (service_container_is_up) {
-				container_add_net_interface(container, new_cfg);
+				// c_net_add_interface handles reclaim from c0
+				if (container_add_net_interface(container, new_cfg) < 0)
+					WARN("Failed to assign %s to service container",
+					     new_cfg->pnet_name);
+			} else if (c0_is_up) {
+				// Eagerly free interface from c0 so it is in root ns when the service container starts
+				if (!container_is_interface_in_config(c0, new_cfg->pnet_name)) {
+					container_remove_net_interface(c0, new_cfg->pnet_name);
+				} else {
+					WARN("Interface %s is explicitly assigned to core container",
+					     new_cfg->pnet_name);
+				}
 			}
 		}
 	}
