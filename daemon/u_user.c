@@ -194,6 +194,9 @@ u_user_cleanup(void *usr, UNUSED bool is_rebooting)
 	ASSERT(user);
 
 	u_user_unset_offset(user->offset);
+
+	if (umount(user->sock_dir))
+		WARN("Could not umount %s", user->sock_dir);
 }
 
 /**
