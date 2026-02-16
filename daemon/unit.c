@@ -157,6 +157,8 @@ unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv,
 		return NULL;
 	}
 
+	compartment_extension_free(extension);
+
 	return unit;
 }
 
@@ -166,7 +168,7 @@ unit_free(unit_t *unit)
 	ASSERT(unit);
 
 	/*
-	 * free compartment first, as c_*_free() may access
+	 * free compartment first, as u_*_free() may access
 	 * unit resources through extension pointer
 	 */
 	if (unit->compartment)
