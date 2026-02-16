@@ -591,7 +591,7 @@ mount_idmapped(char *src, char *dst, int userns_fd)
 		return -1;
 	}
 
-	INFO("Sucessfully applied idmapping from src path %s on fd=%d for %s", src, mapped_tree_fd,
+	INFO("Successfully applied idmapping from src path %s on fd=%d for %s", src, mapped_tree_fd,
 	     dst);
 
 	if (move_mount(mapped_tree_fd, "", -1, dst, MOVE_MOUNT_F_EMPTY_PATH) == -1) {
