@@ -1567,12 +1567,6 @@ cmld_init_stage_unit(const char *path)
 	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
 	mem_free0(btime);
 
-	if (scd_init() < 0)
-		FATAL("Could not init scd module");
-	INFO("scd initialized.");
-	if (atexit(&scd_cleanup))
-		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
-
 	if (device_config_get_tpm_enabled(device_config)) {
 		if (tss_init() < 0) {
 			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
@@ -1582,6 +1576,12 @@ cmld_init_stage_unit(const char *path)
 				WARN("could not register on exit cleanup method 'tss_cleanup()'");
 		}
 	}
+
+	if (scd_init() < 0)
+		FATAL("Could not init scd module");
+	INFO("scd initialized.");
+	if (atexit(&scd_cleanup))
+		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
 
 	device_config_free(device_config);
 
