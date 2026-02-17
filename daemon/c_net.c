@@ -731,20 +731,6 @@ c_net_get_ifname_by_mac_in_ns_new(uint8_t mac[6], pid_t pid)
 	return ifname;
 }
 
-static bool
-c_net_is_iface_in_config(container_t *container, const char *if_name)
-{
-	ASSERT(container);
-	ASSERT(if_name);
-
-	for (list_t *l = container_get_pnet_cfg_list(container); l; l = l->next) {
-		container_pnet_cfg_t *cfg = l->data;
-		if (strcmp(cfg->pnet_name, if_name) == 0)
-			return true;
-	}
-	return false;
-}
-
 /**
  * Checks if a MAC address is explicitly assigned to a container in its config.
  * The if_name_in_ns parameter is the resolved kernel name of the interface
@@ -823,7 +809,7 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 				}
 				mem_free0(c0_if_name);
 			} else {
-				if (!c_net_is_iface_in_config(c0, pnet_cfg->pnet_name)) {
+				if (!container_is_interface_in_config(c0, pnet_cfg->pnet_name)) {
 					if (container_remove_net_interface(
 						    c0, pnet_cfg->pnet_name) == 0) {
 						if_name = mem_strdup(pnet_cfg->pnet_name);
