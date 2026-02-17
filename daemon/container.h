@@ -280,6 +280,9 @@ container_get_usb_pin_entry(const container_t *container);
 list_t *
 container_get_pnet_cfg_list(const container_t *container);
 
+void
+container_set_pnet_cfg_list(container_t *container, list_t *pnet_cfg_list);
+
 list_t *
 container_get_vnet_cfg_list(const container_t *container);
 

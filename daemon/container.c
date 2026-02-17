@@ -993,6 +993,17 @@ container_get_pnet_cfg_list(const container_t *container)
 	return container->pnet_cfg_list;
 }
 
+void
+container_set_pnet_cfg_list(container_t *container, list_t *pnet_cfg_list)
+{
+	ASSERT(container);
+	for (list_t *l = container->pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_free(l->data);
+	}
+	list_delete(container->pnet_cfg_list);
+	container->pnet_cfg_list = pnet_cfg_list;
+}
+
 list_t *
 container_get_vnet_cfg_list(const container_t *container)
 {

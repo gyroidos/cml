@@ -2249,10 +2249,9 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 	if (cmld_sync_container_net_ifaces(container, new_pnet_cfg_list) < 0) {
 		WARN("Failed to sync network interfaces for %s", container_get_name(container));
 	}
-	for (list_t *l = new_pnet_cfg_list; l; l = l->next) {
-		container_pnet_cfg_free(l->data);
-	}
-	list_delete(new_pnet_cfg_list);
+
+	// Update in-memory pnet_cfg_list so subsequent diffs use current state
+	container_set_pnet_cfg_list(container, new_pnet_cfg_list);
 
 	// Wipe container if USB token serial changed
 	if (cmld_container_has_token_changed(container, conf)) {
