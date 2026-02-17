@@ -759,6 +759,24 @@ c_net_is_mac_in_config(container_t *container, uint8_t mac[6], const char *if_na
 }
 
 /**
+ * Resolves a pnet_name (MAC address string or kernel interface name) to the
+ * current kernel interface name in the root network namespace.
+ * Returns a newly allocated string, or NULL if the interface is not present.
+ */
+static char *
+c_net_resolve_ifname_new(const char *pnet_name)
+{
+	uint8_t mac[6];
+	if (network_str_to_mac_addr(pnet_name, mac) != -1)
+		return network_get_ifname_by_addr_new(mac);
+
+	if (network_get_mac_by_ifname(pnet_name, mac) == 0)
+		return mem_strdup(pnet_name);
+
+	return NULL;
+}
+
+/**
  * This function moves/bridges the network interface to the corresponding net
  * namespace of a container.
  * This Funtion mainly implement TSF.CML.DeviceAccessControl for network devices.
@@ -780,53 +798,44 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 
 	uint8_t if_mac[6];
 	bool is_mac = (network_str_to_mac_addr(pnet_cfg->pnet_name, if_mac) != -1);
-	char *if_name = NULL;
 
-	if (is_mac) {
-		if_name = network_get_ifname_by_addr_new(if_mac);
-	} else {
-		uint8_t tmp_mac[6];
-		if (network_get_mac_by_ifname(pnet_cfg->pnet_name, tmp_mac) == 0)
-			if_name = mem_strdup(pnet_cfg->pnet_name);
-		// NULL if interface not found in root ns
-	}
+	char *if_name = c_net_resolve_ifname_new(pnet_cfg->pnet_name);
 
 	// If interface is not in root ns, try reclaiming from core container
 	container_t *c0 = cmld_containers_get_c0();
 	if (!if_name && net->container != c0) {
 		if (c0 && container_is_stoppable(c0)) {
+			bool explicitly_assigned = false;
 			if (is_mac) {
-				pid_t c0_pid = container_get_pid(c0);
-				char *c0_if_name =
-					c_net_get_ifname_by_mac_in_ns_new(if_mac, c0_pid);
-				if (c0_if_name && !c_net_is_mac_in_config(c0, if_mac, c0_if_name)) {
-					if (container_remove_net_interface(c0, c0_if_name) == 0) {
-						if_name = network_get_ifname_by_addr_new(if_mac);
-						if (if_name)
-							INFO("Reclaimed interface %s from core container",
-							     if_name);
-					}
-				}
-				mem_free0(c0_if_name);
+				pid_t core_pid = container_get_pid(c0);
+				char *core_if_name =
+					c_net_get_ifname_by_mac_in_ns_new(if_mac, core_pid);
+				explicitly_assigned =
+					core_if_name &&
+					c_net_is_mac_in_config(c0, if_mac, core_if_name);
+				mem_free0(core_if_name);
 			} else {
-				if (!container_is_interface_in_config(c0, pnet_cfg->pnet_name)) {
-					if (container_remove_net_interface(
-						    c0, pnet_cfg->pnet_name) == 0) {
-						if_name = mem_strdup(pnet_cfg->pnet_name);
+				explicitly_assigned =
+					container_is_interface_in_config(c0, pnet_cfg->pnet_name);
+			}
+
+			if (!explicitly_assigned) {
+				if (container_remove_net_interface(c0, pnet_cfg->pnet_name) == 0) {
+					if_name = c_net_resolve_ifname_new(pnet_cfg->pnet_name);
+					if (if_name)
 						INFO("Reclaimed interface %s from core container",
 						     if_name);
-					}
-				} else {
-					WARN("Interface %s is explicitly assigned to core container",
-					     pnet_cfg->pnet_name);
 				}
+			} else {
+				WARN("Interface %s is explicitly assigned to core container",
+				     pnet_cfg->pnet_name);
 			}
 		}
 	}
 
 	IF_NULL_RETVAL(if_name, -1);
 
-	if (cmld_containers_get_c0() == net->container) {
+	if (c0 == net->container) {
 		if (!c_net_internal) {
 			// adding to core container as implicit assignment, just ensure it's tracked
 			cmld_netif_phys_remove_by_name(if_name);
