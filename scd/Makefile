@@ -30,6 +30,7 @@ SCHSM ?= n
 BNSE ?= n
 # SYSTEMD-flag in the scd is deprecated and should not be used anymore; Will be removed in the future; 
 SYSTEMD = n
+PKCS11 ?= n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
@@ -92,6 +93,14 @@ ifeq ($(SYSTEMD),y)
 	LOCAL_CFLAGS += \
 		-DSYSTEMD \
 		-DSCD_CONTROL_SOCKET=NULL
+endif
+ifeq ($(PKCS11), y)
+    # If requested, we build pkcs11 support into the scd
+    LOCAL_CFLAGS += -DENABLEPKCS11 -I../pkcs11-lib 
+	LOCAL_LDFLAGS += -ldl
+    SRC_FILES += \
+	p11token.c \
+	pkcs11-lib/libpkcs11.c
 endif
 
 
