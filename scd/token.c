@@ -24,6 +24,7 @@
 #include "token.h"
 #include "softtoken.h"
 #include "usbtoken.h"
+#include "p11token.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -200,6 +201,17 @@ token_new(tokentype_t type, const char *token_info, const char *uuid)
 		break;
 	}
 #endif // SC_CARDSERVICE
+#ifdef ENABLEPKCS11
+	case (TOKEN_TYPE_PKCS11): {
+		DEBUG("Create token with internal type 'PKCS11'");
+		new_token->int_token = p11token_new(new_token, &new_token->ops, token_info);
+		if (!new_token->int_token) {
+			ERROR("Creation of p11token failed");
+			goto err;
+		}
+		break;
+	}
+#endif // ENABLEPKCS11
 	default:
 		ERROR("Unrecognized token type");
 		goto err;
