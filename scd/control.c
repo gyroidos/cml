@@ -76,6 +76,8 @@ scd_proto_to_tokentype(const DaemonToToken *msg)
 		return TOKEN_TYPE_SOFT;
 	case TOKEN_TYPE__USB:
 		return TOKEN_TYPE_USB;
+	case TOKEN_TYPE__PKCS11:
+		return TOKEN_TYPE_PKCS11;
 	default:
 		ERROR("Invalid token type value");
 	} // fallthrough
@@ -279,6 +281,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			switch (type) {
 			case TOKEN_TYPE_USB:
 				result = scd_token_new(type, msg->token_uuid, msg->usbtoken_serial);
+				break;
+			case TOKEN_TYPE_PKCS11:
+				ASSERT(msg->pkcs11_module);
+				result = scd_token_new(type, msg->token_uuid, msg->pkcs11_module);
 				break;
 			default:
 				result = scd_token_new(type, msg->token_uuid, NULL);
