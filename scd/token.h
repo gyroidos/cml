@@ -59,7 +59,12 @@ typedef struct token token_t;
  * Choice of supported token types.
  * Must be kept in sync with scd.proto
  */
-typedef enum tokentype { TOKEN_TYPE_NONE, TOKEN_TYPE_SOFT, TOKEN_TYPE_USB } tokentype_t;
+typedef enum tokentype {
+	TOKEN_TYPE_NONE,
+	TOKEN_TYPE_SOFT,
+	TOKEN_TYPE_USB,
+	TOKEN_TYPE_PKCS11
+} tokentype_t;
 
 typedef struct token_operations {
 	token_err_t (*lock)(void *int_token);
