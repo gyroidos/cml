@@ -25,11 +25,14 @@
 
 #include "scd.h"
 #include "scd_shared.h"
+#include "tss.h"
+#include "tpm2d_shared.h"
 #include "cmld.h"
 #include "unit.h"
 
 #include "common/macro.h"
 #include "common/logf.h"
+#include "common/dir.h"
 #include "common/event.h"
 #include "common/fd.h"
 #include "common/file.h"
@@ -38,6 +41,8 @@
 #include "common/protobuf.h"
 #include "common/mem.h"
 #include "common/sock.h"
+
+#include <sys/inotify.h>
 
 // clang-format off
 #define SCD_CONTROL_SOCKET "scd_control"
@@ -173,6 +178,29 @@ scd_on_connect_cb(int sock, const char *sock_path)
 	cmld_init_stage_unit_notify(scd_unit);
 }
 
+static void
+scd_tpm2d_inotify_written_cb(const char *path, uint32_t mask, event_inotify_t *inotify, void *data)
+{
+	IF_FALSE_RETURN(mask & IN_CLOSE_WRITE);
+
+	unit_t *scd_unit = data;
+	ASSERT(scd_unit);
+
+	DEBUG("%s created", path);
+
+	IF_TRUE_RETURN(strcmp(path, TPM2D_ATT_TSS_FILE));
+
+	INFO("Provisioning by tpm2d finished: %s written.", path);
+
+	if (unit_start(scd_unit) < 0) {
+		unit_free(scd_unit);
+		FATAL("Could not start unit for scd!");
+	}
+
+	event_remove_inotify(inotify);
+	event_inotify_free(inotify);
+}
+
 int
 scd_init(void)
 {
@@ -199,15 +227,41 @@ scd_init(void)
 	unit_device_set_initial_allow(scd_unit, dev_nodes);
 	list_delete(dev_nodes);
 
-	if (unit_start(scd_unit) < 0) {
-		unit_free(scd_unit);
-		ERROR("Could nor start unit for scd!");
-		return -1;
+	/*
+	 * if tpm is not supported or tpm2d provisioning is already done
+	 * just start scd unit else start inotify watch for device key
+	 */
+	if (file_exists(TPM2D_ATT_TSS_FILE) || !file_exists("/dev/tpm0") ||
+	    !tss_is_tpm2d_installed()) {
+		if (unit_start(scd_unit) < 0) {
+			ERROR("Could not start unit for scd!");
+			goto error;
+		}
+	} else {
+		const char *token_dir = TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR;
+		if (!file_is_dir(token_dir) && dir_mkdir_p(token_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir dir: %s for device key", token_dir);
+			goto error;
+		}
+		// wait for tpm2d generated device key
+		event_inotify_t *inotify_devkey = event_inotify_new(
+			token_dir, IN_CLOSE_WRITE, scd_tpm2d_inotify_written_cb, scd_unit);
+
+		// start watching for device key creation
+		int error = event_add_inotify(inotify_devkey);
+		if (error && error != -EEXIST) {
+			ERROR("Could not register inotify event watching for device key of unit %s!",
+			      unit_get_description(scd_unit));
+			goto error;
+		}
 	}
 
 	cmld_init_stage_unit_notify(scd_unit);
-
 	return 0;
+
+error:
+	unit_free(scd_unit);
+	return -1;
 }
 
 void
