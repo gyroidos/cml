@@ -70,6 +70,8 @@ print_usage(const char *cmd)
 	       "        Reloads containers from config files.\n\n");
 	printf("   wipe_device\n"
 	       "        Wipes all containers on the device.\n\n");
+	printf("   destroy_system\n"
+	       "        Wipes all containers on the device and clears the TPM.\n\n");
 	printf("   reboot\n"
 	       "        Reboots the whole device, shutting down any containers which are running.\n\n");
 	printf("   set_provisioned\n"
@@ -392,6 +394,10 @@ main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "wipe_device")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "destroy_system")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "reboot")) {
