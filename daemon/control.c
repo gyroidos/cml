@@ -1356,6 +1356,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM: {
+		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+		cmld_destroy_system();
+	} break;
+
 	case CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE: {
 		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
 		cmld_reboot_device();
