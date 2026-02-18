@@ -200,6 +200,9 @@ cmld_container_wipe(container_t *container);
 void
 cmld_wipe_device();
 
+void
+cmld_destroy_system();
+
 container_t *
 cmld_container_get_by_uuid(const uuid_t *uuid);
 

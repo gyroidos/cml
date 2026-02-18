@@ -1984,6 +1984,17 @@ cmld_wipe_device()
 		reboot_reboot(POWER_OFF);
 }
 
+void
+cmld_destroy_system()
+{
+	if (tss_clear() < 0) {
+		ERROR("Failed to clear TPM via tpmd");
+	} else {
+		if (!cmld_hostedmode)
+			reboot_reboot(REBOOT_FORCE);
+	}
+}
+
 const char *
 cmld_get_c0os(void)
 {
