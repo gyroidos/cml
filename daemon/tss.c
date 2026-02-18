@@ -76,7 +76,7 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 	}
 }
 
-static bool
+bool
 tss_is_tpm2d_installed(void)
 {
 	bool found = false;
