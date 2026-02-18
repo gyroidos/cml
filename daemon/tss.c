@@ -192,6 +192,44 @@ tss_cleanup(void)
 	unit_free(tpm2d_unit);
 }
 
+int
+tss_clear(void)
+{
+	if (tss_sock < 0) {
+		ERROR("No TSS Socket available");
+		return -1;
+	}
+
+	ControllerToTpm msg = CONTROLLER_TO_TPM__INIT;
+
+	msg.code = CONTROLLER_TO_TPM__CODE__CLEAR;
+
+	if (protobuf_send_message(tss_sock, (ProtobufCMessage *)&msg) < 0) {
+		WARN("Failed to send clear command to tpm2d");
+		return -1;
+	}
+
+	TpmToController *resp =
+		(TpmToController *)protobuf_recv_message(tss_sock, &tpm_to_controller__descriptor);
+	if (!resp) {
+		WARN("Failed to receive and decode TpmToController protobuf message!");
+		return -1;
+	}
+
+	if (resp->code != TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE ||
+	    resp->response != TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK) {
+		ERROR("Failed to clear TPM via tpmd");
+		protobuf_free_message((ProtobufCMessage *)resp);
+		return -1;
+	} else {
+		INFO("Sucessfully cleared TPM");
+	}
+
+	protobuf_free_message((ProtobufCMessage *)resp);
+
+	return 0;
+}
+
 void
 tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo)
 {
