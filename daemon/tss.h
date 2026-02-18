@@ -48,4 +48,7 @@ tss_cleanup(void);
 void
 tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo);
 
+bool
+tss_is_tpm2d_installed(void);
+
 #endif /* TSS_H */
