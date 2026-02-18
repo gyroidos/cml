@@ -116,6 +116,9 @@ message ControllerToDaemon {
 		// Get the device provisioned state
 		GET_PROVISIONED = 33;
 
+		// ERASE THE SYSTEM + TPM
+		DESTROY_SYSTEM = 34;
+
 		// Pulls the device csr (provisioning)
 		PULL_DEVICE_CSR = 40;
 		// Pushes bach the device certificate (provisioning)
