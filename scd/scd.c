@@ -99,7 +99,7 @@ provisioning_mode()
 	char *dev_key_file = DEVICE_KEY_FILE;
 
 	// if available, use tpm to create and store device key
-	if (file_exists("/dev/tpm0")) {
+	if (file_exists("/dev/tpm0") || file_exists("/dev/tpmrm0")) {
 		// assumption: tpm2d is launched prior to scd, and creates a keypair on first boot
 		if (!file_exists(TPM2D_ATT_TSS_FILE)) {
 			WARN("TPM keypair not found, missing %s, TPM support disabled!",
