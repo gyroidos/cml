@@ -223,7 +223,7 @@ scd_init(void)
 	IF_NULL_RETVAL(scd_unit, -1);
 
 	// scd also accesses the tpm for device cert signing
-	list_t *dev_nodes = list_append(NULL, "/dev/tpm0");
+	list_t *dev_nodes = list_append(NULL, "/dev/tpmrm0");
 	unit_device_set_initial_allow(scd_unit, dev_nodes);
 	list_delete(dev_nodes);
 
@@ -231,7 +231,7 @@ scd_init(void)
 	 * if tpm is not supported or tpm2d provisioning is already done
 	 * just start scd unit else start inotify watch for device key
 	 */
-	if (file_exists(TPM2D_ATT_TSS_FILE) || !file_exists("/dev/tpm0") ||
+	if (file_exists(TPM2D_ATT_TSS_FILE) || !file_exists("/dev/tpmrm0") ||
 	    !tss_is_tpm2d_installed()) {
 		if (unit_start(scd_unit) < 0) {
 			ERROR("Could not start unit for scd!");
