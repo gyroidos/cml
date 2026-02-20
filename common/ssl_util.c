@@ -136,6 +136,15 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 	}
 
 	if (use_tpm) {
+		const char *tpmdev = "/dev/tpmrm0";
+		if (setenv("TPM_INTERFACE_TYPE", "dev", 1) < 0) {
+			ERROR_ERRNO("Could not set environment!");
+			goto error;
+		}
+		if (setenv("TPM_DEVICE", tpmdev, 1) < 0) {
+			ERROR_ERRNO("Could not set environment!");
+			goto error;
+		}
 		if (tpm2d_primary_storage_key_pw) {
 			OSSL_PARAM provider_params[] = {
 				OSSL_PARAM_utf8_ptr("PIN", tpm2d_primary_storage_key_pw, 0),
