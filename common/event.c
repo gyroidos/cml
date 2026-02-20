@@ -682,7 +682,8 @@ event_remove_inotify(event_inotify_t *inotify)
 	      inotify->path, inotify->mask);
 
 	// if last watcher is removed also close inotify fd
-	event_inotify_reset_fd();
+	if (NULL == event_inotify_list)
+		event_inotify_reset_fd();
 }
 
 /******************************************************************************/
