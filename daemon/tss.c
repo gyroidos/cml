@@ -125,7 +125,7 @@ int
 tss_init(void)
 {
 	// Check if the platform has a TPM module attached
-	if (!file_exists("/dev/tpm0") || !tss_is_tpm2d_installed()) {
+	if (!file_exists("/dev/tpmrm0") || !tss_is_tpm2d_installed()) {
 		WARN("Platform does not support TSS / TPM 2.0");
 		return 0;
 	}
@@ -152,7 +152,7 @@ tss_init(void)
 			      &tss_tpm2d_on_connect_cb, true);
 
 	// grant access to the TPM
-	list_t *dev_nodes = list_append(NULL, "/dev/tpm0");
+	list_t *dev_nodes = list_append(NULL, "/dev/tpmrm0");
 	unit_device_set_initial_allow(tpm2d_unit, dev_nodes);
 	list_delete(dev_nodes);
 
