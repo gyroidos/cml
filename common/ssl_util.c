@@ -150,13 +150,13 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 				OSSL_PARAM_utf8_ptr("PIN", tpm2d_primary_storage_key_pw, 0),
 				OSSL_PARAM_END
 			};
-			if ((tpm_provider = OSSL_PROVIDER_load_ex(NULL, "tpm2", provider_params)) ==
-			    NULL) {
+			if ((tpm_provider = OSSL_PROVIDER_load_ex(NULL, "libtpm2",
+								  provider_params)) == NULL) {
 				ERROR("Could not load TPM2 provider with primary storage key pw");
 				goto error;
 			}
 		} else {
-			if ((tpm_provider = OSSL_PROVIDER_load(NULL, "tpm2")) == NULL) {
+			if ((tpm_provider = OSSL_PROVIDER_load(NULL, "libtpm2")) == NULL) {
 				ERROR("Could not load TPM2 provider");
 				goto error;
 			}
