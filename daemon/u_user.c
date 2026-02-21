@@ -267,48 +267,40 @@ u_user_start_pre_clone(void *usr)
 	u_user_t *user = usr;
 	ASSERT(user);
 
-	int ret = 0;
-
 	// reserve a new mapping
 	if (u_user_set_next_uid_range_start(user)) {
 		ERROR("Reserving uid range for userns for unit %s", unit_get_name(user->unit));
 		return -COMPARTMENT_ERROR_USER;
 	}
 
-	char *sock_dir_parent = mem_printf("/run/socket/cml_unit/%s", unit_get_name(user->unit));
 	/*
 	 * set world rwx only if idmapped mount is not supported
 	 * otherwise only allow root to write sock_dir
 	 */
 	mode_t mode = mount_is_idmapping_supported() ? 00755 : 00777;
-	if (dir_mkdir_p(sock_dir_parent, mode) < 0) {
-		ERROR_ERRNO("Could not mkdir %s (%o)", sock_dir_parent, mode);
-		ret = -COMPARTMENT_ERROR_USER;
-		goto out;
+	if (dir_mkdir_p(user->sock_dir, mode) < 0) {
+		ERROR_ERRNO("Could not mkdir %s (%o)", user->sock_dir, mode);
+		return -COMPARTMENT_ERROR_USER;
 	}
 
-	if (mount("tmpfs", sock_dir_parent, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
-		ERROR_ERRNO("Could not mount %s in unit %s", sock_dir_parent,
+	if (mount("tmpfs", user->sock_dir, "tmpfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+		ERROR_ERRNO("Could not mount %s in unit %s", user->sock_dir,
 			    unit_get_description(user->unit));
-		ret = -COMPARTMENT_ERROR_USER;
-		goto out;
+		return -COMPARTMENT_ERROR_USER;
 	}
 
 	// skip chowning if idmapping is supported
 	if (mount_is_idmapping_supported())
-		goto out;
+		return 0;
 
 	if (dir_chown_folder(unit_get_data_path(user->unit), user->uid_start, user->uid_start) <
 	    0) {
 		ERROR("Could not chown %s to target uid:gid (%d:%d)",
 		      unit_get_data_path(user->unit), user->uid_start, user->uid_start);
-		ret = -COMPARTMENT_ERROR_USER;
-		goto out;
+		return -COMPARTMENT_ERROR_USER;
 	}
 
-out:
-	mem_free0(sock_dir_parent);
-	return ret;
+	return 0;
 }
 
 /**
