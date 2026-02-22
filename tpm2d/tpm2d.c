@@ -265,6 +265,11 @@ tpm2d_exit(void)
 #endif
 
 	tss2_destroy();
+	tpm2d_control_free(tpm2d_control_cmld);
+	if (!no_setup_keys) {
+		tpm2d_rcontrol_free(tpm2d_rcontrol_attest);
+	}
+	nvmcrypt_cleanup();
 	exit(0);
 }
 
@@ -363,6 +368,7 @@ main(UNUSED int argc, char **argv)
 	if (!no_setup_keys) {
 		tpm2d_rcontrol_free(tpm2d_rcontrol_attest);
 	}
+	nvmcrypt_cleanup();
 
 	return 0;
 }
