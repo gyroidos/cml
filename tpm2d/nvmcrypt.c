@@ -272,3 +272,10 @@ nvmcrypt_init(bool use_secure_boot_policy)
 			FATAL("Cannot setup nvmcrypt policy!");
 	}
 }
+
+void
+nvmcrypt_cleanup(void)
+{
+	if (nvmcrypt_nvindex_policy)
+		mem_free0(nvmcrypt_nvindex_policy);
+}

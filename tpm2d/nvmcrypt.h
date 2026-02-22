@@ -59,6 +59,14 @@ void
 nvmcrypt_init(bool use_secure_boot_policy);
 
 /**
+ * Cleanup nvmcrypt submodule
+ *
+ * Free static resources allocated by the nvmcrypt submodule
+ */
+void
+nvmcrypt_cleanup(void);
+
+/**
  * Setup an encrypted device mapping for a given block device
  * e.g. /dev/sda using the given password (which can be NULL)
  * will result in a /dev/mapper/sda blockdevice which is then
