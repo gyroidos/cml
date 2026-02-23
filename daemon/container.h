@@ -194,6 +194,11 @@ bool
 container_images_dir_contains_image(const container_t *container);
 
 /**
+ * Return true if the network interface is in the container configuration.
+ */
+bool
+container_is_iface_in_config(const container_t *container, const char *pnet_name);
+/**
  * Get the container config filename.
  */
 const char *
