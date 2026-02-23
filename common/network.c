@@ -1115,6 +1115,54 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 	return NULL;
 }
 
+char *
+network_get_ifname_by_mac_in_ns_new(uint8_t mac[6], pid_t pid)
+{
+	IF_NULL_RETVAL(mac, NULL);
+	IF_TRUE_RETVAL(pid <= 0, NULL);
+
+	char *mac_str = network_mac_addr_to_str_new(mac);
+	IF_NULL_RETVAL(mac_str, NULL);
+
+	list_t *link_list = NULL;
+	if (network_list_link_ns(pid, &link_list) < 0) {
+		mem_free0(mac_str);
+		return NULL;
+	}
+
+	char *ifname = NULL;
+	for (list_t *l = link_list; l; l = l->next) {
+		char *entry = l->data;
+		if (!strstr(entry, mac_str))
+			continue;
+
+		/*
+		 * Parse interface name from ip link output format:
+		 * "N: NAME: <FLAGS>..." or "N: NAME@peer: <FLAGS>..."
+		 */
+		char *start = strchr(entry, ':');
+		if (!start)
+			continue;
+		start++; // skip the index's colon
+		while (*start == ' ')
+			start++;
+		char *end = strchr(start, ':');
+		if (!end)
+			continue;
+		// Handle NAME@peer format
+		char *at = memchr(start, '@', end - start);
+		if (at)
+			end = at;
+		ifname = mem_printf("%.*s", (int)(end - start), start);
+		break;
+	}
+
+	list_delete(link_list);
+	mem_free0(mac_str);
+
+	return ifname;
+}
+
 int
 network_create_bridge(const char *name)
 {
