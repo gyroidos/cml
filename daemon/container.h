@@ -198,6 +198,13 @@ container_images_dir_contains_image(const container_t *container);
  */
 bool
 container_is_iface_in_config(const container_t *container, const char *pnet_name);
+
+/**
+ * Assigns former explicitly assigned network interfaces implicitly to core container.
+ */
+void
+container_update_pnet_cfg_list(container_t *container, list_t *new_pnet_cfg_list);
+
 /**
  * Get the container config filename.
  */
