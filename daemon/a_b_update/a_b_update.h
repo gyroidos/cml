@@ -34,6 +34,7 @@ typedef enum {
 typedef enum {
 	A_B_UPDATE_INIT_NONE = 0,
 	A_B_UPDATE_INIT_STAGE_1,
+	A_B_UPDATE_INIT_STAGE_2,
 	A_B_UPDATE_INIT_COMPLETE,
 } a_b_update_init_stage_t;
 
@@ -44,7 +45,7 @@ typedef enum {
 
 /*****************************************************************************/
 
-#define A_B_UPDATE_FILE_SUFFIX_A ""
+#define A_B_UPDATE_FILE_SUFFIX_A ".A"
 #define A_B_UPDATE_FILE_SUFFIX_B ".B"
 
 /*****************************************************************************/
@@ -61,6 +62,10 @@ a_b_update_get_current(void);
 /**
  * Extend the given path with the extension according to the currently
  * running boot option.
+ *
+ * Do not use this function on the kernel image files as they use a dfferent
+ * naming scheme!
+ *
  * @param Base path to exetend
  * @return Extended path or the base path if the current platform state
  * 		   is undefined.

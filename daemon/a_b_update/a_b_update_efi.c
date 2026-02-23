@@ -55,7 +55,8 @@ platform_get_file_path(a_b_update_kernel_path_t p)
 {
 	switch (p) {
 	case KERNEL_BINARY_A:
-		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_A;
+		// file suffix deliberately omitted for A-image
+		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY;
 	case KERNEL_BINARY_B:
 		return DEFAULT_KERNEL_PATH "/" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_B;
 	default:
@@ -68,7 +69,7 @@ platform_boot_entries_initialized(void)
 {
 	return efivars_boot_entry_initialized(
 		       0, "GyroidosA",
-		       "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_A) &&
+		       "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY) && // file suffix deliberately omitted for A-image
 	       efivars_boot_entry_initialized(
 		       1, "GyroidosB",
 		       "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_B);
@@ -79,11 +80,10 @@ platform_init_boot_entries(void)
 {
 	int ret = 0;
 
-	IF_TRUE_RETVAL_ERROR(
-		(ret = efivars_set_boot_entry(
-			 0, "GyroidosA",
-			 "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY A_B_UPDATE_FILE_SUFFIX_A)),
-		ret);
+	// file suffix deliberately omitted for A-image
+	IF_TRUE_RETVAL_ERROR((ret = efivars_set_boot_entry(0, "GyroidosA",
+							   "\\EFI\\BOOT\\" DEFAULT_KERNEL_BINARY)),
+			     ret);
 
 	IF_TRUE_RETVAL_ERROR(
 		(ret = efivars_set_boot_entry(

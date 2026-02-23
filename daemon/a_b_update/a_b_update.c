@@ -36,8 +36,9 @@
 
 /*****************************************************************************/
 
-#define DEVICE_CONF_A DEFAULT_CONF_BASE_PATH "/device.conf" A_B_UPDATE_FILE_SUFFIX_A
-#define DEVICE_CONF_B DEFAULT_CONF_BASE_PATH "/device.conf" A_B_UPDATE_FILE_SUFFIX_B
+#define DEVICE_CONF_PLAIN DEFAULT_CONF_BASE_PATH "/device.conf"
+#define DEVICE_CONF_A DEVICE_CONF_PLAIN A_B_UPDATE_FILE_SUFFIX_A
+#define DEVICE_CONF_B DEVICE_CONF_PLAIN A_B_UPDATE_FILE_SUFFIX_B
 
 /*****************************************************************************/
 /* Platform functions that should not be exported outside the a_b_update code*/
@@ -70,6 +71,10 @@ a_b_update_get_init_stage(void)
 	/* need to check: did the A kernel start? 
                       was the A config loaded? */
 	DEBUG("Successfully booted into resilient update option.");
+	ret = A_B_UPDATE_INIT_STAGE_2;
+
+	IF_TRUE_GOTO(file_exists(DEVICE_CONF_PLAIN), out);
+	DEBUG("Non-redundant kernel/device.conf already removed.");
 	ret = A_B_UPDATE_INIT_COMPLETE;
 
 out:
@@ -96,7 +101,16 @@ a_b_update_init(void)
 			return;
 		}
 
-		ret = file_copy(DEVICE_CONF_A, DEVICE_CONF_B, -1, 1, 0);
+		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_A, -1, 1, 0);
+		if (ret) {
+			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_A);
+			if (file_exists(DEVICE_CONF_A)) {
+				unlink(DEVICE_CONF_A);
+			}
+			return;
+		}
+
+		ret = file_copy(DEVICE_CONF_PLAIN, DEVICE_CONF_B, -1, 1, 0);
 		if (ret) {
 			ERROR("Copy of %s failed. Cleanup.", DEVICE_CONF_B);
 			if (file_exists(DEVICE_CONF_B)) {
@@ -113,6 +127,9 @@ a_b_update_init(void)
 		INFO("Rebooting into A/B update configuration.");
 		reboot_reboot(REBOOT);
 		return; /* must reboot after this */
+	case A_B_UPDATE_INIT_STAGE_2:
+		unlink(DEVICE_CONF_PLAIN);
+		/* intentional fallthrough */
 	case A_B_UPDATE_INIT_COMPLETE:
 		return;
 	}
