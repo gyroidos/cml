@@ -53,13 +53,7 @@ device_config_new(const char *path)
 		cfg = (DeviceConfig *)protobuf_message_new_from_textfile(
 			file, &device_config__descriptor);
 		if (!cfg) {
-#ifdef CC_MODE
-			FATAL("Failed loading device config from file \"%s\" in CC Mode.", file);
-#endif
-			WARN("Failed loading device config from file \"%s\". Reverting to default values.",
-			     file);
-			cfg = mem_new(DeviceConfig, 1);
-			device_config__init(cfg);
+			FATAL("Failed loading device config from file \"%s\".", file);
 		}
 	}
 	ASSERT(cfg);
