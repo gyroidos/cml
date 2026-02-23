@@ -37,6 +37,7 @@
 #include "container_module.h"
 
 #include "common/cryptfs.h"
+#include "common/network.h"
 #include "common/uuid.h"
 #include "common/list.h"
 #include "compartment.h"
@@ -107,7 +108,7 @@ typedef struct container_usbdev container_usbdev_t;
 typedef struct container_vnet_cfg {
 	char *vnet_name;
 	char *rootns_name;
-	uint8_t vnet_mac[6];
+	uint8_t vnet_mac[MAC_ADDR_LEN];
 	bool configure;
 } container_vnet_cfg_t;
 
@@ -342,8 +343,8 @@ container_usbdev_get_minor(container_usbdev_t *usbdev);
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory
  */
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
-		       bool configure);
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[MAC_ADDR_LEN], bool configure);
 
 /**
  * Free all memory used by a container_vnet_cfg_t data structure

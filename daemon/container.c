@@ -950,13 +950,13 @@ out:
 }
 
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
-		       bool configure)
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[MAC_ADDR_LEN], bool configure)
 {
 	IF_NULL_RETVAL(if_name, NULL);
 	container_vnet_cfg_t *vnet_cfg = mem_new(container_vnet_cfg_t, 1);
 	vnet_cfg->vnet_name = mem_strdup(if_name);
-	memcpy(vnet_cfg->vnet_mac, mac, 6);
+	memcpy(vnet_cfg->vnet_mac, mac, MAC_ADDR_LEN);
 	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
 	vnet_cfg->configure = configure;
 	return vnet_cfg;
@@ -979,8 +979,8 @@ container_pnet_cfg_new(const char *if_name_mac, bool mac_filter, list_t *mac_whi
 		return pnet_cfg;
 
 	for (list_t *l = mac_whitelist; l; l = l->next) {
-		uint8_t *mac = mem_alloc0(6);
-		memcpy(mac, l->data, 6);
+		uint8_t *mac = mem_alloc0(MAC_ADDR_LEN);
+		memcpy(mac, l->data, MAC_ADDR_LEN);
 		pnet_cfg->mac_whitelist = list_append(pnet_cfg->mac_whitelist, mac);
 	}
 
