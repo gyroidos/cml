@@ -690,6 +690,22 @@ container_destroy(container_t *container)
 	return ret;
 }
 
+bool
+container_is_iface_in_config(const container_t *container, const char *pnet_name)
+{
+	ASSERT(container);
+	ASSERT(pnet_name);
+
+	for (list_t *l = container->pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+
+		if (strcmp(cfg->pnet_name, pnet_name) == 0)
+			return true;
+	}
+
+	return false;
+}
+
 const char *
 container_get_config_filename(const container_t *container)
 {
