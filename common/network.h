@@ -282,6 +282,17 @@ int
 network_get_mac_by_ifname(const char *ifname, uint8_t mac[6]);
 
 /**
+ * Resolves a MAC address to an interface name within a specific network namespace
+ * identified by PID. This is needed when the interface has been moved into a
+ * container netns and is no longer visible in the root namespace.
+ * @param mac array containing the mac address
+ * @param pid PID of a process in the target network namespace
+ * @return newly allocated interface name, or NULL if not found
+ */
+char *
+network_get_ifname_by_mac_in_ns_new(uint8_t mac[6], pid_t pid);
+
+/**
  * Create a Linux bridge device.
  */
 int
