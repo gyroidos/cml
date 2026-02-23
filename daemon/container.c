@@ -30,6 +30,7 @@
 #include "common/dir.h"
 #include "common/uuid.h"
 #include "compartment.h"
+#include "cmld.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -704,6 +705,48 @@ container_is_iface_in_config(const container_t *container, const char *pnet_name
 	}
 
 	return false;
+}
+
+void
+container_update_pnet_cfg_list(container_t *container, list_t *new_pnet_cfg_list)
+{
+	ASSERT(container);
+
+	container_t *c0 = cmld_containers_get_c0();
+
+	if (!c0 || !container_is_stoppable(c0))
+		return;
+
+	/*
+	 * Find interfaces REMOVED from config (in old but not in new list).
+	 * These become unassigned and should move to core container as implicit.
+	 */
+	for (list_t *l = container->pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_t *old_cfg = l->data;
+
+		bool found = false;
+		for (list_t *n = new_pnet_cfg_list; n; n = n->next) {
+			container_pnet_cfg_t *new_cfg = n->data;
+			if (strcmp(old_cfg->pnet_name, new_cfg->pnet_name) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (found)
+			continue;
+
+		INFO("Service container updated. Moving interface %s to core container",
+		     old_cfg->pnet_name);
+
+		container_pnet_cfg_t *c0_cfg =
+			container_pnet_cfg_new(old_cfg->pnet_name, false, NULL);
+
+		if (container_add_net_interface(c0, c0_cfg) < 0) {
+			WARN("Failed to add interface %s to core container", c0_cfg->pnet_name);
+			container_pnet_cfg_free(c0_cfg);
+		}
+	}
 }
 
 const char *
