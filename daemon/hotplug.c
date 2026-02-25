@@ -46,7 +46,7 @@
 typedef struct hotplug_net_dev_mapping {
 	container_t *container;
 	container_pnet_cfg_t *pnet_cfg;
-	uint8_t mac[6];
+	uint8_t mac[MAC_ADDR_LEN];
 } hotplug_container_netdev_mapping_t;
 
 static uevent_uev_t *uevent_uev = NULL;
@@ -212,7 +212,7 @@ err:
 static int
 hotplug_netdev_move(uevent_event_t *event)
 {
-	uint8_t iface_mac[6];
+	uint8_t iface_mac[MAC_ADDR_LEN];
 	char *macstr = NULL;
 	uevent_event_t *newevent = NULL;
 	container_pnet_cfg_t *pnet_cfg_c0 = NULL;
@@ -227,7 +227,7 @@ hotplug_netdev_move(uevent_event_t *event)
 	container_pnet_cfg_t *pnet_cfg = NULL;
 	for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
 		hotplug_container_netdev_mapping_t *mapping = l->data;
-		if (0 == memcmp(iface_mac, mapping->mac, 6)) {
+		if (0 == memcmp(iface_mac, mapping->mac, MAC_ADDR_LEN)) {
 			container = mapping->container;
 			pnet_cfg = mapping->pnet_cfg;
 			break;
@@ -438,13 +438,14 @@ hotplug_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg)
 }
 
 int
-hotplug_unregister_netdev(container_t *container, uint8_t mac[6])
+hotplug_unregister_netdev(container_t *container, uint8_t mac[MAC_ADDR_LEN])
 {
 	hotplug_container_netdev_mapping_t *mapping_to_remove = NULL;
 
 	for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
 		hotplug_container_netdev_mapping_t *mapping = l->data;
-		if ((mapping->container == container) && (0 == memcmp(mapping->mac, mac, 6))) {
+		if ((mapping->container == container) &&
+		    (0 == memcmp(mapping->mac, mac, MAC_ADDR_LEN))) {
 			mapping_to_remove = mapping;
 		}
 	}

@@ -30,6 +30,7 @@
 #include "common/dir.h"
 #include "common/uuid.h"
 #include "compartment.h"
+#include "cmld.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -690,6 +691,64 @@ container_destroy(container_t *container)
 	return ret;
 }
 
+bool
+container_is_iface_in_config(const container_t *container, const char *pnet_name)
+{
+	ASSERT(container);
+	ASSERT(pnet_name);
+
+	for (list_t *l = container->pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+
+		if (strcmp(cfg->pnet_name, pnet_name) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+void
+container_update_pnet_cfg_list(container_t *container, list_t *new_pnet_cfg_list)
+{
+	ASSERT(container);
+
+	container_t *c0 = cmld_containers_get_c0();
+
+	if (!c0 || !container_is_stoppable(c0))
+		return;
+
+	/*
+	 * Find interfaces REMOVED from config (in old but not in new list).
+	 * These become unassigned and should move to core container as implicit.
+	 */
+	for (list_t *l = container->pnet_cfg_list; l; l = l->next) {
+		container_pnet_cfg_t *old_cfg = l->data;
+
+		bool found = false;
+		for (list_t *n = new_pnet_cfg_list; n; n = n->next) {
+			container_pnet_cfg_t *new_cfg = n->data;
+			if (strcmp(old_cfg->pnet_name, new_cfg->pnet_name) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (found)
+			continue;
+
+		INFO("Service container updated. Moving interface %s to core container",
+		     old_cfg->pnet_name);
+
+		container_pnet_cfg_t *c0_cfg =
+			container_pnet_cfg_new(old_cfg->pnet_name, false, NULL);
+
+		if (container_add_net_interface(c0, c0_cfg) < 0) {
+			WARN("Failed to add interface %s to core container", c0_cfg->pnet_name);
+			container_pnet_cfg_free(c0_cfg);
+		}
+	}
+}
+
 const char *
 container_get_config_filename(const container_t *container)
 {
@@ -891,13 +950,13 @@ out:
 }
 
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
-		       bool configure)
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[MAC_ADDR_LEN], bool configure)
 {
 	IF_NULL_RETVAL(if_name, NULL);
 	container_vnet_cfg_t *vnet_cfg = mem_new(container_vnet_cfg_t, 1);
 	vnet_cfg->vnet_name = mem_strdup(if_name);
-	memcpy(vnet_cfg->vnet_mac, mac, 6);
+	memcpy(vnet_cfg->vnet_mac, mac, MAC_ADDR_LEN);
 	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
 	vnet_cfg->configure = configure;
 	return vnet_cfg;
@@ -920,8 +979,8 @@ container_pnet_cfg_new(const char *if_name_mac, bool mac_filter, list_t *mac_whi
 		return pnet_cfg;
 
 	for (list_t *l = mac_whitelist; l; l = l->next) {
-		uint8_t *mac = mem_alloc0(6);
-		memcpy(mac, l->data, 6);
+		uint8_t *mac = mem_alloc0(MAC_ADDR_LEN);
+		memcpy(mac, l->data, MAC_ADDR_LEN);
 		pnet_cfg->mac_whitelist = list_append(pnet_cfg->mac_whitelist, mac);
 	}
 

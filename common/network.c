@@ -1027,7 +1027,7 @@ msg_err:
 }
 
 int
-network_str_to_mac_addr(const char *mac_str, uint8_t mac[6])
+network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN])
 {
 	IF_NULL_RETVAL(mac_str, -1);
 
@@ -1036,13 +1036,13 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[6])
 		       "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8,
 		       &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
 
-	IF_TRUE_RETVAL((ret == EOF || ret < 6), -1);
+	IF_TRUE_RETVAL((ret == EOF || ret < MAC_ADDR_LEN), -1);
 
 	return 0;
 }
 
 char *
-network_mac_addr_to_str_new(uint8_t mac[6])
+network_mac_addr_to_str_new(uint8_t mac[MAC_ADDR_LEN])
 {
 	return mem_printf("%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
 			  ":%02" SCNx8,
@@ -1050,7 +1050,7 @@ network_mac_addr_to_str_new(uint8_t mac[6])
 }
 
 int
-network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
+network_get_mac_by_ifname(const char *ifname, uint8_t mac[MAC_ADDR_LEN])
 {
 	IF_NULL_RETVAL(ifname, -1);
 	IF_NULL_RETVAL(mac, -1);
@@ -1061,7 +1061,7 @@ network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
 
 	IF_NULL_RETVAL(mac_str, -1);
 
-	mem_memset(mac, 0, 6);
+	mem_memset(mac, 0, MAC_ADDR_LEN);
 	int ret = network_str_to_mac_addr(mac_str, mac);
 
 	mem_free0(mac_str);
@@ -1069,7 +1069,7 @@ network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
 }
 
 char *
-network_get_ifname_by_addr_new(uint8_t mac[6])
+network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN])
 {
 	IF_NULL_RETVAL(mac, NULL);
 
@@ -1078,7 +1078,7 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 
 	IF_NULL_RETVAL(if_ni, NULL);
 
-	uint8_t mac_i[6];
+	uint8_t mac_i[MAC_ADDR_LEN];
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_addr_path, *dev_bridge_path, *mac_str;
@@ -1101,10 +1101,10 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 		if (mac_str == NULL)
 			continue;
 
-		mem_memset(mac_i, 0, 6);
+		mem_memset(mac_i, 0, MAC_ADDR_LEN);
 
 		if ((0 == network_str_to_mac_addr(mac_str, mac_i)) &&
-		    (0 == memcmp(mac, mac_i, 6))) {
+		    (0 == memcmp(mac, mac_i, MAC_ADDR_LEN))) {
 			mem_free0(mac_str);
 			return mem_strdup(i->if_name);
 		}
@@ -1113,6 +1113,54 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 	}
 
 	return NULL;
+}
+
+char *
+network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid)
+{
+	IF_NULL_RETVAL(mac, NULL);
+	IF_TRUE_RETVAL(pid <= 0, NULL);
+
+	char *mac_str = network_mac_addr_to_str_new(mac);
+	IF_NULL_RETVAL(mac_str, NULL);
+
+	list_t *link_list = NULL;
+	if (network_list_link_ns(pid, &link_list) < 0) {
+		mem_free0(mac_str);
+		return NULL;
+	}
+
+	char *ifname = NULL;
+	for (list_t *l = link_list; l; l = l->next) {
+		char *entry = l->data;
+		if (!strstr(entry, mac_str))
+			continue;
+
+		/*
+		 * Parse interface name from ip link output format:
+		 * "N: NAME: <FLAGS>..." or "N: NAME@peer: <FLAGS>..."
+		 */
+		char *start = strchr(entry, ':');
+		if (!start)
+			continue;
+		start++; // skip the index's colon
+		while (*start == ' ')
+			start++;
+		char *end = strchr(start, ':');
+		if (!end)
+			continue;
+		// Handle NAME@peer format
+		char *at = memchr(start, '@', end - start);
+		if (at)
+			end = at;
+		ifname = mem_printf("%.*s", (int)(end - start), start);
+		break;
+	}
+
+	list_delete(link_list);
+	mem_free0(mac_str);
+
+	return ifname;
 }
 
 int
@@ -1185,7 +1233,7 @@ network_iptables_phys_deny(const char *chain, const char *netif, bool add)
 }
 
 int
-network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], bool add)
+network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADDR_LEN], bool add)
 {
 	ASSERT(netif);
 

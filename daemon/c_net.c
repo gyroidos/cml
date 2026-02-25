@@ -101,19 +101,19 @@
 
 /* Network interface structure with interface specific settings */
 typedef struct {
-	char *nw_name;		       //!< Name of the network device
-	char *nw_name_cmld;	       //!< Name of the network device in rootns
-	bool configure;		       //!< do ip/routing configuration
-	char *veth_cmld_name;	       //!< associated veth name in root ns
-	char *veth_cont_name;	       //!< veth name in the container's ns
-	char *subnet;		       //!< string with subnet (x.x.x.x/y)
-	struct in_addr ipv4_cmld_addr; //!< associated ipv4 address in root ns
-	struct in_addr ipv4_cont_addr; //!< ipv4 address of container
-	struct in_addr ipv4_bc_addr;   //!< ipv4 bcaddr of container/cmld subnet
-	int cont_offset;	       //!< gives information about the adresses to be set
-	uint8_t veth_mac[6];	       //!< generated or configured mac of nic in container
-	int veth_cmld_idx;	       //!< Index of veth endpoint in rootns
-	bool created;		       //!< veth pair was created sucessfully
+	char *nw_name;			//!< Name of the network device
+	char *nw_name_cmld;		//!< Name of the network device in rootns
+	bool configure;			//!< do ip/routing configuration
+	char *veth_cmld_name;		//!< associated veth name in root ns
+	char *veth_cont_name;		//!< veth name in the container's ns
+	char *subnet;			//!< string with subnet (x.x.x.x/y)
+	struct in_addr ipv4_cmld_addr;	//!< associated ipv4 address in root ns
+	struct in_addr ipv4_cont_addr;	//!< ipv4 address of container
+	struct in_addr ipv4_bc_addr;	//!< ipv4 bcaddr of container/cmld subnet
+	int cont_offset;		//!< gives information about the adresses to be set
+	uint8_t veth_mac[MAC_ADDR_LEN]; //!< generated or configured mac of nic in container
+	int veth_cmld_idx;		//!< Index of veth endpoint in rootns
+	bool created;			//!< veth pair was created sucessfully
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -317,7 +317,7 @@ c_net_remove_ifi(const char *ifi_name, const pid_t pid)
  * with a netlink message using the netlink socket
  */
 static int
-c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6])
+c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[MAC_ADDR_LEN])
 {
 	ASSERT(veth1 && veth2);
 
@@ -394,7 +394,7 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 		goto msg_err;
 
 	/* Set veth1 mac address */
-	if (nl_msg_add_buffer(req, IFLA_ADDRESS, (char *)veth1_mac, 6))
+	if (nl_msg_add_buffer(req, IFLA_ADDRESS, (char *)veth1_mac, MAC_ADDR_LEN))
 		goto msg_err;
 
 	/* Send request message and wait for the response message */
@@ -497,7 +497,7 @@ msg_err:
 }
 
 static c_net_interface_t *
-c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_mac[6],
+c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_mac[MAC_ADDR_LEN],
 		    bool configure)
 {
 	ASSERT(if_name);
@@ -505,7 +505,7 @@ c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_ma
 	c_net_interface_t *ni = mem_new0(c_net_interface_t, 1);
 	ni->nw_name = mem_strdup(if_name);
 	ni->nw_name_cmld = root_if_name ? mem_strdup(root_if_name) : NULL;
-	memcpy(ni->veth_mac, if_mac, 6);
+	memcpy(ni->veth_mac, if_mac, MAC_ADDR_LEN);
 	ni->configure = configure;
 	ni->cont_offset = -1;
 	ni->created = false;
@@ -559,8 +559,8 @@ c_net_bridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 		goto err;
 	}
 
-	uint8_t veth_mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-	if (file_read("/dev/urandom", (char *)veth_mac, 6) < 0) {
+	uint8_t veth_mac[MAC_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+	if (file_read("/dev/urandom", (char *)veth_mac, MAC_ADDR_LEN) < 0) {
 		WARN_ERRNO("Failed to read from /dev/urandom");
 	}
 	// sanitize mac veth otherwise kernel may reject the mac
@@ -696,7 +696,7 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 	bool c_net_internal = (NULL != list_find(net->pnet_mv_list, pnet_cfg));
 	pid_t pid = container_get_pid(net->container);
 
-	uint8_t if_mac[6];
+	uint8_t if_mac[MAC_ADDR_LEN];
 	char *if_name = (network_str_to_mac_addr(pnet_cfg->pnet_name, if_mac) != -1) ?
 				network_get_ifname_by_addr_new(if_mac) :
 				mem_strdup(pnet_cfg->pnet_name);
@@ -736,6 +736,29 @@ err:
 }
 
 /**
+ * Resolves a pnet_name (MAC string or kernel name) to the current kernel
+ * interface name. First tries the root namespace, then falls back to
+ * the given container namespace identified by pid.
+ *
+ * @return newly allocated interface name, or NULL if not found
+ */
+static char *
+c_net_resolve_ifname_in_ns_new(const char *pnet_name, pid_t ns_pid)
+{
+	ASSERT(pnet_name);
+
+	uint8_t mac[MAC_ADDR_LEN];
+	if (network_str_to_mac_addr(pnet_name, mac) != -1) {
+		char *if_name = network_get_ifname_by_addr_new(mac);
+		if (!if_name && ns_pid > 0)
+			if_name = network_get_ifname_by_mac_in_ns_new(mac, ns_pid);
+		return if_name;
+	}
+
+	return NULL;
+}
+
+/**
  * This function removes the network interface from the corresponding net
  * namespace of a container, according to the name or mac address.
  */
@@ -750,24 +773,19 @@ c_net_remove_interface(void *netp, const char *if_name_mac)
 	container_pnet_cfg_t *cfg = NULL;
 	pid_t pid = container_get_pid(net->container);
 
-	uint8_t if_mac[6];
-	char *if_name = (network_str_to_mac_addr(if_name_mac, if_mac) != -1) ?
-				network_get_ifname_by_addr_new(if_mac) :
-				mem_strdup(if_name_mac);
-
+	char *if_name = c_net_resolve_ifname_in_ns_new(if_name_mac, pid);
 	IF_NULL_RETVAL(if_name, -1);
 
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
-		container_pnet_cfg_t *_cfg = l->data;
-		char *_if_name = (network_str_to_mac_addr(_cfg->pnet_name, if_mac) != -1) ?
-					 network_get_ifname_by_addr_new(if_mac) :
-					 mem_strdup(_cfg->pnet_name);
-		if (strcmp(if_name, _if_name)) {
-			cfg = _cfg;
-			mem_free0(_if_name);
+		container_pnet_cfg_t *iter_cfg = l->data;
+		char *resolved_name = c_net_resolve_ifname_in_ns_new(iter_cfg->pnet_name, pid);
+
+		if (resolved_name && !strcmp(if_name, resolved_name)) {
+			cfg = iter_cfg;
+			mem_free0(resolved_name);
 			break;
 		}
-		mem_free0(_if_name);
+		mem_free0(resolved_name);
 	}
 
 	if (NULL == cfg) {
@@ -817,8 +835,8 @@ c_net_new(compartment_t *compartment)
 	// add cml interface as uplink for cmld through c0
 	if (container_uuid_is_c0id(container_get_uuid(net->container))) {
 		INFO("Generating uplink veth %s", CML_UPLINK_INTERFACE_NAME);
-		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-		if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+		uint8_t mac[MAC_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+		if (file_read("/dev/urandom", (char *)mac, MAC_ADDR_LEN) < 0) {
 			WARN_ERRNO("Failed to read from /dev/urandom");
 		}
 		mac[0] &= 0xfe; /* clear multicast bit */
@@ -840,7 +858,10 @@ c_net_new(compartment_t *compartment)
 		TRACE("new c_net_interface_t struct %s was allocated", ni->nw_name);
 	}
 
-	uint8_t mac[6];
+	container_t *c0 = cmld_containers_get_c0();
+	bool c0_is_up = (c0 && container_is_stoppable(c0));
+
+	uint8_t mac[MAC_ADDR_LEN];
 	for (list_t *l = container_get_pnet_cfg_list(net->container); l; l = l->next) {
 		container_pnet_cfg_t *pnet_cfg = l->data;
 		// deep copy for internal list and hotplugging
@@ -849,10 +870,20 @@ c_net_new(compartment_t *compartment)
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
 		TRACE("mv_name_list add ifname %s", if_name_macstr);
-		mem_memset(&mac, 0, 6);
+		mem_memset(&mac, 0, MAC_ADDR_LEN);
 		// check if string is mac address
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
+
+			if (c0_is_up && (c0 != net->container)) {
+				if (!container_is_iface_in_config(c0, if_name_macstr)) {
+					INFO("Container created. Removing former implicitly assigned interface %s from core container",
+					     if_name_macstr);
+
+					container_remove_net_interface(c0, if_name_macstr);
+				}
+			}
+
 			// register at hotplug subsys
 			if (-1 == hotplug_register_netdev(net->container, pnet_cfg_mv)) {
 				WARN("Could not register Interface for moving");
@@ -1108,7 +1139,7 @@ c_net_start_post_clone(void *netp)
 		}
 	}
 
-	/* move or bridge phys network intrefaces to container */
+	/* move or bridge phys network interfaces to container */
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
 		if (c_net_add_interface(net, cfg) < 0)
@@ -1511,8 +1542,8 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		}
 	}
 
-	/* remove phys network intrefaces from container */
-	uint8_t if_mac[6];
+	/* remove phys network interfaces from container */
+	uint8_t if_mac[MAC_ADDR_LEN];
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
 		if (!cfg->mac_filter) { // skip directly moved if will fallback to rootns
@@ -1630,11 +1661,64 @@ c_net_join_netns(void *netp)
 	return 0;
 }
 
+/**
+ * Move interfaces back to core container (c0) on destroy, but only if no
+ * other service container has the interface in its config. If another
+ * container claims it, leave it in root namespace so it can be picked up
+ * directly when that container starts.
+ */
+static void
+c_net_destroy(void *netp)
+{
+	c_net_t *net = netp;
+	ASSERT(net);
+
+	container_t *c0 = cmld_containers_get_c0();
+
+	bool c0_is_running = (c0 && container_is_stoppable(c0));
+	IF_FALSE_RETURN(c0_is_running && (net->container != c0));
+
+	list_t *pnet_list = container_get_pnet_cfg_list(net->container);
+	for (list_t *l = pnet_list; l; l = l->next) {
+		container_pnet_cfg_t *cfg = l->data;
+
+		/*
+		 * Check if another service container has this interface
+		 * in its config. If so, leave it in root ns.
+		 */
+		bool iface_explicitly_assigned = false;
+		for (int i = 0; i < cmld_containers_get_count(); i++) {
+			container_t *c = cmld_container_get_by_index(i);
+			if (c == net->container || c == c0)
+				continue;
+			if (container_is_iface_in_config(c, cfg->pnet_name)) {
+				iface_explicitly_assigned = true;
+				break;
+			}
+		}
+
+		if (iface_explicitly_assigned) {
+			INFO("Container destroyed. Interface %s claimed by another "
+			     "container, leaving in root namespace",
+			     cfg->pnet_name);
+			continue;
+		}
+
+		INFO("Container destroyed. Moving interface %s to core container", cfg->pnet_name);
+		container_pnet_cfg_t *c0_cfg = container_pnet_cfg_new(cfg->pnet_name, false, NULL);
+
+		if (container_add_net_interface(c0, c0_cfg) < 0) {
+			WARN("Failed to add interface %s to core container", cfg->pnet_name);
+			container_pnet_cfg_free(c0_cfg);
+		}
+	}
+}
+
 static compartment_module_t c_net_module = {
 	.name = MOD_NAME,
 	.compartment_new = c_net_new,
 	.compartment_free = c_net_free,
-	.compartment_destroy = NULL,
+	.compartment_destroy = c_net_destroy,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_net_start_pre_clone,

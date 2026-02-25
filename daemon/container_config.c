@@ -407,7 +407,7 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 				     config->cfg->net_ifaces[i]->netif,
 				     config->cfg->net_ifaces[i]->mac_filter[j]);
 
-				uint8_t *whitelisted_mac = mem_new(uint8_t, 6);
+				uint8_t *whitelisted_mac = mem_new(uint8_t, MAC_ADDR_LEN);
 				if (0 != network_str_to_mac_addr(
 						 config->cfg->net_ifaces[i]->mac_filter[j],
 						 whitelisted_mac)) {
@@ -563,10 +563,10 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 
 	list_t *if_cfg_list = NULL;
 	for (size_t i = 0; i < config->cfg->n_vnet_configs; ++i) {
-		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+		uint8_t mac[MAC_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
 		if (config->cfg->vnet_configs[i]->if_mac == NULL) {
 			INFO("Generating new mac for if %s", config->cfg->vnet_configs[i]->if_name);
-			if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+			if (file_read("/dev/urandom", (char *)mac, MAC_ADDR_LEN) < 0) {
 				WARN_ERRNO("Failed to read from /dev/urandom");
 			}
 			config->cfg->vnet_configs[i]->if_mac = network_mac_addr_to_str_new(mac);
@@ -593,8 +593,8 @@ container_config_get_vnet_cfg_list_new(const container_config_t *config)
 		nw_name_list = list_append(nw_name_list, C_CONFIG_DEFAULT_VETH_NAME);
 		for (list_t *l = nw_name_list; l != NULL; l = l->next) {
 			char *if_name = l->data;
-			uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-			if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+			uint8_t mac[MAC_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+			if (file_read("/dev/urandom", (char *)mac, MAC_ADDR_LEN) < 0) {
 				WARN_ERRNO("Failed to read from /dev/urandom");
 			}
 			mac[0] &= 0xfe; /* clear multicast bit */
