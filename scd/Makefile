@@ -28,7 +28,8 @@ SANITIZERS ?= n
 WCAST_ALIGN ?= y
 SCHSM ?= n
 BNSE ?= n
-SYSTEMD ?= n
+# SYSTEMD-flag in the scd is deprecated and should not be used anymore; Will be removed in the future; 
+SYSTEMD = n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
