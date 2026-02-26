@@ -517,7 +517,7 @@ err:
 
 static token_err_t
 provision_auth_code(usbtoken_t *token, const char *tpin, const char *newpass,
-		    unsigned char *pairing_secret, size_t pairing_sec_len)
+		    const unsigned char *pairing_secret, size_t pairing_sec_len)
 {
 	TRACE("USBTOKEN: provision_auth_code");
 
@@ -578,7 +578,7 @@ out:
 
 static token_err_t
 change_user_pin(usbtoken_t *token, const char *oldpass, const char *newpass,
-		unsigned char *pairing_secret, size_t pairing_sec_len)
+		const unsigned char *pairing_secret, size_t pairing_sec_len)
 {
 	TRACE("USBTOKEN: change_user_pin");
 
@@ -633,7 +633,7 @@ out:
 
 token_err_t
 usbtoken_change_passphrase(void *int_token, const char *oldpass, const char *newpass,
-			   unsigned char *pairing_secret, size_t pairing_sec_len,
+			   const unsigned char *pairing_secret, size_t pairing_sec_len,
 			   bool is_provisioning)
 {
 	TRACE("USBTOKEN: usbtoken_change_passphrase");
@@ -701,8 +701,8 @@ usbtoken_free(void *int_token)
  * Wraps the plain key.
  */
 token_err_t
-usbtoken_wrap_key(void *int_token, char *label, unsigned char *plain_key, size_t plain_key_len,
-		  unsigned char **wrapped_key, int *wrapped_key_len)
+usbtoken_wrap_key(void *int_token, const char *label, unsigned char *plain_key,
+		  size_t plain_key_len, unsigned char **wrapped_key, int *wrapped_key_len)
 {
 	TRACE("USBTOKEN: usbtoken_wrap_key");
 
@@ -747,7 +747,7 @@ out:
 }
 
 token_err_t
-usbtoken_unwrap_key(void *int_token, char *label, unsigned char *wrapped_key,
+usbtoken_unwrap_key(void *int_token, const char *label, unsigned char *wrapped_key,
 		    size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len)
 {
 	TRACE("USBTOKEN: usbtoken_unwrap_key");
@@ -794,7 +794,7 @@ out:
 }
 
 token_err_t
-usbtoken_unlock(void *int_token, char *passwd, unsigned char *pairing_secret,
+usbtoken_unlock(void *int_token, const char *passwd, const unsigned char *pairing_secret,
 		size_t pairing_sec_len)
 {
 	TRACE("USBTOKEN: usbtoken_unlock");
