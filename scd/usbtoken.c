@@ -735,6 +735,7 @@ usbtoken_wrap_key(void *int_token, char *label, unsigned char *plain_key, size_t
 
 	const unsigned char *kek = key;
 	rc = ssl_wrap_key_sym(kek, plain_key, plain_key_len, wrapped_key, wrapped_key_len);
+	mem_memset0(key, sizeof(key));
 
 	if (0 != rc) {
 		ERROR("ssl_wrap_key_sym failed");
@@ -780,6 +781,7 @@ usbtoken_unwrap_key(void *int_token, char *label, unsigned char *wrapped_key,
 
 	const unsigned char *kek = key;
 	rc = ssl_unwrap_key_sym(kek, wrapped_key, wrapped_key_len, plain_key, plain_key_len);
+	mem_memset0(key, sizeof(key));
 
 	if (0 != rc) {
 		ERROR("ssl_unwrap_key_sym failed");
