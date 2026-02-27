@@ -939,6 +939,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG) ||
+	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM) ||
 #ifdef CC_MODE_EXPERIMENTAL
 	      /* Warning!! Needed logfile encryption for this feature to be safe is not
 	       * yet implemented!
@@ -998,6 +999,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
