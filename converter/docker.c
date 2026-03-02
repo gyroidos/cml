@@ -238,15 +238,15 @@ docker_parse_config_new(const char *raw_file_buffer)
 	cJSON *jconfig = cJSON_GetObjectItem(jroot, "config");
 
 	cJSON *jhostname = cJSON_GetObjectItem(jconfig, "Hostname");
-	if (jhostname->type == cJSON_String)
+	if (jhostname && jhostname->type == cJSON_String)
 		config->hostname = mem_strdup(jhostname->valuestring);
 
 	cJSON *jdomainname = cJSON_GetObjectItem(jconfig, "Domainname");
-	if (jdomainname->type == cJSON_String)
+	if (jdomainname && jdomainname->type == cJSON_String)
 		config->domainname = mem_strdup(jdomainname->valuestring);
 
 	cJSON *juser = cJSON_GetObjectItem(jconfig, "User");
-	if (juser->type == cJSON_String)
+	if (juser && juser->type == cJSON_String)
 		config->user = mem_strdup(juser->valuestring);
 
 	if (cJSON_GetObjectItem(jconfig, "ExposedPorts")) {
