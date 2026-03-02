@@ -567,3 +567,22 @@ docker_download_image(char *curl_token, const docker_manifest_t *manifest, const
 	INFO("Download image %s:%s completed!", image_name, image_tag);
 	return 0;
 }
+
+const char *
+docker_get_arch(const char *uts_machine)
+{
+	if (!strcmp(uts_machine, "x86_64")) {
+		return "amd64";
+	} else if (!strcmp(uts_machine, "arm")) {
+		return "arm";
+	} else if (!strcmp(uts_machine, "aarch64")) {
+		return "arm64";
+	} else if (!strcmp(uts_machine, "riscv")) {
+		return "riscv";
+	} else if (!strcmp(uts_machine, "riscv64")) {
+		return "riscv64";
+	} else {
+		ERROR("Cannot map machine %s to a supported architecture.", uts_machine);
+		return NULL;
+	}
+}

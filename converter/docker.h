@@ -113,4 +113,7 @@ docker_generate_basic_auth(const char *user, const char *password, const char *t
 char *
 docker_get_curl_token_new(char *image_name, char *token_file);
 
+const char *
+docker_get_arch(const char *uts_machine);
+
 #endif /* DOCKER_H */
