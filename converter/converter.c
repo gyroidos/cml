@@ -50,6 +50,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <sys/utsname.h>
 
 #define BUF_SIZE 10 * 4096
 
@@ -62,10 +63,31 @@
 #define SSIG_CERT_FILE UTIL_PKI_PATH "dockerlocal-ssig.cert"
 #define LOCALCA_CERT_FILE UTIL_PKI_PATH "ssig_rootca.cert"
 
-#define SYSTEM_ARCH "x86" // TODO get this from running system
 #define WWW_ROOT "/www/pages/operatingsystems"
 #define TMP_OS_IMAGES_PREFIX "/tmp/operatingsystems/"
-#define WWW_OS_IMAGES_DIR TMP_OS_IMAGES_PREFIX SYSTEM_ARCH
+
+static const char *
+hardware_get_name(void)
+{
+	struct utsname buf;
+
+	uname(&buf);
+
+	if (!strncmp(buf.machine, "x86_64", sizeof(buf.machine))) {
+		return "x86";
+	} else if (!strncmp(buf.machine, "arm", sizeof(buf.machine))) {
+		return "arm";
+	} else if (!strncmp(buf.machine, "aarch64", sizeof(buf.machine))) {
+		return "arm";
+	} else if (!strncmp(buf.machine, "riscv", sizeof(buf.machine))) {
+		return "riscv";
+	} else if (!strncmp(buf.machine, "riscv64", sizeof(buf.machine))) {
+		return "riscv";
+	} else {
+		ERROR("Cannot map machine %s to a supported architecture.", buf.machine);
+		return NULL;
+	}
+}
 
 static char *
 get_ifname_ip_new(const char *ifname)
@@ -107,10 +129,12 @@ write_guestos_config(docker_config_t *config, const char *root_image_file, const
 
 	GuestOSConfig cfg = GUEST_OSCONFIG__INIT;
 
+	IF_FALSE_RETVAL(hardware_get_name(), -1);
+
 	cfg.name = mem_printf("%s_%s", image_name, image_tag);
 
 	cfg.upstream_version = mem_strdup(image_tag);
-	cfg.hardware = "x86";
+	cfg.hardware = mem_strdup(hardware_get_name());
 	cfg.version = (int)time(NULL);
 
 	image_path_unversioned = mem_printf("%s/%s_%s", image_path, image_name, image_tag);
@@ -218,13 +242,22 @@ write_guestos_config(docker_config_t *config, const char *root_image_file, const
 			WARN("Could not copy Certificate to %s", out_cert_file);
 	}
 
-	if (dir_mkdir_p(WWW_OS_IMAGES_DIR, 0755))
+	char *www_os_images_dir = mem_printf("%s/%s", TMP_OS_IMAGES_PREFIX, cfg.hardware);
+	if (dir_mkdir_p(www_os_images_dir, 0755)) {
 		ERROR_ERRNO("Can't create folder for hosting image files");
+		ret = -1;
+		mem_free0(www_os_images_dir);
+		goto free_stuff;
+	}
 
-	if (symlink(TMP_OS_IMAGES_PREFIX, WWW_ROOT) < 0 && errno != EEXIST)
+	if (symlink(TMP_OS_IMAGES_PREFIX, WWW_ROOT) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Can't symlink %s foder to %s", TMP_OS_IMAGES_PREFIX, WWW_ROOT);
+		ret = -1;
+		mem_free0(www_os_images_dir);
+		goto free_stuff;
+	}
 
-	out_www_image_path_versioned = mem_printf("%s/%s_%s-%" PRId64, WWW_OS_IMAGES_DIR,
+	out_www_image_path_versioned = mem_printf("%s/%s_%s-%" PRId64, www_os_images_dir,
 						  image_name, image_tag, cfg.version);
 
 	if (rename(image_path_unversioned, out_www_image_path_versioned) < 0)
@@ -236,6 +269,7 @@ write_guestos_config(docker_config_t *config, const char *root_image_file, const
 	mem_free0(out_sig_file);
 	mem_free0(out_cert_file);
 	mem_free0(out_www_image_path_versioned);
+	mem_free0(www_os_images_dir);
 
 free_stuff:
 	for (uint32_t j = 0; j < cfg.n_mounts; ++j) {
@@ -249,6 +283,7 @@ free_stuff:
 		}
 	}
 	mem_free0(cfg.name);
+	mem_free0(cfg.hardware);
 	mem_free0(cfg.upstream_version);
 	mem_free0(cfg.mounts);
 	mem_free0(description.en);
@@ -334,8 +369,7 @@ main(UNUSED int argc, char **argv)
 	char *manifest_list_file = NULL;
 	char *image_tag = NULL;
 	char *image_name = NULL;
-	;
-	char *image_arch = NULL;
+	const char *image_arch = NULL;
 
 	char *config_file_name = NULL;
 	docker_config_t *config = NULL;
@@ -359,6 +393,9 @@ main(UNUSED int argc, char **argv)
 	if (optind >= argc)
 		print_usage(argv[0]);
 
+	struct utsname uname_buf;
+	uname(&uname_buf);
+
 	const char *command = argv[optind++];
 	if (!strcasecmp(command, "pull")) {
 		optind--;
@@ -366,7 +403,7 @@ main(UNUSED int argc, char **argv)
 		int pull_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		const char *url = "registry-1.docker.io";
-		image_arch = "amd64";
+		image_arch = docker_get_arch(uname_buf.machine);
 		image_tag = "latest";
 		for (int c, option_index = 0;
 		     -1 != (c = getopt_long(pull_argc, pull_argv, "t:r:a:", pull_options,
