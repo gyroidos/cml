@@ -516,10 +516,10 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
-	const char *const argv_bearer[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_bearer,
-					    url,       "-o",   out_file,     NULL };
-	const char *const argv_basic[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_basic,
-					   url,	      "-o",   out_file,	    NULL };
+	const char *const argv_bearer[] = { CURL_PATH, "-fSL", "-H",	 auth_bearer,
+					    url,       "-o",   out_file, NULL };
+	const char *const argv_basic[] = { CURL_PATH, "-fSL", "-H",	auth_basic,
+					   url,	      "-o",   out_file, NULL };
 
 	ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0)
