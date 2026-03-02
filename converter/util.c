@@ -145,8 +145,20 @@ util_squash_image(const char *dir, const char *image_file)
 int
 util_sign_guestos(const char *sig_file, const char *cfg_file, const char *key_file)
 {
-	const char *const argv[] = { OPENSSLBIN_PATH, "dgst",	"-sha512", "-sign", key_file,
-				     "-out",	      sig_file, cfg_file,  NULL };
+	const char *const argv[] = { OPENSSLBIN_PATH,
+				     "dgst",
+				     "-sha512",
+				     "-sign",
+				     key_file,
+				     "-sigopt",
+				     "rsa_padding_mode:pss",
+				     "-sigopt",
+				     "rsa_pss_saltlen:-1",
+				     "-out",
+				     sig_file,
+				     cfg_file,
+				     NULL };
+
 	return proc_fork_and_execvp(argv);
 }
 
