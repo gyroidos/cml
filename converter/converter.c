@@ -59,8 +59,8 @@
 #define MIN_INIT "/sbin/cservice"
 #define FILE_SERVER_ETH "eth0"
 
-#define SSIG_KEY_FILE UTIL_PKI_PATH "dockerlocal-ssig.key"
-#define SSIG_CERT_FILE UTIL_PKI_PATH "dockerlocal-ssig.cert"
+#define SSIG_KEY_FILE UTIL_PKI_PATH "dockerlocal-ssig_cml.key"
+#define SSIG_CERT_FILE UTIL_PKI_PATH "dockerlocal-ssig_cml.cert"
 #define LOCALCA_CERT_FILE UTIL_PKI_PATH "ssig_rootca.cert"
 
 #define WWW_ROOT "/www/pages/operatingsystems"
