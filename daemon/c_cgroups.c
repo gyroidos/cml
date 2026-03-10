@@ -173,8 +173,8 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 
 	//"c 4:0 rwm", // tty0
 
-	/* alternate tty devices - seem to be necessary for android logwrapper */
-	//"c 5:0 rwm", // tty
+	/* alternate tty devices */
+	"c 5:0 rwm", // tty (current process controlling tty necessary for passwd)
 	//"c 5:1 rwm", // console
 	"c 5:2 rwm", // ptmx
 
