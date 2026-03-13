@@ -1661,64 +1661,11 @@ c_net_join_netns(void *netp)
 	return 0;
 }
 
-/**
- * Move interfaces back to core container (c0) on destroy, but only if no
- * other service container has the interface in its config. If another
- * container claims it, leave it in root namespace so it can be picked up
- * directly when that container starts.
- */
-static void
-c_net_destroy(void *netp)
-{
-	c_net_t *net = netp;
-	ASSERT(net);
-
-	container_t *c0 = cmld_containers_get_c0();
-
-	bool c0_is_running = (c0 && container_is_stoppable(c0));
-	IF_FALSE_RETURN(c0_is_running && (net->container != c0));
-
-	list_t *pnet_list = container_get_pnet_cfg_list(net->container);
-	for (list_t *l = pnet_list; l; l = l->next) {
-		container_pnet_cfg_t *cfg = l->data;
-
-		/*
-		 * Check if another service container has this interface
-		 * in its config. If so, leave it in root ns.
-		 */
-		bool iface_explicitly_assigned = false;
-		for (int i = 0; i < cmld_containers_get_count(); i++) {
-			container_t *c = cmld_container_get_by_index(i);
-			if (c == net->container || c == c0)
-				continue;
-			if (container_is_iface_in_config(c, cfg->pnet_name)) {
-				iface_explicitly_assigned = true;
-				break;
-			}
-		}
-
-		if (iface_explicitly_assigned) {
-			INFO("Container destroyed. Interface %s claimed by another "
-			     "container, leaving in root namespace",
-			     cfg->pnet_name);
-			continue;
-		}
-
-		INFO("Container destroyed. Moving interface %s to core container", cfg->pnet_name);
-		container_pnet_cfg_t *c0_cfg = container_pnet_cfg_new(cfg->pnet_name, false, NULL);
-
-		if (container_add_net_interface(c0, c0_cfg) < 0) {
-			WARN("Failed to add interface %s to core container", cfg->pnet_name);
-			container_pnet_cfg_free(c0_cfg);
-		}
-	}
-}
-
 static compartment_module_t c_net_module = {
 	.name = MOD_NAME,
 	.compartment_new = c_net_new,
 	.compartment_free = c_net_free,
-	.compartment_destroy = c_net_destroy,
+	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = c_net_start_pre_clone,
