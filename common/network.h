@@ -206,7 +206,9 @@ list_t *
 network_get_interfaces_new(void);
 
 /*
- * Generates a list containing names of all available physical network interfaces
+ * Generates a list containing MAC address strings of all available physical
+ * network interfaces. Each entry is a newly allocated string in the format
+ * "xx:xx:xx:xx:xx:xx".
  */
 list_t *
 network_get_physical_interfaces_new(void);
@@ -269,7 +271,7 @@ network_mac_addr_to_str_new(uint8_t mac[MAC_ADDR_LEN]);
  * Walk through sysfs to find the if name, e.g., shown by ip addr, to the corresponding
  * hardware (mac) address.
  * @param mac array containing the mac address
- * @return The name of the interface
+ * @return The name of the interface, NULL if not found.
  */
 char *
 network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN]);
