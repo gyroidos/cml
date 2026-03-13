@@ -1180,6 +1180,57 @@ c_net_start_post_clone(void *netp)
 			return -COMPARTMENT_ERROR_NET;
 	}
 
+	/* Retry claiming interfaces registered with hotplug but not added to
+	 * pnet_mv_list during c_net_new. This handles config update races where
+	 * the interface returns to root ns (and the phys list) after c_net_new
+	 * already ran but before the container starts. */
+	if (cmld_containers_get_c0() != net->container) {
+		for (list_t *l = net->hotplug_registered_mac_list; l; l = l->next) {
+			uint8_t *mac = l->data;
+			char *mac_str = network_mac_addr_to_str_new(mac);
+
+			/* Skip if already claimed in pnet_mv_list */
+			bool already_claimed = false;
+			for (list_t *m = net->pnet_mv_list; m; m = m->next) {
+				container_pnet_cfg_t *cfg = m->data;
+				if (!strcmp(cfg->pnet_name, mac_str)) {
+					already_claimed = true;
+					break;
+				}
+			}
+			if (already_claimed) {
+				mem_free0(mac_str);
+				continue;
+			}
+
+			/* Look up mac_filter/mac_whitelist from container config */
+			container_pnet_cfg_t *pnet_cfg = NULL;
+			for (list_t *cl = container_get_pnet_cfg_list(net->container); cl;
+			     cl = cl->next) {
+				container_pnet_cfg_t *orig = cl->data;
+				if (!strcmp(orig->pnet_name, mac_str)) {
+					pnet_cfg = container_pnet_cfg_new(mac_str, orig->mac_filter,
+									  orig->mac_whitelist);
+					break;
+				}
+			}
+			if (!pnet_cfg)
+				pnet_cfg = container_pnet_cfg_new(mac_str, false, NULL);
+
+			INFO("Retry claiming interface %s for container %s", mac_str,
+			     container_get_name(net->container));
+
+			if (c_net_add_interface(net, pnet_cfg) < 0) {
+				WARN("Could not claim interface %s during retry, "
+				     "may not be available yet",
+				     mac_str);
+				container_pnet_cfg_free(pnet_cfg);
+			}
+
+			mem_free0(mac_str);
+		}
+	}
+
 	// nothing to be configured
 	if (NULL == net->interface_list)
 		return 0;
