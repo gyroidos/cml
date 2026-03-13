@@ -265,7 +265,7 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN]);
  * @return The string representing the mac, NULL on error
  */
 char *
-network_mac_addr_to_str_new(uint8_t mac[MAC_ADDR_LEN]);
+network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN]);
 
 /**
  * Walk through sysfs to find the if name, e.g., shown by ip addr, to the corresponding

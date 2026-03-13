@@ -1053,7 +1053,7 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN])
 }
 
 char *
-network_mac_addr_to_str_new(uint8_t mac[MAC_ADDR_LEN])
+network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN])
 {
 	return mem_printf("%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
 			  ":%02" SCNx8,
