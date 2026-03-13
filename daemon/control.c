@@ -1587,9 +1587,20 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			TRACE("Update: Reloading container %s from %s",
 			      uuid_string(container_get_uuid(container)),
 			      cmld_get_containers_dir());
-			if (!cmld_reload_container(container_get_uuid(container),
-						   cmld_get_containers_dir())) {
+			container_t *reloaded = cmld_reload_container(container_get_uuid(container),
+								      cmld_get_containers_dir());
+			if (!reloaded) {
 				ERROR("Failed to reload container on config update");
+			} else if (reloaded != container) {
+				/* 
+				 * cmld_reload_container registered a deferred free via
+				 * container_finish_observers, but that callback only fires
+				 * at the end of compartment_notify_observers(). Since we're
+				 * not inside an observer iteration (container is already
+				 * stopped), the callback will never be invoked. Free the
+				 * old container explicitly.
+				 */
+				container_free(container);
 			}
 		}
 
