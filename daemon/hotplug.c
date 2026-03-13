@@ -463,5 +463,26 @@ hotplug_unregister_netdev(container_t *container, uint8_t mac[MAC_ADDR_LEN])
 	hotplug_container_netdev_mapping_free(mapping_to_remove);
 	mem_free0(macstr);
 
+	/*
+	 * If the NIC is in root ns, add to phys available list synchronously and
+	 * trigger a uevent so it gets reassigned (e.g., to c0).
+	 * The synchronous add is needed because during config updates, the
+	 * replacement container's c_net_start_post_clone may run before the
+	 * retriggered uevent is processed by the event loop.
+	 */
+	char *if_name = network_get_ifname_by_addr_new(mac);
+	if (if_name) {
+		char *uevent_path = mem_printf("/sys/class/net/%s/uevent", if_name);
+		if (file_exists(uevent_path)) {
+			if (-1 == file_printf(uevent_path, "add")) {
+				WARN("Could not retrigger uevent for %s", if_name);
+			} else {
+				DEBUG("Retriggered uevent for unregistered netdev %s", if_name);
+			}
+		}
+		mem_free0(uevent_path);
+		mem_free0(if_name);
+	}
+
 	return 0;
 }
