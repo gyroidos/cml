@@ -463,5 +463,22 @@ hotplug_unregister_netdev(container_t *container, uint8_t mac[MAC_ADDR_LEN])
 	hotplug_container_netdev_mapping_free(mapping_to_remove);
 	mem_free0(macstr);
 
+	// If the NIC is in root ns, trigger a uevent so it gets reassigned (e.g., to c0)
+	// This is needed for the case where a stopped service container is removed.
+	// Without the retriggered uevent the interface won't be added to c0.
+	char *if_name = network_get_ifname_by_addr_new(mac);
+	if (if_name) {
+		char *uevent_path = mem_printf("/sys/class/net/%s/uevent", if_name);
+		if (file_exists(uevent_path)) {
+			if (-1 == file_printf(uevent_path, "add")) {
+				WARN("Could not retrigger uevent for %s", if_name);
+			} else {
+				DEBUG("Retriggered uevent for unregistered netdev %s", if_name);
+			}
+		}
+		mem_free0(uevent_path);
+		mem_free0(if_name);
+	}
+
 	return 0;
 }
