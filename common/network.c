@@ -811,13 +811,24 @@ network_get_physical_interfaces_new()
 
 	IF_NULL_RETVAL_ERROR_ERRNO(if_ni, NULL);
 
-	list_t *if_name_list = NULL;
+	list_t *if_mac_list = NULL;
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
 		if (file_exists(dev_drv_path) && i->if_name != NULL) {
-			DEBUG("Adding %s to the physical device list", i->if_name);
-			if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+			uint8_t mac[MAC_ADDR_LEN];
+			if (network_get_mac_by_ifname(i->if_name, mac) == 0) {
+				char *mac_str = network_mac_addr_to_str_new(mac);
+				DEBUG("Adding %s (mac: %s) to the physical device list", i->if_name,
+				      mac_str);
+				mem_free0(mac_str);
+				if_mac_list = list_append(if_mac_list,
+							  mem_memcpy((const unsigned char *)mac,
+								     MAC_ADDR_LEN));
+			} else {
+				WARN("Could not get MAC for physical interface %s, skipping",
+				     i->if_name);
+			}
 		} else if (file_exists(dev_drv_path)) {
 			DEBUG("Skipping unnamed network interface with index %d", i->if_index);
 		} else {
@@ -826,7 +837,7 @@ network_get_physical_interfaces_new()
 		mem_free0(dev_drv_path);
 	}
 	if_freenameindex(if_ni);
-	return if_name_list;
+	return if_mac_list;
 }
 
 /**
