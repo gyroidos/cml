@@ -570,6 +570,9 @@ cmld_containers_add(container_t *container)
 	cmld_containers_list = list_append(cmld_containers_list, container);
 }
 
+static container_t *
+cmld_reload_container_internal(const uuid_t *uuid, const char *path, container_callback_t *cb);
+
 /*
  * This callback handles config updates during container start/stop cycle
  */
@@ -590,7 +593,7 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 	container_unregister_observer(container, cb);
 	DEBUG("Container is out of sync with its config. Reloading..");
 
-	if (!cmld_reload_container(c_uuid, cmld_get_containers_dir())) {
+	if (!cmld_reload_container_internal(c_uuid, cmld_get_containers_dir(), cb)) {
 		ERROR("Failed to reload container on config update");
 		audit_log_event(c_uuid, FSA, CMLD, CONTAINER_MGMT, "reload", uuid_string(c_uuid),
 				0);
@@ -610,8 +613,8 @@ cmld_container_delayed_free(void *data)
 	container_free(container);
 }
 
-container_t *
-cmld_reload_container(const uuid_t *uuid, const char *path)
+static container_t *
+cmld_reload_container_internal(const uuid_t *uuid, const char *path, container_callback_t *cb)
 {
 	ASSERT(uuid);
 	ASSERT(path);
@@ -643,8 +646,13 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 		      container_get_name(c_current));
 
 		cmld_containers_list = list_remove(cmld_containers_list, c_current);
-		// delayed free to allow all observers to finish up
-		container_finish_observers(c_current, cmld_container_delayed_free, c_current);
+		if (cb) {
+			// delayed free to allow all observers to finish up
+			container_finish_observers(c_current, cmld_container_delayed_free,
+						   c_current);
+		} else {
+			container_free(c_current);
+		}
 	}
 
 	DEBUG("Loaded config for container %s", container_get_name(c));
@@ -666,6 +674,12 @@ cleanup:
 	mem_free0(uuid_tmp);
 
 	return c;
+}
+
+container_t *
+cmld_reload_container(const uuid_t *uuid, const char *path)
+{
+	return cmld_reload_container_internal(uuid, path, NULL);
 }
 
 static int
