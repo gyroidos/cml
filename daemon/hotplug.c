@@ -607,6 +607,7 @@ hotplug_unregister_netdev(container_t *container, uint8_t mac[MAC_ADDR_LEN])
 	 */
 	char *if_name = network_get_ifname_by_addr_new(mac);
 	if (if_name) {
+		cmld_netif_phys_add_by_mac(mac);
 		char *uevent_path = mem_printf("/sys/class/net/%s/uevent", if_name);
 		if (file_exists(uevent_path)) {
 			if (-1 == file_printf(uevent_path, "add")) {
