@@ -312,34 +312,36 @@ cmld_guestos_delete(const char *guestos_name);
 
 /**
  * Returns the list of currently available physical network interfaces
- * not occupied by an application container. Used to assign theses
- * interfaces to c0 in case of c0 uses a private network namespace.
+ * not occupied by an application container, as MAC address byte arrays.
+ * Used to assign these interfaces to c0 in case of c0 uses a private
+ * network namespace.
  */
 list_t *
 cmld_get_netif_phys_list(void);
 
 /**
- * Removes the interface from cmld's list of available physical network
- * interfaces. This is used during container config phases, where network
- * interfaces are assigned directly to a container. The remaining physical
- * interfaces are then assigned to the first privileged container with a
- * private network namespace (usually c0).
+ * Removes the interface identified by MAC address string from cmld's
+ * list of available physical network interfaces. This is used during
+ * container config phases, where network interfaces are assigned
+ * directly to a container. The remaining physical interfaces are then
+ * assigned to the first privileged container with a private network
+ * namespace (usually c0).
  *
- * @param if_name name of the interface which should be removed.
+ * @param mac MAC address byte array.
  * @return true if iface was available and removed, false otherwise.
  */
 bool
-cmld_netif_phys_remove_by_name(const char *if_name);
+cmld_netif_phys_remove_by_mac(const uint8_t mac[MAC_ADDR_LEN]);
 
 /**
- * Adds the given interface to cmld's list of available physical network
- * interfaces. This is used during runtime if a container releases its
- * assignment.
+ * Adds the given interface identified by MAC address to cmld's
+ * list of available physical network interfaces. This is used during
+ * runtime if a container releases its assignment.
  *
- * @param if_name name of the interface which should be added.
+ * @param mac MAC address byte array.
  */
 void
-cmld_netif_phys_add_by_name(const char *if_name);
+cmld_netif_phys_add_by_mac(const uint8_t mac[MAC_ADDR_LEN]);
 
 /*
  * Reboot device by trying to gracfully stop or killing containers otherwise.

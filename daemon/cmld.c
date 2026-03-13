@@ -2014,21 +2014,23 @@ cmld_guestos_delete(const char *guestos_name)
 }
 
 bool
-cmld_netif_phys_remove_by_name(const char *if_name)
+cmld_netif_phys_remove_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 {
-	IF_NULL_RETVAL(if_name, false);
+	IF_NULL_RETVAL(mac, false);
 
 	list_t *found = NULL;
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *cmld_if_name = l->data;
-		if (0 == strcmp(if_name, cmld_if_name)) {
+		uint8_t *entry_mac = l->data;
+		if (0 == memcmp(mac, entry_mac, MAC_ADDR_LEN)) {
 			found = l;
-			mem_free0(cmld_if_name);
 			break;
 		}
 	}
 	if (found) {
-		INFO("Removing '%s' from global available physical netifs", if_name);
+		char *mac_str = network_mac_addr_to_str_new(mac);
+		INFO("Removing '%s' from global available physical netifs", mac_str);
+		mem_free0(mac_str);
+		mem_free0(found->data);
 		cmld_netif_phys_list = list_unlink(cmld_netif_phys_list, found);
 		return true;
 	}
@@ -2036,18 +2038,21 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 }
 
 void
-cmld_netif_phys_add_by_name(const char *if_name)
+cmld_netif_phys_add_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 {
-	IF_NULL_RETURN(if_name);
-	INFO("Adding '%s' to global available physical netifs", if_name);
+	IF_NULL_RETURN(mac);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *cmld_if_name = l->data;
-		if (0 == strcmp(if_name, cmld_if_name)) {
+		uint8_t *entry_mac = l->data;
+		if (0 == memcmp(mac, entry_mac, MAC_ADDR_LEN)) {
 			return;
 		}
 	}
-	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
+	char *mac_str = network_mac_addr_to_str_new(mac);
+	INFO("Adding '%s' to global available physical netifs", mac_str);
+	mem_free0(mac_str);
+	cmld_netif_phys_list = list_append(cmld_netif_phys_list,
+					   mem_memcpy((const unsigned char *)mac, MAC_ADDR_LEN));
 }
 
 void
@@ -2078,8 +2083,8 @@ cmld_cleanup(void)
 		mem_free0(cmld_shared_data_dir);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *name = l->data;
-		mem_free0(name);
+		uint8_t *mac = l->data;
+		mem_free0(mac);
 	}
 	list_delete(cmld_netif_phys_list);
 }
