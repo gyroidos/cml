@@ -91,4 +91,10 @@ device_config_get_audit_size(const device_config_t *config);
 
 bool
 device_config_get_tpm_enabled(const device_config_t *config);
+
+char **
+device_config_get_scd_env(const device_config_t *config);
+
+size_t
+device_config_get_scd_env_len(const device_config_t *config);
 #endif /* DEVICE_H */

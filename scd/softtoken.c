@@ -95,8 +95,8 @@ softtoken_new_from_p12(const char *filename)
 
 token_err_t
 softtoken_change_passphrase(void *int_token, const char *oldpass, const char *newpass,
-			    UNUSED unsigned char *pairing_secret, UNUSED size_t pairing_sec_len,
-			    UNUSED bool is_provisioning)
+			    UNUSED const unsigned char *pairing_secret,
+			    UNUSED size_t pairing_sec_len, UNUSED bool is_provisioning)
 {
 	softtoken_t *st_token = int_token;
 	ASSERT(st_token);
@@ -145,7 +145,7 @@ softtoken_free(void *int_token)
 }
 
 token_err_t
-softtoken_wrap_key(void *int_token, UNUSED char *label, unsigned char *plain_key,
+softtoken_wrap_key(void *int_token, UNUSED const char *label, unsigned char *plain_key,
 		   size_t plain_key_len, unsigned char **wrapped_key, int *wrapped_key_len)
 {
 	softtoken_t *st_token = int_token;
@@ -164,7 +164,7 @@ softtoken_wrap_key(void *int_token, UNUSED char *label, unsigned char *plain_key
 }
 
 token_err_t
-softtoken_unwrap_key(void *int_token, UNUSED char *label, unsigned char *wrapped_key,
+softtoken_unwrap_key(void *int_token, UNUSED const char *label, unsigned char *wrapped_key,
 		     size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len)
 {
 	softtoken_t *st_token = int_token;
@@ -183,8 +183,8 @@ softtoken_unwrap_key(void *int_token, UNUSED char *label, unsigned char *wrapped
 }
 
 token_err_t
-softtoken_unlock(void *int_token, char *passphrase, UNUSED unsigned char *pairing_secret,
-		 UNUSED size_t pairing_sec_len)
+softtoken_unlock(void *int_token, const char *passphrase,
+		 UNUSED const unsigned char *pairing_secret, UNUSED size_t pairing_sec_len)
 {
 	softtoken_t *st_token = int_token;
 	ASSERT(st_token);

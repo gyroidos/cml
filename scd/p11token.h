@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2021 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2026 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,30 +21,23 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#ifndef CML_SCD_H
-#define CML_SCD_H
+#ifndef P11TOKEN_H
+#define P11TOKEN_H
 
 #include <stdbool.h>
+#include <stddef.h>
+#include "token.h"
 
-#include "unit.h"
-
-/**
- * Initializes the scd subsystem (starts the corresponding daemon)
- * @return 0 on success, -1 on error
- */
-int
-scd_init(char **env, size_t env_len);
+typedef struct p11token p11token_t;
 
 /**
- * Cleans up the scd subsystem (stops the corresponding daemon)
+ * Initializes a usb token, iff the serial number of the usb token reader matches
+ * @param token ptr for scd token
+ * @param ops ptr to store token operation callbacks
+ * @param module_path storage directory of the softtoken
+ * @return pointer to the softtoken structure on success or NULL on error
  */
-void
-scd_cleanup(void);
+void *
+p11token_new(token_t *token, token_operations_t **ops, const char *module_path);
 
-/**
- * Returns the scd subsystems unit instance
- */
-unit_t *
-scd_get_unit(void);
-
-#endif /* CML_SCD_H */
+#endif // P11TOKEN_H
