@@ -33,7 +33,7 @@
  * @return 0 on success, -1 on error
  */
 int
-scd_init(void);
+scd_init(char **env, size_t env_len);
 
 /**
  * Cleans up the scd subsystem (stops the corresponding daemon)

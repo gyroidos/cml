@@ -1597,7 +1597,11 @@ cmld_init_stage_unit(const char *path)
 		}
 	}
 
-	if (scd_init() < 0)
+	// get scd env
+	char **scd_env = device_config_get_scd_env(device_config);
+	size_t scd_env_len = device_config_get_scd_env_len(device_config);
+
+	if (scd_init(scd_env, scd_env_len) < 0)
 		FATAL("Could not init scd module");
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))

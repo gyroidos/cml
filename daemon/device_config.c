@@ -235,3 +235,21 @@ device_config_get_audit_size(const device_config_t *config)
 
 	return config->cfg->audit_size;
 }
+
+char **
+device_config_get_scd_env(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->scd_env;
+}
+
+size_t
+device_config_get_scd_env_len(const device_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+
+	return config->cfg->n_scd_env;
+}
