@@ -191,6 +191,7 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 		if (known_name) {
 			if (!strcmp(oldname, known_name)) {
 				DEBUG("Keeping ifname %s", oldname);
+				network_remove_all_altnames(oldname);
 				return mem_strdup(oldname);
 			}
 
@@ -200,6 +201,7 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 				return NULL;
 			}
 
+			network_remove_all_altnames(known_name);
 			return mem_strdup(known_name);
 		}
 	}
@@ -207,6 +209,7 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 	// do not rename twice (new interface already with cml prefix)
 	if (!strncmp(oldname, "cml", 3)) {
 		DEBUG("Keeping ifname %s", oldname);
+		network_remove_all_altnames(oldname);
 		return mem_strdup(oldname);
 	}
 
@@ -228,6 +231,7 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 		return NULL;
 	}
 
+	network_remove_all_altnames(newname);
 	return newname;
 }
 
