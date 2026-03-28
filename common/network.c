@@ -634,6 +634,42 @@ network_delete_link(const char *dev)
 	return proc_fork_and_execvp(argv);
 }
 
+int
+network_remove_all_altnames(const char *dev)
+{
+	ASSERT(dev);
+
+	char *command = mem_printf("%s -d link show dev %s", IP_PATH, dev);
+	FILE *fp = popen(command, "r");
+	mem_free0(command);
+
+	if (fp == NULL) {
+		WARN("Could not run ip link show for %s", dev);
+		return -1;
+	}
+
+	size_t line_size = 256;
+	char *line = mem_new0(char, line_size);
+	int ret = 0;
+
+	while (getline(&line, &line_size, fp) != -1) {
+		char altname[IFNAMSIZ];
+		if (sscanf(line, " altname %15s", altname) == 1) {
+			DEBUG("Removing altname %s from %s", altname, dev);
+			const char *const argv[] = { IP_PATH, "link",	 "property", "del", "dev",
+						     dev,     "altname", altname,    NULL };
+			if (proc_fork_and_execvp(argv)) {
+				WARN("Failed to remove altname %s from %s", altname, dev);
+				ret = -1;
+			}
+		}
+	}
+
+	pclose(fp);
+	mem_free0(line);
+	return ret;
+}
+
 void
 network_enable_ip_forwarding(void)
 {

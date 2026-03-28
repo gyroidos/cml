@@ -250,6 +250,16 @@ int
 network_rename_ifi(const char *old_ifi_name, const char *new_ifi_name);
 
 /**
+ * Remove all alternative names (altnames) from a network interface.
+ * Altnames persist across namespace transitions and can interfere with
+ * udev naming policies inside containers.
+ * @param dev The interface name.
+ * @return 0 on success, -1 on error
+ */
+int
+network_remove_all_altnames(const char *dev);
+
+/**
  * Convert a String representing a mac address ,e.g., "00:11:22:33:44:55"
  * to the corresponding byte array.
  * @param mac_str String representing the mac
