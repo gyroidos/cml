@@ -49,6 +49,56 @@ typedef struct hotplug_net_dev_mapping {
 	uint8_t mac[MAC_ADDR_LEN];
 } hotplug_container_netdev_mapping_t;
 
+/**
+ * Persistent MAC → original kernel name mapping.
+ * Entries are never removed, so the original name survives container
+ * assignment/unassignment cycles where the interface may be renamed.
+ */
+typedef struct {
+	uint8_t mac[MAC_ADDR_LEN];
+	char *ifname;
+} hotplug_netif_name_t;
+
+static list_t *hotplug_known_names_list = NULL;
+
+static void
+hotplug_register_name(const uint8_t mac[MAC_ADDR_LEN], const char *ifname)
+{
+	IF_NULL_RETURN(mac);
+	IF_NULL_RETURN(ifname);
+
+	// Only store the first name seen for a given MAC
+	for (list_t *l = hotplug_known_names_list; l; l = l->next) {
+		hotplug_netif_name_t *entry = l->data;
+		if (0 == memcmp(mac, entry->mac, MAC_ADDR_LEN))
+			return;
+	}
+
+	hotplug_netif_name_t *entry = mem_new0(hotplug_netif_name_t, 1);
+	memcpy(entry->mac, mac, MAC_ADDR_LEN);
+	entry->ifname = mem_strdup(ifname);
+
+	char *mac_str = network_mac_addr_to_str_new(mac);
+	DEBUG("Registered persistent name '%s' for MAC %s", ifname, mac_str);
+	mem_free0(mac_str);
+
+	hotplug_known_names_list = list_append(hotplug_known_names_list, entry);
+}
+
+static const char *
+hotplug_get_ifname_by_mac(const uint8_t mac[MAC_ADDR_LEN])
+{
+	IF_NULL_RETVAL(mac, NULL);
+
+	for (list_t *l = hotplug_known_names_list; l; l = l->next) {
+		hotplug_netif_name_t *entry = l->data;
+		if (0 == memcmp(mac, entry->mac, MAC_ADDR_LEN))
+			return entry->ifname;
+	}
+
+	return NULL;
+}
+
 static uevent_uev_t *uevent_uev = NULL;
 
 // track net devices mapped to containers
@@ -110,17 +160,39 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 	static unsigned int cmld_wlan_idx = 0;
 	static unsigned int cmld_eth_idx = 0;
 
-	//generate interface name that is unique
-	//in the root network namespace
 	unsigned int *ifi_idx;
 	char *newname = NULL;
 
-	// do not rename twice
+	// Check if this interface has a known name from a previous assignment.
+	// This handles interfaces returning from containers (which may have
+	// renamed them) or from cleanup (which uses cml-prefixed collision names).
+	uint8_t mac[MAC_ADDR_LEN];
+	if (network_get_mac_by_ifname(oldname, mac) == 0) {
+		const char *known_name = hotplug_get_ifname_by_mac(mac);
+
+		if (known_name) {
+			if (!strcmp(oldname, known_name)) {
+				DEBUG("Keeping ifname %s", oldname);
+				return mem_strdup(oldname);
+			}
+
+			INFO("Restoring known name %s for %s", known_name, oldname);
+			if (network_rename_ifi(oldname, known_name)) {
+				ERROR("Failed to restore name %s for %s", known_name, oldname);
+				return NULL;
+			}
+
+			return mem_strdup(known_name);
+		}
+	}
+
+	// do not rename twice (new interface already with cml prefix)
 	if (!strncmp(oldname, "cml", 3)) {
 		DEBUG("Keeping ifname %s", oldname);
 		return mem_strdup(oldname);
 	}
 
+	// New interface: assign next sequential cml name
 	ifi_idx = !strcmp(infix, "wlan") ? &cmld_wlan_idx : &cmld_eth_idx;
 
 	if (-1 == asprintf(&newname, "%s%s%d", "cml", infix, *ifi_idx)) {
@@ -164,9 +236,11 @@ hotplug_rename_interface(const uevent_event_t *event)
 		goto err;
 	}
 
-	// replace ifname in cmld's available netifs
-	if (cmld_netif_phys_remove_by_name(event_ifname))
-		cmld_netif_phys_add_by_name(new_ifname);
+	// Register the cml-prefixed name as the persistent original name
+	uint8_t rename_mac[MAC_ADDR_LEN];
+	if (network_get_mac_by_ifname(new_ifname, rename_mac) == 0) {
+		hotplug_register_name(rename_mac, new_ifname);
+	}
 
 	new_devpath = hotplug_replace_devpath_new(event_devpath, event_ifname, new_ifname);
 
@@ -223,6 +297,8 @@ hotplug_netdev_move(uevent_event_t *event)
 		goto error;
 	}
 
+	macstr = network_mac_addr_to_str_new(iface_mac);
+
 	container_t *container = NULL;
 	container_pnet_cfg_t *pnet_cfg = NULL;
 	for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
@@ -234,11 +310,26 @@ hotplug_netdev_move(uevent_event_t *event)
 		}
 	}
 
-	// no mapping found move to c0
+	// no mapping found move to c0, use MAC string as pnet_name
+	// This ways c0's pnet_mv_list stays valid even if c0's OS renames the interface
 	if (!container) {
 		container = cmld_containers_get_c0();
-		pnet_cfg_c0 = container_pnet_cfg_new(event_ifname, false, NULL);
+		pnet_cfg_c0 = container_pnet_cfg_new(macstr, false, NULL);
 		pnet_cfg = pnet_cfg_c0;
+	}
+
+	// Rename interface before any early-out — ensures returning interfaces
+	// get their original name restored even if the target container isn't running yet
+	DEBUG("Renaming new interface we were notified about");
+	newevent = hotplug_rename_interface(event);
+
+	// uevent pointer is not freed inside this function, therefore we can safely drop it
+	if (newevent) {
+		DEBUG("using renamed uevent");
+		event = newevent;
+		event_ifname = uevent_event_get_interface(event);
+	} else {
+		WARN("failed to rename interface %s. injecting uevent as it is", event_ifname);
 	}
 
 	if (!container) {
@@ -252,20 +343,6 @@ hotplug_netdev_move(uevent_event_t *event)
 		WARN("Target container '%s' is not running, skip moving %s",
 		     container_get_description(container), event_ifname);
 		goto error;
-	}
-
-	// rename network interface to avoid name clashes when moving to container
-	DEBUG("Renaming new interface we were notified about");
-	newevent = hotplug_rename_interface(event);
-
-	// uevent pointer is not freed inside this function, therefore we can safely drop it
-	if (newevent) {
-		DEBUG("using renamed uevent");
-		event = newevent;
-		event_ifname = uevent_event_get_interface(event);
-		container_pnet_cfg_set_pnet_name(pnet_cfg, event_ifname);
-	} else {
-		WARN("failed to rename interface %s. injecting uevent as it is", event_ifname);
 	}
 
 	macstr = network_mac_addr_to_str_new(iface_mac);
@@ -334,8 +411,31 @@ hotplug_handle_uevent_cb(unsigned actions, uevent_event_t *event, UNUSED void *d
 	/* move network ifaces to containers */
 	if (actions & UEVENT_ACTION_ADD && !strcmp(uevent_event_get_subsystem(event), "net") &&
 	    !strstr(uevent_event_get_devpath(event), "virtual")) {
-		// got new physical interface, initially add to cmld tracking list
-		cmld_netif_phys_add_by_name(uevent_event_get_interface(event));
+		char *if_name = uevent_event_get_interface(event);
+
+		bool found = false;
+		for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
+			hotplug_container_netdev_mapping_t *mapping = l->data;
+			char *registered_if_name = network_get_ifname_by_addr_new(mapping->mac);
+
+			// Interface may be inside a container's netns and not visible
+			if (registered_if_name && !strcmp(if_name, registered_if_name)) {
+				found = true;
+				DEBUG("Found a hotplug mapping for netif: %s. Won't add to physical list",
+				      registered_if_name);
+				mem_free0(registered_if_name);
+				break;
+			}
+			mem_free0(registered_if_name);
+		}
+
+		if (!found) {
+			// got new physical interface, initially add to cmld tracking list
+			uint8_t new_mac[MAC_ADDR_LEN];
+			if (network_get_mac_by_ifname(if_name, new_mac) == 0) {
+				cmld_netif_phys_add_by_mac(new_mac);
+			}
+		}
 
 		// give sysfs some time to settle if iface is wifi
 		event_timer_t *e =
@@ -357,10 +457,14 @@ hotplug_trigger_net_uevent_foreach_cb(const char *path, const char *name, UNUSED
 		goto out;
 	}
 
-	// if already in list just do 'nothing' (check removes ifname, so just readd)
-	if (cmld_netif_phys_remove_by_name(name)) {
-		cmld_netif_phys_add_by_name(name);
-		goto out;
+	// if already in list just do 'nothing' (check by MAC address)
+	uint8_t check_mac[MAC_ADDR_LEN];
+	if (network_get_mac_by_ifname(name, check_mac) == 0) {
+		bool already_tracked = cmld_netif_phys_remove_by_mac(check_mac);
+		if (already_tracked) {
+			cmld_netif_phys_add_by_mac(check_mac);
+			goto out;
+		}
 	}
 
 	if (-1 == file_printf(uevent_path, "add")) {
@@ -380,14 +484,20 @@ hotplug_init()
 {
 	if (!cmld_is_hostedmode_active()) {
 		// Initially rename all physical interfaces before starting uevent handling.
+		// The phys list contains MAC byte arrays; resolve to kernel name for rename.
 		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
-			const char *ifname = l->data;
+			uint8_t *mac = l->data;
+			char *ifname = network_get_ifname_by_addr_new(mac);
+			if (!ifname)
+				continue;
 			const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
 			char *if_name_new = hotplug_rename_ifi_new(ifname, prefix);
+			// Register the cml-prefixed name as the persistent original name
 			if (if_name_new) {
-				mem_free0(l->data);
-				l->data = if_name_new;
+				hotplug_register_name(mac, if_name_new);
 			}
+			mem_free0(if_name_new);
+			mem_free0(ifname);
 		}
 	}
 
@@ -416,6 +526,14 @@ hotplug_cleanup()
 
 	uevent_remove_uev(uevent_uev);
 	uevent_uev_free(uevent_uev);
+
+	for (list_t *l = hotplug_known_names_list; l; l = l->next) {
+		hotplug_netif_name_t *entry = l->data;
+		if (entry->ifname)
+			mem_free0(entry->ifname);
+		mem_free0(entry);
+	}
+	list_delete(hotplug_known_names_list);
 }
 
 int
