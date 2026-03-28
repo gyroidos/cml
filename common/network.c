@@ -648,8 +648,8 @@ network_remove_all_altnames(const char *dev)
 		return -1;
 	}
 
-	size_t line_size = 256;
-	char *line = mem_new0(char, line_size);
+	char *line = NULL;
+	size_t line_size = 0;
 	int ret = 0;
 
 	while (getline(&line, &line_size, fp) != -1) {
