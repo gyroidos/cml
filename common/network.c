@@ -854,10 +854,10 @@ network_get_physical_interfaces_new()
 		if (file_exists(dev_drv_path) && i->if_name != NULL) {
 			uint8_t mac[MAC_ADDR_LEN];
 			if (network_get_mac_by_ifname(i->if_name, mac) == 0) {
-				char *mac_str = network_mac_addr_to_str_new(mac);
+				char mac_str[MAC_STR_LEN];
+				network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
 				DEBUG("Adding %s (mac: %s) to the physical device list", i->if_name,
 				      mac_str);
-				mem_free0(mac_str);
 				if_mac_list = list_append(if_mac_list,
 							  mem_memcpy((const unsigned char *)mac,
 								     MAC_ADDR_LEN));
@@ -1088,6 +1088,20 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN])
 	return 0;
 }
 
+int
+network_mac_addr_to_str(const uint8_t mac[MAC_ADDR_LEN], char *buf, size_t buf_len)
+{
+	IF_NULL_RETVAL(mac, -1);
+	IF_NULL_RETVAL(buf, -1);
+	IF_TRUE_RETVAL(buf_len < MAC_STR_LEN, -1);
+
+	snprintf(buf, buf_len,
+		 "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8,
+		 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+	return 0;
+}
+
 char *
 network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN])
 {
@@ -1168,12 +1182,11 @@ network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid)
 	IF_NULL_RETVAL(mac, NULL);
 	IF_TRUE_RETVAL(pid <= 0, NULL);
 
-	char *mac_str = network_mac_addr_to_str_new(mac);
-	IF_NULL_RETVAL(mac_str, NULL);
+	char mac_str[MAC_STR_LEN];
+	IF_TRUE_RETVAL(network_mac_addr_to_str(mac, mac_str, sizeof(mac_str)), NULL);
 
 	list_t *link_list = NULL;
 	if (network_list_link_ns(pid, &link_list) < 0) {
-		mem_free0(mac_str);
 		return NULL;
 	}
 
@@ -1205,7 +1218,6 @@ network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid)
 	}
 
 	list_delete(link_list);
-	mem_free0(mac_str);
 
 	return ifname;
 }
@@ -1284,7 +1296,8 @@ network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADD
 {
 	ASSERT(netif);
 
-	char *mac_str = network_mac_addr_to_str_new(mac);
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
 	const char *const argv[] = { IPTABLES_PATH, add ? "-I" : "-D",
 				     chain,	    "-m",
 				     "physdev",	    "--physdev-in",
@@ -1294,7 +1307,5 @@ network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADD
 				     "ACCEPT",	    NULL };
 
 	int ret = proc_fork_and_execvp(argv);
-
-	mem_free0(mac_str);
 	return ret;
 }
