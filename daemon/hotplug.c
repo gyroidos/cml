@@ -78,9 +78,9 @@ hotplug_register_name(const uint8_t mac[MAC_ADDR_LEN], const char *ifname)
 	memcpy(entry->mac, mac, MAC_ADDR_LEN);
 	entry->ifname = mem_strdup(ifname);
 
-	char *mac_str = network_mac_addr_to_str_new(mac);
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
 	DEBUG("Registered persistent name '%s' for MAC %s", ifname, mac_str);
-	mem_free0(mac_str);
 
 	hotplug_known_names_list = list_append(hotplug_known_names_list, entry);
 }
@@ -291,7 +291,7 @@ static int
 hotplug_netdev_move(uevent_event_t *event)
 {
 	uint8_t iface_mac[MAC_ADDR_LEN];
-	char *macstr = NULL;
+	char macstr[MAC_STR_LEN];
 	uevent_event_t *newevent = NULL;
 	container_pnet_cfg_t *pnet_cfg_c0 = NULL;
 	char *event_ifname = uevent_event_get_interface(event);
@@ -301,7 +301,7 @@ hotplug_netdev_move(uevent_event_t *event)
 		goto error;
 	}
 
-	macstr = network_mac_addr_to_str_new(iface_mac);
+	network_mac_addr_to_str(iface_mac, macstr, sizeof(macstr));
 
 	container_t *container = NULL;
 	container_pnet_cfg_t *pnet_cfg = NULL;
@@ -349,7 +349,6 @@ hotplug_netdev_move(uevent_event_t *event)
 		goto error;
 	}
 
-	macstr = network_mac_addr_to_str_new(iface_mac);
 	if (cmld_container_add_net_iface(container, pnet_cfg, false)) {
 		ERROR("cannot move '%s' to %s!", macstr, container_get_name(container));
 		goto error;
@@ -376,14 +375,12 @@ hotplug_netdev_move(uevent_event_t *event)
 out:
 	if (newevent)
 		mem_free0(newevent);
-	mem_free0(macstr);
 	return 0;
 error:
 	if (newevent)
 		mem_free0(newevent);
 	if (pnet_cfg_c0)
 		mem_free0(pnet_cfg_c0);
-	mem_free0(macstr);
 	return -1;
 }
 
@@ -550,12 +547,11 @@ hotplug_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg)
 
 	hotplug_container_netdev_mapping_list =
 		list_append(hotplug_container_netdev_mapping_list, mapping);
-	char *macstr = network_mac_addr_to_str_new(mapping->mac);
+	char macstr[MAC_STR_LEN];
+	network_mac_addr_to_str(mapping->mac, macstr, sizeof(macstr));
 
 	INFO("Registered netdev '%s' for container %s", macstr,
 	     container_get_name(mapping->container));
-
-	mem_free0(macstr);
 	return 0;
 }
 
@@ -577,13 +573,13 @@ hotplug_unregister_netdev(container_t *container, uint8_t mac[MAC_ADDR_LEN])
 	hotplug_container_netdev_mapping_list =
 		list_remove(hotplug_container_netdev_mapping_list, mapping_to_remove);
 
-	char *macstr = network_mac_addr_to_str_new(mapping_to_remove->mac);
+	char macstr[MAC_STR_LEN];
+	network_mac_addr_to_str(mapping_to_remove->mac, macstr, sizeof(macstr));
 
 	INFO("Unregistered netdev '%s' for container %s", macstr,
 	     container_get_name(mapping_to_remove->container));
 
 	hotplug_container_netdev_mapping_free(mapping_to_remove);
-	mem_free0(macstr);
 
 	// If the NIC is in root ns, add to phys available list synchronously and
 	// trigger a uevent so it gets reassigned (e.g., to c0).
