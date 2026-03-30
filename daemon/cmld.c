@@ -2027,9 +2027,9 @@ cmld_netif_phys_remove_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 		}
 	}
 	if (found) {
-		char *mac_str = network_mac_addr_to_str_new(mac);
+		char mac_str[MAC_STR_LEN];
+		network_mac_addr_to_str(mac, mac_str);
 		INFO("Removing '%s' from global available physical netifs", mac_str);
-		mem_free0(mac_str);
 		mem_free0(found->data);
 		cmld_netif_phys_list = list_unlink(cmld_netif_phys_list, found);
 		return true;
@@ -2048,9 +2048,9 @@ cmld_netif_phys_add_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 			return;
 		}
 	}
-	char *mac_str = network_mac_addr_to_str_new(mac);
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str);
 	INFO("Adding '%s' to global available physical netifs", mac_str);
-	mem_free0(mac_str);
 	cmld_netif_phys_list = list_append(cmld_netif_phys_list,
 					   mem_memcpy((const unsigned char *)mac, MAC_ADDR_LEN));
 }
