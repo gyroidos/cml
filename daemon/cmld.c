@@ -584,33 +584,18 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 		return;
 	}
 
-	/* Config file may have been deleted by cmld_container_destroy_cb
-	 * which fired before us on the same state transition.
-	 */
-	if (!file_exists(container_get_config_filename(container))) {
-		DEBUG("Config file removed, skipping reload for %s",
-		      container_get_description(container));
-		container_unregister_observer(container, cb);
-		return;
-	}
-
 	// in error case reload may destroy container object thus dup uuid
 	uuid_t *c_uuid = uuid_new(uuid_string(container_get_uuid(container)));
 
 	container_unregister_observer(container, cb);
 	DEBUG("Container is out of sync with its config. Reloading..");
 
-	container_t *new_container = cmld_reload_container(c_uuid, cmld_get_containers_dir());
-
-	if (!new_container) {
+	if (!cmld_reload_container(c_uuid, cmld_get_containers_dir())) {
 		ERROR("Failed to reload container on config update");
 		audit_log_event(c_uuid, FSA, CMLD, CONTAINER_MGMT, "reload", uuid_string(c_uuid),
 				0);
 		if (strncmp(uuid_string(c_uuid), CMLD_C0_UUID, strlen(CMLD_C0_UUID)))
 			FATAL("Could not reload C0!");
-	} else {
-		container_update_pnet_cfg_list(container,
-					       container_get_pnet_cfg_list(new_container));
 	}
 
 	mem_free0(c_uuid);
@@ -2015,21 +2000,23 @@ cmld_guestos_delete(const char *guestos_name)
 }
 
 bool
-cmld_netif_phys_remove_by_name(const char *if_name)
+cmld_netif_phys_remove_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 {
-	IF_NULL_RETVAL(if_name, false);
+	IF_NULL_RETVAL(mac, false);
 
 	list_t *found = NULL;
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *cmld_if_name = l->data;
-		if (0 == strcmp(if_name, cmld_if_name)) {
+		uint8_t *entry_mac = l->data;
+		if (0 == memcmp(mac, entry_mac, MAC_ADDR_LEN)) {
 			found = l;
-			mem_free0(cmld_if_name);
 			break;
 		}
 	}
 	if (found) {
-		INFO("Removing '%s' from global available physical netifs", if_name);
+		char mac_str[MAC_STR_LEN];
+		network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
+		INFO("Removing '%s' from global available physical netifs", mac_str);
+		mem_free0(found->data);
 		cmld_netif_phys_list = list_unlink(cmld_netif_phys_list, found);
 		return true;
 	}
@@ -2037,18 +2024,21 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 }
 
 void
-cmld_netif_phys_add_by_name(const char *if_name)
+cmld_netif_phys_add_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 {
-	IF_NULL_RETURN(if_name);
-	INFO("Adding '%s' to global available physical netifs", if_name);
+	IF_NULL_RETURN(mac);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *cmld_if_name = l->data;
-		if (0 == strcmp(if_name, cmld_if_name)) {
+		uint8_t *entry_mac = l->data;
+		if (0 == memcmp(mac, entry_mac, MAC_ADDR_LEN)) {
 			return;
 		}
 	}
-	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
+	INFO("Adding '%s' to global available physical netifs", mac_str);
+	cmld_netif_phys_list = list_append(cmld_netif_phys_list,
+					   mem_memcpy((const unsigned char *)mac, MAC_ADDR_LEN));
 }
 
 void
@@ -2079,8 +2069,8 @@ cmld_cleanup(void)
 		mem_free0(cmld_shared_data_dir);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *name = l->data;
-		mem_free0(name);
+		uint8_t *mac = l->data;
+		mem_free0(mac);
 	}
 	list_delete(cmld_netif_phys_list);
 }
@@ -2106,23 +2096,6 @@ cmld_container_has_token_changed(container_t *container, container_config_t *con
 
 	return container_has_token_changed(container, container_config_get_token_type(conf),
 					   container_config_get_usbtoken_serial(conf));
-}
-
-static void
-cmld_handle_config_netif_removal(container_t *container, container_config_t *config)
-{
-	list_t *new_pnet_cfg_list = container_config_get_net_ifaces_list_new(config);
-
-	bool service_container_is_up = container_is_stoppable(container);
-
-	if (!service_container_is_up) {
-		container_update_pnet_cfg_list(container, new_pnet_cfg_list);
-	}
-
-	for (list_t *l = new_pnet_cfg_list; l; l = l->next) {
-		container_pnet_cfg_free(l->data);
-	}
-	list_delete(new_pnet_cfg_list);
 }
 
 int
@@ -2153,8 +2126,6 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 
 	ret = container_config_write(conf);
 	container_set_sync_state(container, false);
-
-	cmld_handle_config_netif_removal(container, conf);
 
 	// Wipe container if USB token serial changed
 	if (cmld_container_has_token_changed(container, conf)) {

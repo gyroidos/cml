@@ -634,6 +634,42 @@ network_delete_link(const char *dev)
 	return proc_fork_and_execvp(argv);
 }
 
+int
+network_remove_all_altnames(const char *dev)
+{
+	ASSERT(dev);
+
+	char *command = mem_printf("%s -d link show dev %s", IP_PATH, dev);
+	FILE *fp = popen(command, "r");
+	mem_free0(command);
+
+	if (fp == NULL) {
+		WARN("Could not run ip link show for %s", dev);
+		return -1;
+	}
+
+	char *line = NULL;
+	size_t line_size = 0;
+	int ret = 0;
+
+	while (getline(&line, &line_size, fp) != -1) {
+		char altname[IFNAMSIZ];
+		if (sscanf(line, " altname %15s", altname) == 1) {
+			DEBUG("Removing altname %s from %s", altname, dev);
+			const char *const argv[] = { IP_PATH, "link",	 "property", "del", "dev",
+						     dev,     "altname", altname,    NULL };
+			if (proc_fork_and_execvp(argv)) {
+				WARN("Failed to remove altname %s from %s", altname, dev);
+				ret = -1;
+			}
+		}
+	}
+
+	pclose(fp);
+	mem_free0(line);
+	return ret;
+}
+
 void
 network_enable_ip_forwarding(void)
 {
@@ -811,13 +847,24 @@ network_get_physical_interfaces_new()
 
 	IF_NULL_RETVAL_ERROR_ERRNO(if_ni, NULL);
 
-	list_t *if_name_list = NULL;
+	list_t *if_mac_list = NULL;
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
 		if (file_exists(dev_drv_path) && i->if_name != NULL) {
-			DEBUG("Adding %s to the physical device list", i->if_name);
-			if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+			uint8_t mac[MAC_ADDR_LEN];
+			if (network_get_mac_by_ifname(i->if_name, mac) == 0) {
+				char mac_str[MAC_STR_LEN];
+				network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
+				DEBUG("Adding %s (mac: %s) to the physical device list", i->if_name,
+				      mac_str);
+				if_mac_list = list_append(if_mac_list,
+							  mem_memcpy((const unsigned char *)mac,
+								     MAC_ADDR_LEN));
+			} else {
+				WARN("Could not get MAC for physical interface %s, skipping",
+				     i->if_name);
+			}
 		} else if (file_exists(dev_drv_path)) {
 			DEBUG("Skipping unnamed network interface with index %d", i->if_index);
 		} else {
@@ -826,7 +873,7 @@ network_get_physical_interfaces_new()
 		mem_free0(dev_drv_path);
 	}
 	if_freenameindex(if_ni);
-	return if_name_list;
+	return if_mac_list;
 }
 
 /**
@@ -1041,8 +1088,22 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN])
 	return 0;
 }
 
+int
+network_mac_addr_to_str(const uint8_t mac[MAC_ADDR_LEN], char *buf, size_t buf_len)
+{
+	IF_NULL_RETVAL(mac, -1);
+	IF_NULL_RETVAL(buf, -1);
+	IF_TRUE_RETVAL(buf_len < MAC_STR_LEN, -1);
+
+	snprintf(buf, buf_len,
+		 "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8,
+		 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+	return 0;
+}
+
 char *
-network_mac_addr_to_str_new(uint8_t mac[MAC_ADDR_LEN])
+network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN])
 {
 	return mem_printf("%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
 			  ":%02" SCNx8,
@@ -1121,12 +1182,11 @@ network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid)
 	IF_NULL_RETVAL(mac, NULL);
 	IF_TRUE_RETVAL(pid <= 0, NULL);
 
-	char *mac_str = network_mac_addr_to_str_new(mac);
-	IF_NULL_RETVAL(mac_str, NULL);
+	char mac_str[MAC_STR_LEN];
+	IF_TRUE_RETVAL(network_mac_addr_to_str(mac, mac_str, sizeof(mac_str)), NULL);
 
 	list_t *link_list = NULL;
 	if (network_list_link_ns(pid, &link_list) < 0) {
-		mem_free0(mac_str);
 		return NULL;
 	}
 
@@ -1158,7 +1218,6 @@ network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid)
 	}
 
 	list_delete(link_list);
-	mem_free0(mac_str);
 
 	return ifname;
 }
@@ -1237,7 +1296,8 @@ network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADD
 {
 	ASSERT(netif);
 
-	char *mac_str = network_mac_addr_to_str_new(mac);
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str, sizeof(mac_str));
 	const char *const argv[] = { IPTABLES_PATH, add ? "-I" : "-D",
 				     chain,	    "-m",
 				     "physdev",	    "--physdev-in",
@@ -1247,7 +1307,5 @@ network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADD
 				     "ACCEPT",	    NULL };
 
 	int ret = proc_fork_and_execvp(argv);
-
-	mem_free0(mac_str);
 	return ret;
 }

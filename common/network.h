@@ -38,6 +38,7 @@
 #include <net/if.h>
 
 #define MAC_ADDR_LEN 6
+#define MAC_STR_LEN 18
 
 /* Bionic misses this flag */
 #ifndef IFF_DOWN
@@ -206,7 +207,9 @@ list_t *
 network_get_interfaces_new(void);
 
 /*
- * Generates a list containing names of all available physical network interfaces
+ * Generates a list containing MAC address strings of all available physical
+ * network interfaces. Each entry is a newly allocated string in the format
+ * "xx:xx:xx:xx:xx:xx".
  */
 list_t *
 network_get_physical_interfaces_new(void);
@@ -248,6 +251,16 @@ int
 network_rename_ifi(const char *old_ifi_name, const char *new_ifi_name);
 
 /**
+ * Remove all alternative names (altnames) from a network interface.
+ * Altnames persist across namespace transitions and can interfere with
+ * udev naming policies inside containers.
+ * @param dev The interface name.
+ * @return 0 on success, -1 on error
+ */
+int
+network_remove_all_altnames(const char *dev);
+
+/**
  * Convert a String representing a mac address ,e.g., "00:11:22:33:44:55"
  * to the corresponding byte array.
  * @param mac_str String representing the mac
@@ -258,18 +271,28 @@ int
 network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN]);
 
 /**
+ * Writes a string representation of a mac address into the provided buffer.
+ * @param mac array to be converted
+ * @param buf buffer to write the string into (must be at least MAC_STR_LEN bytes)
+ * @param buf_len size of the buffer
+ * @return 0 on success, -1 on error
+ */
+int
+network_mac_addr_to_str(const uint8_t mac[MAC_ADDR_LEN], char *buf, size_t buf_len);
+
+/**
  * Constructs a String representation for a mac address.
  * @param mac array to be converted
  * @return The string representing the mac, NULL on error
  */
 char *
-network_mac_addr_to_str_new(uint8_t mac[MAC_ADDR_LEN]);
+network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN]);
 
 /**
  * Walk through sysfs to find the if name, e.g., shown by ip addr, to the corresponding
  * hardware (mac) address.
  * @param mac array containing the mac address
- * @return The name of the interface
+ * @return The name of the interface, NULL if not found.
  */
 char *
 network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN]);
