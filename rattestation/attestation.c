@@ -199,14 +199,23 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	DEBUG_HEXDUMP(tpms_attest.attested.quote.pcrDigest.t.buffer,
 		      tpms_attest.attested.quote.pcrDigest.t.size, "Quote PCR Digest");
 	EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-	EVP_DigestInit(ctx, EVP_sha256());
+	switch (config->halg) {
+	case SHA256_DIGEST_LENGTH:
+		EVP_DigestInit(ctx, EVP_sha256());
+		break;
+	case SHA_DIGEST_LENGTH:
+		EVP_DigestInit(ctx, EVP_sha1());
+		break;
+	default: // should not happen, see ASSERT above
+		goto err;
+	}
 	uint8_t pcr_calc[SHA256_DIGEST_LENGTH] = { 0 };
 	for (size_t i = 0; i < resp->n_pcr_values; i++) {
-		EVP_DigestUpdate(ctx, resp->pcr_values[i]->value.data, SHA256_DIGEST_LENGTH);
+		EVP_DigestUpdate(ctx, resp->pcr_values[i]->value.data, config->halg);
 	}
 	EVP_DigestFinal(ctx, pcr_calc, NULL);
 	EVP_MD_CTX_free(ctx);
-	if (memcmp(tpms_attest.attested.quote.pcrDigest.t.buffer, pcr_calc, SHA256_DIGEST_LENGTH)) {
+	if (memcmp(tpms_attest.attested.quote.pcrDigest.t.buffer, pcr_calc, config->halg)) {
 		ERROR("VERIFY AGGREGATED PCR FAILED");
 		ret = false;
 		goto err;
