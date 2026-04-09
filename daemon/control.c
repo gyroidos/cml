@@ -1092,7 +1092,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 
 		// container
-		for (size_t i = 0; i < n; i++) {
+		for (size_t i = 0; i < n_container; i++) {
 			container_t *container = cmld_container_get_by_index(i);
 			const char *uuid = uuid_string(container_get_uuid(container));
 			results[n_unit + i] = mem_strdup(uuid);
