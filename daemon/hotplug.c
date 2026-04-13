@@ -398,7 +398,7 @@ error:
 	if (newevent)
 		mem_free0(newevent);
 	if (pnet_cfg_c0)
-		mem_free0(pnet_cfg_c0);
+		container_pnet_cfg_free(pnet_cfg_c0);
 	return -1;
 }
 
