@@ -1092,7 +1092,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 
 		// container
-		for (size_t i = 0; i < n; i++) {
+		for (size_t i = 0; i < n_container; i++) {
 			container_t *container = cmld_container_get_by_index(i);
 			const char *uuid = uuid_string(container_get_uuid(container));
 			results[n_unit + i] = mem_strdup(uuid);
@@ -1992,7 +1992,7 @@ control_free(control_t *control)
 		event_io_t *event_io_sock_connected = l->data;
 		event_remove_io(event_io_sock_connected);
 		shutdown(event_io_get_fd(event_io_sock_connected), SHUT_RDWR);
-		if (close(event_io_get_fd(event_io_sock_connected) < 0)) {
+		if (close(event_io_get_fd(event_io_sock_connected)) < 0) {
 			WARN_ERRNO("Failed to close connected control socket");
 		}
 		event_io_free(event_io_sock_connected);

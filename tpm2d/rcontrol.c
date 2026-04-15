@@ -101,7 +101,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		tpm2d_quote_t *quote = NULL;
 		uint8_t *attestation_cert = NULL;
 		size_t att_cert_len = 0;
-		uint8_t pcr_bitmap[3];
+		uint8_t pcr_bitmap[3] = { 0 };
 		int pcr_regs = 0;
 		int index = 0;
 

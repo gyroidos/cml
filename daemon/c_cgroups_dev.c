@@ -1028,7 +1028,8 @@ c_cgroups_dev_device_set_access(void *cgroups_devp, const char *rule)
 	 * check if last char is either rwm, otherwise no access should
 	 * be given and we just call deny
 	 */
-	if (rule[strlen(rule)] == 'r' || rule[strlen(rule)] == 'w' || rule[strlen(rule) - 1] == 'm')
+	if (rule[strlen(rule) - 1] == 'r' || rule[strlen(rule) - 1] == 'w' ||
+	    rule[strlen(rule) - 1] == 'm')
 		ret = c_cgroups_dev_allow(cgroups_dev, rule);
 	else
 		ret = c_cgroups_dev_deny(cgroups_dev, rule);
