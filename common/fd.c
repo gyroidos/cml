@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "bounds_safety.h"
 #include "mem.h"
 #include "macro.h"
 #include "fd.h"
@@ -34,14 +35,18 @@
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 ssize_t
-fd_write(int fd, const char *buf, size_t len)
+fd_write(int fd, const char *__counted_by(len) buf, size_t len)
 {
+	if (len == 0)
+		return 0;
+
+	const char *pos = buf;
 	size_t remain = len;
 
 	while (remain > 0) {
 		int ret;
 
-		ret = write(fd, buf, remain);
+		ret = write(fd, pos, remain);
 
 		if (ret < 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -57,7 +62,7 @@ fd_write(int fd, const char *buf, size_t len)
 		}
 
 		remain -= ret;
-		buf += ret;
+		pos += ret;
 		TRACE("Writing to fd %d: Wrote %d bytes, %zu bytes remaining.", fd, ret, remain);
 
 		if (ret == 0)
@@ -72,14 +77,15 @@ fd_write(int fd, const char *buf, size_t len)
 }
 
 int
-fd_read(int fd, char *buf, size_t len)
+fd_read(int fd, char *__counted_by(len) buf, size_t len)
 {
+	char *pos = buf;
 	size_t remain = len;
 
 	while (remain > 0) {
 		int ret;
 
-		ret = read(fd, buf, remain);
+		ret = read(fd, pos, remain);
 
 		if (ret < 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -94,7 +100,7 @@ fd_read(int fd, char *buf, size_t len)
 		}
 
 		remain -= ret;
-		buf += ret;
+		pos += ret;
 		TRACE("Reading from fd %d: Read %d bytes, %zu bytes remaining.", fd, ret, remain);
 
 		if (ret == 0)
@@ -105,7 +111,8 @@ fd_read(int fd, char *buf, size_t len)
 }
 
 ssize_t
-fd_read_blockwise(int fd, void *buf, size_t len, size_t block_size, size_t alignment)
+fd_read_blockwise(int fd, void *__sized_by(len) buf, size_t len, size_t block_size,
+		  size_t alignment)
 {
 	ASSERT(buf);
 	ASSERT(fd > 0);
@@ -119,12 +126,14 @@ fd_read_blockwise(int fd, void *buf, size_t len, size_t block_size, size_t align
 	size_t fragment_len = len % block_size;
 	size_t blocks_len = len - fragment_len;
 
-	if ((size_t)buf & (alignment - 1)) {
-		int r = posix_memalign(&p, alignment, len);
+	if ((uintptr_t)buf & (alignment - 1)) {
+		void *__unsafe_indexable raw_p = NULL;
+		int r = posix_memalign(&raw_p, alignment, len);
 		if (r) {
 			ERROR("posix_memalign returned %d", r);
 			return -1;
 		}
+		p = __unsafe_forge_bidi_indexable(void *, raw_p, len);
 	} else {
 		p = buf;
 	}
@@ -134,11 +143,13 @@ fd_read_blockwise(int fd, void *buf, size_t len, size_t block_size, size_t align
 	}
 
 	if (fragment_len) {
-		int r = posix_memalign(&fragment_buf, alignment, block_size);
+		void *__unsafe_indexable raw_frag = NULL;
+		int r = posix_memalign(&raw_frag, alignment, block_size);
 		if (r) {
 			ERROR("posix_memalign returned %d", r);
 			goto out;
 		}
+		fragment_buf = __unsafe_forge_bidi_indexable(void *, raw_frag, block_size);
 		if (fd_read(fd, fragment_buf, block_size) < (int)fragment_len) {
 			goto out;
 		}

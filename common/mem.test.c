@@ -150,8 +150,10 @@ test_strdup_strndup(UNUSED const MunitParameter params[], UNUSED void *data)
 	munit_assert_string_equal("hehe, s", c);
 	mem_free0(c);
 
-	// strndup does not overflow
-	c = mem_strndup(a, 1024);
+	// strndup stops at the null terminator even when len spans the whole buffer
+	char big[1024] = { 0 };
+	memcpy(big, a, strlen(a));
+	c = mem_strndup(big, sizeof(big));
 	munit_assert_not_null(c);
 	munit_assert_string_equal(a, c);
 	mem_free0(c);

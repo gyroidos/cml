@@ -32,6 +32,8 @@
 #ifndef MEM_H
 #define MEM_H
 
+#include "bounds_safety.h"
+
 #include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
@@ -43,7 +45,7 @@
  * @param size The number of bytes to allocate.
  * @return Pointer to the allocated memory.
  */
-void *
+void *__sized_by(size)
 mem_alloc(size_t size);
 
 /**
@@ -53,7 +55,7 @@ mem_alloc(size_t size);
  * @param size The number of bytes to allocate.
  * @return Poiner to the allocated memory.
  */
-void *
+void *__sized_by(size)
 mem_alloc0(size_t size);
 
 /**
@@ -64,7 +66,7 @@ mem_alloc0(size_t size);
  * @param size The new size of the memory block.
  * @return Pointer to the newly allocated memory.
  */
-void *
+void *__sized_by(size)
 mem_realloc(void *mem, size_t size);
 
 /**
@@ -74,19 +76,24 @@ mem_realloc(void *mem, size_t size);
  * @param str The string to duplicate.
  * @return Pointer to the new string.
  */
-char *
-mem_strdup(const char *str);
+char *__null_terminated
+mem_strdup(const char *__null_terminated str);
 
 /**
  * Duplicates a string, but copies at most len bytes. Allocates sufficient memory.
  * This is a wrapper for strndup(3) which aborts if the duplication fails.
  *
+ * str must be readable for len bytes (it need not be null-terminated; copying
+ * stops at the first null or after len bytes, whichever comes first). Callers
+ * that only know str is a null-terminated string must pass a len that does not
+ * exceed its length.
+ *
  * @param str The string to duplicate.
  * @param len The maximum length of the new string.
  * @return Pointer to the new string.
  */
-char *
-mem_strndup(const char *str, size_t len);
+char *__null_terminated
+mem_strndup(const char *__counted_by(len) str, size_t len);
 
 /**
  * Duplicates an array of unsigned char, but copies at most size bytes.
@@ -97,8 +104,8 @@ mem_strndup(const char *str, size_t len);
  * @param size The size of the memory.
  * @return Pointer to the new array.
  */
-unsigned char *
-mem_memcpy(const unsigned char *mem, size_t size);
+unsigned char *__sized_by(size)
+mem_memcpy(const unsigned char *__sized_by(size) mem, size_t size);
 
 /**
  * Prints to a string allocated by this function.
@@ -108,8 +115,8 @@ mem_memcpy(const unsigned char *mem, size_t size);
  * @param ap va_list
  * @return Pointer to the allocated formatted string.
  */
-char *
-mem_vprintf(const char *fmt, va_list ap);
+char *__null_terminated
+mem_vprintf(const char *__null_terminated fmt, va_list ap);
 
 /**
  * Prints to a string allocated by this function.
@@ -118,8 +125,8 @@ mem_vprintf(const char *fmt, va_list ap);
  * @param fmt The format string.
  * @return Pointer to the allocated formatted string.
  */
-char *
-mem_printf(const char *fmt, ...)
+char *__null_terminated
+mem_printf(const char *__null_terminated fmt, ...)
 #if defined(__GNUC__)
 	__attribute__((format(printf, 1, 2)))
 #endif
@@ -149,7 +156,7 @@ mem_free(void *ptr);
  * @param size Array size.
  */
 void
-mem_free_array(void **array, size_t size);
+mem_free_array(void *__single *__counted_by(size) array, size_t size);
 
 /**
  * Convenience wrapper macro for mem_alloc which calculates
@@ -215,14 +222,14 @@ mem_free_array(void **array, size_t size);
 	})
 
 static inline void
-mem_memset0(void *ptr, size_t num)
+mem_memset0(void *__sized_by(num) ptr, size_t num)
 {
 	static void *(*const volatile memset_v)(void *, int, size_t) = &memset;
 	memset_v(ptr, 0, num);
 }
 
 static inline void
-mem_memset(void *ptr, int value, size_t num)
+mem_memset(void *__sized_by(num) ptr, int value, size_t num)
 {
 	memset(ptr, value, num);
 }

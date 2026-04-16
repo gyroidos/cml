@@ -2,8 +2,11 @@
 #
 # The changes made to the upstream Linux coding style are:
 # - 100 column limit instead of 80
-# - deleted foreach macros 
-# 
+# - deleted foreach macros
+# - added AttributeMacros for the -fbounds-safety annotation macros
+#   (__counted_by, __sized_by, ...) so clang-format treats them as attributes
+#   and keeps e.g. "void *__sized_by(size)" on the return-type line
+#
 # SPDX-License-Identifier: GPL-2.0
 #
 # clang-format configuration file. Intended for clang-format >= 4.
@@ -32,6 +35,17 @@ AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: All
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: false
+# -fbounds-safety annotation macros (common/bounds_safety.h); see header note.
+AttributeMacros:
+  - __counted_by
+  - __sized_by
+  - __counted_by_or_null
+  - __sized_by_or_null
+  - __single
+  - __null_terminated
+  - __unsafe_indexable
+  - __terminated_by
+  - __ended_by
 BinPackArguments: true
 BinPackParameters: true
 BraceWrapping:

@@ -24,16 +24,20 @@
 #ifndef HEX_H_
 #define HEX_H_
 
+#include "bounds_safety.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
 int
-convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen);
+convert_hex_to_bin(const char *__counted_by(inlen) in, size_t inlen,
+		   uint8_t *__counted_by(outlen) out, size_t outlen);
 
 int
-convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
+convert_bin_to_hex(const uint8_t *__counted_by(inlen) in, size_t inlen,
+		   uint8_t *__counted_by(outlen) out, size_t outlen);
 
 char *
-convert_bin_to_hex_new(const uint8_t *bin, size_t length);
+convert_bin_to_hex_new(const uint8_t *__counted_by(length) bin, size_t length);
 
 #endif // HEX_H_
