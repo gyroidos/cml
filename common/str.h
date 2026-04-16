@@ -32,6 +32,8 @@
 #ifndef STR_H
 #define STR_H
 
+#include "bounds_safety.h"
+
 #include <unistd.h>
 #include <stdbool.h>
 
@@ -88,7 +90,7 @@ str_assign(str_t *str, const char *buf);
  * @param len The length of the string.
  */
 void
-str_assign_len(str_t *str, const char *buf, ssize_t len);
+str_assign_len(str_t *str, const char *__counted_by(len) buf, size_t len);
 
 /**
  * Assigns the content of the supplied format string to a string.
@@ -122,7 +124,7 @@ str_append(str_t *str, const char *buf);
  * @param len The length of the string.
  */
 void
-str_append_len(str_t *str, const char *buf, ssize_t len);
+str_append_len(str_t *str, const char *__counted_by(len) buf, size_t len);
 
 /**
  * Appends the content of the supplied format string to a string.
@@ -166,7 +168,7 @@ str_insert(str_t *str, ssize_t pos, const char *buf);
  * @param len The length of the string.
  */
 void
-str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len);
+str_insert_len(str_t *str, ssize_t pos, const char *__counted_by(len) buf, size_t len);
 
 /**
  * Shortens a string to the specified length.
@@ -205,7 +207,7 @@ str_length(str_t *str);
  * @return The resulting hex dump
  */
 str_t *
-str_hexdump_new(unsigned char *mem, size_t len);
+str_hexdump_new(unsigned char *__counted_by(len) mem, size_t len);
 
 /**
  * Frees the allocated string memory.
@@ -214,6 +216,6 @@ str_hexdump_new(unsigned char *mem, size_t len);
  * @param free_buf True: the internal string buffer should also be freed. False: the internal string buffer is not freed and a pointer to it is returned by the function.
  * @return If free_buf is false, a pointer to the internal string buffer is returned. Otherwise, NULL is returned.
  */
-char *
+char *__null_terminated
 str_free(str_t *str, bool free_buf);
 #endif /* STR_H */
