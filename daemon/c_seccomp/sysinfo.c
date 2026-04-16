@@ -42,12 +42,15 @@
 
 #include "seccomp.h"
 
+#include <limits.h>
 #include <linux/sysinfo.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
 #define CGROUPS_FOLDER "/sys/fs/cgroup"
+// cgroup subtree where cmld is running in (provided by c_cgroups_v2.c)
+extern char *c_cgroups_subtree;
 
 //#undef LOGF_LOG_MIN_PRIO
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -73,6 +76,7 @@
  */
 
 #define SI_LOAD_SHIFT 16
+#define MEM_UNLIMITED 0
 
 int
 sysinfo(struct sysinfo *info)
@@ -81,151 +85,191 @@ sysinfo(struct sysinfo *info)
 }
 
 struct cg_mem_stat {
-	// for sysinfo the only relevant info from memory.stat file is shmem
-	// which mapps to sharedram
+	/*
+	 * for sysinfo the only relevant info from memory.stat file is shmem
+	 * which mapps to sharedram
+	 */
 	unsigned long shmem;
 };
 
-int
-c_seccomp_cgroup_get_mem_stat(struct cg_mem_stat *mem_stat)
+static int
+c_seccomp_cgroup_get_mem_stat(struct cg_mem_stat *mem_stat, const char *cg_path)
 {
-	// we are in the cgroupns of the container, thus we can just use the cgroup root
-	char *buf = file_read_new(CGROUPS_FOLDER "/memory.stat", sysconf(_SC_PAGE_SIZE));
+	int ret = -1;
+	int n = 0;
+	char *cg_file = NULL;
+	char *buf = NULL;
 	char *tmp = NULL;
 
-	IF_NULL_RETVAL(buf, -1);
+	cg_file = mem_printf("%s/%s", cg_path, "memory.stat");
+	IF_NULL_RETVAL(cg_file, -1);
+
+	buf = file_read_new(cg_file, sysconf(_SC_PAGE_SIZE));
+	IF_NULL_GOTO(buf, err);
 
 	TRACE("buf: '%s'", buf);
 
 	tmp = strstr(buf, "\nshmem");
-	int n = sscanf(tmp, "\nshmem %lu\n", &mem_stat->shmem);
+	IF_NULL_GOTO(tmp, err);
+	n = sscanf(tmp, "\nshmem %lu\n", &mem_stat->shmem);
 	IF_FALSE_GOTO(n == 1, err);
 	TRACE("Parsed shmem for %d: %lu", getpid(), mem_stat->shmem);
 
-	mem_free0(buf);
-	return 0;
+	ret = 0;
 err:
-	mem_free0(buf);
-	return -1;
+	mem_free0(cg_file);
+	if (buf)
+		mem_free0(buf);
+	return ret;
 }
 
-#define MEM_UNLIMITED 0
-
-int
-c_seccomp_cgroup_get_mem_max(unsigned long *mem_max)
+static bool
+wd_is_root_cg(void)
 {
-	// we are in the cgroupns of the container, thus we can just use the cgroup root
-	char *buf = file_read_new(CGROUPS_FOLDER "/memory.max", sysconf(_SC_PAGE_SIZE));
+	int ret;
 
-	IF_NULL_RETVAL(buf, -1);
+	char *cwd = get_current_dir_name();
+	if (!cwd)
+		return false;
 
-	TRACE("buf: '%s'", buf);
+	ret = !strcmp(cwd, CGROUPS_FOLDER);
 
-	if (!strcmp("max\n", buf)) {
-		*mem_max = MEM_UNLIMITED;
-		goto out;
-	}
-
-	int n = sscanf(buf, "%lu\n", mem_max);
-	IF_FALSE_GOTO(n == 1, err);
-out:
-	TRACE("Parsed memory.max for %d: %lu", getpid(), *mem_max);
-
-	mem_free0(buf);
-	return 0;
-err:
-	mem_free0(buf);
-	return -1;
-}
-
-int
-c_seccomp_cgroup_get_mem_current(unsigned long *mem_current)
-{
-	// we are in the cgroupns of the container, thus we can just use the cgroup root
-	char *buf = file_read_new(CGROUPS_FOLDER "/memory.current", sysconf(_SC_PAGE_SIZE));
-
-	IF_NULL_RETVAL(buf, -1);
-
-	TRACE("buf: '%s'", buf);
-
-	int n = sscanf(buf, "%lu\n", mem_current);
-	IF_FALSE_GOTO(n == 1, err);
-	TRACE("Parsed memory.current for %d: %lu", getpid(), *mem_current);
-
-	mem_free0(buf);
-	return 0;
-err:
-	mem_free0(buf);
-	return -1;
-}
-
-int
-c_seccomp_cgroup_get_swap_max(unsigned long *swap_max)
-{
-	// we are in the cgroupns of the container, thus we can just use the cgroup root
-	char *buf = file_read_new(CGROUPS_FOLDER "/memory.swap.max", sysconf(_SC_PAGE_SIZE));
-
-	IF_NULL_RETVAL(buf, -1);
-
-	TRACE("buf: '%s'", buf);
-
-	if (!strcmp("max\n", buf)) {
-		*swap_max = MEM_UNLIMITED;
-		goto out;
-	}
-
-	int n = sscanf(buf, "%lu\n", swap_max);
-	IF_FALSE_GOTO(n == 1, err);
-out:
-	TRACE("Parsed memory.swap.max for %d: %lu", getpid(), *swap_max);
-
-	mem_free0(buf);
-	return 0;
-err:
-	mem_free0(buf);
-	return -1;
-}
-
-int
-c_seccomp_cgroup_get_swap_current(unsigned long *swap_current)
-{
-	// we are in the cgroupns of the container, thus we can just use the cgroup root
-	char *buf = file_read_new(CGROUPS_FOLDER "/memory.swap.current", sysconf(_SC_PAGE_SIZE));
-
-	IF_NULL_RETVAL(buf, -1);
-
-	TRACE("buf: '%s'", buf);
-
-	int n = sscanf(buf, "%lu\n", swap_current);
-	IF_FALSE_GOTO(n == 1, err);
-	TRACE("Parsed memory.swap.current for %d: %lu", getpid(), *swap_current);
-
-	mem_free0(buf);
-	return 0;
-err:
-	mem_free0(buf);
-	return -1;
+	mem_free0(cwd);
+	return ret;
 }
 
 static int
-c_seccomp_cgroup_get_pids_current(unsigned short *pid_current)
+c_seccomp_cgroup_get_max(const char *file_prefix, unsigned long *mem_max, const char *cg_path)
 {
-	// we are in the cgroupns of the container, thus we can just use the cgroup root
-	char *buf = file_read_new(CGROUPS_FOLDER "/pids.current", sysconf(_SC_PAGE_SIZE));
+	ASSERT(cg_path);
+	ASSERT(file_prefix);
+	ASSERT(mem_max);
 
-	IF_NULL_RETVAL(buf, -1);
+	int ret = -1;
+	int n = 0;
+	char *buf = NULL;
+	char *cwd = NULL;
+	unsigned long mem_max_current = MEM_UNLIMITED;
+	char *cg_file = mem_printf("%s.max", file_prefix);
+
+	// save current working directory
+	cwd = get_current_dir_name();
+
+	IF_TRUE_GOTO(chdir(cg_path), err);
+
+	*mem_max = ULONG_MAX;
+	while (!wd_is_root_cg() && (buf = file_read_new(cg_file, sysconf(_SC_PAGE_SIZE)))) {
+		TRACE("buf: '%s'", buf);
+
+		if (!strcmp("max\n", buf)) {
+			// no limit set, skip
+		} else {
+			n = sscanf(buf, "%lu\n", &mem_max_current);
+			IF_FALSE_GOTO(n == 1, err);
+			*mem_max = MIN(*mem_max, mem_max_current);
+		}
+
+		mem_free0(buf);
+		// chdir to .. should always succeed, however just to be sure
+		IF_TRUE_GOTO(chdir(".."), err);
+	}
+
+	if (*mem_max == ULONG_MAX)
+		*mem_max = MEM_UNLIMITED;
+
+	TRACE("Parsed memory.max for %d: %lu", getpid(), *mem_max);
+	ret = 0;
+err:
+	mem_free0(cg_file);
+	if (cwd) {
+		// restore current working directory
+		if (chdir(cwd))
+			WARN("Could not change back to former cwd %s", cwd);
+		mem_free0(cwd);
+	}
+	return ret;
+}
+
+static int
+c_seccomp_cgroup_get_mem_max(unsigned long *mem_max, const char *cg_path)
+{
+	return c_seccomp_cgroup_get_max("memory", mem_max, cg_path);
+}
+
+static int
+c_seccomp_cgroup_get_swap_max(unsigned long *swap_max, const char *cg_path)
+{
+	return c_seccomp_cgroup_get_max("memory.swap", swap_max, cg_path);
+}
+
+static int
+c_seccomp_cgroup_get_current(const char *file_prefix, unsigned long *mem_current,
+			     const char *cg_path)
+{
+	ASSERT(cg_path);
+	ASSERT(file_prefix);
+	ASSERT(mem_current);
+
+	int ret = -1;
+	int n = 0;
+	char *buf = NULL;
+	char *cg_file = mem_printf("%s/%s.current", cg_path, file_prefix);
+
+	buf = file_read_new(cg_file, sysconf(_SC_PAGE_SIZE));
+	IF_NULL_GOTO(buf, err);
 
 	TRACE("buf: '%s'", buf);
 
-	int n = sscanf(buf, "%hu\n", pid_current);
+	n = sscanf(buf, "%lu\n", mem_current);
+	IF_FALSE_GOTO(n == 1, err);
+	TRACE("Parsed memory.current for %d: %lu", getpid(), *mem_current);
+
+	ret = 0;
+err:
+	mem_free0(cg_file);
+	if (buf)
+		mem_free0(buf);
+	return ret;
+}
+
+static int
+c_seccomp_cgroup_get_mem_current(unsigned long *mem_current, const char *cg_path)
+{
+	return c_seccomp_cgroup_get_current("memory", mem_current, cg_path);
+}
+
+static int
+c_seccomp_cgroup_get_swap_current(unsigned long *swap_max, const char *cg_path)
+{
+	return c_seccomp_cgroup_get_current("memory.swap", swap_max, cg_path);
+}
+
+static int
+c_seccomp_cgroup_get_pids_current(unsigned short *pid_current, const char *cg_path)
+{
+	ASSERT(cg_path);
+	ASSERT(pid_current);
+
+	int ret = -1;
+	int n = 0;
+	char *buf = NULL;
+	char *cg_file = mem_printf("%s/pids.current", cg_path);
+
+	buf = file_read_new(cg_file, sysconf(_SC_PAGE_SIZE));
+	IF_NULL_GOTO(buf, err);
+
+	TRACE("buf: '%s'", buf);
+
+	n = sscanf(buf, "%hu\n", pid_current);
 	IF_FALSE_GOTO(n == 1, err);
 	TRACE("Parsed pids.current for %d: %hu", getpid(), *pid_current);
 
-	mem_free0(buf);
-	return 0;
+	ret = 0;
 err:
-	mem_free0(buf);
-	return -1;
+	mem_free0(cg_file);
+	if (buf)
+		mem_free0(buf);
+	return ret;
 }
 
 static void
@@ -259,20 +303,6 @@ c_seccomp_do_sysinfo_fork(const void *data)
 	const struct sysinfo_fork_data *sysinfo_params = data;
 	ASSERT(sysinfo_params);
 
-	// unshare mount ns to mount /sys/fs/cgroup if not mounted inside the container
-	if (unshare(CLONE_NEWNS) == -1) {
-		ERROR_ERRNO("Could not unshare mount namespace!");
-		return -1;
-	}
-
-	// mount cgroups in private ns of container
-	if (mount("cgroup2", CGROUPS_FOLDER, "cgroup2",
-		  MS_NOEXEC | MS_NODEV | MS_NOSUID | MS_RELATIME, NULL) == -1 &&
-	    errno != EBUSY) {
-		ERROR_ERRNO("Could not mount cgroups_v2 unified hirachy");
-		return -1;
-	}
-
 	// initialize struct sysinfo with host values
 	TRACE("Executing sysinfo in namespaces of container");
 	if (-1 == sysinfo(sysinfo_params->info)) {
@@ -282,6 +312,67 @@ c_seccomp_do_sysinfo_fork(const void *data)
 
 	TRACE("sysinfo struct ns-only!");
 	c_seccomp_print_sysinfo(sysinfo_params->info);
+
+	const uuid_t *uuid = compartment_get_uuid(sysinfo_params->seccomp->compartment);
+	char *cg_path = mem_printf("%s/%s", c_cgroups_subtree, uuid_string(uuid));
+
+	// cg values are in bytes, thus scale values by mem_unit
+	unsigned int mem_unit = sysinfo_params->info->mem_unit;
+
+	// overwrite totalram and freeram if memory limits are set
+	unsigned long mem_max = 0;
+	if (-1 == c_seccomp_cgroup_get_mem_max(&mem_max, cg_path)) {
+		WARN("Failed to get memory.max from cgroup");
+	} else if (mem_max != MEM_UNLIMITED) {
+		// if cgroup is unlimited mem_max is set to 0 (MEM_UNLIMITED)
+		sysinfo_params->info->totalram = mem_max / mem_unit;
+
+		// overwrite freeram
+		unsigned long mem_current = 0;
+		if (-1 == c_seccomp_cgroup_get_mem_current(&mem_current, cg_path)) {
+			WARN("Failed to get memory.current from cgroup");
+		} else {
+			sysinfo_params->info->freeram = (mem_max - mem_current) / mem_unit;
+		}
+	}
+
+	// overwrite sharedram
+	struct cg_mem_stat mem_stat = { 0 };
+	if (-1 == c_seccomp_cgroup_get_mem_stat(&mem_stat, cg_path)) {
+		WARN("Failed to get mem_stat from cgroup");
+	} else {
+		sysinfo_params->info->sharedram = mem_stat.shmem / mem_unit;
+	}
+	// equivalent for bufferram does not exist in cgroups v2 memory.stat
+	sysinfo_params->info->bufferram = 0ULL;
+
+	// overwrite totalswap and freeswap if swap limits are set
+	unsigned long swap_max = 0;
+	if (-1 == c_seccomp_cgroup_get_swap_max(&swap_max, cg_path)) {
+		WARN("Failed to get memory.swap.max from cgroup");
+	} else if (swap_max != MEM_UNLIMITED) {
+		// if cgroup is unlimited swap_max is set to 0 (MEM_UNLIMITED)
+		sysinfo_params->info->totalswap = swap_max / mem_unit;
+
+		// overwrite freeswap
+		unsigned long swap_current = 0;
+		if (-1 == c_seccomp_cgroup_get_swap_current(&swap_current, cg_path)) {
+			WARN("Failed to get memory.swap.current from cgroup");
+		} else {
+			sysinfo_params->info->freeswap = (swap_max - swap_current) / mem_unit;
+		}
+	}
+
+	// overwrite procs
+	unsigned short pids_current = 0;
+	if (-1 == c_seccomp_cgroup_get_pids_current(&pids_current, cg_path)) {
+		WARN("Failed to get pids.current from cgroup");
+	} else {
+		sysinfo_params->info->procs = pids_current;
+	}
+
+	if (ns_join_by_pid(compartment_get_pid(sysinfo_params->seccomp->compartment), CLONE_NEWNS))
+		WARN("Failed to join mountns for lxcfs provided values");
 
 	// overwrite loads from procfs (if lxcfs is enabled, we get the container values)
 	unsigned long load[6] = { 0 };
@@ -303,63 +394,10 @@ c_seccomp_do_sysinfo_fork(const void *data)
 	}
 	mem_free0(loadavg);
 
-	// cg values are in bytes, thus scale values by mem_unit
-	unsigned int mem_unit = sysinfo_params->info->mem_unit;
-
-	// overwrite totalram and freeram if memory limits are set
-	unsigned long mem_max = 0;
-	if (-1 == c_seccomp_cgroup_get_mem_max(&mem_max)) {
-		WARN("Failed to get memory.max from cgroup");
-	} else if (mem_max != MEM_UNLIMITED) {
-		// if cgroup is unlimited mem_max is set to 0 (MEM_UNLIMITED)
-		sysinfo_params->info->totalram = mem_max / mem_unit;
-
-		// overwrite freeram
-		unsigned long mem_current = 0;
-		if (-1 == c_seccomp_cgroup_get_mem_current(&mem_current)) {
-			WARN("Failed to get memory.current from cgroup");
-		} else {
-			sysinfo_params->info->freeram = (mem_max - mem_current) / mem_unit;
-		}
-	}
-
-	// overwrite sharedram
-	struct cg_mem_stat mem_stat = { 0 };
-	if (-1 == c_seccomp_cgroup_get_mem_stat(&mem_stat)) {
-		WARN("Failed to get mem_stat from cgroup");
-	} else {
-		sysinfo_params->info->sharedram = mem_stat.shmem / mem_unit;
-	}
-	// equivalent for bufferram does not exist in cgroups v2 memory.stat
-	sysinfo_params->info->bufferram = 0ULL;
-
-	// overwrite totalswap and freeswap if swap limits are set
-	unsigned long swap_max = 0;
-	if (-1 == c_seccomp_cgroup_get_swap_max(&swap_max)) {
-		WARN("Failed to get memory.swap.max from cgroup");
-	} else if (swap_max != MEM_UNLIMITED) {
-		// if cgroup is unlimited swap_max is set to 0 (MEM_UNLIMITED)
-		sysinfo_params->info->totalswap = swap_max / mem_unit;
-
-		// overwrite freeswap
-		unsigned long swap_current = 0;
-		if (-1 == c_seccomp_cgroup_get_swap_current(&swap_current)) {
-			WARN("Failed to get memory.swap.current from cgroup");
-		} else {
-			sysinfo_params->info->freeswap = (swap_max - swap_current) / mem_unit;
-		}
-	}
-
-	// overwrite procs
-	unsigned short pids_current = 0;
-	if (-1 == c_seccomp_cgroup_get_pids_current(&pids_current)) {
-		WARN("Failed to get pids.current from cgroup");
-	} else {
-		sysinfo_params->info->procs = pids_current;
-	}
-
 	TRACE("sysinfo struct emulated!");
 	c_seccomp_print_sysinfo(sysinfo_params->info);
+
+	mem_free0(cg_path);
 
 	if (-1 == c_seccomp_send_vm(sysinfo_params->seccomp, sysinfo_params->target_pid,
 				    (void *)sysinfo_params->info, sysinfo_params->target_datap,
@@ -382,15 +420,21 @@ c_seccomp_emulate_sysinfo(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	info = mem_new0(struct sysinfo, 1);
 
 	TRACE("Executing sysinfo on behalf of container");
-	// Join all namespaces but pidns; thus, the helper process won't show up inside the container
-	// Uptime will then already be correctly handled by time namespace
+	/*
+	 * Join all namespaces but pidns; thus, the helper process won't show up inside
+	 * the container and except cgroupns+mountns; thus, cgroup traversal can be made to
+	 * cgroup system root to check max values of parents.
+	 * Uptime will then already be correctly handled by time namespace
+	 */
 	struct sysinfo_fork_data sysinfo_params = { .seccomp = seccomp,
 						    .info = info,
 						    .target_pid = req->pid,
 						    .target_datap =
 							    CAST_UINT_VOIDPTR req->data.args[0] };
-	if (-1 == (ret_sysinfo = namespace_exec(req->pid, CLONE_NEWALL & (~CLONE_NEWPID), 0, 0,
-						c_seccomp_do_sysinfo_fork, &sysinfo_params))) {
+	if (-1 ==
+	    (ret_sysinfo = namespace_exec(
+		     req->pid, CLONE_NEWALL & (~CLONE_NEWPID) & (~CLONE_NEWCGROUP) & (~CLONE_NEWNS),
+		     0, 0, c_seccomp_do_sysinfo_fork, &sysinfo_params))) {
 		ERROR_ERRNO("Failed to execute sysinfo");
 		goto out;
 	}
