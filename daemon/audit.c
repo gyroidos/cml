@@ -507,7 +507,10 @@ audit_do_send_record(const container_t *c)
 	}
 	TRACE("read next audit record sucessfully");
 
-	packed_len = protobuf_pack_message_new((ProtobufCMessage *)message_proto, &packed);
+	protobuf_packed_msg_t packed_msg =
+		protobuf_pack_message_new((ProtobufCMessage *)message_proto);
+	packed = packed_msg.buf;
+	packed_len = packed_msg.len;
 
 	if (!packed) {
 		ERROR("Failed to pack protobuf message");

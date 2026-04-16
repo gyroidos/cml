@@ -86,21 +86,21 @@ file_move(const char *src, const char *dst, size_t bs);
  * Write a string to a file.
  * @param file The file name.
  * @param buf The buffer to be written.
- * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
+ * @param len The length of buffer.
  * @return -1 on error else the number of bytes written.
  */
 int
-file_write(const char *file, const char *buf, ssize_t len);
+file_write(const char *file, const char *buf, size_t len);
 
 /**
  * Append  a string to the end of a file.
  * @param file The file name.
  * @param buf The buffer to be written.
- * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
+ * @param len The length of buffer.
  * @return -1 on error else the number of bytes written.
  */
 int
-file_write_append(const char *file, const char *buf, ssize_t len);
+file_write_append(const char *file, const char *buf, size_t len);
 
 /**
  * Write a string to a file using printf.
@@ -152,7 +152,7 @@ file_size(const char *file);
  * Note: fails if path contains a '.' and file has no ending
  * @ param file The file name
  */
-char *
+const char *
 file_get_extension(const char *file);
 
 /**

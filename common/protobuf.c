@@ -35,11 +35,10 @@
 
 // TODO update naming scheme
 
-uint32_t
-protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr)
+protobuf_packed_msg_t
+protobuf_pack_message_new(const ProtobufCMessage *message)
 {
 	ASSERT(message);
-	ASSERT(ptr);
 
 	uint32_t packed_len = protobuf_c_message_get_packed_size(message);
 	uint8_t *packed = mem_alloc(packed_len);
@@ -49,9 +48,7 @@ protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr)
 	uint32_t actual_len = protobuf_c_message_pack(message, packed);
 	ASSERT(actual_len == packed_len);
 
-	*ptr = packed;
-
-	return actual_len;
+	return (protobuf_packed_msg_t){ .buf = packed, .len = actual_len };
 }
 
 ssize_t
@@ -93,29 +90,29 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
-	uint8_t *buf = NULL;
-	uint32_t buflen = protobuf_pack_message_new(message, &buf);
+	protobuf_packed_msg_t packed = protobuf_pack_message_new(message);
 
-	if (!(buflen < PROTOBUF_MAX_MESSAGE_SIZE)) {
+	if (!(packed.len < PROTOBUF_MAX_MESSAGE_SIZE)) {
 		ERROR("Packed message exceeds PROTOBUF_MAX_MESSAGE_SIZE");
-		if (buf)
-			mem_free0(buf);
+		if (packed.buf)
+			mem_free0(packed.buf);
 
 		return -1;
 	}
 
-	TRACE("Sending protobuf message with len %u", buflen);
-	TRACE_HEXDUMP(buf, buflen, "Message");
+	TRACE("Sending protobuf message with len %u", packed.len);
+	TRACE_HEXDUMP(packed.buf, packed.len, "Message");
 
-	if (-1 == protobuf_send_message_packed(fd, buf, buflen)) {
+	if (-1 == protobuf_send_message_packed(fd, packed.buf, packed.len)) {
 		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
-		mem_free0(buf);
+		mem_free0(packed.buf);
 		return -1;
 	}
 
-	mem_free0(buf);
+	ssize_t ret = packed.len;
+	mem_free0(packed.buf);
 
-	return buflen;
+	return ret;
 }
 
 uint8_t *

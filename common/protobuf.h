@@ -42,17 +42,23 @@
 #define PROTOBUF_MAX_OVERHEAD 1024
 
 /**
+ * Packed protobuf message with paired buffer and length.
+ * Returned by protobuf_pack_message_new(); the caller must free buf.
+ */
+typedef struct {
+	uint8_t *buf;
+	uint32_t len;
+} protobuf_packed_msg_t;
+
+/**
  * Packs the given protobuf message struct
  * and returns it's binary serialized form.
  *
- * The serialized message is prefixed with the length of the actual data.
- *
  * @param message   the protobuf message struct to serialize and write
- * @param ptr       the location to store a pointer to the serialized representation
- * @return          the length of the serialized message (without length prefix) or -1 on error
+ * @return          packed message with buffer and length; buf is NULL on error
  */
-uint32_t
-protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr);
+protobuf_packed_msg_t
+protobuf_pack_message_new(const ProtobufCMessage *message);
 
 /**
  * Writes the given, serialized protobuf message struct to the given file descriptor

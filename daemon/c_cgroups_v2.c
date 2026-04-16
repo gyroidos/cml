@@ -415,7 +415,7 @@ c_cgroups_unfreeze(void *cgroupsp)
 	ASSERT(cgroups);
 
 	char *freezer_state_path = mem_printf("%s/cgroup.freeze", cgroups->path);
-	if (file_write(freezer_state_path, "0", -1) == -1) {
+	if (file_write(freezer_state_path, "0", strlen("0")) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
 		mem_free0(freezer_state_path);
 		return -1;
@@ -478,7 +478,7 @@ c_cgroups_freeze(void *cgroupsp)
 	}
 
 	char *freezer_state_path = mem_printf("%s/cgroup.freeze", cgroups->path);
-	if (file_write(freezer_state_path, "1", -1) == -1) {
+	if (file_write(freezer_state_path, "1", strlen("1")) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
 		mem_free0(freezer_state_path);
 		return -1;

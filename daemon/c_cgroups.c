@@ -344,7 +344,7 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 	// first allow in host-side list, which cannot manipulated by container (if namspaced)
 	char *path = mem_printf("%s/devices/%s/devices.allow", CGROUPS_FOLDER,
 				uuid_string(container_get_uuid(cgroups->container)));
-	if (file_write(path, rule, -1) == -1) {
+	if (file_write(path, rule, strlen(rule)) == -1) {
 		ERROR_ERRNO("Failed to write to %s", path);
 		mem_free0(path);
 		return -1;
@@ -354,7 +354,7 @@ c_cgroups_allow_rule(c_cgroups_t *cgroups, const char *rule)
 	char *path_child = mem_printf("%s/devices/%s/child/devices.allow", CGROUPS_FOLDER,
 				      uuid_string(container_get_uuid(cgroups->container)));
 	if (file_exists(path_child)) {
-		if (file_write(path, rule, -1) == -1) {
+		if (file_write(path, rule, strlen(rule)) == -1) {
 			ERROR_ERRNO("Failed to write to %s", path);
 			mem_free0(path);
 			mem_free0(path_child);
@@ -426,7 +426,7 @@ c_cgroups_devices_deny(void *cgroupsp, const char *rule)
 	char *path = mem_printf("%s/devices/%s/devices.deny", CGROUPS_FOLDER,
 				uuid_string(container_get_uuid(cgroups->container)));
 
-	if (file_write(path, rule, -1) == -1) {
+	if (file_write(path, rule, strlen(rule)) == -1) {
 		ERROR_ERRNO("Failed to write '%s' to %s", rule, path);
 		goto error;
 	}
@@ -572,7 +572,7 @@ c_cgroups_freeze(void *cgroupsp)
 
 	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
 					      uuid_string(container_get_uuid(cgroups->container)));
-	if (file_write(freezer_state_path, "FROZEN", -1) == -1) {
+	if (file_write(freezer_state_path, "FROZEN", strlen("FROZEN")) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
 		mem_free0(freezer_state_path);
 		return -1;
@@ -591,7 +591,7 @@ c_cgroups_unfreeze(void *cgroupsp)
 
 	char *freezer_state_path = mem_printf("%s/freezer/%s/freezer.state", CGROUPS_FOLDER,
 					      uuid_string(container_get_uuid(cgroups->container)));
-	if (file_write(freezer_state_path, "THAWED", -1) == -1) {
+	if (file_write(freezer_state_path, "THAWED", strlen("THAWED")) == -1) {
 		ERROR_ERRNO("Failed to write to freezer file %s", freezer_state_path);
 		mem_free0(freezer_state_path);
 		return -1;

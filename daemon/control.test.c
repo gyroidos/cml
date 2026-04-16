@@ -303,12 +303,12 @@ run_testsuite(int cmld_fd, void (*inject)(ControllerToDaemon *msg, void *data), 
 
 	// test Container_GET_CONTAINER_CONFIG 2
 	DEBUG("test Container_GET_CONTAINER_CONFIG 2");
-	file_write("test_A0.conf",
-		   "name: \"a0\"\nguest_os: \"a0os\"\nguestos_version: 20150408\ncolor: 1426918911",
-		   -1);
-	file_write("test_A1.conf",
-		   "name: \"a1\"\nguest_os: \"a1os\"\nguestos_version: 20150409\ncolor: 1426918912",
-		   -1);
+	const char *a0_conf =
+		"name: \"a0\"\nguest_os: \"a0os\"\nguestos_version: 20150408\ncolor: 1426918911";
+	const char *a1_conf =
+		"name: \"a1\"\nguest_os: \"a1os\"\nguestos_version: 20150409\ncolor: 1426918912";
+	file_write("test_A0.conf", a0_conf, strlen(a0_conf));
+	file_write("test_A1.conf", a1_conf, strlen(a1_conf));
 	msg_in.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 	msg_in.n_container_uuids = 0;
 	test_handle_message(&msg_in, inject, data, cmld_fd, NULL);
