@@ -57,6 +57,18 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
+# --- Per-module bounds-safety support ---
+# Only annotated modules are compiled with -fbounds-safety; all others
+# compile normally.  Add newly annotated .c files to BOUNDS_SAFE_SRCS.
+BOUNDS_SAFETY ?= n
+BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c
+BOUNDS_SAFE_OBJS := $(BOUNDS_SAFE_SRCS:.c=.o)
+
+BOUNDS_CFLAGS := -fbounds-safety -fbounds-safety-bringup-missing-checks=batch_0
+
+ifeq ($(BOUNDS_SAFETY),y)
+$(BOUNDS_SAFE_OBJS): EXTRA_CFLAGS := $(BOUNDS_CFLAGS)
+endif
 
 .PHONY: all
 all: libcommon
@@ -125,10 +137,10 @@ libcommon_full_systemd: $(OBJS_COMMON_FULL) sock-sd.o
 	$(AR) rcs libcommon_full_systemd.a $^
 
 sock-sd.o: sock-sd.c
-	$(CC) -c $(LOCAL_CFLAGS) -DSYSTEMD $< -o $@
+	$(CC) -c $(LOCAL_CFLAGS) $(EXTRA_CFLAGS) -DSYSTEMD $< -o $@
 
 %.o: %.c
-	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
+	$(CC) -c $(LOCAL_CFLAGS) $(EXTRA_CFLAGS) $< -o $@
 
 LFLAGS_TEST := \
 	-L. -lcommon_full \

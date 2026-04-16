@@ -26,12 +26,13 @@
 #include <stdarg.h>
 #include <string.h>
 
+#include "bounds_safety.h"
 #include "str.h"
 #include "mem.h"
 #include "macro.h"
 
 struct str {
-	char *buf;
+	char *__sized_by(allocated_len) buf;
 	ssize_t len;
 	size_t allocated_len;
 };
@@ -44,17 +45,19 @@ str_expand(str_t *str, size_t len)
 	if (str->len + len < str->allocated_len)
 		return;
 
-	str->allocated_len = str->len + len + 1;
-	str->buf = mem_realloc(str->buf, str->allocated_len);
+	size_t new_alloc = str->len + len + 1;
+	str->buf = mem_realloc(str->buf, new_alloc);
+	str->allocated_len = new_alloc;
 }
 
 static void
 str_append_printf_internal(str_t *str, const char *fmt, va_list ap)
 {
-	char *buf;
+	char *__null_terminated buf;
 
 	buf = mem_vprintf(fmt, ap);
-	str_insert_len(str, -1, buf, -1);
+	size_t len = strlen(buf);
+	str_insert_len(str, -1, __unsafe_forge_bidi_indexable(const char *, buf, len), len);
 	mem_free0(buf);
 }
 
@@ -66,11 +69,13 @@ str_new(const char *init)
 	if (init == NULL || *init == '\0') {
 		str = str_new_len(2);
 	} else {
-		int len;
+		size_t len;
 
 		len = strlen(init);
 		str = str_new_len(len + 2);
-		str_append_len(str, init, len);
+		str_append_len(str,
+			       __unsafe_forge_bidi_indexable(const char *, init, len),
+			       len);
 	}
 	return str;
 }
@@ -114,11 +119,12 @@ str_assign(str_t *str, const char *buf)
 	IF_FALSE_RETURN(str->buf != buf);
 
 	str_truncate(str, 0);
-	str_insert_len(str, -1, buf, -1);
+	size_t len = strlen(buf);
+	str_insert_len(str, -1, __unsafe_forge_bidi_indexable(const char *, buf, len), len);
 }
 
 void
-str_assign_len(str_t *str, const char *buf, ssize_t len)
+str_assign_len(str_t *str, const char *__counted_by(len) buf, size_t len)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -147,11 +153,12 @@ str_append(str_t *str, const char *buf)
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
 
-	str_insert_len(str, -1, buf, -1);
+	size_t len = strlen(buf);
+	str_insert_len(str, -1, __unsafe_forge_bidi_indexable(const char *, buf, len), len);
 }
 
 void
-str_append_len(str_t *str, const char *buf, ssize_t len)
+str_append_len(str_t *str, const char *__counted_by(len) buf, size_t len)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
@@ -175,17 +182,15 @@ str_insert(str_t *str, ssize_t pos, const char *buf)
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
 
-	str_insert_len(str, pos, buf, -1);
+	size_t len = strlen(buf);
+	str_insert_len(str, pos, __unsafe_forge_bidi_indexable(const char *, buf, len), len);
 }
 
 void
-str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
+str_insert_len(str_t *str, ssize_t pos, const char *__counted_by(len) buf, size_t len)
 {
 	IF_NULL_RETURN(str);
 	IF_NULL_RETURN(buf);
-
-	if (len < 0)
-		len = strlen(buf);
 
 	if (pos < 0)
 		pos = str->len;
@@ -195,21 +200,22 @@ str_insert_len(str_t *str, ssize_t pos, const char *buf, ssize_t len)
 	str_expand(str, len);
 
 	if (buf >= str->buf && buf <= str->buf + str->len) {
-		ssize_t offset = buf - str->buf;
-		ssize_t precount = 0;
+		size_t offset = buf - str->buf;
+		size_t precount = 0;
 
-		buf = str->buf + offset;
+		const char *src = str->buf + offset;
 
 		if (pos < str->len)
 			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
 
-		if (offset < pos) {
-			precount = MIN(len, pos - offset);
-			memcpy(str->buf + pos, buf, precount);
+		if (offset < (size_t)pos) {
+			precount = MIN(len, (size_t)pos - offset);
+			memcpy(str->buf + pos, src, precount);
 		}
 
 		if (len > precount)
-			memcpy(str->buf + pos + precount, buf + precount + len, len - precount);
+			memcpy(str->buf + pos + precount, src + precount + len,
+			       len - precount);
 	} else {
 		if (pos < str->len)
 			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
@@ -234,7 +240,7 @@ const char *
 str_buffer(str_t *str)
 {
 	IF_NULL_RETVAL(str, NULL);
-	return str->buf;
+	return __unsafe_null_terminated_from_indexable(str->buf);
 }
 
 size_t
@@ -244,18 +250,20 @@ str_length(str_t *str)
 	return str->len;
 }
 
-char *
+char *__null_terminated
 str_free(str_t *str, bool free_buf)
 {
-	char *buf;
+	char *__null_terminated buf;
 
 	IF_NULL_RETVAL(str, NULL);
 
 	if (free_buf) {
-		mem_free0(str->buf);
+		free(str->buf);
+		str->buf = NULL;
+		str->allocated_len = 0;
 		buf = NULL;
 	} else {
-		buf = str->buf;
+		buf = __unsafe_null_terminated_from_indexable(str->buf);
 	}
 
 	mem_free0(str);
@@ -264,13 +272,12 @@ str_free(str_t *str, bool free_buf)
 }
 
 str_t *
-str_hexdump_new(unsigned char *mem, size_t len)
+str_hexdump_new(unsigned char *__counted_by(len) mem, size_t len)
 {
 	str_t *ret = str_new_len(len * 2 + 1);
 
-	while (len--) {
-		str_append_printf(ret, "%02x ", *mem);
-		mem++;
+	for (size_t i = 0; i < len; i++) {
+		str_append_printf(ret, "%02x ", mem[i]);
 	}
 
 	return ret;

@@ -24,11 +24,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include "bounds_safety.h"
 #include "macro.h"
 #include "mem.h"
 
 int
-convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen)
+convert_hex_to_bin(const char *__counted_by(inlen) in, size_t inlen,
+		   uint8_t *__counted_by(outlen) out, size_t outlen)
 {
 	ASSERT(inlen >= 2);
 
@@ -60,7 +62,8 @@ convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen)
 }
 
 int
-convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen)
+convert_bin_to_hex(const uint8_t *__counted_by(inlen) in, size_t inlen,
+		   uint8_t *__counted_by(outlen) out, size_t outlen)
 {
 	size_t len = MUL_WITH_OVERFLOW_CHECK(inlen, (size_t)2);
 	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
@@ -78,7 +81,7 @@ convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen)
 }
 
 char *
-convert_bin_to_hex_new(const uint8_t *bin, size_t length)
+convert_bin_to_hex_new(const uint8_t *__counted_by(length) bin, size_t length)
 {
 	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
 	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
