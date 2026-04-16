@@ -841,9 +841,9 @@
 #ifndef ADD_WITH_OVERFLOW_CHECK
 #define ADD_WITH_OVERFLOW_CHECK(x, y)                                                              \
 	__extension__({                                                                            \
-		typeof(x) _x = (x);                                                                \
-		typeof(y) _y = (y);                                                                \
-		typeof(x + y) _res;                                                                \
+		__typeof__(x) _x = (x);                                                            \
+		__typeof__(y) _y = (y);                                                            \
+		__typeof__(x + y) _res;                                                            \
 		if (__builtin_add_overflow(_x, _y, &_res)) {                                       \
 			FATAL("Detected addition integer overflow.");                              \
 		}                                                                                  \
@@ -865,9 +865,9 @@
 #ifndef SUB_WITH_OVERFLOW_CHECK
 #define SUB_WITH_OVERFLOW_CHECK(x, y)                                                              \
 	__extension__({                                                                            \
-		typeof(x) _x = (x);                                                                \
-		typeof(y) _y = (y);                                                                \
-		typeof(x - y) _res;                                                                \
+		__typeof__(x) _x = (x);                                                            \
+		__typeof__(y) _y = (y);                                                            \
+		__typeof__(x - y) _res;                                                            \
 		if (__builtin_sub_overflow(_x, _y, &_res)) {                                       \
 			FATAL("Detected subtraction integer overflow.");                           \
 		}                                                                                  \
@@ -889,9 +889,9 @@
 #ifndef MUL_WITH_OVERFLOW_CHECK
 #define MUL_WITH_OVERFLOW_CHECK(x, y)                                                              \
 	__extension__({                                                                            \
-		typeof(x) _x = (x);                                                                \
-		typeof(y) _y = (y);                                                                \
-		typeof(x * y) _res;                                                                \
+		__typeof__(x) _x = (x);                                                            \
+		__typeof__(y) _y = (y);                                                            \
+		__typeof__(x * y) _res;                                                            \
 		if (__builtin_mul_overflow(_x, _y, &_res)) {                                       \
 			FATAL("Detected multiplication integer overflow.");                        \
 		}                                                                                  \
