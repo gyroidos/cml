@@ -57,10 +57,14 @@ c_oci_start_pre_clone(void *ocip)
 	} else {
 		unsigned char key[TOKEN_KEY_LEN];
 		int keylen = crypto_random_get_bytes(key, sizeof(key));
-		ascii_key = convert_bin_to_hex_new(key, keylen);
+		if (keylen != sizeof(key)) {
+			ERROR("Failed to generate key for oci container, due to RNG Error!");
+		} else {
+			ascii_key = convert_bin_to_hex_new(key, keylen);
+			// include terminating null byte into file
+			file_write(oci->key_file, ascii_key, strlen(ascii_key) + 1);
+		}
 		mem_memset0(key, sizeof(key));
-		// include terminating null byte into file
-		file_write(oci->key_file, ascii_key, strlen(ascii_key) + 1);
 	}
 
 	if (ascii_key) {

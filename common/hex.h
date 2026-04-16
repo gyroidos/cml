@@ -24,6 +24,9 @@
 #ifndef HEX_H_
 #define HEX_H_
 
+#include <stddef.h>
+#include <stdint.h>
+
 int
 convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen);
 
@@ -31,6 +34,6 @@ int
 convert_bin_to_hex(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
 char *
-convert_bin_to_hex_new(const uint8_t *bin, int length);
+convert_bin_to_hex_new(const uint8_t *bin, size_t length);
 
 #endif // HEX_H_
