@@ -67,8 +67,6 @@ typedef struct __attribute__((packed)) {
 	uint8_t reserved2[168];
 } verity_sb_t;
 
-extern int errno;
-
 static int
 verity_create_uuid(const char *name, const char *uuid_str, char *buf, size_t buflen)
 {
@@ -111,7 +109,7 @@ uuid_bytes_to_string(char *str, uint8_t uuid[16])
 }
 
 static int
-generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, char *fs_dev,
+generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t *sb, char *fs_dev,
 				    uint64_t fs_size, char *hash_dev, const char *root_hash)
 {
 	if (len < sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec)) {
@@ -119,15 +117,13 @@ generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, c
 		return -1;
 	}
 
-	struct dm_target_spec *tgt;
-	tgt = (struct dm_target_spec *)&buf[sizeof(struct dm_ioctl)];
+	struct dm_target_spec *tgt = (struct dm_target_spec *)(io + 1);
 	tgt->sector_start = 0;
 	tgt->length = fs_size;
 	tgt->status = 0;
 	strncpy(tgt->target_type, "verity", sizeof(tgt->target_type));
 
-	char *verity_params;
-	verity_params = (char *)(buf + sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec));
+	char *verity_params = (char *)(io + 1) + sizeof(struct dm_target_spec);
 
 	char *salt = convert_bin_to_hex_new(sb->salt, sb->salt_size);
 	uint32_t offset = 1;
@@ -143,7 +139,7 @@ generate_dm_table_load_extra_params(uint8_t *buf, size_t len, verity_sb_t *sb, c
 	// Align to an 8 byte boundary
 	verity_params = (char *)(((unsigned long)verity_params + 7) & ~8);
 	// Set tgt->next right behind dm_target_spec
-	tgt->next = (unsigned int)(verity_params - (char *)buf);
+	tgt->next = (unsigned int)(verity_params - (char *)io);
 
 	return 0;
 }
@@ -221,8 +217,8 @@ verity_delete_blk_dev(const char *name)
 {
 	int control_fd = -1;
 	int ret = -1;
-	uint8_t buf[16384] = { 0 };
-	struct dm_ioctl *dmi = NULL;
+	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
+	struct dm_ioctl *dmi = (struct dm_ioctl *)buf;
 
 	TRACE("Closing dm-verity device %s", name);
 
@@ -231,7 +227,6 @@ verity_delete_blk_dev(const char *name)
 	}
 
 	// Make sure that dm-verity device exists
-	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL,
 		      DM_EXISTS_FLAG | DM_NOFLUSH_FLAG, 0, 0, 0);
 	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
@@ -240,7 +235,6 @@ verity_delete_blk_dev(const char *name)
 		goto out;
 	}
 
-	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_DEV_REMOVE, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_REMOVE].cmd, dmi);
 	if (ioctl_ret != 0) {
@@ -269,8 +263,8 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	int control_fd = -1;
 	int ret = -1;
 	int fs_fd = -1;
-	uint8_t buf[16384] = { 0 };
-	struct dm_ioctl *dmi = NULL;
+	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
+	struct dm_ioctl *dmi = (struct dm_ioctl *)buf;
 	char *fs_dev = NULL;
 	char *hash_dev = NULL;
 
@@ -307,7 +301,6 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	}
 
 	// Make sure that dm-verity device does not already exist
-	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
 	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
 	if (ioctl_ret == 0 || errno != ENXIO) {
@@ -359,11 +352,10 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	unsigned long long dev = dmi->dev;
 
 	// Reload the dm table
-	dmi = (struct dm_ioctl *)buf;
 	unsigned int flags =
 		DM_READONLY_FLAG | DM_EXISTS_FLAG | DM_PERSISTENT_DEV_FLAG | DM_SECURE_DATA_FLAG;
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_LOAD, sizeof(buf), NULL, NULL, flags, dev, 1, 0);
-	if (generate_dm_table_load_extra_params(buf, sizeof(buf), &sb, fs_dev, fs_size, hash_dev,
+	if (generate_dm_table_load_extra_params(dmi, sizeof(buf), &sb, fs_dev, fs_size, hash_dev,
 						root_hash)) {
 		goto out;
 	}
@@ -374,7 +366,6 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	}
 
 	// Run dev-suspend command
-	dmi = (struct dm_ioctl *)buf;
 	flags = DM_READONLY_FLAG | DM_EXISTS_FLAG | DM_SECURE_DATA_FLAG;
 	dm_ioctl_init(dmi, INDEX_DM_DEV_SUSPEND, sizeof(buf), name, NULL, flags, 0, 0, 0);
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_SUSPEND].cmd, dmi);
@@ -384,19 +375,18 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	}
 
 	// Check that verity device activation was successful
-	dmi = (struct dm_ioctl *)buf;
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_STATUS ioctl returned %d", ioctl_ret);
 		goto out;
 	}
-	char *status_line = (char *)&buf[sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec)];
+	char *status_line = (char *)(dmi + 1) + sizeof(struct dm_target_spec);
 
 	if (status_line[0] == 'V') {
 		DEBUG("Successfully activated verity device %s", name);
 
-		if (0 != create_dm_symlink(name, ((struct dm_ioctl *)buf)->dev, enforce_symlinks)) {
+		if (0 != create_dm_symlink(name, dmi->dev, enforce_symlinks)) {
 			ERROR("Failed to create symlink for verity device %s, closing device",
 			      name);
 

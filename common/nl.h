@@ -126,7 +126,7 @@ nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
  * @return In case of failure, return -1, in case of success, return num of bytes received
  */
 int
-nl_msg_receive_kernel(const nl_sock_t *sock, char *buf, size_t len, bool receive_uevent);
+nl_msg_receive_kernel(const nl_sock_t *sock, void *buf, size_t len, bool receive_uevent);
 
 /**
  * Transmit a message with ACKNOWLEDGEMENT flag

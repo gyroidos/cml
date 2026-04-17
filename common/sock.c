@@ -213,16 +213,9 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 	IF_NULL_RETVAL(addrinfo, -1);
 
 	char addr_str[INET6_ADDRSTRLEN] = { 0 };
-	void *addr_ptr = NULL;
 
-	if (addrinfo->ai_family == AF_INET) {
-		addr_ptr = &((struct sockaddr_in *)addrinfo->ai_addr)->sin_addr;
-	} else if (addrinfo->ai_family == AF_INET6) {
-		addr_ptr = &((struct sockaddr_in6 *)addrinfo->ai_addr)->sin6_addr;
-	}
-
-	if (addr_ptr) {
-		inet_ntop(addrinfo->ai_family, addr_ptr, addr_str, sizeof(addr_str));
+	if (getnameinfo(addrinfo->ai_addr, addrinfo->ai_addrlen, addr_str, sizeof(addr_str), NULL,
+			0, NI_NUMERICHOST) == 0) {
 		INFO("Trying to connect to IPv%d address: %s (%s)",
 		     addrinfo->ai_family == PF_INET6 ? 6 : 4, addr_str, addrinfo->ai_canonname);
 	} else {

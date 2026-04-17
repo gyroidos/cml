@@ -716,14 +716,16 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 		res = -2;
 		return res;
 	}
-	int tmpkeylen = *((int *)wrapped_key);
+	int tmpkeylen;
+	memcpy(&tmpkeylen, wrapped_key, sizeof(int));
 	if (tmpkeylen < 0) {
 		WARN("Given wrapped key is invalid/corrupted.");
 		res = -2;
 		return res;
 	}
 	wrapped_key += sizeof(int);
-	int keylen = *((int *)wrapped_key);
+	int keylen;
+	memcpy(&keylen, wrapped_key, sizeof(int));
 	if (keylen < 0) {
 		WARN("Given wrapped key is invalid/corrupted.");
 		res = -2;

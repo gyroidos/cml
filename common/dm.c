@@ -163,7 +163,7 @@ dm_get_blkdev_readonly(int fd)
 int
 dm_read_version(int fd)
 {
-	uint8_t buf[16384] = { 0 };
+	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
 
 	dmi = (struct dm_ioctl *)buf;
@@ -181,7 +181,7 @@ dm_read_version(int fd)
 int
 dm_list_versions(int fd)
 {
-	uint8_t buf[16384] = { 0 };
+	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
 
 	dmi = (struct dm_ioctl *)buf;
@@ -201,7 +201,7 @@ dm_get_target_type_new(int fd, const char *name)
 {
 	ASSERT(strlen(name) <= DM_NAME_LEN);
 
-	uint8_t buf[16384] = { 0 };
+	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
 
 	dmi = (struct dm_ioctl *)buf;

@@ -780,6 +780,13 @@
 #define UNUSED __attribute__((unused))
 
 /**
+ * Aligns a declaration to the alignment of type @p x.
+ * Used in prefix notation like UNUSED, e.g., to align a byte buffer that is
+ * cast to a struct pointer: @code uint8_t ALIGNED(struct dm_ioctl) buf[N] @endcode
+ */
+#define ALIGNED(x) __attribute__((aligned(__alignof__(x))))
+
+/**
  * Indicates that a function is executed in constructor context before main.
  * We use this to handle optional modules during build
  */
