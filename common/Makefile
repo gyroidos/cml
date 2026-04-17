@@ -61,7 +61,7 @@ endif
 # Only annotated modules are compiled with -fbounds-safety; all others
 # compile normally.  Add newly annotated .c files to BOUNDS_SAFE_SRCS.
 BOUNDS_SAFETY ?= n
-BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c
+BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c sock.c
 BOUNDS_SAFE_OBJS := $(BOUNDS_SAFE_SRCS:.c=.o)
 
 BOUNDS_CFLAGS := -fbounds-safety -fbounds-safety-bringup-missing-checks=batch_0
