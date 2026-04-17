@@ -140,8 +140,11 @@ TEST_SUITES := \
 	macro.test.c \
 	ssl_util.test.c
 
-common.test: $(TEST_SUITES) munit.h munit.c common.test.c
-	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.c common.test.c $(LFLAGS_TEST)
+munit.o: munit.c munit.h
+	$(CC) -c $(LOCAL_CFLAGS) -Wno-c11-extensions $< -o $@
+
+common.test: $(TEST_SUITES) munit.o common.test.c
+	$(CC) $(LOCAL_CFLAGS) -o $@ $(OBJS_COMMON) $(TEST_SUITES) munit.o common.test.c $(LFLAGS_TEST)
 
 .PHONY: test
 test: libcommon_full common.test

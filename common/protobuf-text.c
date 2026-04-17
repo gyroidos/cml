@@ -130,7 +130,7 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
 	ASSERT(buf);
 	ASSERT(descriptor);
 	TRACE("Parsing text protobuf message (%s) from buffer %p (length=%zu).",
-	      descriptor->name ? descriptor->name : "UNKNOWN", buf, buflen);
+	      descriptor->name ? descriptor->name : "UNKNOWN", (void *)buf, buflen);
 
 	char *string = mem_alloc(buflen + 1);
 	memcpy(string, buf, buflen);
