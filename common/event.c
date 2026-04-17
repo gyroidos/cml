@@ -864,7 +864,7 @@ event_loop(void)
 }
 
 void
-event_reset()
+event_reset(void)
 {
 	/*
 	 * FIXME event_inotify_reset_fd();

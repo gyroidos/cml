@@ -89,7 +89,7 @@ namespace_setuid_keep_cap(int uid, int cap)
 }
 
 int
-namespace_setuid0()
+namespace_setuid0(void)
 {
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 	if (setuid(0) < 0) {
