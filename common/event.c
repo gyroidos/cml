@@ -494,7 +494,7 @@ event_inotify_handler(int wd, const char *path, uint32_t mask)
 static void
 event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *data)
 {
-	char buf[(8 * (sizeof(struct inotify_event) + NAME_MAX + 1))] __attribute__((aligned(8)));
+	char buf[(8 * (sizeof(struct inotify_event) + NAME_MAX + 1))] ALIGNED(struct inotify_event);
 	char *p;
 	ssize_t n;
 
@@ -508,7 +508,8 @@ event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *da
 		return;
 
 	for (p = buf; p < buf + n;) {
-		struct inotify_event *e = (struct inotify_event *)p;
+		ASSERT((uintptr_t)p % __alignof__(struct inotify_event) == 0);
+		struct inotify_event *e = (struct inotify_event *)(void *)p;
 		const char *name = e->len ? e->name : NULL;
 
 		TRACE("Read inotify event %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s"

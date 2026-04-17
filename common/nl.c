@@ -41,6 +41,13 @@
 #include "macro.h"
 #include "mem.h"
 
+static inline struct nlmsghdr *
+nl_nlmsg_next(struct nlmsghdr *nlh, int *len)
+{
+	*len -= (int)NLMSG_ALIGN(nlh->nlmsg_len);
+	return (struct nlmsghdr *)(void *)((char *)nlh + NLMSG_ALIGN(nlh->nlmsg_len));
+}
+
 /**
  * Default values for message and socket allocation
  */
@@ -49,7 +56,7 @@
 #define NL_DEFAULT_SOCK_SNDBUF_SIZE 32768
 #define NL_UEVENT_SOCK_RCVBUF_SIZE (256 * 1024)
 
-#define NLA_DATA(nla) (char *)nla + NLA_HDRLEN
+#define NLA_DATA(nla) ((void *)((char *)(nla) + NLA_HDRLEN))
 
 #define NL_HDR_OFFSET(len) len + NLMSG_ALIGN(len);
 
@@ -442,13 +449,15 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 static uint16_t
 nl_msg_attr_get_u16(struct nlattr *nlattr)
 {
-	return *(uint16_t *)((char *)nlattr + NLA_HDRLEN);
+	uint16_t val;
+	memcpy(&val, NLA_DATA(nlattr), sizeof(val));
+	return val;
 }
 
 static char *
 nl_msg_attr_get_str(struct nlattr *nlattr)
 {
-	return (char *)nlattr + NLA_HDRLEN;
+	return NLA_DATA(nlattr);
 }
 
 static int
@@ -461,7 +470,7 @@ nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 		return -1;
 	}
 
-	struct ucred *cred = (struct ucred *)CMSG_DATA(cmsg);
+	struct ucred *cred = (struct ucred *)(void *)CMSG_DATA(cmsg);
 	if (cred->uid != 0) {
 		/* ignoring netlink message from non-root user */
 		return -1;
@@ -486,14 +495,14 @@ nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 }
 
 static int
-nl_msg_receive(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent, bool ucred)
+nl_msg_receive(const nl_sock_t *nl, void *buf, const size_t len, bool receive_uevent, bool ucred)
 {
 	int received;
 	struct sockaddr_nl nladdr;
 	char control[CMSG_SPACE(sizeof(struct ucred))];
 
 	/* Prepare scatter/gather transmission */
-	struct iovec iov = { .iov_base = (void *)buf, .iov_len = len };
+	struct iovec iov = { .iov_base = buf, .iov_len = len };
 
 	struct msghdr m = { .msg_name = (void *)&nladdr,
 			    .msg_namelen = sizeof(nladdr),
@@ -547,13 +556,13 @@ error:
 }
 
 int
-nl_msg_receive_kernel(const nl_sock_t *nl, char *buf, const size_t len, bool receive_uevent)
+nl_msg_receive_kernel(const nl_sock_t *nl, void *buf, const size_t len, bool receive_uevent)
 {
 	return nl_msg_receive(nl, buf, len, receive_uevent, true);
 }
 
 int
-nl_msg_receive_nocred(const nl_sock_t *nl, char *buf, const size_t len)
+nl_msg_receive_nocred(const nl_sock_t *nl, void *buf, const size_t len)
 {
 	return nl_msg_receive(nl, buf, len, false, false);
 }
@@ -566,10 +575,8 @@ nl_eval_ack(const nl_sock_t *nl, UNUSED uint32_t seq)
 {
 	ASSERT(nl);
 
-	char *buf = NULL;
+	struct nlmsghdr *buf = mem_alloc0(NL_DEFAULT_SOCK_RCVBUF_SIZE);
 	int rcvd;
-
-	buf = mem_new0(char, NL_DEFAULT_SOCK_RCVBUF_SIZE);
 
 	if (!buf)
 		return -1;
@@ -584,8 +591,8 @@ nl_eval_ack(const nl_sock_t *nl, UNUSED uint32_t seq)
 
 		/* This code is able to decode multipart nl messages with the NLM_F_MULTI flag set.
 		 * When this loop is passed without ACK found, return -1 */
-		for (msg = (struct nlmsghdr *)buf; NLMSG_OK(msg, (unsigned int)rcvd);
-		     msg = NLMSG_NEXT(msg, rcvd)) {
+		for (msg = buf; NLMSG_OK(msg, (unsigned int)rcvd);
+		     msg = nl_nlmsg_next(msg, &rcvd)) {
 			/* Check pid and sequence number of the received message:
 			 * ACK has same port id as socket and same seq number */
 
@@ -685,7 +692,7 @@ nl_msg_new(void)
 	 * account */
 	const size_t len = NLMSG_ALIGN(size) + NLMSG_ALIGN(sizeof(struct nl_msg));
 
-	ret = (nl_msg_t *)mem_new0(char, len);
+	ret = mem_alloc0(len);
 
 	if (!ret)
 		return NULL;
@@ -817,10 +824,9 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 {
 	ASSERT(nl);
 
-	char *buf = NULL;
+	struct nlmsghdr *buf = mem_alloc0(NL_DEFAULT_SOCK_RCVBUF_SIZE);
 	int ret = 0;
 
-	buf = mem_new0(char, NL_DEFAULT_SOCK_RCVBUF_SIZE);
 	IF_NULL_RETVAL_TRACE(buf, -1);
 
 	if (nl_msg_receive_kernel(nl, buf, NL_DEFAULT_SOCK_RCVBUF_SIZE, false) < 0) {
@@ -828,7 +834,7 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 		return -1;
 	}
 
-	struct nlmsghdr *msg = (struct nlmsghdr *)buf;
+	struct nlmsghdr *msg = buf;
 	if (msg->nlmsg_type == NLMSG_ERROR) {
 		TRACE("Message is a response from previous request");
 		struct nlmsgerr *err = NLMSG_DATA(msg);
@@ -846,7 +852,7 @@ nl_nla_next(const struct nlattr *nla, int *rem)
 {
 	struct nlattr *next = NULL;
 	if (nla->nla_len <= *rem && nla->nla_len >= sizeof(struct nlattr)) {
-		next = (struct nlattr *)((char *)nla + NLA_ALIGN(nla->nla_len));
+		next = (struct nlattr *)(void *)((char *)nla + NLA_ALIGN(nla->nla_len));
 		*rem = *rem - NLA_ALIGN(nla->nla_len);
 	}
 	return next;
@@ -864,7 +870,7 @@ nl_genl_family_getid(const char *family_name)
 	nl_sock_t *nl_sock = NULL;
 	nl_msg_t *req = NULL;
 	uint16_t ret = 0;
-	char *buf = NULL;
+	struct nlmsghdr *buf = NULL;
 	bool nlmsg_done = false;
 	bool nlm_f_multi = false;
 	bool nl80211 = false;
@@ -899,7 +905,7 @@ nl_genl_family_getid(const char *family_name)
 	/* Send request message */
 	IF_TRUE_GOTO_ERROR(nl_msg_send_kernel(nl_sock, req) < 0, msg_err);
 
-	buf = mem_new0(char, NL_DEFAULT_SOCK_RCVBUF_SIZE);
+	buf = mem_alloc0(NL_DEFAULT_SOCK_RCVBUF_SIZE);
 	IF_NULL_GOTO_ERROR(buf, msg_err);
 
 	do {
@@ -910,8 +916,8 @@ nl_genl_family_getid(const char *family_name)
 			goto msg_err;
 		}
 
-		for (msg = (struct nlmsghdr *)buf; NLMSG_OK(msg, (unsigned int)rcvd);
-		     msg = NLMSG_NEXT(msg, rcvd)) {
+		for (msg = buf; NLMSG_OK(msg, (unsigned int)rcvd);
+		     msg = nl_nlmsg_next(msg, &rcvd)) {
 			IF_TRUE_GOTO_ERROR(msg->nlmsg_type == NLMSG_ERROR, msg_err);
 			IF_TRUE_GOTO_ERROR(msg->nlmsg_type == NLMSG_OVERRUN, msg_err);
 
@@ -932,8 +938,8 @@ nl_genl_family_getid(const char *family_name)
 			TRACE("nlattrs_len %d, genl_offset %u, nlattrs_offset: %zu", nlattrs_len,
 			      NLMSG_ALIGN(NLMSG_HDRLEN), NLMSG_ALIGN(GENL_HDRLEN));
 
-			struct nlattr *nla =
-				(struct nlattr *)((char *)hdr_resp + NLMSG_ALIGN(GENL_HDRLEN));
+			struct nlattr *nla = (struct nlattr *)(void *)((char *)hdr_resp +
+								       NLMSG_ALIGN(GENL_HDRLEN));
 			for (int len = nlattrs_len; nl_nla_ok(nla, len);
 			     nla = nl_nla_next(nla, &len)) {
 				TRACE("nla->nla_len %u, nla->nla_type %u, len %d", nla->nla_len,

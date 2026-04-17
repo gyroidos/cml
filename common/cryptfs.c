@@ -121,9 +121,8 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	IF_TRUE_RETVAL_ERROR(!stacked && !integrity_key_ascii, -1);
 
 	// Load mapping variables
-	char *mapping_buffer = mem_new(char, DM_INTEGRITY_BUF_SIZE);
+	struct dm_ioctl *mapping_io = mem_alloc0(DM_INTEGRITY_BUF_SIZE);
 	struct dm_target_spec *tgt;
-	struct dm_ioctl *mapping_io;
 	char *integrity_params;
 	char *extra_params =
 		stacked ? mem_printf("1 meta_device:%s", meta_blk_name) :
@@ -131,10 +130,8 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 				     meta_blk_name, INTEGRITY_TYPE, integrity_key_ascii);
 	int mapping_counter;
 
-	mapping_io = (struct dm_ioctl *)mapping_buffer;
-
 	/* Load the mapping table for this device */
-	tgt = (struct dm_target_spec *)&mapping_buffer[sizeof(struct dm_ioctl)];
+	tgt = (struct dm_target_spec *)(mapping_io + 1);
 
 	// Configure parameters for ioctl
 	dm_ioctl_init(mapping_io, INDEX_DM_TABLE_LOAD, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0,
@@ -146,7 +143,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	strcpy(tgt->target_type, "integrity");
 
 	// Write the intergity parameters at the end after dm_target_spec
-	integrity_params = mapping_buffer + sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec);
+	integrity_params = (char *)(mapping_io + 1) + sizeof(struct dm_target_spec);
 
 	// Write parameter
 	// these parameters are used in [1] as well as by dmsetup when traced with strace
@@ -162,7 +159,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	integrity_params = (char *)(((unsigned long)integrity_params + 7) &
 				    ~8); /* Align to an 8 byte boundary */
 	// Set tgt->next right behind dm_target_spec
-	tgt->next = integrity_params - mapping_buffer;
+	tgt->next = integrity_params - (char *)mapping_io;
 
 	for (mapping_counter = 0; mapping_counter < TABLE_LOAD_RETRIES; mapping_counter++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, mapping_io);
@@ -174,7 +171,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 		NANOSLEEP(0, 500000000)
 	}
 
-	mem_free0(mapping_buffer);
+	mem_free0(mapping_io);
 
 	// Check that loading the table worked
 	if (mapping_counter >= TABLE_LOAD_RETRIES) {
@@ -189,8 +186,7 @@ static int
 load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_key_ascii,
 			  const char *name, int fs_size, bool integrity)
 {
-	char *buffer = mem_new(char, DM_CRYPT_BUF_SIZE);
-	struct dm_ioctl *io;
+	struct dm_ioctl *io = mem_alloc0(DM_CRYPT_BUF_SIZE);
 	struct dm_target_spec *tgt;
 	char *crypt_params;
 	char *extra_params = integrity ? mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE) :
@@ -204,10 +200,8 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	TRACE("Loading crypto mapping table (%s,%s,%s,%s,%d,%d)", real_blk_name, crypto_type,
 	      master_key_ascii, name, fs_size, fd);
 
-	io = (struct dm_ioctl *)buffer;
-
 	/* Load the mapping table for this device */
-	tgt = (struct dm_target_spec *)&buffer[sizeof(struct dm_ioctl)];
+	tgt = (struct dm_target_spec *)(io + 1);
 
 	dm_ioctl_init(io, INDEX_DM_TABLE_LOAD, DM_CRYPT_BUF_SIZE, name, NULL, DM_EXISTS_FLAG, 0, 0,
 		      0);
@@ -217,7 +211,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	tgt->length = fs_size;
 	strcpy(tgt->target_type, "crypt");
 
-	crypt_params = buffer + sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec);
+	crypt_params = (char *)(io + 1) + sizeof(struct dm_target_spec);
 	snprintf(crypt_params,
 		 DM_CRYPT_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
 		 "%s %s 0 %s 0 %s", crypto_type, master_key_ascii, real_blk_name, extra_params);
@@ -226,7 +220,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	crypt_params += strlen(crypt_params) + 1;
 	crypt_params =
 		(char *)(((unsigned long)crypt_params + 7) & ~8); /* Align to an 8 byte boundary */
-	tgt->next = crypt_params - buffer;
+	tgt->next = crypt_params - (char *)io;
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, io);
@@ -237,7 +231,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 		NANOSLEEP(0, 500000000)
 	}
 
-	mem_free0(buffer);
+	mem_free0(io);
 	if (i == TABLE_LOAD_RETRIES) {
 		/* We failed to load the table, return an error */
 		ERROR_ERRNO("Loading crypto mapping table did not work after %d tries", i);
@@ -250,7 +244,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 static char *
 create_device_node(const char *name)
 {
-	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
+	struct dm_ioctl *io = mem_alloc0(DEVMAPPER_BUFFER_SIZE);
 	char *device = NULL;
 
 	int fd = open(DM_CONTROL, O_RDWR);
@@ -258,8 +252,6 @@ create_device_node(const char *name)
 		ERROR_ERRNO("Error opening devmapper");
 		goto errout;
 	}
-
-	struct dm_ioctl *io = (struct dm_ioctl *)buffer;
 
 	dm_ioctl_init(io, INDEX_DM_DEV_STATUS, DEVMAPPER_BUFFER_SIZE, name, NULL, 0, 0, 0, 0);
 	if (dm_ioctl(fd, DM_DEV_STATUS, io)) {
@@ -286,7 +278,7 @@ create_device_node(const char *name)
 errout:
 
 	close(fd);
-	mem_free0(buffer);
+	mem_free0(io);
 
 	return device;
 }
@@ -307,7 +299,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	int fd;
 	int ioctl_ret;
 	int load_count = -1;
-	char create_buffer[DM_INTEGRITY_BUF_SIZE];
+	char ALIGNED(struct dm_ioctl) create_buffer[DM_INTEGRITY_BUF_SIZE];
 	struct dm_ioctl *create_io;
 	int create_counter;
 	char *integrity_dev = NULL;
@@ -384,7 +376,7 @@ static char *
 create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name,
 		      unsigned long fs_size, bool integrity)
 {
-	char buffer[DM_CRYPT_BUF_SIZE];
+	char ALIGNED(struct dm_ioctl) buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
 	int fd;
 	int load_count;
@@ -455,8 +447,7 @@ static int
 delete_integrity_blk_dev(const char *name)
 {
 	int fd;
-	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
-	struct dm_ioctl *io;
+	struct dm_ioctl *io = mem_alloc0(DEVMAPPER_BUFFER_SIZE);
 	int ret = -1;
 	char *device = NULL;
 
@@ -465,8 +456,6 @@ delete_integrity_blk_dev(const char *name)
 		ERROR_ERRNO("Cannot open device-mapper");
 		goto error;
 	}
-
-	io = (struct dm_ioctl *)buffer;
 
 	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
@@ -486,7 +475,7 @@ delete_integrity_blk_dev(const char *name)
 error:
 	if (device)
 		mem_free0(device);
-	mem_free(buffer);
+	mem_free0(io);
 	close(fd);
 	return ret;
 }
@@ -494,8 +483,7 @@ error:
 static int
 delete_crypto_blk_dev(int fd, const char *name)
 {
-	char *buffer = mem_new(char, DM_CRYPT_BUF_SIZE);
-	struct dm_ioctl *io;
+	struct dm_ioctl *io = mem_alloc0(DM_CRYPT_BUF_SIZE);
 	int ret = -1;
 	char *device = NULL;
 	bool internally_opend = false;
@@ -508,8 +496,6 @@ delete_crypto_blk_dev(int fd, const char *name)
 		ERROR_ERRNO("Cannot open device-mapper");
 		goto error;
 	}
-
-	io = (struct dm_ioctl *)buffer;
 
 	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
@@ -530,7 +516,7 @@ delete_crypto_blk_dev(int fd, const char *name)
 error:
 	if (device)
 		mem_free0(device);
-	mem_free(buffer);
+	mem_free0(io);
 	if (internally_opend)
 		close(fd);
 	return ret;
