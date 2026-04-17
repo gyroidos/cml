@@ -268,6 +268,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 {
 	int control_fd = -1;
 	int ret = -1;
+	int fs_fd = -1;
 	uint8_t buf[16384] = { 0 };
 	struct dm_ioctl *dmi = NULL;
 	char *fs_dev = NULL;
@@ -281,6 +282,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	int hash_fd = open(hash_dev_name, O_RDONLY);
 	if (hash_fd < 0) {
 		ERROR_ERRNO("Failed to open dm-verity hash device %s", hash_dev_name);
+		goto out;
 	}
 
 	ssize_t size = fd_read_blockwise(hash_fd, &sb, sizeof(verity_sb_t), 4096, 4096);
@@ -314,7 +316,6 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	}
 
 	// Create loopdevice for dm-verity image
-	int fs_fd = 0;
 	fs_dev = loopdev_create_new(&fs_fd, fs_img_name, 1, 0);
 	if (!fs_dev) {
 		goto out;
@@ -415,9 +416,9 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 
 out:
 	dm_close_control(control_fd);
-	if (fs_fd > 0)
+	if (fs_fd >= 0)
 		close(fs_fd);
-	if (hash_fd > 0)
+	if (hash_fd >= 0)
 		close(hash_fd);
 	if (fs_dev)
 		mem_free0(fs_dev);
