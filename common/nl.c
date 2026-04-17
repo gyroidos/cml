@@ -291,14 +291,14 @@ nl_sock_uevent_new(pid_t udevd_pid)
 }
 
 nl_sock_t *
-nl_sock_routing_new()
+nl_sock_routing_new(void)
 {
 	TRACE("Creating routing nl socket");
 	return nl_sock_new(NETLINK_ROUTE, 0);
 }
 
 nl_sock_t *
-nl_sock_ifaddr_new()
+nl_sock_ifaddr_new(void)
 {
 	TRACE("Creating routing nl socket for ifaddr ifdel");
 	uint32_t nl_groups = (nl_mgrp(RTNLGRP_IPV4_IFADDR) | nl_mgrp(RTNLGRP_IPV6_IFADDR));
@@ -306,7 +306,7 @@ nl_sock_ifaddr_new()
 }
 
 nl_sock_t *
-nl_sock_xfrm_new()
+nl_sock_xfrm_new(void)
 {
 	TRACE("Creating xfrm nl socket");
 	uint32_t nl_groups =
@@ -676,7 +676,7 @@ nl_msg_send_kernel_verify(const nl_sock_t *nl_sock, const nl_msg_t *req)
 }
 
 nl_msg_t *
-nl_msg_new()
+nl_msg_new(void)
 {
 	nl_msg_t *ret = NULL;
 	size_t size = NL_MSG_DEFAULT_SIZE;

@@ -100,7 +100,7 @@ typedef struct proc_meminfo proc_meminfo_t;
  * @return pointer to the newly allocated struct, NULL on error
  */
 proc_meminfo_t *
-proc_meminfo_new();
+proc_meminfo_new(void);
 
 /**
  * Frees the meminfo internal struct
