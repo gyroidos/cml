@@ -42,11 +42,11 @@
 #define BOUNDS_SAFETY_H
 
 #if defined(__has_include) && __has_include(<ptrcheck.h>)
-  /* swiftlang Clang fork: <ptrcheck.h> provides real annotations when
+/* swiftlang Clang fork: <ptrcheck.h> provides real annotations when
    * -fbounds-safety is active and comprehensive no-ops when it is not. */
-  #include <ptrcheck.h>
+#include <ptrcheck.h>
 #else
-  /* GCC or stock Clang without ptrcheck.h: annotations are no-ops.
+/* GCC or stock Clang without ptrcheck.h: annotations are no-ops.
    *
    * The __counted_by/__sized_by family is guarded with #ifndef: the Linux
    * UAPI header <linux/stddef.h> (kernel >= 6.11) also defines __counted_by
@@ -54,41 +54,43 @@
    * redefinition here trips -Wmacro-redefined under -Werror whenever a
    * translation unit pulls in a UAPI header before this one.  Cooperate the
    * same way the kernel header does and defer to any existing definition. */
-  #ifndef __counted_by
-  #define __counted_by(N)
-  #endif
-  #ifndef __sized_by
-  #define __sized_by(N)
-  #endif
-  #ifndef __counted_by_or_null
-  #define __counted_by_or_null(N)
-  #endif
-  #ifndef __sized_by_or_null
-  #define __sized_by_or_null(N)
-  #endif
-  #define __ended_by(E)
-  #define __single
-  #define __null_terminated
-  #define __unsafe_indexable
-  #define __terminated_by(T)
-  #define __unsafe_forge_single(T, P) ((T)(P))
-  #define __unsafe_forge_bidi_indexable(T, P, S) ((T)(P))
-  #define __unsafe_forge_null_terminated(T, P) ((T)(P))
-  #define __BOUNDS_SAFETY_IGNORE_REST(P, ...) (P)
-  #define __unsafe_terminated_by_from_indexable(T, ...) \
-    __BOUNDS_SAFETY_IGNORE_REST(__VA_ARGS__, ((void)0))
-  #define __unsafe_null_terminated_from_indexable(...) \
-    __unsafe_terminated_by_from_indexable(0, __VA_ARGS__)
-  #define __ptrcheck_abi_assume_single()
-  #define __ptrcheck_abi_assume_unsafe_indexable()
-  #define __array_decay_discards_count_in_parameters
+#ifndef __counted_by
+#define __counted_by(N)
+#endif
+#ifndef __sized_by
+#define __sized_by(N)
+#endif
+#ifndef __counted_by_or_null
+#define __counted_by_or_null(N)
+#endif
+#ifndef __sized_by_or_null
+#define __sized_by_or_null(N)
+#endif
+#define __ended_by(E)
+#define __single
+#define __null_terminated
+#define __unsafe_indexable
+#define __terminated_by(T)
+#define __unsafe_forge_single(T, P) ((T)(P))
+#define __unsafe_forge_bidi_indexable(T, P, S) ((T)(P))
+#define __unsafe_forge_null_terminated(T, P) ((T)(P))
+#define __BOUNDS_SAFETY_IGNORE_REST(P, ...) (P)
+#define __unsafe_terminated_by_from_indexable(T, ...)                                              \
+	__BOUNDS_SAFETY_IGNORE_REST(__VA_ARGS__, ((void)0))
+#define __unsafe_null_terminated_from_indexable(...)                                               \
+	__unsafe_terminated_by_from_indexable(0, __VA_ARGS__)
+#define __null_terminated_to_indexable(P) (P)
+#define __unsafe_null_terminated_to_indexable(P) (P)
+#define __ptrcheck_abi_assume_single()
+#define __ptrcheck_abi_assume_unsafe_indexable()
+#define __array_decay_discards_count_in_parameters
 #endif
 
 /* Set when full enforcement is active (bounds_test files gate on this). */
 #ifdef __clang__
-  #if __has_feature(bounds_safety)
-    #define BOUNDS_SAFETY_ENABLED 1
-  #endif
+#if __has_feature(bounds_safety)
+#define BOUNDS_SAFETY_ENABLED 1
+#endif
 #endif
 
 #endif /* BOUNDS_SAFETY_H */
