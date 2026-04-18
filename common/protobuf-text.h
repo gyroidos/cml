@@ -37,6 +37,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+#include "bounds_safety.h"
 #include "protobuf.h"
 
 /**
@@ -73,10 +74,10 @@ protobuf_message_new_from_textfile(const char *filename,
  *          must be released with protobuf_free_message()
  */
 ProtobufCMessage *
-protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor);
+protobuf_message_new_from_string(const char *string, const ProtobufCMessageDescriptor *descriptor);
 
 ProtobufCMessage *
-protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
+protobuf_message_new_from_buf(const uint8_t *__counted_by(buflen) buf, size_t buflen,
 			      const ProtobufCMessageDescriptor *descriptor);
 
 /**
@@ -96,7 +97,7 @@ protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *mes
  * @param allocator protobuf C allocator
 */
 size_t
-protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage *message,
-			     ProtobufCAllocator *allocator);
+protobuf_string_from_message(char *__null_terminated *buffer_proto_string,
+			     const ProtobufCMessage *message, ProtobufCAllocator *allocator);
 
 #endif // PROTOBUF_TEXT_H
