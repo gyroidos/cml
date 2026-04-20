@@ -86,9 +86,10 @@ sysinfo(struct sysinfo *info)
 
 struct cg_mem_stat {
 	/*
-	 * for sysinfo the only relevant info from memory.stat file is shmem
-	 * which mapps to sharedram
+	 * for sysinfo the only relevant info from memory.stat file is file
+	 * which maps to bufferram and shmem which maps to sharedram
 	 */
+	unsigned long file;
 	unsigned long shmem;
 };
 
@@ -109,7 +110,13 @@ c_seccomp_cgroup_get_mem_stat(struct cg_mem_stat *mem_stat, const char *cg_path)
 
 	TRACE("buf: '%s'", buf);
 
-	tmp = strstr(buf, "\nshmem");
+	tmp = strstr(buf, "\nfile");
+	IF_NULL_GOTO(tmp, err);
+	n = sscanf(tmp, "\nfile %lu\n", &mem_stat->file);
+	IF_FALSE_GOTO(n == 1, err);
+	TRACE("Parsed file for %d: %lu", getpid(), mem_stat->file);
+
+	tmp = strstr(tmp, "\nshmem");
 	IF_NULL_GOTO(tmp, err);
 	n = sscanf(tmp, "\nshmem %lu\n", &mem_stat->shmem);
 	IF_FALSE_GOTO(n == 1, err);
@@ -336,15 +343,14 @@ c_seccomp_do_sysinfo_fork(const void *data)
 		}
 	}
 
-	// overwrite sharedram
+	// overwrite bufferram and sharedram
 	struct cg_mem_stat mem_stat = { 0 };
 	if (-1 == c_seccomp_cgroup_get_mem_stat(&mem_stat, cg_path)) {
 		WARN("Failed to get mem_stat from cgroup");
 	} else {
+		sysinfo_params->info->bufferram = mem_stat.file / mem_unit;
 		sysinfo_params->info->sharedram = mem_stat.shmem / mem_unit;
 	}
-	// equivalent for bufferram does not exist in cgroups v2 memory.stat
-	sysinfo_params->info->bufferram = 0ULL;
 
 	// overwrite totalswap and freeswap if swap limits are set
 	unsigned long swap_max = 0;
