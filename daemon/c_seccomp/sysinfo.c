@@ -331,15 +331,24 @@ c_seccomp_do_sysinfo_fork(const void *data)
 	if (-1 == c_seccomp_cgroup_get_mem_max(&mem_max, cg_path)) {
 		WARN("Failed to get memory.max from cgroup");
 	} else if (mem_max != MEM_UNLIMITED) {
-		// if cgroup is unlimited mem_max is set to 0 (MEM_UNLIMITED)
-		sysinfo_params->info->totalram = mem_max / mem_unit;
+		mem_max /= mem_unit;
+		/*
+		 * if cgroup is unlimited mem_max is set to 0 (MEM_UNLIMITED).
+		 * memory.max of cgroup could be grater then actual physical memory, thus,
+		 * we have to take the minimum.
+		 */
+		sysinfo_params->info->totalram = MIN(sysinfo_params->info->totalram, mem_max);
 
 		// overwrite freeram
 		unsigned long mem_current = 0;
 		if (-1 == c_seccomp_cgroup_get_mem_current(&mem_current, cg_path)) {
 			WARN("Failed to get memory.current from cgroup");
 		} else {
-			sysinfo_params->info->freeram = (mem_max - mem_current) / mem_unit;
+			mem_current /= mem_unit;
+			// if over provisioning set to 0
+			sysinfo_params->info->freeram =
+				MIN(sysinfo_params->info->freeram,
+				    mem_max > mem_current ? mem_max - mem_current : 0);
 		}
 	}
 
@@ -357,15 +366,24 @@ c_seccomp_do_sysinfo_fork(const void *data)
 	if (-1 == c_seccomp_cgroup_get_swap_max(&swap_max, cg_path)) {
 		WARN("Failed to get memory.swap.max from cgroup");
 	} else if (swap_max != MEM_UNLIMITED) {
-		// if cgroup is unlimited swap_max is set to 0 (MEM_UNLIMITED)
-		sysinfo_params->info->totalswap = swap_max / mem_unit;
+		swap_max /= mem_unit;
+		/*
+		 * if cgroup is unlimited swap_max is set to 0 (MEM_UNLIMITED).
+		 * memory.max of cgroup could be grater then actual physical memory, thus,
+		 * we have to take the minimum.
+		 */
+		sysinfo_params->info->totalswap = MIN(sysinfo_params->info->totalswap, swap_max);
 
 		// overwrite freeswap
 		unsigned long swap_current = 0;
 		if (-1 == c_seccomp_cgroup_get_swap_current(&swap_current, cg_path)) {
 			WARN("Failed to get memory.swap.current from cgroup");
 		} else {
-			sysinfo_params->info->freeswap = (swap_max - swap_current) / mem_unit;
+			swap_current /= mem_unit;
+			// if over provisioning set to 0
+			sysinfo_params->info->freeswap =
+				MIN(sysinfo_params->info->freeswap,
+				    swap_max > swap_current ? swap_max - swap_current : 0);
 		}
 	}
 
