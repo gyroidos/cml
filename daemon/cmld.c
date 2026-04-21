@@ -550,6 +550,9 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 			  assigned_devices, vnet_cfg_list, usbdev_list, init, init_argv, init_env,
 			  init_env_len, fifo_list, ttype, usb_pin_entry, enable_xorg_compat);
 	if (c) {
+		// add container specific volumes
+		container_config_fill_volumes(conf, container_get_mnt(c));
+
 		// overwrite image sizes of mount table
 		container_config_fill_mount(conf, container_get_mnt(c));
 		container_config_write(conf);
@@ -2137,6 +2140,7 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 	mount_t *mnt_table_new = mount_new();
 	guestos_fill_mount(container_get_guestos(container), mnt_table_new);
 	guestos_fill_mount_setup(container_get_guestos(container), mnt_table_new);
+	container_config_fill_volumes(conf, mnt_table_new);
 	container_config_fill_mount(conf, mnt_table_new);
 	off_t new_disk_usage = mount_get_disk_usage_container(mnt_table_new);
 	off_t current_disk_usage = mount_get_disk_usage_container(container_get_mnt(container));
