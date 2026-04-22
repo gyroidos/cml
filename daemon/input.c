@@ -119,11 +119,11 @@ input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 	FILE *fp;
 	char *line = NULL;
 	size_t len = 0;
-	ssize_t n;
-	uint16_t bus;
-	uint16_t vid;
-	uint16_t pid;
-	uint16_t ver;
+	ssize_t n = 0;
+	uint16_t bus = 0;
+	uint16_t vid = 0;
+	uint16_t pid = 0;
+	uint16_t ver = 0;
 	char *event = NULL;
 	char *event_path = NULL;
 
@@ -132,8 +132,10 @@ input_get_usb_input_event_file(uint16_t vendor_id, uint16_t product_id)
 
 	while ((n = getline(&line, &len, fp)) != -1) {
 		if (strncmp(IFACE_PREFIX, line, strlen(IFACE_PREFIX)) == 0) {
-			sscanf(line, "I: Bus=%04hx Vendor=%04hx Product=%04hx Version=%04hx\n",
-			       &bus, &vid, &pid, &ver);
+			if (sscanf(line, "I: Bus=%04hx Vendor=%04hx Product=%04hx Version=%04hx\n",
+				   &bus, &vid, &pid, &ver) != 4)
+				bus = vid = pid = ver = 0;
+			continue;
 		}
 
 		if ((vid == vendor_id) && (pid == product_id) &&
