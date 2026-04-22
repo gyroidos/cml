@@ -53,6 +53,7 @@ struct c_idmapped_mnt {
 	char *ovl_lower;
 	char *ovl_upper;
 	bool bind_in_child;
+	bool is_dir;
 };
 
 /* idmapped structure with specific directory mappings */
@@ -132,7 +133,7 @@ c_idmapped_mnt_apply_mapping(struct c_idmapped_mnt *mnt, int userns_fd)
 	if (lstat(mnt->src, &s) == -1) {
 		return -1;
 	}
-	if (s.st_uid != 0) {
+	if (s.st_uid != 0 && mnt->is_dir) {
 		uid_t uid = 0;
 		gid_t gid = 0;
 
@@ -309,9 +310,16 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 			      uuid_string(container_get_uuid(idmapped->container)),
 			      idmapped->src_index++);
 
-	if (dir_mkdir_p(mnt->src, 0777) < 0) {
-		ERROR_ERRNO("Could not mkdir mapped dir %s", mnt->src);
-		return -1;
+	if (mnt->is_dir) {
+		if (dir_mkdir_p(mnt->src, 0777) < 0) {
+			ERROR_ERRNO("Could not mkdir mapped dir %s", mnt->src);
+			return -1;
+		}
+	} else {
+		if (file_touch(mnt->src)) {
+			ERROR_ERRNO("Could not touch mapped file: %s for bind mount", mnt->src);
+			return -1;
+		}
 	}
 
 	if (mount(dir, mnt->src, NULL, MS_BIND, NULL) < 0) {
@@ -379,6 +387,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 
 	mnt = mem_new0(struct c_idmapped_mnt, 1);
 	mnt->target = mem_strdup(dst);
+	mnt->is_dir = file_is_dir(src);
 
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
@@ -414,6 +423,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 					    mnt_lower->target);
 				goto error;
 			}
+			mnt_lower->is_dir = true;
 
 			mnt_lower->ovl_lower = NULL;
 			IF_TRUE_GOTO(c_idmapped_prepare_dir(idmapped, mnt_lower, ovl_lower) < 0,
@@ -435,6 +445,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 		}
 		mnt_upper = mem_new0(struct c_idmapped_mnt, 1);
 		mnt_upper->target = mem_strdup(mnt->ovl_upper);
+		mnt_upper->is_dir = true;
 
 		IF_TRUE_GOTO(c_idmapped_prepare_dir(idmapped, mnt_upper, src) < 0, error);
 		idmapped->mapped_mnts = list_append(idmapped->mapped_mnts, mnt_upper);
@@ -474,15 +485,6 @@ c_idmapped_shift_ids(void *idmappedp, const char *src, const char *dst, const ch
 
 	uid_t uid = container_get_uid(idmapped->container);
 	gid_t gid = container_get_uid(idmapped->container);
-
-	// if we just got a single file chown this and return
-	if (file_exists(src) && !file_is_dir(src)) {
-		if (lchown(src, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", src, uid, gid);
-			goto error;
-		}
-		goto success;
-	}
 
 	bool is_dev = strlen(dst) >= 5 && !strcmp(strrchr(dst, '\0') - 4, "/dev");
 	bool is_cgroup = strstr(src, "/cgroup") != NULL;
@@ -536,8 +538,11 @@ c_idmapped_start_child(void *idmappedp)
 		// if explictly set to bind inchild (e.g. /dev on tmpfs) or
 		// kernel does not support idmapped mounts just do bind mount
 		if (mnt->bind_in_child || (!mount_is_idmapping_supported())) {
-			if (!file_exists(mnt->target))
+			if (mnt->is_dir) {
 				dir_mkdir_p(mnt->target, 0755);
+			} else {
+				file_touch(mnt->target);
+			}
 
 			if (mount(mnt->src, mnt->target, NULL, MS_BIND, NULL) < 0) {
 				ERROR_ERRNO("Could not bind mount src %s to %s", mnt->src,
