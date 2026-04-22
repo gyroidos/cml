@@ -127,13 +127,13 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 
 	len = file_read(id_product_file, buf, sizeof(buf));
 	IF_TRUE_GOTO((len < 4), out);
-	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_product) < 0), out);
+	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_product) != 1), out);
 	found = (id_product == container_usbdev_get_id_product(usbdev));
 	TRACE("found: %d", found);
 
 	len = file_read(id_vendor_file, buf, sizeof(buf));
 	IF_TRUE_GOTO((len < 4), out);
-	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_vendor) < 0), out);
+	IF_TRUE_GOTO((sscanf(buf, "%hx", &id_vendor) != 1), out);
 	found &= (id_vendor == container_usbdev_get_id_vendor(usbdev));
 	TRACE("found: %d", found);
 
@@ -156,7 +156,7 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 
 	len = file_read(dev_file, buf, sizeof(buf));
 	IF_TRUE_GOTO(len < 0, out);
-	IF_TRUE_GOTO((sscanf(buf, "%d:%d", &dev[0], &dev[1]) < 0), out);
+	IF_TRUE_GOTO((sscanf(buf, "%d:%d", &dev[0], &dev[1]) != 2), out);
 	IF_FALSE_GOTO((dev[0] > -1 && dev[1] > -1), out);
 
 	found = true; // parsing dev_file succeded.
