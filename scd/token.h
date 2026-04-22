@@ -29,7 +29,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define TOKEN_DEFAULT_PASS "trustme"
 #define TOKEN_MAX_WRONG_UNLOCK_ATTEMPTS 3
 
 #define MAX_APDU_BUF_LEN 4096

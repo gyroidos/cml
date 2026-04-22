@@ -100,9 +100,23 @@ softtoken_change_passphrase(void *int_token, const char *oldpass, const char *ne
 {
 	softtoken_t *st_token = int_token;
 	ASSERT(st_token);
-	if (ssl_newpass_pkcs12_token(st_token->token_file, oldpass, newpass) == 0) {
+
+	/*
+	 * First change passphrase is treated as initialization. Thus, oldpass is
+	 * ignored and only newpass is used for creating a new token.
+	 */
+	if (!file_exists(st_token->token_file)) {
+		if (softtoken_create_p12(st_token->token_file, newpass,
+					 uuid_string(token_get_uuid(st_token->token))) != 0) {
+			ERROR("Could not create new softtoken file");
+			return TOKEN_ERR_FATAL;
+		}
 		return TOKEN_ERR_OK;
 	}
+
+	if (ssl_newpass_pkcs12_token(st_token->token_file, oldpass, newpass) == 0)
+		return TOKEN_ERR_OK;
+
 	return TOKEN_ERR_FATAL;
 }
 
@@ -258,14 +272,7 @@ softtoken_new(token_t *token, token_operations_t **ops, const char *softtoken_di
 
 	token_file = mem_printf("%s/%s%s", softtoken_dir, uuid_string(token_get_uuid(token)),
 				STOKEN_DEFAULT_EXT);
-	if (!file_exists(token_file)) {
-		if (softtoken_create_p12(token_file, TOKEN_DEFAULT_PASS,
-					 uuid_string(token_get_uuid(token))) != 0) {
-			ERROR("Could not create new softtoken file");
-			mem_free0(token_file);
-			goto err;
-		}
-	}
+
 	softtoken_t *st_token = softtoken_new_from_p12(token_file);
 	if (!st_token) {
 		ERROR("Creation of softtoken failed");
