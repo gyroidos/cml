@@ -293,7 +293,8 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	if (bytes_read < 0) {
 		char *pid_str = mem_printf("%d", pid);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
-				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
+				compartment_get_name(seccomp->compartment), 2, "pid", pid_str,
+				NULL);
 
 		ERROR_ERRNO("Failed to access memory of remote process, bytes read: %zd",
 			    bytes_read);
@@ -325,7 +326,8 @@ c_seccomp_send_vm(c_seccomp_t *seccomp, int pid, void *lbuf, void *rbuf, uint64_
 	if (bytes_written < 0) {
 		char *pid_str = mem_printf("%d", pid);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
-				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
+				compartment_get_name(seccomp->compartment), 2, "pid", pid_str,
+				NULL);
 
 		ERROR_ERRNO("Failed to access memory of remote process, bytes written: %zd",
 			    bytes_written);
@@ -372,7 +374,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-rcv-next",
 				compartment_get_name(seccomp->compartment), 2, "errno",
-				strerror(errno));
+				strerror(errno), NULL);
 		mem_free0(req);
 		mem_free0(resp);
 		return;
@@ -435,7 +437,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		syscall_str = mem_printf("_NR: %d", req->data.nr);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
-				syscall_str);
+				syscall_str, NULL);
 
 		ERROR("Got syscall not handled by us: %d", req->data.nr);
 
@@ -447,13 +449,13 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	if (-1 == ret_syscall) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
-				syscall_str);
+				syscall_str, NULL);
 	}
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-response",
 				compartment_get_name(seccomp->compartment), 2, "errno",
-				strerror(errno));
+				strerror(errno), NULL);
 		ERROR_ERRNO("Failed to send seccomp notify response");
 	} else {
 		TRACE("Successfully handled seccomp notification");

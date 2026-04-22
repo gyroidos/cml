@@ -1578,7 +1578,7 @@ cmld_init_stage_unit(const char *path)
 	INFO("time initialized.");
 
 	char *btime = mem_printf("%lld", (long long)time_cml(NULL));
-	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
+	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime, NULL);
 	mem_free0(btime);
 
 	if (device_config_get_tpm_enabled(device_config)) {

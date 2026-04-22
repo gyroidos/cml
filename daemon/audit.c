@@ -670,9 +670,11 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		AUDIT_EVENTCLASS evclass, const char *evtype, const char *subject_id,
 		int meta_count, ...)
 {
+	va_list ap;
 	AuditRecord *record = NULL;
 	AuditRecord__Meta **metas = NULL;
 	int ret = 0;
+	int i = 0;
 
 	if (!AUDIT_STORAGE) {
 		TRACE("Attempt to log audit message but AUDIT_STORAGE is zero, skipping...");
@@ -685,18 +687,21 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 			return -1;
 		}
 
-		va_list ap;
-
 		va_start(ap, meta_count);
 
 		metas = mem_alloc0((meta_count / 2) * sizeof(AuditRecord__Meta *));
-		for (int i = 0; i < meta_count / 2; i++) {
+		for (i = 0; i < meta_count / 2; i++) {
 			metas[i] = mem_alloc0(sizeof(AuditRecord__Meta));
 
 			audit_record__meta__init(metas[i]);
+			const char *key = va_arg(ap, const char *);
+			IF_NULL_GOTO(key, err_va);
 
-			metas[i]->key = mem_strdup(va_arg(ap, const char *));
-			metas[i]->value = mem_strdup(va_arg(ap, const char *));
+			const char *value = va_arg(ap, const char *);
+			IF_NULL_GOTO(value, err_va);
+
+			metas[i]->key = mem_strdup(key);
+			metas[i]->value = mem_strdup(value);
 		}
 
 		va_end(ap);
@@ -738,6 +743,21 @@ out:
 	protobuf_free_message((ProtobufCMessage *)record);
 
 	return ret;
+
+err_va:
+	ERROR("Early va_args terminator reached, aborting...");
+	for (int j = i; j >= 0; j--) {
+		if (metas[j]->key)
+			mem_free0(metas[j]->key);
+		if (metas[j]->value)
+			mem_free0(metas[j]->value);
+		mem_free0(metas[j]);
+	}
+	mem_free0(metas);
+
+	va_end(ap);
+
+	return -1;
 }
 
 static void

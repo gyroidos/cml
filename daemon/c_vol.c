@@ -865,7 +865,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
 					CONTAINER_MGMT, "setup-crypted-volume-no-key",
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
-					label);
+					label, NULL);
 			ERROR("Trying to mount encrypted volume without key...");
 			mem_free0(label);
 			goto error;
@@ -895,7 +895,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
 						CONTAINER_MGMT, "setup-crypted-volume",
 						uuid_string(container_get_uuid(vol->container)), 2,
-						"label", label);
+						"label", label, NULL);
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
 				mem_free0(label);
 				goto error;
@@ -903,7 +903,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			audit_log_event(container_get_uuid(vol->container), SSA, CMLD,
 					CONTAINER_MGMT, "setup-crypted-volume",
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
-					label);
+					label, NULL);
 		}
 
 		mem_free0(label);
@@ -1420,19 +1420,20 @@ c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 						      "image file is corrupted",
 						      mount_entry_get_img(mntent));
 
-						audit_log_event(
-							container_get_uuid(vol->container), FSA,
-							CMLD, CONTAINER_MGMT, "verify-image",
-							uuid_string(
-								container_get_uuid(vol->container)),
-							2, "name", mount_entry_get_img(mntent));
+						audit_log_event(container_get_uuid(vol->container),
+								FSA, CMLD, CONTAINER_MGMT,
+								"verify-image",
+								uuid_string(container_get_uuid(
+									vol->container)),
+								2, "name",
+								mount_entry_get_img(mntent), NULL);
 						_exit(-1);
 					}
 					audit_log_event(
 						container_get_uuid(vol->container), SSA, CMLD,
 						CONTAINER_MGMT, "verify-image",
 						uuid_string(container_get_uuid(vol->container)), 2,
-						"name", mount_entry_get_img(mntent));
+						"name", mount_entry_get_img(mntent), NULL);
 					_exit(0);
 				} else { // parent
 					INFO("dm-verity active for image %s, "

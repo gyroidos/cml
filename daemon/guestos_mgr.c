@@ -521,7 +521,7 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 
 			audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-old-version",
 					os_name, 4, "installed_version", installed_str,
-					"update_version", update_str);
+					"update_version", update_str, NULL);
 
 			mem_free0(installed_str);
 			mem_free0(update_str);

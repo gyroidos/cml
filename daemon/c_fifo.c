@@ -205,12 +205,12 @@ c_fifo_create_fifos(list_t *fifo_list, uid_t uid, const char *fifo_dir,
 		}
 
 		audit_log_event(container_uuid, SSA, CMLD, CONTAINER_ISOLATION, "create-fifo",
-				audit_subject, 2, "name", current_fifo);
+				audit_subject, 2, "name", current_fifo, NULL);
 
 		if (chown(fifo_path, uid, uid)) {
 			audit_log_event(container_uuid, FSA, CMLD, CONTAINER_ISOLATION,
 					"prepare-fifo-directory", audit_subject, 2, "path",
-					fifo_path);
+					fifo_path, NULL);
 			ERROR("Failed to chown fifo dir to %d", uid);
 
 			mem_free0(fifo_path);
@@ -218,7 +218,8 @@ c_fifo_create_fifos(list_t *fifo_list, uid_t uid, const char *fifo_dir,
 		}
 
 		audit_log_event(container_uuid, SSA, CMLD, CONTAINER_ISOLATION,
-				"prepare-fifo-directory", audit_subject, 2, "path", fifo_path);
+				"prepare-fifo-directory", audit_subject, 2, "path", fifo_path,
+				NULL);
 		DEBUG("Chowned FIFO at %s to %d", fifo_path ? fifo_path : "NULL", uid);
 
 		mem_free0(fifo_path);
