@@ -51,6 +51,7 @@ list_join(list_t *list, list_t *list_append)
 
 	list_t *l_tail = list_tail(list);
 	l_tail->next = list_append;
+	list_append->prev = l_tail;
 
 	return list;
 }
