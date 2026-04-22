@@ -128,7 +128,6 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		break;
 	case MOUNT_TYPE_BIND_FILE:
 	case MOUNT_TYPE_BIND_FILE_RW:
-		return mem_printf("%s/%s", SHARED_FILES_PATH, mount_entry_get_img(mntent));
 	case MOUNT_TYPE_BIND_DIR:
 		// Note: We just bind mount any absolut path of the host
 		return mem_strdup(mount_entry_get_img(mntent));
@@ -536,63 +535,7 @@ error:
 }
 
 static int
-c_vol_mount_file_bind(const char *src, const char *dst, unsigned long flags)
-{
-	char *_src = mem_strdup(src);
-	char *_dst = mem_strdup(dst);
-	char *dir_src = dirname(_src);
-	char *dir_dst = dirname(_dst);
-
-	if (!(flags & MS_BIND)) {
-		errno = EINVAL;
-		ERROR_ERRNO("bind mount flag is not set!");
-		goto err;
-	}
-
-	if (dir_mkdir_p(dir_src, 0755) < 0) {
-		DEBUG_ERRNO("Could not mkdir %s", dir_src);
-		goto err;
-	}
-	if (dir_mkdir_p(dir_dst, 0755) < 0) {
-		DEBUG_ERRNO("Could not mkdir %s", dir_dst);
-		goto err;
-	}
-	if (file_touch(src) == -1) {
-		ERROR("Failed to touch source file \"%s\" for bind mount", src);
-		goto err;
-	}
-	if (file_touch(dst) == -1) {
-		ERROR("Failed to touch target file \"%s\"for bind mount", dst);
-		goto err;
-	}
-	if (mount(src, dst, "bind", flags, NULL) < 0) {
-		ERROR_ERRNO("Failed to bind mount %s to %s", src, dst);
-		goto err;
-	}
-	/*
-	 * ro bind mounts do not work directly, so we need to remount it manually
-	 * see, https://lwn.net/Articles/281157/
-	 */
-	if (flags & MS_RDONLY) { // ro bind mounts do not work directly
-		if (mount("none", dst, "bind", flags | MS_RDONLY | MS_REMOUNT, NULL) < 0) {
-			ERROR_ERRNO("Failed to remount bind"
-				    " mount %s to %s read-only",
-				    src, dst);
-		}
-	}
-	DEBUG("Sucessfully bind mounted %s to %s", src, dst);
-
-	mem_free0(_src);
-	mem_free0(_dst);
-	return 0;
-err:
-	mem_free0(_src);
-	mem_free0(_dst);
-	return -1;
-}
-
-static int
-c_vol_mount_dir_bind(const char *src, const char *dst, unsigned long flags)
+c_vol_mount_bind(const char *src, const char *dst, unsigned long flags)
 {
 	if (!(flags & MS_BIND)) {
 		errno = EINVAL;
@@ -600,9 +543,21 @@ c_vol_mount_dir_bind(const char *src, const char *dst, unsigned long flags)
 		return -1;
 	}
 
+	char *dst_dir = mem_strdup(dst);
+	const char *dst_dir_p = file_is_dir(src) ? dst : dirname(dst_dir);
+
 	// try to create mount point before mount, usually not necessary...
-	if (dir_mkdir_p(dst, 0755) < 0)
-		DEBUG_ERRNO("Could not mkdir %s", dst);
+	if (dir_mkdir_p(dst_dir_p, 0755) < 0) {
+		DEBUG_ERRNO("Could not mkdir %s", dst_dir_p);
+		mem_free0(dst_dir);
+		return -1;
+	}
+	mem_free0(dst_dir);
+
+	if (!file_exists(dst) && file_touch(dst)) {
+		ERROR_ERRNO("Could not touch dst: %s for bind mount", dst);
+		return -1;
+	}
 
 	TRACE("Mounting path %s to %s", src, dst);
 	if (mount(src, dst, NULL, flags, NULL) < 0) {
@@ -725,15 +680,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	case MOUNT_TYPE_DEVICE_RW:
 	case MOUNT_TYPE_EMPTY:
 		shiftids = true;
-		break; // stick to defaults
-	case MOUNT_TYPE_BIND_FILE:
-		mountflags |= MS_RDONLY; // Fallthrough
-	case MOUNT_TYPE_BIND_FILE_RW:
-		if (container_has_userns(vol->container)) // skip
-			goto final;
-		mountflags |= MS_BIND; // use bind mount
-		IF_TRUE_GOTO(-1 == c_vol_mount_file_bind(img, dir, mountflags), error);
-		goto final;
+		break;	      // stick to defaults
 	case MOUNT_TYPE_COPY: // deprecated
 		//WARN("Found deprecated MOUNT_TYPE_COPY");
 		shiftids = true;
@@ -741,12 +688,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	case MOUNT_TYPE_FLASH:
 		DEBUG("Skipping mounting of FLASH type image %s", mount_entry_get_img(mntent));
 		goto final;
+	case MOUNT_TYPE_BIND_FILE:
 	case MOUNT_TYPE_BIND_DIR:
 		mountflags |= MS_RDONLY; // Fallthrough
+	case MOUNT_TYPE_BIND_FILE_RW:
 	case MOUNT_TYPE_BIND_DIR_RW:
 		mountflags |= MS_BIND; // use bind mount
 		shiftids = true;
-		IF_TRUE_GOTO(-1 == c_vol_mount_dir_bind(img, dir, mountflags), error);
+		IF_TRUE_GOTO(-1 == c_vol_mount_bind(img, dir, mountflags), error);
 		goto final;
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
@@ -1540,69 +1489,6 @@ c_vol_free(void *volp)
 	mem_free0(vol);
 }
 
-static int
-c_vol_do_shared_bind_mounts(const c_vol_t *vol)
-{
-	ASSERT(vol);
-	char *bind_img_path = NULL;
-	char *bind_dev = NULL;
-	int loop_fd = 0;
-	bool contains_bind = false;
-
-	int n = mount_get_count(vol->mnt);
-	for (int i = 0; i < n; i++) {
-		const mount_entry_t *mntent;
-		mntent = mount_get_entry(vol->mnt, i);
-		if (mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE_RW ||
-		    mount_entry_get_type(mntent) == MOUNT_TYPE_BIND_FILE) {
-			contains_bind = true;
-		}
-	}
-	// if no bind mount nothing to do
-	IF_FALSE_RETVAL(contains_bind, 0);
-
-	if (!file_is_dir(SHARED_FILES_PATH)) {
-		if (dir_mkdir_p(SHARED_FILES_PATH, 0755) < 0) {
-			DEBUG_ERRNO("Could not mkdir %s", SHARED_FILES_PATH);
-			return -1;
-		}
-	}
-	// if already mounted nothing to be done
-	IF_TRUE_RETVAL(file_is_mountpoint(SHARED_FILES_PATH), 0);
-
-	// setup persitent image as date store for shared objects
-	bind_img_path = mem_printf("%s/_store.img", SHARED_FILES_PATH);
-	if (!file_exists(bind_img_path)) {
-		if (c_vol_create_image_empty(bind_img_path, NULL, SHARED_FILES_STORE_SIZE) < 0) {
-			goto err;
-		}
-		if (c_vol_format_image(bind_img_path, "ext4") < 0) {
-			goto err;
-		}
-		INFO("Succesfully created image for %s", SHARED_FILES_PATH);
-	}
-	bind_dev = loopdev_create_new(&loop_fd, bind_img_path, 0, 0);
-	IF_NULL_GOTO(bind_dev, err);
-	if (mount(bind_dev, SHARED_FILES_PATH, "ext4", MS_NOATIME | MS_NODEV | MS_NOEXEC, NULL) <
-	    0) {
-		ERROR_ERRNO("Failed to mount %s to %s", bind_img_path, SHARED_FILES_PATH);
-		goto err;
-	}
-
-	close(loop_fd);
-	mem_free0(bind_img_path);
-	mem_free0(bind_dev);
-	return 0;
-err:
-	if (loop_fd)
-		close(loop_fd);
-	if (bind_img_path)
-		mem_free0(bind_img_path);
-	if (bind_dev)
-		mem_free0(bind_dev);
-	return -1;
-}
-
 static char *
 c_vol_get_rootdir(void *volp)
 {
@@ -1642,12 +1528,6 @@ c_vol_start_child_early(void *volp)
 	DEBUG("Mounting images");
 	if (c_vol_mount_images(vol) < 0) {
 		ERROR("Could not mount images for container start");
-		goto error;
-	}
-
-	//FIXME should be before mounting images, because it sets up storage for bound files!
-	if (c_vol_do_shared_bind_mounts(vol) < 0) {
-		ERROR("Could not do shared bind mounts for container start");
 		goto error;
 	}
 
