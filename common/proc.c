@@ -292,7 +292,9 @@ proc_cap_last_cap(void)
 	const char *file_cap_last_cap = "/proc/sys/kernel/cap_last_cap";
 
 	char *str_cap_last_cap = file_read_new(file_cap_last_cap, 24);
-	if (sscanf(str_cap_last_cap, "%d", &cap) <= 0) {
+	IF_NULL_RETVAL(str_cap_last_cap, -1);
+
+	if (sscanf(str_cap_last_cap, "%d", &cap) != 1) {
 		ERROR_ERRNO("Can't read cap from '%s'", file_cap_last_cap);
 		cap = -1;
 	}
