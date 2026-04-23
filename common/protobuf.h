@@ -45,7 +45,7 @@
 
 /**
  * Packed protobuf message with bounds-safe buffer.
- * Returned by protobuf_pack_message_new(); the caller must free buf.
+ * Returned by protobuf_pack_message_new(); free with protobuf_pack_message_free().
  */
 typedef struct {
 	uint8_t *__sized_by(len) buf;
@@ -61,6 +61,14 @@ typedef struct {
  */
 protobuf_packed_msg_t
 protobuf_pack_message_new(const ProtobufCMessage *message);
+
+/**
+ * Frees the buffer inside a packed message and zeros both fields.
+ *
+ * @param msg   pointer to the packed message struct (may be NULL)
+ */
+void
+protobuf_pack_message_free(protobuf_packed_msg_t *msg);
 
 /**
  * Writes the given, serialized protobuf message struct to the given file descriptor
