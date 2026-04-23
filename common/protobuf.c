@@ -53,6 +53,15 @@ protobuf_pack_message_new(const ProtobufCMessage *message)
 	return (protobuf_packed_msg_t){ .buf = packed, .len = actual_len };
 }
 
+void
+protobuf_pack_message_free(protobuf_packed_msg_t *msg)
+{
+	IF_NULL_RETURN(msg);
+	free(msg->buf);
+	msg->buf = NULL;
+	msg->len = 0;
+}
+
 ssize_t
 protobuf_send_message_packed(int fd, const uint8_t *__counted_by(buflen) buf, uint32_t buflen)
 {
@@ -96,12 +105,7 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 
 	if (!(packed.len < PROTOBUF_MAX_MESSAGE_SIZE)) {
 		ERROR("Packed message exceeds PROTOBUF_MAX_MESSAGE_SIZE");
-		if (packed.buf) {
-			free(packed.buf);
-			packed.buf = NULL;
-			packed.len = 0;
-		}
-
+		protobuf_pack_message_free(&packed);
 		return -1;
 	}
 
@@ -112,16 +116,11 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 
 	if (-1 == protobuf_send_message_packed(fd, packed.buf, packed.len)) {
 		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
-		free(packed.buf);
-		packed.buf = NULL;
-		packed.len = 0;
+		protobuf_pack_message_free(&packed);
 		return -1;
 	}
 
-	free(packed.buf);
-	packed.buf = NULL;
-	packed.len = 0;
-
+	protobuf_pack_message_free(&packed);
 	return ret;
 }
 
