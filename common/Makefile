@@ -62,10 +62,14 @@ endif
 all: libcommon
 
 .PHONY: protobuf
-protobuf audit.pb-c.h audit.pb-c.c: audit.proto
+protobuf: audit.pb-c.c
+
+audit.pb-c.c: audit.proto
 	protoc --c_out=. audit.proto
 
-audit.c: audit.pb-c.h
+audit.pb-c.h: audit.pb-c.c
+
+audit.o: audit.pb-c.h
 
 OBJS_COMMON := \
 	event.o \
