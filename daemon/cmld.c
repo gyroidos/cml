@@ -525,7 +525,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 
 	char **init_argv = guestos_get_init_argv_new(os);
 
-	char **init_env = container_config_get_init_env(conf);
+	const char **init_env = container_config_get_init_env(conf);
 	size_t init_env_len = container_config_get_init_env_len(conf);
 
 	// create FIFO list

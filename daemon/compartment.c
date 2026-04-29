@@ -321,7 +321,7 @@ compartment_is_module_sig_enforced(void)
 
 compartment_t *
 compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char *init,
-		char **init_argv, char **init_env, size_t init_env_len,
+		char **init_argv, const char **init_env, size_t init_env_len,
 		const compartment_extension_t *extension)
 {
 	list_t *compartment_module_list = NULL;
@@ -474,7 +474,7 @@ compartment_uuid_is_c0id(const uuid_t *uuid)
 }
 
 void
-compartment_init_env_prepend(compartment_t *compartment, char **init_env, size_t init_env_len)
+compartment_init_env_prepend(compartment_t *compartment, const char **init_env, size_t init_env_len)
 {
 	IF_TRUE_RETURN(init_env == NULL || init_env_len <= 0);
 

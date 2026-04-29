@@ -150,7 +150,7 @@ compartment_module_get_instance_by_name(const compartment_t *compartment, const 
  */
 compartment_t *
 compartment_new(const uuid_t *uuid, const char *name, uint64_t flags, const char *init,
-		char **init_argv, char **init_env, size_t init_env_len,
+		char **init_argv, const char **init_env, size_t init_env_len,
 		const compartment_extension_t *extension);
 
 /**
@@ -418,7 +418,8 @@ void
 compartment_set_key(compartment_t *compartment, const char *key);
 
 void
-compartment_init_env_prepend(compartment_t *compartment, char **init_env, size_t init_env_len);
+compartment_init_env_prepend(compartment_t *compartment, const char **init_env,
+			     size_t init_env_len);
 
 bool
 compartment_has_netns(const compartment_t *compartment);

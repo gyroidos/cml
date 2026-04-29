@@ -635,12 +635,12 @@ container_config_get_init_env_len(const container_config_t *config)
 	return config->cfg->n_init_env;
 }
 
-char **
+const char **
 container_config_get_init_env(const container_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-	return config->cfg->init_env;
+	return (const char **)config->cfg->init_env;
 }
 
 size_t

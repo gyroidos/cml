@@ -223,7 +223,7 @@ container_config_get_usbdev_list_new(const container_config_t *config);
 /**
  * Returns the container specific array used to appened to evn buffer on start
  */
-char **
+const char **
 container_config_get_init_env(const container_config_t *cfg);
 
 /**

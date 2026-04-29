@@ -263,7 +263,7 @@ guestos_get_init(const guestos_t *os);
 char **
 guestos_get_init_argv_new(const guestos_t *os);
 
-char **
+const char **
 guestos_get_init_env(const guestos_t *os);
 
 size_t

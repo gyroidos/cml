@@ -1260,11 +1260,11 @@ guestos_get_init_argv_new(const guestos_t *os)
 	return guestos_config_get_init_argv_new(os->cfg);
 }
 
-char **
+const char **
 guestos_get_init_env(const guestos_t *os)
 {
 	ASSERT(os);
-	return guestos_config_get_init_env(os->cfg);
+	return (const char **)guestos_config_get_init_env(os->cfg);
 }
 
 size_t

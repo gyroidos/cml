@@ -161,7 +161,7 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 	      bool allow_autostart, bool allow_system_time, const char *dns_server,
 	      list_t *pnet_cfg_list, list_t *allowed_module_list, char **allowed_devices,
 	      char **assigned_devices, list_t *vnet_cfg_list, list_t *usbdev_list, const char *init,
-	      char **init_argv, char **init_env, size_t init_env_len, list_t *fifo_list,
+	      char **init_argv, const char **init_env, size_t init_env_len, list_t *fifo_list,
 	      container_token_type_t ttype, bool usb_pin_entry, bool xorg_compat);
 
 /**
@@ -414,7 +414,7 @@ void
 container_finish_observers(container_t *container, void (*cb)(void *), void *data);
 
 void
-container_init_env_prepend(container_t *container, char **init_env, size_t init_env_len);
+container_init_env_prepend(container_t *container, const char **init_env, size_t init_env_len);
 
 const uuid_t *
 container_get_uuid(const container_t *container);
