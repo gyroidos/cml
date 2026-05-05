@@ -821,7 +821,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 
 		char *record_type = mem_printf("type=%hu", type);
 		audit_log_event(uuid, (strstr(res, "success") || res[0] == '1') ? SSA : FSA, CMLD,
-				KAUDIT, record_type, uuid_str, 2, "msg", log_record);
+				KAUDIT, record_type, uuid_str, 2, "msg", log_record, NULL);
 		mem_free0(record_type);
 		TRACE("audit: type=%d %s", type, log_record);
 	} else if (type == AUDIT_DM_EVENT) {
@@ -865,7 +865,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 			sector_str = mem_printf("%llu", sector);
 			audit_log_event(uuid, (res == 1) ? SSA : FSA, CMLD, CONTAINER_MGMT,
 					"dm-audit", uuid_str, 6, "op", op_buf, "label", dev_name,
-					"sector", sector_str);
+					"sector", sector_str, NULL);
 
 			mem_free0(sector_str);
 			mem_free0(dev_name);
