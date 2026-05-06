@@ -329,23 +329,17 @@ dir_chown_contents_cb(const char *path, const char *file, void *data)
 	if (cb_data->id_adjust_cb)
 		cb_data->id_adjust_cb(&s, &uid, &gid);
 
-	if (file_is_dir(file_to_chown)) {
+	if (S_ISDIR(s.st_mode)) {
 		TRACE("Path %s is dir", file_to_chown);
 		if (dir_foreach(file_to_chown, &dir_chown_contents_cb, cb_data) < 0) {
 			ERROR_ERRNO("Could not chown all dir contents in '%s' to (%d:%d)",
 				    file_to_chown, uid, gid);
 			ret--;
 		}
-		if (chown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
-			ret--;
-		}
-	} else {
-		if (lchown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
-				    gid);
-			ret--;
-		}
+	}
+	if (lchown(file_to_chown, uid, gid) < 0) {
+		ERROR_ERRNO("Could not chown '%s' to (%d:%d)", file_to_chown, uid, gid);
+		ret--;
 	}
 	TRACE("Chown file '%s' to (%d:%d)", file_to_chown, uid, gid);
 
@@ -358,7 +352,7 @@ dir_chown_folder(const char *path, uid_t uid, gid_t gid,
 		 void (*id_adjust_cb)(struct stat *, uid_t *, gid_t *))
 {
 	struct stat s;
-	IF_TRUE_RETVAL(stat(path, &s), -1);
+	IF_TRUE_RETVAL(lstat(path, &s), -1);
 
 	uid_t _uid = uid;
 	gid_t _gid = gid;
@@ -367,7 +361,7 @@ dir_chown_folder(const char *path, uid_t uid, gid_t gid,
 		id_adjust_cb(&s, &_uid, &_gid);
 
 	// chown .
-	if (chown(path, _uid, _gid) < 0) {
+	if (lchown(path, _uid, _gid) < 0) {
 		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, _uid, _gid);
 		return -1;
 	}
