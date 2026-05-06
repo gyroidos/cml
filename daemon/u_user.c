@@ -296,8 +296,8 @@ u_user_start_pre_clone(void *usr)
 	if (mount_is_idmapping_supported())
 		return 0;
 
-	if (dir_chown_folder(unit_get_data_path(user->unit), user->uid_start, user->uid_start) <
-	    0) {
+	if (dir_chown_folder(unit_get_data_path(user->unit), user->uid_start, user->uid_start,
+			     NULL) < 0) {
 		ERROR("Could not chown %s to target uid:gid (%d:%d)",
 		      unit_get_data_path(user->unit), user->uid_start, user->uid_start);
 		return -COMPARTMENT_ERROR_USER;

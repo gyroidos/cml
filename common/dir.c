@@ -306,6 +306,7 @@ dir_copy_folder(const char *source, const char *target,
 struct chown_data {
 	uid_t uid;
 	gid_t gid;
+	void (*id_adjust_cb)(struct stat *, uid_t *, gid_t *);
 };
 
 static int
@@ -324,6 +325,9 @@ dir_chown_contents_cb(const char *path, const char *file, void *data)
 
 	uid_t uid = cb_data->uid;
 	gid_t gid = cb_data->gid;
+
+	if (cb_data->id_adjust_cb)
+		cb_data->id_adjust_cb(&s, &uid, &gid);
 
 	if (file_is_dir(file_to_chown)) {
 		TRACE("Path %s is dir", file_to_chown);
@@ -345,28 +349,35 @@ dir_chown_contents_cb(const char *path, const char *file, void *data)
 	}
 	TRACE("Chown file '%s' to (%d:%d)", file_to_chown, uid, gid);
 
-	// chown .
-	if (chown(path, uid, gid) < 0) {
-		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
-		ret--;
-	}
 	mem_free0(file_to_chown);
 	return ret;
 }
 
 int
-dir_chown_folder(const char *path, uid_t uid, gid_t gid)
+dir_chown_folder(const char *path, uid_t uid, gid_t gid,
+		 void (*id_adjust_cb)(struct stat *, uid_t *, gid_t *))
 {
 	struct stat s;
 	IF_TRUE_RETVAL(stat(path, &s), -1);
 
-	int ret = 0;
+	uid_t _uid = uid;
+	gid_t _gid = gid;
 
-	struct chown_data cb_data = { .uid = uid, .gid = gid };
-	if (dir_foreach(path, &dir_chown_contents_cb, &cb_data) < 0) {
-		ERROR("Could not chown %s to uid:gid (%d:%d)", path, uid, gid);
-		ret--;
+	if (id_adjust_cb)
+		id_adjust_cb(&s, &_uid, &_gid);
+
+	// chown .
+	if (chown(path, _uid, _gid) < 0) {
+		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, _uid, _gid);
+		return -1;
 	}
 
-	return ret;
+	// recursively chown files and subdirs
+	struct chown_data cb_data = { .uid = uid, .gid = gid, .id_adjust_cb = id_adjust_cb };
+	if (dir_foreach(path, &dir_chown_contents_cb, &cb_data) < 0) {
+		ERROR("Could not chown %s to uid:gid (%d:%d)", path, uid, gid);
+		return -1;
+	}
+
+	return 0;
 }

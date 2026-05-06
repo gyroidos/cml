@@ -105,7 +105,7 @@ u_idmapped_new(compartment_t *compartment)
 	// ensure data directory of unit in CML is root owned
 	struct stat s;
 	if (!stat(unit_get_data_path(idmapped->unit), &s) && s.st_uid != 0) {
-		if (dir_chown_folder(unit_get_data_path(idmapped->unit), 0, 0) < 0) {
+		if (dir_chown_folder(unit_get_data_path(idmapped->unit), 0, 0, NULL) < 0) {
 			FATAL("Could not chown %s to root:root failed.",
 			      unit_get_data_path(idmapped->unit));
 		}

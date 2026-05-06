@@ -73,9 +73,11 @@ dir_copy_folder(const char *source, const char *target,
  * @param path The path of the directory.
  * @param uid uid to be set in the directory.
  * @param gid gid to be set in the directory.
+ * @param id_adjust_cb callback which is called to adjust the uid and gid
  * @returns 0 on success, -1 on error.
  */
 int
-dir_chown_folder(const char *path, uid_t uid, gid_t gid);
+dir_chown_folder(const char *path, uid_t uid, gid_t gid,
+		 void (*id_adjust_cb)(struct stat *, uid_t *, gid_t *));
 
 #endif /* DIR_H */
