@@ -109,50 +109,14 @@ c_idmapped_free(void *idmappedp)
 	mem_free0(idmapped);
 }
 
-static int
-c_idmapped_chown_dir_cb(const char *path, const char *file, void *data)
+static void
+c_idmapped_chown_id_adjust_cb(struct stat *s, uid_t *uid, gid_t *gid)
 {
-	struct stat s;
-	int ret = 0;
-	struct c_idmapped_chown_dir_cbdata *cbdata = data;
-	ASSERT(cbdata);
-
-	char *file_to_chown = mem_printf("%s/%s", path, file);
-	if (lstat(file_to_chown, &s) == -1) {
-		mem_free0(file_to_chown);
-		return -1;
-	}
+	ASSERT(s && uid && gid);
 
 	// modulo operation avoids shifting twice
-	uid_t uid = s.st_uid % UID_RANGE + cbdata->uid;
-	gid_t gid = s.st_gid % UID_RANGE + cbdata->gid;
-
-	if (file_is_dir(file_to_chown)) {
-		TRACE("Path %s is dir", file_to_chown);
-		if (dir_foreach(file_to_chown, &c_idmapped_chown_dir_cb, cbdata) < 0) {
-			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
-			ret--;
-		}
-		if (chown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
-			ret--;
-		}
-	} else {
-		if (lchown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
-				    gid);
-			ret--;
-		}
-	}
-	TRACE("Chown file '%s' to (%d:%d) (uid_start %d)", file_to_chown, uid, gid, cbdata->uid);
-
-	// chown .
-	if (chown(path, uid, gid) < 0) {
-		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
-		ret--;
-	}
-	mem_free0(file_to_chown);
-	return ret;
+	*uid = s->st_uid % UID_RANGE + *uid;
+	*gid = s->st_gid % UID_RANGE + *gid;
 }
 
 static int
@@ -169,14 +133,17 @@ c_idmapped_mnt_apply_mapping(struct c_idmapped_mnt *mnt, int userns_fd)
 		return -1;
 	}
 	if (s.st_uid != 0) {
-		struct c_idmapped_chown_dir_cbdata cbdata = { .uid = 0, .gid = 0 };
-		if (dir_foreach(mnt->src, &c_idmapped_chown_dir_cb, &cbdata) < 0) {
-			ERROR("Could not revert mapping done by chown %s to target uid:gid (%d:%d)",
-			      mnt->src, cbdata.uid, cbdata.gid);
+		uid_t uid = 0;
+		gid_t gid = 0;
+
+		if (dir_chown_folder(mnt->src, uid, gid, c_idmapped_chown_id_adjust_cb) == -1) {
+			ERROR("Could not revert mapping done by chown %s from %d to target uid:gid (%d:%d)",
+			      mnt->src, s.st_uid, uid, gid);
 			return -1;
 		}
+
 		DEBUG("Reverted mapping done by chown %s from %d to target uid:gid (%d:%d)",
-		      mnt->src, s.st_uid, cbdata.uid, cbdata.gid);
+		      mnt->src, s.st_uid, uid, gid);
 	}
 
 	struct mount_attr attr = { 0 };
@@ -323,16 +290,10 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 			}
 			mem_free0(tmpfs_dir);
 		}
-		if (chown(dir, container_uid, container_uid) < 0) {
+		if (dir_chown_folder(dir, container_uid, container_uid,
+				     &c_idmapped_chown_id_adjust_cb) < 0) {
 			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", dir, container_uid,
 				    container_uid);
-			return -1;
-		}
-		struct c_idmapped_chown_dir_cbdata cbdata = { .uid = container_uid,
-							      .gid = container_uid };
-		if (dir_foreach(dir, &c_idmapped_chown_dir_cb, &cbdata) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, cbdata.uid,
-			      cbdata.gid);
 			return -1;
 		}
 
@@ -511,12 +472,13 @@ c_idmapped_shift_ids(void *idmappedp, const char *src, const char *dst, const ch
 
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 
-	int uid = container_get_uid(idmapped->container);
+	uid_t uid = container_get_uid(idmapped->container);
+	gid_t gid = container_get_uid(idmapped->container);
 
 	// if we just got a single file chown this and return
 	if (file_exists(src) && !file_is_dir(src)) {
-		if (lchown(src, uid, uid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", src, uid, uid);
+		if (lchown(src, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", src, uid, gid);
 			goto error;
 		}
 		goto success;
@@ -527,10 +489,8 @@ c_idmapped_shift_ids(void *idmappedp, const char *src, const char *dst, const ch
 
 	// if cgroup subsys or dev just chown the files
 	if (is_dev || is_cgroup) {
-		struct c_idmapped_chown_dir_cbdata cbdata = { .uid = uid, .gid = uid };
-		if (dir_foreach(src, &c_idmapped_chown_dir_cb, &cbdata) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", src, cbdata.uid,
-			      cbdata.gid);
+		if (dir_chown_folder(src, uid, gid, &c_idmapped_chown_id_adjust_cb) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", src, uid, gid);
 			return -1;
 		}
 		if ((is_dev && idmapped->is_dev_mounted) || is_cgroup)
