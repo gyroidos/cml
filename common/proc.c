@@ -183,9 +183,13 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 	struct proc_killall *pk = data;
 
 	char *tmp = NULL;
-	pid_t pid = strtol(file, &tmp, 10);
+	errno = 0;
+	long lpid = strtol(file, &tmp, 10);
 	if (!tmp || tmp[0] != '\0') // filename is not a number
 		return 0;
+	if (errno == ERANGE || lpid <= 0 || lpid > INT_MAX)
+		return 0;
+	pid_t pid = (pid_t)lpid;
 
 	proc_status_t *status = proc_status_new(pid);
 	IF_NULL_RETVAL(status, 0);
@@ -222,9 +226,13 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 	struct proc_find *pf = data;
 
 	char *tmp = NULL;
-	pid_t pid = strtol(file, &tmp, 10);
+	errno = 0;
+	long lpid = strtol(file, &tmp, 10);
 	if (!tmp || tmp[0] != '\0') // filename is not a number
 		return 0;
+	if (errno == ERANGE || lpid <= 0 || lpid > INT_MAX)
+		return 0;
+	pid_t pid = (pid_t)lpid;
 
 	proc_status_t *status = proc_status_new(pid);
 	IF_NULL_RETVAL_TRACE(status, 0);
