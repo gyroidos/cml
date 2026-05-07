@@ -305,14 +305,14 @@ proc_fork_and_execvp(const char *const *argv)
 int
 proc_cap_last_cap(void)
 {
-	int cap;
+	int cap = -1;
 	const char *file_cap_last_cap = "/proc/sys/kernel/cap_last_cap";
 
 	char *str_cap_last_cap = file_read_new(file_cap_last_cap, 24);
 	IF_NULL_RETVAL(str_cap_last_cap, -1);
 
-	if (sscanf(str_cap_last_cap, "%d", &cap) != 1) {
-		ERROR_ERRNO("Can't read cap from '%s'", file_cap_last_cap);
+	if (sscanf(str_cap_last_cap, "%d", &cap) != 1 || cap < 0) {
+		ERROR("Invalid cap_last_cap value in '%s'", file_cap_last_cap);
 		cap = -1;
 	}
 
