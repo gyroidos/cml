@@ -317,12 +317,12 @@ proc_stat_btime(unsigned long long *boottime_sec)
 		fclose(proc);
 		return 0;
 	}
-	if (errno) {
-		ERROR_ERRNO("fscanf");
+	if (ferror(proc)) {
+		ERROR_ERRNO("failed to read /proc/stat");
 		fclose(proc);
-		return -errno;
+		return -1;
 	}
-	ERROR_ERRNO("failed to parse /proc/stat");
+	ERROR("failed to parse btime from /proc/stat");
 	fclose(proc);
 	return -1;
 }
