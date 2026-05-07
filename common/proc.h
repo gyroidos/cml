@@ -61,7 +61,7 @@ proc_killall(pid_t ppid, const char *name, int sig);
  * Returns the pid of the process matching name and ppid.
  * @param ppid The pid of the parent process.
  * @param name The process name to find.
- * @return pid of matched process, 0 if no match, -1 on error.
+ * @return pid of matched process, -1 if no match or on error.
  */
 pid_t
 proc_find(pid_t ppid, const char *name);

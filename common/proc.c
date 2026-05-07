@@ -245,7 +245,7 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 pid_t
 proc_find(pid_t ppid, const char *name)
 {
-	struct proc_find data = { ppid, name, 0 };
+	struct proc_find data = { ppid, name, -1 };
 
 	if (dir_foreach("/proc", &proc_find_cb, &data) < 0) {
 		WARN("Could not traverse /proc");
