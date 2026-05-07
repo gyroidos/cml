@@ -250,10 +250,9 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 	pid_t ppid = proc_status_get_ppid(status);
 	const char *name = proc_status_get_name(status);
 
-	if ((pf->ppid == ppid) && !strcmp(name, pf->name)) {
+	if (pf->match < 0 && (pf->ppid == ppid) && !strcmp(name, pf->name)) {
 		TRACE("Found pid %d with ppid %d and name %s", pid, ppid, pf->name);
 		pf->match = pid;
-		//return -1; // TODO maybe adapt dir_foreach to allow aborting the directory traversing without indicating an error
 	}
 
 	proc_status_free(status);
