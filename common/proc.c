@@ -38,6 +38,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#include "pidfd.h"
+
 struct proc_killall {
 	pid_t ppid;
 	const char *name;
@@ -191,8 +193,15 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 		return 0;
 	pid_t pid = (pid_t)lpid;
 
+	int pidfd = pidfd_open(pid, 0);
+	if (pidfd < 0)
+		return 0;
+
 	proc_status_t *status = proc_status_new(pid);
-	IF_NULL_RETVAL(status, 0);
+	if (!status) {
+		close(pidfd);
+		return 0;
+	}
 
 	pid_t ppid = proc_status_get_ppid(status);
 	const char *name = proc_status_get_name(status);
@@ -203,6 +212,7 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 	}
 
 	proc_status_free(status);
+	close(pidfd);
 	return 0;
 }
 
