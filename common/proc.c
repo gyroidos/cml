@@ -408,7 +408,7 @@ proc_meminfo_new()
 	IF_FALSE_GOTO(n == 1, error);
 	TRACE("Parsed MemFree: %zd kB", meminfo->mem_free);
 
-	tmp = strstr(buf, "\nMemAvailable:");
+	tmp = strstr(tmp, "\nMemAvailable:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nMemAvailable:\t%zd kB", &meminfo->mem_available);
 	IF_FALSE_GOTO(n == 1, error);
