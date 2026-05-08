@@ -49,16 +49,21 @@ typedef struct hotplug_net_dev_mapping {
 	uint8_t mac[MAC_ADDR_LEN];
 } hotplug_container_netdev_mapping_t;
 
-/**
- * Persistent MAC → original kernel name mapping.
- * Entries are never removed, so the original name survives container
- * assignment/unassignment cycles where the interface may be renamed.
- */
 typedef struct {
 	uint8_t mac[MAC_ADDR_LEN];
 	char *ifname;
 } hotplug_netif_name_t;
 
+static uevent_uev_t *uevent_uev = NULL;
+
+// track net devices mapped to containers
+static list_t *hotplug_container_netdev_mapping_list = NULL;
+
+/**
+ * Persistent MAC → original kernel name mapping.
+ * Entries are never removed, so the original name survives container
+ * assignment/unassignment cycles where the interface may be renamed.
+ */
 static list_t *hotplug_known_names_list = NULL;
 
 static hotplug_netif_name_t *
@@ -114,11 +119,6 @@ hotplug_get_ifname_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 
 	return NULL;
 }
-
-static uevent_uev_t *uevent_uev = NULL;
-
-// track net devices mapped to containers
-static list_t *hotplug_container_netdev_mapping_list = NULL;
 
 static void
 hotplug_container_netdev_mapping_free(hotplug_container_netdev_mapping_t *mapping)
