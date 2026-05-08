@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/file.h>
@@ -402,9 +403,15 @@ logf_file_new(const char *name)
 
 	FILE *f;
 	char *name_with_time_of_day = logf_file_new_name(name);
-	f = fopen(name_with_time_of_day, "w");
+
+	int fd = open(name_with_time_of_day, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+	if (fd < 0) {
+		FATAL_ERRNO("Failed to open log file %s", name_with_time_of_day);
+	}
+	f = fdopen(fd, "w");
 	if (!f) {
-		FATAL_ERRNO("Failed to open log file\n");
+		close(fd);
+		FATAL_ERRNO("Failed to fdopen log file %s", name_with_time_of_day);
 	}
 
 	if (0 != setvbuf(f, NULL, _IOLBF, 0)) {
@@ -412,15 +419,17 @@ logf_file_new(const char *name)
 		f = NULL;
 	}
 
-	if ((file_is_link(current) && !file_exists(current)) || file_exists(current)) {
-		if (unlink(current)) {
-			FATAL_ERRNO("could not unlink %s", current);
-		}
+	char *current_tmp = mem_printf("%s.tmp", current);
+	unlink(current_tmp);
+	if (symlink(name_with_time_of_day, current_tmp) < 0) {
+		FATAL_ERRNO("Could not create symlink %s to %s", name_with_time_of_day,
+			    current_tmp);
 	}
-
-	if (symlink(name_with_time_of_day, current) < 0) {
-		FATAL_ERRNO("Could not create symlink %s to %s", name_with_time_of_day, current);
+	if (rename(current_tmp, current) < 0) {
+		unlink(current_tmp);
+		FATAL_ERRNO("Could not rename %s to %s", current_tmp, current);
 	}
+	mem_free0(current_tmp);
 
 	mem_free0(current);
 	mem_free0(name_with_time_of_day);
