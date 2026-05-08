@@ -220,7 +220,7 @@ c_vol_create_sparse_file(const char *img, off64_t storage_size)
 
 	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long)storage_size);
 
-	fd = open(img, O_LARGEFILE | O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	fd = open(img, O_LARGEFILE | O_WRONLY | O_CREAT | O_TRUNC, 0600);
 	if (fd < 0) {
 		ERROR_ERRNO("Could not open image file %s", img);
 		return -1;
@@ -481,11 +481,11 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	TRACE("Creating upper dir %s and work dir %s\n", upper_dir, work_dir);
 
 	// create mountpoint for upper dev
-	if (dir_mkdir_p(upper_dir, 0777) < 0) {
+	if (dir_mkdir_p(upper_dir, 0700) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
 		goto error;
 	}
-	if (dir_mkdir_p(work_dir, 0777) < 0) {
+	if (dir_mkdir_p(work_dir, 0700) < 0) {
 		ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
 		goto error;
 	}
@@ -755,7 +755,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	}
 
 	// try to create mount point before mount, usually not necessary...
-	if (dir_mkdir_p(dir, 0777) < 0)
+	if (dir_mkdir_p(dir, 0700) < 0)
 		DEBUG_ERRNO("Could not mkdir %s", dir);
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
