@@ -41,7 +41,9 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 
+#include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 //#undef LOGF_LOG_MIN_PRIO
@@ -240,6 +242,19 @@ end:
 	return ret;
 }
 
+static FILE *
+ssl_fopen_write(const char *path, mode_t mode)
+{
+	int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
+	if (fd < 0)
+		return NULL;
+
+	FILE *fp = fdopen(fd, "wb");
+	if (!fp)
+		close(fd);
+	return fp;
+}
+
 int
 ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase,
 	       const char *common_name, const char *uid, bool tpmkey, rsa_padding_t rsa_padding)
@@ -285,7 +300,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 
 	DEBUG("CSR created");
 
-	if (!(fp = fopen(req_file, "wb"))) {
+	if (!(fp = ssl_fopen_write(req_file, 0644))) {
 		ERROR("Error saving certificate request");
 		goto error;
 	}
@@ -298,7 +313,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 	fclose(fp);
 
 	if (!tpmkey) {
-		if (!(fp = fopen(key_file, "wb"))) {
+		if (!(fp = ssl_fopen_write(key_file, 0600))) {
 			ERROR("Error saving CSR private key");
 			goto error;
 		}
@@ -1307,7 +1322,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 
 	DEBUG("Softtoken created");
 
-	if (!(fp = fopen(token_file, "wb"))) {
+	if (!(fp = ssl_fopen_write(token_file, 0600))) {
 		ERROR("Error saving PKCS#12 softtoken");
 		goto error;
 	}
@@ -1319,7 +1334,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 	fclose(fp);
 
 	if (cert_file) {
-		if (!(fp = fopen(cert_file, "wb"))) {
+		if (!(fp = ssl_fopen_write(cert_file, 0644))) {
 			ERROR("Error saving certificate");
 			goto error;
 		}
@@ -1398,7 +1413,7 @@ ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char
 		ERROR("Error creating PKCS#12 softtoken structure");
 		goto error;
 	}
-	if (!(fp = fopen(token_file, "wb"))) {
+	if (!(fp = ssl_fopen_write(token_file, 0600))) {
 		ERROR("Error saving PKCS#12 softtoken");
 		goto error;
 	}
