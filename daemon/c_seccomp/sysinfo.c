@@ -188,6 +188,8 @@ c_seccomp_cgroup_get_max(const char *file_prefix, unsigned long *mem_max, const 
 	ret = 0;
 err:
 	mem_free0(cg_file);
+	if (buf)
+		mem_free0(buf);
 	if (cwd) {
 		// restore current working directory
 		if (chdir(cwd))
