@@ -116,13 +116,12 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 	struct stat stat_buffer;
 	int ret = 0;
 	char *file_to_remove = mem_printf("%s/%s", path, name);
-	if (stat(file_to_remove, &stat_buffer) == 0 && !S_ISDIR(stat_buffer.st_mode)) {
-		TRACE("Unlinking file %s", file_to_remove);
-		if (unlink(file_to_remove) == -1) {
-			ERROR_ERRNO("Could not delete file %s", file_to_remove);
-			ret--;
-		}
-	} else {
+	if (lstat(file_to_remove, &stat_buffer) == -1) {
+		ERROR_ERRNO("Could not lstat %s", file_to_remove);
+		mem_free0(file_to_remove);
+		return -1;
+	}
+	if (S_ISDIR(stat_buffer.st_mode)) {
 		TRACE("Path %s is dir", file_to_remove);
 		if (dir_foreach(file_to_remove, &dir_unlink_folder_contents_cb, NULL) < 0) {
 			ERROR_ERRNO("Could not delete all dir contents in %s", file_to_remove);
@@ -131,6 +130,12 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 		TRACE("Removing now empty dir %s", file_to_remove);
 		if (rmdir(file_to_remove) < 0) {
 			ERROR_ERRNO("Could not delete dir %s", file_to_remove);
+			ret--;
+		}
+	} else {
+		TRACE("Unlinking %s", file_to_remove);
+		if (unlink(file_to_remove) == -1) {
+			ERROR_ERRNO("Could not delete %s", file_to_remove);
 			ret--;
 		}
 	}
