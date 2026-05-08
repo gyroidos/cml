@@ -527,7 +527,11 @@ hotplug_init()
 				    UEVENT_ACTION_ADD | UEVENT_ACTION_CHANGE | UEVENT_ACTION_REMOVE,
 				    hotplug_handle_uevent_cb, NULL);
 
-	IF_TRUE_RETVAL(uevent_add_uev(uevent_uev), -1);
+	if (uevent_add_uev(uevent_uev)) {
+		uevent_uev_free(uevent_uev);
+		uevent_uev = NULL;
+		return -1;
+	}
 
 	if (cmld_is_hostedmode_active())
 		return 0;
@@ -548,10 +552,17 @@ hotplug_cleanup()
 	uevent_remove_uev(uevent_uev);
 	uevent_uev_free(uevent_uev);
 
+	for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
+		hotplug_container_netdev_mapping_free(l->data);
+	}
+	list_delete(hotplug_container_netdev_mapping_list);
+	hotplug_container_netdev_mapping_list = NULL;
+
 	for (list_t *l = hotplug_known_names_list; l; l = l->next) {
 		hotplug_netif_name_free(l->data);
 	}
 	list_delete(hotplug_known_names_list);
+	hotplug_known_names_list = NULL;
 }
 
 int
