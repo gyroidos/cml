@@ -52,6 +52,7 @@ message GuestOSMount {
 		OVERLAY_RW = 9; // similar to EMPTY image, however overlayed on given mount_point (writable persitent fs as overlay)
 		BIND_FILE = 10;
 		BIND_FILE_RW = 11;
+		STORE_ONLY = 12; // image that should just reside in the guestos store but is neither mounted nor flashed
 	}
 	required Type mount_type = 4;   // type of the image file
 

@@ -54,6 +54,15 @@ reboot_reboot(int cmd)
 		res = reboot(RB_POWER_OFF);
 #endif
 		break;
+	case REBOOT_FORCE:
+#ifdef ANDROID
+		// ANDROID_RB_RESTART is deprecated and no longer recommended to be used
+		res = android_reboot(ANDROID_RB_RESTART, 0, 0);
+#else
+		// do sync otherwise data will be lost. (man 2 reboot)
+		res = reboot(RB_AUTOBOOT);
+#endif
+		break;
 	}
 	return res;
 }

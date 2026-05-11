@@ -31,8 +31,10 @@
 #include "common/uuid.h"
 #include "compartment.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
 
 struct container {
@@ -88,6 +90,15 @@ struct container_usbdev {
 	container_usbdev_type_t type;
 };
 
+// list of compartments modules for all container objects
+static list_t *compartment_module_list = NULL;
+
+static list_t *
+container_get_compartment_modules(void)
+{
+	return compartment_module_list;
+}
+
 static void
 container_set_extension(void *extension_data, compartment_t *compartment)
 {
@@ -96,6 +107,16 @@ container_set_extension(void *extension_data, compartment_t *compartment)
 
 	container_t *container = extension_data;
 	container->compartment = compartment;
+}
+
+void
+container_register_compartment_module(compartment_module_t *mod)
+{
+	ASSERT(mod);
+
+	compartment_module_list = list_append(compartment_module_list, mod);
+	DEBUG("Container module %s registered, nr of hooks: %d)", mod->name,
+	      list_length(compartment_module_list));
 }
 
 container_t *
@@ -184,8 +205,8 @@ container_new(const uuid_t *uuid, const char *name, container_type_t type, bool 
 		flags |= COMPARTMENT_FLAG_XORG_COMPAT;
 
 	// create internal compartment object with container as extension data
-	compartment_extension_t *extension =
-		compartment_extension_new(container_set_extension, container);
+	compartment_extension_t *extension = compartment_extension_new(
+		container_set_extension, container_get_compartment_modules, container);
 	container->compartment = compartment_new(uuid, name, flags, init, init_argv, init_env,
 						 init_env_len, extension);
 
@@ -311,6 +332,15 @@ container_unregister_observer(container_t *container, container_callback_t *cont
 
 	compartment_unregister_observer(container->compartment, container_cb->compartment_cb);
 	mem_free0(container_cb);
+}
+
+void
+container_finish_observers(container_t *container, void (*cb)(void *), void *data)
+{
+	ASSERT(container);
+	ASSERT(cb);
+
+	compartment_finish_observers(container->compartment, cb, data);
 }
 
 void
@@ -540,6 +570,20 @@ container_get_images_dir(const container_t *container)
 }
 
 static int
+container_images_exist_cb(UNUSED const char *path, const char *name, UNUSED void *data)
+{
+	int len = strlen(name);
+	return (len >= 4 && !strcmp(name + len - 4, ".img")) ? 1 : 0;
+}
+
+bool
+container_images_dir_contains_image(const container_t *container)
+{
+	ASSERT(container);
+	return dir_foreach(container->images_dir, container_images_exist_cb, NULL) > 0;
+}
+
+static int
 container_wipe_image_cb(const char *path, const char *name, UNUSED void *data)
 {
 	ASSERT(data);
@@ -569,6 +613,10 @@ container_wipe_finish(container_t *container)
 		     container_get_description(container));
 		return -1;
 	}
+
+	if (container_get_state(container) == COMPARTMENT_STATE_ZOMBIE)
+		container_set_state(container, COMPARTMENT_STATE_STOPPED);
+
 	return 0;
 }
 
@@ -598,20 +646,21 @@ container_wipe(container_t *container)
 
 	INFO("Wiping container %s", container_get_description(container));
 
-	if (container_get_state(container) != COMPARTMENT_STATE_STOPPED) {
-		container_kill(container);
-
-		/* Register observer to wait for completed compartment_stop */
-		if (!compartment_register_observer(container->compartment, &container_wipe_cb,
-						   container)) {
-			DEBUG("Could not register wipe callback");
-			return -1;
-		}
-		return 0;
-	} else {
+	if (container_get_state(container) == COMPARTMENT_STATE_STOPPED ||
+	    container_get_state(container) == COMPARTMENT_STATE_ZOMBIE) {
 		/* Container is already stopped */
 		return container_wipe_finish(container);
 	}
+
+	/* Container is running kill it before wipe */
+	container_kill(container);
+
+	/* Register observer to wait for completed compartment_stop */
+	if (!compartment_register_observer(container->compartment, &container_wipe_cb, container)) {
+		DEBUG("Could not register wipe callback");
+		return -1;
+	}
+	return 0;
 }
 
 int
@@ -807,14 +856,48 @@ container_usbdev_get_minor(container_usbdev_t *usbdev)
 	return usbdev->minor;
 }
 
+char *
+container_usbdev_get_devpath_new(container_usbdev_t *usbdev)
+{
+	int n;
+	char *dev_path = NULL;
+	char *event_str = NULL;
+	char *tmp = NULL;
+	char *buf = NULL;
+	char *sys_path = mem_printf("/sys/dev/char/%d:%d/uevent", usbdev->major, usbdev->minor);
+
+	IF_FALSE_GOTO(file_exists(sys_path), out);
+
+	event_str = file_read_new(sys_path, 4096);
+	IF_NULL_GOTO(event_str, out);
+
+	tmp = strstr(event_str, "\nDEVNAME=");
+	IF_NULL_GOTO(tmp, out);
+
+	buf = mem_new0(char, PATH_MAX);
+	n = sscanf(tmp, "\nDEVNAME=%s\n", buf);
+	IF_FALSE_GOTO(n == 1, out);
+
+	dev_path = (0 == strncmp("/dev", buf, 4)) ? mem_strdup(buf) : mem_printf("/dev/%s", buf);
+out:
+
+	if (event_str)
+		mem_free0(event_str);
+	if (buf)
+		mem_free0(buf);
+	mem_free0(sys_path);
+
+	return dev_path;
+}
+
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
-		       bool configure)
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[MAC_ADDR_LEN], bool configure)
 {
 	IF_NULL_RETVAL(if_name, NULL);
 	container_vnet_cfg_t *vnet_cfg = mem_new(container_vnet_cfg_t, 1);
 	vnet_cfg->vnet_name = mem_strdup(if_name);
-	memcpy(vnet_cfg->vnet_mac, mac, 6);
+	memcpy(vnet_cfg->vnet_mac, mac, MAC_ADDR_LEN);
 	vnet_cfg->rootns_name = rootns_name ? mem_strdup(rootns_name) : NULL;
 	vnet_cfg->configure = configure;
 	return vnet_cfg;
@@ -837,8 +920,8 @@ container_pnet_cfg_new(const char *if_name_mac, bool mac_filter, list_t *mac_whi
 		return pnet_cfg;
 
 	for (list_t *l = mac_whitelist; l; l = l->next) {
-		uint8_t *mac = mem_alloc0(6);
-		memcpy(mac, l->data, 6);
+		uint8_t *mac = mem_alloc0(MAC_ADDR_LEN);
+		memcpy(mac, l->data, MAC_ADDR_LEN);
 		pnet_cfg->mac_whitelist = list_append(pnet_cfg->mac_whitelist, mac);
 	}
 
@@ -951,6 +1034,8 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(device_deny, int, void *, char, int, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(device_deny, int, 0, char, int, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_device_allowed, bool, void *, char, int, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(is_device_allowed, bool, true, char, int, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(device_set_access, int, void *, const char *)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(device_set_access, int, 0, const char *)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(add_pid_to_cgroups, int, void *, pid_t)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(add_pid_to_cgroups, int, 0, pid_t)
 
@@ -959,6 +1044,9 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_rootdir, char *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_rootdir, char *, NULL)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_mnt, void *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_mnt, void *, NULL)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_cryptfs_mode, cryptfs_mode_t, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(get_cryptfs_mode, cryptfs_mode_t,
+				       CRYPTFS_MODE_NOT_IMPLEMENTED)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(is_encrypted, bool, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(is_encrypted, bool, false)
 
@@ -1023,3 +1111,5 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(has_token_changed, bool, void *, containe
 				       const char *)
 CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(has_token_changed, bool, false, container_token_type_t,
 					const char *)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(scd_connect, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(scd_connect, int, 0)

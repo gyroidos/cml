@@ -271,8 +271,13 @@ crypto_cb(int fd, unsigned events, event_io_t *io, void *data)
 
 				TRACE("Received hash for file %s: %s",
 				      task->hash_file ? task->hash_file : "<empty>", hash);
-				task->hash_complete(hash, task->hash_file, task->hash_algo,
-						    task->data);
+				if (task->hash_complete)
+					task->hash_complete(hash, task->hash_file, task->hash_algo,
+							    task->data);
+				if (task->hash_buf_complete)
+					task->hash_buf_complete(hash, task->hash_buf,
+								task->hash_buf_len, task->hash_algo,
+								task->data);
 				if (hash != NULL) {
 					mem_free0(hash);
 				}
@@ -281,6 +286,12 @@ crypto_cb(int fd, unsigned events, event_io_t *io, void *data)
 			ERROR("Missing hash_value in CRYPTO_HASH_OK response!"); // fallthrough
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR:
 			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
+			if (task->hash_complete)
+				task->hash_complete(NULL, task->hash_file, task->hash_algo,
+						    task->data);
+			if (task->hash_buf_complete)
+				task->hash_buf_complete(NULL, task->hash_buf, task->hash_buf_len,
+							task->hash_algo, task->data);
 			break;
 
 		// deal with CRYPTO_VERIFY_* cases
@@ -459,10 +470,11 @@ crypto_hash_buf(const unsigned char *buf, size_t buf_len, crypto_hashalgo_t hash
 	out.code = DAEMON_TO_TOKEN__CODE__CRYPTO_HASH_BUF;
 	out.has_hash_algo = true;
 	out.hash_algo = crypto_hashalgo_to_proto(hashalgo);
+	out.has_hash_buf = true;
 	out.hash_buf.data = task->hash_buf;
 	out.hash_buf.len = task->hash_buf_len;
 
-	TRACE("Requesting scd to hash file at %s", task->hash_file);
+	TRACE("Requesting scd to hash buf of len %zu", task->hash_buf_len);
 
 	if (crypto_send_msg(&out, task) < 0) {
 		crypto_callback_task_free(task);

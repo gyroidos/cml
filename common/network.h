@@ -37,6 +37,9 @@
 
 #include <net/if.h>
 
+#define MAC_ADDR_LEN 6
+#define MAC_STR_LEN 18
+
 /* Bionic misses this flag */
 #ifndef IFF_DOWN
 #define IFF_DOWN 0x0
@@ -80,6 +83,57 @@ network_setup_route(const char *net_dst, const char *dev, bool add);
  */
 int
 network_setup_route_table(const char *table_id, const char *net_dst, const char *dev, bool add);
+
+/**
+ * Adds a routing policy rule using netlink.
+ * Creates a rule like: "from all lookup <table_id> priority <priority>"
+ *
+ * @param table_id Routing table ID
+ * @param family Address family (AF_INET or AF_INET6)
+ * @param priority Rule priority (lower = higher priority)
+ * @return 0 on success, -1 on failure
+ */
+int
+network_add_routing_rule(uint32_t table_id, int family, uint32_t priority);
+
+/**
+ * Removes a routing policy rule using netlink.
+ *
+ * @param table_id Routing table ID
+ * @param family Address family (AF_INET or AF_INET6)
+ * @param priority Rule priority (must match the rule to remove)
+ * @return 0 on success, -1 on failure
+ */
+int
+network_remove_routing_rule(uint32_t table_id, int family, uint32_t priority);
+
+/**
+ * Adds a route to a routing table using netlink.
+ *
+ * @param table_id Routing table ID
+ * @param dest_network Destination network address (e.g., "9.9.9.0" or "2001:db8::")
+ * @param prefix_len Network prefix length (e.g., 24 for IPv4 /24, 64 for IPv6 /64)
+ * @param gateway Gateway IP address
+ * @param dev Network device name
+ * @return 0 on success, -1 on failure
+ */
+int
+network_add_route_to_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+			   const char *gateway, const char *dev);
+
+/**
+ * Removes a route from a routing table using netlink.
+ *
+ * @param table_id Routing table ID
+ * @param dest_network Destination network address
+ * @param prefix_len Network prefix length
+ * @param gateway Gateway IP address
+ * @param dev Network device name
+ * @return 0 on success, -1 on failure
+ */
+int
+network_remove_route_from_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+				const char *gateway, const char *dev);
 
 /**
  * Add (or remove) simple iptables rule.
@@ -147,7 +201,15 @@ int
 network_list_link_ns(pid_t pid, list_t **link_list);
 
 /*
- * Generates a list containing names of all available physical network interfaces
+ * Generates a list containing names of all available network interfaces
+ */
+list_t *
+network_get_interfaces_new(void);
+
+/*
+ * Generates a list containing MAC address strings of all available physical
+ * network interfaces. Each entry is a newly allocated string in the format
+ * "xx:xx:xx:xx:xx:xx".
  */
 list_t *
 network_get_physical_interfaces_new(void);
@@ -189,6 +251,15 @@ int
 network_rename_ifi(const char *old_ifi_name, const char *new_ifi_name);
 
 /**
+ * Remove all alternative names (altnames) from a network interface.
+ * Altnames persist across namespace transitions and can interfere with
+ * udev naming policies inside containers.
+ * @param dev The interface name.
+ */
+void
+network_remove_all_altnames(const char *dev);
+
+/**
  * Convert a String representing a mac address ,e.g., "00:11:22:33:44:55"
  * to the corresponding byte array.
  * @param mac_str String representing the mac
@@ -196,7 +267,15 @@ network_rename_ifi(const char *old_ifi_name, const char *new_ifi_name);
  * @return 0 on success, -1 on error
  */
 int
-network_str_to_mac_addr(const char *mac_str, uint8_t mac[6]);
+network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN]);
+
+/**
+ * Writes a string representation of a mac address into the provided buffer.
+ * @param mac array to be converted
+ * @param buf buffer to write the string into (must be MAC_STR_LEN bytes)
+ */
+void
+network_mac_addr_to_str(const uint8_t mac[MAC_ADDR_LEN], char buf[MAC_STR_LEN]);
 
 /**
  * Constructs a String representation for a mac address.
@@ -204,16 +283,16 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[6]);
  * @return The string representing the mac, NULL on error
  */
 char *
-network_mac_addr_to_str_new(uint8_t mac[6]);
+network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN]);
 
 /**
  * Walk through sysfs to find the if name, e.g., shown by ip addr, to the corresponding
  * hardware (mac) address.
  * @param mac array containing the mac address
- * @return The name of the interface
+ * @return The name of the interface, NULL if not found.
  */
 char *
-network_get_ifname_by_addr_new(uint8_t mac[6]);
+network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN]);
 
 /**
  * Get mac address for network interface given by name.
@@ -222,7 +301,18 @@ network_get_ifname_by_addr_new(uint8_t mac[6]);
  * @return 0 on success, -1 on error
  */
 int
-network_get_mac_by_ifname(const char *ifname, uint8_t mac[6]);
+network_get_mac_by_ifname(const char *ifname, uint8_t mac[MAC_ADDR_LEN]);
+
+/**
+ * Resolves a MAC address to an interface name within a specific network namespace
+ * identified by PID. This is needed when the interface has been moved into a
+ * container netns and is no longer visible in the root namespace.
+ * @param mac array containing the mac address
+ * @param pid PID of a process in the target network namespace
+ * @return newly allocated interface name, or NULL if not found
+ */
+char *
+network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid);
 
 /**
  * Create a Linux bridge device.
@@ -266,6 +356,6 @@ network_iptables_phys_deny(const char *chain, const char *netif, bool add);
  * by its mac address on the physical (bridge-port) interface netif.
  */
 int
-network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], bool add);
+network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADDR_LEN], bool add);
 
 #endif /* NETWORK_H */

@@ -164,6 +164,14 @@ enum ContainerTrust {
 	UNSIGNED = 3;
 }
 
+enum CryptfsMode {
+	NOT_IMPLEMENTED = 1;
+	AUTHENC = 2;
+	ENCRYPT_ONLY = 3;
+	INTEGRITY_ENCRYPT = 4;
+	INTEGRITY_ONLY = 5;
+}
+
 /**
  * Represents the status of a single container.
  */
@@ -176,5 +184,6 @@ message ContainerStatus {
 	required uint64 created = 6;
 	required string guestos = 7;
 	required ContainerTrust trust_level = 8;
+	required CryptfsMode cryptfs_mode = 9;
 	/* TBD more state values */
 }

@@ -46,7 +46,7 @@ organizationalUnitName		= Organizational Unit Name (eg, section)
 organizationalUnitName_default	= Development
 
 commonName          = Common Name (e.g. server FQDN or YOUR name)
-commonName_default      = trustme CML Signing Sub CA
+commonName_default      = unittest CML Signing Sub CA
 
 ####################################################################
 [ ca_extensions ]

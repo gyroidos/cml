@@ -94,8 +94,9 @@ time_get_ntp_coarse(char *server)
 	ntp->tx_timestamp_frac = ntohl(ntp->tx_timestamp_frac);
 
 	time_t ret = (time_t)(ntp->tx_timestamp_sec - NTP_TIMESTAMP_DELTA);
+	char ctime_str[26] = { 0 };
 
-	INFO("Got current time from server %s", ctime(&ret));
+	INFO("Got current time from server %s", ctime_r(&ret, ctime_str) ? ctime_str : "N/A");
 	mem_free0(ntp);
 	return ret;
 err:

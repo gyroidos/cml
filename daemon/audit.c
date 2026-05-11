@@ -159,46 +159,26 @@ audit_remaining_storage(const char *uuid)
 }
 
 static void
-audit_send_record_cb(const char *hash_string, const char *hash_file,
+audit_send_record_cb(const char *hash_string, const unsigned char *hash_buf, size_t hash_buf_len,
 		     UNUSED crypto_hashalgo_t hash_algo, void *data)
 {
-	uint8_t *buf = NULL;
 	const container_t *c = (const container_t *)data;
 	ASSERT(c);
 
 	// callback is triggert twice for cleanup
 	IF_NULL_RETURN_TRACE(hash_string);
 
-	if (!hash_file) {
-		ERROR("audit_send_record_cb: hash_file was empty");
-		return;
-	}
-
 	if (!data) {
 		ERROR("audit_send_record_cb: No container given");
 		return;
 	}
 
-	uint32_t buf_len = file_size(hash_file);
-	buf = mem_alloc0(buf_len);
-
-	int read = file_read(hash_file, (char *)buf, buf_len);
-
-	if (read < 0 || buf_len != (unsigned int)read) {
-		ERROR("Processing SCD response: read %u bytes, expected %u", read, buf_len);
-		goto out;
-	}
-
-	TRACE("Got hash from SCD for file %s: %s", hash_file, hash_string);
-
-	if (unlink(hash_file)) {
-		ERROR_ERRNO("Failed to unlink %s", hash_file);
-	}
+	TRACE("Got hash from SCD for record: %s", hash_string);
 
 	char *old_acked = mem_strdup(container_audit_get_last_ack(c));
 	container_audit_set_last_ack(c, hash_string);
 
-	if (0 > container_audit_record_send(c, buf, buf_len)) {
+	if (0 > container_audit_record_send(c, hash_buf, hash_buf_len)) {
 		ERROR("Failed to send audit record to container");
 		// rollback
 		container_audit_set_last_ack(c, old_acked);
@@ -212,7 +192,6 @@ audit_send_record_cb(const char *hash_string, const char *hash_file,
 
 out:
 	container_audit_set_processing_ack(c, false);
-	mem_free0(buf);
 }
 
 static AuditRecord *
@@ -408,7 +387,7 @@ audit_write_file(const uuid_t *uuid, const AuditRecord *msg)
 	int audit_file_lock = -1;
 	int fd = -1;
 
-	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
+	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0700)) {
 		ERROR("Failed to create logdir");
 		return -1;
 	}
@@ -515,17 +494,6 @@ audit_do_send_record(const container_t *c)
 	int ret = -1;
 	int fd = -1;
 
-	char tmpfile[strlen(AUDIT_LOGDIR) + 14];
-	if (0 >= sprintf(tmpfile, "%s/%s", AUDIT_LOGDIR, "audit_XXXXXX")) {
-		ERROR_ERRNO("Failed to prepare temporary filename");
-		return -1;
-	}
-
-	if (-1 == (fd = mkstemp(tmpfile))) {
-		ERROR_ERRNO("Failed to generate temporary filename");
-		return -1;
-	}
-
 	CmldToServiceMessage *message_proto = mem_new0(CmldToServiceMessage, 1);
 	cmld_to_service_message__init(message_proto);
 	message_proto->code = CMLD_TO_SERVICE_MESSAGE__CODE__AUDIT_RECORD;
@@ -543,18 +511,13 @@ audit_do_send_record(const container_t *c)
 		goto out;
 	}
 
-	if (-1 == fd_write(fd, (char *)packed, packed_len)) {
-		ERROR("Failed to write packed message to file.");
-		goto out;
-	}
+	TRACE("Requesting scd to hash serialized protobuf message");
 
-	TRACE("Requesting scd to hash serialized protobuf message at %s", tmpfile);
-
-	// this state is needed s.t. additional ACKs from container arriving while scd is hashing the file
+	// this state is needed s.t. additional ACKs from container arriving while scd is hashing a record
 	// do not lead to multiple transmissions of the same record
 	container_audit_set_processing_ack(c, true);
 
-	if (crypto_hash_file(tmpfile, AUDIT_HASH_ALGO, audit_send_record_cb, (void *)c)) {
+	if (crypto_hash_buf(packed, packed_len, AUDIT_HASH_ALGO, audit_send_record_cb, (void *)c)) {
 		container_audit_set_processing_ack(c, false);
 		str_t *dump = str_hexdump_new((unsigned char *)packed, (int)packed_len);
 		ERROR("Failed to request hashing of record to be sent with length %u: %s.",
@@ -707,9 +670,11 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 		AUDIT_EVENTCLASS evclass, const char *evtype, const char *subject_id,
 		int meta_count, ...)
 {
+	va_list ap;
 	AuditRecord *record = NULL;
 	AuditRecord__Meta **metas = NULL;
 	int ret = 0;
+	int i = 0;
 
 	if (!AUDIT_STORAGE) {
 		TRACE("Attempt to log audit message but AUDIT_STORAGE is zero, skipping...");
@@ -722,18 +687,21 @@ audit_log_event(const uuid_t *uuid, AUDIT_CATEGORY category, AUDIT_COMPONENT com
 			return -1;
 		}
 
-		va_list ap;
-
 		va_start(ap, meta_count);
 
 		metas = mem_alloc0((meta_count / 2) * sizeof(AuditRecord__Meta *));
-		for (int i = 0; i < meta_count / 2; i++) {
+		for (i = 0; i < meta_count / 2; i++) {
 			metas[i] = mem_alloc0(sizeof(AuditRecord__Meta));
 
 			audit_record__meta__init(metas[i]);
+			const char *key = va_arg(ap, const char *);
+			IF_NULL_GOTO(key, err_va);
 
-			metas[i]->key = mem_strdup(va_arg(ap, const char *));
-			metas[i]->value = mem_strdup(va_arg(ap, const char *));
+			const char *value = va_arg(ap, const char *);
+			IF_NULL_GOTO(value, err_va);
+
+			metas[i]->key = mem_strdup(key);
+			metas[i]->value = mem_strdup(value);
 		}
 
 		va_end(ap);
@@ -775,6 +743,21 @@ out:
 	protobuf_free_message((ProtobufCMessage *)record);
 
 	return ret;
+
+err_va:
+	ERROR("Early va_args terminator reached, aborting...");
+	for (int j = i; j >= 0; j--) {
+		if (metas[j]->key)
+			mem_free0(metas[j]->key);
+		if (metas[j]->value)
+			mem_free0(metas[j]->value);
+		mem_free0(metas[j]);
+	}
+	mem_free0(metas);
+
+	va_end(ap);
+
+	return -1;
 }
 
 static void
@@ -838,7 +821,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 
 		char *record_type = mem_printf("type=%hu", type);
 		audit_log_event(uuid, (strstr(res, "success") || res[0] == '1') ? SSA : FSA, CMLD,
-				KAUDIT, record_type, uuid_str, 2, "msg", log_record);
+				KAUDIT, record_type, uuid_str, 2, "msg", log_record, NULL);
 		mem_free0(record_type);
 		TRACE("audit: type=%d %s", type, log_record);
 	} else if (type == AUDIT_DM_EVENT) {
@@ -882,7 +865,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 			sector_str = mem_printf("%llu", sector);
 			audit_log_event(uuid, (res == 1) ? SSA : FSA, CMLD, CONTAINER_MGMT,
 					"dm-audit", uuid_str, 6, "op", op_buf, "label", dev_name,
-					"sector", sector_str);
+					"sector", sector_str, NULL);
 
 			mem_free0(sector_str);
 			mem_free0(dev_name);

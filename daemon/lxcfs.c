@@ -108,15 +108,15 @@ lxcfs_daemon_start(const char *rt_path)
 			if (sscanf(pid_buf, "%d", &lxcfs_daemon_prev_pid) == 1) {
 				INFO("Killing previous instance of lxcfs!");
 				kill(lxcfs_daemon_prev_pid, SIGTERM);
-			}
-			mem_free0(pid_buf);
-			for (int i = 0; file_exists(LXCFS_PID_FILE); ++i) {
-				sleep(1);
-				if (i > 4) {
-					kill(lxcfs_daemon_prev_pid, SIGKILL);
-					break;
+				for (int i = 0; file_exists(LXCFS_PID_FILE); ++i) {
+					sleep(1);
+					if (i > 4) {
+						kill(lxcfs_daemon_prev_pid, SIGKILL);
+						break;
+					}
 				}
 			}
+			mem_free0(pid_buf);
 		}
 		execvp(lxcfs_bin_path, (char *const *)lxcfs_argv);
 		WARN_ERRNO("Could not exec '%s'!", lxcfs_argv[0]);

@@ -46,7 +46,7 @@ organizationalUnitName		= Organizational Unit Name (eg, section)
 organizationalUnitName_default	= Development
 
 commonName          = Common Name (e.g. server FQDN or YOUR name)
-commonName_default      = trustme Software Signing Root CA
+commonName_default      = unittest Software Signing Root CA
 
 ####################################################################
 [ ca_extensions ]

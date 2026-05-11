@@ -32,11 +32,15 @@
 #include "proc.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <net/if.h>
 #include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <linux/fib_rules.h>
 #include <linux/genetlink.h>
 #include <linux/nl80211.h>
 
@@ -62,6 +66,32 @@
 #define LOOPBACK_OLD_PREFIX 8
 #define LOOPBACK_PREFIX 16
 #define LOCALHOST_IP "127.0.0.1"
+
+/**
+ * Parses an IP address string and detects its address family.
+ *
+ * @param addr_str The IP address string to parse
+ * @param addr Output buffer for parsed address
+ * @param family Output: AF_INET or AF_INET6
+ * @param addr_size Input: size of the buffer, Output: size of the address (4 for IPv4, 16 for IPv6)
+ * @return 0 on success, -1 on failure (including if buffer is too small)
+ */
+static int
+network_parse_addr(const char *addr_str, void *addr, int *family, size_t *addr_size)
+{
+	IF_TRUE_RETVAL(*addr_size < sizeof(struct in6_addr), -1);
+
+	if (inet_pton(AF_INET, addr_str, addr) == 1) {
+		*family = AF_INET;
+		*addr_size = sizeof(struct in_addr);
+		return 0;
+	} else if (inet_pton(AF_INET6, addr_str, addr) == 1) {
+		*family = AF_INET6;
+		*addr_size = sizeof(struct in6_addr);
+		return 0;
+	}
+	return -1;
+}
 
 static int
 network_call_ip(const char *addr, uint32_t subnet, const char *interface, char *action)
@@ -189,6 +219,328 @@ network_setup_route(const char *net_dst, const char *dev, bool add)
 }
 
 int
+network_add_routing_rule(uint32_t table_id, int family, uint32_t priority)
+{
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+
+	DEBUG("Adding routing policy rule: from all lookup %u priority %u (family %s)", table_id,
+	      priority, (family == AF_INET6) ? "inet6" : "inet");
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to allocate netlink message for routing rule");
+		goto err;
+	}
+
+	struct fib_rule_hdr rule = { .family = family,
+				     .dst_len = 0,
+				     .src_len = 0,
+				     .tos = 0,
+				     .table = RT_TABLE_UNSPEC,
+				     .action = FR_ACT_TO_TBL,
+				     .flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_NEWRULE), err);
+	IF_TRUE_GOTO_ERROR(
+		nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rule_req(req, &rule), err);
+
+	if (nl_msg_add_u32(req, FRA_TABLE, table_id) < 0) {
+		ERROR("Failed to add FRA_TABLE attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, FRA_PRIORITY, priority) < 0) {
+		ERROR("Failed to add FRA_PRIORITY attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		if (errno == EEXIST) {
+			DEBUG("Routing rule for table %u already exists (family %s), continuing",
+			      table_id, (family == AF_INET6) ? "inet6" : "inet");
+		} else {
+			ERROR("Failed to add routing rule for table %u", table_id);
+			goto err;
+		}
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_remove_routing_rule(uint32_t table_id, int family, uint32_t priority)
+{
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+
+	DEBUG("Removing routing policy rule: from all lookup %u priority %u (family %s)", table_id,
+	      priority, (family == AF_INET6) ? "inet6" : "inet");
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to create netlink message for rule deletion");
+		goto err;
+	}
+
+	struct fib_rule_hdr rule = { .family = family,
+				     .dst_len = 0,
+				     .src_len = 0,
+				     .tos = 0,
+				     .table = RT_TABLE_UNSPEC,
+				     .action = FR_ACT_TO_TBL,
+				     .flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_DELRULE), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rule_req(req, &rule), err);
+
+	if (nl_msg_add_u32(req, FRA_TABLE, table_id) < 0) {
+		ERROR("Failed to add FRA_TABLE attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, FRA_PRIORITY, priority) < 0) {
+		ERROR("Failed to add FRA_PRIORITY attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		if (errno == ENOENT || errno == ESRCH) {
+			DEBUG("Routing rule for table %u doesn't exist (family %s), continuing",
+			      table_id, (family == AF_INET6) ? "inet6" : "inet");
+		} else {
+			WARN("Failed to delete routing rule for table %u", table_id);
+			goto err;
+		}
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_add_route_to_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+			   const char *gateway, const char *dev)
+{
+	ASSERT(dest_network);
+	ASSERT(gateway);
+	ASSERT(dev);
+
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+	int family;
+	size_t addr_size = sizeof(struct in6_addr);
+	struct in6_addr dst_addr, gw_addr;
+
+	if (network_parse_addr(dest_network, &dst_addr, &family, &addr_size) < 0) {
+		ERROR("Invalid destination network address: %s", dest_network);
+		return -1;
+	}
+
+	if (inet_pton(family, gateway, &gw_addr) != 1) {
+		ERROR("Invalid gateway address %s (expected %s)", gateway,
+		      (family == AF_INET) ? "IPv4" : "IPv6");
+		return -1;
+	}
+
+	unsigned int if_index = if_nametoindex(dev);
+	if (if_index == 0) {
+		ERROR("Failed to get interface index for %s", dev);
+		return -1;
+	}
+
+	DEBUG("Adding route %s/%u via %s dev %s to table %u", dest_network, prefix_len, gateway,
+	      dev, table_id);
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to allocate netlink message for route");
+		goto err;
+	}
+
+	struct rtmsg rtmsg = { .rtm_family = family,
+			       .rtm_dst_len = prefix_len,
+			       .rtm_src_len = 0,
+			       .rtm_tos = 0,
+			       .rtm_table = RT_TABLE_UNSPEC,
+			       .rtm_protocol = RTPROT_STATIC,
+			       .rtm_scope = RT_SCOPE_UNIVERSE,
+			       .rtm_type = RTN_UNICAST,
+			       .rtm_flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_NEWROUTE), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE |
+							 NLM_F_REPLACE),
+			   err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rt_req(req, &rtmsg), err);
+
+	if (nl_msg_add_buffer(req, RTA_DST, (const char *)&dst_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_DST attribute");
+		goto err;
+	}
+	if (nl_msg_add_buffer(req, RTA_GATEWAY, (const char *)&gw_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_GATEWAY attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_OIF, if_index) < 0) {
+		ERROR("Failed to add RTA_OIF attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_TABLE, table_id) < 0) {
+		ERROR("Failed to add RTA_TABLE attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		ERROR("Failed to add route to table %u", table_id);
+		goto err;
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	DEBUG("Successfully added route %s/%u via %s dev %s to table %u", dest_network, prefix_len,
+	      gateway, dev, table_id);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
+network_remove_route_from_table(uint32_t table_id, const char *dest_network, uint8_t prefix_len,
+				const char *gateway, const char *dev)
+{
+	ASSERT(dest_network);
+	ASSERT(gateway);
+	ASSERT(dev);
+
+	nl_sock_t *nl_sock = NULL;
+	nl_msg_t *req = NULL;
+	int family;
+	size_t addr_size = sizeof(struct in6_addr);
+	struct in6_addr dst_addr, gw_addr;
+
+	if (network_parse_addr(dest_network, &dst_addr, &family, &addr_size) < 0) {
+		ERROR("Invalid destination network address: %s", dest_network);
+		return -1;
+	}
+
+	if (inet_pton(family, gateway, &gw_addr) != 1) {
+		ERROR("Invalid gateway address %s (expected %s)", gateway,
+		      (family == AF_INET) ? "IPv4" : "IPv6");
+		return -1;
+	}
+
+	unsigned int if_index = if_nametoindex(dev);
+	if (if_index == 0) {
+		ERROR_ERRNO("Failed to get interface index for %s", dev);
+		return -1;
+	}
+
+	DEBUG("Removing route %s/%u via %s dev %s from table %u", dest_network, prefix_len, gateway,
+	      dev, table_id);
+
+	nl_sock = nl_sock_routing_new();
+	if (!nl_sock) {
+		ERROR("Failed to create netlink routing socket");
+		return -1;
+	}
+
+	req = nl_msg_new();
+	if (!req) {
+		ERROR("Failed to create netlink message");
+		goto err;
+	}
+
+	struct rtmsg rtmsg = { .rtm_family = family,
+			       .rtm_dst_len = prefix_len,
+			       .rtm_src_len = 0,
+			       .rtm_tos = 0,
+			       .rtm_table = RT_TABLE_UNSPEC,
+			       .rtm_protocol = RTPROT_STATIC,
+			       .rtm_scope = RT_SCOPE_UNIVERSE,
+			       .rtm_type = RTN_UNICAST,
+			       .rtm_flags = 0 };
+
+	IF_TRUE_GOTO_ERROR(nl_msg_set_type(req, RTM_DELROUTE), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_flags(req, NLM_F_REQUEST | NLM_F_ACK), err);
+	IF_TRUE_GOTO_ERROR(nl_msg_set_rt_req(req, &rtmsg), err);
+
+	if (nl_msg_add_buffer(req, RTA_DST, (const char *)&dst_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_DST attribute");
+		goto err;
+	}
+	if (nl_msg_add_buffer(req, RTA_GATEWAY, (const char *)&gw_addr, addr_size) < 0) {
+		ERROR("Failed to add RTA_GATEWAY attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_OIF, if_index) < 0) {
+		ERROR("Failed to add RTA_OIF attribute");
+		goto err;
+	}
+	if (nl_msg_add_u32(req, RTA_TABLE, table_id) < 0) {
+		ERROR("Failed to add RTA_TABLE attribute");
+		goto err;
+	}
+
+	if (nl_msg_send_kernel_verify(nl_sock, req) < 0) {
+		ERROR("Failed to delete route from table %u", table_id);
+		goto err;
+	}
+
+	nl_msg_free(req);
+	nl_sock_free(nl_sock);
+	DEBUG("Successfully deleted route %s/%u from table %u", dest_network, prefix_len, table_id);
+	return 0;
+
+err:
+	if (req)
+		nl_msg_free(req);
+	if (nl_sock)
+		nl_sock_free(nl_sock);
+	return -1;
+}
+
+int
 network_iptables(const char *table, const char *chain, const char *net_src, const char *jmp_target,
 		 bool add)
 {
@@ -280,6 +632,39 @@ network_delete_link(const char *dev)
 
 	const char *const argv[] = { IP_PATH, "link", "delete", dev, NULL };
 	return proc_fork_and_execvp(argv);
+}
+
+void
+network_remove_all_altnames(const char *dev)
+{
+	ASSERT(dev);
+
+	char *command = mem_printf("%s -d link show dev %s", IP_PATH, dev);
+	FILE *fp = popen(command, "r");
+	mem_free0(command);
+
+	if (fp == NULL) {
+		WARN("Could not run ip link show for %s", dev);
+		return;
+	}
+
+	char *line = NULL;
+	size_t line_size = 0;
+	char altname[IFNAMSIZ];
+
+	while (getline(&line, &line_size, fp) != -1) {
+		if (sscanf(line, " altname %15s", altname) == 1) {
+			DEBUG("Removing altname %s from %s", altname, dev);
+			const char *const argv[] = { IP_PATH, "link",	 "property", "del", "dev",
+						     dev,     "altname", altname,    NULL };
+			if (proc_fork_and_execvp(argv)) {
+				WARN("Failed to remove altname %s from %s", altname, dev);
+			}
+		}
+	}
+
+	pclose(fp);
+	mem_free0(line);
 }
 
 void
@@ -435,20 +820,48 @@ network_interface_is_wifi(const char *if_name)
 }
 
 list_t *
+network_get_interfaces_new()
+{
+	struct if_nameindex *if_ni, *i;
+	if_ni = if_nameindex();
+
+	IF_NULL_RETVAL_ERROR_ERRNO(if_ni, NULL);
+
+	list_t *if_name_list = NULL;
+
+	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
+		if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+	}
+	if_freenameindex(if_ni);
+	return if_name_list;
+}
+
+list_t *
 network_get_physical_interfaces_new()
 {
 	struct if_nameindex *if_ni, *i;
 	if_ni = if_nameindex();
 
-	list_t *if_name_list = NULL;
+	IF_NULL_RETVAL_ERROR_ERRNO(if_ni, NULL);
 
-	IF_NULL_RETVAL(if_ni, NULL);
+	list_t *if_mac_list = NULL;
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", i->if_name);
 		if (file_exists(dev_drv_path) && i->if_name != NULL) {
-			DEBUG("Adding %s to the physical device list", i->if_name);
-			if_name_list = list_append(if_name_list, mem_strdup(i->if_name));
+			uint8_t mac[MAC_ADDR_LEN];
+			if (network_get_mac_by_ifname(i->if_name, mac) == 0) {
+				char mac_str[MAC_STR_LEN];
+				network_mac_addr_to_str(mac, mac_str);
+				DEBUG("Adding %s (mac: %s) to the physical device list", i->if_name,
+				      mac_str);
+				if_mac_list = list_append(if_mac_list,
+							  mem_memcpy((const unsigned char *)mac,
+								     MAC_ADDR_LEN));
+			} else {
+				WARN("Could not get MAC for physical interface %s, skipping",
+				     i->if_name);
+			}
 		} else if (file_exists(dev_drv_path)) {
 			DEBUG("Skipping unnamed network interface with index %d", i->if_index);
 		} else {
@@ -457,7 +870,7 @@ network_get_physical_interfaces_new()
 		mem_free0(dev_drv_path);
 	}
 	if_freenameindex(if_ni);
-	return if_name_list;
+	return if_mac_list;
 }
 
 /**
@@ -658,7 +1071,7 @@ msg_err:
 }
 
 int
-network_str_to_mac_addr(const char *mac_str, uint8_t mac[6])
+network_str_to_mac_addr(const char *mac_str, uint8_t mac[MAC_ADDR_LEN])
 {
 	IF_NULL_RETVAL(mac_str, -1);
 
@@ -667,13 +1080,24 @@ network_str_to_mac_addr(const char *mac_str, uint8_t mac[6])
 		       "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8,
 		       &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
 
-	IF_TRUE_RETVAL((ret == EOF || ret < 6), -1);
+	IF_TRUE_RETVAL((ret == EOF || ret < MAC_ADDR_LEN), -1);
 
 	return 0;
 }
 
+void
+network_mac_addr_to_str(const uint8_t mac[MAC_ADDR_LEN], char buf[MAC_STR_LEN])
+{
+	ASSERT(mac);
+	ASSERT(buf);
+
+	snprintf(buf, MAC_STR_LEN,
+		 "%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8,
+		 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
 char *
-network_mac_addr_to_str_new(uint8_t mac[6])
+network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN])
 {
 	return mem_printf("%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8 ":%02" SCNx8
 			  ":%02" SCNx8,
@@ -681,7 +1105,7 @@ network_mac_addr_to_str_new(uint8_t mac[6])
 }
 
 int
-network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
+network_get_mac_by_ifname(const char *ifname, uint8_t mac[MAC_ADDR_LEN])
 {
 	IF_NULL_RETVAL(ifname, -1);
 	IF_NULL_RETVAL(mac, -1);
@@ -692,7 +1116,7 @@ network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
 
 	IF_NULL_RETVAL(mac_str, -1);
 
-	mem_memset(mac, 0, 6);
+	mem_memset(mac, 0, MAC_ADDR_LEN);
 	int ret = network_str_to_mac_addr(mac_str, mac);
 
 	mem_free0(mac_str);
@@ -700,7 +1124,7 @@ network_get_mac_by_ifname(const char *ifname, uint8_t mac[6])
 }
 
 char *
-network_get_ifname_by_addr_new(uint8_t mac[6])
+network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN])
 {
 	IF_NULL_RETVAL(mac, NULL);
 
@@ -709,7 +1133,7 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 
 	IF_NULL_RETVAL(if_ni, NULL);
 
-	uint8_t mac_i[6];
+	uint8_t mac_i[MAC_ADDR_LEN];
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_addr_path, *dev_bridge_path, *mac_str;
@@ -732,10 +1156,10 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 		if (mac_str == NULL)
 			continue;
 
-		mem_memset(mac_i, 0, 6);
+		mem_memset(mac_i, 0, MAC_ADDR_LEN);
 
 		if ((0 == network_str_to_mac_addr(mac_str, mac_i)) &&
-		    (0 == memcmp(mac, mac_i, 6))) {
+		    (0 == memcmp(mac, mac_i, MAC_ADDR_LEN))) {
 			mem_free0(mac_str);
 			return mem_strdup(i->if_name);
 		}
@@ -744,6 +1168,52 @@ network_get_ifname_by_addr_new(uint8_t mac[6])
 	}
 
 	return NULL;
+}
+
+char *
+network_get_ifname_by_mac_in_ns_new(uint8_t mac[MAC_ADDR_LEN], pid_t pid)
+{
+	IF_NULL_RETVAL(mac, NULL);
+	IF_TRUE_RETVAL(pid <= 0, NULL);
+
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str);
+
+	list_t *link_list = NULL;
+	if (network_list_link_ns(pid, &link_list) < 0) {
+		return NULL;
+	}
+
+	char *ifname = NULL;
+	for (list_t *l = link_list; l; l = l->next) {
+		char *entry = l->data;
+		if (!strstr(entry, mac_str))
+			continue;
+
+		/*
+		 * Parse interface name from ip link output format:
+		 * "N: NAME: <FLAGS>..." or "N: NAME@peer: <FLAGS>..."
+		 */
+		char *start = strchr(entry, ':');
+		if (!start)
+			continue;
+		start++; // skip the index's colon
+		while (*start == ' ')
+			start++;
+		char *end = strchr(start, ':');
+		if (!end)
+			continue;
+		// Handle NAME@peer format
+		char *at = memchr(start, '@', end - start);
+		if (at)
+			end = at;
+		ifname = mem_printf("%.*s", (int)(end - start), start);
+		break;
+	}
+
+	list_delete(link_list);
+
+	return ifname;
 }
 
 int
@@ -816,11 +1286,12 @@ network_iptables_phys_deny(const char *chain, const char *netif, bool add)
 }
 
 int
-network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], bool add)
+network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[MAC_ADDR_LEN], bool add)
 {
 	ASSERT(netif);
 
-	char *mac_str = network_mac_addr_to_str_new(mac);
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str);
 	const char *const argv[] = { IPTABLES_PATH, add ? "-I" : "-D",
 				     chain,	    "-m",
 				     "physdev",	    "--physdev-in",
@@ -830,7 +1301,5 @@ network_phys_allow_mac(const char *chain, const char *netif, uint8_t mac[6], boo
 				     "ACCEPT",	    NULL };
 
 	int ret = proc_fork_and_execvp(argv);
-
-	mem_free0(mac_str);
 	return ret;
 }

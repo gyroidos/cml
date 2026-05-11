@@ -67,6 +67,6 @@ hotplug_register_netdev(container_t *container, container_pnet_cfg_t *pnet_cfg);
  * @return 0 if successful. -1 indicates an error.
  */
 int
-hotplug_unregister_netdev(container_t *container, uint8_t mac[6]);
+hotplug_unregister_netdev(container_t *container, uint8_t mac[MAC_ADDR_LEN]);
 
 #endif /* UEVENT_H */

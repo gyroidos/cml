@@ -23,7 +23,7 @@
 
 #ifdef DEBUG_BUILD
 // prevent reboot in debug build
-#define TRUSTME_DEBUG
+#define NO_REBOOT_ON_EXIT
 #endif
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
@@ -42,6 +42,8 @@
 #include "common/dir.h"
 #include "common/network.h"
 #include "common/reboot.h"
+#include "common/hex.h"
+#include "a_b_update/a_b_update.h"
 #include "mount.h"
 #include "device_config.h"
 #include "device_id.h"
@@ -60,6 +62,7 @@
 #include "container.h"
 #include "input.h"
 #include "oci.h"
+#include "crypto.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -83,12 +86,11 @@
 
 // files and directories in cmld's home path /data/cml
 #define CMLD_PATH_DEVICE_CONF "device.conf"
-#define CMLD_PATH_DEVICE_ID "device_id.conf"
-#define CMLD_PATH_USERS_DIR "users"
 #define CMLD_PATH_GUESTOS_DIR "operatingsystems"
 #define CMLD_PATH_CONTAINERS_DIR "containers"
 #define CMLD_PATH_CONTAINER_KEYS_DIR "keys"
 #define CMLD_PATH_CONTAINER_TOKENS_DIR "tokens"
+#define CMLD_PATH_DEVICE_ID CMLD_PATH_CONTAINER_TOKENS_DIR "/device_id.conf"
 #define CMLD_PATH_SHARED_DATA_DIR "shared"
 
 #define CMLD_WAKE_LOCK_STARTUP "ContainerStartup"
@@ -96,12 +98,14 @@
 #define CMLD_KSM_AGGRESSIVE_TIME_AFTER_CONTAINER_BOOT 70000
 
 /*
- * dummy key used for unecnrypted c0 and for reboots where the real key
- * is already in kernel
+ * dummy key used for unencrypted c0 (legacy dm ondisk format)
+ * and for reboots where the real key is already in kernel
  */
 #define DUMMY_KEY                                                                                  \
 	"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
+#define CMLD_C0_KEY_BUF_SIZE 256
+#define CMLD_C0_KEY_LEN 32
 #define CMLD_C0_UUID "00000000-0000-0000-0000-000000000000"
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
@@ -109,6 +113,7 @@ static const char *cmld_container_path = NULL;
 static const char *cmld_wrapped_keys_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
+static list_t *cmld_units_list = NULL;
 
 static control_t *cmld_control_gui = NULL;
 static control_t *cmld_control_cml = NULL;
@@ -129,6 +134,14 @@ static bool cmld_device_provisioned = false;
 
 static enum command cmld_device_reboot = POWER_OFF;
 
+typedef enum {
+	CMLD_INIT_STAGE_ZERO = 0,
+	CMLD_INIT_STAGE_UNIT,
+	CMLD_INIT_STAGE_CONTAINER,
+} cmld_init_stage_t;
+
+static cmld_init_stage_t cmld_init_stage = CMLD_INIT_STAGE_ZERO;
+
 #ifdef OCI
 // clang-format off
 #define CMLD_OCI_CONTROL_SOCKET SOCK_PATH(oci-control)
@@ -140,6 +153,9 @@ static oci_control_t *cmld_oci_control_cml = NULL;
 
 static int
 cmld_start_c0(container_t *new_c0);
+
+static int
+cmld_init_stage_container(void);
 
 /******************************************************************************/
 
@@ -185,7 +201,6 @@ cmld_container_get_by_uuid(const uuid_t *uuid)
 	return NULL;
 }
 
-#define UID_MAX 65535
 container_t *
 cmld_container_get_by_uid(int uid)
 {
@@ -555,6 +570,9 @@ cmld_containers_add(container_t *container)
 	cmld_containers_list = list_append(cmld_containers_list, container);
 }
 
+static container_t *
+cmld_reload_container_internal(const uuid_t *uuid, const char *path, container_callback_t *cb);
+
 /*
  * This callback handles config updates during container start/stop cycle
  */
@@ -575,7 +593,7 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 	container_unregister_observer(container, cb);
 	DEBUG("Container is out of sync with its config. Reloading..");
 
-	if (!cmld_reload_container(c_uuid, cmld_get_containers_dir())) {
+	if (!cmld_reload_container_internal(c_uuid, cmld_get_containers_dir(), cb)) {
 		ERROR("Failed to reload container on config update");
 		audit_log_event(c_uuid, FSA, CMLD, CONTAINER_MGMT, "reload", uuid_string(c_uuid),
 				0);
@@ -586,8 +604,17 @@ cmld_container_config_sync_cb(container_t *container, container_callback_t *cb, 
 	mem_free0(c_uuid);
 }
 
-container_t *
-cmld_reload_container(const uuid_t *uuid, const char *path)
+static void
+cmld_container_delayed_free(void *data)
+{
+	ASSERT(data);
+
+	container_t *container = data;
+	container_free(container);
+}
+
+static container_t *
+cmld_reload_container_internal(const uuid_t *uuid, const char *path, container_callback_t *cb)
 {
 	ASSERT(uuid);
 	ASSERT(path);
@@ -619,9 +646,13 @@ cmld_reload_container(const uuid_t *uuid, const char *path)
 		      container_get_name(c_current));
 
 		cmld_containers_list = list_remove(cmld_containers_list, c_current);
-		container_free(c_current);
-		// container_free() releases the token in scd, thus reattach it
-		container_token_attach(c);
+		if (cb) {
+			// delayed free to allow all observers to finish up
+			container_finish_observers(c_current, cmld_container_delayed_free,
+						   c_current);
+		} else {
+			container_free(c_current);
+		}
 	}
 
 	DEBUG("Loaded config for container %s", container_get_name(c));
@@ -643,6 +674,12 @@ cleanup:
 	mem_free0(uuid_tmp);
 
 	return c;
+}
+
+container_t *
+cmld_reload_container(const uuid_t *uuid, const char *path)
+{
+	return cmld_reload_container_internal(uuid, path, NULL);
 }
 
 static int
@@ -1060,6 +1097,30 @@ cmld_container_ctrl_with_smartcard(container_t *container, const char *passwd,
 	return -2;
 }
 
+int
+cmld_units_get_count(void)
+{
+	return list_length(cmld_units_list);
+}
+
+unit_t *
+cmld_unit_get_by_index(int index)
+{
+	return list_nth_data(cmld_units_list, index);
+}
+
+unit_t *
+cmld_unit_get_by_uuid(const uuid_t *uuid)
+{
+	ASSERT(uuid);
+
+	for (list_t *l = cmld_units_list; l; l = l->next)
+		if (uuid_equals(unit_get_uuid(l->data), uuid))
+			return l->data;
+
+	return NULL;
+}
+
 /******************************************************************************/
 
 static void
@@ -1097,6 +1158,9 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 		cmld_rename_logfiles();
 		container_unregister_observer(container, cb);
 
+		// swap boot order
+		a_b_update_set_boot_order();
+
 		for (list_t *l = cmld_containers_list; l; l = l->next) {
 			container_t *container = l->data;
 			if (container_get_allow_autostart(container)) {
@@ -1111,12 +1175,12 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 static void
 cmld_handle_device_shutdown(void)
 {
-#ifdef TRUSTME_DEBUG
+#ifdef NO_REBOOT_ON_EXIT
 	if (cmld_device_reboot == POWER_OFF) {
 		DEBUG("Device shutdown: keep CML running, just exit cmld for debugging.");
 		exit(0);
 	}
-#endif /* TRUSTME_DEBUG */
+#endif /* NO_REBOOT_ON_EXIT */
 
 	reboot_reboot(cmld_device_reboot);
 	// should never arrive here, but in case the shutdown fails somehow, we exit
@@ -1277,6 +1341,67 @@ out:
 }
 
 static int
+cmld_set_key_c0(container_t *new_c0)
+{
+	int ret = -1;
+
+	int c0_key_len;
+	char *c0_key, *c0_ascii_key;
+
+	char *c0_key_file = mem_printf("%s/%s.key", cmld_get_wrapped_keys_dir(), CMLD_C0_UUID);
+	if (file_exists(c0_key_file)) {
+		c0_key = mem_alloc0(CMLD_C0_KEY_BUF_SIZE);
+		c0_key_len = file_read(c0_key_file, c0_key, CMLD_C0_KEY_BUF_SIZE);
+		if (c0_key_len < CMLD_C0_KEY_LEN) {
+			ERROR("Failed to read key from %s for c0", c0_key_file);
+			goto out;
+		}
+	} else {
+		if (container_images_dir_contains_image(new_c0)) {
+			// set legacy mode where we used the dummy key for c0
+			c0_key_len = strlen(DUMMY_KEY) / 2;
+			c0_key = mem_alloc0(c0_key_len);
+			if (convert_hex_to_bin(DUMMY_KEY, strlen(DUMMY_KEY), (uint8_t *)c0_key,
+					       c0_key_len) < 0) {
+				ERROR("Failed to generate key for c0 (using legacy DUMMY_KEY)");
+				goto out;
+			}
+		} else {
+			// for new images we use a random key for integrity protection of c0
+			c0_key_len = CMLD_C0_KEY_LEN;
+			c0_key = mem_alloc0(c0_key_len);
+			int bytes_read = crypto_random_get_bytes((uint8_t *)c0_key, c0_key_len);
+			if (bytes_read != c0_key_len) {
+				ERROR("Failed to generate key for c0");
+				goto out;
+			}
+		}
+
+		int bytes_written = file_write(c0_key_file, c0_key, c0_key_len);
+		if (bytes_written != c0_key_len) {
+			ERROR("Failed to write c0 key to file, bytes written: %d", bytes_written);
+			goto out;
+		}
+	}
+
+	c0_ascii_key = convert_bin_to_hex_new((uint8_t *)c0_key, c0_key_len);
+	container_set_key(new_c0, c0_ascii_key);
+
+	mem_memset0(c0_key, c0_key_len);
+	mem_memset0(c0_ascii_key, strlen(c0_ascii_key));
+	mem_free0(c0_ascii_key);
+
+	ret = 0;
+
+out:
+	if (c0_key)
+		mem_free0(c0_key);
+	mem_free0(c0_key_file);
+
+	return ret;
+}
+
+static int
 cmld_start_c0(container_t *new_c0)
 {
 	IF_TRUE_RETVAL_TRACE(cmld_hostedmode, 0);
@@ -1299,7 +1424,8 @@ cmld_start_c0(container_t *new_c0)
 		return -1;
 	}
 
-	container_set_key(new_c0, DUMMY_KEY);
+	IF_TRUE_RETVAL_ERROR(cmld_set_key_c0(new_c0), -1);
+
 	if (container_start(new_c0)) {
 		audit_log_event(container_get_uuid(new_c0), FSA, CMLD, CONTAINER_MGMT, "c0-start",
 				uuid_string(container_get_uuid(new_c0)), 0);
@@ -1367,12 +1493,47 @@ cmld_tune_network(const char *host_addr, uint32_t host_subnet, const char *host_
 	network_enable_ip_forwarding();
 }
 
-int
-cmld_init(const char *path)
+static void
+cmld_init_stage_reached(cmld_init_stage_t stage)
 {
+	// skip if a completed stage is reached again, e.g., due to an unit restart
+	if (cmld_init_stage >= stage)
+		return;
+
+	switch (stage) {
+	case CMLD_INIT_STAGE_UNIT:
+		INFO("CMLD_INIT_STAGE_UNIT completed.");
+		cmld_init_stage = stage;
+		cmld_init_stage_container();
+		break;
+	case CMLD_INIT_STAGE_CONTAINER:
+		INFO("CMLD_INIT_STAGE_CONTAINER completed.");
+		cmld_init_stage = stage;
+		break;
+	default:
+		return;
+	}
+}
+
+int
+cmld_init_stage_unit(const char *path)
+{
+	if (cmld_init_stage > CMLD_INIT_STAGE_ZERO) {
+		TRACE("cmld init stage UNIT already done. Skip.");
+		return 0;
+	}
+
 	INFO("Storage path is %s", path);
 	cmld_path = path;
 	cmld_container_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
+
+	// ensure data directory in CML is root owned
+	struct stat s;
+	if (!stat(cmld_path, &s) && s.st_uid != 0) {
+		if (dir_chown_folder(cmld_path, 0, 0, NULL) < 0) {
+			FATAL("Could not chown %s to root:root failed.", cmld_path);
+		}
+	}
 
 	if (prctl(PR_SET_CHILD_SUBREAPER, 1))
 		FATAL("Could not setup cmld as child subreaper!");
@@ -1386,38 +1547,14 @@ cmld_init(const char *path)
 	if (mkdir(path, 0755) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir base path %s", path);
 
-	char *users_path = mem_printf("%s/%s", path, CMLD_PATH_USERS_DIR);
-	if (mkdir(users_path, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir users directory %s", users_path);
-	mem_free0(users_path);
-
-	const char *device_path = DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF;
+	char *device_path =
+		a_b_update_get_path_new(DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF);
+	INFO("device.conf path is %s", device_path);
 	device_config_t *device_config = device_config_new(device_path);
+	mem_free0(device_path);
 
 	// set hostedmode, which disables some configuration
 	cmld_hostedmode = device_config_get_hostedmode(device_config);
-
-	// activate signature checking of container configs if enabled
-	cmld_signed_configs = device_config_get_signed_configs(device_config);
-
-	cmld_tune_network(device_config_get_host_addr(device_config),
-			  device_config_get_host_subnet(device_config),
-			  device_config_get_host_if(device_config),
-			  device_config_get_host_gateway(device_config),
-			  device_config_get_host_dns(device_config));
-
-	cmld_shared_data_dir = mem_printf("%s/%s", path, CMLD_PATH_SHARED_DATA_DIR);
-	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir shared data directory %s", cmld_shared_data_dir);
-
-	const char *update_base_url = device_config_get_update_base_url(device_config);
-	cmld_device_update_base_url = update_base_url ? mem_strdup(update_base_url) : NULL;
-
-	const char *host_dns = device_config_get_host_dns(device_config);
-	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
-
-	const char *c0os_name = device_config_get_c0os(device_config);
-	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
 	if (mount_remount_root_ro() < 0 && !cmld_hostedmode)
 		FATAL("Could not remount rootfs read-only");
@@ -1426,6 +1563,9 @@ cmld_init(const char *path)
 		WARN("Could not mount debugfs (already mounted?)");
 	else
 		INFO("mounted debugfs");
+
+	if (!cmld_hostedmode)
+		a_b_update_init();
 
 	// init audit and set max audit log file size
 	if (audit_init(device_config_get_audit_size(device_config)) < 0)
@@ -1438,20 +1578,71 @@ cmld_init(const char *path)
 	INFO("time initialized.");
 
 	char *btime = mem_printf("%lld", (long long)time_cml(NULL));
-	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime);
+	audit_log_event(NULL, SSA, CMLD, GENERIC, "boot-time", NULL, 2, "time", btime, NULL);
 	mem_free0(btime);
 
-	if (scd_init(!cmld_is_hostedmode_active()) < 0)
+	if (device_config_get_tpm_enabled(device_config)) {
+		if (tss_init() < 0) {
+			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
+		} else {
+			INFO("tss initialized.");
+			if (atexit(&tss_cleanup))
+				WARN("could not register on exit cleanup method 'tss_cleanup()'");
+		}
+	}
+
+	if (scd_init() < 0)
 		FATAL("Could not init scd module");
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
+
+	device_config_free(device_config);
+
+	return 0;
+}
+
+static int
+cmld_init_stage_container(void)
+{
+	if (cmld_init_stage > CMLD_INIT_STAGE_UNIT) {
+		TRACE("cmld init stage CONTAINER already done. Skip.");
+		return 0;
+	}
 
 	// set device uuid from device_id configuration file (initially generated by scd)
 	char *device_id_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_DEVICE_ID);
 	device_id_t *device_id = device_id_new(device_id_path);
 	cmld_device_uuid = mem_strdup(device_id_get_uuid(device_id));
 	mem_free0(device_id_path);
+
+	char *device_path =
+		a_b_update_get_path_new(DEFAULT_CONF_BASE_PATH "/" CMLD_PATH_DEVICE_CONF);
+	INFO("device.conf path is %s", device_path);
+	device_config_t *device_config = device_config_new(device_path);
+	mem_free0(device_path);
+
+	// activate signature checking of container configs if enabled
+	cmld_signed_configs = device_config_get_signed_configs(device_config);
+
+	cmld_tune_network(device_config_get_host_addr(device_config),
+			  device_config_get_host_subnet(device_config),
+			  device_config_get_host_if(device_config),
+			  device_config_get_host_gateway(device_config),
+			  device_config_get_host_dns(device_config));
+
+	cmld_shared_data_dir = mem_printf("%s/%s", cmld_path, CMLD_PATH_SHARED_DATA_DIR);
+	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
+		FATAL_ERRNO("Could not mkdir shared data directory %s", cmld_shared_data_dir);
+
+	const char *update_base_url = device_config_get_update_base_url(device_config);
+	cmld_device_update_base_url = update_base_url ? mem_strdup(update_base_url) : NULL;
+
+	const char *host_dns = device_config_get_host_dns(device_config);
+	cmld_device_host_dns = host_dns ? mem_strdup(host_dns) : NULL;
+
+	const char *c0os_name = device_config_get_c0os(device_config);
+	cmld_c0os_name = c0os_name ? mem_strdup(c0os_name) : NULL;
 
 	if (hotplug_init() < 0)
 		FATAL("Could not init hotplug module");
@@ -1463,16 +1654,6 @@ cmld_init(const char *path)
 		WARN("Could not init ksm module");
 	else
 		INFO("ksm initialized.");
-
-	if (device_config_get_tpm_enabled(device_config)) {
-		if (tss_init(!cmld_is_hostedmode_active()) < 0) {
-			FATAL("Failed to initialize TSS / TPM 2.0 and tpm2d");
-		} else {
-			INFO("tss initialized.");
-			if (atexit(&tss_cleanup))
-				WARN("could not register on exit cleanup method 'tss_cleanup()'");
-		}
-	}
 
 	if (lxcfs_init() < 0) {
 		WARN("Plattform does not support LXCFS");
@@ -1513,7 +1694,7 @@ cmld_init(const char *path)
 	INFO("created oci control socket.");
 #endif
 
-	char *guestos_path = mem_printf("%s/%s", path, CMLD_PATH_GUESTOS_DIR);
+	char *guestos_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_GUESTOS_DIR);
 	bool allow_locally_signed = device_config_get_locally_signed_images(device_config);
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
 		FATAL("Could not load guest operating systems");
@@ -1521,12 +1702,12 @@ cmld_init(const char *path)
 	INFO("guestos initialized.");
 	guestos_mgr_update_images();
 
-	char *containers_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINERS_DIR);
+	char *containers_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINERS_DIR);
 	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir containers directory %s", containers_path);
 
-	cmld_wrapped_keys_path = mem_printf("%s/%s", path, CMLD_PATH_CONTAINER_KEYS_DIR);
-	if (mkdir(containers_path, 0700) < 0 && errno != EEXIST)
+	cmld_wrapped_keys_path = mem_printf("%s/%s", cmld_path, CMLD_PATH_CONTAINER_KEYS_DIR);
+	if (mkdir(cmld_wrapped_keys_path, 0700) < 0 && errno != EEXIST)
 		FATAL_ERRNO("Could not mkdir container keys directory %s", containers_path);
 
 	if (cmld_init_c0(containers_path, device_config_get_c0os(device_config)) < 0)
@@ -1545,7 +1726,35 @@ cmld_init(const char *path)
 
 	device_config_free(device_config);
 	device_id_free(device_id);
+
+	// set init stage CONTAINER completed
+	cmld_init_stage_reached(CMLD_INIT_STAGE_CONTAINER);
 	return 0;
+}
+
+void
+cmld_init_stage_unit_notify(unit_t *unit)
+{
+	if (!list_find(cmld_units_list, unit))
+		cmld_units_list = list_append(cmld_units_list, unit);
+
+	bool units_pending = false;
+	for (list_t *l = cmld_units_list; l; l = l->next) {
+		unit_t *u = l->data;
+		if (unit_get_state(u) != COMPARTMENT_STATE_RUNNING) {
+			units_pending = true;
+			break;
+		}
+	}
+
+	DEBUG("Unit notify: unit '%s' is pending %s", unit_get_name(unit),
+	      units_pending ? "true" : "false");
+
+	if (units_pending)
+		return;
+
+	// set init stage UNIT completed
+	cmld_init_stage_reached(CMLD_INIT_STAGE_UNIT);
 }
 
 container_t *
@@ -1630,7 +1839,13 @@ cmld_container_destroy_cb(container_t *container, container_callback_t *cb, UNUS
 	cmld_containers_list = list_remove(cmld_containers_list, container);
 	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT,
 			"container-remove", uuid_string(container_get_uuid(container)), 0);
-	container_free(container);
+
+	if (cb) {
+		// delayed free to allow all observers to finish up
+		container_finish_observers(container, cmld_container_delayed_free, container);
+	} else {
+		container_free(container);
+	}
 }
 
 int
@@ -1768,6 +1983,17 @@ cmld_wipe_device()
 		reboot_reboot(POWER_OFF);
 }
 
+void
+cmld_destroy_system()
+{
+	if (tss_clear() < 0) {
+		ERROR("Failed to clear TPM via tpmd");
+	} else {
+		if (!cmld_hostedmode)
+			reboot_reboot(REBOOT_FORCE);
+	}
+}
+
 const char *
 cmld_get_c0os(void)
 {
@@ -1788,21 +2014,23 @@ cmld_guestos_delete(const char *guestos_name)
 }
 
 bool
-cmld_netif_phys_remove_by_name(const char *if_name)
+cmld_netif_phys_remove_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 {
-	IF_NULL_RETVAL(if_name, false);
+	IF_NULL_RETVAL(mac, false);
 
 	list_t *found = NULL;
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *cmld_if_name = l->data;
-		if (0 == strcmp(if_name, cmld_if_name)) {
+		uint8_t *entry_mac = l->data;
+		if (0 == memcmp(mac, entry_mac, MAC_ADDR_LEN)) {
 			found = l;
-			mem_free0(cmld_if_name);
 			break;
 		}
 	}
 	if (found) {
-		INFO("Removing '%s' from global available physical netifs", if_name);
+		char mac_str[MAC_STR_LEN];
+		network_mac_addr_to_str(mac, mac_str);
+		INFO("Removing '%s' from global available physical netifs", mac_str);
+		mem_free0(found->data);
 		cmld_netif_phys_list = list_unlink(cmld_netif_phys_list, found);
 		return true;
 	}
@@ -1810,18 +2038,21 @@ cmld_netif_phys_remove_by_name(const char *if_name)
 }
 
 void
-cmld_netif_phys_add_by_name(const char *if_name)
+cmld_netif_phys_add_by_mac(const uint8_t mac[MAC_ADDR_LEN])
 {
-	IF_NULL_RETURN(if_name);
-	INFO("Adding '%s' to global available physical netifs", if_name);
+	IF_NULL_RETURN(mac);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *cmld_if_name = l->data;
-		if (0 == strcmp(if_name, cmld_if_name)) {
+		uint8_t *entry_mac = l->data;
+		if (0 == memcmp(mac, entry_mac, MAC_ADDR_LEN)) {
 			return;
 		}
 	}
-	cmld_netif_phys_list = list_append(cmld_netif_phys_list, mem_strdup(if_name));
+	char mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(mac, mac_str);
+	INFO("Adding '%s' to global available physical netifs", mac_str);
+	cmld_netif_phys_list = list_append(cmld_netif_phys_list,
+					   mem_memcpy((const unsigned char *)mac, MAC_ADDR_LEN));
 }
 
 void
@@ -1832,6 +2063,8 @@ cmld_cleanup(void)
 		container_free(container);
 	}
 	list_delete(cmld_containers_list);
+
+	list_delete(cmld_units_list);
 
 	if (cmld_control_gui)
 		control_free(cmld_control_gui);
@@ -1850,8 +2083,8 @@ cmld_cleanup(void)
 		mem_free0(cmld_shared_data_dir);
 
 	for (list_t *l = cmld_netif_phys_list; l; l = l->next) {
-		char *name = l->data;
-		mem_free0(name);
+		uint8_t *mac = l->data;
+		mem_free0(mac);
 	}
 	list_delete(cmld_netif_phys_list);
 }

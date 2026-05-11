@@ -93,8 +93,9 @@ c_time_get_creation_time_from_file(c_time_t *_time)
 			     uuid_string(container_get_uuid(_time->container)));
 		}
 	}
+	char ctime_str[26] = { 0 };
 	INFO("container %s was created at %s", uuid_string(container_get_uuid(_time->container)),
-	     ctime(&ret));
+	     ctime_r(&ret, ctime_str) ? ctime_str : "N/A");
 
 	mem_free0(file_name_created);
 	return ret;
@@ -285,7 +286,7 @@ static void INIT
 c_time_init(void)
 {
 	// register this module in container.c
-	compartment_register_module(&c_time_module);
+	container_register_compartment_module(&c_time_module);
 
 	// register relevant handlers implemented by this module
 	container_register_get_creation_time_handler(MOD_NAME, c_time_get_creation_time);

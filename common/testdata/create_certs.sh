@@ -52,8 +52,8 @@ DAYS_VALID="365"
 KEY_SIZE="4096"
 
 
-PASS_IN="-passin env:TRUSTME_TEST_PASSWD_PKI"
-PASS_OUT="-passout env:TRUSTME_TEST_PASSWD_PKI"
+PASS_IN="-passin env:GYROIDOS_TEST_PASSWD_PKI"
+PASS_OUT="-passout env:GYROIDOS_TEST_PASSWD_PKI"
 
 
 
@@ -62,7 +62,7 @@ SSIG_ROOTCA_INDEX_FILE="ssig_rootca_index.txt"
 SSIG_SUBCA_CML_INDEX_FILE="ssig_subca_cml_index.txt"
 SSIG_SUBCA_INDEX_FILE="ssig_subca_index.txt"
 
-export TRUSTME_TEST_PASSWD_PKI
+export GYROIDOS_TEST_PASSWD_PKI
 
 error_check(){
 if [ "$1" != "0" ]; then

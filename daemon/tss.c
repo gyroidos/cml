@@ -25,24 +25,37 @@
 
 #include "tpm2d.pb-c.h"
 #include "tpm2d_shared.h"
+#include "cmld.h"
+#include "unit.h"
 
+#include "common/event.h"
+#include "common/dir.h"
 #include "common/macro.h"
 #include "common/mem.h"
 #include "common/protobuf.h"
 #include "common/proc.h"
+#include "common/fd.h"
 #include "common/file.h"
 
 #include <google/protobuf-c/protobuf-c-text.h>
 #include <stdbool.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
+
+// clang-format off
+#define TPM2D_CONTROL_SOCKET "tpm2d-control"
+// clang-format on
 
 #ifndef TPM2D_BINARY_NAME
 #define TPM2D_BINARY_NAME "tpm2d"
 #endif
 
+#define TPM2D_UUID "00000000-0000-0000-0000-000000000002"
+
 static int tss_sock = -1;
-static pid_t tss_tpm2d_pid = -1;
+
+static unit_t *tpm2d_unit;
 
 /**
  * Returns the HashAlgLen (proto) for the given tss_hash_algo_t algo.
@@ -63,7 +76,7 @@ tss_hash_algo_get_len_proto(tss_hash_algo_t algo)
 	}
 }
 
-static bool
+bool
 tss_is_tpm2d_installed(void)
 {
 	bool found = false;
@@ -80,78 +93,141 @@ tss_is_tpm2d_installed(void)
 	return false;
 }
 
-static pid_t
-fork_and_exec_tpm2d(void)
+static void
+tss_event_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *data)
 {
-	TRACE("Starting tpm2d..");
-
-	int status;
-	pid_t pid = fork();
-	char *const param_list[] = { TPM2D_BINARY_NAME, NULL };
-
-	switch (pid) {
-	case -1:
-		ERROR_ERRNO("Could not fork for %s", TPM2D_BINARY_NAME);
-		return -1;
-	case 0:
-		execvp((const char *)param_list[0], param_list);
-		FATAL_ERRNO("Could not execvp %s", TPM2D_BINARY_NAME);
-		return -1;
-	default:
-		// Just check if the child is alive but do not wait
-		if (waitpid(pid, &status, WNOHANG) != 0) {
-			ERROR("Failed to start %s", TPM2D_BINARY_NAME);
-			return -1;
-		}
-		return pid;
+	if (events & EVENT_IO_EXCEPT) {
+		INFO("tpm2d closed event connection; reconnect.");
+		event_remove_io(io);
+		event_io_free(io);
+		if (close(fd) < 0)
+			WARN_ERRNO("Failed to close connected tpm2d socket");
 	}
-	return -1;
+}
+
+static void
+tss_tpm2d_on_connect_cb(int sock, const char *sock_path)
+{
+	ASSERT(sock_path);
+
+	tss_sock = sock;
+
+	/* register socket for receiving data */
+	fd_make_non_blocking(sock);
+
+	event_io_t *event = event_io_new(sock, EVENT_IO_READ, &tss_event_cb_recv_message, NULL);
+	event_add_io(event);
+
+	cmld_init_stage_unit_notify(tpm2d_unit);
 }
 
 int
-tss_init(bool start_daemon)
+tss_init(void)
 {
 	// Check if the platform has a TPM module attached
-	if (!file_exists("/dev/tpm0") || !tss_is_tpm2d_installed()) {
+	if (!file_exists("/dev/tpmrm0") || !tss_is_tpm2d_installed()) {
 		WARN("Platform does not support TSS / TPM 2.0");
 		return 0;
 	}
 
-	// Start the tpm2d
-	// In hosted mode this should be handled by the respective init scripts
-	if (start_daemon) {
-		tss_tpm2d_pid = fork_and_exec_tpm2d();
-		IF_TRUE_RETVAL_TRACE(tss_tpm2d_pid == -1, -1);
+	// create data dir if not existing
+	if (!file_is_dir(TPM2D_BASE_DIR)) {
+		if (dir_mkdir_p(TPM2D_BASE_DIR, 0755) < 0) {
+			FATAL_ERRNO("Could not mkdir tpm2d's data dir: %s", TPM2D_BASE_DIR);
+		}
 	} else {
-		DEBUG("Skipping tpm2d launch as requested");
+		// ensure scd can access the file which stores the TPM-wrapped device key
+		if (chmod(TPM2D_BASE_DIR, 00755) < 0) {
+			FATAL_ERRNO("Could not chmod '%s' to 755!", TPM2D_BASE_DIR);
+		}
+		const char *token_dir = TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR;
+		if (file_is_dir(token_dir) && chmod(token_dir, 00755) < 0) {
+			FATAL_ERRNO("Could not chmod '%s' to 755!", token_dir);
+		}
 	}
 
-	// Connect to tpm2d
-	size_t retries = 0;
-	do {
-		NANOSLEEP(0, 500000000)
-		tss_sock = sock_unix_create_and_connect(SOCK_STREAM, TPM2D_SOCKET);
-		retries++;
-		TRACE("Retry %zu connecting to tpm2d", retries);
-		printf(".");
-		fflush(stdout);
-	} while (tss_sock < 0);
+	// Start the tpm2d
+	tpm2d_unit = unit_new(uuid_new(TPM2D_UUID), "TPM2D", TPM2D_BINARY_NAME, NULL, NULL, 0,
+			      false, TPM2D_BASE_DIR, TPM2D_CONTROL_SOCKET, SOCK_STREAM,
+			      &tss_tpm2d_on_connect_cb, true);
 
-	return (tss_sock < 0) ? -1 : 0;
-}
+	// grant access to the TPM
+	list_t *dev_nodes = list_append(NULL, "/dev/tpmrm0");
+	unit_device_set_initial_allow(tpm2d_unit, dev_nodes);
+	list_delete(dev_nodes);
 
-static void
-tss_tpm2d_stop(void)
-{
-	IF_TRUE_RETURN_TRACE(tss_tpm2d_pid == -1);
-	DEBUG("Stopping %s process with pid=%d!", TPM2D_BINARY_NAME, tss_tpm2d_pid);
-	kill(tss_tpm2d_pid, SIGTERM);
+	// ensure read access to ima measurements for attestation
+	list_t *ima_files = NULL;
+	ima_files = list_append(ima_files, "/sys/kernel/security/ima/binary_runtime_measurements");
+	ima_files =
+		list_append(ima_files, "/sys/kernel/security/ima/binary_runtime_measurements_sha1");
+	ima_files = list_append(ima_files,
+				"/sys/kernel/security/ima/binary_runtime_measurements_sha256");
+
+	for (list_t *l = ima_files; l; l = l->next) {
+		const char *file = l->data;
+		if (chmod(file, 00444) < 0)
+			WARN("Could not chmod '%s' to read-only!", file);
+	}
+
+	list_delete(ima_files);
+
+	if (unit_start(tpm2d_unit)) {
+		unit_free(tpm2d_unit);
+		ERROR("Could nor start unit for tpm2d!");
+		return -1;
+	}
+
+	cmld_init_stage_unit_notify(tpm2d_unit);
+
+	return 0;
 }
 
 void
 tss_cleanup(void)
 {
-	tss_tpm2d_stop();
+	IF_NULL_RETURN(tpm2d_unit);
+
+	unit_kill(tpm2d_unit);
+	unit_free(tpm2d_unit);
+}
+
+int
+tss_clear(void)
+{
+	if (tss_sock < 0) {
+		ERROR("No TSS Socket available");
+		return -1;
+	}
+
+	ControllerToTpm msg = CONTROLLER_TO_TPM__INIT;
+
+	msg.code = CONTROLLER_TO_TPM__CODE__CLEAR;
+
+	if (protobuf_send_message(tss_sock, (ProtobufCMessage *)&msg) < 0) {
+		WARN("Failed to send clear command to tpm2d");
+		return -1;
+	}
+
+	TpmToController *resp =
+		(TpmToController *)protobuf_recv_message(tss_sock, &tpm_to_controller__descriptor);
+	if (!resp) {
+		WARN("Failed to receive and decode TpmToController protobuf message!");
+		return -1;
+	}
+
+	if (resp->code != TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE ||
+	    resp->response != TPM_TO_CONTROLLER__GENERIC_RESPONSE__CMD_OK) {
+		ERROR("Failed to clear TPM via tpmd");
+		protobuf_free_message((ProtobufCMessage *)resp);
+		return -1;
+	} else {
+		INFO("Sucessfully cleared TPM");
+	}
+
+	protobuf_free_message((ProtobufCMessage *)resp);
+
+	return 0;
 }
 
 void

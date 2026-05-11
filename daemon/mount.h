@@ -68,6 +68,7 @@ enum mount_type {
 	MOUNT_TYPE_BIND_FILE_RW = 11, /**< file is bind mounted to container (RW) */
 	MOUNT_TYPE_BIND_DIR = 12,     /**< dir is bind mounted to container (RO) */
 	MOUNT_TYPE_BIND_DIR_RW = 13,  /**< dir is bind mounted to container (RW) */
+	MOUNT_TYPE_STORE_ONLY = 14,   /**< image is only held in guestos store */
 };
 
 mount_t *
@@ -262,5 +263,11 @@ mount_private_tmp(void);
  */
 int
 mount_cgroups(list_t *cgroups_subsystems);
+
+bool
+mount_is_idmapping_supported(void);
+
+int
+mount_idmapped(char *src, char *dst, int userns_fd);
 
 #endif /* MOUNT_H */

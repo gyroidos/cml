@@ -51,6 +51,12 @@ message ControllerToTpm {
 		ML_APPEND = 9;
 	}
 
+	enum FdeKeyType {
+		XTS_AES128 = 1;
+		XTS_AES192 = 2;
+		XTS_AES256 = 3;
+	}
+
 	required Code code = 1;
 
 	// if command FDE_DM_SETUP this is the blk device which is used
@@ -70,6 +76,9 @@ message ControllerToTpm {
 	optional bytes ml_datahash = 10;
 	// hash algorithm used to create ml_datahash
 	optional HashAlgLen ml_hashalg = 11;
+
+	// truncate NV index to the corresponding length for key_type.
+	optional FdeKeyType dmcrypt_key_type = 12 [default = XTS_AES256];
 }
 
 message TpmToController {

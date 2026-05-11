@@ -27,6 +27,7 @@
 #include "container.pb-c.h"
 
 #include "container.h"
+#include "unit.h"
 #include "guestos_mgr.h"
 #include "guestos.h"
 #include "cmld.h"
@@ -73,22 +74,34 @@ struct control {
 
 static list_t *control_list = NULL;
 
+struct log_cb_data {
+	int fd;
+	list_t *current_logs;
+	bool remove_logs;
+};
+
 /**
  * @brief callback for the dir_foreach function sending a file as LogMessage to the Controller
  * @path: Expects path string without trailing "/" at the end
- * @return 1 on error, 0 else
+ * @return 0 on error, 1 on success. Does not return -1 to not stop loop.
  */
 static int
-control_send_file_as_log_message_cb(const char *path, const char *file, void UNUSED *data)
+control_send_file_as_log_message_cb(const char *path, const char *file, void *data)
 {
 	IF_NULL_RETVAL(path, 1);
 	IF_NULL_RETVAL(file, 1);
 
-	int *fd = (int *)data;
-	int ret = 0;
-	str_t *path_str = str_new(path);
-	str_append(path_str, "/");
-	str_append(path_str, file);
+	struct log_cb_data *cbdata = data;
+	ASSERT(cbdata);
+
+	char *file_path = mem_printf("%s/%s", path, file);
+
+	// current logfile link and lock file shall not be processed.
+	if ((file_is_link(file_path)) || (strstr(file, ".current") != NULL) ||
+	    (strstr(file, ".lock-delete-old") != NULL)) {
+		mem_free0(file_path);
+		return 0;
+	}
 
 	LogMessage message = LOG_MESSAGE__INIT;
 
@@ -99,10 +112,10 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 		out.device_uuid = mem_strdup(cmld_get_device_uuid());
 	}
 
-	DEBUG("Opening and sending %s", str_buffer(path_str));
+	DEBUG("Opening and sending %s", file_path);
 
-	char *file_buf =
-		file_read_new(str_buffer(path_str), (size_t)file_size(str_buffer(path_str)));
+	int ret = 1;
+	char *file_buf = file_read_new(file_path, (size_t)file_size(file_path));
 
 	if (file_buf) {
 		int max_fragment_size = PROTOBUF_MAX_MESSAGE_SIZE - PROTOBUF_MAX_OVERHEAD;
@@ -121,13 +134,16 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 					(char *)mem_strndup(file_buf + sent, max_fragment_size);
 
 				DEBUG("Sending fragment of logfile %s, sent: %d, remaining: %d",
-				      str_buffer(path_str), sent, size - sent);
+				      file_path, sent, size - sent);
 
 				out.log_message = &message;
-				if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
-					ERROR_ERRNO("Could not finish sending %s",
-						    str_buffer(path_str));
-					ret = 1;
+				if (protobuf_send_message(cbdata->fd, (ProtobufCMessage *)&out) <
+				    0) {
+					ERROR_ERRNO("Could not finish sending %s", file_path);
+					// do not return -1, because this would stopp log retrieval entirely.
+					// only because this file failed, this does not mean the others won't succeed.
+					ret = 0;
+					mem_free0(message.msg);
 					break;
 				}
 
@@ -135,15 +151,18 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 				mem_free0(message.msg);
 			} else {
 				DEBUG("Sending final fragment of logfile %s, sent: %d, remaining: %d",
-				      str_buffer(path_str), sent, size - sent);
+				      file_path, sent, size - sent);
 				out.code = DAEMON_TO_CONTROLLER__CODE__LOG_MESSAGE_FINAL;
 				message.msg = (char *)mem_strndup(file_buf + sent, size - sent);
 
 				out.log_message = &message;
-				if (protobuf_send_message(*fd, (ProtobufCMessage *)&out) < 0) {
-					ERROR_ERRNO("Could not finish sending %s",
-						    str_buffer(path_str));
-					ret = 1;
+				if (protobuf_send_message(cbdata->fd, (ProtobufCMessage *)&out) <
+				    0) {
+					ERROR_ERRNO("Could not finish sending %s", file_path);
+					// do not return -1, because this would stopp log retrieval entirely.
+					// only because this file failed, this does not mean the others won't succeed.
+					ret = 0;
+					mem_free0(message.msg);
 					break;
 				}
 
@@ -152,16 +171,43 @@ control_send_file_as_log_message_cb(const char *path, const char *file, void UNU
 			}
 		}
 		mem_free0(file_buf);
+
+		// Only remove the file, if its was sent successfully.
+		if ((ret == 1) && cbdata->remove_logs) {
+			bool is_current_log = false;
+			for (list_t *l = cbdata->current_logs; l; l = l->next) {
+				char *logfile = l->data;
+				if (logfile) {
+					if (strcmp(logfile, file_path) == 0) {
+						is_current_log = true;
+						break;
+					}
+				}
+			}
+
+			if (!is_current_log) {
+				int remove_ret = remove(file_path);
+
+				if (remove_ret != 0) {
+					ERROR("Failed to remove %s. Return code: %d", file_path,
+					      remove_ret);
+				}
+
+				DEBUG("Removed log file %s", file_path);
+			}
+		}
 	} else {
-		DEBUG("File %s could not be read to buffer.", str_buffer(path_str));
-		ret = 1;
+		WARN("File %s could not be read to buffer.", file_path);
+		// do not return -1, because this would stopp log retrieval entirely.
+		// only because this file failed, this does not mean the others won't succeed.
+		ret = 0;
 	}
 
 	if (out.device_uuid != NULL) {
 		mem_free0(out.device_uuid);
 	}
 
-	str_free(path_str, true);
+	mem_free0(file_path);
 
 	return ret;
 }
@@ -197,8 +243,8 @@ control_compartment_state_to_proto(compartment_state_t state)
 		FATAL("Unhandled value for compartment_state_t: %d", state);
 	}
 }
-/**
 
+/**
  * The usual identity map between two corresponding C and protobuf enums.
  */
 ContainerType
@@ -211,6 +257,28 @@ control_container_type_to_proto(container_type_t type)
 		return CONTAINER_TYPE__KVM;
 	default:
 		FATAL("Unhandled value for container_type_t: %d", type);
+	}
+}
+
+/**
+ * The usual identity map between two corresponding C and protobuf enums.
+ */
+CryptfsMode
+control_cryptfs_mode_to_proto(cryptfs_mode_t mode)
+{
+	switch (mode) {
+	case CRYPTFS_MODE_NOT_IMPLEMENTED:
+		return CRYPTFS_MODE__NOT_IMPLEMENTED;
+	case CRYPTFS_MODE_AUTHENC:
+		return CRYPTFS_MODE__AUTHENC;
+	case CRYPTFS_MODE_ENCRYPT_ONLY:
+		return CRYPTFS_MODE__ENCRYPT_ONLY;
+	case CRYPTFS_MODE_INTEGRITY_ENCRYPT:
+		return CRYPTFS_MODE__INTEGRITY_ENCRYPT;
+	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		return CRYPTFS_MODE__INTEGRITY_ONLY;
+	default:
+		FATAL("Unhandled value for cryptfs_mode_t: %d", mode);
 	}
 }
 
@@ -251,12 +319,40 @@ control_container_status_new(const container_t *container)
 		}
 	}
 
+	c_status->cryptfs_mode =
+		control_cryptfs_mode_to_proto(container_get_cryptfs_mode(container));
+
+	return c_status;
+}
+
+/**
+ * Get the ContainerStatus for the given unit
+ *
+ * @param unit the unit object from which to generate the ContainerStatus
+ * @return  a new ContainerStatus object with information about the given unit;
+ *          has to be free'd with control_container_status_free()
+ */
+static ContainerStatus *
+control_unit_status_new(const unit_t *unit)
+{
+	ContainerStatus *c_status = mem_new(ContainerStatus, 1);
+	container_status__init(c_status);
+	c_status->uuid = mem_strdup(uuid_string(unit_get_uuid(unit)));
+	c_status->name = mem_strdup(unit_get_name(unit));
+	c_status->type = CONTAINER_TYPE__CONTAINER;
+	c_status->state = control_compartment_state_to_proto(unit_get_state(unit));
+	c_status->uptime = unit_get_uptime(unit);
+	c_status->created = unit_get_creation_time(unit);
+	c_status->guestos = mem_strdup("host");
+	c_status->trust_level = CONTAINER_TRUST__SIGNED;
+	c_status->cryptfs_mode = CRYPTFS_MODE__NOT_IMPLEMENTED;
+
 	return c_status;
 }
 
 /**
  * Free the given ContainerStatus object that was previously allocated
- * by control_container_status_new().
+ * by control_container_status_new() or control_unit_status_new()
  *
  * @param c_status the previously allocated ContainerStatus object
  */
@@ -380,6 +476,48 @@ control_build_container_list_from_uuids(size_t n_uuids, char **uuids)
 		}
 	}
 	return containers;
+}
+
+static unit_t *
+control_get_unit_by_uuid_string(const char *uuid_str)
+{
+	uuid_t *uuid = uuid_new(uuid_str);
+	if (!uuid) {
+		WARN("Could not get UUID");
+		return NULL;
+	}
+	unit_t *unit = cmld_unit_get_by_uuid(uuid);
+	if (!unit) {
+		WARN("Could not find unit for UUID %s", uuid_string(uuid));
+		uuid_free(uuid);
+		return NULL;
+	}
+	uuid_free(uuid);
+	return unit;
+}
+
+/**
+ * Returns a list of units for all given UUIDs, or a list with all
+ * available units if the given UUID list is empty.
+ */
+static list_t *
+control_build_unit_list_from_uuids(size_t n_uuids, char **uuids)
+{
+	list_t *units = NULL;
+	if (n_uuids > 0) { // uuid list given in incoming message
+		for (size_t i = 0; i < n_uuids; i++) {
+			unit_t *unit = control_get_unit_by_uuid_string(uuids[i]);
+			if (unit != NULL)
+				units = list_append(units, unit);
+		}
+	} else { // empty uuid list, return status for all units
+		n_uuids = cmld_units_get_count();
+		for (size_t i = 0; i < n_uuids; i++) {
+			unit_t *unit = cmld_unit_get_by_index(i);
+			units = list_append(units, unit);
+		}
+	}
+	return units;
 }
 
 int
@@ -801,6 +939,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
 	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG) ||
+	      (msg->command == CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM) ||
 #ifdef CC_MODE_EXPERIMENTAL
 	      /* Warning!! Needed logfile encryption for this feature to be safe is not
 	       * yet implemented!
@@ -860,6 +999,7 @@ control_check_command(control_t *control, const ControllerToDaemon *msg)
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CREATE_CONTAINER) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_PROVISIONED) ||
+	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_START) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_UPDATE_CONFIG) ||
 	    (msg->command == CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS) ||
@@ -936,15 +1076,26 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__LIST_CONTAINERS: {
-		// assemble list of relevant containers and allocate memory for result
-		size_t n = cmld_containers_get_count();
+		// assemble list of relevant units + containers and allocate memory for result
+		size_t n_container = cmld_containers_get_count();
+		size_t n_unit = 0;
+		if (msg->has_system_services && msg->system_services)
+			n_unit += cmld_units_get_count();
+		size_t n = n_unit + n_container;
 		char **results = mem_new(char *, n);
 
-		// fill result with data from guestos
-		for (size_t i = 0; i < n; i++) {
+		// units
+		for (size_t i = 0; i < n_unit; i++) {
+			unit_t *unit = cmld_unit_get_by_index(i);
+			const char *uuid = uuid_string(unit_get_uuid(unit));
+			results[i] = mem_strdup(uuid);
+		}
+
+		// container
+		for (size_t i = 0; i < n_container; i++) {
 			container_t *container = cmld_container_get_by_index(i);
 			const char *uuid = uuid_string(container_get_uuid(container));
-			results[i] = mem_strdup(uuid);
+			results[n_unit + i] = mem_strdup(uuid);
 		}
 
 		// build and send response message to controller
@@ -963,16 +1114,31 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS: {
-		// assemble list of relevant containers and allocate memory for result
+		bool include_units = (msg->n_container_uuids > 0) ? true : false;
+		// assemble list of relevant units + containers and allocate memory for result
 		list_t *containers = control_build_container_list_from_uuids(msg->n_container_uuids,
 									     msg->container_uuids);
-		size_t n = list_length(containers);
+		list_t *units = NULL;
+		size_t n_container = list_length(containers);
+		size_t n_unit = 0;
+		if (include_units || (msg->has_system_services && msg->system_services)) {
+			units = control_build_unit_list_from_uuids(msg->n_container_uuids,
+								   msg->container_uuids);
+			n_unit += list_length(units);
+		}
+		size_t n = n_unit + n_container;
 		ContainerStatus **results = mem_new(ContainerStatus *, n);
 
 		// fill result with data from container
-		for (size_t i = 0; i < n; i++) {
+		for (size_t i = 0; i < n_unit; i++) {
+			unit_t *unit = list_nth_data(units, i);
+			results[i] = control_unit_status_new(unit);
+		}
+
+		// fill result with data from container
+		for (size_t i = 0; i < n_container; i++) {
 			container_t *container = list_nth_data(containers, i);
-			results[i] = control_container_status_new(container);
+			results[n_unit + i] = control_container_status_new(container);
 		}
 
 		// build and send response message to controller
@@ -985,6 +1151,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 
 		// collect garbage
+		list_delete(units);
 		list_delete(containers);
 		for (size_t i = 0; i < n; i++)
 			control_container_status_free(results[i]);
@@ -1104,16 +1271,42 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		out.has_response = true;
 		out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_FAILED;
 
-		int dir_ret =
-			dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb, (void *)&fd);
+		int dir_ret = 0;
+		bool remove_logs = (!msg->has_remove_logs) ? false : msg->remove_logs;
 
-		if (dir_ret < 0) {
-			WARN("Something went wrong during traversal of LOGFILE_DIR");
-		} else if (dir_ret > 0) {
-			WARN("%d logs could not be sent.", dir_ret);
+		if (remove_logs) {
+			int lock_fd = logf_lock_apply(LOGFILE_DIR);
+			if (lock_fd < 0) {
+				break;
+			}
+
+			list_t *current_logs = logf_get_current_log_files_new(LOGFILE_DIR);
+
+			struct log_cb_data cbdata = { .fd = fd,
+						      .current_logs = current_logs,
+						      .remove_logs = true };
+
+			dir_ret = dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb,
+					      &cbdata);
+
+			logf_lock_release(LOGFILE_DIR, lock_fd);
+			logf_log_files_list_free(current_logs);
 		} else {
+			struct log_cb_data cbdata = { .fd = fd,
+						      .current_logs = NULL,
+						      .remove_logs = false };
+
+			dir_ret = dir_foreach(LOGFILE_DIR, &control_send_file_as_log_message_cb,
+					      &cbdata);
+		}
+
+		if (dir_ret == 0) {
+			ERROR("No log files in folder %s could be sent.", LOGFILE_DIR);
+		} else if (dir_ret > 0) {
+			TRACE("%d logs were sent.", dir_ret);
 			out.response = DAEMON_TO_CONTROLLER__RESPONSE__CMD_OK;
 		}
+
 		if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0) {
 			ERROR_ERRNO("Could not finish send LOG_END message");
 			break;
@@ -1163,6 +1356,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 	case CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE: {
 		cmld_wipe_device();
 		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM: {
+		control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+		cmld_destroy_system();
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__REBOOT_DEVICE: {
@@ -1644,6 +1842,20 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		}
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DEV_ACCESS: {
+		IF_NULL_RETURN(container);
+		if (!msg->dev_rule) {
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
+			break;
+		}
+		res = container_device_set_access(container, msg->dev_rule);
+		if (res) {
+			control_send_message(CONTROL_RESPONSE_CMD_FAILED, fd);
+		} else {
+			control_send_message(CONTROL_RESPONSE_CMD_OK, fd);
+		}
+	} break;
+
 	default:
 		WARN("Unsupported ControllerToDaemon command: %d received", msg->command);
 		if (control_send_message(CONTROL_RESPONSE_CMD_UNSUPPORTED, fd))
@@ -1780,7 +1992,7 @@ control_free(control_t *control)
 		event_io_t *event_io_sock_connected = l->data;
 		event_remove_io(event_io_sock_connected);
 		shutdown(event_io_get_fd(event_io_sock_connected), SHUT_RDWR);
-		if (close(event_io_get_fd(event_io_sock_connected) < 0)) {
+		if (close(event_io_get_fd(event_io_sock_connected)) < 0) {
 			WARN_ERRNO("Failed to close connected control socket");
 		}
 		event_io_free(event_io_sock_connected);

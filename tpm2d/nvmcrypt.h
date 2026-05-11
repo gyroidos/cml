@@ -59,6 +59,14 @@ void
 nvmcrypt_init(bool use_secure_boot_policy);
 
 /**
+ * Cleanup nvmcrypt submodule
+ *
+ * Free static resources allocated by the nvmcrypt submodule
+ */
+void
+nvmcrypt_cleanup(void);
+
+/**
  * Setup an encrypted device mapping for a given block device
  * e.g. /dev/sda using the given password (which can be NULL)
  * will result in a /dev/mapper/sda blockdevice which is then
@@ -72,11 +80,12 @@ nvmcrypt_init(bool use_secure_boot_policy);
  * nvram and binding the autorization to the given fde_pw.
  *
  *  @param device_path path to the real blockdevice
+ *  @param max_key_len truncate to provided key len
  *  @param fde_pw password which will authorize the access to the
  *  		real key stored inside an nvindex of the TPM.
  */
 nvmcrypt_fde_state_t
-nvmcrypt_dm_setup(const char *device_path, const char *fde_pw);
+nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len);
 
 /**
  * This function locks the nvm key inside the TPM for further reading

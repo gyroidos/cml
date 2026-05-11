@@ -43,6 +43,7 @@
  */
 typedef struct tpm2d_rcontrol tpm2d_rcontrol_t;
 
+#ifndef TPM2D_NVMCRYPT_ONLY
 /**
  * Creates a new tpm2d_rcontrol_t object listening on a INET socket bound
  * to the specified ip and port.
@@ -54,5 +55,20 @@ tpm2d_rcontrol_new(const char *ip, int port);
 
 void
 tpm2d_rcontrol_free(tpm2d_rcontrol_t *rcontrol);
+
+#else
+#include "common/macro.h"
+
+static inline tpm2d_rcontrol_t *
+tpm2d_rcontrol_new(UNUSED const char *ip, UNUSED int port)
+{
+	return NULL;
+}
+
+static inline void
+tpm2d_rcontrol_free(UNUSED tpm2d_rcontrol_t *rcontrol)
+{
+}
+#endif /* TPM2D_NVMCRYPT_ONLY */
 
 #endif /* TPM2D_RCONTROL_H */

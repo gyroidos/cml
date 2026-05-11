@@ -66,6 +66,43 @@ struct scd_control {
 
 UNUSED static list_t *control_list = NULL;
 
+static tokentype_t
+scd_proto_to_tokentype(const DaemonToToken *msg)
+{
+	switch (msg->token_type) {
+	case TOKEN_TYPE__NONE:
+		return TOKEN_TYPE_NONE;
+	case TOKEN_TYPE__SOFT:
+		return TOKEN_TYPE_SOFT;
+	case TOKEN_TYPE__USB:
+		return TOKEN_TYPE_USB;
+	default:
+		ERROR("Invalid token type value");
+	} // fallthrough
+	return -1;
+}
+
+/**
+ * Gets an existing scd token from a DaemonToToken message.
+ */
+static token_t *
+scd_get_token_from_msg(const DaemonToToken *msg)
+{
+	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
+
+	ASSERT(msg);
+	ASSERT(msg->token_uuid);
+
+	token_t *t = NULL;
+	tokentype_t type = scd_proto_to_tokentype(msg);
+
+	if (!(t = scd_get_token(type, msg->token_uuid))) {
+		DEBUG("Token with UUID %s not found", msg->token_uuid);
+	}
+
+	return t;
+}
+
 TokenToDaemon__Code
 control_event_to_proto(scd_event_t event)
 {
@@ -231,15 +268,27 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_FAILED;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 
 		if (token != NULL) {
 			INFO("Token already exists.");
 			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL;
-		} else if (scd_token_new(msg) == 0) {
-			out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL;
 		} else {
-			ERROR("Could not create new token");
+			tokentype_t type = scd_proto_to_tokentype(msg);
+			int result = -1;
+			switch (type) {
+			case TOKEN_TYPE_USB:
+				result = scd_token_new(type, msg->token_uuid, msg->usbtoken_serial);
+				break;
+			default:
+				result = scd_token_new(type, msg->token_uuid, NULL);
+				break;
+			}
+			if (result == 0) {
+				out.code = TOKEN_TO_DAEMON__CODE__TOKEN_ADD_SUCCESSFUL;
+			} else {
+				ERROR("Could not create new token");
+			}
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
@@ -248,7 +297,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__TOKEN_REMOVE_FAILED;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 
 		if (token == NULL) {
 			ERROR("Token not found");
@@ -264,21 +313,21 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__UNLOCK_FAILED;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 
 		if (!token) {
 			ERROR("No token loaded, unlock failed");
 		} else if (!msg->token_pin) {
 			ERROR("Token passphrase not specified");
-		} else if (token->is_locked_till_reboot(token)) {
+		} else if (token_is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 		} else {
-			int ret = token->unlock(token, msg->token_pin, msg->pairing_secret.data,
-						msg->pairing_secret.len);
+			int ret = token_unlock(token, msg->token_pin, msg->pairing_secret.data,
+					       msg->pairing_secret.len);
 			if (ret == 0)
 				out.code = TOKEN_TO_DAEMON__CODE__UNLOCK_SUCCESSFUL;
 			else if (ret == -2) {
-				if (token->is_locked_till_reboot(token))
+				if (token_is_locked_till_reboot(token))
 					out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 				else
 					out.code = TOKEN_TO_DAEMON__CODE__PASSWD_WRONG;
@@ -293,10 +342,10 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__LOCK_FAILED;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, lock failed");
-		} else if (token->lock(token) == 0) {
+		} else if (token_lock(token) == 0) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCK_SUCCESSFUL;
 		}
 
@@ -309,16 +358,16 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__WRAPPED_KEY;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, wrap failed");
-		} else if (token->is_locked(token)) {
+		} else if (token_is_locked(token)) {
 			ERROR("Token is locked. Unlock first.");
 		} else if (!msg->has_unwrapped_key) {
 			ERROR("Unwrapped key not specified.");
-		} else if (token->wrap_key(token, msg->container_uuid, msg->unwrapped_key.data,
-					   msg->unwrapped_key.len, &wrapped_key,
-					   &wrapped_key_len) == 0) {
+		} else if (token_wrap_key(token, msg->container_uuid, msg->unwrapped_key.data,
+					  msg->unwrapped_key.len, &wrapped_key,
+					  &wrapped_key_len) == 0) {
 			out.has_wrapped_key = true;
 			out.wrapped_key.len = wrapped_key_len;
 			out.wrapped_key.data = wrapped_key;
@@ -337,30 +386,37 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 	} break;
 	case DAEMON_TO_TOKEN__CODE__UNWRAP_KEY: {
 		TRACE("SCD: Handle messsage UNWRAP_KEY");
+		int ret_unwrap = 0;
 		int unwrapped_key_len;
 		unsigned char *unwrapped_key;
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__UNWRAPPED_KEY;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, unwrap failed");
-		} else if (token->is_locked(token)) {
+		} else if (token_is_locked(token)) {
 			ERROR("Token is locked. Unlock first.");
 		} else if (!msg->has_wrapped_key) {
 			ERROR("Wrapped key not specified.");
-		} else if (token->unwrap_key(token, msg->container_uuid, msg->wrapped_key.data,
-					     msg->wrapped_key.len, &unwrapped_key,
-					     &unwrapped_key_len) == 0) {
+		} else if ((ret_unwrap =
+				    token_unwrap_key(token, msg->container_uuid,
+						     msg->wrapped_key.data, msg->wrapped_key.len,
+						     &unwrapped_key, &unwrapped_key_len)) == 0) {
 			out.has_unwrapped_key = true;
 			out.unwrapped_key.len = unwrapped_key_len;
 			out.unwrapped_key.data = unwrapped_key;
+		} else if (ret_unwrap == -2) {
+			ERROR("Keyfile which contains wrapped key is corrupted!");
+			out.has_unwrapped_key = true;
+			out.unwrapped_key.len = 0;
+			out.unwrapped_key.data = NULL;
 		} else {
 			ERROR("Key unwrapping failed");
 		}
 
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
-		if (out.has_unwrapped_key) {
+		if (out.has_unwrapped_key && ret_unwrap == 0) {
 			mem_memset0(unwrapped_key, unwrapped_key_len);
 			mem_free0(unwrapped_key);
 		}
@@ -373,7 +429,7 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, change pass failed");
 		} else if (!msg->token_pin) {
@@ -382,12 +438,12 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 			ERROR("Token new passphrase not specified");
 		} else if (!msg->has_pairing_secret) {
 			ERROR("Pairing secret not specified");
-		} else if (token->is_locked_till_reboot(token)) {
+		} else if (token_is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 		} else {
-			int ret = token->change_passphrase(token, msg->token_pin, msg->token_newpin,
-							   msg->pairing_secret.data,
-							   msg->pairing_secret.len, false);
+			int ret = token_change_passphrase(token, msg->token_pin, msg->token_newpin,
+							  msg->pairing_secret.data,
+							  msg->pairing_secret.len, false);
 			if (ret == 0) {
 				out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_SUCCESSFUL;
 			} else {
@@ -411,17 +467,17 @@ scd_control_handle_message(const DaemonToToken *msg, int fd)
 		TokenToDaemon out = TOKEN_TO_DAEMON__INIT;
 		out.code = TOKEN_TO_DAEMON__CODE__CHANGE_PIN_FAILED;
 
-		scd_token_t *token = scd_get_token_from_msg(msg);
+		token_t *token = scd_get_token_from_msg(msg);
 		if (!token) {
 			ERROR("No token loaded, change pass failed");
 		} else if (!msg->token_pin) {
 			ERROR("Token passphrase not specified");
-		} else if (token->is_locked_till_reboot(token)) {
+		} else if (token_is_locked_till_reboot(token)) {
 			out.code = TOKEN_TO_DAEMON__CODE__LOCKED_TILL_REBOOT;
 		} else {
-			int ret = token->change_passphrase(token, msg->token_pin, msg->token_newpin,
-							   msg->pairing_secret.data,
-							   msg->pairing_secret.len, true);
+			int ret = token_change_passphrase(token, msg->token_pin, msg->token_newpin,
+							  msg->pairing_secret.data,
+							  msg->pairing_secret.len, true);
 			if (ret == 0) {
 				TRACE("SCD: change_passphrase successful");
 				out.code = TOKEN_TO_DAEMON__CODE__PROVISION_PIN_SUCCESSFUL;
@@ -521,7 +577,7 @@ scd_crypto_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		event_signal_free(sig);
 
 		if ((WIFEXITED(status) && WEXITSTATUS(status)) || WIFSIGNALED(status)) {
-			WARN("asyn crypto handler reurned with error");
+			WARN("asyn crypto handler returned with error");
 		}
 		mem_free0(pid);
 	}
@@ -602,7 +658,7 @@ scd_control_handle_crypto_message(const DaemonToToken *msg, int fd)
 
 		hash_algo = switch_proto_hash_algo(msg->hash_algo);
 
-		if (hash_algo) {
+		if (hash_algo && msg->has_hash_buf && msg->hash_buf.data) {
 			if ((hash = ssl_hash_buf(msg->hash_buf.data, msg->hash_buf.len, &hash_len,
 						 hash_algo)) == NULL) {
 				ERROR("Hashing buffer failed");

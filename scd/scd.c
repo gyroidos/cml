@@ -25,12 +25,7 @@
 #include "tpm2d_shared.h"
 
 #include "control.h"
-#ifdef ANDROID
-#include <cutils/properties.h>
-#include "device/fraunhofer/common/cml/scd/device.pb-c.h"
-#else
 #include "device.pb-c.h"
-#endif
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -59,18 +54,13 @@
 // clang-format on
 
 // Do not edit! This path is also configured in cmld.c
-#define DEVICE_ID_CONF DEFAULT_BASE_PATH "/device_id.conf"
+#define DEVICE_ID_CONF SCD_TOKEN_DIR "/device_id.conf"
 
-#ifdef ANDROID
-#define PROP_SERIALNO "ro.boot.serialno"
-#define PROP_HARDWARE "ro.hardware"
-#else
 #define DMI_PRODUCT_SERIAL "/sys/devices/virtual/dmi/id/product_serial"
 #define DMI_PRODUCT_NAME "/sys/devices/virtual/dmi/id/product_name"
-#endif
+#define DMI_PRODUCT_SERIAL_LEN 40
+#define DMI_PRODUCT_NAME_LEN 20
 
-#define TOKEN_DEFAULT_PASS "trustme"
-#define TOKEN_DEFAULT_NAME "testuser"
 #define TOKEN_DEFAULT_EXT ".p12"
 
 //#undef LOGF_LOG_MIN_PRIO
@@ -93,47 +83,6 @@ scd_sigterm_cb(UNUSED int signum, UNUSED event_signal_t *sig, UNUSED void *data)
 	exit(0);
 }
 
-/**
- * returns 1 if a given file is a p12 token, otherwise 0
- */
-static int
-is_softtoken(const char *path, const char *file, UNUSED void *data)
-{
-	char *location = mem_printf("%s/%s", path, file);
-	char *ext;
-
-	// regular file
-	if (!file_is_regular(location))
-		goto out;
-	// with fixed extesion
-	if (!(ext = file_get_extension(file)))
-		goto out;
-	if (!strncmp(ext, TOKEN_DEFAULT_EXT, strlen(TOKEN_DEFAULT_EXT))) {
-		DEBUG("Found token file: %s", location);
-		mem_free0(location);
-		return 1;
-	}
-out:
-	mem_free0(location);
-	return 0;
-}
-
-/**
- * returns >0 if one or more token files exist
- */
-static int
-token_file_exists()
-{
-	int ret = dir_foreach(SCD_TOKEN_DIR, &is_softtoken, NULL);
-
-	if (ret < 0)
-		FATAL("Could not open token directory");
-	else {
-		DEBUG("%d Token files exist", ret);
-		return ret;
-	}
-}
-
 bool
 scd_in_provisioning_mode(void)
 {
@@ -143,14 +92,14 @@ scd_in_provisioning_mode(void)
 static void
 provisioning_mode()
 {
-	INFO("Check for existence of device certificate and user token");
+	INFO("Check for existence of device certificate");
 
-	bool need_initialization = (!file_exists(DEVICE_CERT_FILE) || !token_file_exists());
+	bool need_initialization = (!file_exists(DEVICE_CERT_FILE));
 	bool use_tpm = false;
 	char *dev_key_file = DEVICE_KEY_FILE;
 
 	// if available, use tpm to create and store device key
-	if (file_exists("/dev/tpm0")) {
+	if (file_exists("/dev/tpm0") || file_exists("/dev/tpmrm0")) {
 		// assumption: tpm2d is launched prior to scd, and creates a keypair on first boot
 		if (!file_exists(TPM2D_ATT_TSS_FILE)) {
 			WARN("TPM keypair not found, missing %s, TPM support disabled!",
@@ -184,39 +133,22 @@ provisioning_mode()
 				FATAL("Failed to create CSR directory");
 			}
 
-#ifdef ANDROID
-			char *hw_serial = mem_alloc0(PROPERTY_VALUE_MAX);
-			char *hw_name = mem_alloc0(PROPERTY_VALUE_MAX);
-			bool property_read_failure = false;
-			if (!(property_get(PROP_SERIALNO, hw_serial, NULL) > 0)) {
-				ERROR("Failed to read hardware serialno property");
-				property_read_failure = true;
-			}
-			if (!(property_get(PROP_HARDWARE, hw_name, NULL) > 0)) {
-				ERROR("Failed to read hardware name property");
-				property_read_failure = true;
-			}
-			char *common_name;
-			if (!property_read_failure)
-				common_name = mem_printf("%s %s", hw_name, hw_serial);
-			else
-				common_name = mem_printf("%s %s", "generic", "0000");
-#else
 			char *hw_serial = NULL;
 			char *hw_name = NULL;
 
+			// file_read_new of max length of SERIAL and NAME is limited due to the character limit of RFC5280
 			if (file_exists(DMI_PRODUCT_SERIAL))
-				hw_serial = file_read_new(DMI_PRODUCT_SERIAL, 512);
+				hw_serial =
+					file_read_new(DMI_PRODUCT_SERIAL, DMI_PRODUCT_SERIAL_LEN);
 			if (!hw_serial)
 				hw_serial = mem_strdup("0000");
 
 			if (file_exists(DMI_PRODUCT_NAME))
-				hw_name = file_read_new(DMI_PRODUCT_NAME, 512);
+				hw_name = file_read_new(DMI_PRODUCT_NAME, DMI_PRODUCT_NAME_LEN);
 			if (!hw_name)
 				hw_name = mem_strdup("generic");
 
 			char *common_name = mem_printf("%s %s", hw_name, hw_serial);
-#endif
 			DEBUG("Using common name %s", common_name);
 
 			// create device uuid and write to csr
@@ -253,29 +185,10 @@ provisioning_mode()
 	} else {
 		INFO("Device certificate found");
 		if (file_exists(DEVICE_CSR_FILE)) {
-			// this is the case when a non-provisioned trustme phone
+			// this is the case when a non-provisioned gyroidos device
 			// created its own device.cert and user.p12
 			WARN("Device CSR still exists. Device was not correctly provisioned!");
 		}
-	}
-
-	// self-create a user token to bring the device up
-	// is removed during provisioning
-	if (!token_file_exists()) {
-		DEBUG("Create initial soft token");
-		// TPM not used for soft token
-		if (ssl_init(false, NULL) == -1) {
-			FATAL("Failed to initialize OpenSSL stack for softtoken");
-		}
-
-		char *token_file =
-			mem_printf("%s/%s%s", SCD_TOKEN_DIR, TOKEN_DEFAULT_NAME, TOKEN_DEFAULT_EXT);
-		if (ssl_create_pkcs12_token(token_file, NULL, TOKEN_DEFAULT_PASS,
-					    TOKEN_DEFAULT_NAME, RSA_SSA_PADDING) != 0) {
-			FATAL("Unable to create initial user token");
-		}
-		mem_free0(token_file);
-		ssl_free();
 	}
 
 	// we now have anything for a clean startup so just die and let us be restarted by init
@@ -286,9 +199,8 @@ provisioning_mode()
 	}
 
 	// remark: no certificate validation checks are carried out
-	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT) ||
-	    !token_file_exists()) {
-		FATAL("Missing certificate chains, user token, or private key for device certificate");
+	if ((!use_tpm && !file_exists(DEVICE_KEY_FILE)) || !file_exists(SSIG_ROOT_CERT)) {
+		FATAL("Missing certificate chains, or private key for device certificate");
 	}
 }
 
@@ -314,6 +226,12 @@ main_init(void)
 	logf_handler_set_prio(scd_logfile_handler, LOGF_PRIO_TRACE);
 }
 
+static void
+main_sync_fs()
+{
+	SYNC_INFO();
+}
+
 int
 main(UNUSED int argc, UNUSED char **argv)
 {
@@ -323,6 +241,9 @@ main(UNUSED int argc, UNUSED char **argv)
 
 	event_signal_t *sig_term = event_signal_new(SIGTERM, &scd_sigterm_cb, NULL);
 	event_add_signal(sig_term);
+
+	if (atexit(&main_sync_fs))
+		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
 
 	provisioning_mode();
 
@@ -369,13 +290,6 @@ main(UNUSED int argc, UNUSED char **argv)
 		FATAL("Could not create directory for scd_control socket");
 	}
 
-#ifdef ANDROID
-	/* trigger start of cmld */
-	if (property_set("trustme.provisioning.mode", "no") != 0) {
-		FATAL("Unable to set property. Cannot trigger CMLD");
-	}
-#endif
-
 	event_loop();
 	ssl_free();
 
@@ -388,7 +302,7 @@ scd_get_softtoken_dir(void)
 	return SCD_TOKEN_DIR;
 }
 
-softtoken_t *
+/*softtoken_t *
 scd_load_softtoken(const char *path, const char *name)
 {
 	ASSERT(path);
@@ -411,32 +325,16 @@ scd_load_softtoken(const char *path, const char *name)
 
 	ERROR("SCD: scd_load_softtoken failed");
 	return NULL;
-}
-
-scd_tokentype_t
-scd_proto_to_tokentype(const DaemonToToken *msg)
-{
-	switch (msg->token_type) {
-	case TOKEN_TYPE__NONE:
-		return NONE;
-	case TOKEN_TYPE__SOFT:
-		return SOFT;
-	case TOKEN_TYPE__USB:
-		return USB;
-	default:
-		ERROR("Invalid token type value");
-	} // fallthrough
-	return -1;
-}
+}*/
 
 /**
  * Gets an existing scd token.
  */
-scd_token_t *
-scd_get_token(scd_tokentype_t type, char *tuuid)
+token_t *
+scd_get_token(tokentype_t type, const char *tuuid)
 {
 	for (list_t *l = scd_token_list; l; l = l->next) {
-		scd_token_t *t = (scd_token_t *)l->data;
+		token_t *t = (token_t *)l->data;
 		ASSERT(t);
 
 		if (type != token_get_type(t)) {
@@ -452,76 +350,35 @@ scd_get_token(scd_tokentype_t type, char *tuuid)
 }
 
 /**
- * Gets an existing scd token from a DaemonToToken message.
- */
-scd_token_t *
-scd_get_token_from_msg(const DaemonToToken *msg)
-{
-	TRACE("SCD: scd_get_token. proto_tokentype: %d", msg->token_type);
-
-	ASSERT(msg);
-	ASSERT(msg->token_uuid);
-
-	scd_token_t *t = NULL;
-	scd_tokentype_t type = scd_proto_to_tokentype(msg);
-
-	if (!(t = scd_get_token(type, msg->token_uuid))) {
-		DEBUG("Token with UUID %s not found", msg->token_uuid);
-	}
-
-	return t;
-}
-
-scd_token_t *
-scd_get_token_from_int_token(const void *int_token)
-{
-	for (list_t *l = scd_token_list; l; l = l->next) {
-		scd_token_t *t = (scd_token_t *)l->data;
-		ASSERT(t);
-
-		if (token_has_internal_token(t, int_token)) {
-			TRACE("Token %s found in scd_token_list", uuid_string(token_get_uuid(t)));
-			return t;
-		}
-	}
-	return NULL;
-}
-
-/**
  * Creates a new scd token structure and appends it to the global list.
  */
 int
-scd_token_new(const DaemonToToken *msg)
+scd_token_new(tokentype_t type, const char *uuid, const char *token_info)
 {
-	TRACE("SCD: scd_token_new. proto_tokentype: %d", msg->token_type);
+	TRACE("SCD: scd_token_new. proto_tokentype: %d", type);
 
-	ASSERT(msg->token_uuid);
+	token_t *ntoken;
 
-	scd_token_t *ntoken;
-	token_constr_data_t create_data;
-
-	if (NULL != (ntoken = scd_get_token_from_msg(msg))) {
-		WARN("SCD: Token %s already exists. Aborting creation...", msg->token_uuid);
+	if (NULL != (ntoken = scd_get_token(type, uuid))) {
+		WARN("SCD: Token %s already exists. Aborting creation...", uuid);
 		return -1; // TODO: is this the correct behaviour?
 	}
 
-	create_data.type = scd_proto_to_tokentype(msg);
-
-	if (create_data.type == NONE) {
-		create_data.init_str.softtoken_dir = NULL;
-	} else if (create_data.type == SOFT) {
-		create_data.init_str.softtoken_dir = SCD_TOKEN_DIR;
-	} else if (create_data.type == USB) {
-		ASSERT(msg->usbtoken_serial);
-		create_data.init_str.usbtoken_serial = msg->usbtoken_serial;
-	} else {
+	switch (type) {
+	case TOKEN_TYPE_NONE:
+		ntoken = token_new(TOKEN_TYPE_NONE, NULL, uuid);
+		break;
+	case TOKEN_TYPE_SOFT:
+		ntoken = token_new(TOKEN_TYPE_SOFT, SCD_TOKEN_DIR, uuid);
+		break;
+	case TOKEN_TYPE_USB:
+		ntoken = token_new(TOKEN_TYPE_USB, token_info, uuid);
+		break;
+	default:
 		ERROR("Type of token not recognized");
 		return -1;
 	}
 
-	create_data.uuid = msg->token_uuid;
-
-	ntoken = token_new(&create_data);
 	if (!ntoken) {
 		ERROR("Could not create new scd_token");
 		return -1;
@@ -535,10 +392,10 @@ scd_token_new(const DaemonToToken *msg)
  * free a scd token and remove it from the global list of initialized tokens.
  */
 void
-scd_token_free(scd_token_t *token)
+scd_token_free(token_t *token)
 {
 	IF_NULL_RETURN(token);
-	scd_token_t *t = token;
+	token_t *t = token;
 	scd_token_list = list_remove(scd_token_list, token);
 	token_free(t);
 }

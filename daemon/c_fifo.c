@@ -205,12 +205,12 @@ c_fifo_create_fifos(list_t *fifo_list, uid_t uid, const char *fifo_dir,
 		}
 
 		audit_log_event(container_uuid, SSA, CMLD, CONTAINER_ISOLATION, "create-fifo",
-				audit_subject, 2, "name", current_fifo);
+				audit_subject, 2, "name", current_fifo, NULL);
 
 		if (chown(fifo_path, uid, uid)) {
 			audit_log_event(container_uuid, FSA, CMLD, CONTAINER_ISOLATION,
 					"prepare-fifo-directory", audit_subject, 2, "path",
-					fifo_path);
+					fifo_path, NULL);
 			ERROR("Failed to chown fifo dir to %d", uid);
 
 			mem_free0(fifo_path);
@@ -218,7 +218,8 @@ c_fifo_create_fifos(list_t *fifo_list, uid_t uid, const char *fifo_dir,
 		}
 
 		audit_log_event(container_uuid, SSA, CMLD, CONTAINER_ISOLATION,
-				"prepare-fifo-directory", audit_subject, 2, "path", fifo_path);
+				"prepare-fifo-directory", audit_subject, 2, "path", fifo_path,
+				NULL);
 		DEBUG("Chowned FIFO at %s to %d", fifo_path ? fifo_path : "NULL", uid);
 
 		mem_free0(fifo_path);
@@ -407,6 +408,35 @@ error:
 }
 
 static int
+c_fifo_start_pre_exec_child(void *fifop)
+{
+	c_fifo_t *fifo = fifop;
+	ASSERT(fifo);
+
+	int ret = -COMPARTMENT_ERROR_FIFO;
+	container_t *c0 = cmld_containers_get_c0();
+
+	if (fifo->container != c0)
+		return 0;
+
+	/*
+	 * avoid race where container is already started and the corresponding
+	 * fifo dir in c0 is not ready yet.
+	 */
+	DEBUG("Creating dir for FIFOs in c0");
+
+	if (dir_mkdir_p(FIFO_PATH, 0755) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not create fifo parent dir at %s", FIFO_PATH);
+		ret = -COMPARTMENT_ERROR_FIFO;
+	} else {
+		DEBUG("Created dir for FIFOs at path %s", FIFO_PATH);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+static int
 c_fifo_stop(void *fifop)
 {
 	c_fifo_t *fifo = fifop;
@@ -438,7 +468,7 @@ static compartment_module_t c_fifo_module = {
 	.start_post_exec = NULL,
 	.start_child = NULL,
 	.start_pre_exec_child_early = NULL,
-	.start_pre_exec_child = NULL,
+	.start_pre_exec_child = c_fifo_start_pre_exec_child,
 	.stop = c_fifo_stop,
 	.cleanup = c_fifo_cleanup,
 	.join_ns = NULL,
@@ -447,6 +477,6 @@ static compartment_module_t c_fifo_module = {
 static void INIT
 c_fifo_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_fifo_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_fifo_module);
 }

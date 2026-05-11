@@ -25,7 +25,8 @@ include Makefile
 
 LOCAL_CFLAGS += -DDEFAULT_BASE_PATH=\"/var/lib/cml\" -DLOGFILE_PATH=\"/var/log\"
 
-BINDIR := /usr/bin
+PREFIX ?= /usr
+BINDIR := ${PREFIX}/bin
 install:
 	install -d ${DESTDIR}${BINDIR}
 	install rung ${DESTDIR}${BINDIR}/rung

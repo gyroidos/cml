@@ -36,6 +36,8 @@
 
 #include "container_module.h"
 
+#include "common/cryptfs.h"
+#include "common/network.h"
 #include "common/uuid.h"
 #include "common/list.h"
 #include "compartment.h"
@@ -106,7 +108,7 @@ typedef struct container_usbdev container_usbdev_t;
 typedef struct container_vnet_cfg {
 	char *vnet_name;
 	char *rootns_name;
-	uint8_t vnet_mac[6];
+	uint8_t vnet_mac[MAC_ADDR_LEN];
 	bool configure;
 } container_vnet_cfg_t;
 
@@ -138,6 +140,12 @@ enum container_smartcard_error {
 	CONTAINER_SMARTCARD_CB_OK,
 	CONTAINER_SMARTCARD_CB_FAILED,
 };
+
+/**
+ * Register a compartment module for all container objects.
+ */
+void
+container_register_compartment_module(compartment_module_t *mod);
 
 /**
  * constructor that creates a new container instance
@@ -179,6 +187,12 @@ container_is_startable(container_t *container);
  */
 const char *
 container_get_images_dir(const container_t *container);
+
+/**
+ * Return true if the container images directory contains image files.
+ */
+bool
+container_images_dir_contains_image(const container_t *container);
 
 /**
  * Get the container config filename.
@@ -295,6 +309,9 @@ container_usbdev_get_i_serial(container_usbdev_t *usbdev);
 container_usbdev_type_t
 container_usbdev_get_type(container_usbdev_t *usbdev);
 
+char *
+container_usbdev_get_devpath_new(container_usbdev_t *usbdev);
+
 bool
 container_usbdev_is_assigned(container_usbdev_t *usbdev);
 
@@ -314,8 +331,8 @@ container_usbdev_get_minor(container_usbdev_t *usbdev);
  * Initialize a container_vnet_cfg_t data structure and allocate needed memory
  */
 container_vnet_cfg_t *
-container_vnet_cfg_new(const char *if_name, const char *rootns_name, const uint8_t mac[6],
-		       bool configure);
+container_vnet_cfg_new(const char *if_name, const char *rootns_name,
+		       const uint8_t mac[MAC_ADDR_LEN], bool configure);
 
 /**
  * Free all memory used by a container_vnet_cfg_t data structure
@@ -392,6 +409,9 @@ container_register_observer(container_t *container,
 
 void
 container_unregister_observer(container_t *container, container_callback_t *cb);
+
+void
+container_finish_observers(container_t *container, void (*cb)(void *), void *data);
 
 void
 container_init_env_prepend(container_t *container, char **init_env, size_t init_env_len);
@@ -568,6 +588,11 @@ CONTAINER_MODULE_WRAPPER_DECLARE(device_deny, int, char type, int major, int min
 CONTAINER_MODULE_WRAPPER_DECLARE(is_device_allowed, bool, char type, int major, int minor)
 
 /**
+ * Set device access by rule "dev-type major:minor read-write-mknod", e.g., "c 42:42 rwm"
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(device_set_access, int, const char *rule)
+
+/**
  * Prepares a mount for shifted uid and gids of directory/file for the container's userns.
  *
  * Needs to be called in rootns for each file system image which should be mounted
@@ -602,6 +627,12 @@ CONTAINER_MODULE_WRAPPER_DECLARE(get_rootdir, char *)
  * Returns a generic pointer to the mount table
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(get_mnt, void *)
+
+/**
+ * Returns the cryptfs mode which is used for the persistent data
+ * images of this container
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(get_cryptfs_mode, cryptfs_mode_t)
 
 /**
  * Returns the last ACK hash that has been received from this container
@@ -676,6 +707,13 @@ CONTAINER_MODULE_WRAPPER_DECLARE(token_detach, int)
 
 CONTAINER_MODULE_WRAPPER_DECLARE(has_token_changed, bool, container_token_type_t type,
 				 const char *serial)
+
+/**
+ * Handles scd connect/reconnect.
+ *
+ * @return 0 if the connection to scd was established, -1 otherwise
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(scd_connect, int)
 
 /**
  * Registers the corresponding handler for container_get_uptime

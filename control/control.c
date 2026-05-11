@@ -62,14 +62,16 @@ print_usage(const char *cmd)
 	printf("Usage: %s [-s <socket file>] <command> [<command args>]\n", cmd);
 	printf("\n");
 	printf("commands:\n");
-	printf("   list\n"
-	       "        Lists all containers.\n\n");
+	printf("   list [-s | --system]\n"
+	       "        Lists all containers. If 'system' option is set, include system services (units)\n\n");
 	printf("   list_guestos\n"
 	       "        Lists all installed guestos configs.\n\n");
 	printf("   reload\n"
 	       "        Reloads containers from config files.\n\n");
 	printf("   wipe_device\n"
 	       "        Wipes all containers on the device.\n\n");
+	printf("   destroy_system\n"
+	       "        Wipes all containers on the device and clears the TPM.\n\n");
 	printf("   reboot\n"
 	       "        Reboots the whole device, shutting down any containers which are running.\n\n");
 	printf("   set_provisioned\n"
@@ -105,6 +107,8 @@ print_usage(const char *cmd)
 	       "        Grant audio access to the specified container (cgroups).\n\n");
 	printf("   deny_audio <container-uuid>\n"
 	       "        Deny audio access to the specified container (cgroups).\n\n");
+	printf("   dev_access <container-uuid>\n"
+	       "        Set Access rule of a device for the specified container (cgroups).\n\n");
 	printf("   wipe <container-uuid>\n"
 	       "        Wipes the specified container.\n\n");
 	printf("   push_guestos_config <guestos.conf> <guestos.sig> <guestos.pem>\n"
@@ -130,9 +134,10 @@ print_usage(const char *cmd)
 	       "        Prints the list of network interfaces assigned to the specified container.\n\n");
 	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
-	printf("   retrieve_logs [<path_to_logstore_dir>]\n"
-	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the given directory"
-	       " or in the current directory if no directory was given.\n\n");
+	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
+	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the\n"
+	       "        given directory. If the 'remove' option was given, all log files are removed upon\n"
+	       "        successful retrieval. The currrently used log file is not removed.\n\n");
 	printf("\n");
 	exit(-1);
 }
@@ -194,11 +199,15 @@ get_container_usb_pin_entry(uuid_t *uuid, int sock)
 }
 
 static uuid_t *
-get_container_uuid_new(const char *identifier, int sock)
+get_container_uuid_new(const char *identifier, int sock, bool system)
 {
 	uuid_t *valid_uuid = NULL;
 	ControllerToDaemon msg = CONTROLLER_TO_DAEMON__INIT;
 	msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+	if (system) {
+		msg.has_system_services = true;
+		msg.system_services = true;
+	}
 	send_message(sock, &msg);
 
 	DaemonToController *resp = recv_message(sock);
@@ -244,6 +253,10 @@ static const struct option assign_iface_options[] = { { "iface", required_argume
 						      { "persistent", no_argument, 0, 'p' },
 						      { 0, 0, 0, 0 } };
 
+static const struct option log_options[] = { { "remove", no_argument, 0, 'r' }, { 0, 0, 0, 0 } };
+
+static const struct option list_options[] = { { "system", no_argument, 0, 's' }, { 0, 0, 0, 0 } };
+
 static char *
 get_password_new(const char *prompt)
 {
@@ -286,7 +299,7 @@ main(int argc, char *argv[])
 	tcgetattr(STDIN_FILENO, &termios_before);
 
 	for (int c, option_index = 0;
-	     - 1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
+	     -1 != (c = getopt_long(argc, argv, "+s:h", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			socket_file = optarg;
@@ -312,6 +325,24 @@ main(int argc, char *argv[])
 	 */
 	if (!strcasecmp(command, "list")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+		// parse specific options for list command
+		optind--;
+		char **list_argv = &argv[optind];
+		int list_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     -1 !=
+		     (c = getopt_long(list_argc, list_argv, "s", list_options, &option_index));) {
+			switch (c) {
+			case 's':
+				msg.has_system_services = true;
+				msg.system_services = true;
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
 		goto send_message;
 	}
 	if (!strcasecmp(command, "list_guestos")) {
@@ -319,20 +350,35 @@ main(int argc, char *argv[])
 		goto send_message;
 	}
 	if (!strcasecmp(command, "retrieve_logs")) {
-		// need at most one more argument (path to store logs)
-		if (optind < argc - 1)
+		// need at least one more argument (container config)
+		if (optind >= argc)
 			print_usage(argv[0]);
 
-		if (optind == argc) {
-			INFO("No target directory specified. Copying logs to current directory.");
-			log_dir = str_new("./");
-		} else {
-			log_dir = str_new(argv[optind++]);
-			if (str_buffer(log_dir)[str_length(log_dir)] != '/') {
-				str_append(log_dir, "/");
-			}
-			INFO("Copy logs to %s", str_buffer(log_dir));
+		log_dir = str_new(argv[optind++]);
+		if (str_buffer(log_dir)[str_length(log_dir)] != '/') {
+			str_append(log_dir, "/");
 		}
+		INFO("Copy logs to %s", str_buffer(log_dir));
+
+		// parse specific options for retrieve_logs command
+		optind--;
+		char **start_argv = &argv[optind];
+		int start_argc = argc - optind;
+		optind = 0; // reset optind to scan command-specific options
+		for (int c, option_index = 0;
+		     -1 !=
+		     (c = getopt_long(start_argc, start_argv, "r", log_options, &option_index));) {
+			switch (c) {
+			case 'r':
+				msg.has_remove_logs = true;
+				msg.remove_logs = true;
+				break;
+			default:
+				print_usage(argv[0]);
+				ASSERT(false); // never reached
+			}
+		}
+		optind += argc - start_argc; // adjust optind to be used with argv
 
 		if (file_exists(str_buffer(log_dir)) && file_is_dir(str_buffer(log_dir))) {
 			msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_LAST_LOG;
@@ -348,6 +394,10 @@ main(int argc, char *argv[])
 	}
 	if (!strcasecmp(command, "wipe_device")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__WIPE_DEVICE;
+		goto send_message;
+	}
+	if (!strcasecmp(command, "destroy_system")) {
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__DESTROY_SYSTEM;
 		goto send_message;
 	}
 	if (!strcasecmp(command, "reboot")) {
@@ -531,7 +581,17 @@ main(int argc, char *argv[])
 		print_usage(argv[0]);
 
 	sock = sock_connect(socket_file);
-	uuid = get_container_uuid_new(argv[optind], sock);
+
+	if (!strcasecmp(command, "state")) {
+		uuid = get_container_uuid_new(argv[optind], sock, true);
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
+		msg.n_container_uuids = 1;
+		msg.container_uuids = mem_new(char *, 1);
+		msg.container_uuids[0] = mem_strdup(uuid_string(uuid));
+		goto send_message;
+	}
+
+	uuid = get_container_uuid_new(argv[optind], sock, false);
 
 	ContainerStartParams container_start_params = CONTAINER_START_PARAMS__INIT;
 	if (!strcasecmp(command, "remove")) {
@@ -547,8 +607,8 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(start_argc, start_argv, "k::s", start_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(start_argc, start_argv, "k::s", start_options,
+					    &option_index));) {
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg;
@@ -584,8 +644,8 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(start_argc, start_argv, "k", start_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(start_argc, start_argv, "k", start_options,
+					    &option_index));) {
 			switch (c) {
 			case 'k':
 				container_start_params.key = optarg;
@@ -618,8 +678,6 @@ main(int argc, char *argv[])
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_ALLOWAUDIO;
 	} else if (!strcasecmp(command, "deny_audio")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DENYAUDIO;
-	} else if (!strcasecmp(command, "state")) {
-		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_STATUS;
 	} else if (!strcasecmp(command, "config")) {
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__GET_CONTAINER_CONFIG;
 	} else if (!strcasecmp(command, "update_config")) {
@@ -681,8 +739,8 @@ main(int argc, char *argv[])
 		int start_argc = argc - optind;
 		optind = 0; // reset optind to scan command-specific options
 		for (int c, option_index = 0;
-		     - 1 != (c = getopt_long(start_argc, start_argv, "i::p", assign_iface_options,
-					     &option_index));) {
+		     -1 != (c = getopt_long(start_argc, start_argv, "i::p", assign_iface_options,
+					    &option_index));) {
 			switch (c) {
 			case 'i':
 				assign_iface_params.iface_name = optarg;
@@ -759,6 +817,17 @@ main(int argc, char *argv[])
 
 		mem_memset0(newpin_verify, strlen(newpin_verify));
 		mem_free0(newpin_verify);
+	} else if (!strcasecmp(command, "dev_access")) {
+		optind++;
+		// need at least one more argument (dev access rule)
+		if (optind >= argc)
+			print_usage(argv[0]);
+
+		char *dev_rule = argv[optind++];
+
+		INFO("Setting device access rule %s", dev_rule);
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_DEV_ACCESS;
+		msg.dev_rule = dev_rule;
 	} else
 		print_usage(argv[0]);
 
@@ -847,13 +916,16 @@ send_message:
 						}
 						fflush(stdout);
 					}
+					protobuf_free_message((ProtobufCMessage *)resp);
 				} else if (resp->code == DAEMON_TO_CONTROLLER__CODE__EXEC_END) {
 					TRACE("[CLIENT] Got notification of command termination. Exiting...");
 					kill(pid, SIGTERM);
 					waitpid(pid, NULL, 0);
+					protobuf_free_message((ProtobufCMessage *)resp);
 					goto exit;
 				} else {
 					ERROR("Detected unexpected message from cmld. Exiting");
+					protobuf_free_message((ProtobufCMessage *)resp);
 					goto exit;
 				}
 			}

@@ -50,8 +50,9 @@
 #include "container.h"
 #include "cmld.h"
 
-//TODO define in container.h?
 #define CLONE_STACK_SIZE 8192
+
+#define SESSION_WBUF_SIZE 1024
 
 typedef struct c_run {
 	container_t *container;
@@ -71,6 +72,10 @@ typedef struct c_run_session {
 	char *cmd;
 	ssize_t argc;
 	char **argv;
+	char *console_sock_container_wbuf;
+	int console_sock_container_wbuf_count;
+	char *pty_master_wbuf;
+	int pty_master_wbuf_count;
 } c_run_session_t;
 
 static void *
@@ -135,6 +140,11 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 	}
 	session->argv[i] = NULL;
 
+	session->console_sock_container_wbuf = mem_new0(char, SESSION_WBUF_SIZE);
+	session->pty_master_wbuf = mem_new0(char, SESSION_WBUF_SIZE);
+	session->console_sock_container_wbuf_count = 0;
+	session->pty_master_wbuf_count = 0;
+
 	return session;
 }
 
@@ -147,6 +157,10 @@ c_run_session_free(c_run_session_t *session)
 	if (session->pty_slave_name)
 		mem_free0(session->pty_slave_name);
 	mem_free_array((void *)session->argv, session->argc);
+	if (session->console_sock_container_wbuf)
+		mem_free0(session->console_sock_container_wbuf);
+	if (session->pty_master_wbuf)
+		mem_free0(session->pty_master_wbuf);
 	mem_free0(session);
 }
 
@@ -191,6 +205,12 @@ c_run_session_cleanup(c_run_session_t *session)
 		shutdown(session->console_sock_container, SHUT_RDWR);
 		shutdown(session->console_sock_cmld, SHUT_RDWR);
 	}
+
+	session->console_sock_container_wbuf_count = 0;
+	session->pty_master_wbuf_count = 0;
+
+	mem_memset0(session->console_sock_container_wbuf, SESSION_WBUF_SIZE);
+	mem_memset0(session->pty_master_wbuf, SESSION_WBUF_SIZE);
 }
 
 static void
@@ -203,7 +223,6 @@ c_run_cleanup(void *runp, UNUSED bool is_rebooting)
 	for (list_t *l = run->sessions; l; l = l->next) {
 		c_run_session_t *session = l->data;
 		c_run_session_cleanup(session);
-		c_run_session_free(session);
 	}
 	list_delete(run->sessions);
 	run->sessions = NULL;
@@ -446,26 +465,60 @@ error:
 }
 
 static int
-readloop(int from_fd, int to_fd)
+readloop(int from_fd, int to_fd, char *buf, int *count)
 {
 	TRACE("[EXEC] Starting read loop in process %d; from fd %d, to fd %d, PPID: %d", getpid(),
 	      from_fd, to_fd, getppid());
 
-	int count = 0;
-	char buf[1024];
+	// write pending null
+	if (*count == -1) {
+		if (write(to_fd, "\0", 1) < 0) {
+			TRACE_ERRNO("[READLOOP] write failed.");
+			return -1;
+		}
+		*count = 0;
+	}
 
-	while (0 < (count = read(from_fd, &buf, sizeof(buf) - 1))) {
-		buf[count] = 0;
-		TRACE("[READLOOP] Read %d bytes from fd: %d: %s", count, from_fd, buf);
-		if (write(to_fd, buf, count + 1) < 0) {
+	// write pending data
+	if (*count > 0) {
+		TRACE("[READLOOP] Pending %d bytes from fd: %d: %s", *count, from_fd, buf);
+		IF_TRUE_RETVAL(*count + 1 > SESSION_WBUF_SIZE, -1);
+
+		if (write(to_fd, buf, *count + 1) < 0) {
+			if (errno == EAGAIN)
+				return 0; // try again;
+
 			TRACE_ERRNO("[READLOOP] write failed.");
 			return -1;
 		}
 	}
-	if (count < 0 && errno != EAGAIN) {
+
+	while (0 < (*count = read(from_fd, buf, SESSION_WBUF_SIZE - 1))) {
+		buf[*count] = 0;
+		TRACE("[READLOOP] Read %d bytes from fd: %d: %s", *count, from_fd, buf);
+		int written = write(to_fd, buf, *count + 1);
+		if (written < 0) {
+			if (errno == EAGAIN)
+				return 0; // try again;
+
+			TRACE_ERRNO("[READLOOP] write failed.");
+			return -1;
+		}
+		if (written == *count) {
+			*count = -1;
+		} else if (written < *count + 1) {
+			*count -= written;
+			memmove(buf, buf + written, written);
+		}
+	}
+	if (*count < 0 && errno != EAGAIN) {
 		TRACE_ERRNO("[READLOOP] read failed.");
 		return -1;
 	}
+
+	// all pending data written to to_fd, reset input/output parameter count
+	*count = 0;
+
 	return 0;
 }
 
@@ -484,12 +537,11 @@ c_run_cb_read_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 	}
 
 	TRACE("Entering PTY master reading loop");
-	if (-1 == readloop(session->pty_master, session->console_sock_container)) {
+	if (-1 == readloop(session->pty_master, session->console_sock_container,
+			   session->console_sock_container_wbuf,
+			   &session->console_sock_container_wbuf_count)) {
 		ERROR("Readloop returned an error, cleanup!");
-		c_run_t *run = session->run;
-		run->sessions = list_remove(run->sessions, session);
 		c_run_session_cleanup(session);
-		c_run_session_free(session);
 	}
 }
 
@@ -508,12 +560,10 @@ c_run_cb_write_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 	}
 
 	TRACE("Entering console sock reading loop");
-	if (-1 == readloop(session->console_sock_container, session->pty_master)) {
+	if (-1 == readloop(session->console_sock_container, session->pty_master,
+			   session->pty_master_wbuf, &session->pty_master_wbuf_count)) {
 		ERROR("Readloop returned an error, cleanup!");
-		c_run_t *run = session->run;
-		run->sessions = list_remove(run->sessions, session);
 		c_run_session_cleanup(session);
-		c_run_session_free(session);
 	}
 }
 
@@ -659,8 +709,8 @@ static compartment_module_t c_run_module = {
 static void INIT
 c_run_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_run_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_run_module);
 
 	// register relevant handlers implemented by this module
 	container_register_run_handler(MOD_NAME, c_run_exec_process);

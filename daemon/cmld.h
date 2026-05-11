@@ -36,6 +36,7 @@
 #define CMLD_H
 
 #include "container.h"
+#include "unit.h"
 #include "control.h"
 
 #ifndef DEFAULT_BASE_PATH
@@ -52,6 +53,8 @@
 
 #define CMLD_STORAGE_FREE_THRESHOLD 0.2 // 20% reserved space
 
+#define UID_MAX 65536
+
 /**
  * Enum represents different commands to control a container
  */
@@ -60,11 +63,22 @@ typedef enum { CMLD_CONTAINER_CTRL_START, CMLD_CONTAINER_CTRL_STOP } cmld_contai
 /**
  * Initialize the CMLD module.
  *
+ * 1st stage initialization including startup of SCD
+ *
  * @param path The path of the CMLD configuration file.
  * @return 0 on success, -1 on error
  */
 int
-cmld_init(const char *path);
+cmld_init_stage_unit(const char *path);
+
+/**
+ * Notify cmld about unit state change during early init stage
+ *
+ * Triggers internal 2nd stage initialization if all units including SCD,
+ * are running.
+ */
+void
+cmld_init_stage_unit_notify(unit_t *unit);
 
 /**
  * Cleans up the CMLD module.
@@ -186,6 +200,9 @@ cmld_container_wipe(container_t *container);
 void
 cmld_wipe_device();
 
+void
+cmld_destroy_system();
+
 container_t *
 cmld_container_get_by_uuid(const uuid_t *uuid);
 
@@ -213,6 +230,15 @@ cmld_containers_get_count();
 
 container_t *
 cmld_container_get_by_index(int index);
+
+int
+cmld_units_get_count(void);
+
+unit_t *
+cmld_unit_get_by_index(int index);
+
+unit_t *
+cmld_unit_get_by_uuid(const uuid_t *uuid);
 
 /**
  * Get the device UUID.
@@ -286,34 +312,36 @@ cmld_guestos_delete(const char *guestos_name);
 
 /**
  * Returns the list of currently available physical network interfaces
- * not occupied by an application container. Used to assign theses
- * interfaces to c0 in case of c0 uses a private network namespace.
+ * not occupied by an application container, as MAC address byte arrays.
+ * Used to assign these interfaces to c0 in case of c0 uses a private
+ * network namespace.
  */
 list_t *
 cmld_get_netif_phys_list(void);
 
 /**
- * Removes the interface from cmld's list of available physical network
- * interfaces. This is used during container config phases, where network
- * interfaces are assigned directly to a container. The remaining physical
- * interfaces are then assigned to the first privileged container with a
- * private network namespace (usually c0).
+ * Removes the interface identified by MAC address string from cmld's
+ * list of available physical network interfaces. This is used during
+ * container config phases, where network interfaces are assigned
+ * directly to a container. The remaining physical interfaces are then
+ * assigned to the first privileged container with a private network
+ * namespace (usually c0).
  *
- * @param if_name name of the interface which should be removed.
+ * @param mac MAC address byte array.
  * @return true if iface was available and removed, false otherwise.
  */
 bool
-cmld_netif_phys_remove_by_name(const char *if_name);
+cmld_netif_phys_remove_by_mac(const uint8_t mac[MAC_ADDR_LEN]);
 
 /**
- * Adds the given interface to cmld's list of available physical network
- * interfaces. This is used during runtime if a container releases its
- * assignment.
+ * Adds the given interface identified by MAC address to cmld's
+ * list of available physical network interfaces. This is used during
+ * runtime if a container releases its assignment.
  *
- * @param if_name name of the interface which should be added.
+ * @param mac MAC address byte array.
  */
 void
-cmld_netif_phys_add_by_name(const char *if_name);
+cmld_netif_phys_add_by_mac(const uint8_t mac[MAC_ADDR_LEN]);
 
 /*
  * Reboot device by trying to gracfully stop or killing containers otherwise.

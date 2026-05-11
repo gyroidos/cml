@@ -66,13 +66,13 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	ASSERT((config->halg == SHA256_DIGEST_LENGTH) || (config->halg == SHA_DIGEST_LENGTH));
 
 	bool ret = false;
-	uint8_t quote[resp->quoted.len];
-	uint8_t sig[resp->signature.len];
-	uint8_t *q = quote; // Required as TSS functions manipulate pointer
-	uint8_t *s = sig;   // Required as TSS functions manipulate pointer
-	uint32_t quote_len = resp->quoted.len;
-	uint32_t sig_len = resp->signature.len;
-	uint8_t pcr[resp->n_pcr_values][config->halg];
+	uint8_t *quote = NULL;
+	uint8_t *q = NULL;
+	uint8_t *sig = NULL;
+	uint8_t *s = NULL;
+	uint32_t quote_len;
+	uint32_t sig_len;
+	uint8_t **pcr = NULL;
 
 	if (resp->has_quoted) {
 		INFO("Response contains quote (Length %zu)", resp->quoted.len);
@@ -91,6 +91,15 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 		goto err;
 	}
 
+	quote_len = resp->quoted.len;
+	sig_len = resp->signature.len;
+
+	quote = mem_alloc0(resp->quoted.len);
+	sig = mem_alloc0(resp->signature.len);
+
+	q = quote; // Required as TSS functions manipulate pointer
+	s = sig;   // Required as TSS functions manipulate pointer
+
 	// The TSS library manipulates the quote and signature buffers. Copy the buffers
 	// in order to enable a clean freeing of the protobuf response
 	memcpy(quote, resp->quoted.data, resp->quoted.len);
@@ -105,6 +114,8 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 		ret = false;
 		goto err;
 	}
+
+	pcr = mem_alloc0(MUL_WITH_OVERFLOW_CHECK(resp->n_pcr_values, config->halg));
 
 	bool ret_pcr = true;
 	for (size_t i = 0; i < config->n_pcr_values; i++) {
@@ -199,14 +210,23 @@ attestation_verify_resp(Tpm2dToRemote *resp, RAttestationConfig *config, uint8_t
 	DEBUG_HEXDUMP(tpms_attest.attested.quote.pcrDigest.t.buffer,
 		      tpms_attest.attested.quote.pcrDigest.t.size, "Quote PCR Digest");
 	EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-	EVP_DigestInit(ctx, EVP_sha256());
+	switch (config->halg) {
+	case SHA256_DIGEST_LENGTH:
+		EVP_DigestInit(ctx, EVP_sha256());
+		break;
+	case SHA_DIGEST_LENGTH:
+		EVP_DigestInit(ctx, EVP_sha1());
+		break;
+	default: // should not happen, see ASSERT above
+		goto err;
+	}
 	uint8_t pcr_calc[SHA256_DIGEST_LENGTH] = { 0 };
 	for (size_t i = 0; i < resp->n_pcr_values; i++) {
-		EVP_DigestUpdate(ctx, resp->pcr_values[i]->value.data, SHA256_DIGEST_LENGTH);
+		EVP_DigestUpdate(ctx, resp->pcr_values[i]->value.data, config->halg);
 	}
 	EVP_DigestFinal(ctx, pcr_calc, NULL);
 	EVP_MD_CTX_free(ctx);
-	if (memcmp(tpms_attest.attested.quote.pcrDigest.t.buffer, pcr_calc, SHA256_DIGEST_LENGTH)) {
+	if (memcmp(tpms_attest.attested.quote.pcrDigest.t.buffer, pcr_calc, config->halg)) {
 		ERROR("VERIFY AGGREGATED PCR FAILED");
 		ret = false;
 		goto err;
@@ -291,6 +311,9 @@ err:
 
 	// Free resources
 	ssl_free();
+	mem_free0(quote);
+	mem_free0(sig);
+	mem_free0(pcr);
 
 	return ret;
 }

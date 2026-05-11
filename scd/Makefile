@@ -26,9 +26,10 @@ DEVELOPMENT_BUILD ?= y
 AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
-TRUSTME_SCHSM ?= n
+SCHSM ?= n
 BNSE ?= n
-SYSTEMD ?= n
+# SYSTEMD-flag in the scd is deprecated and should not be used anymore; Will be removed in the future; 
+SYSTEMD = n
 
 LOCAL_CFLAGS := -std=gnu99 -I.. -I../include -I../tpm2d -Icommon -pedantic -O2
 LOCAL_CFLAGS += -DTPM_POSIX
@@ -65,7 +66,7 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
-ifeq ($(TRUSTME_SCHSM), y)
+ifeq ($(SCHSM), y)
     # If requested, we build sc-cardservice with sc-hsm support into the scd
     LOCAL_CFLAGS += -DCARDSERVICE_SCHSM
     SC_CARDSERVICE = y
@@ -79,7 +80,7 @@ ifeq ($(BNSE), y)
 endif
 ifeq ($(SC_CARDSERVICE), y)
     # If requested, we build generic sc-cardservice support into the scd
-    # SC_CARDSERVICE is set internally by TRUSTE_SCHSM or BNSE.
+    # SC_CARDSERVICE is set internally by SCHSM or BNSE.
     # The direct use of SC_CARDSERVICE is not intended.
     LOCAL_CFLAGS += -DSC_CARDSERVICE
 	LOCAL_LFLAGS += -lctccid
@@ -101,6 +102,7 @@ SRC_FILES += \
 	softtoken.c \
 	token.c \
 	scd.c \
+	tokencontrol.c \
 	tokencontrol.pb-c.c
 
 
@@ -110,15 +112,15 @@ all: scd
 ifeq ($(CC_MODE),y)
 protobuf: device.proto scd.proto tokencontrol.proto
 	ln -sf ../daemon/cc_mode/device.proto device.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. device.proto
-	protoc-c --c_out=. tokencontrol.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. device.proto
+	protoc --c_out=. tokencontrol.proto
 
 else
 protobuf: device.proto scd.proto tokencontrol.proto
-	protoc-c --c_out=. scd.proto
-	protoc-c --c_out=. device.proto
-	protoc-c --c_out=. tokencontrol.proto
+	protoc --c_out=. scd.proto
+	protoc --c_out=. device.proto
+	protoc --c_out=. tokencontrol.proto
 
 endif
 

@@ -75,9 +75,9 @@ LD_LIB_FLAGS := \
 all: converter
 
 protobuf: container.proto control.proto guestos.proto
-	protoc-c --c_out=. guestos.proto
-	protoc-c --c_out=. container.proto
-	protoc-c --c_out=. control.proto
+	protoc --c_out=. guestos.proto
+	protoc --c_out=. container.proto
+	protoc --c_out=. control.proto
 	$(MAKE) -C common protobuf
 
 $(PROTO_SRC): protobuf

@@ -752,7 +752,7 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 				coldboot_data->filter(major, minor, coldboot_data->data), out);
 
 		char *trigger = mem_printf("add %s", uuid_string(coldboot_data->synth_uuid));
-		if (-1 == file_printf(full_path, trigger)) {
+		if (-1 == file_printf(full_path, "%s", trigger)) {
 			WARN("Could not trigger event %s <- %s", full_path, trigger);
 			ret--;
 		} else {

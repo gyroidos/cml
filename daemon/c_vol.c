@@ -92,6 +92,8 @@ typedef struct c_vol {
 	const guestos_t *os;
 	mount_t *mnt;
 	mount_t *mnt_setup;
+	cryptfs_mode_t mode;
+	bool corrupted_image;
 } c_vol_t;
 
 /******************************************************************************/
@@ -140,7 +142,7 @@ c_vol_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 }
 
 static char *
-c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
+c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent, const char *suffix)
 {
 	const char *dir;
 
@@ -162,7 +164,8 @@ c_vol_meta_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 		return NULL;
 	}
 
-	return mem_printf("%s/%s.meta.img", dir, mount_entry_get_img(mntent));
+	return mem_printf("%s/%s.meta.img%s", dir, mount_entry_get_img(mntent),
+			  suffix ? suffix : "");
 }
 
 static char *
@@ -217,7 +220,7 @@ c_vol_create_sparse_file(const char *img, off64_t storage_size)
 
 	INFO("Creating empty image file %s with %llu bytes", img, (unsigned long long)storage_size);
 
-	fd = open(img, O_LARGEFILE | O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	fd = open(img, O_LARGEFILE | O_WRONLY | O_CREAT | O_TRUNC, 0600);
 	if (fd < 0) {
 		ERROR_ERRNO("Could not open image file %s", img);
 		return -1;
@@ -347,7 +350,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 		return 0;
 	case MOUNT_TYPE_OVERLAY_RW:
 	case MOUNT_TYPE_EMPTY: {
-		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 		int ret = c_vol_create_image_empty(img, img_meta, mount_entry_get_size(mntent));
 		mem_free0(img_meta);
 		return ret;
@@ -465,6 +468,11 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	 */
 	if (mount(upper_dev, overlayfs_mount_dir, upper_fstype, mount_flags, mount_data) < 0) {
 		ERROR_ERRNO("Could not mount %s to %s", upper_dev, overlayfs_mount_dir);
+
+		// dm-integrity error, wrong key usage (wrapped-key was overwritten) -> irrecoverable state
+		if (errno == EIO)
+			vol->corrupted_image = true;
+
 		goto error;
 	}
 
@@ -473,11 +481,11 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 	TRACE("Creating upper dir %s and work dir %s\n", upper_dir, work_dir);
 
 	// create mountpoint for upper dev
-	if (dir_mkdir_p(upper_dir, 0777) < 0) {
+	if (dir_mkdir_p(upper_dir, 0700) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
 		goto error;
 	}
-	if (dir_mkdir_p(work_dir, 0777) < 0) {
+	if (dir_mkdir_p(work_dir, 0700) < 0) {
 		ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
 		goto error;
 	}
@@ -672,6 +680,7 @@ c_vol_setup_busybox_install(void)
 static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
+	int ret = -1;
 	char *img, *dev, *img_meta, *dev_meta, *dir, *img_hash;
 	int fd = 0, fd_meta = 0;
 	bool new_image = false;
@@ -746,7 +755,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	}
 
 	// try to create mount point before mount, usually not necessary...
-	if (dir_mkdir_p(dir, 0777) < 0)
+	if (dir_mkdir_p(dir, 0700) < 0)
 		DEBUG_ERRNO("Could not mkdir %s", dir);
 
 	if (strcmp(mount_entry_get_fs(mntent), "tmpfs") == 0) {
@@ -775,6 +784,14 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (c_vol_check_image(vol, img) < 0) {
 		new_image = true;
 		if (c_vol_create_image(vol, img, mntent) < 0) {
+			goto error;
+		}
+	}
+
+	if (mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) {
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
+		if (c_vol_check_image(vol, img_meta) < 0) {
+			vol->corrupted_image = true;
 			goto error;
 		}
 	}
@@ -848,7 +865,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
 					CONTAINER_MGMT, "setup-crypted-volume-no-key",
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
-					label);
+					label, NULL);
 			ERROR("Trying to mount encrypted volume without key...");
 			mem_free0(label);
 			goto error;
@@ -858,16 +875,17 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
-			DEBUG("Setting up cryptfs volume %s for %s", label, dev);
+			DEBUG("Setting up cryptfs volume %s for %s (%s)", label, dev,
+			      vol->mode == CRYPTFS_MODE_AUTHENC ? "AUTHENC" : "INTEGRITY_ENCRYPT");
 
-			img_meta = c_vol_meta_image_path_new(vol, mntent);
+			img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 			dev_meta = loopdev_create_new(&fd_meta, img_meta, 0, 0);
 
 			IF_NULL_GOTO(dev_meta, error);
 
 			mem_free0(crypt);
 			crypt = cryptfs_setup_volume_new(
-				label, dev, container_get_key(vol->container), dev_meta);
+				label, dev, container_get_key(vol->container), dev_meta, vol->mode);
 
 			// release loopdev fd (crypt device should keep it open now)
 			close(fd_meta);
@@ -877,7 +895,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 				audit_log_event(container_get_uuid(vol->container), FSA, CMLD,
 						CONTAINER_MGMT, "setup-crypted-volume",
 						uuid_string(container_get_uuid(vol->container)), 2,
-						"label", label);
+						"label", label, NULL);
 				ERROR("Setting up cryptfs volume %s for %s failed", label, dev);
 				mem_free0(label);
 				goto error;
@@ -885,7 +903,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			audit_log_event(container_get_uuid(vol->container), SSA, CMLD,
 					CONTAINER_MGMT, "setup-crypted-volume",
 					uuid_string(container_get_uuid(vol->container)), 2, "label",
-					label);
+					label, NULL);
 		}
 
 		mem_free0(label);
@@ -973,6 +991,13 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		goto final;
 	}
 
+	// dm-integrity error, wrong key usage (wrapped-key was overwritten) -> irrecoverable state
+	if (errno == EIO) {
+		ERROR_ERRNO("Could not mount image %s using %s to %s", img, dev, dir);
+		vol->corrupted_image = true;
+		goto error;
+	}
+
 	// retry with default options
 	if (mount(dev, dir, mount_entry_get_fs(mntent), mountflags, NULL) >= 0) {
 		DEBUG("Sucessfully mounted %s using %s to %s", img, dev, dir);
@@ -991,7 +1016,6 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	if (mount_entry_get_type(mntent) != MOUNT_TYPE_EMPTY)
 		goto error;
 
-	/* TODO better password handling before in order to remove this condition. */
 	if (encrypted && !new_image) {
 		DEBUG("Possibly the wrong password was specified. Abort container start.");
 		goto error;
@@ -1029,24 +1053,7 @@ final:
 	}
 
 final_noshift:
-
-	if (dev)
-		loopdev_free(dev);
-	if (dev_meta)
-		loopdev_free(dev_meta);
-	if (img)
-		mem_free0(img);
-	if (img_meta)
-		mem_free0(img_meta);
-	if (dir)
-		mem_free0(dir);
-	if (fd)
-		close(fd);
-	if (fd_meta)
-		close(fd_meta);
-	if (img_hash)
-		mem_free0(img_hash);
-	return 0;
+	ret = 0;
 
 error:
 	if (dev)
@@ -1063,7 +1070,9 @@ error:
 		close(fd);
 	if (fd_meta)
 		close(fd_meta);
-	return -1;
+	if (img_hash)
+		mem_free0(img_hash);
+	return ret;
 }
 
 static int
@@ -1094,12 +1103,12 @@ c_vol_cleanup_dm(c_vol_t *vol)
 
 		DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
 
-		if (!strcmp(type, "crypt")) {
-			if (cryptfs_delete_blk_dev(fd, label) < 0)
-				DEBUG("Could not delete dm-crypt dev %s", label);
+		if (!strcmp(type, "crypt") || !strcmp(type, "integrity")) {
+			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
+				WARN("Could not delete dm-%s dev %s", type, label);
 		} else if (!strcmp(type, "verity")) {
 			if (verity_delete_blk_dev(label) < 0)
-				DEBUG("Could not delete dm-verity dev %s", label);
+				WARN("Could not delete dm-verity dev %s", label);
 		}
 		mem_free0(label);
 		mem_free0(type);
@@ -1353,11 +1362,13 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
 		if (mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_SHARED_RW ||
 		    mount_entry_get_type(mntent) == MOUNT_TYPE_OVERLAY_RO) {
-			if (mount_entry_get_verity_sha256(mntent)) {
-				// skip, handled in c_vol_verify_mount_entries_bg()
-				continue;
-			}
-			if (guestos_check_mount_image_block(vol->os, mntent, true) !=
+			/*
+			 * Skip thorough check if dm-vertiy device.
+			 * In this case, this is done in c_vol_verify_mount_entries_bg()
+			 */
+			bool thorough = mount_entry_get_verity_sha256(mntent) ? false : true;
+
+			if (guestos_check_mount_image_block(vol->os, mntent, thorough) !=
 			    CHECK_IMAGE_GOOD) {
 				ERROR("Cannot verify image %s: image file is corrupted",
 				      mount_entry_get_img(mntent));
@@ -1372,6 +1383,14 @@ c_vol_verify_mount_entries(const c_vol_t *vol)
  * This Function verifies integrity of base images in background as part of
  * TSF.CML.SecureCompartmentInit.
  */
+#ifdef DM_LAZY_CHECK_ONLY
+// disable full image checking in background. Just rely on dm-verity.
+static bool
+c_vol_verify_mount_entries_bg(const c_vol_t *vol)
+{
+	return true;
+}
+#else
 static bool
 c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 {
@@ -1401,19 +1420,20 @@ c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 						      "image file is corrupted",
 						      mount_entry_get_img(mntent));
 
-						audit_log_event(
-							container_get_uuid(vol->container), FSA,
-							CMLD, CONTAINER_MGMT, "verify-image",
-							uuid_string(
-								container_get_uuid(vol->container)),
-							2, "name", mount_entry_get_img(mntent));
+						audit_log_event(container_get_uuid(vol->container),
+								FSA, CMLD, CONTAINER_MGMT,
+								"verify-image",
+								uuid_string(container_get_uuid(
+									vol->container)),
+								2, "name",
+								mount_entry_get_img(mntent), NULL);
 						_exit(-1);
 					}
 					audit_log_event(
 						container_get_uuid(vol->container), SSA, CMLD,
 						CONTAINER_MGMT, "verify-image",
 						uuid_string(container_get_uuid(vol->container)), 2,
-						"name", mount_entry_get_img(mntent));
+						"name", mount_entry_get_img(mntent), NULL);
 					_exit(0);
 				} else { // parent
 					INFO("dm-verity active for image %s, "
@@ -1428,6 +1448,41 @@ c_vol_verify_mount_entries_bg(const c_vol_t *vol)
 		}
 	}
 	return true;
+}
+#endif /* DM_LAZY_CHECK_ONLY */
+
+/*
+ * If images_dir does not have stacked images, persist policy without stacking
+ * using cryptfs_mode INTEGRITY_ENCRYPT to support TRIM on SSDs.
+ * Call this function on container start to allow switching the policy by container
+ * wipe.
+ */
+static void
+c_vol_set_dm_mode(c_vol_t *vol)
+{
+	ASSERT(vol);
+
+	const char *images_dir = container_get_images_dir(vol->container);
+	ASSERT(images_dir);
+
+	bool is_c0 = container_uuid_is_c0id(container_get_uuid(vol->container));
+
+	char *not_stacked_file = mem_printf("%s/not-stacked", images_dir);
+	if (file_exists(not_stacked_file)) {
+		TRACE("file exists %s %s", not_stacked_file,
+		      is_c0 ? "(c0) -> CRYPTFS_MODE_INTEGRITY_ONLY" :
+			      "-> CRYPTFS_MODE_INTEGRITY_ENCRYPT");
+		vol->mode = is_c0 ? CRYPTFS_MODE_INTEGRITY_ONLY : CRYPTFS_MODE_INTEGRITY_ENCRYPT;
+	} else if (container_images_dir_contains_image(vol->container)) {
+		TRACE("previous image files exists -> CRYPTFS_MODE_AUTHENC");
+		vol->mode = CRYPTFS_MODE_AUTHENC;
+	} else {
+		TRACE("new image files %s", is_c0 ? "(c0) -> CRYPTFS_MODE_INTEGRITY_ONLY" :
+						    "-> CRYPTFS_MODE_INTEGRITY_ENCRYPT");
+		vol->mode = is_c0 ? CRYPTFS_MODE_INTEGRITY_ONLY : CRYPTFS_MODE_INTEGRITY_ENCRYPT;
+		file_touch(not_stacked_file);
+	}
+	mem_free0(not_stacked_file);
 }
 
 /******************************************************************************/
@@ -1462,6 +1517,8 @@ c_vol_new(compartment_t *compartment)
 	if (compartment_get_flags(compartment) & COMPARTMENT_FLAG_MODULE_LOAD)
 		mount_add_entry(vol->mnt, MOUNT_TYPE_BIND_DIR, "/lib/modules", "/lib/modules",
 				"none", 0);
+
+	vol->corrupted_image = false;
 
 	return vol;
 }
@@ -1600,7 +1657,19 @@ c_vol_start_child_early(void *volp)
 	return 0;
 error:
 	ERROR("Failed to execute start child early hook for c_vol");
-	return -COMPARTMENT_ERROR_VOL;
+	return vol->corrupted_image ? -COMPARTMENT_ERROR_VOL_CORRUPTED : -COMPARTMENT_ERROR_VOL;
+}
+
+static int
+c_vol_start_pre_clone(void *volp)
+{
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
+	// set device mapper mode for data integrity and encryption
+	c_vol_set_dm_mode(vol);
+
+	return 0;
 }
 
 static int
@@ -1963,6 +2032,18 @@ c_vol_is_encrypted(void *volp)
 	return false;
 }
 
+static cryptfs_mode_t
+c_vol_get_mode(void *volp)
+{
+	c_vol_t *vol = volp;
+	ASSERT(vol);
+
+	// update internal mode variable if container did not run or was wiped
+	c_vol_set_dm_mode(vol);
+
+	return vol->mode;
+}
+
 static void
 c_vol_cleanup(void *volp, bool is_rebooting)
 {
@@ -1984,7 +2065,7 @@ static compartment_module_t c_vol_module = {
 	.compartment_destroy = NULL,
 	.start_post_clone_early = NULL,
 	.start_child_early = c_vol_start_child_early,
-	.start_pre_clone = NULL,
+	.start_pre_clone = c_vol_start_pre_clone,
 	.start_post_clone = c_vol_start_post_clone,
 	.start_pre_exec = c_vol_start_pre_exec,
 	.start_post_exec = NULL,
@@ -1999,11 +2080,12 @@ static compartment_module_t c_vol_module = {
 static void INIT
 c_vol_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_vol_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_vol_module);
 
 	// register relevant handlers implemented by this module
 	container_register_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);
 	container_register_get_mnt_handler(MOD_NAME, c_vol_get_mnt);
 	container_register_is_encrypted_handler(MOD_NAME, c_vol_is_encrypted);
+	container_register_get_cryptfs_mode_handler(MOD_NAME, c_vol_get_mode);
 }

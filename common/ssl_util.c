@@ -41,7 +41,9 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 
+#include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 //#undef LOGF_LOG_MIN_PRIO
@@ -53,7 +55,7 @@
 //#define CITY_L_CSR "Muenchen"
 #define ORGANIZATION_O_CSR "Fraunhofer"
 #define ORG_UNIT_OU1_CSR "AISEC"
-//#define ORG_UNIT_OU2_CSR "trustme"
+//#define ORG_UNIT_OU2_CSR "gyroidos"
 #define KEY_USAGE_CSR "critical, digitalSignature,keyEncipherment,nonRepudiation"
 #define EXT_KEY_USAGE_CSR "clientAuth"
 #define REQ_VERSION_CSR 0L
@@ -80,7 +82,7 @@
 #define TEST_L "Muenchen"
 #define TEST_O "Fraunhofer"
 #define TEST_OU1 "AISEC"
-#define TEST_OU2 "trustme"
+#define TEST_OU2 "gyroidos"
 #define TEST_BASIC_CONSTRAINTS "critical,CA:FALSE"
 #define TEST_KEY_USAGE_CERT "critical,keyCertSign,cRLSign"
 #define TEST_KEY_IDENTIFIER "hash"
@@ -88,7 +90,7 @@
 #define TEST_NOT_BEFORE 0
 #define TEST_NOT_AFTER (60 * 60 * 24 * 365)
 #define TEST_CERT_VERSION 2
-#define TEST_FRIENDLY_NAME "trust-me test user"
+#define TEST_FRIENDLY_NAME "gyroidos test user"
 
 /* creates a certificate containing the public key pkeyp with
  * serial number and validity in days (for user.p12) */
@@ -136,18 +138,27 @@ ssl_init(bool use_tpm, void *tpm2d_primary_storage_key_pw)
 	}
 
 	if (use_tpm) {
+		const char *tpmdev = "/dev/tpmrm0";
+		if (setenv("TPM_INTERFACE_TYPE", "dev", 1) < 0) {
+			ERROR_ERRNO("Could not set environment!");
+			goto error;
+		}
+		if (setenv("TPM_DEVICE", tpmdev, 1) < 0) {
+			ERROR_ERRNO("Could not set environment!");
+			goto error;
+		}
 		if (tpm2d_primary_storage_key_pw) {
 			OSSL_PARAM provider_params[] = {
 				OSSL_PARAM_utf8_ptr("PIN", tpm2d_primary_storage_key_pw, 0),
 				OSSL_PARAM_END
 			};
-			if ((tpm_provider = OSSL_PROVIDER_load_ex(NULL, "tpm2", provider_params)) ==
-			    NULL) {
+			if ((tpm_provider = OSSL_PROVIDER_load_ex(NULL, "libtpm2",
+								  provider_params)) == NULL) {
 				ERROR("Could not load TPM2 provider with primary storage key pw");
 				goto error;
 			}
 		} else {
-			if ((tpm_provider = OSSL_PROVIDER_load(NULL, "tpm2")) == NULL) {
+			if ((tpm_provider = OSSL_PROVIDER_load(NULL, "libtpm2")) == NULL) {
 				ERROR("Could not load TPM2 provider");
 				goto error;
 			}
@@ -231,6 +242,19 @@ end:
 	return ret;
 }
 
+static FILE *
+ssl_fopen_write(const char *path, mode_t mode)
+{
+	int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
+	if (fd < 0)
+		return NULL;
+
+	FILE *fp = fdopen(fd, "wb");
+	if (!fp)
+		close(fd);
+	return fp;
+}
+
 int
 ssl_create_csr(const char *req_file, const char *key_file, const char *passphrase,
 	       const char *common_name, const char *uid, bool tpmkey, rsa_padding_t rsa_padding)
@@ -276,7 +300,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 
 	DEBUG("CSR created");
 
-	if (!(fp = fopen(req_file, "wb"))) {
+	if (!(fp = ssl_fopen_write(req_file, 0644))) {
 		ERROR("Error saving certificate request");
 		goto error;
 	}
@@ -289,7 +313,7 @@ ssl_create_csr(const char *req_file, const char *key_file, const char *passphras
 	fclose(fp);
 
 	if (!tpmkey) {
-		if (!(fp = fopen(key_file, "wb"))) {
+		if (!(fp = ssl_fopen_write(key_file, 0600))) {
 			ERROR("Error saving CSR private key");
 			goto error;
 		}
@@ -689,14 +713,26 @@ ssl_unwrap_key(EVP_PKEY *pkey, const unsigned char *wrapped_key, size_t wrapped_
 	int iv_len = EVP_CIPHER_iv_length(type);
 	if (wrapped_key_len < 2 * sizeof(int) + iv_len) {
 		WARN("Given wrapped key is invalid/corrupted.");
+		res = -2;
 		return res;
 	}
 	int tmpkeylen = *((int *)wrapped_key);
+	if (tmpkeylen < 0) {
+		WARN("Given wrapped key is invalid/corrupted.");
+		res = -2;
+		return res;
+	}
 	wrapped_key += sizeof(int);
 	int keylen = *((int *)wrapped_key);
+	if (keylen < 0) {
+		WARN("Given wrapped key is invalid/corrupted.");
+		res = -2;
+		return res;
+	}
 	wrapped_key += sizeof(int);
 	if (wrapped_key_len != 2 * sizeof(int) + iv_len + tmpkeylen + keylen) {
 		WARN("Given wrapped key is invalid/corrupted.");
+		res = -2;
 		return res;
 	}
 	const unsigned char *iv_buf = wrapped_key;
@@ -1286,7 +1322,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 
 	DEBUG("Softtoken created");
 
-	if (!(fp = fopen(token_file, "wb"))) {
+	if (!(fp = ssl_fopen_write(token_file, 0600))) {
 		ERROR("Error saving PKCS#12 softtoken");
 		goto error;
 	}
@@ -1298,7 +1334,7 @@ ssl_create_pkcs12_token(const char *token_file, const char *cert_file, const cha
 	fclose(fp);
 
 	if (cert_file) {
-		if (!(fp = fopen(cert_file, "wb"))) {
+		if (!(fp = ssl_fopen_write(cert_file, 0644))) {
 			ERROR("Error saving certificate");
 			goto error;
 		}
@@ -1377,7 +1413,7 @@ ssl_newpass_pkcs12_token(const char *token_file, const char *oldpass, const char
 		ERROR("Error creating PKCS#12 softtoken structure");
 		goto error;
 	}
-	if (!(fp = fopen(token_file, "wb"))) {
+	if (!(fp = ssl_fopen_write(token_file, 0600))) {
 		ERROR("Error saving PKCS#12 softtoken");
 		goto error;
 	}

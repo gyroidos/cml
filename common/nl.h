@@ -39,6 +39,7 @@
 #include <sys/socket.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <linux/fib_rules.h>
 #include <linux/genetlink.h>
 #include <stdbool.h>
 
@@ -175,6 +176,14 @@ nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg);
  */
 int
 nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg);
+
+/**
+ * Sets the request according to the given routing rule payload struct.
+ * The message length is adapted accordingly.
+ * @return failure: -1, success: 0
+ */
+int
+nl_msg_set_rule_req(nl_msg_t *msg, const struct fib_rule_hdr *rule);
 
 /**
  * Sets the nl message type attribute

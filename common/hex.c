@@ -47,10 +47,10 @@ convert_hex_to_bin(const char *in, size_t inlen, uint8_t *out, size_t outlen)
 	for (size_t i = 0; i < outlen; i++) {
 		if ((uint8_t)*pos < 0x30 || (uint8_t)*pos > 0x66 ||
 		    ((uint8_t)*pos > 0x39 && (uint8_t)*pos < 0x40) ||
-		    ((uint8_t)*pos > 0x46 && (uint8_t)*pos < 0x61) ||
-		    (uint8_t) * (pos + 1) < 0x30 || (uint8_t) * (pos + 1) > 0x66 ||
-		    ((uint8_t) * (pos + 1) > 0x39 && (uint8_t) * (pos + 1) < 0x40) ||
-		    ((uint8_t) * (pos + 1) > 0x46 && (uint8_t) * (pos + 1) < 0x61)) {
+		    ((uint8_t)*pos > 0x46 && (uint8_t)*pos < 0x61) || (uint8_t)*(pos + 1) < 0x30 ||
+		    (uint8_t)*(pos + 1) > 0x66 ||
+		    ((uint8_t)*(pos + 1) > 0x39 && (uint8_t)*(pos + 1) < 0x40) ||
+		    ((uint8_t)*(pos + 1) > 0x46 && (uint8_t)*(pos + 1) < 0x61)) {
 			return -3;
 		}
 		sscanf(pos, "%2hhx", &out[i]);

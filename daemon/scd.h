@@ -26,18 +26,25 @@
 
 #include <stdbool.h>
 
+#include "unit.h"
+
 /**
  * Initializes the scd subsystem (starts the corresponding daemon)
- * @param start_daemon Fork and execute the scd daemon
  * @return 0 on success, -1 on error
  */
 int
-scd_init(bool start_daemon);
+scd_init(void);
 
 /**
  * Cleans up the scd subsystem (stops the corresponding daemon)
  */
 void
 scd_cleanup(void);
+
+/**
+ * Returns the scd subsystems unit instance
+ */
+unit_t *
+scd_get_unit(void);
 
 #endif /* CML_SCD_H */

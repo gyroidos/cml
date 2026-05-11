@@ -173,8 +173,8 @@ static const char *c_cgroups_devices_generic_whitelist[] = {
 
 	//"c 4:0 rwm", // tty0
 
-	/* alternate tty devices - seem to be necessary for android logwrapper */
-	//"c 5:0 rwm", // tty
+	/* alternate tty devices */
+	"c 5:0 rwm", // tty (current process controlling tty necessary for passwd)
 	//"c 5:1 rwm", // console
 	"c 5:2 rwm", // ptmx
 
@@ -1316,8 +1316,8 @@ static compartment_module_t c_cgroups_module = {
 static void INIT
 c_cgroups_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_cgroups_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_cgroups_module);
 
 	// register relevant handlers implemented by this module
 	container_register_freeze_handler(MOD_NAME, c_cgroups_freeze);

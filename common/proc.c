@@ -38,6 +38,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#include "pidfd.h"
+
 struct proc_killall {
 	pid_t ppid;
 	const char *name;
@@ -183,12 +185,23 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 	struct proc_killall *pk = data;
 
 	char *tmp = NULL;
-	pid_t pid = strtol(file, &tmp, 10);
+	errno = 0;
+	long lpid = strtol(file, &tmp, 10);
 	if (!tmp || tmp[0] != '\0') // filename is not a number
+		return 0;
+	if (errno == ERANGE || lpid <= 0 || lpid > INT_MAX)
+		return 0;
+	pid_t pid = (pid_t)lpid;
+
+	int pidfd = pidfd_open(pid, 0);
+	if (pidfd < 0)
 		return 0;
 
 	proc_status_t *status = proc_status_new(pid);
-	IF_NULL_RETVAL(status, 0);
+	if (!status) {
+		close(pidfd);
+		return 0;
+	}
 
 	pid_t ppid = proc_status_get_ppid(status);
 	const char *name = proc_status_get_name(status);
@@ -199,6 +212,7 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 	}
 
 	proc_status_free(status);
+	close(pidfd);
 	return 0;
 }
 
@@ -222,9 +236,13 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 	struct proc_find *pf = data;
 
 	char *tmp = NULL;
-	pid_t pid = strtol(file, &tmp, 10);
+	errno = 0;
+	long lpid = strtol(file, &tmp, 10);
 	if (!tmp || tmp[0] != '\0') // filename is not a number
 		return 0;
+	if (errno == ERANGE || lpid <= 0 || lpid > INT_MAX)
+		return 0;
+	pid_t pid = (pid_t)lpid;
 
 	proc_status_t *status = proc_status_new(pid);
 	IF_NULL_RETVAL_TRACE(status, 0);
@@ -232,10 +250,9 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 	pid_t ppid = proc_status_get_ppid(status);
 	const char *name = proc_status_get_name(status);
 
-	if ((pf->ppid == ppid) && !strcmp(name, pf->name)) {
+	if (pf->match < 0 && (pf->ppid == ppid) && !strcmp(name, pf->name)) {
 		TRACE("Found pid %d with ppid %d and name %s", pid, ppid, pf->name);
 		pf->match = pid;
-		//return -1; // TODO maybe adapt dir_foreach to allow aborting the directory traversing without indicating an error
 	}
 
 	proc_status_free(status);
@@ -245,7 +262,7 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 pid_t
 proc_find(pid_t ppid, const char *name)
 {
-	struct proc_find data = { ppid, name, 0 };
+	struct proc_find data = { ppid, name, -1 };
 
 	if (dir_foreach("/proc", &proc_find_cb, &data) < 0) {
 		WARN("Could not traverse /proc");
@@ -270,12 +287,9 @@ proc_fork_and_execvp(const char *const *argv)
 		FATAL_ERRNO("Could not execvp %s", argv[0]);
 		return -1;
 	default:
-		while (waitpid(pid, &status, 0) != pid && errno == EINTR) {
-			TRACE_ERRNO("waitpid interrupted for child '%s' "
-				    "wait again",
-				    argv[0]);
-		}
-		if (!WIFEXITED(status)) {
+		if (proc_waitpid(pid, &status, 0) == -1) {
+			ERROR_ERRNO("waitpid failed for child '%s'", argv[0]);
+		} else if (!WIFEXITED(status)) {
 			ERROR("Child '%s' terminated abnormally", argv[0]);
 		} else {
 			TRACE("%s terminated normally", argv[0]);
@@ -288,12 +302,14 @@ proc_fork_and_execvp(const char *const *argv)
 int
 proc_cap_last_cap(void)
 {
-	int cap;
+	int cap = -1;
 	const char *file_cap_last_cap = "/proc/sys/kernel/cap_last_cap";
 
 	char *str_cap_last_cap = file_read_new(file_cap_last_cap, 24);
-	if (sscanf(str_cap_last_cap, "%d", &cap) <= 0) {
-		ERROR_ERRNO("Can't read cap from '%s'", file_cap_last_cap);
+	IF_NULL_RETVAL(str_cap_last_cap, -1);
+
+	if (sscanf(str_cap_last_cap, "%d", &cap) != 1 || cap < 0) {
+		ERROR("Invalid cap_last_cap value in '%s'", file_cap_last_cap);
 		cap = -1;
 	}
 
@@ -315,12 +331,12 @@ proc_stat_btime(unsigned long long *boottime_sec)
 		fclose(proc);
 		return 0;
 	}
-	if (errno) {
-		ERROR_ERRNO("fscanf");
+	if (ferror(proc)) {
+		ERROR_ERRNO("failed to read /proc/stat");
 		fclose(proc);
-		return -errno;
+		return -1;
 	}
-	ERROR_ERRNO("failed to parse /proc/stat");
+	ERROR("failed to parse btime from /proc/stat");
 	fclose(proc);
 	return -1;
 }
@@ -389,7 +405,7 @@ proc_meminfo_new()
 	IF_FALSE_GOTO(n == 1, error);
 	TRACE("Parsed MemFree: %zd kB", meminfo->mem_free);
 
-	tmp = strstr(buf, "\nMemAvailable:");
+	tmp = strstr(tmp, "\nMemAvailable:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nMemAvailable:\t%zd kB", &meminfo->mem_available);
 	IF_FALSE_GOTO(n == 1, error);

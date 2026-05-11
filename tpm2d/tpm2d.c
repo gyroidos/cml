@@ -141,7 +141,7 @@ tpm2d_setup_keys(void)
 	}
 
 	if (!file_is_dir(token_dir)) {
-		if (mkdir(token_dir, 0700) < 0) {
+		if (mkdir(token_dir, 0755) < 0) {
 			FATAL_ERRNO("Could not mkdir tpm tokens dir: %s", token_dir);
 		}
 	}
@@ -202,7 +202,7 @@ tpm2d_init(void)
 	char *session_dir = mem_printf("%s/%s", TPM2D_BASE_DIR, TPM2D_SESSION_DIR);
 
 	if (!file_is_dir(TPM2D_BASE_DIR)) {
-		if (dir_mkdir_p(TPM2D_BASE_DIR, 0700) < 0) {
+		if (dir_mkdir_p(TPM2D_BASE_DIR, 0755) < 0) {
 			FATAL_ERRNO("Could not mkdir tpm2d's working dir: %s", TPM2D_BASE_DIR);
 		}
 	}
@@ -214,10 +214,11 @@ tpm2d_init(void)
 		FATAL_ERRNO("Could not set environment!");
 
 	// if real hw tpm exists, setup environment
-	if (file_exists("/dev/tpm0") && !use_simulator) {
+	const char *tpmdev = no_setup_keys ? "/dev/tpm0" : "/dev/tpmrm0";
+	if (file_exists(tpmdev) && !use_simulator) {
 		if (setenv("TPM_INTERFACE_TYPE", "dev", 1) < 0)
 			FATAL_ERRNO("Could not set environment!");
-		if (setenv("TPM_DEVICE", "/dev/tpm0", 1) < 0)
+		if (setenv("TPM_DEVICE", tpmdev, 1) < 0)
 			FATAL_ERRNO("Could not set environment!");
 	} else {
 		if (setenv("TPM_INTERFACE_TYPE", "socsim", 1) < 0)
@@ -242,6 +243,7 @@ tpm2d_init(void)
 #else
 	// initialize nvm_crypt_submodule
 	nvmcrypt_init(false);
+	no_setup_keys = true;
 #endif
 
 	mem_free0(session_dir);
@@ -263,6 +265,11 @@ tpm2d_exit(void)
 #endif
 
 	tss2_destroy();
+	tpm2d_control_free(tpm2d_control_cmld);
+	if (!no_setup_keys) {
+		tpm2d_rcontrol_free(tpm2d_rcontrol_attest);
+	}
+	nvmcrypt_cleanup();
 	exit(0);
 }
 
@@ -303,7 +310,7 @@ main(UNUSED int argc, char **argv)
 	logf_register(&logf_file_write, stdout);
 
 	for (int c, option_index = 0;
-	     - 1 != (c = getopt_long(argc, argv, ":snh", global_options, &option_index));) {
+	     -1 != (c = getopt_long(argc, argv, ":snh", global_options, &option_index));) {
 		switch (c) {
 		case 's':
 			use_simulator = true;
@@ -361,6 +368,7 @@ main(UNUSED int argc, char **argv)
 	if (!no_setup_keys) {
 		tpm2d_rcontrol_free(tpm2d_rcontrol_attest);
 	}
+	nvmcrypt_cleanup();
 
 	return 0;
 }

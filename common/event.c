@@ -82,7 +82,7 @@ struct event_timer {
 	struct timespec diff;	  /**< interval, relative value */
 	struct timespec next;	  /**< next timeout, absolute value */
 	int repeat;		  /**< how often to repeat, -1 means repeat indefinitely */
-	int repeated;		  /**< how often the timer already expired */
+	int repeated;		  /**< how many repetitions the timer has left */
 };
 
 struct event_io {
@@ -413,7 +413,7 @@ event_epoll(int timeout)
 		if (errno == EINTR) // caused by suspend (no real error)
 			TRACE_ERRNO("epoll_wait interrupted by system");
 		else
-			DEBUG_ERRNO("epoll_wait failed");
+			ERROR_ERRNO("epoll_wait failed");
 
 	} else if (n > 0) {
 		for (i = 0; i < n; i++) {
@@ -682,7 +682,8 @@ event_remove_inotify(event_inotify_t *inotify)
 	      inotify->path, inotify->mask);
 
 	// if last watcher is removed also close inotify fd
-	event_inotify_reset_fd();
+	if (NULL == event_inotify_list)
+		event_inotify_reset_fd();
 }
 
 /******************************************************************************/
@@ -851,8 +852,10 @@ event_loop(void)
 		event_signal_handler();
 
 		timeout = event_timeout();
-		if (!event_epoll(timeout))
-			event_timeout_handler();
+
+		event_epoll(timeout);
+
+		event_timeout_handler();
 
 		TRACE("Handled event");
 	}

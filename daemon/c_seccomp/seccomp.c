@@ -86,50 +86,14 @@
 #elif defined __aarch64__
 	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_AARCH64
 #elif defined __riscv
-	#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV64
+	#if (__riscv_xlen == 32)
+		#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV32
+	#else
+		#define C_SECCOMP_AUDIT_ARCH AUDIT_ARCH_RISCV64
+	#endif
 #endif
 
 /**************************/
-
-#ifndef __NR_pidfd_open
-	#if defined __alpha__
-		#define __NR_pidfd_open 544
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_pidfd_open (434 + 4000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_pidfd_open (434 + 6000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_pidfd_open (434 + 5000)
-		#endif
-	#elif defined __ia64__
-		#define __NR_pidfd_open (434 + 1024)
-	#else
-		#define __NR_pidfd_open 434
-	#endif
-#endif
-
-#ifndef __NR_pidfd_getfd
-	#if defined __alpha__
-		#define __NR_pidfd_getfd 548
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_pidfd_getfd (438 + 4000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_pidfd_getfd (438 + 6000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_pidfd_getfd (438 + 5000)
-		#endif
-	#elif defined __ia64__
-		#define __NR_pidfd_getfd (438 + 1024)
-	#else
-		#define __NR_pidfd_getfd 438
-	#endif
-#endif
 // clang-format on
 
 #ifndef SYS_clock_settime
@@ -138,17 +102,10 @@
 #endif
 #endif
 
-int
-pidfd_open(pid_t pid, unsigned int flags)
-{
-	return syscall(__NR_pidfd_open, pid, flags);
-}
-
-int
-pidfd_getfd(int pidfd, int targetfd, unsigned int flags)
-{
-	return syscall(__NR_pidfd_getfd, pidfd, targetfd, flags);
-}
+#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64 && C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_RISCV32 &&   \
+     C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_RISCV64)
+#define C_SECCOMP_ARCH_HAS_MKNOD
+#endif
 
 static int
 seccomp(unsigned int op, unsigned int flags, void *args)
@@ -212,7 +169,7 @@ c_seccomp_install_filter(c_seccomp_t *_seccomp)
 	 * and thus follows a deny-list approach.
 	 */
 	struct sock_filter filter_tail[] = {
-#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
+#ifdef C_SECCOMP_ARCH_HAS_MKNOD
 		/*
 		 * Note for future syscalls
 		 * ========================
@@ -251,7 +208,7 @@ c_seccomp_install_filter(c_seccomp_t *_seccomp)
 
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mount, 6, 0),
 
-		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_sysinfo, 4, 0),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_sysinfo, 5, 0),
 
 		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_finit_module, 4, 0),
 
@@ -336,7 +293,8 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	if (bytes_read < 0) {
 		char *pid_str = mem_printf("%d", pid);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
-				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
+				compartment_get_name(seccomp->compartment), 2, "pid", pid_str,
+				NULL);
 
 		ERROR_ERRNO("Failed to access memory of remote process, bytes read: %zd",
 			    bytes_read);
@@ -368,7 +326,8 @@ c_seccomp_send_vm(c_seccomp_t *seccomp, int pid, void *lbuf, void *rbuf, uint64_
 	if (bytes_written < 0) {
 		char *pid_str = mem_printf("%d", pid);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-vm-access-failed",
-				compartment_get_name(seccomp->compartment), 2, "pid", pid_str);
+				compartment_get_name(seccomp->compartment), 2, "pid", pid_str,
+				NULL);
 
 		ERROR_ERRNO("Failed to access memory of remote process, bytes written: %zd",
 			    bytes_written);
@@ -415,7 +374,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-rcv-next",
 				compartment_get_name(seccomp->compartment), 2, "errno",
-				strerror(errno));
+				strerror(errno), NULL);
 		mem_free0(req);
 		mem_free0(resp);
 		return;
@@ -457,8 +416,8 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		syscall_str = mem_strdup("SYS_finit_module");
 		ret_syscall = c_seccomp_emulate_finit_module(seccomp, req, resp);
 		break;
-#if (C_SECCOMP_AUDIT_ARCH != AUDIT_ARCH_AARCH64)
-	// SYS_mknod not defined on arm64
+#ifdef C_SECCOMP_ARCH_HAS_MKNOD
+	// SYS_mknod not defined on some architectures
 	case SYS_mknod:
 #endif
 	case SYS_mknodat:
@@ -478,7 +437,7 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		syscall_str = mem_printf("_NR: %d", req->data.nr);
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-unexpected-syscall",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
-				syscall_str);
+				syscall_str, NULL);
 
 		ERROR("Got syscall not handled by us: %d", req->data.nr);
 
@@ -490,13 +449,13 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	if (-1 == ret_syscall) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-emulation-failed",
 				compartment_get_name(seccomp->compartment), 2, "syscall",
-				syscall_str);
+				syscall_str, NULL);
 	}
 
 	if (-1 == seccomp_ioctl(fd, SECCOMP_IOCTL_NOTIF_SEND, resp)) {
 		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION, "seccomp-send-response",
 				compartment_get_name(seccomp->compartment), 2, "errno",
-				strerror(errno));
+				strerror(errno), NULL);
 		ERROR_ERRNO("Failed to send seccomp notify response");
 	} else {
 		TRACE("Successfully handled seccomp notification");
@@ -679,6 +638,6 @@ static compartment_module_t c_seccomp_module = {
 static void INIT
 c_seccomp_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_seccomp_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_seccomp_module);
 }

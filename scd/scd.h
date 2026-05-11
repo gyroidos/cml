@@ -34,41 +34,22 @@
 #include "scd_shared.h"
 
 /**
- * Returns the type of the token
- */
-scd_tokentype_t
-scd_proto_to_tokentype(const DaemonToToken *msg);
-
-/**
  * Creates a new scd token structure.
  */
 int
-scd_token_new(const DaemonToToken *msg);
+scd_token_new(tokentype_t type, const char *uuid, const char *token_info);
 
 /**
  * Returns an existing scd token.
  */
-scd_token_t *
-scd_get_token(scd_tokentype_t type, char *tuuid);
-
-/**
- * Returns an existing scd token.
- * This is a convience wrapper for scd_get_token(scd_token_t type, char *tuuid).
- */
-scd_token_t *
-scd_get_token_from_msg(const DaemonToToken *msg);
-
-/**
- * Returns an existing scd token by its internal token pointer
- */
-scd_token_t *
-scd_get_token_from_int_token(const void *int_token);
+token_t *
+scd_get_token(tokentype_t type, const char *tuuid);
 
 /**
  * Frees a generic token structure.
  */
 void
-scd_token_free(scd_token_t *token);
+scd_token_free(token_t *token);
 
 /**
  * Checks provisioning mode.

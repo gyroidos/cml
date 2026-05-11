@@ -38,6 +38,8 @@
 #include <sys/statvfs.h>
 #include <fcntl.h>
 #include <alloca.h>
+#include <sys/sendfile.h>
+#include <errno.h>
 
 /******************************************************************************/
 
@@ -127,12 +129,13 @@ int
 file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, off_t seek)
 {
 	int in_fd, out_fd, ret = 0;
-	ssize_t i;
+
+	ssize_t i = 0;
 	unsigned char *buf;
 
 	IF_NULL_RETVAL(in_file, -1);
 	IF_NULL_RETVAL(out_file, -1);
-	IF_FALSE_RETVAL(bs, -1);
+	IF_FALSE_RETVAL((bs > 0), -1);
 
 	in_fd = open(in_file, O_RDONLY);
 	if (in_fd < 0) {
@@ -147,13 +150,58 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		return -1;
 	}
 
-	buf = mem_alloc0(bs);
-
 	ret = lseek(out_fd, seek * bs, SEEK_SET);
 	if (ret < 0) {
 		DEBUG_ERRNO("Could not lseek in output file %s", out_file);
 		goto out;
 	}
+
+	// reset ret
+	ret = 0;
+
+	ssize_t len = 0;
+	struct stat stat;
+	if (fstat(in_fd, &stat) != 0) {
+		DEBUG_ERRNO("fstat on %s failed", in_file);
+		// use fallback
+		goto fallback;
+	}
+	len = (count < 0) ? stat.st_size :
+			    MIN(stat.st_size, (off_t)MUL_WITH_OVERFLOW_CHECK(count, bs));
+
+	// corner case: special file systems
+	IF_TRUE_GOTO_TRACE((count < 0 && len == 0), fallback);
+
+	int ctr = 0;
+	while (len > 0) {
+		ssize_t num_bytes = sendfile(out_fd, in_fd, NULL, len);
+		if (num_bytes == 0) {
+			ctr++;
+			IF_TRUE_GOTO_ERROR(ctr == 5, out);
+		} else if (num_bytes < 0) {
+			DEBUG_ERRNO("sendfile failed");
+			if (errno == EINVAL || errno == ENOSYS) {
+				goto fallback;
+			} else {
+				ret = -1;
+				goto out;
+			}
+		} else { // num_bytes > 0
+			ctr = 0;
+			len -= num_bytes;
+		}
+	}
+
+	if (0 != fsync(out_fd)) {
+		TRACE_ERRNO("Could not sync fd %d", out_fd);
+	}
+
+	ret = 0;
+	goto out;
+
+	// slow copy as fallback
+fallback:
+	buf = mem_alloc0(bs);
 
 	for (i = 0; i != count; i++) {
 		ssize_t len;
@@ -165,24 +213,29 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 			      in_file, out_file);
 
 		if (len == 0) {
-			goto out;
+			goto out_fallback;
 		} else if (len < 0) {
 			DEBUG_ERRNO("Could not read from input file %s", in_file);
 			ret = -1;
-			goto out;
+			goto out_fallback;
 		} else /* if (len > 0) */ {
 			if (write(out_fd, buf, len) < 0) {
 				DEBUG_ERRNO("Could not write to output file %s", out_file);
 				ret = -1;
-				goto out;
+				goto out_fallback;
 			}
 		}
 	}
 
+	if (0 != fsync(out_fd)) {
+		TRACE_ERRNO("Could not sync fd %d", out_fd);
+	}
+
+out_fallback:
+	mem_free(buf);
 out:
 	close(out_fd);
 	close(in_fd);
-	mem_free(buf);
 
 	return ret;
 }
@@ -225,6 +278,10 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 		DEBUG("Could not write to output file %s", file);
 		close(fd);
 		return -1;
+	}
+
+	if (0 != fsync(fd)) {
+		TRACE_ERRNO("Could not sync fd %d", fd);
 	}
 
 	close(fd);

@@ -84,11 +84,10 @@ c_cap_set_current_process(void *capp)
 	///* 7 */ C_CAP_DROP(CAP_SETUID); /* does NOT work */
 
 	/* 9 */ C_CAP_DROP(CAP_LINUX_IMMUTABLE);
-	/* 14 */ C_CAP_DROP(CAP_IPC_LOCK);
 	/* 15 */ C_CAP_DROP(CAP_IPC_OWNER);
 	if (!(COMPARTMENT_FLAG_MODULE_LOAD & compartment_get_flags(cap->compartment)))
 		/* 16 */ C_CAP_DROP(CAP_SYS_MODULE);
-		///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
+	///* 17 */ C_CAP_DROP(CAP_SYS_RAWIO); /* does NOT work */
 #ifndef DEBUG_BUILD
 	/* 19 */ C_CAP_DROP(CAP_SYS_PTRACE);
 #endif
@@ -114,6 +113,7 @@ c_cap_set_current_process(void *capp)
 		return 0;
 
 	/* 21 */ C_CAP_DROP(CAP_SYS_ADMIN);
+	/* 14 */ C_CAP_DROP(CAP_IPC_LOCK);
 
 	/* Use the following for dropping caps only in unprivileged containers */
 	if (!container_is_privileged(container) &&
@@ -160,8 +160,8 @@ static compartment_module_t c_cap_module = {
 static void INIT
 c_cap_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_cap_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_cap_module);
 
 	// register relevant handlers implemented by this module
 	container_register_set_cap_current_process_handler(MOD_NAME, c_cap_set_current_process);

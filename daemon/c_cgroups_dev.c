@@ -131,8 +131,8 @@ static const char *c_cgroups_dev_generic_whitelist[] = {
 
 	//"c 4:0 rwm", // tty0
 
-	/* alternate tty devices - seem to be necessary for android logwrapper */
-	//"c 5:0 rwm", // tty
+	/* alternate tty devices */
+	"c 5:0 rwm", // tty (current process controlling tty necessary for passwd)
 	//"c 5:1 rwm", // console
 	"c 5:2 rwm", // ptmx
 
@@ -187,7 +187,8 @@ c_cgroups_dev_from_rule_new(const char *rule)
 
 	// strtok manipulates string thus use a copy here;
 	char *rule_cp = mem_strdup(rule);
-	char *pointer;
+	char *pointer, *pointer2;
+	pointer = pointer2 = NULL;
 
 	char *type = strtok_r(rule_cp, " ", &pointer);
 	IF_NULL_GOTO_TRACE(type, error);
@@ -210,9 +211,7 @@ c_cgroups_dev_from_rule_new(const char *rule)
 	char *dev = strtok_r(NULL, " ", &pointer);
 	IF_NULL_GOTO_TRACE(dev, error);
 
-	pointer = NULL;
-
-	char *maj_str = strtok_r(dev, ":", &pointer);
+	char *maj_str = strtok_r(dev, ":", &pointer2);
 	IF_NULL_GOTO_TRACE(maj_str, error);
 
 	// default wildcard
@@ -226,7 +225,7 @@ c_cgroups_dev_from_rule_new(const char *rule)
 		dev_item->major = (int)parsed_int;
 	}
 
-	char *min_str = strtok_r(NULL, " ", &pointer);
+	char *min_str = strtok_r(NULL, ":", &pointer2);
 	IF_NULL_GOTO_TRACE(min_str, error);
 
 	// default wildcard
@@ -240,7 +239,7 @@ c_cgroups_dev_from_rule_new(const char *rule)
 		dev_item->minor = (int)parsed_int;
 	}
 
-	char *access = strtok_r(NULL, ":", &pointer);
+	char *access = strtok_r(NULL, " ", &pointer);
 	if (!access) {
 		dev_item->access = LEGACY_DEVCG_ACC_ALL;
 	} else {
@@ -648,6 +647,8 @@ c_cgroups_dev_allow(void *cgroups_devp, const char *rule)
 	ASSERT(rule);
 
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
+	IF_NULL_RETVAL(dev_item, -1);
+
 	if (c_cgroups_dev_list_match(global_assigned_devs_list, dev_item)) {
 		WARN("Unable to allow rule %s: device busy (already assigned to another container)",
 		     rule);
@@ -685,6 +686,8 @@ c_cgroups_dev_assign(void *cgroups_devp, const char *rule)
 	ASSERT(rule);
 
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
+	IF_NULL_RETVAL(dev_item, -1);
+
 	if (c_cgroups_dev_list_match(global_allowed_devs_list, dev_item)) {
 		ERROR("Unable to exclusively assign device according to rule %s: device busy (already available to another container)",
 		      rule);
@@ -698,7 +701,8 @@ c_cgroups_dev_assign(void *cgroups_devp, const char *rule)
 
 	// regenerate bpf prog and update for running containers only
 	compartment_state_t state = container_get_state(cgroups_dev->container);
-	if (state != COMPARTMENT_STATE_BOOTING && state != COMPARTMENT_STATE_RUNNING)
+	if (state != COMPARTMENT_STATE_STARTING && state != COMPARTMENT_STATE_BOOTING &&
+	    state != COMPARTMENT_STATE_RUNNING)
 		return 0;
 
 	c_cgroups_bpf_prog_t *prog = c_cgroups_dev_bpf_prog_generate(cgroups_dev->denied_devs,
@@ -718,6 +722,8 @@ c_cgroups_dev_deny(void *cgroups_devp, const char *rule)
 	compartment_state_t state;
 
 	c_cgroups_dev_item_t *dev_item = c_cgroups_dev_from_rule_new(rule);
+	IF_NULL_RETVAL(dev_item, -1);
+
 	c_cgroups_dev_item_t *matched_dev;
 
 	// an entry for an allowed device should only be present once in the list
@@ -1010,6 +1016,27 @@ c_cgroups_dev_device_deny(void *cgroups_devp, char type, int major, int minor)
 	return ret;
 }
 
+static int
+c_cgroups_dev_device_set_access(void *cgroups_devp, const char *rule)
+{
+	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
+	ASSERT(cgroups_dev);
+
+	int ret;
+
+	/*
+	 * check if last char is either rwm, otherwise no access should
+	 * be given and we just call deny
+	 */
+	if (rule[strlen(rule) - 1] == 'r' || rule[strlen(rule) - 1] == 'w' ||
+	    rule[strlen(rule) - 1] == 'm')
+		ret = c_cgroups_dev_allow(cgroups_dev, rule);
+	else
+		ret = c_cgroups_dev_deny(cgroups_dev, rule);
+
+	return ret;
+}
+
 static compartment_module_t c_cgroups_dev_module = {
 	.name = MOD_NAME,
 	.compartment_new = c_cgroups_dev_new,
@@ -1032,11 +1059,12 @@ static compartment_module_t c_cgroups_dev_module = {
 static void INIT
 c_cgroups_dev_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_cgroups_dev_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_cgroups_dev_module);
 
 	// register relevant handlers implemented by this module
 	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);
 	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
+	container_register_device_set_access_handler(MOD_NAME, c_cgroups_dev_device_set_access);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
 }

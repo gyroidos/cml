@@ -8,4 +8,4 @@ After=cmld.socket
 [Service]
 Environment="SCD_CONTROL=/run/socket/cml-scd_control"
 Type=exec
-ExecStart=/usr/sbin/cmld
+ExecStart={{PREFIX}}/sbin/cmld

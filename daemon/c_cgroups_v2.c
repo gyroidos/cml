@@ -120,8 +120,14 @@ c_cgroups_activate_controllers(const char *path)
 	char *controllers_path = mem_printf("%s/cgroup.controllers", path);
 	char *controllers = file_read_new(controllers_path, 4096);
 
+	if (NULL == controllers) {
+		ERROR("Failed to read controllers at '%s'", controllers_path);
+		mem_free0(controllers_path);
+		return -1;
+	}
+
 	// remove possible newline
-	if (controllers[strlen(controllers) - 1] == '\n')
+	if (strlen(controllers) > 0 && controllers[strlen(controllers) - 1] == '\n')
 		controllers[strlen(controllers) - 1] = '\0';
 
 	char *controller = strtok(controllers, " ");
@@ -672,8 +678,8 @@ c_cgroups_deinit(void)
 static void INIT
 c_cgroups_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_cgroups_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_cgroups_module);
 
 	// register relevant handlers implemented by this module
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);

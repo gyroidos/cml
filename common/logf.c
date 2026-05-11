@@ -21,9 +21,11 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#include "macro.h"
+#include "dir.h"
+#include "file.h"
 #include "logf.h"
 #include "list.h"
+#include "macro.h"
 #include "mem.h"
 
 #ifdef ANDROID
@@ -31,16 +33,20 @@
 #include <android/log.h>
 #endif
 
-#include <time.h>
 #include <errno.h>
-#include <stdio.h>
+#include <fcntl.h>
+#include <linux/limits.h>
 #include <stdarg.h>
-#include <syslog.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <syslog.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/file.h>
+#include <time.h>
 #include <unistd.h>
-#include <stdint.h>
 
 // TODO: we should not include this in production builds...
 #ifndef LOGF_FILE_STRIP
@@ -268,6 +274,100 @@ logf_handler_set_prio(logf_handler_t *handler, logf_prio_t prio)
 	handler->prio = prio;
 }
 
+void
+logf_log_files_list_free(list_t *head)
+{
+	while (head) {
+		list_t *next = head->next;
+		mem_free0(head->data);
+		mem_free0(head);
+		head = next;
+	}
+}
+
+static int
+logf_current_log_cb(const char *path, const char *file, void *data)
+{
+	list_t **log_file_list = (list_t **)data;
+	char *file_path = mem_printf("%s/%s", path, file);
+
+	// only process .current symlinks.
+	if ((!file_is_link(file_path)) || (strstr(file, ".current") == NULL)) {
+		return 0;
+	}
+
+	char *buffer = mem_alloc0(PATH_MAX);
+	ssize_t len = readlink(file_path, buffer, PATH_MAX);
+
+	if (len < 0 || len > PATH_MAX - 1) {
+		ERROR_ERRNO("readlink on %s returned %zd", file_path, len);
+		return -1;
+	} else {
+		DEBUG("Adding currently used logfile to list %s", buffer);
+		*log_file_list = list_append(*log_file_list, mem_strdup(buffer));
+	}
+
+	mem_free0(file_path);
+	mem_free0(buffer);
+
+	return 1;
+}
+
+list_t *
+logf_get_current_log_files_new(const char *path)
+{
+	list_t *current_log_files = NULL;
+	int dir_ret = dir_foreach(path, &logf_current_log_cb, &current_log_files);
+
+	if (dir_ret < 0) {
+		WARN("Something went wrong during traversal of %s", path);
+	} else if (dir_ret > 0) {
+		TRACE("%d logs have been analyzed.", dir_ret);
+	}
+
+	return current_log_files;
+}
+
+int
+logf_lock_apply(const char *path)
+{
+	char *file_path = mem_printf("%s/%s", path, ".lock-delete-old");
+
+	int lock_fd = open(file_path, O_RDONLY | O_CREAT, 0644);
+	if (lock_fd < 0) {
+		ERROR_ERRNO("Failed to open %s", file_path);
+		lock_fd = -1;
+		goto out;
+	}
+	if (flock(lock_fd, LOCK_EX) < 0) {
+		ERROR_ERRNO("Failed to get lock on %s", file_path);
+		close(lock_fd);
+		lock_fd = -1;
+		goto out;
+	}
+
+out:
+	mem_free0(file_path);
+	return lock_fd;
+}
+
+int
+logf_lock_release(const char *path, int lock_fd)
+{
+	int result = 0;
+	char *file_path = mem_printf("%s/%s", path, ".lock-delete-old");
+
+	if (flock(lock_fd, LOCK_UN)) {
+		ERROR_ERRNO("Failed to release lock on %s", file_path);
+		result = -1;
+	}
+
+	close(lock_fd);
+	mem_free0(file_path);
+
+	return result;
+}
+
 /******************************************************************************/
 
 char *
@@ -275,20 +375,19 @@ logf_file_new_name(const char *name)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
-	struct tm *tm;
+	struct tm _tm;
 	char *n;
 
 	if (gettimeofday(&tv, NULL) < 0)
 		FATAL_ERRNO("Failed to get time of day. Aborting.\n");
 
-	tm = localtime(&tv.tv_sec);
-	if (tm == NULL)
+	if (NULL == localtime_r(&tv.tv_sec, &_tm))
 		FATAL_ERRNO("Failed to get local time. Aborting.\n");
 
-	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", tm))
+	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", &_tm))
 		buf1[0] = '\0';
 
-	if (!strftime(buf2, sizeof(buf2) - 1, "%z", tm))
+	if (!strftime(buf2, sizeof(buf2) - 1, "%z", &_tm))
 		buf2[0] = '\0';
 
 	// rfc3339 format: <name>.2014-05-23T21:29:11.150495+02:00
@@ -300,11 +399,19 @@ logf_file_new_name(const char *name)
 void *
 logf_file_new(const char *name)
 {
+	char *current = mem_printf("%s%s", name, ".current");
+
 	FILE *f;
 	char *name_with_time_of_day = logf_file_new_name(name);
-	f = fopen(name_with_time_of_day, "w");
+
+	int fd = open(name_with_time_of_day, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+	if (fd < 0) {
+		FATAL_ERRNO("Failed to open log file %s", name_with_time_of_day);
+	}
+	f = fdopen(fd, "w");
 	if (!f) {
-		FATAL_ERRNO("Failed to open log file\n");
+		close(fd);
+		FATAL_ERRNO("Failed to fdopen log file %s", name_with_time_of_day);
 	}
 
 	if (0 != setvbuf(f, NULL, _IOLBF, 0)) {
@@ -312,6 +419,19 @@ logf_file_new(const char *name)
 		f = NULL;
 	}
 
+	char *current_tmp = mem_printf("%s.tmp", current);
+	unlink(current_tmp);
+	if (symlink(name_with_time_of_day, current_tmp) < 0) {
+		FATAL_ERRNO("Could not create symlink %s to %s", name_with_time_of_day,
+			    current_tmp);
+	}
+	if (rename(current_tmp, current) < 0) {
+		unlink(current_tmp);
+		FATAL_ERRNO("Could not rename %s to %s", current_tmp, current);
+	}
+	mem_free0(current_tmp);
+
+	mem_free0(current);
 	mem_free0(name_with_time_of_day);
 
 	return f;
@@ -329,20 +449,19 @@ logf_file_write_timestamp(FILE *stream)
 {
 	char buf1[64], buf2[64];
 	struct timeval tv;
-	struct tm *tm;
+	struct tm _tm;
 
 	IF_TRUE_RETURN_ERROR_ERRNO((gettimeofday(&tv, NULL) < 0));
 
-	tm = localtime(&tv.tv_sec);
-	IF_NULL_RETURN_ERROR_ERRNO(tm);
+	IF_NULL_RETURN_ERROR_ERRNO(localtime_r(&tv.tv_sec, &_tm));
 
 	if (!stream)
 		return;
 
-	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", tm))
+	if (!strftime(buf1, sizeof(buf1) - 1, "%Y-%m-%dT%H:%M:%S", &_tm))
 		return;
 
-	if (!strftime(buf2, sizeof(buf2) - 1, "%z", tm))
+	if (!strftime(buf2, sizeof(buf2) - 1, "%z", &_tm))
 		return;
 
 	// rfc3339 format: 2014-05-23T21:29:11.150495+02:00
@@ -378,7 +497,12 @@ logf_file_write(logf_prio_t prio, const char *msg, void *data)
 
 	logf_file_write_timestamp(data);
 	fprintf(data, "[%u] %s %s\n", getpid(), prio_str(prio), msg);
-	fflush(data);
+
+	int res = -1;
+	if (0 != (res = fflush(data))) {
+		ERROR_ERRNO("Failed to flush log file for PID %d after message %s: %d", getpid(),
+			    msg, res);
+	}
 }
 
 void
@@ -388,7 +512,12 @@ logf_test_write(logf_prio_t prio, const char *msg, void *data)
 		return;
 
 	fprintf(data, "[%u] %s %s\n", getpid(), prio_str(prio), msg);
-	fflush(data);
+
+	int res = -1;
+	if (0 != (res = fflush(data))) {
+		ERROR_ERRNO("Failed to flush log file for PID %d after message %s: %d", getpid(),
+			    msg, res);
+	}
 }
 
 void *

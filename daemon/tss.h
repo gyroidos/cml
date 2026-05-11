@@ -34,11 +34,10 @@ typedef enum { TSS_SHA1 = 0, TSS_SHA256, TSS_SHA384 } tss_hash_algo_t;
 
 /**
  * Initializes the tss subsystem (starts the corresponding daemon)
- * @param start_daemon Fork and execute the tpm2d daemon
  * @return 0 on success, -1 on error
  */
 int
-tss_init(bool start_daemon);
+tss_init(void);
 
 /**
  * Cleanup the tss submodule, mainly stop tpm2d daemon.
@@ -46,7 +45,13 @@ tss_init(bool start_daemon);
 void
 tss_cleanup(void);
 
+int
+tss_clear(void);
+
 void
 tss_ml_append(char *filename, uint8_t *filehash, int filehash_len, tss_hash_algo_t hashalgo);
+
+bool
+tss_is_tpm2d_installed(void);
 
 #endif /* TSS_H */

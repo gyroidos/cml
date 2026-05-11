@@ -238,15 +238,15 @@ docker_parse_config_new(const char *raw_file_buffer)
 	cJSON *jconfig = cJSON_GetObjectItem(jroot, "config");
 
 	cJSON *jhostname = cJSON_GetObjectItem(jconfig, "Hostname");
-	if (jhostname->type == cJSON_String)
+	if (jhostname && jhostname->type == cJSON_String)
 		config->hostname = mem_strdup(jhostname->valuestring);
 
 	cJSON *jdomainname = cJSON_GetObjectItem(jconfig, "Domainname");
-	if (jdomainname->type == cJSON_String)
+	if (jdomainname && jdomainname->type == cJSON_String)
 		config->domainname = mem_strdup(jdomainname->valuestring);
 
 	cJSON *juser = cJSON_GetObjectItem(jconfig, "User");
-	if (juser->type == cJSON_String)
+	if (juser && juser->type == cJSON_String)
 		config->user = mem_strdup(juser->valuestring);
 
 	if (cJSON_GetObjectItem(jconfig, "ExposedPorts")) {
@@ -516,10 +516,10 @@ download_docker_remote_file(const char *curl_token, const docker_remote_file_t *
 
 	char *auth_basic = mem_printf("Authorization: Basic %s", curl_token);
 	char *auth_bearer = mem_printf("Authorization: Bearer %s", curl_token);
-	const char *const argv_bearer[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_bearer,
-					    url,       "-o",   out_file,     NULL };
-	const char *const argv_basic[] = { CURL_PATH, "-fSL", "--progress", "-H", auth_basic,
-					   url,	      "-o",   out_file,	    NULL };
+	const char *const argv_bearer[] = { CURL_PATH, "-fSL", "-H",	 auth_bearer,
+					    url,       "-o",   out_file, NULL };
+	const char *const argv_basic[] = { CURL_PATH, "-fSL", "-H",	auth_basic,
+					   url,	      "-o",   out_file, NULL };
 
 	ret = proc_fork_and_execvp(argv_bearer);
 	if (ret != 0)
@@ -566,4 +566,23 @@ docker_download_image(char *curl_token, const docker_manifest_t *manifest, const
 	}
 	INFO("Download image %s:%s completed!", image_name, image_tag);
 	return 0;
+}
+
+const char *
+docker_get_arch(const char *uts_machine)
+{
+	if (!strcmp(uts_machine, "x86_64")) {
+		return "amd64";
+	} else if (!strcmp(uts_machine, "arm")) {
+		return "arm";
+	} else if (!strcmp(uts_machine, "aarch64")) {
+		return "arm64";
+	} else if (!strcmp(uts_machine, "riscv")) {
+		return "riscv";
+	} else if (!strcmp(uts_machine, "riscv64")) {
+		return "riscv64";
+	} else {
+		ERROR("Cannot map machine %s to a supported architecture.", uts_machine);
+		return NULL;
+	}
 }

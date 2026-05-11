@@ -40,179 +40,11 @@
 #include "common/dir.h"
 #include "common/kernel.h"
 #include "container.h"
+#include "mount.h"
+#include "mount_idmapped.h"
 
 #define IDMAPPED_SRC_DIR "/tmp/idmapped_mnts"
 #define UID_RANGE 100000
-
-/**************************/
-#ifndef MOUNT_ATTR_RDONLY
-#define MOUNT_ATTR_RDONLY 0x00000001
-#endif
-
-#ifndef MOUNT_ATTR_NOSUID
-#define MOUNT_ATTR_NOSUID 0x00000002
-#endif
-
-#ifndef MOUNT_ATTR_NOEXEC
-#define MOUNT_ATTR_NOEXEC 0x00000008
-#endif
-
-#ifndef MOUNT_ATTR_NODIRATIME
-#define MOUNT_ATTR_NODIRATIME 0x00000080
-#endif
-
-#ifndef MOUNT_ATTR__ATIME
-#define MOUNT_ATTR__ATIME 0x00000070
-#endif
-
-#ifndef MOUNT_ATTR_RELATIME
-#define MOUNT_ATTR_RELATIME 0x00000000
-#endif
-
-#ifndef MOUNT_ATTR_NOATIME
-#define MOUNT_ATTR_NOATIME 0x00000010
-#endif
-
-#ifndef MOUNT_ATTR_STRICTATIME
-#define MOUNT_ATTR_STRICTATIME 0x00000020
-#endif
-
-#ifndef MOUNT_ATTR_IDMAP
-#define MOUNT_ATTR_IDMAP 0x00100000
-#endif
-
-#ifndef AT_RECURSIVE
-#define AT_RECURSIVE 0x8000
-#endif
-
-// clang-format off
-#ifndef __NR_mount_setattr
-	#if defined __alpha__
-		#define __NR_mount_setattr 552
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_mount_setattr (442 + 4000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_mount_setattr (442 + 6000)
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_mount_setattr (442 + 5000)
-		#endif
-	#elif defined __ia64__
-		#define __NR_mount_setattr (442 + 1024)
-	#else
-		#define __NR_mount_setattr 442
-	#endif
-// clang-format on
-
-struct mount_attr {
-	__u64 attr_set;
-	__u64 attr_clr;
-	__u64 propagation;
-	__u64 userns_fd;
-};
-#endif
-
-#ifndef OPEN_TREE_CLONE
-#define OPEN_TREE_CLONE 1
-#endif
-
-#ifndef OPEN_TREE_CLOEXEC
-#define OPEN_TREE_CLOEXEC O_CLOEXEC
-#endif
-
-// clang-format off
-#ifndef __NR_open_tree
-	#if defined __alpha__
-		#define __NR_open_tree 538
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32        /* o32 */
-			#define __NR_open_tree 4428
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32       /* n32 */
-			#define __NR_open_tree 6428
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64        /* n64 */
-			#define __NR_open_tree 5428
-		#endif
-	#elif defined __ia64__
-		#define __NR_open_tree (428 + 1024)
-	#else
-		#define __NR_open_tree 428
-	#endif
-#endif
-// clang-format on
-
-#ifndef MOVE_MOUNT_F_SYMLINKS
-#define MOVE_MOUNT_F_SYMLINKS 0x00000001
-#endif
-
-#ifndef MOVE_MOUNT_F_AUTOMOUNTS
-#define MOVE_MOUNT_F_AUTOMOUNTS 0x00000002
-#endif
-
-#ifndef MOVE_MOUNT_F_EMPTY_PATH
-#define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
-#endif
-
-#ifndef MOVE_MOUNT_T_SYMLINKS
-#define MOVE_MOUNT_T_SYMLINKS 0x00000010
-#endif
-
-#ifndef MOVE_MOUNT_T_AUTOMOUNTS
-#define MOVE_MOUNT_T_AUTOMOUNTS 0x00000020
-#endif
-
-#ifndef MOVE_MOUNT_T_EMPTY_PATH
-#define MOVE_MOUNT_T_EMPTY_PATH 0x00000040
-#endif
-
-#ifndef MOVE_MOUNT__MASK
-#define MOVE_MOUNT__MASK 0x00000077
-#endif
-
-// clang-format off
-#ifndef __NR_move_mount
-	#if defined __alpha__
-		#define __NR_move_mount 539
-	#elif defined _MIPS_SIM
-		#if _MIPS_SIM == _MIPS_SIM_ABI32
-			#define __NR_move_mount 4429
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_NABI32
-			#define __NR_move_mount 6429
-		#endif
-		#if _MIPS_SIM == _MIPS_SIM_ABI64
-			#define __NR_move_mount 5429
-		#endif
-	#elif defined __ia64__
-		#define __NR_move_mount (428 + 1024)
-	#else
-		#define __NR_move_mount 429
-	#endif
-#endif
-// clang-format on
-
-int
-mount_setattr(int dirfd, const char *path, unsigned int flags, struct mount_attr *attr, size_t size)
-{
-	return syscall(__NR_mount_setattr, dirfd, path, flags, attr, size);
-}
-
-int
-open_tree(int dirfd, const char *path, unsigned int flags)
-{
-	return syscall(__NR_open_tree, dirfd, path, flags);
-}
-
-int
-move_mount(int from_dirfd, const char *from_path, int to_dirfd, const char *to_path,
-	   unsigned int flags)
-{
-	return syscall(__NR_move_mount, from_dirfd, from_path, to_dirfd, to_path, flags);
-}
-/**************************/
 
 struct c_idmapped_mnt {
 	char *target;
@@ -277,50 +109,14 @@ c_idmapped_free(void *idmappedp)
 	mem_free0(idmapped);
 }
 
-static int
-c_idmapped_chown_dir_cb(const char *path, const char *file, void *data)
+static void
+c_idmapped_chown_id_adjust_cb(struct stat *s, uid_t *uid, gid_t *gid)
 {
-	struct stat s;
-	int ret = 0;
-	struct c_idmapped_chown_dir_cbdata *cbdata = data;
-	ASSERT(cbdata);
-
-	char *file_to_chown = mem_printf("%s/%s", path, file);
-	if (lstat(file_to_chown, &s) == -1) {
-		mem_free0(file_to_chown);
-		return -1;
-	}
+	ASSERT(s && uid && gid);
 
 	// modulo operation avoids shifting twice
-	uid_t uid = s.st_uid % UID_RANGE + cbdata->uid;
-	gid_t gid = s.st_gid % UID_RANGE + cbdata->gid;
-
-	if (file_is_dir(file_to_chown)) {
-		TRACE("Path %s is dir", file_to_chown);
-		if (dir_foreach(file_to_chown, &c_idmapped_chown_dir_cb, cbdata) < 0) {
-			ERROR_ERRNO("Could not chown all dir contents in '%s'", file_to_chown);
-			ret--;
-		}
-		if (chown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_to_chown, uid, gid);
-			ret--;
-		}
-	} else {
-		if (lchown(file_to_chown, uid, gid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_to_chown, uid,
-				    gid);
-			ret--;
-		}
-	}
-	TRACE("Chown file '%s' to (%d:%d) (uid_start %d)", file_to_chown, uid, gid, cbdata->uid);
-
-	// chown .
-	if (chown(path, uid, gid) < 0) {
-		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, uid, gid);
-		ret--;
-	}
-	mem_free0(file_to_chown);
-	return ret;
+	*uid = s->st_uid % UID_RANGE + *uid;
+	*gid = s->st_gid % UID_RANGE + *gid;
 }
 
 static int
@@ -337,14 +133,17 @@ c_idmapped_mnt_apply_mapping(struct c_idmapped_mnt *mnt, int userns_fd)
 		return -1;
 	}
 	if (s.st_uid != 0) {
-		struct c_idmapped_chown_dir_cbdata cbdata = { .uid = 0, .gid = 0 };
-		if (dir_foreach(mnt->src, &c_idmapped_chown_dir_cb, &cbdata) < 0) {
-			ERROR("Could not revert mapping done by chown %s to target uid:gid (%d:%d)",
-			      mnt->src, cbdata.uid, cbdata.gid);
+		uid_t uid = 0;
+		gid_t gid = 0;
+
+		if (dir_chown_folder(mnt->src, uid, gid, c_idmapped_chown_id_adjust_cb) == -1) {
+			ERROR("Could not revert mapping done by chown %s from %d to target uid:gid (%d:%d)",
+			      mnt->src, s.st_uid, uid, gid);
 			return -1;
 		}
+
 		DEBUG("Reverted mapping done by chown %s from %d to target uid:gid (%d:%d)",
-		      mnt->src, s.st_uid, cbdata.uid, cbdata.gid);
+		      mnt->src, s.st_uid, uid, gid);
 	}
 
 	struct mount_attr attr = { 0 };
@@ -456,12 +255,6 @@ error:
 	return -1;
 }
 
-static bool
-is_idmapping_supported()
-{
-	return kernel_version_check("6.3");
-}
-
 static int
 c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const char *dir)
 {
@@ -473,7 +266,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 	struct statfs dir_statfs;
 	statfs(dir, &dir_statfs);
 
-	if (!is_idmapping_supported()) {
+	if (!mount_is_idmapping_supported()) {
 		if (dir_statfs.f_flags & MS_RDONLY) {
 			char *tmpfs_dir =
 				mem_printf("%s/%s/tmp%d", IDMAPPED_SRC_DIR,
@@ -497,16 +290,10 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 			}
 			mem_free0(tmpfs_dir);
 		}
-		if (chown(dir, container_uid, container_uid) < 0) {
+		if (dir_chown_folder(dir, container_uid, container_uid,
+				     &c_idmapped_chown_id_adjust_cb) < 0) {
 			ERROR_ERRNO("Could not chown mnt point '%s' to (%d:%d)", dir, container_uid,
 				    container_uid);
-			return -1;
-		}
-		struct c_idmapped_chown_dir_cbdata cbdata = { .uid = container_uid,
-							      .gid = container_uid };
-		if (dir_foreach(dir, &c_idmapped_chown_dir_cb, &cbdata) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", dir, cbdata.uid,
-			      cbdata.gid);
 			return -1;
 		}
 
@@ -532,7 +319,7 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 		return -1;
 	}
 
-	if (!is_idmapping_supported())
+	if (!mount_is_idmapping_supported())
 		return 0;
 
 	/*
@@ -595,7 +382,7 @@ c_idmapped_mount_idmapped(c_idmapped_t *idmapped, const char *src, const char *d
 
 	if (ovl_lower) {
 		// mount ovl in rootns if kernel is to old
-		if (!is_idmapping_supported()) {
+		if (!mount_is_idmapping_supported()) {
 			if (c_idmapped_mount_ovl(src, src, ovl_lower, false)) {
 				ERROR("Failed to mount ovl '%s' (lower='%s') in rootns on '%s'",
 				      src, ovl_lower, dst);
@@ -685,12 +472,13 @@ c_idmapped_shift_ids(void *idmappedp, const char *src, const char *dst, const ch
 
 	TRACE("uid %d, euid %d", getuid(), geteuid());
 
-	int uid = container_get_uid(idmapped->container);
+	uid_t uid = container_get_uid(idmapped->container);
+	gid_t gid = container_get_uid(idmapped->container);
 
 	// if we just got a single file chown this and return
 	if (file_exists(src) && !file_is_dir(src)) {
-		if (lchown(src, uid, uid) < 0) {
-			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", src, uid, uid);
+		if (lchown(src, uid, gid) < 0) {
+			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", src, uid, gid);
 			goto error;
 		}
 		goto success;
@@ -701,10 +489,8 @@ c_idmapped_shift_ids(void *idmappedp, const char *src, const char *dst, const ch
 
 	// if cgroup subsys or dev just chown the files
 	if (is_dev || is_cgroup) {
-		struct c_idmapped_chown_dir_cbdata cbdata = { .uid = uid, .gid = uid };
-		if (dir_foreach(src, &c_idmapped_chown_dir_cb, &cbdata) < 0) {
-			ERROR("Could not chown %s to target uid:gid (%d:%d)", src, cbdata.uid,
-			      cbdata.gid);
+		if (dir_chown_folder(src, uid, gid, &c_idmapped_chown_id_adjust_cb) < 0) {
+			ERROR("Could not chown %s to target uid:gid (%d:%d)", src, uid, gid);
 			return -1;
 		}
 		if ((is_dev && idmapped->is_dev_mounted) || is_cgroup)
@@ -749,7 +535,7 @@ c_idmapped_start_child(void *idmappedp)
 
 		// if explictly set to bind inchild (e.g. /dev on tmpfs) or
 		// kernel does not support idmapped mounts just do bind mount
-		if (mnt->bind_in_child || (!is_idmapping_supported())) {
+		if (mnt->bind_in_child || (!mount_is_idmapping_supported())) {
 			if (!file_exists(mnt->target))
 				dir_mkdir_p(mnt->target, 0755);
 
@@ -872,8 +658,8 @@ static compartment_module_t c_idmapped_module = {
 static void INIT
 c_idmapped_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_idmapped_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_idmapped_module);
 
 	// register relevant handlers implemented by this module
 	container_register_shift_ids_handler(MOD_NAME, c_idmapped_shift_ids);

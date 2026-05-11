@@ -101,7 +101,7 @@ dm_ioctl_init(struct dm_ioctl *io, enum dm_cmd_index idx, size_t data_size, cons
 		strncpy(io->name, name, sizeof(io->name) - 1);
 
 	if (uuid)
-		strncpy(io->uuid, uuid, sizeof(io->name) - 1);
+		strncpy(io->uuid, uuid, sizeof(io->uuid) - 1);
 
 	return 0;
 }

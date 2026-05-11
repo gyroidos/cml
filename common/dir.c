@@ -116,13 +116,12 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 	struct stat stat_buffer;
 	int ret = 0;
 	char *file_to_remove = mem_printf("%s/%s", path, name);
-	if (stat(file_to_remove, &stat_buffer) == 0 && !S_ISDIR(stat_buffer.st_mode)) {
-		TRACE("Unlinking file %s", file_to_remove);
-		if (unlink(file_to_remove) == -1) {
-			ERROR_ERRNO("Could not delete file %s", file_to_remove);
-			ret--;
-		}
-	} else {
+	if (lstat(file_to_remove, &stat_buffer) == -1) {
+		ERROR_ERRNO("Could not lstat %s", file_to_remove);
+		mem_free0(file_to_remove);
+		return -1;
+	}
+	if (S_ISDIR(stat_buffer.st_mode)) {
 		TRACE("Path %s is dir", file_to_remove);
 		if (dir_foreach(file_to_remove, &dir_unlink_folder_contents_cb, NULL) < 0) {
 			ERROR_ERRNO("Could not delete all dir contents in %s", file_to_remove);
@@ -131,6 +130,12 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 		TRACE("Removing now empty dir %s", file_to_remove);
 		if (rmdir(file_to_remove) < 0) {
 			ERROR_ERRNO("Could not delete dir %s", file_to_remove);
+			ret--;
+		}
+	} else {
+		TRACE("Unlinking %s", file_to_remove);
+		if (unlink(file_to_remove) == -1) {
+			ERROR_ERRNO("Could not delete %s", file_to_remove);
 			ret--;
 		}
 	}
@@ -301,4 +306,77 @@ dir_copy_folder(const char *source, const char *target,
 	umask(old_mask);
 	dir_copy_params_free(params);
 	return ret;
+}
+
+struct chown_data {
+	uid_t uid;
+	gid_t gid;
+	void (*id_adjust_cb)(struct stat *, uid_t *, gid_t *);
+};
+
+static int
+dir_chown_contents_cb(const char *path, const char *file, void *data)
+{
+	struct stat s;
+	int ret = 0;
+	struct chown_data *cb_data = data;
+	ASSERT(cb_data);
+
+	char *file_to_chown = mem_printf("%s/%s", path, file);
+	if (lstat(file_to_chown, &s) == -1) {
+		mem_free0(file_to_chown);
+		return -1;
+	}
+
+	uid_t uid = cb_data->uid;
+	gid_t gid = cb_data->gid;
+
+	if (cb_data->id_adjust_cb)
+		cb_data->id_adjust_cb(&s, &uid, &gid);
+
+	if (S_ISDIR(s.st_mode)) {
+		TRACE("Path %s is dir", file_to_chown);
+		if (dir_foreach(file_to_chown, &dir_chown_contents_cb, cb_data) < 0) {
+			ERROR_ERRNO("Could not chown all dir contents in '%s' to (%d:%d)",
+				    file_to_chown, uid, gid);
+			ret--;
+		}
+	}
+	if (lchown(file_to_chown, uid, gid) < 0) {
+		ERROR_ERRNO("Could not chown '%s' to (%d:%d)", file_to_chown, uid, gid);
+		ret--;
+	}
+	TRACE("Chown file '%s' to (%d:%d)", file_to_chown, uid, gid);
+
+	mem_free0(file_to_chown);
+	return ret;
+}
+
+int
+dir_chown_folder(const char *path, uid_t uid, gid_t gid,
+		 void (*id_adjust_cb)(struct stat *, uid_t *, gid_t *))
+{
+	struct stat s;
+	IF_TRUE_RETVAL(lstat(path, &s), -1);
+
+	uid_t _uid = uid;
+	gid_t _gid = gid;
+
+	if (id_adjust_cb)
+		id_adjust_cb(&s, &_uid, &_gid);
+
+	// chown .
+	if (lchown(path, _uid, _gid) < 0) {
+		ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", path, _uid, _gid);
+		return -1;
+	}
+
+	// recursively chown files and subdirs
+	struct chown_data cb_data = { .uid = uid, .gid = gid, .id_adjust_cb = id_adjust_cb };
+	if (dir_foreach(path, &dir_chown_contents_cb, &cb_data) < 0) {
+		ERROR("Could not chown %s to uid:gid (%d:%d)", path, uid, gid);
+		return -1;
+	}
+
+	return 0;
 }

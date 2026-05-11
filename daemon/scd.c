@@ -25,22 +25,24 @@
 
 #include "scd.h"
 #include "scd_shared.h"
+#include "tss.h"
+#include "tpm2d_shared.h"
 #include "cmld.h"
+#include "unit.h"
 
 #include "common/macro.h"
 #include "common/logf.h"
+#include "common/dir.h"
 #include "common/event.h"
 #include "common/fd.h"
 #include "common/file.h"
-#include "common/sock.h"
+#include "common/list.h"
 #include "common/proc.h"
 #include "common/protobuf.h"
 #include "common/mem.h"
+#include "common/sock.h"
 
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include <sys/inotify.h>
 
 // clang-format off
 #define SCD_CONTROL_SOCKET "scd_control"
@@ -50,37 +52,13 @@
 #define SCD_BINARY_NAME "scd"
 #endif
 
+#define SCD_DEVICE_ID_CONF SCD_TOKEN_DIR "/device_id.conf"
+
+#define SCD_UUID "00000000-0000-0000-0000-000000000001"
+
 char *scd_sock_path = NULL;
 
-static pid_t scd_pid;
-
-static pid_t
-scd_fork_and_exec(void)
-{
-	TRACE("Starting scd..");
-
-	int status;
-	pid_t pid = fork();
-	char *const param_list[] = { SCD_BINARY_NAME, NULL };
-
-	switch (pid) {
-	case -1:
-		ERROR_ERRNO("Could not fork for %s", SCD_BINARY_NAME);
-		return -1;
-	case 0:
-		execvp((const char *)param_list[0], param_list);
-		FATAL_ERRNO("Could not execvp %s", SCD_BINARY_NAME);
-		return -1;
-	default:
-		// Just check if the child is alive but do not wait
-		if (waitpid(pid, &status, WNOHANG) != 0) {
-			ERROR("Failed to start %s", SCD_BINARY_NAME);
-			return -1;
-		}
-		return pid;
-	}
-	return -1;
-}
+static unit_t *scd_unit;
 
 static int
 scd_register_listener(int fd)
@@ -164,74 +142,139 @@ connection_err:
 	event_io_free(io);
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected scd event socket");
-	// reconnect
-	scd_init(false);
 	return;
 }
 
-int
-scd_init(bool start_daemon)
+static void
+scd_on_connect_cb(int sock, const char *sock_path)
 {
-	int sock = -1;
-
-	// In hosted mode, the init scripts should take care of correct scd initialization and start-up
-	if (start_daemon) {
-		// if device.cert is not present, start scd to initialize device (provisioning mode)
-		if (!file_exists(DEVICE_CERT_FILE)) {
-			INFO("Starting scd in Provisioning / Installing Mode");
-			// Start the SCD in provisioning mode
-			const char *const args[] = { SCD_BINARY_NAME, NULL };
-			IF_FALSE_RETVAL_TRACE(proc_fork_and_execvp(args) == 0, -1);
-		}
-
-		// Start SCD and wait for control interface
-		scd_pid = scd_fork_and_exec();
-		IF_TRUE_RETVAL_TRACE(scd_pid == -1, -1);
-	} else {
-		DEBUG("Skipping scd launch as requested");
-		scd_pid = -1;
-	}
-
-	scd_sock_path = sock_get_path_new(SCD_CONTROL_SOCKET);
-	size_t retries = 0;
-	do {
-		NANOSLEEP(0, 500000000)
-		sock = sock_unix_create_and_connect(SOCK_SEQPACKET, scd_sock_path);
-		retries++;
-		TRACE("Retry %zu connecting to scd", retries);
-	} while (sock < 0 && retries < 10);
-
-	if (sock < 0) {
-		ERROR("Failed to connect to scd");
-		close(sock);
-		return -1;
-	}
-
+	ASSERT(sock_path);
 	if (scd_register_listener(sock) < 0) {
 		ERROR("Failed to register event listener for scd events");
+		if (scd_sock_path)
+			mem_free0(scd_sock_path);
 		close(sock);
-		return -1;
+		return;
 	}
+
+	if (scd_sock_path)
+		mem_free0(scd_sock_path);
+	scd_sock_path = mem_strdup(sock_path);
 
 	/* register socket for receiving data */
 	fd_make_non_blocking(sock);
 
-	event_io_t *event = event_io_new(sock, EVENT_IO_READ, scd_event_cb_recv_message, NULL);
+	event_io_t *event = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
 	event_add_io(event);
 
-	// allow access from namespaced child before chroot and execv of init
-	if (chmod(scd_sock_path, 00777))
-		WARN("could not change access rights for scd control socket");
+	/* notify containers about (re-)connection of the scd */
+	for (int i = 0; i < cmld_containers_get_count(); i++) {
+		container_t *container = cmld_container_get_by_index(i);
+		if (container_scd_connect(container))
+			ERROR("could not reconnect icontainer %s to scd!",
+			      container_get_description(container));
+	}
 
+	cmld_init_stage_unit_notify(scd_unit);
+}
+
+static void
+scd_tpm2d_inotify_written_cb(const char *path, uint32_t mask, event_inotify_t *inotify, void *data)
+{
+	IF_FALSE_RETURN(mask & IN_CLOSE_WRITE);
+
+	unit_t *scd_unit = data;
+	ASSERT(scd_unit);
+
+	DEBUG("%s created", path);
+
+	IF_TRUE_RETURN(strcmp(path, TPM2D_ATT_TSS_FILE));
+
+	INFO("Provisioning by tpm2d finished: %s written.", path);
+
+	if (unit_start(scd_unit) < 0) {
+		unit_free(scd_unit);
+		FATAL("Could not start unit for scd!");
+	}
+
+	event_remove_inotify(inotify);
+	event_inotify_free(inotify);
+}
+
+int
+scd_init(void)
+{
+	// ensure device_id configuration file is located in SCD_TOKEN_DIR
+	char *legacy_device_id_path = mem_printf("%s/%s", cmld_get_cmld_dir(), "device_id.conf");
+	if (file_is_regular(legacy_device_id_path) &&
+	    file_move(legacy_device_id_path, SCD_DEVICE_ID_CONF, 512) < 0) {
+		ERROR("Moving device_id.conf from old location %s to %s failed!",
+		      legacy_device_id_path, SCD_DEVICE_ID_CONF);
+		mem_free(legacy_device_id_path);
+		return -1;
+	}
+	mem_free(legacy_device_id_path);
+
+	// if device.cert is not present, scd will die. Hence, we set autorestart in unit_new
+	scd_unit = unit_new(uuid_new(SCD_UUID), "SCD", SCD_BINARY_NAME, NULL, NULL, 0, true,
+			    SCD_TOKEN_DIR, SCD_CONTROL_SOCKET, SOCK_SEQPACKET, &scd_on_connect_cb,
+			    true);
+
+	IF_NULL_RETVAL(scd_unit, -1);
+
+	// scd also accesses the tpm for device cert signing
+	list_t *dev_nodes = list_append(NULL, "/dev/tpmrm0");
+	unit_device_set_initial_allow(scd_unit, dev_nodes);
+	list_delete(dev_nodes);
+
+	/*
+	 * if tpm is not supported or tpm2d provisioning is already done
+	 * just start scd unit else start inotify watch for device key
+	 */
+	if (file_exists(TPM2D_ATT_TSS_FILE) || !file_exists("/dev/tpmrm0") ||
+	    !tss_is_tpm2d_installed()) {
+		if (unit_start(scd_unit) < 0) {
+			ERROR("Could not start unit for scd!");
+			goto error;
+		}
+	} else {
+		const char *token_dir = TPM2D_BASE_DIR "/" TPM2D_TOKEN_DIR;
+		if (!file_is_dir(token_dir) && dir_mkdir_p(token_dir, 0755) < 0) {
+			ERROR_ERRNO("Could not mkdir dir: %s for device key", token_dir);
+			goto error;
+		}
+		// wait for tpm2d generated device key
+		event_inotify_t *inotify_devkey = event_inotify_new(
+			token_dir, IN_CLOSE_WRITE, scd_tpm2d_inotify_written_cb, scd_unit);
+
+		// start watching for device key creation
+		int error = event_add_inotify(inotify_devkey);
+		if (error && error != -EEXIST) {
+			ERROR("Could not register inotify event watching for device key of unit %s!",
+			      unit_get_description(scd_unit));
+			goto error;
+		}
+	}
+
+	cmld_init_stage_unit_notify(scd_unit);
 	return 0;
+
+error:
+	unit_free(scd_unit);
+	return -1;
 }
 
 void
 scd_cleanup(void)
 {
-	IF_TRUE_RETURN_TRACE(scd_pid == -1);
-	DEBUG("Stopping %s process with pid=%d!", SCD_BINARY_NAME, scd_pid);
-	mem_free(scd_sock_path);
-	scd_sock_path = NULL;
-	kill(scd_pid, SIGTERM);
+	unit_kill(scd_unit);
+	if (scd_sock_path)
+		mem_free0(scd_sock_path);
+	unit_free(scd_unit);
+}
+
+unit_t *
+scd_get_unit(void)
+{
+	return scd_unit;
 }

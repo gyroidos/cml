@@ -101,18 +101,19 @@
 
 /* Network interface structure with interface specific settings */
 typedef struct {
-	char *nw_name;		       //!< Name of the network device
-	char *nw_name_cmld;	       //!< Name of the network device in rootns
-	bool configure;		       //!< do ip/routing configuration
-	char *veth_cmld_name;	       //!< associated veth name in root ns
-	char *veth_cont_name;	       //!< veth name in the container's ns
-	char *subnet;		       //!< string with subnet (x.x.x.x/y)
-	struct in_addr ipv4_cmld_addr; //!< associated ipv4 address in root ns
-	struct in_addr ipv4_cont_addr; //!< ipv4 address of container
-	struct in_addr ipv4_bc_addr;   //!< ipv4 bcaddr of container/cmld subnet
-	int cont_offset;	       //!< gives information about the adresses to be set
-	uint8_t veth_mac[6];	       //!< generated or configured mac of nic in container
-	int veth_cmld_idx;	       //!< Index of veth endpoint in rootns
+	char *nw_name;			//!< Name of the network device
+	char *nw_name_cmld;		//!< Name of the network device in rootns
+	bool configure;			//!< do ip/routing configuration
+	char *veth_cmld_name;		//!< associated veth name in root ns
+	char *veth_cont_name;		//!< veth name in the container's ns
+	char *subnet;			//!< string with subnet (x.x.x.x/y)
+	struct in_addr ipv4_cmld_addr;	//!< associated ipv4 address in root ns
+	struct in_addr ipv4_cont_addr;	//!< ipv4 address of container
+	struct in_addr ipv4_bc_addr;	//!< ipv4 bcaddr of container/cmld subnet
+	int cont_offset;		//!< gives information about the adresses to be set
+	uint8_t veth_mac[MAC_ADDR_LEN]; //!< generated or configured mac of nic in container
+	int veth_cmld_idx;		//!< Index of veth endpoint in rootns
+	bool created;			//!< veth pair was created sucessfully
 } c_net_interface_t;
 
 /* Network structure with specific network settings */
@@ -253,7 +254,7 @@ c_net_get_next_ipv4_cont_addr(int offset, struct in_addr *ipv4_addr)
 static int
 c_net_is_veth_used(const char *if_name)
 {
-	ASSERT(if_name);
+	IF_NULL_RETVAL(if_name, -1);
 
 	DIR *dirp = opendir(SYS_NET_PATH);
 	struct dirent *dp;
@@ -316,7 +317,7 @@ c_net_remove_ifi(const char *ifi_name, const pid_t pid)
  * with a netlink message using the netlink socket
  */
 static int
-c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6])
+c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[MAC_ADDR_LEN])
 {
 	ASSERT(veth1 && veth2);
 
@@ -393,7 +394,7 @@ c_net_create_veth_pair(const char *veth1, const char *veth2, uint8_t veth1_mac[6
 		goto msg_err;
 
 	/* Set veth1 mac address */
-	if (nl_msg_add_buffer(req, IFLA_ADDRESS, (char *)veth1_mac, 6))
+	if (nl_msg_add_buffer(req, IFLA_ADDRESS, (char *)veth1_mac, MAC_ADDR_LEN))
 		goto msg_err;
 
 	/* Send request message and wait for the response message */
@@ -496,7 +497,7 @@ msg_err:
 }
 
 static c_net_interface_t *
-c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_mac[6],
+c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_mac[MAC_ADDR_LEN],
 		    bool configure)
 {
 	ASSERT(if_name);
@@ -504,9 +505,10 @@ c_net_interface_new(const char *if_name, const char *root_if_name, uint8_t if_ma
 	c_net_interface_t *ni = mem_new0(c_net_interface_t, 1);
 	ni->nw_name = mem_strdup(if_name);
 	ni->nw_name_cmld = root_if_name ? mem_strdup(root_if_name) : NULL;
-	memcpy(ni->veth_mac, if_mac, 6);
+	memcpy(ni->veth_mac, if_mac, MAC_ADDR_LEN);
 	ni->configure = configure;
 	ni->cont_offset = -1;
+	ni->created = false;
 
 	return ni;
 }
@@ -529,9 +531,9 @@ c_net_mac_filter(const char *if_name, list_t *mac_whitelist, bool apply)
 		ret = network_phys_allow_mac("INPUT", if_name, mac, apply);
 		ret |= network_phys_allow_mac("FORWARD", if_name, mac, apply);
 		if (ret) {
-			char *mac_str = network_mac_addr_to_str_new(mac);
+			char mac_str[MAC_STR_LEN];
+			network_mac_addr_to_str(mac, mac_str);
 			ERROR("Failed to allow %s on %s", mac_str, if_name);
-			mem_free0(mac_str);
 			return -1;
 		}
 	}
@@ -557,8 +559,8 @@ c_net_bridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 		goto err;
 	}
 
-	uint8_t veth_mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-	if (file_read("/dev/urandom", (char *)veth_mac, 6) < 0) {
+	uint8_t veth_mac[MAC_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+	if (file_read("/dev/urandom", (char *)veth_mac, MAC_ADDR_LEN) < 0) {
 		WARN_ERRNO("Failed to read from /dev/urandom");
 	}
 	// sanitize mac veth otherwise kernel may reject the mac
@@ -674,6 +676,27 @@ c_net_unbridge_ifi(const char *if_name, list_t *mac_whitelist, const pid_t pid)
 	return 0;
 }
 
+static int
+c_net_resolve_mac_and_ifname_new(const char *if_name_mac, char **out_if_name,
+				 uint8_t out_mac[MAC_ADDR_LEN])
+{
+	ASSERT(if_name_mac);
+
+	if (network_str_to_mac_addr(if_name_mac, out_mac) == 0) {
+		*out_if_name = network_get_ifname_by_addr_new(out_mac);
+	} else {
+		*out_if_name = mem_strdup(if_name_mac);
+		if (network_get_mac_by_ifname(*out_if_name, out_mac) != 0) {
+			ERROR("Failed to get MAC for interface %s", *out_if_name);
+			mem_free0(*out_if_name);
+			*out_if_name = NULL;
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 /**
  * This function moves/bridges the network interface to the corresponding net
  * namespace of a container.
@@ -694,34 +717,44 @@ c_net_add_interface(void *netp, container_pnet_cfg_t *pnet_cfg)
 	bool c_net_internal = (NULL != list_find(net->pnet_mv_list, pnet_cfg));
 	pid_t pid = container_get_pid(net->container);
 
-	uint8_t if_mac[6];
-	char *if_name = (network_str_to_mac_addr(pnet_cfg->pnet_name, if_mac) != -1) ?
-				network_get_ifname_by_addr_new(if_mac) :
-				mem_strdup(pnet_cfg->pnet_name);
+	char *if_name = NULL;
+	uint8_t if_mac[MAC_ADDR_LEN];
 
+	if (c_net_resolve_mac_and_ifname_new(pnet_cfg->pnet_name, &if_name, if_mac) != 0) {
+		WARN("Could not resolve interface for '%s'", pnet_cfg->pnet_name);
+		return -1;
+	}
 	IF_NULL_RETVAL(if_name, -1);
 
+	char if_mac_str[MAC_STR_LEN];
+	network_mac_addr_to_str(if_mac, if_mac_str);
+
 	if (!c_net_internal) {
-		IF_FALSE_GOTO_ERROR(cmld_netif_phys_remove_by_name(if_name), err);
+		IF_FALSE_GOTO_ERROR(cmld_netif_phys_remove_by_mac(if_mac), err);
 
 		// adding to c0, thus mark this interface available as free for others
 		if (cmld_containers_get_c0() == net->container) {
 			// re-add iface to list of available network interfaces
-			cmld_netif_phys_add_by_name(if_name);
+			cmld_netif_phys_add_by_mac(if_mac);
 		}
 	}
 
 	if (!pnet_cfg->mac_filter) { // directly map phys. IF into container
-		DEBUG("move phys %s to the ns of this pid: %d", pnet_cfg->pnet_name, pid);
+		DEBUG("move phys %s: %s to the ns of pid: %d", if_name, if_mac_str, pid);
 		IF_TRUE_GOTO_ERROR(-1 == c_net_move_ifi(if_name, pid), err);
 	} else { // pIF should be bridged and MAC filtering applied
-		DEBUG("bridge phys %s to the ns of this pid: %d", pnet_cfg->pnet_name, pid);
+		DEBUG("bridge phys %s: %s to the ns of pid: %d", if_name, if_mac_str, pid);
 		IF_TRUE_GOTO_ERROR(-1 == c_net_bridge_ifi(if_name, pnet_cfg->mac_whitelist, pid),
 				   err);
 	}
 
-	if (!c_net_internal) // called externally add to internal list
+	// always normalize pnet_name to MAC string for reliable MAC-based lookup
+	container_pnet_cfg_set_pnet_name(pnet_cfg, if_mac_str);
+
+	// called externally: add to internal list
+	if (!c_net_internal) {
 		net->pnet_mv_list = list_append(net->pnet_mv_list, pnet_cfg);
+	}
 
 	INFO("Sucessfully move/bridged iface %s to %s", if_name,
 	     container_get_name(net->container));
@@ -747,30 +780,51 @@ c_net_remove_interface(void *netp, const char *if_name_mac)
 
 	container_pnet_cfg_t *cfg = NULL;
 	pid_t pid = container_get_pid(net->container);
+	char *if_name = NULL;
+	uint8_t if_mac[MAC_ADDR_LEN];
 
-	uint8_t if_mac[6];
-	char *if_name = (network_str_to_mac_addr(if_name_mac, if_mac) != -1) ?
-				network_get_ifname_by_addr_new(if_mac) :
-				mem_strdup(if_name_mac);
-
-	IF_NULL_RETVAL(if_name, -1);
-
-	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
-		container_pnet_cfg_t *_cfg = l->data;
-		char *_if_name = (network_str_to_mac_addr(_cfg->pnet_name, if_mac) != -1) ?
-					 network_get_ifname_by_addr_new(if_mac) :
-					 mem_strdup(_cfg->pnet_name);
-		if (strcmp(if_name, _if_name)) {
-			cfg = _cfg;
-			mem_free0(_if_name);
-			break;
+	if (network_str_to_mac_addr(if_name_mac, if_mac) == 0) {
+		// Input is a MAC string — lookup config by MAC
+		for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+			container_pnet_cfg_t *_cfg = l->data;
+			uint8_t cfg_mac[MAC_ADDR_LEN];
+			if (network_str_to_mac_addr(_cfg->pnet_name, cfg_mac) == 0 &&
+			    0 == memcmp(if_mac, cfg_mac, MAC_ADDR_LEN)) {
+				cfg = _cfg;
+				break;
+			}
 		}
-		mem_free0(_if_name);
+	} else {
+		// Input is a name — assumed to be the container-ns name
+		// Find config by resolving each config's MAC to a container-ns name
+		for (list_t *l = net->pnet_mv_list; l; l = l->next) {
+			container_pnet_cfg_t *_cfg = l->data;
+			uint8_t cfg_mac[MAC_ADDR_LEN];
+			if (network_str_to_mac_addr(_cfg->pnet_name, cfg_mac) != 0)
+				continue;
+			char *cfg_if_name = network_get_ifname_by_mac_in_ns_new(cfg_mac, pid);
+			if (!cfg_if_name)
+				continue;
+			if (!strcmp(cfg_if_name, if_name_mac)) {
+				cfg = _cfg;
+				memcpy(if_mac, cfg_mac, MAC_ADDR_LEN);
+				mem_free0(cfg_if_name);
+				break;
+			}
+			mem_free0(cfg_if_name);
+		}
 	}
 
-	if (NULL == cfg) {
-		mem_free0(if_name);
+	if (!cfg) {
+		TRACE("No config for interface %s found", if_name_mac);
 		return 0;
+	}
+
+	// Resolve container-ns name from MAC (works for both input types)
+	if_name = network_get_ifname_by_mac_in_ns_new(if_mac, pid);
+	if (!if_name) {
+		WARN("Could not resolve container-ns name for %s", if_name_mac);
+		return -1;
 	}
 
 	if (!cfg->mac_filter) { // remove directly mapped ifi
@@ -784,10 +838,11 @@ c_net_remove_interface(void *netp, const char *if_name_mac)
 	net->pnet_mv_list = list_remove(net->pnet_mv_list, cfg);
 	container_pnet_cfg_free(cfg);
 
-	cmld_netif_phys_add_by_name(if_name);
+	// add interface back to available phys list by MAC
+	cmld_netif_phys_add_by_mac(if_mac);
+
 	mem_free0(if_name);
 	return 0;
-
 err:
 	mem_free0(if_name);
 	return -1;
@@ -815,8 +870,8 @@ c_net_new(compartment_t *compartment)
 	// add cml interface as uplink for cmld through c0
 	if (container_uuid_is_c0id(container_get_uuid(net->container))) {
 		INFO("Generating uplink veth %s", CML_UPLINK_INTERFACE_NAME);
-		uint8_t mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-		if (file_read("/dev/urandom", (char *)mac, 6) < 0) {
+		uint8_t mac[MAC_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+		if (file_read("/dev/urandom", (char *)mac, MAC_ADDR_LEN) < 0) {
 			WARN_ERRNO("Failed to read from /dev/urandom");
 		}
 		mac[0] &= 0xfe; /* clear multicast bit */
@@ -838,7 +893,10 @@ c_net_new(compartment_t *compartment)
 		TRACE("new c_net_interface_t struct %s was allocated", ni->nw_name);
 	}
 
-	uint8_t mac[6];
+	container_t *c0 = cmld_containers_get_c0();
+	bool c0_is_up = (c0 && container_is_stoppable(c0));
+
+	uint8_t mac[MAC_ADDR_LEN];
 	for (list_t *l = container_get_pnet_cfg_list(net->container); l; l = l->next) {
 		container_pnet_cfg_t *pnet_cfg = l->data;
 		// deep copy for internal list and hotplugging
@@ -847,7 +905,7 @@ c_net_new(compartment_t *compartment)
 		char *if_name_macstr = pnet_cfg->pnet_name;
 		char *if_name = NULL;
 		TRACE("mv_name_list add ifname %s", if_name_macstr);
-		mem_memset(&mac, 0, 6);
+		mem_memset(&mac, 0, MAC_ADDR_LEN);
 		// check if string is mac address
 		if (0 == network_str_to_mac_addr(if_name_macstr, mac)) {
 			TRACE("mv_name_list add if by mac: %s", if_name_macstr);
@@ -856,12 +914,16 @@ c_net_new(compartment_t *compartment)
 				WARN("Could not register Interface for moving");
 				container_pnet_cfg_free(pnet_cfg_mv);
 			} else {
-				INFO("Registed Interface for mac '%s' at hotplug subsys",
+				INFO("Registered Interface for mac '%s' at hotplug subsys",
 				     if_name_macstr);
 
 				net->hotplug_registered_mac_list =
 					list_append(net->hotplug_registered_mac_list,
 						    mem_memcpy((unsigned char *)&mac, sizeof(mac)));
+			}
+
+			if (c0_is_up && (c0 != net->container)) {
+				container_remove_net_interface(c0, if_name_macstr);
 			}
 
 			if_name = network_get_ifname_by_addr_new(mac);
@@ -877,7 +939,10 @@ c_net_new(compartment_t *compartment)
 
 		TRACE("mv_name_list add ifname %s", if_name);
 
-		if (cmld_netif_phys_remove_by_name(if_name))
+		// resolve MAC for phys list removal if pnet_name was a kernel name
+		mem_memset(&mac, 0, MAC_ADDR_LEN);
+		network_get_mac_by_ifname(if_name, mac);
+		if (cmld_netif_phys_remove_by_mac(mac))
 			net->pnet_mv_list = list_append(net->pnet_mv_list, pnet_cfg_mv);
 
 		mem_free0(if_name);
@@ -949,6 +1014,8 @@ c_net_start_pre_clone_interface(c_net_interface_t *ni)
 	/* Create veth pair */
 	if (c_net_create_veth_pair(ni->veth_cont_name, ni->veth_cmld_name, ni->veth_mac))
 		goto err;
+
+	ni->created = true;
 
 	/* Get the interface index of the interface name */
 	if (!(ni->veth_cmld_idx = if_nametoindex(ni->veth_cmld_name))) {
@@ -1095,20 +1162,71 @@ c_net_start_post_clone(void *netp)
 	pid_t pid = container_get_pid(net->container);
 	pid_t pid_c0 = cmld_containers_get_c0() ? container_get_pid(cmld_containers_get_c0()) : 0;
 
-	/* append list for c0 with available phys network interfaces */
+	/* append list for c0 with available phys network interfaces.
+	 * The phys list contains MAC byte arrays; convert to string for pnet_cfg. */
 	if (pid == pid_c0 && container_is_privileged(net->container)) {
 		for (list_t *l = cmld_get_netif_phys_list(); l; l = l->next) {
-			char *iff_name = l->data;
-			container_pnet_cfg_t *cfg = container_pnet_cfg_new(iff_name, false, NULL);
+			uint8_t *mac = l->data;
+			char mac_str[MAC_STR_LEN];
+			network_mac_addr_to_str(mac, mac_str);
+			container_pnet_cfg_t *cfg = container_pnet_cfg_new(mac_str, false, NULL);
 			net->pnet_mv_list = list_append(net->pnet_mv_list, cfg);
 		}
 	}
 
-	/* move or bridge phys network intrefaces to container */
+	/* move or bridge phys network interfaces to container */
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
 		if (c_net_add_interface(net, cfg) < 0)
 			return -COMPARTMENT_ERROR_NET;
+	}
+
+	/* Retry claiming interfaces registered with hotplug but not added to
+	 * pnet_mv_list during c_net_new. This handles config update races where
+	 * the interface returns to root ns (and the phys list) after c_net_new
+	 * already ran but before the container starts. */
+	if (cmld_containers_get_c0() != net->container) {
+		for (list_t *l = net->hotplug_registered_mac_list; l; l = l->next) {
+			uint8_t *mac = l->data;
+			char mac_str[MAC_STR_LEN];
+			network_mac_addr_to_str(mac, mac_str);
+
+			/* Skip if already claimed in pnet_mv_list */
+			bool already_claimed = false;
+			for (list_t *m = net->pnet_mv_list; m; m = m->next) {
+				container_pnet_cfg_t *cfg = m->data;
+				if (!strcmp(cfg->pnet_name, mac_str)) {
+					already_claimed = true;
+					break;
+				}
+			}
+			if (already_claimed)
+				continue;
+
+			/* Look up mac_filter/mac_whitelist from container config */
+			container_pnet_cfg_t *pnet_cfg = NULL;
+			for (list_t *cl = container_get_pnet_cfg_list(net->container); cl;
+			     cl = cl->next) {
+				container_pnet_cfg_t *orig = cl->data;
+				if (!strcmp(orig->pnet_name, mac_str)) {
+					pnet_cfg = container_pnet_cfg_new(mac_str, orig->mac_filter,
+									  orig->mac_whitelist);
+					break;
+				}
+			}
+			if (!pnet_cfg)
+				pnet_cfg = container_pnet_cfg_new(mac_str, false, NULL);
+
+			INFO("Retry claiming interface %s for container %s", mac_str,
+			     container_get_name(net->container));
+
+			if (c_net_add_interface(net, pnet_cfg) < 0) {
+				WARN("Could not claim interface %s during retry, "
+				     "may not be available yet",
+				     mac_str);
+				container_pnet_cfg_free(pnet_cfg);
+			}
+		}
 	}
 
 	// nothing to be configured
@@ -1169,7 +1287,7 @@ c_net_start_post_clone(void *netp)
 				if (network_setup_masquerading(ni->subnet, true))
 					FATAL_ERRNO("Could not setup masquerading for %s!",
 						    ni->veth_cmld_name);
-					// configuration of interface is done in root netns below
+				// configuration of interface is done in root netns below
 
 #ifdef DEBUG_BUILD
 				/* setup port forwarding for ssh in debug build */
@@ -1311,43 +1429,15 @@ c_net_start_child(void *netp)
 }
 
 static void
-c_net_interface_down(c_net_interface_t *ni)
-{
-	ASSERT(ni);
-
-	/* shut the network interface down */
-	// check if iface was allready destroyed by kernel
-	if (ni->veth_cmld_name && c_net_is_veth_used(ni->veth_cmld_name)) {
-		char current_if_name[IF_NAMESIZE];
-
-		/*
-		 * if interface was renamed during runtime, we have to get the
-		 * current name by index
-		 */
-		if (if_indextoname(ni->veth_cmld_idx, current_if_name)) {
-			ERROR("veth interface name could not be resolved for "
-			      "ifidx=%d (startup name '%s')",
-			      ni->veth_cmld_idx, ni->veth_cmld_name);
-			return;
-		}
-
-		if (network_set_flag(ni->veth_cmld_name, IFF_DOWN))
-			WARN("network interface could not be gracefully shut down");
-
-		if (network_delete_link(ni->veth_cmld_name))
-			WARN("network interface %s could not be destroyed", ni->veth_cmld_name);
-	}
-}
-
-static void
 c_net_cleanup_interface(c_net_interface_t *ni)
 {
-	TRACE("cleanup c_net_t structure");
+	TRACE("cleanup c_net_interface_t structure");
 
-	DEBUG("shut network interface %s down", ni->veth_cont_name);
+	DEBUG("shut network interface %s down", ni->veth_cont_name ? ni->veth_cont_name : "'NA'");
 
 	/* Release the offset, as the ip addresses are no more occupied */
-	c_net_unset_offset(ni->cont_offset);
+	if (ni->cont_offset >= 0)
+		c_net_unset_offset(ni->cont_offset);
 
 	if (ni->subnet) {
 		mem_free0(ni->subnet);
@@ -1376,14 +1466,8 @@ c_net_do_cleanup_host(const void *data)
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 
-		if (!ni->configure) {
-			c_net_interface_down(ni);
-			continue;
-		}
-		if (network_setup_masquerading(ni->subnet, false))
+		if (ni->configure && network_setup_masquerading(ni->subnet, false))
 			WARN("Failed to remove masquerading from %s", ni->subnet);
-
-		c_net_interface_down(ni);
 	}
 	return 0;
 }
@@ -1410,20 +1494,52 @@ c_net_cleanup_c0(const c_net_t *net)
 	return ret;
 }
 
+static void
+c_net_interface_down(const char *iface)
+{
+	if (network_set_flag(iface, IFF_DOWN))
+		WARN("Network interface %s could not be stopped gracefully", iface);
+
+	if (network_delete_link(iface))
+		WARN("Network interface %s could not be destroyed", iface);
+}
+
+static int
+c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index)
+{
+	const char *prefix = (network_interface_is_wifi(iface)) ? "wlan" : "eth";
+
+	// create collision free name with cmld's main process naming scheme
+	char *newname = mem_printf("%s%08x_%03d", prefix, container_get_uid(net->container), index);
+	if (strlen(newname) > IFNAMSIZ) {
+		ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
+		mem_free(newname);
+		return -1;
+	}
+	DEBUG("Renaming physical interface %s to %s from container %s", iface, newname,
+	      uuid_string(container_get_uuid(net->container)));
+
+	if (network_rename_ifi(iface, newname)) {
+		WARN("Failed to rename interface %s", iface);
+		mem_free(newname);
+		return -1;
+	}
+	mem_free(newname);
+	return 0;
+}
+
 /**
- * Rename physical network interfaces of container before netns destruction
+ * Cleanup network interfaces inside container.
+ * Includes renaming physical interfaces to avoid nameclashes
+ * and removing veth interfaces.
  */
 static int
-c_net_cleanup_phys(const c_net_t *net)
+c_net_cleanup_container(const c_net_t *net)
 {
 	ASSERT(net);
 
-	// no need to cleanup/rename if no phys interfaces where added
-	IF_FALSE_RETVAL(net->pnet_mv_list, 0);
-
 	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
 
-	// rename moved physical interfaces in network namespace of container
 	pid_t c_netns_pid = fork();
 	if (c_netns_pid == -1) {
 		ERROR_ERRNO("Could not fork for switching to netns");
@@ -1432,38 +1548,35 @@ c_net_cleanup_phys(const c_net_t *net)
 		DEBUG("Renaming netifs in %s", container_get_name(net->container));
 
 		event_reset(); // reset event_loop of cloned from parent
-		if (ns_join_by_path(net->ns_path) < 0)
-			FATAL_ERRNO("Could not join netns of compartment");
+		if (ns_join_by_path(net->ns_path) < 0) {
+			WARN("Could not join netns of compartment by path, trying pid");
 
-		list_t *phys_ifaces = network_get_physical_interfaces_new();
-		// Rename all physical interfaces.
+			if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0)
+				FATAL_ERRNO("Could not join netns of compartment");
+		}
+
+		list_t *ifaces = network_get_interfaces_new();
 		int index = 0;
-		for (list_t *l = phys_ifaces; l; l = l->next) {
-			const char *ifname = l->data;
-			const char *prefix = (network_interface_is_wifi(ifname)) ? "wlan" : "eth";
+		for (list_t *l = ifaces; l; l = l->next) {
+			const char *iface = l->data;
+			char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", iface);
 
-			// create collision free name with cmld's main process naming scheme
-			char *newname = mem_printf("%s%08x_%03d", prefix,
-						   container_get_uid(net->container), index++);
-			if (strlen(newname) > IFNAMSIZ) {
-				ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
-				mem_free(newname);
-				mem_free0(l->data);
-				continue;
+			if (file_exists(dev_drv_path) && iface != NULL) {
+				// rename moved physical interfaces in network namespace of container
+				c_net_cleanup_phys(net, iface, index);
+			} else if (file_exists(dev_drv_path)) {
+				DEBUG("Skipping unnamed network interface");
+			} else {
+				DEBUG("Removing veth interface %s", iface);
+				c_net_interface_down(iface);
 			}
 
-			DEBUG("Renaming interface %s to %s in netns of %s ", ifname, newname,
-			      container_get_name(net->container));
-
-			if (network_rename_ifi(ifname, newname))
-				WARN("Failed to rename interface %s", ifname);
-
-			mem_free(newname);
+			mem_free0(dev_drv_path);
 			mem_free0(l->data);
 		}
-		list_delete(phys_ifaces);
+		list_delete(ifaces);
 
-		DEBUG("Renaming ifs in netns of %s done, exiting netns child!",
+		DEBUG("Removing ifs in netns of %s done, exiting netns child!",
 		      container_get_name(net->container));
 		_exit(0); // don't call atexit registered cleanup of main process
 	} else {
@@ -1496,19 +1609,24 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		return;
 	}
 
+	if (c_net_cleanup_c0(net) == -1)
+		WARN("Failed to create helper child for cleanup in c0's netns");
+
 	// rename phys interface to avoid name clashes during fallback to rootns
-	if (c_net_cleanup_phys(net) == -1)
-		WARN("Failed to create helper child for cleanup of phys in container's netns");
-
-	// remove bound to filesystem
-	if (net->fd_netns > 0) {
-		close(net->fd_netns);
-		net->fd_netns = -1;
+	if (c_net_cleanup_container(net) == -1) {
+		DEBUG("Failed to create helper child for cleanup of container's netns, still in rootns?");
+		for (list_t *l = net->interface_list; l; l = l->next) {
+			c_net_interface_t *ni = l->data;
+			// delete veth pair if it was created!
+			if (ni->created && c_net_is_veth_used(ni->veth_cmld_name)) {
+				DEBUG("Removing veth interface %s", ni->veth_cmld_name);
+				c_net_interface_down(ni->veth_cmld_name);
+			}
+		}
 	}
-	ns_unbind(net->ns_path);
 
-	/* remove phys network intrefaces from container */
-	uint8_t if_mac[6];
+	/* remove phys network interfaces from container */
+	uint8_t if_mac[MAC_ADDR_LEN];
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
 		if (!cfg->mac_filter) { // skip directly moved if will fallback to rootns
@@ -1525,14 +1643,18 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		}
 	}
 
-	if (c_net_cleanup_c0(net) == -1)
-		WARN("Failed to create helper child for cleanup in c0's netns");
-
 	/* release ip offsets and names of veths */
 	for (list_t *l = net->interface_list; l; l = l->next) {
 		c_net_interface_t *ni = l->data;
 		c_net_cleanup_interface(ni);
 	}
+
+	// remove bound to filesystem
+	if (net->fd_netns > 0) {
+		close(net->fd_netns);
+		net->fd_netns = -1;
+	}
+	ns_unbind(net->ns_path);
 }
 
 /**
@@ -1644,8 +1766,8 @@ static compartment_module_t c_net_module = {
 static void INIT
 c_net_init(void)
 {
-	// register this module in compartment.c
-	compartment_register_module(&c_net_module);
+	// register this module in container.c
+	container_register_compartment_module(&c_net_module);
 
 	// register relevant handlers implemented by this module
 	container_register_add_net_interface_handler(MOD_NAME, c_net_add_interface);
