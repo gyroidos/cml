@@ -216,7 +216,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		TRACE("Copying device node %s -> %s", file_src, file_dst);
 		if ((ret = mknod(file_dst, s.st_mode, s.st_rdev)) < 0)
 			ERROR_ERRNO("Could not mknod at %s", file_dst);
-		if ((ret = chown(file_dst, s.st_uid, s.st_gid)) < 0)
+		if ((ret = lchown(file_dst, s.st_uid, s.st_gid)) < 0)
 			ERROR_ERRNO("Could not chown node '%s' to (%d:%d)", file_dst, s.st_uid,
 				    s.st_gid);
 		break;
@@ -246,16 +246,13 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		ret = 0;
 		break;
 	case S_IFDIR:
-		if (!file_exists(file_dst)) {
-			TRACE("Creating target dir %s", file_dst);
-			if (mkdir(file_dst, s.st_mode) < 0) {
-				ERROR_ERRNO("Could not mkdir target dir %s", file_dst);
-				ret--;
-			} else if (chown(file_dst, s.st_uid, s.st_gid) < 0) {
-				ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_dst,
-					    s.st_uid, s.st_gid);
-				ret--;
-			}
+		if (mkdir(file_dst, s.st_mode) < 0 && errno != EEXIST) {
+			ERROR_ERRNO("Could not mkdir target dir %s", file_dst);
+			ret--;
+		} else if (lchown(file_dst, s.st_uid, s.st_gid) < 0) {
+			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_dst, s.st_uid,
+				    s.st_gid);
+			ret--;
 		}
 		if (dir_foreach(file_src, &dir_copy_folder_contents_cb, params) < 0) {
 			ERROR("Could not copy all dir contents of %s -> %s ", file_src, file_dst);
@@ -267,7 +264,7 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 		if (file_copy(file_src, file_dst, -1, 512, 0)) {
 			ERROR("Could not copy file %s -> %s", file_src, file_dst);
 			ret--;
-		} else if (chown(file_dst, s.st_uid, s.st_gid) < 0) {
+		} else if (lchown(file_dst, s.st_uid, s.st_gid) < 0) {
 			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_dst, s.st_uid,
 				    s.st_gid);
 			ret--;
@@ -291,11 +288,9 @@ dir_copy_folder(const char *source, const char *target,
 	mode_t old_mask = umask(0);
 
 	DEBUG("Copying %s -> %s", source, target);
-	if (!file_exists(target)) {
-		if (mkdir(target, s.st_mode) < 0) {
-			ERROR_ERRNO("Could not mkdir target dir %s", target);
-			ret--;
-		}
+	if (mkdir(target, s.st_mode) < 0 && errno != EEXIST) {
+		ERROR_ERRNO("Could not mkdir target dir %s", target);
+		ret--;
 	}
 	dir_copy_params_t *params = dir_copy_params_new(target, NULL, filter, filter_data);
 	if (dir_foreach(source, &dir_copy_folder_contents_cb, params) < 0) {
