@@ -283,6 +283,8 @@ proc_fork_and_execvp(const char *const *argv)
 		ERROR_ERRNO("Could not fork for %s", argv[0]);
 		return -1;
 	case 0:
+		if (setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1) < 0)
+			FATAL_ERRNO("Could not set PATH for %s", argv[0]);
 		execvp(argv[0], (char *const *)argv);
 		FATAL_ERRNO("Could not execvp %s", argv[0]);
 		return -1;
