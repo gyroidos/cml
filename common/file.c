@@ -143,7 +143,7 @@ file_copy(const char *in_file, const char *out_file, ssize_t count, size_t bs, o
 		return -1;
 	}
 
-	out_fd = open(out_file, O_WRONLY | O_CREAT | O_TRUNC, 00666);
+	out_fd = open(out_file, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 00644);
 	if (out_fd < 0) {
 		DEBUG_ERRNO("Could not open output file %s", out_file);
 		close(in_fd);
@@ -264,7 +264,7 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 	IF_NULL_RETVAL(file, -1);
 	IF_NULL_RETVAL(buf, -1);
 
-	fd = open(file, oflags, 00666);
+	fd = open(file, oflags, 00644);
 	if (fd < 0) {
 		DEBUG_ERRNO("Could not open output file %s", file);
 		return -1;
@@ -291,13 +291,13 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 int
 file_write(const char *file, const char *buf, ssize_t len)
 {
-	return file_write_internal(file, buf, len, O_WRONLY | O_CREAT | O_TRUNC);
+	return file_write_internal(file, buf, len, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW);
 }
 
 int
 file_write_append(const char *file, const char *buf, ssize_t len)
 {
-	int oflags = O_WRONLY;
+	int oflags = O_WRONLY | O_NOFOLLOW;
 	oflags |= file_exists(file) ? O_APPEND : (O_CREAT | O_TRUNC);
 
 	return file_write_internal(file, buf, len, oflags);
@@ -415,7 +415,7 @@ file_touch(const char *file)
 	IF_NULL_RETVAL(file, -1);
 
 	if (file_exists(file)) {
-		int fd = open(file, O_WRONLY | O_CREAT, 00666);
+		int fd = open(file, O_WRONLY | O_CREAT | O_NOFOLLOW, 00644);
 		if (fd < 0) {
 			DEBUG_ERRNO("Could not touch output file %s", file);
 			return -1;
@@ -423,7 +423,7 @@ file_touch(const char *file)
 
 		close(fd);
 	} else {
-		if (-1 == mknod(file, S_IFREG | 00666, 0)) {
+		if (-1 == mknod(file, S_IFREG | 00644, 0)) {
 			DEBUG_ERRNO("Could not create file %s", file);
 			return -1;
 		}
