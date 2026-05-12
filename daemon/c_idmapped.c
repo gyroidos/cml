@@ -497,11 +497,11 @@ c_idmapped_shift_ids(void *idmappedp, const char *src, const char *dst, const ch
 			goto success;
 	}
 
-	if (dir_mkdir_p(IDMAPPED_SRC_DIR, 0777) < 0) {
+	if (dir_mkdir_p(IDMAPPED_SRC_DIR, 0755) < 0) {
 		ERROR_ERRNO("Could not mkdir %s", IDMAPPED_SRC_DIR);
 		return -1;
 	}
-	if (chmod(IDMAPPED_SRC_DIR, 00777) < 0) {
+	if (chmod(IDMAPPED_SRC_DIR, 00755) < 0) {
 		ERROR_ERRNO("Could not chmod %s", IDMAPPED_SRC_DIR);
 		goto error;
 	}
