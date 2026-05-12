@@ -30,6 +30,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -115,31 +116,41 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 {
 	struct stat stat_buffer;
 	int ret = 0;
-	char *file_to_remove = mem_printf("%s/%s", path, name);
-	if (lstat(file_to_remove, &stat_buffer) == -1) {
-		ERROR_ERRNO("Could not lstat %s", file_to_remove);
-		mem_free0(file_to_remove);
+
+	int dirfd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (dirfd < 0) {
+		ERROR_ERRNO("Could not open parent dir %s", path);
 		return -1;
 	}
+
+	if (fstatat(dirfd, name, &stat_buffer, AT_SYMLINK_NOFOLLOW) == -1) {
+		ERROR_ERRNO("Could not fstatat %s/%s", path, name);
+		close(dirfd);
+		return -1;
+	}
+
 	if (S_ISDIR(stat_buffer.st_mode)) {
-		TRACE("Path %s is dir", file_to_remove);
-		if (dir_foreach(file_to_remove, &dir_unlink_folder_contents_cb, NULL) < 0) {
-			ERROR_ERRNO("Could not delete all dir contents in %s", file_to_remove);
+		char *subdir = mem_printf("%s/%s", path, name);
+		TRACE("Path %s is dir", subdir);
+		if (dir_foreach(subdir, &dir_unlink_folder_contents_cb, NULL) < 0) {
+			ERROR_ERRNO("Could not delete all dir contents in %s", subdir);
 			ret--;
 		}
-		TRACE("Removing now empty dir %s", file_to_remove);
-		if (rmdir(file_to_remove) < 0) {
-			ERROR_ERRNO("Could not delete dir %s", file_to_remove);
+		mem_free0(subdir);
+		TRACE("Removing dir %s/%s", path, name);
+		if (unlinkat(dirfd, name, AT_REMOVEDIR) < 0) {
+			ERROR_ERRNO("Could not delete dir %s/%s", path, name);
 			ret--;
 		}
 	} else {
-		TRACE("Unlinking %s", file_to_remove);
-		if (unlink(file_to_remove) == -1) {
-			ERROR_ERRNO("Could not delete %s", file_to_remove);
+		TRACE("Unlinking %s/%s", path, name);
+		if (unlinkat(dirfd, name, 0) < 0) {
+			ERROR_ERRNO("Could not delete %s/%s", path, name);
 			ret--;
 		}
 	}
-	mem_free0(file_to_remove);
+
+	close(dirfd);
 	return ret;
 }
 
