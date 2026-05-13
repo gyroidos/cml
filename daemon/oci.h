@@ -111,3 +111,12 @@ oci_control_new(int socket);
  */
 oci_control_t *
 oci_control_local_new(const char *path);
+
+/**
+ * Releases an oci_control_t object: removes pending IO events, closes connected
+ * client sockets, and frees the struct.
+ *
+ * @param oci_control oci_control_t to release
+ */
+void
+oci_control_free(oci_control_t *oci_control);
