@@ -109,7 +109,7 @@
 #define CMLD_C0_UUID "00000000-0000-0000-0000-000000000000"
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
-static const char *cmld_container_path = NULL;
+static char *cmld_container_path = NULL;
 static const char *cmld_wrapped_keys_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
@@ -2070,6 +2070,9 @@ cmld_cleanup(void)
 		control_free(cmld_control_gui);
 	if (cmld_control_cml)
 		control_free(cmld_control_cml);
+
+	if (cmld_container_path)
+		mem_free0(cmld_container_path);
 
 	if (cmld_device_uuid)
 		mem_free0(cmld_device_uuid);
