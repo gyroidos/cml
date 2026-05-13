@@ -2070,6 +2070,10 @@ cmld_cleanup(void)
 		control_free(cmld_control_gui);
 	if (cmld_control_cml)
 		control_free(cmld_control_cml);
+#ifdef OCI
+	if (cmld_oci_control_cml)
+		oci_control_free(cmld_oci_control_cml);
+#endif
 
 	if (cmld_container_path)
 		mem_free0(cmld_container_path);
