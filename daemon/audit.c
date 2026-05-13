@@ -771,6 +771,11 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 	char *log_record = NULL;
 
 	if (events & EVENT_IO_EXCEPT) {
+		WARN("EVENT_IO_EXCEPT on audit socket %d, draining pending error.", fd);
+	    int err = 0;
+	    socklen_t errlen = sizeof(err);
+	    getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
+	    WARN("Audit socket error: %s", strerror(err));
 		goto out;
 	}
 
