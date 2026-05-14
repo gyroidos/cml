@@ -1134,6 +1134,7 @@ network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN])
 	IF_NULL_RETVAL(if_ni, NULL);
 
 	uint8_t mac_i[MAC_ADDR_LEN];
+	char *ifname = NULL;
 
 	for (i = if_ni; i->if_index != 0 || i->if_name != NULL; i++) {
 		char *dev_addr_path, *dev_bridge_path, *mac_str;
@@ -1161,13 +1162,15 @@ network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN])
 		if ((0 == network_str_to_mac_addr(mac_str, mac_i)) &&
 		    (0 == memcmp(mac, mac_i, MAC_ADDR_LEN))) {
 			mem_free0(mac_str);
-			return mem_strdup(i->if_name);
+			ifname = mem_strdup(i->if_name);
+			break;
 		}
 
 		mem_free0(mac_str);
 	}
 
-	return NULL;
+	if_freenameindex(if_ni);
+	return ifname;
 }
 
 char *
