@@ -488,9 +488,24 @@ static compartment_module_t c_fifo_module = {
 	.join_ns = NULL,
 };
 
+static void
+c_fifo_deinit(void)
+{
+	/*
+	 * per-entry data pointers are borrowed from each container's fifo_list
+	 * and not owned by c0_fifo_list, so only the list nodes need releasing.
+	 */
+	list_delete(c0_fifo_list);
+	c0_fifo_list = NULL;
+}
+
 static void INIT
 c_fifo_init(void)
 {
 	// register this module in container.c
 	container_register_compartment_module(&c_fifo_module);
+
+	// register cleanup on exit handler
+	if (atexit(&c_fifo_deinit))
+		WARN("Could not register on exit deinit method 'c_fifo_deinit()'");
 }
