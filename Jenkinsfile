@@ -1,5 +1,5 @@
 pipeline {
-	agent any
+	agent none
 
 	options {
 		preserveStashes(buildCount: 1) 
