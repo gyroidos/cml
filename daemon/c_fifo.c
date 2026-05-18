@@ -157,6 +157,8 @@ c_fifo_cleanup(void *fifop, bool is_rebooting)
 		}
 		mem_free(current_path);
 	}
+
+	mem_free0(fifo_path_c0);
 }
 
 static int
