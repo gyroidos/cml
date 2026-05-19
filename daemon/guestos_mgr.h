@@ -51,6 +51,14 @@ int
 guestos_mgr_init(const char *path, bool allow_locally_signed);
 
 /**
+ * Releases the guestos_list and its owned guestos_t entries plus the
+ * mem_strdup'd guestos_basepath. Intended to be registered with atexit()
+ * by the application after guestos_mgr_init() succeeds.
+ */
+void
+guestos_mgr_cleanup(void);
+
+/**
  * Add an operating system WITHOUT checking its signature. The verification
  * should already made elsewhere and the result must be provided by parameter
  * verify_result.

@@ -62,7 +62,7 @@
 
 static list_t *guestos_list = NULL;
 
-static const char *guestos_basepath = NULL;
+static char *guestos_basepath = NULL;
 static bool guestos_mgr_allow_locally_signed = false;
 
 /******************************************************************************/
@@ -252,6 +252,22 @@ guestos_mgr_init(const char *path, bool allow_locally_signed)
 	guestos_mgr_allow_locally_signed = allow_locally_signed;
 
 	return guestos_mgr_load_operatingsystems();
+}
+
+void
+guestos_mgr_cleanup(void)
+{
+	for (list_t *l = guestos_list; l; l = l->next) {
+		guestos_t *os = l->data;
+		guestos_free(os);
+	}
+	list_delete(guestos_list);
+	guestos_list = NULL;
+
+	if (guestos_basepath) {
+		mem_free0(guestos_basepath);
+		guestos_basepath = NULL;
+	}
 }
 
 int
