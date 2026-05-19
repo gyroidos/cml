@@ -1064,3 +1064,26 @@ oci_control_free(oci_control_t *oci_control)
 	mem_free0(oci_control);
 	return;
 }
+
+static void
+oci_deinit(void)
+{
+	/*
+	 * oci_container_free() and oci_control_free() each list_remove
+	 * themselves from the corresponding global list, so walk the head
+	 * until empty instead of using a for-loop.
+	 */
+	while (oci_containers_list)
+		oci_container_free(oci_containers_list->data);
+
+	while (oci_control_list)
+		oci_control_free(oci_control_list->data);
+}
+
+static void INIT
+oci_init(void)
+{
+	// register cleanup on exit handler
+	if (atexit(&oci_deinit))
+		WARN("Could not register on exit deinit method 'oci_deinit()'");
+}
