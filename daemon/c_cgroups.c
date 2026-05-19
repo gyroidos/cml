@@ -1282,6 +1282,10 @@ c_cgroups_cleanup(void *cgroupsp, UNUSED bool is_rebooting)
 		int *dev_elem = (int *)elem->data;
 		c_cgroups_list_remove(&global_assigned_devs_list, dev_elem);
 	}
+	for (list_t *l = cgroups->assigned_devs; l; l = l->next) {
+		int *dev_elem = (int *)l->data;
+		mem_free0(dev_elem);
+	}
 	list_delete(cgroups->assigned_devs);
 	cgroups->assigned_devs = NULL;
 
@@ -1289,6 +1293,10 @@ c_cgroups_cleanup(void *cgroupsp, UNUSED bool is_rebooting)
 	for (list_t *elem = cgroups->allowed_devs; elem != NULL; elem = elem->next) {
 		int *dev_elem = (int *)elem->data;
 		c_cgroups_list_remove(&global_allowed_devs_list, dev_elem);
+	}
+	for (list_t *l = cgroups->allowed_devs; l; l = l->next) {
+		int *dev_elem = (int *)l->data;
+		mem_free0(dev_elem);
 	}
 	list_delete(cgroups->allowed_devs);
 	cgroups->allowed_devs = NULL;
