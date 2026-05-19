@@ -631,10 +631,22 @@ uevent_deinit()
 	if (uevent_io_event) {
 		event_remove_io(uevent_io_event);
 		event_io_free(uevent_io_event);
+		uevent_io_event = NULL;
 	}
 	if (uevent_netlink_sock) {
 		nl_sock_free(uevent_netlink_sock);
+		uevent_netlink_sock = NULL;
 	}
+
+	/*
+	 * uevent_remove_uev() drops individual list nodes; list_delete() is
+	 * a defensive no-op when both lists have already been emptied.
+	 * uevent_uev_t entries are owned by their registrants.
+	 */
+	list_delete(uevent_uev_kernel_list);
+	uevent_uev_kernel_list = NULL;
+	list_delete(uevent_uev_udev_list);
+	uevent_uev_udev_list = NULL;
 }
 
 uevent_uev_t *
