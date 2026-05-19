@@ -47,6 +47,7 @@
 #include <string.h>
 
 logf_handler_t *cml_daemon_logfile_handler = NULL;
+logf_handler_t *cml_daemon_stdout_handler = NULL;
 static void *main_logfile_p = NULL;
 static bool is_handling_sigint = false;
 
@@ -97,24 +98,38 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 }
 
+static void
+main_logf_cleanup()
+{
+	logf_unregister(cml_daemon_logfile_handler);
+	logf_unregister(cml_daemon_stdout_handler);
+
+	if (!cmld_is_hostedmode_active()) {
+		SYNC_INFO()
+	}
+
+	logf_file_close(main_logfile_p);
+}
+
 static void INIT
 main_init(void)
 {
-	logf_register(&logf_file_write, stdout);
+	cml_daemon_stdout_handler = logf_register(&logf_file_write, stdout);
 
 	main_logfile_p = logf_file_new(LOGFILE_DIR "/cml-daemon");
 	cml_daemon_logfile_handler = logf_register(&logf_file_write, main_logfile_p);
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 
-	main_core_dump_enable();
-}
+	/*
+	 * Register logf cleanup as an INIT-time atexit so it runs after every
+	 * atexit added later from main() / cmld_init (LIFO order). Other
+	 * shutdown paths may still want to log; main_logf_cleanup must fire
+	 * last.
+	 */
+	if (atexit(&main_logf_cleanup))
+		WARN("could not register on exit cleanup method 'main_logf_cleanup()'");
 
-static void
-main_sync_fs()
-{
-	if (!cmld_is_hostedmode_active()) {
-		SYNC_INFO()
-	}
+	main_core_dump_enable();
 }
 
 /******************************************************************************/
@@ -149,9 +164,6 @@ main(int argc, char **argv)
 		FATAL("Could not init cmld (unit stage)");
 
 	if (atexit(&cmld_cleanup))
-		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
-
-	if (atexit(&main_sync_fs))
 		WARN("could not register on exit cleanup method 'cmld_cleanup()'");
 
 	event_loop();
