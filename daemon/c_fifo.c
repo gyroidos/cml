@@ -78,6 +78,18 @@ c_fifo_free(void *fifop)
 {
 	c_fifo_t *fifo = fifop;
 	ASSERT(fifo);
+
+	/*
+	 * Drain forwarder_list defensively in case c_fifo_cleanup was skipped
+	 * (e.g. c0 reboot early-return) before the compartment is freed.
+	 */
+	for (list_t *l = fifo->forwarder_list; l; l = l->next) {
+		pid_t *pid = l->data;
+		if (pid)
+			mem_free(pid);
+	}
+	list_delete(fifo->forwarder_list);
+
 	mem_free0(fifo);
 }
 
