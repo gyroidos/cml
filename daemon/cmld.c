@@ -1699,6 +1699,8 @@ cmld_init_stage_container(void)
 	if (guestos_mgr_init(guestos_path, allow_locally_signed) < 0 && !cmld_hostedmode)
 		FATAL("Could not load guest operating systems");
 	mem_free0(guestos_path);
+	if (atexit(&guestos_mgr_cleanup))
+		WARN("could not register on exit cleanup method 'guestos_mgr_cleanup()'");
 	INFO("guestos initialized.");
 	guestos_mgr_update_images();
 
