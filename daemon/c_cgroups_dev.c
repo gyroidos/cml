@@ -1056,6 +1056,29 @@ static compartment_module_t c_cgroups_dev_module = {
 	.join_ns = NULL,
 };
 
+static void
+c_cgroups_dev_deinit(void)
+{
+	/*
+	 * per-entry data is mem_new0'd by c_cgroups_dev_list_add() and is
+	 * owned by the global lists. Free each item before releasing the
+	 * list nodes.
+	 */
+	for (list_t *l = global_assigned_devs_list; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		c_cgroups_dev_item_free(dev_item);
+	}
+	list_delete(global_assigned_devs_list);
+	global_assigned_devs_list = NULL;
+
+	for (list_t *l = global_allowed_devs_list; l; l = l->next) {
+		c_cgroups_dev_item_t *dev_item = l->data;
+		c_cgroups_dev_item_free(dev_item);
+	}
+	list_delete(global_allowed_devs_list);
+	global_allowed_devs_list = NULL;
+}
+
 static void INIT
 c_cgroups_dev_init(void)
 {
@@ -1067,4 +1090,8 @@ c_cgroups_dev_init(void)
 	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
 	container_register_device_set_access_handler(MOD_NAME, c_cgroups_dev_device_set_access);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
+
+	// register cleanup on exit handler
+	if (atexit(&c_cgroups_dev_deinit))
+		WARN("Could not register on exit deinit method 'c_cgroups_dev_deinit()'");
 }
