@@ -110,7 +110,7 @@
 
 static const char *cmld_path = DEFAULT_BASE_PATH;
 static char *cmld_container_path = NULL;
-static const char *cmld_wrapped_keys_path = NULL;
+static char *cmld_wrapped_keys_path = NULL;
 
 static list_t *cmld_containers_list = NULL; // usually first element is c0
 static list_t *cmld_units_list = NULL;
@@ -2079,6 +2079,9 @@ cmld_cleanup(void)
 
 	if (cmld_container_path)
 		mem_free0(cmld_container_path);
+
+	if (cmld_wrapped_keys_path)
+		mem_free0(cmld_wrapped_keys_path);
 
 	if (cmld_device_uuid)
 		mem_free0(cmld_device_uuid);
