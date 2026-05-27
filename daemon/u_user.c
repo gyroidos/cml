@@ -373,3 +373,9 @@ u_user_init(void)
 	if (chmod(LOGFILE_DIR, mode))
 		WARN_ERRNO("Could not chmod %s (%o)", LOGFILE_DIR, mode);
 }
+
+static void DEINIT
+u_user_deinit(void)
+{
+	unit_unregister_compartment_module(&u_user_module);
+}

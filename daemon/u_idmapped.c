@@ -251,3 +251,9 @@ u_idmapped_init(void)
 	// register this module in unit.c
 	unit_register_compartment_module(&u_idmapped_module);
 }
+
+static void DEINIT
+u_idmapped_deinit(void)
+{
+	unit_unregister_compartment_module(&u_idmapped_module);
+}

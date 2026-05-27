@@ -34,6 +34,9 @@ typedef struct unit unit_t;
 void
 unit_register_compartment_module(compartment_module_t *mod);
 
+void
+unit_unregister_compartment_module(compartment_module_t *mod);
+
 unit_t *
 unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv, const char **env,
 	 size_t env_len, bool netns, const char *data_path, const char *sock_name, int sock_type,
