@@ -254,10 +254,16 @@ container_free(container_t *container)
 	}
 	list_delete(container->module_allowed_list);
 
-	if (container->device_allowed_list)
+	if (container->device_allowed_list) {
+		for (char **entry = container->device_allowed_list; *entry; entry++)
+			mem_free0(*entry);
 		mem_free0(container->device_allowed_list);
-	if (container->device_assigned_list)
+	}
+	if (container->device_assigned_list) {
+		for (char **entry = container->device_assigned_list; *entry; entry++)
+			mem_free0(*entry);
 		mem_free0(container->device_assigned_list);
+	}
 
 	for (list_t *l = container->usbdev_list; l; l = l->next) {
 		container_usbdev_t *usbdev = l->data;
