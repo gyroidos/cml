@@ -454,6 +454,10 @@ compartment_free(compartment_t *compartment)
 	if (compartment->debug_log_dir)
 		mem_free0(compartment->debug_log_dir);
 
+	for (list_t *l = compartment->observer_list; l; l = l->next)
+		mem_free0(l->data);
+	list_delete(compartment->observer_list);
+
 	mem_free0(compartment);
 }
 
