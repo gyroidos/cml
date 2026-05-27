@@ -428,6 +428,7 @@ compartment_free(compartment_t *compartment)
 
 	uuid_free(compartment->uuid);
 	mem_free0(compartment->name);
+	mem_free0(compartment->description);
 
 	for (list_t *l = compartment->csock_list; l; l = l->next) {
 		compartment_sock_t *cs = l->data;
