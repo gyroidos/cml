@@ -222,3 +222,9 @@ u_service_init(void)
 	// register this module in unit.c
 	unit_register_compartment_module(&u_service_module);
 }
+
+static void DEINIT
+u_service_deinit(void)
+{
+	unit_unregister_compartment_module(&u_service_module);
+}

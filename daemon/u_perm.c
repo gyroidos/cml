@@ -309,3 +309,9 @@ u_perm_init(void)
 	// register this module in unit.c
 	unit_register_compartment_module(&u_perm_module);
 }
+
+static void DEINIT
+u_perm_deinit(void)
+{
+	unit_unregister_compartment_module(&u_perm_module);
+}

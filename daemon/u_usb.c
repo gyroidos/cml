@@ -224,3 +224,9 @@ u_usb_init(void)
 	// register this module in unit.c
 	unit_register_compartment_module(&u_usb_module);
 }
+
+static void DEINIT
+u_usb_deinit(void)
+{
+	unit_unregister_compartment_module(&u_usb_module);
+}

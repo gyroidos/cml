@@ -87,6 +87,16 @@ unit_register_compartment_module(compartment_module_t *mod)
 	      list_length(compartment_module_list));
 }
 
+void
+unit_unregister_compartment_module(compartment_module_t *mod)
+{
+	ASSERT(mod);
+
+	compartment_module_list = list_remove(compartment_module_list, mod);
+	DEBUG("Unit module %s unregistered, nr of hooks: %d)", mod->name,
+	      list_length(compartment_module_list));
+}
+
 unit_t *
 unit_new(const uuid_t *uuid, const char *name, const char *command, char **argv, const char **env,
 	 size_t env_len, bool netns, const char *data_path, const char *sock_name, int sock_type,
