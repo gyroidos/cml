@@ -98,9 +98,17 @@ main_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
 }
 
-static void
-main_logf_cleanup()
+/*
+ * Tagged DEINIT_LAST so it fires after every other DEINIT in the daemon.
+ * Drains the event subsystem (any signal/timer/inotify entries that
+ * subsystems failed to remove themselves) and then closes the log
+ * handlers last so per-module deinit messages still reach the log file.
+ */
+DEINIT_LAST static void
+main_deinit(void)
 {
+	event_reset();
+
 	logf_unregister(cml_daemon_logfile_handler);
 	logf_unregister(cml_daemon_stdout_handler);
 
@@ -119,15 +127,6 @@ main_init(void)
 	main_logfile_p = logf_file_new(LOGFILE_DIR "/cml-daemon");
 	cml_daemon_logfile_handler = logf_register(&logf_file_write, main_logfile_p);
 	logf_handler_set_prio(cml_daemon_logfile_handler, LOGF_PRIO_TRACE);
-
-	/*
-	 * Register logf cleanup as an INIT-time atexit so it runs after every
-	 * atexit added later from main() / cmld_init (LIFO order). Other
-	 * shutdown paths may still want to log; main_logf_cleanup must fire
-	 * last.
-	 */
-	if (atexit(&main_logf_cleanup))
-		WARN("could not register on exit cleanup method 'main_logf_cleanup()'");
 
 	main_core_dump_enable();
 }
