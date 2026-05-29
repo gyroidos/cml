@@ -422,6 +422,14 @@ container_config_get_net_ifaces_list_new(const container_config_t *config)
 		}
 		container_pnet_cfg_t *pnet_cfg = container_pnet_cfg_new(
 			config->cfg->net_ifaces[i]->netif, mac_filter_enabled, mac_whitelist);
+
+		/* container_pnet_cfg_new() deep-copies each entry; release the
+		 * local mac_whitelist (both nodes and entries) regardless of
+		 * whether pnet_cfg creation succeeded. */
+		for (list_t *l = mac_whitelist; l; l = l->next)
+			mem_free0(l->data);
+		list_delete(mac_whitelist);
+
 		if (pnet_cfg == NULL) {
 			ERROR("Failed to create container_pnet_cfg for %s",
 			      config->cfg->net_ifaces[i]->netif);
