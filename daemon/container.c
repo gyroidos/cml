@@ -274,6 +274,8 @@ container_free(container_t *container)
 	for (list_t *l = container->vnet_cfg_list; l; l = l->next) {
 		container_vnet_cfg_t *vnet_cfg = l->data;
 		mem_free0(vnet_cfg->vnet_name);
+		if (vnet_cfg->rootns_name)
+			mem_free0(vnet_cfg->rootns_name);
 		mem_free0(vnet_cfg);
 	}
 	list_delete(container->vnet_cfg_list);
