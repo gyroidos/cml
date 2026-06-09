@@ -470,6 +470,6 @@ ns_join_by_pid(pid_t pid, int nstype)
 	}
 
 	close(fd);
-	INFO("Sucessfully joined ns of pid by pid: %d.", pid);
+	TRACE("Sucessfully joined ns of pid by pid: %d.", pid);
 	return 0;
 }
