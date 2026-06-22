@@ -104,6 +104,8 @@ mount_free(mount_t *mnt)
 			mem_free0(mntent->sha1);
 		if (mntent->sha256)
 			mem_free0(mntent->sha256);
+		if (mntent->verity_sha256)
+			mem_free0(mntent->verity_sha256);
 		if (mntent->mount_data)
 			mem_free0(mntent->mount_data);
 		mem_free0(mntent);
