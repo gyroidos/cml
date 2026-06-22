@@ -147,9 +147,11 @@ tss_init(void)
 	}
 
 	// Start the tpm2d
-	tpm2d_unit = unit_new(uuid_new(TPM2D_UUID), "TPM2D", TPM2D_BINARY_NAME, NULL, NULL, 0,
-			      false, TPM2D_BASE_DIR, TPM2D_CONTROL_SOCKET, SOCK_STREAM,
+	uuid_t *tpm2d_uuid = uuid_new(TPM2D_UUID);
+	tpm2d_unit = unit_new(tpm2d_uuid, "TPM2D", TPM2D_BINARY_NAME, NULL, NULL, 0, false,
+			      TPM2D_BASE_DIR, TPM2D_CONTROL_SOCKET, SOCK_STREAM,
 			      &tss_tpm2d_on_connect_cb, true);
+	uuid_free(tpm2d_uuid);
 
 	// grant access to the TPM
 	list_t *dev_nodes = list_append(NULL, "/dev/tpmrm0");
