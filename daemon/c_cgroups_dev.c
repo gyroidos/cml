@@ -823,6 +823,9 @@ c_cgroups_dev_free(void *cgroups_devp)
 	c_cgroups_dev_t *cgroups_dev = cgroups_devp;
 	ASSERT(cgroups_dev);
 
+	if (cgroups_dev->path)
+		mem_free0(cgroups_dev->path);
+
 	mem_free0(cgroups_dev);
 }
 
