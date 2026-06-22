@@ -59,6 +59,7 @@
 char *scd_sock_path = NULL;
 
 static unit_t *scd_unit;
+static event_io_t *scd_event_io = NULL;
 
 static int
 scd_register_listener(int fd)
@@ -140,6 +141,8 @@ scd_event_cb_recv_message(int fd, unsigned events, event_io_t *io, UNUSED void *
 connection_err:
 	event_remove_io(io);
 	event_io_free(io);
+	if (io == scd_event_io)
+		scd_event_io = NULL;
 	if (close(fd) < 0)
 		WARN_ERRNO("Failed to close connected scd event socket");
 	return;
@@ -164,8 +167,8 @@ scd_on_connect_cb(int sock, const char *sock_path)
 	/* register socket for receiving data */
 	fd_make_non_blocking(sock);
 
-	event_io_t *event = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
-	event_add_io(event);
+	scd_event_io = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
+	event_add_io(scd_event_io);
 
 	/* notify containers about (re-)connection of the scd */
 	for (int i = 0; i < cmld_containers_get_count(); i++) {
@@ -269,6 +272,11 @@ void
 scd_cleanup(void)
 {
 	unit_kill(scd_unit);
+	if (scd_event_io) {
+		event_remove_io(scd_event_io);
+		event_io_free(scd_event_io);
+		scd_event_io = NULL;
+	}
 	if (scd_sock_path)
 		mem_free0(scd_sock_path);
 	unit_free(scd_unit);
