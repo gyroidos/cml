@@ -1098,6 +1098,7 @@ c_vol_cleanup_dm(c_vol_t *vol)
 		char *type = dm_get_target_type_new(fd, label);
 		if (type == NULL) {
 			WARN("Failed to get target type of %s\n", label);
+			mem_free0(label);
 			continue;
 		}
 
