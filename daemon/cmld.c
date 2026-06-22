@@ -671,7 +671,7 @@ cmld_reload_container_internal(const uuid_t *uuid, const char *path, container_c
 	container_set_sync_state(c, true);
 
 cleanup:
-	mem_free0(uuid_tmp);
+	uuid_free(uuid_tmp);
 
 	return c;
 }
