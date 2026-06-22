@@ -54,4 +54,7 @@ audit_process_ack(const container_t *audit, const char *ack);
 int
 audit_init(uint32_t size);
 
+void
+audit_cleanup(void);
+
 #endif /* AUDIT_H */

@@ -1568,10 +1568,13 @@ cmld_init_stage_unit(const char *path)
 		a_b_update_init();
 
 	// init audit and set max audit log file size
-	if (audit_init(device_config_get_audit_size(device_config)) < 0)
+	if (audit_init(device_config_get_audit_size(device_config)) < 0) {
 		WARN("Could not init audit module");
-	else
+	} else {
 		INFO("audit initialized.");
+		if (atexit(&audit_cleanup))
+			WARN("Could not register on exit cleanup method 'audit_cleanup()'");
+	}
 
 	if (time_init() < 0)
 		FATAL("Could not init time module");

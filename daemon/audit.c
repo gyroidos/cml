@@ -78,6 +78,9 @@ uint64_t AUDIT_STORAGE = 0;
 
 static AUDIT_MODE LOGMODE = CONTAINER;
 
+static nl_sock_t *audit_sock = NULL;
+static event_io_t *audit_io_event = NULL;
+
 typedef struct {
 	char *key;
 	char *value;
@@ -901,7 +904,6 @@ audit_init(uint32_t size)
 	TRACE("Initializing audit subsystem");
 
 	/* Open audit netlink socket */
-	nl_sock_t *audit_sock;
 	if (!(audit_sock = nl_sock_default_new(NETLINK_AUDIT))) {
 		ERROR("Failed to allocate audit netlink socket");
 		return -1;
@@ -911,19 +913,38 @@ audit_init(uint32_t size)
 	if (-1 == audit_kernel_send(audit_sock, AUDIT_SET, &s_pid, sizeof(struct audit_status))) {
 		ERROR("Failed to set cmld as auditd in kernel!");
 		nl_sock_free(audit_sock);
+		audit_sock = NULL;
 		return -1;
 	}
 
-	event_io_t *audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
-						  &audit_cb_kernel_handle_log, audit_sock);
+	audit_io_event = event_io_new(nl_sock_get_fd(audit_sock), EVENT_IO_READ,
+				      &audit_cb_kernel_handle_log, audit_sock);
 	event_add_io(audit_io_event);
 
 	/* Register message handler for audit logs */
 	if (fd_make_non_blocking(nl_sock_get_fd(audit_sock))) {
 		ERROR("Could not set fd of audit netlink socket to non blocking!");
+		event_remove_io(audit_io_event);
+		event_io_free(audit_io_event);
+		audit_io_event = NULL;
 		nl_sock_free(audit_sock);
+		audit_sock = NULL;
 		return -1;
 	}
 
 	return 0;
+}
+
+void
+audit_cleanup(void)
+{
+	if (audit_io_event) {
+		event_remove_io(audit_io_event);
+		event_io_free(audit_io_event);
+		audit_io_event = NULL;
+	}
+	if (audit_sock) {
+		nl_sock_free(audit_sock);
+		audit_sock = NULL;
+	}
 }
