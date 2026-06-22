@@ -69,6 +69,7 @@
 struct control {
 	int sock; // listen socket fd
 	bool privileged;
+	event_io_t *event_io_accept;	      // event_io for the listening socket
 	list_t *event_io_sock_connected_list; // list of clients
 };
 
@@ -1964,8 +1965,8 @@ control_new(int sock, bool privileged)
 	control->sock = sock;
 	control->privileged = privileged;
 
-	event_io_t *event = event_io_new(sock, EVENT_IO_READ, control_cb_accept, control);
-	event_add_io(event);
+	control->event_io_accept = event_io_new(sock, EVENT_IO_READ, control_cb_accept, control);
+	event_add_io(control->event_io_accept);
 
 	return control;
 }
@@ -1999,6 +2000,12 @@ control_free(control_t *control)
 	}
 	list_delete(control->event_io_sock_connected_list);
 	control->event_io_sock_connected_list = NULL;
+
+	if (control->event_io_accept) {
+		event_remove_io(control->event_io_accept);
+		event_io_free(control->event_io_accept);
+		control->event_io_accept = NULL;
+	}
 
 	control_list = list_remove(control_list, control);
 
