@@ -123,6 +123,10 @@ u_idmapped_free(void *idmappedp)
 	u_idmapped_t *idmapped = idmappedp;
 	ASSERT(idmapped);
 
+	for (list_t *l = idmapped->mnt_list; l; l = l->next)
+		u_idmapped_mnt_free(l->data);
+	list_delete(idmapped->mnt_list);
+
 	mem_free0(idmapped);
 }
 
