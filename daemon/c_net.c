@@ -1618,6 +1618,9 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		for (list_t *l = net->interface_list; l; l = l->next) {
 			c_net_interface_t *ni = l->data;
 			// delete veth pair if it was created!
+			if (ni->veth_cmld_name == NULL) {
+				continue;
+			}
 			if (ni->created && c_net_is_veth_used(ni->veth_cmld_name)) {
 				DEBUG("Removing veth interface %s", ni->veth_cmld_name);
 				c_net_interface_down(ni->veth_cmld_name);
