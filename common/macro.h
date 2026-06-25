@@ -786,6 +786,21 @@
 #define INIT __attribute__((constructor))
 
 /**
+ * Indicates that a function is executed in destructor context after main
+ * (or exit()) returns, in reverse order of construction. Paired with INIT
+ * for symmetric module-level setup and teardown.
+ */
+#define DEINIT __attribute__((destructor))
+
+/**
+ * Like DEINIT, but pinned to the lowest user-allowed destructor priority
+ * (101) so the function fires last among all DEINIT/destructor handlers.
+ * Use this for teardown that must outlive every other DEINIT, e.g.
+ * closing log handlers used by the rest of the destructor chain.
+ */
+#define DEINIT_LAST __attribute__((destructor(101)))
+
+/**
  * Helper macro to cast a function pointer to a void pointer.
  */
 #ifdef __GNUC__
