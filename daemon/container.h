@@ -347,28 +347,6 @@ void
 container_vnet_cfg_free(container_vnet_cfg_t *vnet_cfg);
 
 /**
- * This function provides the container's runtime config
- * of veth interfaces in form of a container_vnet_cfg_t* list.
- * The elements contain the veth name inside the container and
- * the runtime generated interface name of the rootns endpoint.
- */
-list_t *
-container_get_vnet_runtime_cfg_new(const container_t *container);
-
-/**
- * Registers the corresponding handler for container_get_vnet_runtime_cfg_new
- */
-void
-container_register_get_vnet_runtime_cfg_new_handler(const char *mod_name,
-						    list_t *(*handler)(void *data));
-
-/**
- * Unregisters the corresponding handler for container_get_vnet_runtime_cfg_new
- */
-void
-container_unregister_get_vnet_runtime_cfg_new_handler(void);
-
-/**
  * Initialize a container_pnet_cfg_t data structure and allocate needed memory.
  * @if_name may be either the name or the MAC of the phyiscal NIC
  */
@@ -578,6 +556,13 @@ CONTAINER_MODULE_WRAPPER_DECLARE(add_net_interface, int, container_pnet_cfg_t *p
  * Removes a network interface from the container.
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(remove_net_interface, int, const char *iface)
+
+/**
+ * Provides the container's runtime config of veth interfaces as a
+ * container_vnet_cfg_t * list. Each element contains the veth name inside
+ * the container and the runtime-generated rootns endpoint name.
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(get_vnet_runtime_cfg_new, list_t *)
 
 /**
  * Registers the corresponding handler for container_setuid0
