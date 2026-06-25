@@ -489,3 +489,13 @@ c_user_init(void)
 	container_register_get_uid_handler(MOD_NAME, c_user_get_uid);
 	container_register_open_userns_handler(MOD_NAME, c_user_open_userns);
 }
+
+static void DEINIT
+c_user_deinit(void)
+{
+	container_unregister_setuid0_handler();
+	container_unregister_get_uid_handler();
+	container_unregister_open_userns_handler();
+
+	container_unregister_compartment_module(&c_user_module);
+}

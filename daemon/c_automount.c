@@ -281,3 +281,9 @@ c_automount_init(void)
 	// register this module in container.c
 	container_register_compartment_module(&c_automount_module);
 }
+
+static void DEINIT
+c_automount_deinit(void)
+{
+	container_unregister_compartment_module(&c_automount_module);
+}

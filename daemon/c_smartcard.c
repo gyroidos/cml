@@ -1352,3 +1352,18 @@ c_smartcard_init(void)
 	container_register_has_token_changed_handler(MOD_NAME, c_smartcard_has_token_changed);
 	container_register_scd_connect_handler(MOD_NAME, c_smartcard_scd_connect);
 }
+
+static void DEINIT
+c_smartcard_deinit(void)
+{
+	container_unregister_ctrl_with_smartcard_handler();
+	container_unregister_set_smartcard_error_cb_handler();
+	container_unregister_change_pin_handler();
+	container_unregister_scd_release_pairing_handler();
+	container_unregister_token_attach_handler();
+	container_unregister_token_detach_handler();
+	container_unregister_has_token_changed_handler();
+	container_unregister_scd_connect_handler();
+
+	container_unregister_compartment_module(&c_smartcard_module);
+}

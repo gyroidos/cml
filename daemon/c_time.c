@@ -292,3 +292,12 @@ c_time_init(void)
 	container_register_get_creation_time_handler(MOD_NAME, c_time_get_creation_time);
 	container_register_get_uptime_handler(MOD_NAME, c_time_get_uptime);
 }
+
+static void DEINIT
+c_time_deinit(void)
+{
+	container_unregister_get_creation_time_handler();
+	container_unregister_get_uptime_handler();
+
+	container_unregister_compartment_module(&c_time_module);
+}

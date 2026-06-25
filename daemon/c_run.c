@@ -717,3 +717,13 @@ c_run_init(void)
 	container_register_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
 	container_register_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
 }
+
+static void DEINIT
+c_run_deinit(void)
+{
+	container_unregister_run_handler();
+	container_unregister_write_exec_input_handler();
+	container_unregister_get_console_sock_cmld_handler();
+
+	container_unregister_compartment_module(&c_run_module);
+}

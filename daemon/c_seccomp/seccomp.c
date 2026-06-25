@@ -641,3 +641,9 @@ c_seccomp_init(void)
 	// register this module in container.c
 	container_register_compartment_module(&c_seccomp_module);
 }
+
+static void DEINIT
+c_seccomp_deinit(void)
+{
+	container_unregister_compartment_module(&c_seccomp_module);
+}

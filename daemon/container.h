@@ -148,6 +148,12 @@ void
 container_register_compartment_module(compartment_module_t *mod);
 
 /**
+ * Unregister a previously registered compartment module.
+ */
+void
+container_unregister_compartment_module(compartment_module_t *mod);
+
+/**
  * constructor that creates a new container instance
  * with the given parameters.
  *
@@ -355,6 +361,12 @@ container_get_vnet_runtime_cfg_new(const container_t *container);
 void
 container_register_get_vnet_runtime_cfg_new_handler(const char *mod_name,
 						    list_t *(*handler)(void *data));
+
+/**
+ * Unregisters the corresponding handler for container_get_vnet_runtime_cfg_new
+ */
+void
+container_unregister_get_vnet_runtime_cfg_new_handler(void);
 
 /**
  * Initialize a container_pnet_cfg_t data structure and allocate needed memory.

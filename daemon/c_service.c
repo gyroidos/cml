@@ -522,3 +522,13 @@ c_service_init(void)
 	container_register_audit_record_notify_handler(MOD_NAME, c_service_audit_notify);
 	container_register_audit_notify_complete_handler(MOD_NAME, c_service_audit_notify_complete);
 }
+
+static void DEINIT
+c_service_deinit(void)
+{
+	container_unregister_audit_record_send_handler();
+	container_unregister_audit_record_notify_handler();
+	container_unregister_audit_notify_complete_handler();
+
+	container_unregister_compartment_module(&c_service_module);
+}

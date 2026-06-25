@@ -740,9 +740,11 @@ static compartment_module_t c_hotplug_module = {
 	.join_ns = NULL,
 };
 
-static void
+static void DEINIT
 c_hotplug_deinit(void)
 {
+	container_unregister_compartment_module(&c_hotplug_module);
+
 	/*
 	 * per-entry data pointers are borrowed from each container's usbdev_list
 	 * and not owned by c_hotplug_token_list, so only the list nodes need releasing.
@@ -756,8 +758,4 @@ c_hotplug_init(void)
 {
 	// register this module in container.c
 	container_register_compartment_module(&c_hotplug_module);
-
-	// register cleanup on exit handler
-	if (atexit(&c_hotplug_deinit))
-		WARN("Could not register on exit deinit method 'c_hotplug_deinit()'");
 }

@@ -1778,3 +1778,13 @@ c_net_init(void)
 	container_register_get_vnet_runtime_cfg_new_handler(MOD_NAME,
 							    c_net_get_interface_mapping_new);
 }
+
+static void DEINIT
+c_net_deinit(void)
+{
+	container_unregister_add_net_interface_handler();
+	container_unregister_remove_net_interface_handler();
+	container_unregister_get_vnet_runtime_cfg_new_handler();
+
+	container_unregister_compartment_module(&c_net_module);
+}

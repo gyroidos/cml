@@ -166,3 +166,11 @@ c_cap_init(void)
 	// register relevant handlers implemented by this module
 	container_register_set_cap_current_process_handler(MOD_NAME, c_cap_set_current_process);
 }
+
+static void DEINIT
+c_cap_deinit(void)
+{
+	container_unregister_set_cap_current_process_handler();
+
+	container_unregister_compartment_module(&c_cap_module);
+}
