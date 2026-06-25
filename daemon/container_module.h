@@ -25,7 +25,7 @@
  * @file container_module.h
  *
  * Module macro magic to avoid code duplication and
- * functions implementd by submodules using those macros
+ * functions implemented by submodules using those macros
  */
 
 #ifndef CONTAINER_MODULE_H
@@ -49,18 +49,18 @@
 	void container_register_## name ##_handler(const char *mod_name, type (*h)(__VA_ARGS__)) \
 	{ \
 		if (container_## name ##_handler) { \
-			WARN("%s_handler allready registered, skip", #name); \
+			WARN("%s_handler already registered, skip", #name); \
 			return; \
 		} \
 		container_## name ##_handler = mem_new0(container_## name ##_handler_t, 1); \
 		container_## name ##_handler->mod_name = mod_name; \
 		container_## name ##_handler->handler_func = h; \
-		INFO("%s_handler registerd by module '%s'.", #name, mod_name); \
+		INFO("%s_handler registered by module '%s'.", #name, mod_name); \
 	} \
 	void container_unregister_## name ##_handler(void) \
 	{ \
 		if (container_## name ##_handler) { \
-			INFO("%s_handler unregisterd by module '%s'.", #name, \
+			INFO("%s_handler unregistered by module '%s'.", #name, \
 			     container_## name ##_handler->mod_name); \
 			mem_free0(container_## name ##_handler); \
 		} \
