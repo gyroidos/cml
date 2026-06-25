@@ -119,6 +119,16 @@ container_register_compartment_module(compartment_module_t *mod)
 	      list_length(compartment_module_list));
 }
 
+void
+container_unregister_compartment_module(compartment_module_t *mod)
+{
+	ASSERT(mod);
+
+	compartment_module_list = list_remove(compartment_module_list, mod);
+	DEBUG("Container module %s unregistered, nr of hooks: %d)", mod->name,
+	      list_length(compartment_module_list));
+}
+
 container_t *
 container_new(const uuid_t *uuid, const char *name, container_type_t type, bool ns_usr, bool ns_net,
 	      const void *os, const char *config_filename, const char *images_dir,

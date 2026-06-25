@@ -195,3 +195,9 @@ c_oci_init(void)
 	// register this module in container.c
 	container_register_compartment_module(&c_oci_module);
 }
+
+static void DEINIT
+c_oci_deinit(void)
+{
+	container_unregister_compartment_module(&c_oci_module);
+}

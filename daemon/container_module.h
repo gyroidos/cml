@@ -37,7 +37,8 @@
 // clang-format off
 #define CONTAINER_MODULE_WRAPPER_DECLARE(name, type, ...) \
 	type container_## name(const container_t *container, ##__VA_ARGS__); \
-	void container_register_## name ##_handler(const char *mod_name, type (*h)(void *, ##__VA_ARGS__));
+	void container_register_## name ##_handler(const char *mod_name, type (*h)(void *, ##__VA_ARGS__)); \
+	void container_unregister_## name ##_handler(void);
 
 #define CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(name, type, ...) \
 	typedef struct { \
@@ -55,6 +56,14 @@
 		container_## name ##_handler->mod_name = mod_name; \
 		container_## name ##_handler->handler_func = h; \
 		INFO("%s_handler registerd by module '%s'.", #name, mod_name); \
+	} \
+	void container_unregister_## name ##_handler(void) \
+	{ \
+		if (container_## name ##_handler) { \
+			INFO("%s_handler unregisterd by module '%s'.", #name, \
+			     container_## name ##_handler->mod_name); \
+			mem_free0(container_## name ##_handler); \
+		} \
 	}
 
 #define CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(name, type, unimpl) \

@@ -332,3 +332,9 @@ c_cgroups_sockopt_init(void)
 	// register this module in container.c
 	container_register_compartment_module(&c_cgroups_sockopt_module);
 }
+
+static void DEINIT
+c_cgroups_sockopt_deinit(void)
+{
+	container_unregister_compartment_module(&c_cgroups_sockopt_module);
+}

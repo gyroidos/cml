@@ -1321,9 +1321,18 @@ static compartment_module_t c_cgroups_module = {
 	.join_ns = NULL,
 };
 
-static void
+static void DEINIT
 c_cgroups_deinit(void)
 {
+	container_unregister_freeze_handler();
+	container_unregister_unfreeze_handler();
+	container_unregister_device_allow_handler();
+	container_unregister_device_deny_handler();
+	container_unregister_is_device_allowed_handler();
+	container_unregister_add_pid_to_cgroups_handler();
+
+	container_unregister_compartment_module(&c_cgroups_module);
+
 	/*
 	 * per-entry data is mem_new0'd by c_cgroups_list_add() and is owned
 	 * by the global lists. Free each item before releasing the list nodes.
@@ -1356,10 +1365,6 @@ c_cgroups_init(void)
 	container_register_device_deny_handler(MOD_NAME, c_cgroups_devices_dev_deny);
 	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_devices_is_dev_allowed);
 	container_register_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
-
-	// register cleanup on exit handler
-	if (atexit(&c_cgroups_deinit))
-		WARN("Could not register on exit deinit method 'c_cgroups_deinit()'");
 
 	// mount cgroups if not allready mounted by init
 	if (mount_cgroups(get_active_cgroups_subsystems()))
