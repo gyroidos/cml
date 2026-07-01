@@ -481,14 +481,20 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 	ASSERT(resp_fd);
 
 	guestos_t *os = guestos_new_from_buffer(cfg_buf, cfg_buf_len, guestos_basepath);
-	const char *os_name = NULL;
+
+	/*
+	 * guestos_get_name() borrows a pointer into the protobuf-unpacked
+	 * config owned by os. Duplicate it so it survives guestos_free() and
+	 * remains valid for the audit_log_event() at the err label.
+	 */
+	char *os_name = mem_strdup(os ? guestos_get_name(os) : "NA");
+
 	if (!os) {
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "push-os-invalid", guestos_basepath,
 				0);
 		ERROR("Could not instantiate GuestOS from buffer");
 		goto err;
 	}
-	os_name = guestos_get_name(os);
 
 	switch (verify_result) {
 	case VERIFY_GOOD:
@@ -603,6 +609,7 @@ trigger_download:
 	guestos_mgr_download_latest(os_name, *resp_fd);
 
 	mem_free0(resp_fd);
+	mem_free0(os_name);
 	return;
 
 cleanup_purge:
@@ -617,6 +624,7 @@ err:
 	if (control_send_message(CONTROL_RESPONSE_GUESTOS_MGR_INSTALL_FAILED, *resp_fd) < 0)
 		WARN("Could not send response to fd=%d", *resp_fd);
 	mem_free0(resp_fd);
+	mem_free0(os_name);
 }
 
 int
