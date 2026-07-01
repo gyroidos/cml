@@ -40,6 +40,7 @@
 #include <alloca.h>
 #include <sys/sendfile.h>
 #include <errno.h>
+#include <stdint.h>
 
 /******************************************************************************/
 
@@ -509,7 +510,9 @@ file_disk_space_available(const char *path, off_t required, float threshold)
 	min_free_space *= threshold;
 
 	if (required > available || (available - required) < min_free_space) {
-		ERROR("Not enough disk space left");
+		ERROR("Not enough disk space left, required: %jd, "
+		      "available: %jd, min_free_space, %jd, threshold: %f",
+		      (intmax_t)required, (intmax_t)available, (intmax_t)min_free_space, threshold);
 		return false;
 	}
 
