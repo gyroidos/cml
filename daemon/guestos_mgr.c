@@ -451,13 +451,26 @@ guestos_mgr_update_images(void)
 static char *
 write_to_tmpfile_new(unsigned char *buf, size_t buflen)
 {
-	/* this fixes the problem that /tmp is unshared between cmld and scd which is why
+	/*
+	 * this fixes the problem that /tmp is unshared between cmld and scd which is why
 	 * it cannot be used to share files to be hashed (e.g. newca_certs)
-	 * FIXME: move SCD in own container and introduce shared mount
 	 */
 	char *file = mem_printf("%s/shared/tmpXXXXXXXX", DEFAULT_BASE_PATH);
+	mode_t mode = 00644;
 	int fd = mkstemp(file);
 	if (fd != -1) {
+		/*
+		 * mkstemp generates files with 600, thus ensure units especially the SCD
+		 * can read this.
+		 */
+		if (fchmod(fd, mode)) {
+			ERROR_ERRNO("Could not chmod temp file %s (%o)", file, mode);
+			close(fd);
+			if (unlink(file))
+				WARN_ERRNO("Failed to delete tmpfile %s", file);
+			mem_free0(file);
+			return NULL;
+		}
 		int len = fd_write(fd, (char *)buf, buflen);
 		close(fd);
 		if (len >= 0 && (size_t)len == buflen)
