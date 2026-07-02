@@ -1635,8 +1635,14 @@ cmld_init_stage_container(void)
 			  device_config_get_host_dns(device_config));
 
 	cmld_shared_data_dir = mem_printf("%s/%s", cmld_path, CMLD_PATH_SHARED_DATA_DIR);
-	if (mkdir(cmld_shared_data_dir, 0700) < 0 && errno != EEXIST)
-		FATAL_ERRNO("Could not mkdir shared data directory %s", cmld_shared_data_dir);
+	mode_t mode = 0755;
+	if (mkdir(cmld_shared_data_dir, mode) < 0) {
+		if (errno != EEXIST)
+			FATAL_ERRNO("Could not mkdir shared data directory %s",
+				    cmld_shared_data_dir);
+		if (chmod(cmld_shared_data_dir, mode) < 0)
+			FATAL_ERRNO("Could not chmod %s (%o)", cmld_shared_data_dir, mode);
+	}
 
 	const char *update_base_url = device_config_get_update_base_url(device_config);
 	cmld_device_update_base_url = update_base_url ? mem_strdup(update_base_url) : NULL;
