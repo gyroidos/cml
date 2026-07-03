@@ -167,6 +167,19 @@ scd_on_connect_cb(int sock, const char *sock_path)
 	/* register socket for receiving data */
 	fd_make_non_blocking(sock);
 
+	/*
+	 * release a stale event io of a previous connection whose error
+	 * event has not been handled yet, otherwise it would be leaked by
+	 * the overwrite below
+	 */
+	if (scd_event_io) {
+		int old_fd = event_io_get_fd(scd_event_io);
+		event_remove_io(scd_event_io);
+		event_io_free(scd_event_io);
+		if (close(old_fd) < 0)
+			WARN_ERRNO("Failed to close stale scd event socket");
+	}
+
 	scd_event_io = event_io_new(sock, EVENT_IO_READ, &scd_event_cb_recv_message, NULL);
 	event_add_io(scd_event_io);
 
