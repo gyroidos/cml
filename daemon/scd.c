@@ -286,8 +286,11 @@ scd_cleanup(void)
 {
 	unit_kill(scd_unit);
 	if (scd_event_io) {
+		int fd = event_io_get_fd(scd_event_io);
 		event_remove_io(scd_event_io);
 		event_io_free(scd_event_io);
+		if (close(fd) < 0)
+			WARN_ERRNO("Failed to close connected scd event socket");
 		scd_event_io = NULL;
 	}
 	if (scd_sock_path)
