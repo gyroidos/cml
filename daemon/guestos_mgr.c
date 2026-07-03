@@ -568,6 +568,11 @@ push_config_verify_buf_cb(crypto_verify_result_t verify_result, unsigned char *c
 		} else if (os_ver == old_ver) {
 			DEBUG("Retrigger download of GuestOS images for %s of v%" PRIu64 ".",
 			      os_name, os_ver);
+			/*
+			 * os with this version is already registered; free the duplicate
+			 * from the repeated push
+			 */
+			guestos_free(os);
 			goto trigger_download;
 		}
 		DEBUG("Updating GuestOS config for %s from v%" PRIu64 " to v%" PRIu64 ".", os_name,
