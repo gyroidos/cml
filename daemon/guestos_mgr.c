@@ -626,6 +626,7 @@ trigger_download:
 		WARN("Could not send response to fd=%d", *resp_fd);
 	guestos_mgr_download_latest(os_name, *resp_fd);
 
+	mount_free(mnt);
 	mem_free0(resp_fd);
 	mem_free0(os_name);
 	return;
