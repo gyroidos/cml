@@ -1128,11 +1128,6 @@ tpm2_getrandom_new(size_t rand_length)
 		return NULL;
 	}
 
-	char *rand_hex = convert_bin_to_hex_new(rand, rand_length);
-	INFO("Generated Rand: %s", rand_hex);
-
-	mem_free0(rand_hex);
-
 	if (TPM_RC_SUCCESS != tpm2_flushcontext(se_handle))
 		WARN("Flush failed, maybe session handle was allready flushed.");
 
