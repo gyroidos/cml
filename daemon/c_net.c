@@ -1551,8 +1551,10 @@ c_net_cleanup_container(const c_net_t *net)
 		if (ns_join_by_path(net->ns_path) < 0) {
 			WARN("Could not join netns of compartment by path, trying pid");
 
-			if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0)
-				FATAL_ERRNO("Could not join netns of compartment");
+			if (ns_join_by_pid(container_get_pid(net->container), CLONE_NEWNET) < 0) {
+				WARN("Could not join netns of compartment");
+				_exit(0);
+			}
 		}
 
 		list_t *ifaces = network_get_interfaces_new();
@@ -1609,22 +1611,22 @@ c_net_cleanup(void *netp, bool is_rebooting)
 		return;
 	}
 
+	// rename phys interface to avoid name clashes during fallback to rootns
+	if (c_net_cleanup_container(net) == -1)
+		WARN("Failed to create helper child for cleanup of container's netns, still in rootns?");
+
 	if (c_net_cleanup_c0(net) == -1)
 		WARN("Failed to create helper child for cleanup in c0's netns");
 
-	// rename phys interface to avoid name clashes during fallback to rootns
-	if (c_net_cleanup_container(net) == -1) {
-		DEBUG("Failed to create helper child for cleanup of container's netns, still in rootns?");
-		for (list_t *l = net->interface_list; l; l = l->next) {
-			c_net_interface_t *ni = l->data;
-			// delete veth pair if it was created!
-			if (ni->veth_cmld_name == NULL) {
-				continue;
-			}
-			if (ni->created && c_net_is_veth_used(ni->veth_cmld_name)) {
-				DEBUG("Removing veth interface %s", ni->veth_cmld_name);
-				c_net_interface_down(ni->veth_cmld_name);
-			}
+	for (list_t *l = net->interface_list; l; l = l->next) {
+		c_net_interface_t *ni = l->data;
+		// delete veth pair if it was created!
+		if (ni->veth_cmld_name == NULL) {
+			continue;
+		}
+		if (ni->created && c_net_is_veth_used(ni->veth_cmld_name)) {
+			DEBUG("Removing veth interface %s", ni->veth_cmld_name);
+			c_net_interface_down(ni->veth_cmld_name);
 		}
 	}
 
