@@ -241,8 +241,12 @@ device_config_get_scd_env(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-
+#ifdef CC_MODE
+	// not supported in CC Mode
+	return NULL;
+#else
 	return (const char **)config->cfg->scd_env;
+#endif // CC_MODE
 }
 
 size_t
@@ -250,6 +254,10 @@ device_config_get_scd_env_len(const device_config_t *config)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
-
+#ifdef CC_MODE
+	// not supported in CC Mode
+	return 0;
+#else
 	return config->cfg->n_scd_env;
+#endif // CC_MODE
 }
