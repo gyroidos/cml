@@ -668,7 +668,9 @@ c_idmapped_init(void)
 static void DEINIT
 c_idmapped_deinit(void)
 {
-	container_unregister_shift_ids_handler();
+	// unregister handlers implemented by this module
+	container_unregister_shift_ids_handler(MOD_NAME, c_idmapped_shift_ids);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_idmapped_module);
 }

@@ -667,20 +667,6 @@ static compartment_module_t c_cgroups_module = {
 	.join_ns = NULL,
 };
 
-DEINIT static void
-c_cgroups_deinit(void)
-{
-	container_unregister_add_pid_to_cgroups_handler();
-	container_unregister_freeze_handler();
-	container_unregister_unfreeze_handler();
-
-	container_unregister_compartment_module(&c_cgroups_module);
-
-	// free global memory alloctaions
-	if (c_cgroups_subtree)
-		mem_free0(c_cgroups_subtree);
-}
-
 static void INIT
 c_cgroups_init(void)
 {
@@ -721,4 +707,20 @@ c_cgroups_init(void)
 		FATAL("Could not activate cgroup controllers for cmld!");
 
 	mem_free0(cgroup_cmld);
+}
+
+DEINIT static void
+c_cgroups_deinit(void)
+{
+	// unregister handlers implemented by this module
+	container_unregister_add_pid_to_cgroups_handler(MOD_NAME, c_cgroups_add_pid);
+	container_unregister_freeze_handler(MOD_NAME, c_cgroups_freeze);
+	container_unregister_unfreeze_handler(MOD_NAME, c_cgroups_unfreeze);
+
+	// unregister this module from container.c
+	container_unregister_compartment_module(&c_cgroups_module);
+
+	// free global memory alloctaions
+	if (c_cgroups_subtree)
+		mem_free0(c_cgroups_subtree);
 }

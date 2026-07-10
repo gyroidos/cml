@@ -1782,9 +1782,12 @@ c_net_init(void)
 static void DEINIT
 c_net_deinit(void)
 {
-	container_unregister_add_net_interface_handler();
-	container_unregister_remove_net_interface_handler();
-	container_unregister_get_vnet_runtime_cfg_new_handler();
+	// unregister handlers implemented by this module
+	container_unregister_add_net_interface_handler(MOD_NAME, c_net_add_interface);
+	container_unregister_remove_net_interface_handler(MOD_NAME, c_net_remove_interface);
+	container_unregister_get_vnet_runtime_cfg_new_handler(MOD_NAME,
+							      c_net_get_interface_mapping_new);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_net_module);
 }

@@ -2094,10 +2094,12 @@ c_vol_init(void)
 static void DEINIT
 c_vol_deinit(void)
 {
-	container_unregister_get_rootdir_handler();
-	container_unregister_get_mnt_handler();
-	container_unregister_is_encrypted_handler();
-	container_unregister_get_cryptfs_mode_handler();
+	// unregister handlers implemented by this module
+	container_unregister_get_rootdir_handler(MOD_NAME, c_vol_get_rootdir);
+	container_unregister_get_mnt_handler(MOD_NAME, c_vol_get_mnt);
+	container_unregister_is_encrypted_handler(MOD_NAME, c_vol_is_encrypted);
+	container_unregister_get_cryptfs_mode_handler(MOD_NAME, c_vol_get_mode);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_vol_module);
 }

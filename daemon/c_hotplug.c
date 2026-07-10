@@ -740,9 +740,17 @@ static compartment_module_t c_hotplug_module = {
 	.join_ns = NULL,
 };
 
+static void INIT
+c_hotplug_init(void)
+{
+	// register this module in container.c
+	container_register_compartment_module(&c_hotplug_module);
+}
+
 static void DEINIT
 c_hotplug_deinit(void)
 {
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_hotplug_module);
 
 	/*
@@ -751,11 +759,4 @@ c_hotplug_deinit(void)
 	 */
 	list_delete(c_hotplug_token_list);
 	c_hotplug_token_list = NULL;
-}
-
-static void INIT
-c_hotplug_init(void)
-{
-	// register this module in container.c
-	container_register_compartment_module(&c_hotplug_module);
 }

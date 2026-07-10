@@ -1059,14 +1059,29 @@ static compartment_module_t c_cgroups_dev_module = {
 	.join_ns = NULL,
 };
 
+static void INIT
+c_cgroups_dev_init(void)
+{
+	// register this module in container.c
+	container_register_compartment_module(&c_cgroups_dev_module);
+
+	// register relevant handlers implemented by this module
+	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);
+	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
+	container_register_device_set_access_handler(MOD_NAME, c_cgroups_dev_device_set_access);
+	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
+}
+
 static void DEINIT
 c_cgroups_dev_deinit(void)
 {
-	container_unregister_device_allow_handler();
-	container_unregister_device_deny_handler();
-	container_unregister_device_set_access_handler();
-	container_unregister_is_device_allowed_handler();
+	// unregister handlers implemented by this module
+	container_unregister_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);
+	container_unregister_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
+	container_unregister_device_set_access_handler(MOD_NAME, c_cgroups_dev_device_set_access);
+	container_unregister_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_cgroups_dev_module);
 
 	/*
@@ -1087,17 +1102,4 @@ c_cgroups_dev_deinit(void)
 	}
 	list_delete(global_allowed_devs_list);
 	global_allowed_devs_list = NULL;
-}
-
-static void INIT
-c_cgroups_dev_init(void)
-{
-	// register this module in container.c
-	container_register_compartment_module(&c_cgroups_dev_module);
-
-	// register relevant handlers implemented by this module
-	container_register_device_allow_handler(MOD_NAME, c_cgroups_dev_device_allow);
-	container_register_device_deny_handler(MOD_NAME, c_cgroups_dev_device_deny);
-	container_register_device_set_access_handler(MOD_NAME, c_cgroups_dev_device_set_access);
-	container_register_is_device_allowed_handler(MOD_NAME, c_cgroups_dev_is_dev_allowed);
 }

@@ -645,5 +645,6 @@ c_seccomp_init(void)
 static void DEINIT
 c_seccomp_deinit(void)
 {
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_seccomp_module);
 }

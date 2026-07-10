@@ -721,9 +721,11 @@ c_run_init(void)
 static void DEINIT
 c_run_deinit(void)
 {
-	container_unregister_run_handler();
-	container_unregister_write_exec_input_handler();
-	container_unregister_get_console_sock_cmld_handler();
+	// unregister handlers implemented by this module
+	container_unregister_run_handler(MOD_NAME, c_run_exec_process);
+	container_unregister_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
+	container_unregister_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_run_module);
 }
