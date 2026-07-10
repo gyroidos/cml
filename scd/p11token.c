@@ -106,7 +106,7 @@ typedef struct {
 	unsigned char nonce[P11_GCM_NONCE_BYTES]; /* GCM only */
 } p11_cipher_params_t;
 
-int
+static int
 int_pkcs11_wrap_to_pkcs7(const unsigned char *ciphertext, size_t ct_len,
 			 const p11_cipher_params_t *params, unsigned char **out_der,
 			 int *out_der_len)
@@ -185,7 +185,7 @@ err:
 	return ret;
 }
 
-int
+static int
 int_pkcs7_unwrap_to_pkcs11(const unsigned char *der, int der_len, p11_cipher_params_t *params,
 			   unsigned char **ciphertext, size_t *ct_len)
 {
@@ -303,7 +303,7 @@ int_load_module(const char *path, struct ck_function_list **ctx)
 	*ctx = interface->function_list_ptr;*/
 
 	ck_rv_t (*get_function_list)(struct ck_function_list **) =
-		CAST(ck_rv_t (*)(struct ck_function_list **)) dlsym(module, "C_GetFunctionList");
+		CAST(ck_rv_t(*)(struct ck_function_list **)) dlsym(module, "C_GetFunctionList");
 	if (get_function_list == NULL) {
 		ERROR("dlsym failed: %s\n", dlerror());
 		goto error;
@@ -665,7 +665,7 @@ error_init:
 }
 
 // TODO: use pairing secret?
-token_err_t
+static token_err_t
 p11token_unlock(void *int_token, const char *passwd, UNUSED const unsigned char *pairing_secret,
 		UNUSED size_t pairing_sec_len)
 {
@@ -757,7 +757,7 @@ error_init:
 	return ret;
 }
 
-token_err_t
+static token_err_t
 p11token_lock(void *int_token)
 {
 	p11token_t *p11_token = int_token;
@@ -792,7 +792,7 @@ p11token_lock(void *int_token)
 	return TOKEN_ERR_OK;
 }
 
-token_err_t
+static token_err_t
 p11token_wrap_key(void *int_token, UNUSED const char *label, unsigned char *plain_key,
 		  size_t plain_key_len, unsigned char **wrapped_key, int *wrapped_key_len)
 {
@@ -899,7 +899,7 @@ error:
 	return ret;
 }
 
-token_err_t
+static token_err_t
 p11token_unwrap_key(void *int_token, UNUSED const char *label, unsigned char *wrapped_key,
 		    size_t wrapped_key_len, unsigned char **plain_key, int *plain_key_len)
 {
@@ -999,7 +999,7 @@ error:
 	return ret;
 }
 
-token_err_t
+static token_err_t
 p11token_change_pin(void *int_token, const char *oldpass, const char *newpass,
 		    UNUSED const unsigned char *pairing_secret, UNUSED size_t pairing_sec_len,
 		    UNUSED bool is_provisioning)
@@ -1066,7 +1066,7 @@ p11token_get_type()
 /**
  * lock token and cleanup data structure
 */
-void
+static void
 p11token_free(void *int_token)
 {
 	p11token_t *p11_token = int_token;
