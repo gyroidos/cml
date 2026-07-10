@@ -170,7 +170,9 @@ c_cap_init(void)
 static void DEINIT
 c_cap_deinit(void)
 {
-	container_unregister_set_cap_current_process_handler();
+	// unregister handlers implemented by this module
+	container_unregister_set_cap_current_process_handler(MOD_NAME, c_cap_set_current_process);
 
+	// unregister this module in container.c
 	container_unregister_compartment_module(&c_cap_module);
 }

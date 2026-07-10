@@ -199,5 +199,6 @@ c_oci_init(void)
 static void DEINIT
 c_oci_deinit(void)
 {
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_oci_module);
 }

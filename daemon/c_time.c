@@ -296,8 +296,10 @@ c_time_init(void)
 static void DEINIT
 c_time_deinit(void)
 {
-	container_unregister_get_creation_time_handler();
-	container_unregister_get_uptime_handler();
+	// unregister relevant handlers implemented by this module
+	container_unregister_get_creation_time_handler(MOD_NAME, c_time_get_creation_time);
+	container_unregister_get_uptime_handler(MOD_NAME, c_time_get_uptime);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_time_module);
 }

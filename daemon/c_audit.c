@@ -229,12 +229,14 @@ c_audit_init(void)
 static void DEINIT
 c_audit_deinit(void)
 {
-	container_unregister_audit_get_last_ack_handler();
-	container_unregister_audit_set_last_ack_handler();
-	container_unregister_audit_get_processing_ack_handler();
-	container_unregister_audit_set_processing_ack_handler();
-	container_unregister_audit_get_loginuid_handler();
-	container_unregister_audit_set_loginuid_handler();
+	// unregister handlers implemented by this module
+	container_unregister_audit_get_last_ack_handler(MOD_NAME, c_audit_get_last_ack);
+	container_unregister_audit_set_last_ack_handler(MOD_NAME, c_audit_set_last_ack);
+	container_unregister_audit_get_processing_ack_handler(MOD_NAME, c_audit_get_processing_ack);
+	container_unregister_audit_set_processing_ack_handler(MOD_NAME, c_audit_set_processing_ack);
+	container_unregister_audit_get_loginuid_handler(MOD_NAME, c_audit_get_loginuid);
+	container_unregister_audit_set_loginuid_handler(MOD_NAME, c_audit_set_loginuid);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_audit_module);
 }

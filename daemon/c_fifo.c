@@ -488,9 +488,17 @@ static compartment_module_t c_fifo_module = {
 	.join_ns = NULL,
 };
 
+static void INIT
+c_fifo_init(void)
+{
+	// register this module in container.c
+	container_register_compartment_module(&c_fifo_module);
+}
+
 static void DEINIT
 c_fifo_deinit(void)
 {
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_fifo_module);
 
 	/*
@@ -499,11 +507,4 @@ c_fifo_deinit(void)
 	 */
 	list_delete(c0_fifo_list);
 	c0_fifo_list = NULL;
-}
-
-static void INIT
-c_fifo_init(void)
-{
-	// register this module in container.c
-	container_register_compartment_module(&c_fifo_module);
 }

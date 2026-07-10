@@ -1356,14 +1356,16 @@ c_smartcard_init(void)
 static void DEINIT
 c_smartcard_deinit(void)
 {
-	container_unregister_ctrl_with_smartcard_handler();
-	container_unregister_set_smartcard_error_cb_handler();
-	container_unregister_change_pin_handler();
-	container_unregister_scd_release_pairing_handler();
-	container_unregister_token_attach_handler();
-	container_unregister_token_detach_handler();
-	container_unregister_has_token_changed_handler();
-	container_unregister_scd_connect_handler();
+	// unregister handlers implemented by this module
+	container_unregister_ctrl_with_smartcard_handler(MOD_NAME, c_smartcard_container_ctrl);
+	container_unregister_set_smartcard_error_cb_handler(MOD_NAME, c_smartcard_set_error_cb);
+	container_unregister_change_pin_handler(MOD_NAME, c_smartcard_change_pin);
+	container_unregister_scd_release_pairing_handler(MOD_NAME, c_smartcard_scd_release_pairing);
+	container_unregister_token_attach_handler(MOD_NAME, c_smartcard_token_attach);
+	container_unregister_token_detach_handler(MOD_NAME, c_smartcard_token_detach);
+	container_unregister_has_token_changed_handler(MOD_NAME, c_smartcard_has_token_changed);
+	container_unregister_scd_connect_handler(MOD_NAME, c_smartcard_scd_connect);
 
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_smartcard_module);
 }

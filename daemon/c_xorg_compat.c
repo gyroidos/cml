@@ -169,5 +169,6 @@ c_xorg_compat_init(void)
 static void DEINIT
 c_xorg_compat_deinit(void)
 {
+	// unregister this module from container.c
 	container_unregister_compartment_module(&c_xorg_compat_module);
 }
