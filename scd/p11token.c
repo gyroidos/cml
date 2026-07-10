@@ -578,12 +578,12 @@ int_init_token(p11token_t *p11_token, const char *so_pin, const char *user_pin)
 	// terminate token-session
 	P11_CHECK_RV_GOTO(ctx->C_CloseSession(sh), error);
 
-	// free slot id ptr
-	mem_free(slot);
-
 	// Unload Module
 	P11_CHECK_RV_GOTO(ctx->C_Finalize(NULL), error_init);
 	int_unload_module(module);
+
+	// free slot id ptr
+	mem_free(slot);
 
 	p11_token->initialized = true;
 	return TOKEN_ERR_OK;
@@ -644,6 +644,9 @@ int_token_by_label(const char *module_path, const char *label)
 	memcpy(token->label, token_label, P11_LABEL_MAX_LEN);
 	// free label
 	mem_free0(token_label);
+	// free slot id ptr
+	mem_free(slot);
+
 	token->ctx = NULL;
 	token->sh = NULL;
 	token->module = NULL;
@@ -894,6 +897,8 @@ p11token_wrap_key(void *int_token, UNUSED const char *label, unsigned char *plai
 	return TOKEN_ERR_OK;
 error:
 	if (ct) {
+		// assure memory is cleared before freeing, as it may contain sensitive data
+		mem_memset0(ct, ct_len);
 		mem_free0(ct);
 	}
 	return ret;
@@ -994,6 +999,8 @@ p11token_unwrap_key(void *int_token, UNUSED const char *label, unsigned char *wr
 	return TOKEN_ERR_OK;
 error:
 	if (pt) {
+		// assure memory is cleared before freeing, as it may contain sensitive data
+		mem_memset0(pt, pt_len);
 		mem_free0(pt);
 	}
 	return ret;
