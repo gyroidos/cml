@@ -47,6 +47,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 
 // clang-format off
 #ifndef SCD_CONTROL_SOCKET
@@ -381,10 +382,19 @@ scd_token_new(tokentype_t type, const char *uuid, const char *token_info)
 		break;
 	case TOKEN_TYPE_PKCS11:
 		ASSERT(token_info);
+		// sanitize input: only module name is expected, no path
+		char *token_info_cp = mem_strdup(token_info);
+		char *module_name = token_info_cp;
+		char *next_component = strtok(token_info_cp, "/");
+		while (next_component) {
+			module_name = next_component;
+			next_component = strtok(NULL, "/");
+		}
 		str_t *module_path = str_new(PKCS11_MODULE_DIR);
-		str_append(module_path, token_info);
+		str_append(module_path, module_name);
 		char *pkcs11_module = str_free(module_path, false);
 		ntoken = token_new(TOKEN_TYPE_PKCS11, pkcs11_module, uuid);
+		mem_free0(token_info_cp);
 		mem_free0(pkcs11_module);
 		break;
 	default:

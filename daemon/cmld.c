@@ -1599,12 +1599,45 @@ cmld_init_stage_unit(const char *path)
 		}
 	}
 
-	// get scd env
-	const char **scd_env = device_config_get_scd_env(device_config);
-	size_t scd_env_len = device_config_get_scd_env_len(device_config);
+	// Get scd env from the device config and filter it against an allowlist of
+	// permitted variable names. scd runs as root, so forwarding arbitrary env
+	// (e.g. LD_PRELOAD / LD_LIBRARY_PATH) would allow code execution in scd.
+	// Extend the allowlist below as additional PKCS#11 modules require it.
+	static const char *const scd_env_allow_names[] = { "SOFTHSM2_CONF" };
+	static const char *const scd_env_allow_prefixes[] = { "PKCS11_" };
+
+	const char **scd_env_all = device_config_get_scd_env(device_config);
+	size_t scd_env_all_len = device_config_get_scd_env_len(device_config);
+
+	const char **scd_env = mem_new0(const char *, scd_env_all_len + 1);
+	size_t scd_env_len = 0;
+	for (size_t i = 0; i < scd_env_all_len; i++) {
+		const char *entry = scd_env_all[i];
+		const char *eq = strchr(entry, '=');
+		size_t name_len = eq ? (size_t)(eq - entry) : strlen(entry);
+
+		bool allowed = false;
+		for (size_t j = 0; !allowed && j < ELEMENTSOF(scd_env_allow_names); j++) {
+			if (strlen(scd_env_allow_names[j]) == name_len &&
+			    0 == strncmp(entry, scd_env_allow_names[j], name_len))
+				allowed = true;
+		}
+		for (size_t j = 0; !allowed && j < ELEMENTSOF(scd_env_allow_prefixes); j++) {
+			size_t prefix_len = strlen(scd_env_allow_prefixes[j]);
+			if (prefix_len <= name_len &&
+			    0 == strncmp(entry, scd_env_allow_prefixes[j], prefix_len))
+				allowed = true;
+		}
+
+		if (allowed)
+			scd_env[scd_env_len++] = entry;
+		else
+			WARN("Dropping disallowed scd env entry '%.*s'", (int)name_len, entry);
+	}
 
 	if (scd_init(scd_env, scd_env_len) < 0)
 		FATAL("Could not init scd module");
+	mem_free0(scd_env);
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");
