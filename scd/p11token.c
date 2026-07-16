@@ -29,6 +29,8 @@
 #include "common/mem.h"
 #include "common/file.h"
 #include "common/str.h"
+#include "common/hex.h"
+#include "common/ssl_util.h"
 #include "common/uuid.h"
 #include <limits.h>
 #include <string.h>
@@ -52,6 +54,17 @@
 
 #define P11_GCM_NONCE_BYTES 12
 #define P11_GCM_TAG_BYTES 16
+
+/**
+ * Parameters for deriving the PKCS#11 user PIN from the user pin and the device
+ * pairing secret via PBKDF2-HMAC-SHA256. P11_KDF_KEY_BYTES is kept small so the
+ * hex-encoded PIN (2 chars per byte) stays within PKCS#11 module PIN-length limits.
+ * The iteration count follows current OWASP guidance for PBKDF2-HMAC-SHA256; it
+ * must not be changed once tokens are provisioned (the derived PIN would change
+ * and lock the token out) - version the scheme if it ever needs to.
+ */
+#define P11_KDF_ITERATIONS 600000
+#define P11_KDF_KEY_BYTES 16
 
 #define P11_CHECK_RV_RETURN(expr)                                                                  \
 	do {                                                                                       \
@@ -430,6 +443,61 @@ int_token_label_new(const char *label)
 }
 
 /**
+ * Derive the PKCS#11 user PIN from the user pin and the device pairing secret.
+ *
+ * The pin is stretched with PBKDF2-HMAC-SHA256 (pin as password, pairing secret
+ * as salt) and the P11_KDF_KEY_BYTES-byte result is hex-encoded into an ASCII
+ * string (2 chars per byte, NUL-terminated, no separators). Hex-encoding keeps
+ * the derived PIN NUL-free and printable, so it can be handed to the PKCS#11
+ * module (which may treat it as a UTF-8 string) and measured with strlen().
+ * Binding the PIN to the pairing secret ties token authentication to this
+ * specific device.
+ *
+ * The pairing secret is mandatory: a p11 token PIN is always platform-bound.
+ *
+ * @return heap-allocated NULL-terminated hex PIN string (2*P11_KDF_KEY_BYTES
+ *         chars); wipe with mem_memset0(., strlen(.)) and free with mem_free0(.),
+ *         or NULL on failure.
+ */
+static char *
+int_derive_pin_new(const char *pin, const unsigned char *pairing_secret, size_t pairing_sec_len)
+{
+	ASSERT(pin);
+
+	if (NULL == pairing_secret || 0 == pairing_sec_len) {
+		ERROR("Refusing to derive PKCS#11 PIN without a device pairing secret");
+		return NULL;
+	}
+
+	unsigned char *key = ssl_kdf_pbkdf2(pin, pairing_secret, pairing_sec_len,
+					    P11_KDF_ITERATIONS, P11_KDF_KEY_BYTES);
+	if (NULL == key) {
+		ERROR("Failed to derive PKCS#11 PIN from pairing secret");
+		return NULL;
+	}
+
+	char *pin_hex = convert_bin_to_hex_new(key, P11_KDF_KEY_BYTES);
+
+	// clear sensitive derived key material before freeing
+	mem_memset0(key, P11_KDF_KEY_BYTES);
+	mem_free0(key);
+
+	return pin_hex;
+}
+
+/**
+ * Wipe and free a hex PIN string (from int_derive_pin_new or the SO PIN encoder)
+ * so no credential material is left in freed heap memory. NULL-safe.
+ */
+static void
+int_pin_free(char *pin)
+{
+	IF_NULL_RETURN(pin);
+	mem_memset0(pin, strlen(pin));
+	mem_free0(pin);
+}
+
+/**
  * Probe the token's supported key-wrapping mechanism and store it in
  * p11_token->wrap_mech (prefers AES_KEY_WRAP_KWP, falls back to AES_GCM).
  *
@@ -667,10 +735,9 @@ error_init:
 	return NULL;
 }
 
-// TODO: use pairing secret?
 static token_err_t
-p11token_unlock(void *int_token, const char *passwd, UNUSED const unsigned char *pairing_secret,
-		UNUSED size_t pairing_sec_len)
+p11token_unlock(void *int_token, const char *passwd, const unsigned char *pairing_secret,
+		size_t pairing_sec_len)
 {
 	p11token_t *p11_token = int_token;
 	ASSERT(p11_token);
@@ -728,10 +795,15 @@ p11token_unlock(void *int_token, const char *passwd, UNUSED const unsigned char 
 	mem_free(slot_id);
 	slot_id = NULL;
 
+	// derive the PKCS#11 user PIN bound to the device pairing secret
+	char *login_pin = int_derive_pin_new(passwd, pairing_secret, pairing_sec_len);
+	IF_TRUE_GOTO_ERROR(NULL == login_pin, error);
+
 	// login
-	switch (p11_token->ctx->C_Login(*p11_token->sh, CKU_USER, (unsigned char *)passwd,
-					strlen(passwd))) {
+	switch (p11_token->ctx->C_Login(*p11_token->sh, CKU_USER, (unsigned char *)login_pin,
+					strlen(login_pin))) {
 	case CKR_OK:
+		int_pin_free(login_pin);
 		return TOKEN_ERR_OK;
 	case CKR_PIN_INCORRECT:
 		ret = TOKEN_ERR_PW;
@@ -739,6 +811,7 @@ p11token_unlock(void *int_token, const char *passwd, UNUSED const unsigned char 
 	default:
 		DEBUG("C_Login returnvalue unexpected");
 	}
+	int_pin_free(login_pin);
 
 	P11_CHECK_RV_GOTO(p11_token->ctx->C_CloseSession(*p11_token->sh), error);
 error:
@@ -811,6 +884,18 @@ p11token_wrap_key(void *int_token, UNUSED const char *label, unsigned char *plai
 
 	if (token_is_locked(p11_token->token)) {
 		ERROR("p11token_wrap_key: token is locked");
+		ret = TOKEN_ERR_LOCKED;
+		goto error;
+	}
+
+	/**
+	 * Guard against a NULL session handle independently of token->locked: that
+	 * generic flag is not maintained on the direct p11token_lock() path (e.g.
+	 * from p11token_change_pin), so it may read "unlocked" while sh is NULL.
+	 * Dereferencing *p11_token->sh below would then crash scd.
+	 */
+	if (NULL == p11_token->sh) {
+		ERROR("p11token_wrap_key: no open session (token not unlocked)");
 		ret = TOKEN_ERR_LOCKED;
 		goto error;
 	}
@@ -924,6 +1009,16 @@ p11token_unwrap_key(void *int_token, UNUSED const char *label, unsigned char *wr
 		goto error;
 	}
 
+	/**
+	 * Guard against a NULL session handle independently of token->locked (see
+	 * p11token_wrap_key): dereferencing *p11_token->sh below would crash scd.
+	 */
+	if (NULL == p11_token->sh) {
+		ERROR("p11token_unwrap_key: no open session (token not unlocked)");
+		ret = TOKEN_ERR_LOCKED;
+		goto error;
+	}
+
 	// get ciphertext and cipher params from PKCS#7 structure
 	unsigned char *ct = NULL;
 	size_t ct_len;
@@ -1008,7 +1103,7 @@ error:
 
 static token_err_t
 p11token_change_pin(void *int_token, const char *oldpass, const char *newpass,
-		    UNUSED const unsigned char *pairing_secret, UNUSED size_t pairing_sec_len,
+		    const unsigned char *pairing_secret, size_t pairing_sec_len,
 		    UNUSED bool is_provisioning)
 {
 	p11token_t *p11_token = int_token;
@@ -1030,25 +1125,52 @@ p11token_change_pin(void *int_token, const char *oldpass, const char *newpass,
 			ERROR("Failed to generate random SO PIN");
 			return TOKEN_ERR_FATAL;
 		}
-		str_t *so_pin = str_hexdump_new(random_mem, sizeof(random_mem));
+		char *so_pin = convert_bin_to_hex_new(random_mem, (int)sizeof(random_mem));
 		mem_memset0(random_mem, sizeof(random_mem));
 		if (!so_pin) {
 			ERROR("Failed to hex-encode SO PIN");
 			return TOKEN_ERR_FATAL;
 		}
-		ret = int_init_token(p11_token, str_buffer(so_pin), newpass);
-		str_free(so_pin, true);
+		// derive the user PIN bound to the device pairing secret
+		char *user_pin = int_derive_pin_new(newpass, pairing_secret, pairing_sec_len);
+		if (!user_pin) {
+			int_pin_free(so_pin);
+			return TOKEN_ERR_FATAL;
+		}
+		ret = int_init_token(p11_token, so_pin, user_pin);
+		int_pin_free(so_pin);
+		int_pin_free(user_pin);
 	} else {
 		DEBUG("Token already initialized, changing pin");
-		ret = p11token_unlock(p11_token, oldpass, NULL, 0);
+		ret = p11token_unlock(p11_token, oldpass, pairing_secret, pairing_sec_len);
 		if (TOKEN_ERR_OK != ret) {
 			goto out;
 		}
 
-		P11_CHECK_RV_GOTO(p11_token->ctx->C_SetPIN(
-					  *p11_token->sh, (unsigned char *)oldpass, strlen(oldpass),
-					  (unsigned char *)newpass, strlen(newpass)),
-				  out);
+		/**
+		 * Both the old and the new PIN are bound to the device pairing secret,
+		 * mirroring the derivation done at unlock/provisioning time.
+		 */
+		char *old_pin = int_derive_pin_new(oldpass, pairing_secret, pairing_sec_len);
+		char *new_pin = int_derive_pin_new(newpass, pairing_secret, pairing_sec_len);
+		if (NULL == old_pin || NULL == new_pin) {
+			ERROR("Failed to derive PKCS#11 PINs for pin change");
+			int_pin_free(old_pin);
+			int_pin_free(new_pin);
+			ret = TOKEN_ERR_FATAL;
+			goto out;
+		}
+
+		ck_rv_t rv = p11_token->ctx->C_SetPIN(*p11_token->sh, (unsigned char *)old_pin,
+						      strlen(old_pin), (unsigned char *)new_pin,
+						      strlen(new_pin));
+		int_pin_free(old_pin);
+		int_pin_free(new_pin);
+		if (CKR_OK != rv) {
+			ERROR("Pkcs11 operation 'C_SetPIN' returned Errorcode %lu\n", rv);
+			ret = TOKEN_ERR_FATAL;
+			goto out;
+		}
 	}
 out:
 	/**
