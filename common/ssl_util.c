@@ -41,6 +41,18 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 
+/*
+ * ssl_init() passes the TPM primary storage key PIN to the libtpm2 provider
+ * via OSSL_PROVIDER_load_ex(), which was introduced in OpenSSL 3.2. On older
+ * OpenSSL the file does not compile at all; fail with a clear message instead
+ * of a cryptic implicit-declaration error. Silently loading the provider
+ * without the PIN is not an option -- it would defer a TPM auth failure to
+ * runtime for the exact (password-protected) case the PIN exists for.
+ */
+#if OPENSSL_VERSION_NUMBER < 0x30200000L
+#error "CML requires OpenSSL >= 3.2 (OSSL_PROVIDER_load_ex for the TPM primary storage key PIN)"
+#endif
+
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
