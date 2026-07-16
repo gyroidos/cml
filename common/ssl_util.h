@@ -156,6 +156,19 @@ ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned in
 	     const char *digest_algo);
 
 /**
+ * Derive a key from a low-entropy password and a salt using PBKDF2-HMAC-SHA256.
+ * @param pass the password (e.g. a user PIN); must not be NULL
+ * @param salt the salt (e.g. the device pairing secret); may be NULL if salt_len is 0
+ * @param salt_len length of salt in bytes
+ * @param iterations PBKDF2 iteration count (work factor)
+ * @param key_len desired length of the derived key in bytes
+ * @return heap-allocated derived key of length key_len (free with mem_free0), or NULL on error.
+ */
+unsigned char *
+ssl_kdf_pbkdf2(const char *pass, const unsigned char *salt, size_t salt_len,
+	       unsigned int iterations, size_t key_len);
+
+/**
  * The file located in file_to_hash is hashed with the hash algorithm hash_algo.
  * @return The function reveals the hash  as return value and its length via the parameter calc_len.
  * In case of a failure, NULL is returned.
