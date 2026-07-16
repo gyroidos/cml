@@ -42,6 +42,7 @@
 #include <openssl/params.h>
 
 #include <fcntl.h>
+#include <limits.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -1217,6 +1218,33 @@ ssl_hash_buf(const unsigned char *buf_to_hash, unsigned int buf_len, unsigned in
 error:
 	EVP_MD_CTX_free(md_ctx);
 	return ret;
+}
+
+unsigned char *
+ssl_kdf_pbkdf2(const char *pass, const unsigned char *salt, size_t salt_len,
+	       unsigned int iterations, size_t key_len)
+{
+	ASSERT(pass);
+
+	// PKCS5_PBKDF2_HMAC takes int lengths; reject anything that would narrow
+	size_t pass_len = strlen(pass);
+	if (0 == key_len || key_len > INT_MAX || pass_len > INT_MAX || salt_len > INT_MAX ||
+	    iterations > INT_MAX) {
+		ERROR("PBKDF2 called with out-of-range parameters");
+		return NULL;
+	}
+
+	unsigned char *out = mem_alloc0(key_len);
+
+	if (1 != PKCS5_PBKDF2_HMAC(pass, pass_len, salt, salt_len, iterations, EVP_sha256(),
+				   key_len, out)) {
+		ERROR("PBKDF2 key derivation failed");
+		mem_memset0(out, key_len);
+		mem_free0(out);
+		return NULL;
+	}
+
+	return out;
 }
 
 unsigned char *
