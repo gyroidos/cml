@@ -68,6 +68,17 @@
 #define LOCALHOST_IP "127.0.0.1"
 
 /**
+ * The image runs iptables-nft, which pulls the NAT targets (nf_nat, nft_compat,
+ * nft_chain_nat, xt_nat, ...) in as modules on demand. The first
+ * `iptables -t nat` rule after boot can lose the race against the target module
+ * finishing registration and fail ("Extension ... revision 0 not supported" /
+ * RULE_INSERT ENOENT). The failed attempt itself triggers the autoload, so a
+ * fresh retry a moment later succeeds.
+ */
+#define NETWORK_IPTABLES_RETRIES 3
+#define NETWORK_IPTABLES_RETRY_DELAY_MS 166
+
+/**
  * Parses an IP address string and detects its address family.
  *
  * @param addr_str The IP address string to parse
@@ -540,6 +551,36 @@ err:
 	return -1;
 }
 
+/**
+ * Run an iptables command. If retry is set (used for rule inserts), a failure is
+ * retried a bounded number of times to absorb the first-use module autoload race
+ * described above. Deletes pass retry=false, since a failing delete usually just
+ * means the rule is already gone.
+ */
+static int
+network_iptables_exec(const char *const *argv, bool retry)
+{
+	/* one initial attempt, plus NETWORK_IPTABLES_RETRIES retries if requested */
+	int max_attempts = retry ? 1 + NETWORK_IPTABLES_RETRIES : 1;
+	int ret = -1;
+
+	for (int attempt = 1; attempt <= max_attempts; attempt++) {
+		ret = proc_fork_and_execvp(argv);
+		if (ret == 0)
+			return ret;
+		if (attempt < max_attempts) {
+			WARN("iptables rule insert failed, retry %d/%d after on-demand module load",
+			     attempt, NETWORK_IPTABLES_RETRIES);
+			NANOSLEEP(0, NETWORK_IPTABLES_RETRY_DELAY_MS * 1000000L)
+		}
+	}
+
+	if (retry)
+		ERROR("iptables rule insert still failing after %d retries",
+		      NETWORK_IPTABLES_RETRIES);
+	return ret;
+}
+
 int
 network_iptables(const char *table, const char *chain, const char *net_src, const char *jmp_target,
 		 bool add)
@@ -551,7 +592,7 @@ network_iptables(const char *table, const char *chain, const char *net_src, cons
 
 	const char *const argv[] = { IPTABLES_PATH, "-t",    table, add ? "-I" : "-D", chain,
 				     "-s",	    net_src, "-j",  jmp_target,	       NULL };
-	return proc_fork_and_execvp(argv);
+	return network_iptables_exec(argv, add);
 }
 
 int
@@ -573,14 +614,14 @@ network_setup_port_forwarding(const char *srcip, uint16_t srcport, const char *d
 				     src_port,	    "-m", "addrtype", "--dst-type",
 				     "LOCAL",	    "-j", "DNAT",     "--to-destination",
 				     dst,	    NULL };
-	int error = proc_fork_and_execvp(argv);
+	int error = network_iptables_exec(argv, enable);
 
 	// change source address for forwarded packets
 	const char *const argv2[] = { IPTABLES_PATH, "-t",	    "nat",    enable ? "-I" : "-D",
 				      "POSTROUTING", "-d",	    dstip,    "-p",
 				      "tcp",	     "--dport",	    dst_port, "-j",
 				      "SNAT",	     "--to-source", srcip,    NULL };
-	error |= proc_fork_and_execvp(argv2);
+	error |= network_iptables_exec(argv2, enable);
 
 	mem_free0(src_port);
 	mem_free0(dst_port);
@@ -614,7 +655,7 @@ network_setup_masquerading(const char *subnet, bool enable)
 				     "-j",
 				     "ACCEPT",
 				     NULL };
-	error |= proc_fork_and_execvp(argv);
+	error |= network_iptables_exec(argv, enable);
 
 	if (error) {
 		ERROR("Failed to setup IP forwarding from %s", subnet);
