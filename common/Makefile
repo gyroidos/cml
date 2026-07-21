@@ -63,6 +63,7 @@ endif
 BOUNDS_SAFETY ?= n
 BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c sock.c protobuf-text.c
 BOUNDS_SAFE_OBJS := $(BOUNDS_SAFE_SRCS:.c=.o)
+BOUNDS_SAFE_BS_OBJS := $(BOUNDS_SAFE_SRCS:.c=.bs.o)
 
 BOUNDS_CFLAGS := -fbounds-safety -fbounds-safety-bringup-missing-checks=batch_0
 
@@ -142,6 +143,15 @@ sock-sd.o: sock-sd.c
 %.o: %.c
 	$(CC) -c $(LOCAL_CFLAGS) $(EXTRA_CFLAGS) $< -o $@
 
+# Bounds-safe .bs.o objects — always compiled with BOUNDS_CFLAGS.
+# Used exclusively by bounds_test targets to avoid colliding with normal .o files.
+$(BOUNDS_SAFE_BS_OBJS): %.bs.o: %.c
+	$(CC) -c $(LOCAL_CFLAGS) $(BOUNDS_CFLAGS) $< -o $@
+
+# Bounds-test source files — also compiled with BOUNDS_CFLAGS.
+%.bounds_test.o: %.bounds_test.c
+	$(CC) -c $(LOCAL_CFLAGS) $(BOUNDS_CFLAGS) $< -o $@
+
 LFLAGS_TEST := \
 	-L. -lcommon_full \
 	-lssl \
@@ -162,6 +172,21 @@ common.test: $(TEST_SUITES) munit.o common.test.c
 test: libcommon_full common.test
 	./common.test
 
+# Bounds-safety enforcement tests (requires swiftlang Clang fork).
+# Annotated modules are compiled with -fbounds-safety; all others without.
+# Usage: make bounds_test CC=/path/to/bs-clang
+OBJS_BOUNDS_SUPPORT := logf.o list.o dir.o event.o
+
+# All bounds_test binaries — add new ones as modules are annotated.
+BOUNDS_TEST_BINS := hex.bounds_test fd.bounds_test str.bounds_test protobuf.bounds_test file.bounds_test protobuf-text.bounds_test
+
+$(BOUNDS_TEST_BINS): %: %.o $(BOUNDS_SAFE_BS_OBJS) $(OBJS_BOUNDS_SUPPORT)
+	$(CC) $(LOCAL_CFLAGS) -o $@ $^ -lprotobuf-c -lprotobuf-c-text
+
+.PHONY: bounds_test
+bounds_test: $(BOUNDS_TEST_BINS)
+	@for t in $(BOUNDS_TEST_BINS); do echo "=== $$t ==="; ./$$t; done
+
 .PHONY: clean
 clean:
-	rm -f *.o *.a *.pb-c.* common.test
+	rm -f *.o *.a *.pb-c.* common.test $(BOUNDS_TEST_BINS)

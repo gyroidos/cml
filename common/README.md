@@ -54,3 +54,17 @@ new module, add its `.c` filename to `BOUNDS_SAFE_SRCS`.
 # Build with bounds enforcement on annotated modules
 make CC=/home/node/llvm-bs/build/bin/clang BOUNDS_SAFETY=y
 ```
+
+### Enforcement tests
+
+Enforcement tests (`*.bounds_test.c`) verify that out-of-bounds access
+actually traps at runtime. They fork a child process that deliberately
+violates declared bounds; the parent asserts the child was killed by a
+signal.
+
+```bash
+make bounds_test CC=/home/node/llvm-bs/build/bin/clang
+```
+
+Without the bounds-safety toolchain, these tests print `SKIP` and exit
+with code 77.
