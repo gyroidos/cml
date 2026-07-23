@@ -47,6 +47,15 @@ typedef enum {
 	CRYPTFS_MODE_INTEGRITY_ONLY
 } cryptfs_mode_t;
 
+/*
+ * Overwrite internal fixed algorithm strings
+ *
+ * e.g., use something like that "capi:cbc(paes)-essiv:sha256"
+ * if you need protected keys on hardware where xts is not available
+ */
+void
+cryptfs_set_crypto_type(const char *type);
+
 /**
  * Get the full path of a cryptfs device with the specified name
  *

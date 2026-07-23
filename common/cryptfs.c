@@ -74,6 +74,7 @@
 #endif
 
 /******************************************************************************/
+static const char *cryptfs_crypto_type = NULL;
 
 static unsigned long
 get_provided_data_sectors(const char *real_blk_name);
@@ -82,6 +83,12 @@ char *
 cryptfs_get_device_path_new(const char *label)
 {
 	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
+}
+
+void
+cryptfs_set_crypto_type(const char *type)
+{
+	cryptfs_crypto_type = type;
 }
 
 #if 0
@@ -196,7 +203,11 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	char *extra_params = integrity ? mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE) :
 					 mem_printf("1 allow_discards");
 
-	const char *crypto_type = integrity ? CRYPTO_TYPE_AUTHENC : CRYPTO_TYPE;
+	const char *crypto_type = NULL;
+	if (cryptfs_crypto_type)
+		crypto_type = cryptfs_crypto_type;
+	else
+		crypto_type = integrity ? CRYPTO_TYPE_AUTHENC : CRYPTO_TYPE;
 
 	int i;
 	int ioctl_ret;
