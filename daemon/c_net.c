@@ -1505,14 +1505,14 @@ c_net_interface_down(const char *iface)
 }
 
 static int
-c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index)
+c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index, const pid_t rootns_pid)
 {
 	const char *prefix = (network_interface_is_wifi(iface)) ? "wlan" : "eth";
 
 	// create collision free name with cmld's main process naming scheme
 	char *newname = mem_printf("%s%08x_%03d", prefix, container_get_uid(net->container), index);
 	if (strlen(newname) > IFNAMSIZ) {
-		ERROR("newname '*s' exceeds IFNAMSIZ %d.", IFNAMSIZ);
+		ERROR("newname '%s' exceeds IFNAMSIZ %d.", newname, IFNAMSIZ);
 		mem_free(newname);
 		return -1;
 	}
@@ -1524,6 +1524,24 @@ c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index)
 		mem_free(newname);
 		return -1;
 	}
+
+	/*
+	* Move interface to rootns explicitly (synchronously).
+	* If we do not move them, the kernel will eventually move them back to
+	* root ns, when the network namespace is destroyed.
+	* But then this happens asynchronous and is no longer
+	* directly related to container status "STOPPED".
+	* In other words, "STOPPED" then does not represent
+	* the state before the container was started in every case.
+	*/
+	if (c_net_move_ifi(newname, rootns_pid)) {
+		WARN("Failed to move physical interface %s back to rootns (pid %d); "
+		     "falling back to kernel-driven return on netns teardown",
+		     newname, rootns_pid);
+		mem_free(newname);
+		return -1;
+	}
+
 	mem_free(newname);
 	return 0;
 }
@@ -1539,6 +1557,8 @@ c_net_cleanup_container(const c_net_t *net)
 	ASSERT(net);
 
 	IF_FALSE_RETVAL(file_exists(net->ns_path), -1);
+
+	pid_t rootns_pid = getpid();
 
 	pid_t c_netns_pid = fork();
 	if (c_netns_pid == -1) {
@@ -1564,8 +1584,9 @@ c_net_cleanup_container(const c_net_t *net)
 			char *dev_drv_path = mem_printf("/sys/class/net/%s/device/driver", iface);
 
 			if (file_exists(dev_drv_path) && iface != NULL) {
-				// rename moved physical interfaces in network namespace of container
-				c_net_cleanup_phys(net, iface, index);
+				// rename moved physical interfaces and return them to the root ns.
+				c_net_cleanup_phys(net, iface, index, rootns_pid);
+				index++;
 			} else if (file_exists(dev_drv_path)) {
 				DEBUG("Skipping unnamed network interface");
 			} else {
@@ -1634,7 +1655,9 @@ c_net_cleanup(void *netp, bool is_rebooting)
 	uint8_t if_mac[MAC_ADDR_LEN];
 	for (list_t *l = net->pnet_mv_list; l; l = l->next) {
 		container_pnet_cfg_t *cfg = l->data;
-		if (!cfg->mac_filter) { // skip directly moved if will fallback to rootns
+		if (!cfg->mac_filter) {
+			// directly moved phys ifaces are returned to the root ns
+			// synchronously by c_net_cleanup_container()/c_net_cleanup_phys()
 			continue;
 		} else { // pIF remove bridged and MAC filtering rules
 			char *if_name = (network_str_to_mac_addr(cfg->pnet_name, if_mac) != -1) ?
