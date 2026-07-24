@@ -12,12 +12,15 @@ implementation lives in the [swiftlang Clang fork](https://github.com/swiftlang/
 Requires `cmake` and `ninja-build`.
 
 ```bash
+# Pick a location for the toolchain checkout/build (adjust to taste)
+export LLVM_BS_DIR="$HOME/llvm-bs"
+
 # Clone (blobless shallow clone, ~2 min)
-git clone --depth 1 --branch stable/21.x --filter=blob:none \
-  https://github.com/swiftlang/llvm-project.git /home/node/llvm-bs
+git clone --depth 1 --branch stable/20260609 --filter=blob:none \
+  https://github.com/swiftlang/llvm-project.git "$LLVM_BS_DIR"
 
 # Configure (Clang only, Release, host architecture)
-cmake -G Ninja -S /home/node/llvm-bs/llvm -B /home/node/llvm-bs/build \
+cmake -G Ninja -S "$LLVM_BS_DIR/llvm" -B "$LLVM_BS_DIR/build" \
   -DLLVM_ENABLE_PROJECTS="clang" \
   -DCMAKE_BUILD_TYPE=Release \
   -DLLVM_TARGETS_TO_BUILD="Native" \
@@ -27,14 +30,14 @@ cmake -G Ninja -S /home/node/llvm-bs/llvm -B /home/node/llvm-bs/build \
   -DLLVM_INCLUDE_DOCS=OFF
 
 # Build (~15 min on 8 cores)
-cmake --build /home/node/llvm-bs/build --target clang -- -j$(nproc)
+cmake --build "$LLVM_BS_DIR/build" --target clang -- -j$(nproc)
 ```
 
 The resulting Clang binary accepts `-fbounds-safety`. The `BOUNDS_SAFETY`
 Makefile flag wires this into the build:
 
 ```bash
-make CC=/home/node/llvm-bs/build/bin/clang BOUNDS_SAFETY=y
+make CC="$LLVM_BS_DIR/build/bin/clang" BOUNDS_SAFETY=y
 ```
 
 ## Bounds-safety annotations
@@ -52,7 +55,7 @@ new module, add its `.c` filename to `BOUNDS_SAFE_SRCS`.
 
 ```bash
 # Build with bounds enforcement on annotated modules
-make CC=/home/node/llvm-bs/build/bin/clang BOUNDS_SAFETY=y
+make CC="$LLVM_BS_DIR/build/bin/clang" BOUNDS_SAFETY=y
 ```
 
 ### Enforcement tests
@@ -63,7 +66,7 @@ violates declared bounds; the parent asserts the child was killed by a
 signal.
 
 ```bash
-make bounds_test CC=/home/node/llvm-bs/build/bin/clang
+make bounds_test CC="$LLVM_BS_DIR/build/bin/clang"
 ```
 
 Without the bounds-safety toolchain, these tests print `SKIP` and exit
