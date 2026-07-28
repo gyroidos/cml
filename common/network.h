@@ -210,12 +210,21 @@ network_get_interfaces_new(void);
  * Generates a list containing MAC address strings of all available physical
  * network interfaces. Each entry is a newly allocated string in the format
  * "xx:xx:xx:xx:xx:xx".
+ *
+ * Only valid for the netns in which the /sys of the caller was mounted, see
+ * network_get_ifname_by_addr_new(). Interfaces which are not visible there are
+ * skipped, so this returns an empty list after a plain setns(CLONE_NEWNET).
  */
 list_t *
 network_get_physical_interfaces_new(void);
 
 /**
  * Checks if an interface is an wifi interface using sysfs.
+ *
+ * Only valid for the netns in which the /sys of the caller was mounted, see
+ * network_get_ifname_by_addr_new(). Returns false for interfaces which are not
+ * visible there, which would e.g. select the rtnetlink instead of the nl80211
+ * path when moving a wifi interface.
  */
 bool
 network_interface_is_wifi(const char *if_name);
@@ -288,6 +297,18 @@ network_mac_addr_to_str_new(const uint8_t mac[MAC_ADDR_LEN]);
 /**
  * Walk through sysfs to find the if name, e.g., shown by ip addr, to the corresponding
  * hardware (mac) address.
+ *
+ * Only valid for the netns in which the /sys of the caller was mounted. Both
+ * the sysfs entries of a netdevice and the mount itself carry the netns they
+ * belong to as a namespace tag and only matching entries are visible, see
+ * kernfs_enable_ns() in include/linux/kernfs.h. The tag of a mount is taken
+ * from the mounting process and cannot be changed later, so a setns() does not
+ * change what this function sees and it keeps reporting the interfaces of the
+ * old netns without any error. Keep in mind that if_nameindex() and /proc/sys/net do
+ * follow setns(), only sysfs does not. To use this in another netns, mount a
+ * fresh sysfs there first as done in c_net_cleanup_container(), or use the
+ * netlink based network_get_ifname_by_mac_in_ns_new() instead.
+ *
  * @param mac array containing the mac address
  * @return The name of the interface, NULL if not found.
  */
@@ -296,6 +317,11 @@ network_get_ifname_by_addr_new(uint8_t mac[MAC_ADDR_LEN]);
 
 /**
  * Get mac address for network interface given by name.
+ *
+ * Only valid for the netns in which the /sys of the caller was mounted, see
+ * network_get_ifname_by_addr_new(). Fails with -1 for interfaces which are not
+ * visible there, even if they exist in the current netns.
+ *
  * @param ifname network interface name
  * @param mac buffer for the resulting byte array
  * @return 0 on success, -1 on error
