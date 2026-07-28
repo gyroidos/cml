@@ -41,6 +41,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -1507,11 +1508,11 @@ c_net_interface_down(const char *iface)
 static int
 c_net_cleanup_phys(const c_net_t *net, const char *iface, const int index, const pid_t rootns_pid)
 {
-	const char *prefix = (network_interface_is_wifi(iface)) ? "wlan" : "eth";
+	const char *prefix = (network_interface_is_wifi(iface)) ? "wl" : "eth";
 
 	// create collision free name with cmld's main process naming scheme
 	char *newname = mem_printf("%s%08x_%03d", prefix, container_get_uid(net->container), index);
-	if (strlen(newname) > IFNAMSIZ) {
+	if (strlen(newname) >= IFNAMSIZ) {
 		ERROR("newname '%s' exceeds IFNAMSIZ %d.", newname, IFNAMSIZ);
 		mem_free(newname);
 		return -1;
@@ -1575,6 +1576,31 @@ c_net_cleanup_container(const c_net_t *net)
 				WARN("Could not join netns of compartment");
 				_exit(0);
 			}
+		}
+
+		/*
+		 * Each sysfs entry of a netdevice carries the netns it belongs to as a
+		 * namespace tag and so does the mount itself. Only entries whose tag
+		 * matches the tag of the mount are visible, see kernfs_enable_ns() in
+		 * include/linux/kernfs.h. That tag is taken from the mounting process
+		 * and cannot be changed later, so our /sys keeps referring to the
+		 * rootns even after the setns() above. Its content is live, it just
+		 * answers for the wrong netns, which is why the device/driver check
+		 * below does not see the moved phys interfaces and treats them as
+		 * veths. Mounting a fresh sysfs from in here is the only way to get
+		 * one which refers to this netns. We do that in an own mount ns to
+		 * keep it away from the host, the child _exit()s below anyway.
+		 */
+		if (unshare(CLONE_NEWNS) < 0) {
+			WARN_ERRNO("Could not unshare mount ns, /sys view may be stale");
+		} else if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) < 0) {
+			WARN_ERRNO("Could not mark / MS_PRIVATE in netns helper");
+		} else if (mount("sysfs", "/sys", "sysfs", MS_RELATIME | MS_NOSUID, NULL) < 0) {
+			WARN_ERRNO("Could not remount /sys for netns of %s",
+				   container_get_name(net->container));
+		} else {
+			TRACE("Remounted /sys to match netns of %s",
+			      container_get_name(net->container));
 		}
 
 		list_t *ifaces = network_get_interfaces_new();
