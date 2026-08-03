@@ -834,6 +834,16 @@
 #define ABS(a) (((a) < 0) ? -(a) : (a))
 #endif
 
+/*
+ * Round x up to the next multiple of a (a must be a power of two).
+ * Similar definition as the Linux kernel's __ALIGN_KERNEL() see
+ * <linux/align.h> and <linux/const.h>.
+ */
+#ifndef ALIGN
+#define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
+#define ALIGN(x, a) ALIGN_MASK((x), (__typeof__(x))(a) - 1)
+#endif
+
 /**
  * Do normal addition, i.e. +, but abort if
  * overflow is detected. This is helpful when we
