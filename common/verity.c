@@ -137,7 +137,7 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 	// Set pointer behind parameter
 	verity_params += strlen(verity_params) + 1;
 	// Align to an 8 byte boundary
-	verity_params = (char *)(((unsigned long)verity_params + 7) & ~8);
+	verity_params = (char *)ALIGN((uintptr_t)verity_params, 8);
 	// Set tgt->next right behind dm_target_spec
 	tgt->next = (unsigned int)(verity_params - (char *)io);
 
