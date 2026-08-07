@@ -151,6 +151,21 @@ mem_free(void *ptr);
 #define mem_free0(ptr) ((void)(free(ptr), (ptr) = NULL))
 
 /**
+ * Frees a bounds-safe (__sized_by/__counted_by) pointer and clears both the
+ * pointer and its paired length/count together, preserving the invariant that
+ * -fbounds-safety enforces. Use for annotated struct fields where plain
+ * mem_free0() is rejected (it would null the pointer without updating the count).
+ * @param ptr Memory pointer to be freed and set to NULL.
+ * @param count Paired length/count to be set to 0.
+ */
+#define mem_free0_sized(ptr, count)                                                                \
+	do {                                                                                       \
+		free(ptr);                                                                         \
+		(ptr) = NULL;                                                                      \
+		(count) = 0;                                                                       \
+	} while (0)
+
+/**
  * Frees the allocated memory of each array element and the array itself.
  * @param array Array to be freed.
  * @param size Array size.
