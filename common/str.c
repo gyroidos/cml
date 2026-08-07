@@ -73,9 +73,7 @@ str_new(const char *init)
 
 		len = strlen(init);
 		str = str_new_len(len + 2);
-		str_append_len(str,
-			       __unsafe_forge_bidi_indexable(const char *, init, len),
-			       len);
+		str_append_len(str, __unsafe_forge_bidi_indexable(const char *, init, len), len);
 	}
 	return str;
 }
@@ -214,8 +212,7 @@ str_insert_len(str_t *str, ssize_t pos, const char *__counted_by(len) buf, size_
 		}
 
 		if (len > precount)
-			memcpy(str->buf + pos + precount, src + precount + len,
-			       len - precount);
+			memcpy(str->buf + pos + precount, src + precount + len, len - precount);
 	} else {
 		if (pos < str->len)
 			memmove(str->buf + pos + len, str->buf + pos, str->len - pos);
@@ -258,9 +255,7 @@ str_free(str_t *str, bool free_buf)
 	IF_NULL_RETVAL(str, NULL);
 
 	if (free_buf) {
-		free(str->buf);
-		str->buf = NULL;
-		str->allocated_len = 0;
+		mem_free0_sized(str->buf, str->allocated_len);
 		buf = NULL;
 	} else {
 		buf = __unsafe_null_terminated_from_indexable(str->buf);
