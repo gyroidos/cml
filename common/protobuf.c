@@ -57,9 +57,7 @@ void
 protobuf_pack_message_free(protobuf_packed_msg_t *msg)
 {
 	IF_NULL_RETURN(msg);
-	free(msg->buf);
-	msg->buf = NULL;
-	msg->len = 0;
+	mem_free0_sized(msg->buf, msg->len);
 }
 
 ssize_t
@@ -206,7 +204,7 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		TRACE("Got zero length message, returning default message fields");
 
 		return __unsafe_forge_single(ProtobufCMessage *,
-				protobuf_c_message_unpack(descriptor, NULL, 0, NULL));
+					     protobuf_c_message_unpack(descriptor, NULL, 0, NULL));
 	}
 
 	// -2 means that client closed connection
@@ -219,8 +217,8 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		return NULL;
 	}
 
-	ProtobufCMessage *msg = __unsafe_forge_single(ProtobufCMessage *,
-			protobuf_c_message_unpack(descriptor, NULL, buflen, buf));
+	ProtobufCMessage *msg = __unsafe_forge_single(
+		ProtobufCMessage *, protobuf_c_message_unpack(descriptor, NULL, buflen, buf));
 
 	if (!msg) {
 		WARN("Failed to parse received protobuf message");
@@ -239,8 +237,8 @@ protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor,
 {
 	ASSERT(descriptor);
 
-	ProtobufCMessage *msg = __unsafe_forge_single(ProtobufCMessage *,
-			protobuf_c_message_unpack(descriptor, NULL, buf_len, buf));
+	ProtobufCMessage *msg = __unsafe_forge_single(
+		ProtobufCMessage *, protobuf_c_message_unpack(descriptor, NULL, buf_len, buf));
 
 	return msg;
 }
