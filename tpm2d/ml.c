@@ -40,6 +40,7 @@
 
 #define BINARY_RUNTIME_MEASUREMENTS "/sys/kernel/security/ima/binary_runtime_measurements"
 
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 typedef struct ml_elem {
 	char *filename;
 	TPM_ALG_ID algid;
@@ -47,13 +48,28 @@ typedef struct ml_elem {
 	uint8_t *datahash;
 	tpm2d_pcr_t *template;
 } ml_elem_t;
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+typedef struct ml_elem {
+	char *filename;
+	TPM2_ALG_ID algid;
+	int hash_len;
+	uint8_t *datahash;
+	tpm2d_pcr_t *template;
+} ml_elem_t;
+#endif
 
 static list_t *measurement_list = NULL;
 static size_t measurement_list_len = 0;
 
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 int
 ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
 			   size_t datahash_len)
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+int
+ml_measurement_list_append(const char *filename, TPM2_ALG_ID algid, const uint8_t *datahash,
+			   size_t datahash_len)
+#endif
 {
 	// input checks
 	IF_NULL_RETVAL(filename, -1);
@@ -94,6 +110,7 @@ ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t
 	return 0;
 }
 
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 static const char *
 halg_id_to_ima_string(TPM_ALG_ID alg_id)
 {
@@ -108,6 +125,22 @@ halg_id_to_ima_string(TPM_ALG_ID alg_id)
 		return "none";
 	}
 }
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+static const char *
+halg_id_to_ima_string(TPM2_ALG_ID alg_id)
+{
+	switch (alg_id) {
+	case TPM2_ALG_SHA1:
+		return "sha1";
+	case TPM2_ALG_SHA256:
+		return "sha256";
+	case TPM2_ALG_SHA384:
+		return "sha384";
+	default:
+		return "none";
+	}
+}
+#endif
 
 uint8_t *
 ml_get_ima_list_new(size_t *len)

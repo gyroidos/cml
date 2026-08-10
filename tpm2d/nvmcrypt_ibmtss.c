@@ -26,7 +26,8 @@
 #include <string.h>
 
 #include "nvmcrypt.h"
-#include "tpm2d.h"
+#include "tpm2d_ibmtss.h"
+#include "tpm2d_common.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
