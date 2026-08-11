@@ -61,7 +61,7 @@ endif
 # Only annotated modules are compiled with -fbounds-safety; all others
 # compile normally.  Add newly annotated .c files to BOUNDS_SAFE_SRCS.
 BOUNDS_SAFETY ?= n
-BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c sock.c protobuf-text.c
+BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c sock.c protobuf-text.c event.c dir.c
 BOUNDS_SAFE_OBJS := $(BOUNDS_SAFE_SRCS:.c=.o)
 BOUNDS_SAFE_BS_OBJS := $(BOUNDS_SAFE_SRCS:.c=.bs.o)
 
@@ -175,7 +175,7 @@ test: libcommon_full common.test
 # Bounds-safety enforcement tests (requires swiftlang Clang fork).
 # Annotated modules are compiled with -fbounds-safety; all others without.
 # Usage: make bounds_test CC=/path/to/bs-clang
-OBJS_BOUNDS_SUPPORT := logf.o list.o dir.o event.o
+OBJS_BOUNDS_SUPPORT := logf.o list.o
 
 # All bounds_test binaries — add new ones as modules are annotated.
 BOUNDS_TEST_BINS := hex.bounds_test fd.bounds_test str.bounds_test protobuf.bounds_test file.bounds_test protobuf-text.bounds_test
