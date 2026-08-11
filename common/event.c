@@ -25,6 +25,7 @@
 
 #include "event.h"
 
+#include "bounds_safety.h"
 #include "mem.h"
 #include "list.h"
 #include "macro.h"
@@ -95,12 +96,12 @@ struct event_io {
 
 struct event_inotify {
 	void (*func)(const char *path, uint32_t mask, event_inotify_t *inotify,
-		     void *data); /**< the function to call when the event is triggered */
-	void *data;		  /**< a data pointer to pass to the callback function */
-	char *path;		  /**< the path to be watched */
-	uint32_t mask;		  /**< a bit-mask of events to be watched for */
-	int wd;			  /**< the watch descriptor */
-	bool todo;		  /**< helper variable for event_inotify_handler() */
+		     void *data);     /**< the function to call when the event is triggered */
+	void *data;		      /**< a data pointer to pass to the callback function */
+	char *__null_terminated path; /**< the path to be watched */
+	uint32_t mask;		      /**< a bit-mask of events to be watched for */
+	int wd;			      /**< the watch descriptor */
+	bool todo;		      /**< helper variable for event_inotify_handler() */
 };
 
 struct event_signal {
@@ -116,7 +117,7 @@ static list_t *event_signal_list = NULL;
 static list_t *event_inotify_list = NULL;
 static bool event_signal_received0[NSIG] = { false };
 static bool event_signal_received1[NSIG] = { false };
-static bool *event_signal_received = event_signal_received0;
+static bool *__counted_by(NSIG) event_signal_received = event_signal_received0;
 static unsigned event_io_active = 0;
 static bool event_initialized = false;
 static event_io_t *event_inotify_io = NULL;
@@ -127,7 +128,7 @@ static int
 event_timeout(void)
 {
 	struct timespec next, now, diff;
-	event_timer_t *timer;
+	event_timer_t *__single timer;
 	list_t *l;
 
 	if (!event_timer_list)
@@ -174,7 +175,7 @@ event_timeout_handler(void)
 	timespec_now(&now);
 
 	for (list_t *l = event_timer_list; l;) {
-		event_timer_t *timer = l->data;
+		event_timer_t *__single timer = l->data;
 
 		ASSERT(timer);
 
@@ -417,7 +418,8 @@ event_epoll(int timeout)
 
 	} else if (n > 0) {
 		for (i = 0; i < n; i++) {
-			event_io_t *io = epoll_events[i].data.ptr;
+			event_io_t *__single io =
+				__unsafe_forge_single(event_io_t *, epoll_events[i].data.ptr);
 			uint32_t events = epoll_events[i].events;
 			unsigned e;
 
@@ -449,7 +451,7 @@ static void
 event_inotify_handler(int wd, const char *path, uint32_t mask)
 {
 	for (list_t *l = event_inotify_list; l; l = l->next) {
-		event_inotify_t *inotify = l->data;
+		event_inotify_t *__single inotify = l->data;
 
 		ASSERT(inotify);
 
@@ -458,7 +460,7 @@ event_inotify_handler(int wd, const char *path, uint32_t mask)
 	}
 
 	for (list_t *l = event_inotify_list; l;) {
-		event_inotify_t *inotify = l->data;
+		event_inotify_t *__single inotify = l->data;
 
 		ASSERT(inotify);
 
@@ -472,7 +474,8 @@ event_inotify_handler(int wd, const char *path, uint32_t mask)
 			      wd, inotify->path, inotify->mask);
 
 			if (path) {
-				char *full_path = mem_printf("%s/%s", inotify->path, path);
+				char *__null_terminated full_path =
+					mem_printf("%s/%s", inotify->path, path);
 				(inotify->func)(full_path, mask, inotify, inotify->data);
 				mem_free0(full_path);
 			} else {
@@ -510,7 +513,8 @@ event_inotify_cb(int fd, unsigned events, UNUSED event_io_t *io, UNUSED void *da
 	for (p = buf; p < buf + n;) {
 		ASSERT((uintptr_t)p % __alignof__(struct inotify_event) == 0);
 		struct inotify_event *e = (struct inotify_event *)(void *)p;
-		const char *name = e->len ? e->name : NULL;
+		const char *__null_terminated name =
+			e->len ? __unsafe_forge_null_terminated(const char *, e->name) : NULL;
 
 		TRACE("Read inotify event %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s"
 		      "(wd=%d, mask=0x%08x, cookie=0x%08x, name=%s)",
@@ -655,7 +659,7 @@ event_remove_inotify(event_inotify_t *inotify)
 	 * watch descriptor */
 	bool others = false;
 	for (list_t *l = event_inotify_list; l; l = l->next) {
-		event_inotify_t *inotify_cur = l->data;
+		event_inotify_t *__single inotify_cur = l->data;
 		if (inotify_cur->wd == inotify->wd) {
 			if (!others)
 				/* If the handler is the first of the others it should overwrite the mask */
@@ -741,8 +745,6 @@ event_remove_signal(event_signal_t *sig)
 static void
 event_signal_handler(void)
 {
-	bool *received;
-
 	TRACE("event_signal_handler() called");
 
 	/* We have two arrays to allow atomic switching from one array to the
@@ -750,14 +752,14 @@ event_signal_handler(void)
 	 * possible that the handler is only called once for multiple signals
 	 * of the same type.
 	 */
-	received = event_signal_received;
+	bool *__counted_by(NSIG) received = event_signal_received;
 	if (event_signal_received == event_signal_received0)
 		event_signal_received = event_signal_received1;
 	else
 		event_signal_received = event_signal_received0;
 
 	for (list_t *l = event_signal_list; l; l = l->next) {
-		event_signal_t *sig = l->data;
+		event_signal_t *__single sig = l->data;
 
 		ASSERT(sig);
 
@@ -766,7 +768,7 @@ event_signal_handler(void)
 	}
 
 	for (list_t *l = event_signal_list; l;) {
-		event_signal_t *sig = l->data;
+		event_signal_t *__single sig = l->data;
 
 		ASSERT(sig);
 		ASSERT(sig->signum > 0);
