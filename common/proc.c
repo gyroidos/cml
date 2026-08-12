@@ -23,6 +23,7 @@
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
+#include "bounds_safety.h"
 #include "macro.h"
 #include "proc.h"
 #include "mem.h"
@@ -73,7 +74,9 @@ proc_status_t *
 proc_status_new(pid_t pid)
 {
 	proc_status_t *status;
-	char *file, *buf, *tmp;
+	char *__null_terminated file;
+	char *__null_terminated buf;
+	char *__unsafe_indexable tmp; /* interior pointer into buf from strstr */
 	int n;
 
 	file = mem_printf("/proc/%d/status", pid);
@@ -86,9 +89,14 @@ proc_status_new(pid_t pid)
 
 	n = sscanf(buf, "Name:\t%15c", status->name);
 	IF_FALSE_GOTO(n == 1, error);
-	tmp = strchr(status->name, '\n');
-	if (tmp)
-		tmp[0] = '\0';
+	/* %15c does not NUL-terminate; trailing bytes are 0 from mem_new0. Truncate
+	 * the name at the first newline by walking the fixed array (bounds-checked). */
+	for (char *p = status->name; *p; p++) {
+		if (*p == '\n') {
+			*p = '\0';
+			break;
+		}
+	}
 	TRACE("Parsed name for %d: %s", pid, status->name);
 
 	tmp = strstr(buf, "\nState:");
@@ -155,7 +163,8 @@ const char *
 proc_status_get_name(const proc_status_t *status)
 {
 	ASSERT(status);
-	return status->name;
+	/* name is a fixed char[16], always NUL-terminated (zeroed struct + %15c) */
+	return __unsafe_null_terminated_from_indexable(status->name);
 }
 
 pid_t
@@ -182,9 +191,9 @@ proc_status_get_cap_eff(const proc_status_t *status)
 static int
 proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 {
-	struct proc_killall *pk = data;
+	struct proc_killall *__single pk = data;
 
-	char *tmp = NULL;
+	char *__unsafe_indexable tmp = NULL;
 	errno = 0;
 	long lpid = strtol(file, &tmp, 10);
 	if (!tmp || tmp[0] != '\0') // filename is not a number
@@ -204,7 +213,7 @@ proc_killall_cb(UNUSED const char *path, const char *file, void *data)
 	}
 
 	pid_t ppid = proc_status_get_ppid(status);
-	const char *name = proc_status_get_name(status);
+	const char *__null_terminated name = proc_status_get_name(status);
 
 	if ((pk->ppid < 0 || pk->ppid == ppid) && !strcmp(name, pk->name)) {
 		DEBUG("Killing process %s with pid %d", pk->name, pid);
@@ -233,9 +242,9 @@ proc_killall(pid_t ppid, const char *name, int sig)
 static int
 proc_find_cb(UNUSED const char *path, const char *file, void *data)
 {
-	struct proc_find *pf = data;
+	struct proc_find *__single pf = data;
 
-	char *tmp = NULL;
+	char *__unsafe_indexable tmp = NULL;
 	errno = 0;
 	long lpid = strtol(file, &tmp, 10);
 	if (!tmp || tmp[0] != '\0') // filename is not a number
@@ -248,7 +257,7 @@ proc_find_cb(UNUSED const char *path, const char *file, void *data)
 	IF_NULL_RETVAL_TRACE(status, 0);
 
 	pid_t ppid = proc_status_get_ppid(status);
-	const char *name = proc_status_get_name(status);
+	const char *__null_terminated name = proc_status_get_name(status);
 
 	if (pf->match < 0 && (pf->ppid == ppid) && !strcmp(name, pf->name)) {
 		TRACE("Found pid %d with ppid %d and name %s", pid, ppid, pf->name);
@@ -305,9 +314,9 @@ int
 proc_cap_last_cap(void)
 {
 	int cap = -1;
-	const char *file_cap_last_cap = "/proc/sys/kernel/cap_last_cap";
+	const char *__null_terminated file_cap_last_cap = "/proc/sys/kernel/cap_last_cap";
 
-	char *str_cap_last_cap = file_read_new(file_cap_last_cap, 24);
+	char *__null_terminated str_cap_last_cap = file_read_new(file_cap_last_cap, 24);
 	IF_NULL_RETVAL(str_cap_last_cap, -1);
 
 	if (sscanf(str_cap_last_cap, "%d", &cap) != 1 || cap < 0) {
@@ -322,10 +331,10 @@ proc_cap_last_cap(void)
 int
 proc_stat_btime(unsigned long long *boottime_sec)
 {
-	FILE *proc;
+	FILE *__single proc;
 	char line_buf[2048];
 
-	IF_NULL_RETVAL((proc = fopen("/proc/stat", "r")), -1);
+	IF_NULL_RETVAL((proc = __unsafe_forge_single(FILE *, fopen("/proc/stat", "r"))), -1);
 
 	while (fgets(line_buf, 2048, proc)) {
 		if (sscanf(line_buf, "btime %llu", boottime_sec) != 1)
@@ -343,17 +352,17 @@ proc_stat_btime(unsigned long long *boottime_sec)
 	return -1;
 }
 
-char *
+char *__null_terminated
 proc_get_cgroups_path_new(pid_t pid)
 {
 	char line_buf[2048];
-	FILE *proc = NULL;
-	char *cgroup_path = NULL;
+	FILE *__single proc = NULL;
+	char *__null_terminated cgroup_path = NULL;
 	bool read_one_line = false;
 
-	char *path = mem_printf("/proc/%d/cgroup", pid);
+	char *__null_terminated path = mem_printf("/proc/%d/cgroup", pid);
 
-	if (NULL == (proc = fopen(path, "r"))) {
+	if (NULL == (proc = __unsafe_forge_single(FILE *, fopen(path, "r")))) {
 		mem_free0(path);
 		return NULL;
 	}
@@ -367,9 +376,17 @@ proc_get_cgroups_path_new(pid_t pid)
 		read_one_line = true;
 
 		if (strlen(line_buf) > 3 && !strncmp(line_buf, "0::", 3)) {
-			cgroup_path = mem_strdup(line_buf + 3);
-			// fgets does not remove '\n'
-			cgroup_path[strcspn(cgroup_path, "\n")] = '\0';
+			/* line_buf is a fixed array, NUL-terminated by fgets and >3 chars */
+			cgroup_path =
+				mem_strdup(__unsafe_null_terminated_from_indexable(line_buf + 3));
+			// fgets does not remove '\n' -- truncate at it. Subscript on a
+			// __null_terminated pointer is not allowed, so walk it
+			for (char *__null_terminated p = cgroup_path; *p; p++) {
+				if (*p == '\n') {
+					*p = '\0';
+					break;
+				}
+			}
 			break;
 		}
 	}
@@ -389,7 +406,8 @@ proc_meminfo_t *
 proc_meminfo_new(void)
 {
 	proc_meminfo_t *meminfo;
-	char *buf, *tmp;
+	char *__null_terminated buf;
+	char *__unsafe_indexable tmp; /* points into buf via strstr */
 	int n;
 
 	buf = file_read_new("/proc/meminfo", 4096);
@@ -459,38 +477,46 @@ proc_waitpid(pid_t pid, int *status, int options)
 	return ret;
 }
 
-char *
+char *__null_terminated
 proc_get_filename_of_fd_new(pid_t pid, int fd)
 {
-	char *ret;
+	char *__null_terminated ret;
 
 	char *file_path = mem_alloc0(PATH_MAX);
-	char *path = mem_printf("/proc/%d/fd/%d", pid, fd);
+	char *__null_terminated path = mem_printf("/proc/%d/fd/%d", pid, fd);
 
 	ssize_t len = readlink(path, file_path, PATH_MAX);
 	if (len < 0 || len > PATH_MAX - 1)
 		ERROR_ERRNO("readlink on %s returned %zd", path, len);
 
-	ret = (len < 0 || len > PATH_MAX - 1) ? NULL : mem_strdup(file_path);
+	/* file_path is mem_alloc0'd (zeroed) and readlink wrote len < PATH_MAX bytes,
+	 * so it is NUL-terminated within bounds */
+	ret = (len < 0 || len > PATH_MAX - 1) ?
+		      NULL :
+		      mem_strdup(__unsafe_null_terminated_from_indexable(file_path));
 
 	mem_free0(file_path);
 	mem_free0(path);
 	return ret;
 }
 
-char *
+char *__null_terminated
 proc_get_cwd_new(pid_t pid)
 {
-	char *ret;
+	char *__null_terminated ret;
 
 	char *file_path = mem_alloc0(PATH_MAX);
-	char *path = mem_printf("/proc/%d/cwd", pid);
+	char *__null_terminated path = mem_printf("/proc/%d/cwd", pid);
 
 	ssize_t len = readlink(path, file_path, PATH_MAX);
 	if (len < 0 || len > PATH_MAX - 1)
 		ERROR_ERRNO("readlink on %s returned %zd", path, len);
 
-	ret = (len < 0 || len > PATH_MAX - 1) ? NULL : mem_strdup(file_path);
+	/* file_path is mem_alloc0'd (zeroed) and readlink wrote len < PATH_MAX bytes,
+	 * so it is NUL-terminated within bounds */
+	ret = (len < 0 || len > PATH_MAX - 1) ?
+		      NULL :
+		      mem_strdup(__unsafe_null_terminated_from_indexable(file_path));
 
 	mem_free0(file_path);
 	mem_free0(path);
