@@ -1820,6 +1820,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	mem_free0(path);
 	return c;
 err:
+	container_destroy(c);
 	container_free(c);
 	mem_free0(path);
 	return NULL;
