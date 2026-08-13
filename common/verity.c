@@ -213,55 +213,10 @@ out:
 }
 
 int
-verity_delete_blk_dev(const char *name)
-{
-	int control_fd = -1;
-	int ret = -1;
-	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
-	struct dm_ioctl *dmi = (struct dm_ioctl *)buf;
-
-	TRACE("Closing dm-verity device %s", name);
-
-	if ((control_fd = dm_open_control()) < 0) {
-		goto out;
-	}
-
-	// Make sure that dm-verity device exists
-	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL,
-		      DM_EXISTS_FLAG | DM_NOFLUSH_FLAG, 0, 0, 0);
-	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
-	if (ioctl_ret != 0) {
-		ERROR_ERRNO("Cannot close dm-verity device %s", name);
-		goto out;
-	}
-
-	dm_ioctl_init(dmi, INDEX_DM_DEV_REMOVE, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_REMOVE].cmd, dmi);
-	if (ioctl_ret != 0) {
-		ERROR_ERRNO("Failed to close dm-verity device");
-		goto out;
-	}
-
-	/* remove device node or symlink if necessary */
-	char *device = verity_get_device_path_new(name);
-	unlink(device);
-	mem_free0(device);
-
-	TRACE("Successfully closed dm-verity device %s", name);
-	ret = 0;
-
-out:
-	dm_close_control(control_fd);
-
-	return ret;
-}
-
-int
 verity_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
 		      const char *root_hash, bool enforce_symlinks)
 {
 	int control_fd = -1;
-	int ret = -1;
 	int fs_fd = -1;
 	uint8_t ALIGNED(struct dm_ioctl) buf[16384] = { 0 };
 	struct dm_ioctl *dmi = (struct dm_ioctl *)buf;
@@ -276,15 +231,17 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	int hash_fd = open(hash_dev_name, O_RDONLY);
 	if (hash_fd < 0) {
 		ERROR_ERRNO("Failed to open dm-verity hash device %s", hash_dev_name);
-		goto out;
+		return -1;
 	}
 
 	ssize_t size = fd_read_blockwise(hash_fd, &sb, sizeof(verity_sb_t), 4096, 4096);
 	if (size < (ssize_t)sizeof(verity_sb_t)) {
 		ERROR("Failed to read superblock of %s", hash_dev_name);
-		goto out;
+		close(hash_fd);
+		return -1;
 	}
 	close(hash_fd);
+	hash_fd = -1; // we will reopen the hash_dev with loopdev_create_new() later
 
 	// Create dm-verity format uuid
 	char uuid[40] = { 0 };
@@ -292,12 +249,12 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	uuid_bytes_to_string(uuid, sb.uuid);
 	if (verity_create_uuid(name, uuid, dev_uuid, sizeof(dev_uuid))) {
 		ERROR("Failed to create uuid for dm-verity device %s", name);
-		goto out;
+		return -1;
 	}
 	TRACE("dm-verity device %s uuid: %s", name, dev_uuid);
 
 	if ((control_fd = dm_open_control()) < 0) {
-		goto out;
+		return -1;
 	}
 
 	// Make sure that dm-verity device does not already exist
@@ -305,39 +262,39 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
 	if (ioctl_ret == 0 || errno != ENXIO) {
 		ERROR("Cannot create dm-verity device %s: Device already exists", name);
-		goto out;
+		goto dm_control;
 	}
 
 	// Create loopdevice for dm-verity image
 	fs_dev = loopdev_create_new(&fs_fd, fs_img_name, 1, 0);
 	if (!fs_dev) {
-		goto out;
+		goto dm_control;
 	}
 	TRACE("Created loop device %s for %s", fs_dev, fs_img_name);
 
 	int fs_sector_size = dm_get_blkdev_sector_size(fs_fd);
 	if (!(fs_sector_size > 0)) {
-		goto out;
+		goto loop_dev_fs;
 	}
 	uint64_t fs_size = dm_get_blkdev_size64(fs_fd) / fs_sector_size;
 	if (fs_size == 0) {
-		goto out;
+		goto loop_dev_fs;
 	}
 
 	// Create loop device for dm-verity hash-tree
 	hash_dev = loopdev_create_new(&hash_fd, hash_dev_name, 1, 0);
 	if (!hash_dev) {
-		goto out;
+		goto loop_dev_fs;
 	}
 	TRACE("Created loop device %s for %s", hash_dev, hash_dev_name);
 
 	int hash_sector_size = dm_get_blkdev_sector_size(hash_fd);
 	if (!(hash_sector_size > 0)) {
-		goto out;
+		goto loop_dev_hash;
 	}
 	uint64_t hash_dev_size = dm_get_blkdev_size64(hash_fd) / hash_sector_size;
 	if (hash_dev_size == 0) {
-		goto out;
+		goto loop_dev_hash;
 	}
 
 	// Create verity device
@@ -346,7 +303,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_CREATE].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_DEV_CREATE ioctl returned %d", ioctl_ret);
-		goto out;
+		goto loop_dev_hash;
 	}
 
 	unsigned long long dev = dmi->dev;
@@ -357,12 +314,12 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_LOAD, sizeof(buf), NULL, NULL, flags, dev, 1, 0);
 	if (generate_dm_table_load_extra_params(dmi, sizeof(buf), &sb, fs_dev, fs_size, hash_dev,
 						root_hash)) {
-		goto out;
+		goto verity_dev;
 	}
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_LOAD].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_LOAD ioctl returned %d", ioctl_ret);
-		goto out;
+		goto verity_dev;
 	}
 
 	// Run dev-suspend command
@@ -371,7 +328,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_SUSPEND].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_DEV_SUSPEND ioctl returned %d", ioctl_ret);
-		goto out;
+		goto verity_dev;
 	}
 
 	// Check that verity device activation was successful
@@ -379,7 +336,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_STATUS ioctl returned %d", ioctl_ret);
-		goto out;
+		goto verity_dev;
 	}
 	char *status_line = (char *)(dmi + 1) + sizeof(struct dm_target_spec);
 
@@ -389,31 +346,36 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 		if (0 != create_dm_symlink(name, dmi->dev, enforce_symlinks)) {
 			ERROR("Failed to create symlink for verity device %s, closing device",
 			      name);
-
-			if (verity_delete_blk_dev(name)) {
-				ERROR("Failed to close verity device %s", name);
-			}
-
-			goto out;
+			goto verity_dev;
 		}
-
-		ret = 0;
 	} else if (status_line[0] == 'C') {
-		WARN("Activated verity device %s, corruption detected", name);
+		ERROR("Activated verity device %s, corruption detected", name);
+		goto verity_dev;
 	} else {
-		WARN("Activated verity device %s, unknown status %c", name, status_line[0]);
+		ERROR("Activated verity device %s, unknown status %c", name, status_line[0]);
+		goto verity_dev;
 	}
 
-out:
-	dm_close_control(control_fd);
-	if (fs_fd >= 0)
-		close(fs_fd);
-	if (hash_fd >= 0)
-		close(hash_fd);
-	if (fs_dev)
-		mem_free0(fs_dev);
-	if (hash_dev)
-		mem_free0(hash_dev);
+	close(hash_fd);
+	close(fs_fd);
+	mem_free0(hash_dev);
+	mem_free0(fs_dev);
 
-	return ret;
+	dm_close_control(control_fd);
+
+	return 0;
+
+verity_dev:
+	if (dm_delete_blk_dev(control_fd, name))
+		WARN("Failed to close verity device %s", name);
+loop_dev_hash:
+	close(hash_fd);
+	mem_free0(hash_dev);
+loop_dev_fs:
+	close(fs_fd);
+	mem_free0(fs_dev);
+dm_control:
+	dm_close_control(control_fd);
+
+	return -1;
 }
