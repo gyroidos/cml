@@ -47,14 +47,4 @@ int
 verity_create_blk_dev(const char *name, const char *fs_img_name, const char *hash_dev_name,
 		      const char *root_hash, bool enforce_symlinks);
 
-/**
- * Close a device-mapper verity device
- *
- * @param name The name of the device to be closed
- * @return int 0 if successful, otherwise -1
- *
- */
-int
-verity_delete_blk_dev(const char *name);
-
 #endif // VERITY_H
