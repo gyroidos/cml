@@ -50,7 +50,7 @@
 #include "dm.h"
 #include "fd.h"
 
-#define TABLE_LOAD_RETRIES 10
+#define IOCTL_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
 #define AUTHENC_KEY_LEN 96
 #define CRYPTO_TYPE_AUTHENC "capi:authenc(hmac(sha256),xts(aes))-random"
@@ -164,7 +164,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	// Set tgt->next right behind dm_target_spec
 	tgt->next = integrity_params - mapping_buffer;
 
-	for (mapping_counter = 0; mapping_counter < TABLE_LOAD_RETRIES; mapping_counter++) {
+	for (mapping_counter = 0; mapping_counter < IOCTL_RETRIES; mapping_counter++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, mapping_io);
 
 		if (ioctl_ret == 0) {
@@ -177,7 +177,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	mem_free0(mapping_buffer);
 
 	// Check that loading the table worked
-	if (mapping_counter >= TABLE_LOAD_RETRIES) {
+	if (mapping_counter >= IOCTL_RETRIES) {
 		ERROR_ERRNO("Loading integrity mapping table did not work after %d tries",
 			    mapping_counter);
 		return -1;
@@ -228,7 +228,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 		(char *)(((unsigned long)crypt_params + 7) & ~8); /* Align to an 8 byte boundary */
 	tgt->next = crypt_params - buffer;
 
-	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
+	for (i = 0; i < IOCTL_RETRIES; i++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, io);
 		if (!ioctl_ret) {
 			DEBUG("Loading device table successfull.");
@@ -238,7 +238,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	}
 
 	mem_free0(buffer);
-	if (i == TABLE_LOAD_RETRIES) {
+	if (i == IOCTL_RETRIES) {
 		/* We failed to load the table, return an error */
 		ERROR_ERRNO("Loading crypto mapping table did not work after %d tries", i);
 		return -1;
@@ -291,6 +291,125 @@ errout:
 	return device;
 }
 
+static int
+delete_integrity_blk_dev(const char *name)
+{
+	int fd;
+	int i;
+	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
+	struct dm_ioctl *io;
+	int ret = -1;
+	char *device = NULL;
+
+	fd = open(DM_CONTROL, O_RDWR);
+	if (fd < 0) {
+		ERROR_ERRNO("Cannot open device-mapper");
+		goto error;
+	}
+
+	io = (struct dm_ioctl *)buffer;
+
+	for (i = 0; i < IOCTL_RETRIES; i++) {
+		dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0,
+			      0);
+		if (dm_ioctl(fd, DM_DEV_REMOVE, io) == 0) {
+			/* remove sucessfull, no more retry needed */
+			break;
+		}
+		if (errno == ENXIO) {
+			/* device does not exist, nothing to be remove */
+			goto out;
+		}
+		if (errno != EBUSY) {
+			ERROR_ERRNO("Cannot remove dm-integrity device '%s'", name);
+			goto error;
+		}
+		/* something is blocking device sleep and retry */
+		NANOSLEEP(0, 500000000);
+	}
+
+	if (i == IOCTL_RETRIES) {
+		/* We failed to delete the device, return an error */
+		ERROR_ERRNO("Cannot remove dm-integrity device '%s'", name);
+		goto error;
+	}
+
+	/* remove device node if necessary */
+	device = cryptfs_get_device_path_new(name);
+	unlink(device);
+	mem_free0(device);
+out:
+
+	DEBUG("Successfully deleted dm-integrity device '%s'", name);
+	ret = 0;
+
+error:
+	mem_free(buffer);
+	close(fd);
+	return ret;
+}
+
+static int
+delete_crypto_blk_dev(int fd, const char *name)
+{
+	char *buffer = mem_new(char, DM_CRYPT_BUF_SIZE);
+	struct dm_ioctl *io;
+	int ret = -1;
+	int i;
+	char *device = NULL;
+	bool internally_opend = false;
+
+	if (fd == -1) {
+		fd = open(DM_CONTROL, O_RDWR);
+		internally_opend = true;
+	}
+	if (fd < 0) {
+		ERROR_ERRNO("Cannot open device-mapper");
+		goto error;
+	}
+
+	io = (struct dm_ioctl *)buffer;
+
+	for (i = 0; i < IOCTL_RETRIES; i++) {
+		dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
+		if (dm_ioctl(fd, DM_DEV_REMOVE, io) == 0) {
+			/* remove sucessfull, no more retry needed */
+			break;
+		}
+		if (errno == ENXIO) {
+			/* device does not exist, nothing to be remove */
+			goto out;
+		}
+		if (errno != EBUSY) {
+			ERROR_ERRNO("Cannot remove dm-crypt device '%s'", name);
+			goto error;
+		}
+		/* something is blocking device sleep and retry */
+		NANOSLEEP(0, 500000000);
+	}
+
+	if (i == IOCTL_RETRIES) {
+		/* We failed to delete the device, return an error */
+		ERROR_ERRNO("Cannot remove dm-crypt device '%s'", name);
+		goto error;
+	}
+
+	/* remove device node if necessary */
+	device = cryptfs_get_device_path_new(name);
+	unlink(device);
+	mem_free0(device);
+
+out:
+	DEBUG("Successfully deleted dm-crypt device '%s'", name);
+	ret = 0;
+
+error:
+	mem_free(buffer);
+	if (internally_opend)
+		close(fd);
+	return ret;
+}
+
 /**
  * Creates an integrity block device with DM_DEV_CREATE ioctl, reloads the mapping
  * table with DM_TABLE_LOADE ioctl and resumes the device with DM_DEV_SUSPEND ioctl
@@ -313,9 +432,8 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	char *integrity_dev = NULL;
 
 	// Open device mapper
-	if ((fd = open(DM_CONTROL, O_RDWR)) < 0) {
-		ERROR_ERRNO("Cannot open device-mapper");
-		goto error;
+	if ((fd = dm_open_control()) < 0) {
+		return NULL;
 	}
 
 	// Create blk device
@@ -324,7 +442,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	dm_ioctl_init(create_io, INDEX_DM_DEV_CREATE, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0,
 		      0);
 
-	for (create_counter = 0; create_counter < TABLE_LOAD_RETRIES; create_counter++) {
+	for (create_counter = 0; create_counter < IOCTL_RETRIES; create_counter++) {
 		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, create_io);
 		if (!ioctl_ret) {
 			DEBUG("Creating block device worked!");
@@ -334,9 +452,9 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 		NANOSLEEP(0, 500000000)
 	}
 
-	if (create_counter >= TABLE_LOAD_RETRIES) {
+	if (create_counter >= IOCTL_RETRIES) {
 		ERROR_ERRNO("Failed to create block device after %d tries", create_counter);
-		goto error;
+		goto dm_control;
 	}
 
 	// Load Integrity map table
@@ -346,7 +464,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 						  fs_size, stacked);
 	if (load_count < 0) {
 		ERROR("Error while loading mapping table");
-		goto error;
+		goto integrity_dev;
 	} else {
 		INFO("Loading integrity map took %d tries", load_count);
 	}
@@ -360,23 +478,28 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("Cannot resume the dm-integrity device (ioctl ret: %d, errno:%d)",
 			    ioctl_ret, errno);
-		goto error;
+		goto integrity_dev;
 	}
 
 	integrity_dev = create_device_node(name);
 	if (!integrity_dev) {
 		ERROR("Could not create device node (integrity)");
-		goto error;
+		goto integrity_dev;
 	} else {
 		DEBUG("Successfully created device node (integrity)");
 	}
 
-	close(fd);
+	dm_close_control(fd);
+
 	return integrity_dev;
 
-error:
+integrity_dev:
+	if (delete_integrity_blk_dev(name))
+		WARN("Failed to close integrity device %s", name);
+dm_control:
+	dm_close_control(fd);
+
 	ERROR("Failed integrity block creation");
-	close(fd);
 	return NULL;
 }
 
@@ -393,15 +516,16 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	char *crypto_blkdev = NULL;
 
 	DEBUG("Creating crypto blk device");
-	if ((fd = open(DM_CONTROL, O_RDWR)) < 0) {
-		ERROR("Cannot open device-mapper\n");
-		goto error;
+
+	// Open device mapper
+	if ((fd = dm_open_control()) < 0) {
+		return NULL;
 	}
 
 	io = (struct dm_ioctl *)buffer;
 	dm_ioctl_init(io, INDEX_DM_DEV_CREATE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
 
-	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
+	for (i = 0; i < IOCTL_RETRIES; i++) {
 		ioctl_ret = dm_ioctl(fd, DM_DEV_CREATE, io);
 
 		if (!ioctl_ret) {
@@ -411,17 +535,17 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 		NANOSLEEP(0, 500000000)
 	}
 
-	if (i == TABLE_LOAD_RETRIES) {
+	if (i == IOCTL_RETRIES) {
 		/* We failed to load the table, return an error */
 		ERROR("Cannot create dm-crypt device");
-		goto error;
+		goto dm_control;
 	}
 
 	load_count =
 		load_crypto_mapping_table(fd, real_blk_name, master_key, name, fs_size, integrity);
 	if (load_count < 0) {
 		ERROR("Cannot load dm-crypt mapping table");
-		goto error;
+		goto crypto_dev;
 	} else if (load_count > 1) {
 		INFO("Took %d tries to load dmcrypt table.\n", load_count);
 	}
@@ -431,109 +555,29 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 
 	if (dm_ioctl(fd, DM_DEV_SUSPEND, io)) {
 		ERROR_ERRNO("Cannot resume the dm-crypt device\n");
-		goto error;
+		goto crypto_dev;
 	}
 
 	crypto_blkdev = create_device_node(name);
 	if (!crypto_blkdev) {
 		ERROR("Could not create device node (crypt)");
-		goto error;
+		goto crypto_dev;
 	} else {
 		DEBUG("Successfully created device node (crypt)");
 	}
 
-	close(fd);
+	dm_close_control(fd);
+
 	return crypto_blkdev;
 
-error:
-	close(fd); /* If fd is <0 from a failed open call, it's safe to just ignore the close error */
+crypto_dev:
+	if (delete_crypto_blk_dev(fd, name))
+		WARN("Failed to close crypto device %s", name);
+dm_control:
+	dm_close_control(fd);
+
 	ERROR("Failed crypto block creation wiht name '%s'", name);
 	return NULL;
-}
-
-static int
-delete_integrity_blk_dev(const char *name)
-{
-	int fd;
-	char *buffer = mem_new(char, DEVMAPPER_BUFFER_SIZE);
-	struct dm_ioctl *io;
-	int ret = -1;
-	char *device = NULL;
-
-	fd = open(DM_CONTROL, O_RDWR);
-	if (fd < 0) {
-		ERROR_ERRNO("Cannot open device-mapper");
-		goto error;
-	}
-
-	io = (struct dm_ioctl *)buffer;
-
-	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_INTEGRITY_BUF_SIZE, name, NULL, 0, 0, 0, 0);
-	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
-		ret = errno;
-		if (errno != ENXIO)
-			ERROR_ERRNO("Cannot remove dm-integrity device '%s'", name);
-		goto error;
-	}
-
-	/* remove device node if necessary */
-	device = cryptfs_get_device_path_new(name);
-	unlink(device);
-
-	DEBUG("Successfully deleted dm-integrity device '%s'", name);
-	ret = 0;
-
-error:
-	if (device)
-		mem_free0(device);
-	mem_free(buffer);
-	close(fd);
-	return ret;
-}
-
-static int
-delete_crypto_blk_dev(int fd, const char *name)
-{
-	char *buffer = mem_new(char, DM_CRYPT_BUF_SIZE);
-	struct dm_ioctl *io;
-	int ret = -1;
-	char *device = NULL;
-	bool internally_opend = false;
-
-	if (fd == -1) {
-		fd = open(DM_CONTROL, O_RDWR);
-		internally_opend = true;
-	}
-	if (fd < 0) {
-		ERROR_ERRNO("Cannot open device-mapper");
-		goto error;
-	}
-
-	io = (struct dm_ioctl *)buffer;
-
-	dm_ioctl_init(io, INDEX_DM_DEV_REMOVE, DM_CRYPT_BUF_SIZE, name, NULL, 0, 0, 0, 0);
-	if (dm_ioctl(fd, DM_DEV_REMOVE, io) < 0) {
-		ret = errno;
-		if (errno != ENXIO)
-			ERROR_ERRNO("Cannot remove dm-crypt device '%s'", name);
-		goto error;
-	}
-
-	/* remove device node if necessary */
-	device = cryptfs_get_device_path_new(name);
-	unlink(device);
-	mem_free0(device);
-
-	DEBUG("Successfully deleted dm-crypt device '%s'", name);
-	ret = 0;
-
-error:
-	if (device)
-		mem_free0(device);
-	mem_free(buffer);
-	if (internally_opend)
-		close(fd);
-	return ret;
 }
 
 static unsigned long
@@ -753,9 +797,9 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 			ERROR("Could not create crypto block device");
 			goto error;
 		}
-	} else {
-		crypto_blkdev = integrity_blkdev;
 	}
+
+	char *top_blkdev = encrypt ? crypto_blkdev : integrity_blkdev;
 
 	if (initial_format) {
 		/*
@@ -766,15 +810,15 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		 */
 		DEBUG("Formatting crypto blkdev %s. Generating initial MAC on "
 		      "integrity blkdev %s",
-		      crypto_blkdev, integrity_blkdev);
+		      top_blkdev, integrity_blkdev);
 
-		if (0 != cryptfs_write_zeros(crypto_blkdev, fs_size * 512)) {
+		if (0 != cryptfs_write_zeros(top_blkdev, fs_size * 512)) {
 			WARN("Failed to format volume %s using calloc, falling back to stack-allocated buffer",
-			     crypto_blkdev);
+			     top_blkdev);
 
 			int fd;
-			if ((fd = open(crypto_blkdev, O_WRONLY | O_DIRECT)) < 0) {
-				ERROR("Cannot open volume %s", crypto_blkdev);
+			if ((fd = open(top_blkdev, O_WRONLY | O_DIRECT)) < 0) {
+				ERROR("Cannot open volume %s", top_blkdev);
 				goto error;
 			}
 
@@ -783,14 +827,14 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 				if (write(fd, zeros, DM_INTEGRITY_BUF_SIZE) <
 				    DM_INTEGRITY_BUF_SIZE) {
 					ERROR_ERRNO("Could not write empty block %lu to %s", i,
-						    crypto_blkdev);
+						    top_blkdev);
 					close(fd);
 					goto error;
 				}
 			}
 			close(fd);
 
-			DEBUG("Successfully formatted volume %s using file_copy", crypto_blkdev);
+			DEBUG("Successfully formatted volume %s using file_copy", top_blkdev);
 		}
 	}
 
@@ -804,10 +848,10 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	}
 	if (integrity_dev_label)
 		mem_free0(integrity_dev_label);
-	if (integrity_blkdev && integrity_blkdev != crypto_blkdev)
+	if (integrity_blkdev && integrity_blkdev != top_blkdev)
 		mem_free0(integrity_blkdev);
 
-	return crypto_blkdev;
+	return top_blkdev;
 
 error:
 	if (crypto_key) {
@@ -818,16 +862,19 @@ error:
 		mem_memset0(integrity_key, integrity_key_len);
 		mem_free0(integrity_key);
 	}
-	if (integrity_dev_label)
-		mem_free0(integrity_dev_label);
-	if (integrity_blkdev) {
-		delete_integrity_blk_dev(label);
-		mem_free0(integrity_blkdev);
-	}
 	if (crypto_blkdev) {
-		delete_crypto_blk_dev(-1, label);
+		if (delete_crypto_blk_dev(-1, label))
+			WARN("Failed to remove half-created crypto device %s.", label);
 		mem_free0(crypto_blkdev);
 	}
+	if (integrity_blkdev) {
+		if (delete_integrity_blk_dev(integrity_dev_label))
+			WARN("Failed to remove half-created integrity device %s.",
+			     integrity_dev_label);
+		mem_free0(integrity_blkdev);
+	}
+	if (integrity_dev_label)
+		mem_free0(integrity_dev_label);
 
 	return NULL;
 }
