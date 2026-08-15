@@ -139,7 +139,7 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 	// Align to an 8 byte boundary
 	verity_params = (char *)ALIGN((uintptr_t)verity_params, 8);
 	// Set tgt->next right behind dm_target_spec
-	tgt->next = (unsigned int)(verity_params - (char *)io);
+	tgt->next = (unsigned int)(verity_params - (char *)tgt);
 
 	return 0;
 }
