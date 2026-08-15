@@ -158,7 +158,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	// Byte align the parameter
 	integrity_params = (char *)ALIGN((uintptr_t)integrity_params, 8);
 	// Set tgt->next right behind dm_target_spec
-	tgt->next = integrity_params - (char *)mapping_io;
+	tgt->next = (unsigned int)(integrity_params - (char *)tgt);
 
 	for (mapping_counter = 0; mapping_counter < TABLE_LOAD_RETRIES; mapping_counter++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, mapping_io);
@@ -218,7 +218,7 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 
 	crypt_params += strlen(crypt_params) + 1;
 	crypt_params = (char *)ALIGN((uintptr_t)crypt_params, 8); /* Align to an 8 byte boundary */
-	tgt->next = crypt_params - (char *)io;
+	tgt->next = (unsigned int)(crypt_params - (char *)tgt);
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, io);
