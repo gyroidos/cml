@@ -28,6 +28,7 @@
 
 #include "file.h"
 
+#include "bounds_safety.h"
 #include "macro.h"
 #include "logf.h"
 #include "mem.h"
@@ -100,7 +101,7 @@ file_is_mountpoint(const char *file)
 {
 	bool ret;
 	struct stat s, s_parent;
-	char *parent = mem_printf("%s/..", file);
+	char *__null_terminated parent = mem_printf("%s/..", file);
 
 	ret = !lstat(file, &s);
 	ret &= !lstat(parent, &s_parent);
@@ -258,7 +259,7 @@ file_move(const char *src, const char *dst, size_t bs)
 }
 
 static int
-file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
+file_write_internal(const char *file, const char *__counted_by(len) buf, size_t len, int oflags)
 {
 	int fd;
 
@@ -270,9 +271,6 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 		DEBUG_ERRNO("Could not open output file %s", file);
 		return -1;
 	}
-
-	if (len < 0)
-		len = strlen(buf);
 
 	int bytes_written = fd_write(fd, buf, len);
 	if (bytes_written < 0) {
@@ -290,13 +288,13 @@ file_write_internal(const char *file, const char *buf, ssize_t len, int oflags)
 }
 
 int
-file_write(const char *file, const char *buf, ssize_t len)
+file_write(const char *file, const char *__counted_by(len) buf, size_t len)
 {
 	return file_write_internal(file, buf, len, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW);
 }
 
 int
-file_write_append(const char *file, const char *buf, ssize_t len)
+file_write_append(const char *file, const char *__counted_by(len) buf, size_t len)
 {
 	int oflags = O_WRONLY | O_NOFOLLOW;
 	oflags |= file_exists(file) ? O_APPEND : (O_CREAT | O_TRUNC);
@@ -308,7 +306,7 @@ int
 file_printf(const char *file, const char *fmt, ...)
 {
 	va_list ap;
-	char *buf;
+	char *__null_terminated buf;
 	int ret;
 
 	IF_NULL_RETVAL(file, -1);
@@ -317,7 +315,8 @@ file_printf(const char *file, const char *fmt, ...)
 	buf = mem_vprintf(fmt, ap);
 	va_end(ap);
 
-	ret = file_write(file, buf, -1);
+	size_t len = strlen(buf);
+	ret = file_write(file, __unsafe_forge_bidi_indexable(const char *, buf, len), len);
 	mem_free0(buf);
 	return ret;
 }
@@ -326,7 +325,7 @@ int
 file_printf_append(const char *file, const char *fmt, ...)
 {
 	va_list ap;
-	char *buf;
+	char *__null_terminated buf;
 	int ret;
 
 	IF_NULL_RETVAL(file, -1);
@@ -335,13 +334,14 @@ file_printf_append(const char *file, const char *fmt, ...)
 	buf = mem_vprintf(fmt, ap);
 	va_end(ap);
 
-	ret = file_write_append(file, buf, -1);
+	size_t len = strlen(buf);
+	ret = file_write_append(file, __unsafe_forge_bidi_indexable(const char *, buf, len), len);
 	mem_free0(buf);
 	return ret;
 }
 
 int
-file_read(const char *file, char *buf, size_t len)
+file_read(const char *file, char *__counted_by(len) buf, size_t len)
 {
 	int fd;
 
@@ -366,10 +366,11 @@ file_read(const char *file, char *buf, size_t len)
 	return bytes_read;
 }
 
-char *
+char *__null_terminated
 file_read_new(const char *file, size_t maxlen)
 {
-	char *maxbuf, *buf;
+	char *maxbuf;
+	char *__null_terminated buf;
 
 	IF_NULL_RETVAL(file, NULL);
 
@@ -385,7 +386,7 @@ file_read_new(const char *file, size_t maxlen)
 	// Make sure the buffer returned is nul terminated
 	maxbuf[bytes_read] = '\0';
 
-	buf = mem_strdup(maxbuf);
+	buf = mem_strdup(__unsafe_null_terminated_from_indexable(maxbuf));
 	mem_free0(maxbuf);
 	return buf;
 }
@@ -399,15 +400,15 @@ file_size(const char *file)
 	return s.st_size;
 }
 
-char *
+const char *
 file_get_extension(const char *file)
 {
 	ASSERT(file);
 
-	char *ext = strrchr(file, '.');
+	char *__unsafe_indexable ext = strrchr(file, '.');
 	if (!ext)
 		return "";
-	return ext;
+	return __unsafe_forge_null_terminated(const char *, ext);
 }
 
 int

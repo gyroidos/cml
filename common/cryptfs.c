@@ -567,7 +567,8 @@ cryptfs_write_zeros(char *crypto_blkdev, size_t size)
 {
 	int fd = -1, ret = -1;
 	char *zeros = NULL;
-	ssize_t towrite = -1, res = -1, written = 0;
+	size_t towrite = 0;
+	ssize_t res = -1, written = 0;
 
 	IF_NULL_RETVAL(crypto_blkdev, -1);
 
@@ -585,10 +586,10 @@ cryptfs_write_zeros(char *crypto_blkdev, size_t size)
 		towrite = MIN(size - written, ZERO_BUF_SIZE);
 
 		if (0 > (res = fd_write(fd, zeros, towrite))) {
-			ERROR("Failed to write: %zd bytes", towrite);
+			ERROR("Failed to write: %zu bytes", towrite);
 			goto error;
 		}
-		TRACE("res: %zd, written %zd, towrite %zd\n", res, written, towrite);
+		TRACE("res: %zd, written %zd, towrite %zu\n", res, written, towrite);
 
 		written += res;
 	}

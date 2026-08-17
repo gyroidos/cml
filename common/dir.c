@@ -22,6 +22,8 @@
  */
 
 #include "dir.h"
+
+#include "bounds_safety.h"
 #include "file.h"
 
 #include "macro.h"
@@ -38,28 +40,30 @@ int
 dir_foreach(const char *path, int (*func)(const char *path, const char *file, void *data),
 	    void *data)
 {
-	struct dirent *dp;
-	DIR *dirp;
+	struct dirent *__single dp;
+	DIR *__single dirp;
 	int n = 0;
 
 	IF_NULL_RETVAL(path, -1);
 	IF_NULL_RETVAL(func, -1);
 
-	dirp = opendir(path);
+	dirp = __unsafe_forge_single(DIR *, opendir(path));
 	if (!dirp) {
 		WARN_ERRNO("Could not open dir %s", path);
 		return -1;
 	}
 
-	while ((dp = readdir(dirp)) != NULL) {
-		if (strcmp(dp->d_name, ".") == 0)
+	while ((dp = __unsafe_forge_single(struct dirent *, readdir(dirp))) != NULL) {
+		const char *__null_terminated name =
+			__unsafe_forge_null_terminated(const char *, dp->d_name);
+		if (strcmp(name, ".") == 0)
 			continue;
-		if (strcmp(dp->d_name, "..") == 0)
+		if (strcmp(name, "..") == 0)
 			continue;
 
-		TRACE("Found directory %s/%s", path, dp->d_name);
+		TRACE("Found directory %s/%s", path, name);
 
-		int ret = func(path, dp->d_name, data);
+		int ret = func(path, name, data);
 		if (ret < 0) {
 			DEBUG("Callback of dir_foreach returned %d", ret);
 			n = -1;
@@ -78,18 +82,18 @@ int
 dir_mkdir_p(const char *path, mode_t mode)
 {
 	ASSERT(path);
-	char *c, *p = mem_printf("%s", path);
+	char *__null_terminated c, *__null_terminated p = mem_printf("%s", path);
 	c = p;
 	int ret = 0;
 
 	//DEBUG("Doing mkdir -p on path %s", p);
 	mode_t old_mask = umask(0);
 
-	if (c[0] == '/') {
+	if (*c == '/') {
 		c++;
 	}
 
-	c = strchr(c, '/');
+	c = __unsafe_forge_null_terminated(char *, strchr(c, '/'));
 	while (c) {
 		*c = '\0';
 		//DEBUG("Doing mkdir on path %s", p);
@@ -99,7 +103,8 @@ dir_mkdir_p(const char *path, mode_t mode)
 			goto out;
 		}
 		*c = '/';
-		c = strchr(c + 1, '/');
+		c++;
+		c = __unsafe_forge_null_terminated(char *, strchr(c, '/'));
 	}
 	if (mkdir(p, mode) < 0 && errno != EEXIST) {
 		ERROR_ERRNO("Could not mkdir %s", p);
@@ -130,7 +135,7 @@ dir_unlink_folder_contents_cb(const char *path, const char *name, UNUSED void *d
 	}
 
 	if (S_ISDIR(stat_buffer.st_mode)) {
-		char *subdir = mem_printf("%s/%s", path, name);
+		char *__null_terminated subdir = mem_printf("%s/%s", path, name);
 		TRACE("Path %s is dir", subdir);
 		if (dir_foreach(subdir, &dir_unlink_folder_contents_cb, NULL) < 0) {
 			ERROR_ERRNO("Could not delete all dir contents in %s", subdir);
@@ -158,7 +163,7 @@ int
 dir_delete_folder(const char *path, const char *dir_name)
 {
 	int ret = 0;
-	char *dir_to_remove = mem_printf("%s/%s", path, dir_name);
+	char *__null_terminated dir_to_remove = mem_printf("%s/%s", path, dir_name);
 
 	DEBUG("Deleting %s", dir_to_remove);
 	if (dir_foreach(dir_to_remove, &dir_unlink_folder_contents_cb, NULL) < 0) {
@@ -176,7 +181,7 @@ dir_delete_folder(const char *path, const char *dir_name)
 }
 
 typedef struct dir_copy_params {
-	char *target;
+	char *__null_terminated target;
 	void *data;
 	bool (*filter)(const char *file, void *data);
 } dir_copy_params_t;
@@ -201,15 +206,15 @@ dir_copy_params_free(dir_copy_params_t *params)
 static int
 dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 {
-	dir_copy_params_t *p = data;
+	dir_copy_params_t *__single p = data;
 	ASSERT(p);
 
 	struct stat s;
 
 	int ret = 0;
-	char *file_src = mem_printf("%s/%s", path, name);
+	char *__null_terminated file_src = mem_printf("%s/%s", path, name);
 	dir_copy_params_t *params = dir_copy_params_new(p->target, name, p->filter, p->data);
-	char *file_dst = params->target;
+	char *__null_terminated file_dst = params->target;
 
 	IF_NULL_GOTO_ERROR(file_dst, out);
 
@@ -325,10 +330,10 @@ dir_chown_contents_cb(const char *path, const char *file, void *data)
 {
 	struct stat s;
 	int ret = 0;
-	struct chown_data *cb_data = data;
+	struct chown_data *__single cb_data = data;
 	ASSERT(cb_data);
 
-	char *file_to_chown = mem_printf("%s/%s", path, file);
+	char *__null_terminated file_to_chown = mem_printf("%s/%s", path, file);
 	if (lstat(file_to_chown, &s) == -1) {
 		mem_free0(file_to_chown);
 		return -1;

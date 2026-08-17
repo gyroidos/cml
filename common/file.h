@@ -30,6 +30,8 @@
 #ifndef FILE_H
 #define FILE_H
 
+#include "bounds_safety.h"
+
 #include <stdbool.h>
 #include <sys/types.h>
 
@@ -86,21 +88,21 @@ file_move(const char *src, const char *dst, size_t bs);
  * Write a string to a file.
  * @param file The file name.
  * @param buf The buffer to be written.
- * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
+ * @param len The length of buffer.
  * @return -1 on error else the number of bytes written.
  */
 int
-file_write(const char *file, const char *buf, ssize_t len);
+file_write(const char *file, const char *__counted_by(len) buf, size_t len);
 
 /**
  * Append  a string to the end of a file.
  * @param file The file name.
  * @param buf The buffer to be written.
- * @param len The length of buffer, maybe -1 to determine buffer length with strlen().
+ * @param len The length of buffer.
  * @return -1 on error else the number of bytes written.
  */
 int
-file_write_append(const char *file, const char *buf, ssize_t len);
+file_write_append(const char *file, const char *__counted_by(len) buf, size_t len);
 
 /**
  * Write a string to a file using printf.
@@ -128,7 +130,7 @@ file_printf_append(const char *file, const char *fmt, ...);
  * @return -1 on error else the number of bytes read.
  */
 int
-file_read(const char *file, char *buf, size_t len);
+file_read(const char *file, char *__counted_by(len) buf, size_t len);
 
 /**
  * Read a string from a file and allocate memory for it.
@@ -136,7 +138,7 @@ file_read(const char *file, char *buf, size_t len);
  * @param maxlen The maximum length to read.
  * @return A newly allocated buffer with the string read from file and NULL in case of an error.
  */
-char *
+char *__null_terminated
 file_read_new(const char *file, size_t maxlen);
 
 /**
@@ -152,7 +154,7 @@ file_size(const char *file);
  * Note: fails if path contains a '.' and file has no ending
  * @ param file The file name
  */
-char *
+const char *
 file_get_extension(const char *file);
 
 /**

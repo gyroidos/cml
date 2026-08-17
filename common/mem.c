@@ -28,6 +28,7 @@
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
+#include "bounds_safety.h"
 #include "mem.h"
 #include "macro.h"
 
@@ -37,7 +38,7 @@
 			DEBUG("Allocating a large memory area of %zu bytes", size);                \
 	} while (0)
 
-void *
+void *__sized_by(size)
 mem_alloc(size_t size)
 {
 	DEBUG_THRESHOLD(size);
@@ -46,7 +47,7 @@ mem_alloc(size_t size)
 	return p;
 }
 
-void *
+void *__sized_by(size)
 mem_alloc0(size_t size)
 {
 	DEBUG_THRESHOLD(size);
@@ -55,7 +56,7 @@ mem_alloc0(size_t size)
 	return p;
 }
 
-void *
+void *__sized_by(size)
 mem_realloc(void *mem, size_t size)
 {
 	DEBUG_THRESHOLD(size);
@@ -64,27 +65,27 @@ mem_realloc(void *mem, size_t size)
 	return p;
 }
 
-char *
-mem_strdup(const char *str)
+char *__null_terminated
+mem_strdup(const char *__null_terminated str)
 {
 	ASSERT(str);
-	char *p = strdup(str);
+	char *__null_terminated p = __unsafe_forge_null_terminated(char *, strdup(str));
 	ASSERT(p);
 	return p;
 }
 
-char *
-mem_strndup(const char *str, size_t len)
+char *__null_terminated
+mem_strndup(const char *__counted_by(len) str, size_t len)
 {
 	ASSERT(str);
 	DEBUG_THRESHOLD(len);
-	char *p = strndup(str, len);
+	char *__null_terminated p = __unsafe_forge_null_terminated(char *, strndup(str, len));
 	ASSERT(p);
 	return p;
 }
 
-unsigned char *
-mem_memcpy(const unsigned char *mem, size_t size)
+unsigned char *__sized_by(size)
+mem_memcpy(const unsigned char *__sized_by(size) mem, size_t size)
 {
 	ASSERT(mem);
 	unsigned char *p = mem_alloc0(size);
@@ -93,25 +94,25 @@ mem_memcpy(const unsigned char *mem, size_t size)
 	return p;
 }
 
-char *
-mem_vprintf(const char *fmt, va_list ap)
+char *__null_terminated
+mem_vprintf(const char *__null_terminated fmt, va_list ap)
 {
-	char *p = NULL;
+	char *__unsafe_indexable p = NULL;
 	ASSERT(fmt);
 	ASSERT(vasprintf(&p, fmt, ap) >= 0);
-	return p;
+	return __unsafe_forge_null_terminated(char *, p);
 }
 
-char *
-mem_printf(const char *fmt, ...)
+char *__null_terminated
+mem_printf(const char *__null_terminated fmt, ...)
 {
-	char *p = NULL;
+	char *__unsafe_indexable p = NULL;
 	va_list ap;
 	ASSERT(fmt);
 	va_start(ap, fmt);
 	ASSERT(vasprintf(&p, fmt, ap) >= 0);
 	va_end(ap);
-	return p;
+	return __unsafe_forge_null_terminated(char *, p);
 }
 
 void
@@ -121,7 +122,7 @@ mem_free(void *ptr)
 }
 
 void
-mem_free_array(void **array, size_t size)
+mem_free_array(void *__single *__counted_by(size) array, size_t size)
 {
 	if (array != NULL) {
 		size_t i = 0;
@@ -135,6 +136,6 @@ mem_free_array(void **array, size_t size)
 		}
 
 		DEBUG("[MEM] Freeing array");
-		mem_free0(array);
+		mem_free(array);
 	}
 }

@@ -57,6 +57,19 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
+# --- Per-module bounds-safety support ---
+# Only annotated modules are compiled with -fbounds-safety; all others
+# compile normally.  Add newly annotated .c files to BOUNDS_SAFE_SRCS.
+BOUNDS_SAFETY ?= n
+BOUNDS_SAFE_SRCS := hex.c mem.c fd.c str.c protobuf.c file.c sock.c protobuf-text.c event.c dir.c uuid.c proc.c
+BOUNDS_SAFE_OBJS := $(BOUNDS_SAFE_SRCS:.c=.o)
+BOUNDS_SAFE_BS_OBJS := $(BOUNDS_SAFE_SRCS:.c=.bs.o)
+
+BOUNDS_CFLAGS := -fbounds-safety -fbounds-safety-bringup-missing-checks=batch_0
+
+ifeq ($(BOUNDS_SAFETY),y)
+$(BOUNDS_SAFE_OBJS): EXTRA_CFLAGS := $(BOUNDS_CFLAGS)
+endif
 
 .PHONY: all
 all: libcommon
@@ -125,10 +138,19 @@ libcommon_full_systemd: $(OBJS_COMMON_FULL) sock-sd.o
 	$(AR) rcs libcommon_full_systemd.a $^
 
 sock-sd.o: sock-sd.c
-	$(CC) -c $(LOCAL_CFLAGS) -DSYSTEMD $< -o $@
+	$(CC) -c $(LOCAL_CFLAGS) $(EXTRA_CFLAGS) -DSYSTEMD $< -o $@
 
 %.o: %.c
-	$(CC) -c $(LOCAL_CFLAGS) $< -o $@
+	$(CC) -c $(LOCAL_CFLAGS) $(EXTRA_CFLAGS) $< -o $@
+
+# Bounds-safe .bs.o objects — always compiled with BOUNDS_CFLAGS.
+# Used exclusively by bounds_test targets to avoid colliding with normal .o files.
+$(BOUNDS_SAFE_BS_OBJS): %.bs.o: %.c
+	$(CC) -c $(LOCAL_CFLAGS) $(BOUNDS_CFLAGS) $< -o $@
+
+# Bounds-test source files — also compiled with BOUNDS_CFLAGS.
+%.bounds_test.o: %.bounds_test.c
+	$(CC) -c $(LOCAL_CFLAGS) $(BOUNDS_CFLAGS) $< -o $@
 
 LFLAGS_TEST := \
 	-L. -lcommon_full \
@@ -150,6 +172,21 @@ common.test: $(TEST_SUITES) munit.o common.test.c
 test: libcommon_full common.test
 	./common.test
 
+# Bounds-safety enforcement tests (requires swiftlang Clang fork).
+# Annotated modules are compiled with -fbounds-safety; all others without.
+# Usage: make bounds_test CC=/path/to/bs-clang
+OBJS_BOUNDS_SUPPORT := logf.o list.o
+
+# All bounds_test binaries — add new ones as modules are annotated.
+BOUNDS_TEST_BINS := hex.bounds_test fd.bounds_test str.bounds_test protobuf.bounds_test file.bounds_test protobuf-text.bounds_test
+
+$(BOUNDS_TEST_BINS): %: %.o $(BOUNDS_SAFE_BS_OBJS) $(OBJS_BOUNDS_SUPPORT)
+	$(CC) $(LOCAL_CFLAGS) -o $@ $^ -lprotobuf-c -lprotobuf-c-text
+
+.PHONY: bounds_test
+bounds_test: $(BOUNDS_TEST_BINS)
+	@for t in $(BOUNDS_TEST_BINS); do echo "=== $$t ==="; ./$$t; done
+
 .PHONY: clean
 clean:
-	rm -f *.o *.a *.pb-c.* common.test
+	rm -f *.o *.a *.pb-c.* common.test $(BOUNDS_TEST_BINS)

@@ -585,7 +585,7 @@ compartment_oom_protect_service(const compartment_t *compartment)
 	DEBUG("Setting oom_adj of trustme service (PID %d) in compartment %s to -17", service_pid,
 	      compartment_get_description(compartment));
 	char *path = mem_printf("/proc/%d/oom_adj", service_pid);
-	int ret = file_write(path, "-17", -1);
+	int ret = file_write(path, "-17", strlen("-17"));
 	if (ret < 0)
 		ERROR_ERRNO("Failed to write to %s", path);
 	mem_free0(path);
@@ -1003,8 +1003,9 @@ compartment_start_child(void *data)
 			ssize_t read_bytes;
 			char *kvm_log = mem_printf("%s.kvm.log", compartment->debug_log_dir);
 			read_bytes = read(fd_master, buffer, 128);
-			file_write(kvm_log, buffer, read_bytes);
-			while ((read_bytes = read(fd_master, buffer, 128))) {
+			if (read_bytes > 0)
+				file_write(kvm_log, buffer, read_bytes);
+			while ((read_bytes = read(fd_master, buffer, 128)) > 0) {
 				file_write_append(kvm_log, buffer, read_bytes);
 			}
 			return COMPARTMENT_ERROR;

@@ -24,6 +24,8 @@
 #include "protobuf.h"
 #include <errno.h>
 
+#include "bounds_safety.h"
+
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 #include "macro.h"
 #include "mem.h"
@@ -35,11 +37,10 @@
 
 // TODO update naming scheme
 
-uint32_t
-protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr)
+protobuf_packed_msg_t
+protobuf_pack_message_new(const ProtobufCMessage *message)
 {
 	ASSERT(message);
-	ASSERT(ptr);
 
 	uint32_t packed_len = protobuf_c_message_get_packed_size(message);
 	uint8_t *packed = mem_alloc(packed_len);
@@ -49,13 +50,18 @@ protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr)
 	uint32_t actual_len = protobuf_c_message_pack(message, packed);
 	ASSERT(actual_len == packed_len);
 
-	*ptr = packed;
+	return (protobuf_packed_msg_t){ .buf = packed, .len = actual_len };
+}
 
-	return actual_len;
+void
+protobuf_pack_message_free(protobuf_packed_msg_t *msg)
+{
+	IF_NULL_RETURN(msg);
+	mem_free0_sized(msg->buf, msg->len);
 }
 
 ssize_t
-protobuf_send_message_packed(int fd, const uint8_t *buf, uint32_t buflen)
+protobuf_send_message_packed(int fd, const uint8_t *__counted_by(buflen) buf, uint32_t buflen)
 {
 	ASSERT(buf);
 
@@ -93,29 +99,27 @@ protobuf_send_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
-	uint8_t *buf = NULL;
-	uint32_t buflen = protobuf_pack_message_new(message, &buf);
+	protobuf_packed_msg_t packed = protobuf_pack_message_new(message);
 
-	if (!(buflen < PROTOBUF_MAX_MESSAGE_SIZE)) {
+	if (!(packed.len < PROTOBUF_MAX_MESSAGE_SIZE)) {
 		ERROR("Packed message exceeds PROTOBUF_MAX_MESSAGE_SIZE");
-		if (buf)
-			mem_free0(buf);
-
+		protobuf_pack_message_free(&packed);
 		return -1;
 	}
 
-	TRACE("Sending protobuf message with len %u", buflen);
-	TRACE_HEXDUMP(buf, buflen, "Message");
+	TRACE("Sending protobuf message with len %u", packed.len);
+	TRACE_HEXDUMP(packed.buf, packed.len, "Message");
 
-	if (-1 == protobuf_send_message_packed(fd, buf, buflen)) {
+	ssize_t ret = packed.len;
+
+	if (-1 == protobuf_send_message_packed(fd, packed.buf, packed.len)) {
 		ERROR_ERRNO("Failed to write packed protobuf message to fd %d.", fd);
-		mem_free0(buf);
+		protobuf_pack_message_free(&packed);
 		return -1;
 	}
 
-	mem_free0(buf);
-
-	return buflen;
+	protobuf_pack_message_free(&packed);
+	return ret;
 }
 
 uint8_t *
@@ -199,7 +203,8 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 	if (0 == buflen) {
 		TRACE("Got zero length message, returning default message fields");
 
-		return protobuf_c_message_unpack(descriptor, NULL, 0, NULL);
+		return __unsafe_forge_single(ProtobufCMessage *,
+					     protobuf_c_message_unpack(descriptor, NULL, 0, NULL));
 	}
 
 	// -2 means that client closed connection
@@ -212,7 +217,8 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 		return NULL;
 	}
 
-	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buflen, buf);
+	ProtobufCMessage *msg = __unsafe_forge_single(
+		ProtobufCMessage *, protobuf_c_message_unpack(descriptor, NULL, buflen, buf));
 
 	if (!msg) {
 		WARN("Failed to parse received protobuf message");
@@ -226,12 +232,13 @@ protobuf_recv_message(int fd, const ProtobufCMessageDescriptor *descriptor)
 }
 
 ProtobufCMessage *
-protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor, uint8_t *buf,
-			uint32_t buf_len)
+protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor,
+			uint8_t *__counted_by(buf_len) buf, uint32_t buf_len)
 {
 	ASSERT(descriptor);
 
-	ProtobufCMessage *msg = protobuf_c_message_unpack(descriptor, NULL, buf_len, buf);
+	ProtobufCMessage *msg = __unsafe_forge_single(
+		ProtobufCMessage *, protobuf_c_message_unpack(descriptor, NULL, buf_len, buf));
 
 	return msg;
 }

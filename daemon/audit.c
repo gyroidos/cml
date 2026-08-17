@@ -492,6 +492,7 @@ audit_next_record_new(const container_t *container, bool purge)
 static int
 audit_do_send_record(const container_t *c)
 {
+	protobuf_packed_msg_t packed_msg = { 0 };
 	uint8_t *packed = NULL;
 	uint32_t packed_len = 0;
 	int ret = -1;
@@ -507,7 +508,9 @@ audit_do_send_record(const container_t *c)
 	}
 	TRACE("read next audit record sucessfully");
 
-	packed_len = protobuf_pack_message_new((ProtobufCMessage *)message_proto, &packed);
+	packed_msg = protobuf_pack_message_new((ProtobufCMessage *)message_proto);
+	packed = packed_msg.buf;
+	packed_len = packed_msg.len;
 
 	if (!packed) {
 		ERROR("Failed to pack protobuf message");
@@ -536,7 +539,7 @@ out:
 
 	close(fd);
 
-	mem_free0(packed);
+	protobuf_pack_message_free(&packed_msg);
 	protobuf_free_message((ProtobufCMessage *)message_proto);
 	return ret;
 }
