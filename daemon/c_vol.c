@@ -1786,36 +1786,6 @@ error:
 }
 
 static int
-c_vol_move_root(const c_vol_t *vol)
-{
-	if (chdir(vol->root) < 0) {
-		ERROR_ERRNO("Could not chdir to root dir %s for container start", vol->root);
-		goto error;
-	}
-
-	// mount namespace handles chroot jail breaks
-	if (mount(".", "/", NULL, MS_MOVE, NULL) < 0) {
-		ERROR_ERRNO("Could not move mount for container start");
-		goto error;
-	}
-
-	if (chroot(".") < 0) {
-		ERROR_ERRNO("Could not chroot to . for container start");
-		goto error;
-	}
-
-	if (chdir("/") < 0) {
-		ERROR_ERRNO("Could not chdir to / for container start");
-		goto error;
-	}
-
-	INFO("Sucessfully switched (move mount) to new root %s", vol->root);
-	return 0;
-error:
-	return -1;
-}
-
-static int
 pivot_root(const char *new_root, const char *put_old)
 {
 	return syscall(SYS_pivot_root, new_root, put_old);
@@ -1929,10 +1899,7 @@ c_vol_start_child(void *volp)
 	mem_free0(cservice_bin);
 	mem_free0(cservice_dir);
 
-	if (cmld_is_hostedmode_active())
-		IF_TRUE_GOTO(c_vol_pivot_root(vol) < 0, error);
-	else
-		IF_TRUE_GOTO(c_vol_move_root(vol) < 0, error);
+	IF_TRUE_GOTO(c_vol_pivot_root(vol) < 0, error);
 
 	if (!container_has_userns(vol->container) && file_exists("/proc/sysrq-trigger")) {
 		if (mount("/proc/sysrq-trigger", "/proc/sysrq-trigger", NULL, MS_BIND, NULL) < 0) {
