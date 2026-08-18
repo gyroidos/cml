@@ -423,6 +423,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	char **assigned_devices;
 	const char *init;
 	bool enable_xorg_compat;
+	const char *pkcs11_module;
 	container_t *c = NULL;
 
 	if (!existing_uuid) {
@@ -540,6 +541,8 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 
 	container_token_type_t ttype = container_config_get_token_type(conf);
 
+	pkcs11_module = container_config_get_pkcs11_module(conf);
+
 	bool usb_pin_entry = container_config_get_usb_pin_entry(conf);
 
 	enable_xorg_compat = container_config_get_enable_xorg_compat(conf);
@@ -548,7 +551,8 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 			  ram_limit, cpus_allowed, color, allow_autostart, allow_system_time,
 			  dns_server, pnet_cfg_list, allowed_module_list, allowed_devices,
 			  assigned_devices, vnet_cfg_list, usbdev_list, init, init_argv, init_env,
-			  init_env_len, fifo_list, ttype, usb_pin_entry, enable_xorg_compat);
+			  init_env_len, fifo_list, ttype, usb_pin_entry, enable_xorg_compat,
+			  pkcs11_module);
 	if (c) {
 		// overwrite image sizes of mount table
 		container_config_fill_mount(conf, container_get_mnt(c));
@@ -1326,7 +1330,8 @@ cmld_init_c0(const char *path, const char *c0os)
 		container_new(c0_uuid, "c0", CONTAINER_TYPE_CONTAINER, false, c0_ns_net, c0_os,
 			      NULL, c0_images_folder, c0_ram_limit, NULL, 0xffffff00, false, false,
 			      cmld_get_device_host_dns(), NULL, NULL, NULL, NULL, NULL, NULL, init,
-			      init_argv, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false, false);
+			      init_argv, NULL, 0, NULL, CONTAINER_TOKEN_TYPE_NONE, false, false,
+			      NULL);
 
 	/* store c0 as first element of the cmld_containers_list */
 	cmld_containers_list = list_prepend(cmld_containers_list, new_c0);
@@ -1594,8 +1599,45 @@ cmld_init_stage_unit(const char *path)
 		}
 	}
 
-	if (scd_init() < 0)
+	// Get scd env from the device config and filter it against an allowlist of
+	// permitted variable names. scd runs as root, so forwarding arbitrary env
+	// (e.g. LD_PRELOAD / LD_LIBRARY_PATH) would allow code execution in scd.
+	// Extend the allowlist below as additional PKCS#11 modules require it.
+	static const char *const scd_env_allow_names[] = { "SOFTHSM2_CONF" };
+	static const char *const scd_env_allow_prefixes[] = { "PKCS11_" };
+
+	const char **scd_env_all = device_config_get_scd_env(device_config);
+	size_t scd_env_all_len = device_config_get_scd_env_len(device_config);
+
+	const char **scd_env = mem_new0(const char *, scd_env_all_len + 1);
+	size_t scd_env_len = 0;
+	for (size_t i = 0; i < scd_env_all_len; i++) {
+		const char *entry = scd_env_all[i];
+		const char *eq = strchr(entry, '=');
+		size_t name_len = eq ? (size_t)(eq - entry) : strlen(entry);
+
+		bool allowed = false;
+		for (size_t j = 0; !allowed && j < ELEMENTSOF(scd_env_allow_names); j++) {
+			if (strlen(scd_env_allow_names[j]) == name_len &&
+			    0 == strncmp(entry, scd_env_allow_names[j], name_len))
+				allowed = true;
+		}
+		for (size_t j = 0; !allowed && j < ELEMENTSOF(scd_env_allow_prefixes); j++) {
+			size_t prefix_len = strlen(scd_env_allow_prefixes[j]);
+			if (prefix_len <= name_len &&
+			    0 == strncmp(entry, scd_env_allow_prefixes[j], prefix_len))
+				allowed = true;
+		}
+
+		if (allowed)
+			scd_env[scd_env_len++] = entry;
+		else
+			WARN("Dropping disallowed scd env entry '%.*s'", (int)name_len, entry);
+	}
+
+	if (scd_init(scd_env, scd_env_len) < 0)
 		FATAL("Could not init scd module");
+	mem_free0(scd_env);
 	INFO("scd initialized.");
 	if (atexit(&scd_cleanup))
 		WARN("Could not register on exit cleanup method 'scd_cleanup()'");

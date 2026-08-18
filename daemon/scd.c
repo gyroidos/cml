@@ -29,6 +29,7 @@
 #include "tpm2d_shared.h"
 #include "cmld.h"
 #include "unit.h"
+#include "device_config.h"
 
 #include "common/macro.h"
 #include "common/logf.h"
@@ -218,7 +219,7 @@ scd_tpm2d_inotify_written_cb(const char *path, uint32_t mask, event_inotify_t *i
 }
 
 int
-scd_init(void)
+scd_init(const char **env, size_t env_len)
 {
 	// ensure device_id configuration file is located in SCD_TOKEN_DIR
 	char *legacy_device_id_path = mem_printf("%s/%s", cmld_get_cmld_dir(), "device_id.conf");
@@ -233,8 +234,9 @@ scd_init(void)
 
 	// if device.cert is not present, scd will die. Hence, we set autorestart in unit_new
 	uuid_t *scd_uuid = uuid_new(SCD_UUID);
-	scd_unit = unit_new(scd_uuid, "SCD", SCD_BINARY_NAME, NULL, NULL, 0, true, SCD_TOKEN_DIR,
-			    SCD_CONTROL_SOCKET, SOCK_SEQPACKET, &scd_on_connect_cb, true);
+	scd_unit =
+		unit_new(scd_uuid, "SCD", SCD_BINARY_NAME, NULL, env, env_len, true, SCD_TOKEN_DIR,
+			 SCD_CONTROL_SOCKET, SOCK_SEQPACKET, &scd_on_connect_cb, true);
 	uuid_free(scd_uuid);
 
 	IF_NULL_RETVAL(scd_unit, -1);

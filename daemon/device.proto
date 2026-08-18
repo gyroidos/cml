@@ -54,6 +54,9 @@ message DeviceConfig {
 	optional uint64 audit_size = 16 [default = 0];
 
 	required bool tpm_enabled = 17 [ default = true ];
+
+	// configure scd-unit
+	repeated string scd_env = 18;
 }
 
 message DeviceId {
