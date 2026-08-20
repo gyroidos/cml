@@ -1841,6 +1841,8 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	mem_free0(path);
 	return c;
 err:
+	audit_log_event(container_get_uuid(c), FSA, CMLD, CONTAINER_MGMT, "container-create", NULL,
+			0);
 	container_destroy(c);
 	container_free(c);
 	mem_free0(path);
