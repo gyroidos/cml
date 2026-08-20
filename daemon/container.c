@@ -701,10 +701,38 @@ container_destroy(container_t *container)
 			WARN("Could not delete leftover container dir");
 	}
 
+	const char *config_file = container_get_config_filename(container);
 	/* remove config files */
-	if (unlink(container_get_config_filename(container)))
+	if (unlink(config_file))
 		WARN_ERRNO("Can't delete config file!");
 
+	char *prefix = mem_strdup(config_file);
+	size_t file_len = strlen(config_file);
+
+	IF_TRUE_GOTO(file_len < 5 || strcmp(config_file + file_len - 5, ".conf"), out);
+
+	prefix[file_len - 5] = '\0';
+
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+
+	if (file_exists(sig_file)) {
+		if (unlink(sig_file)) {
+			WARN_ERRNO("Can't delete %s file!", sig_file);
+		}
+	}
+
+	if (file_exists(cert_file)) {
+		if (unlink(cert_file)) {
+			WARN_ERRNO("Can't delete %s file!", cert_file);
+		}
+	}
+
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+
+out:
+	mem_free0(prefix);
 	return ret;
 }
 
