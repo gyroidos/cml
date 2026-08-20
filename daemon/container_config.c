@@ -238,6 +238,9 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 				WARN("Could not update sig_file '%s'", sig_file);
 			if (-1 == file_write(cert_file, (char *)cert_buf, cert_len))
 				WARN("Could not update cert_file '%s'", cert_file);
+
+			mem_free0(sig_file);
+			mem_free0(cert_file);
 		}
 	}
 
