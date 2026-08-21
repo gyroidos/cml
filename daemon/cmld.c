@@ -552,7 +552,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	if (c) {
 		// overwrite image sizes of mount table
 		container_config_fill_mount(conf, container_get_mnt(c));
-		container_config_write(conf);
+		container_config_write(conf, config, config_len, sig, sig_len, cert, cert_len);
 	}
 
 out_config:
@@ -2161,7 +2161,8 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 				    out);
 	}
 
-	ret = container_config_write(conf);
+	ret = container_config_write(conf, buf, buf_len, sig_buf, sig_len, cert_buf, cert_len);
+	IF_TRUE_GOTO_ERROR(ret, out);
 	container_set_sync_state(container, false);
 
 	// Wipe container if USB token serial changed
@@ -2225,7 +2226,7 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
-	container_config_write(conf);
+	container_config_write(conf, NULL, 0, NULL, 0, NULL, 0);
 	container_config_free(conf);
 	return 0;
 }
@@ -2241,7 +2242,7 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
-	container_config_write(conf);
+	container_config_write(conf, NULL, 0, NULL, 0, NULL, 0);
 	container_config_free(conf);
 	return 0;
 }
