@@ -238,8 +238,8 @@ hotplug_rename_ifi_new(const char *oldname, const char *infix)
 static uevent_event_t *
 hotplug_rename_interface(const uevent_event_t *event)
 {
-	char *event_ifname = uevent_event_get_interface(event);
-	char *event_devpath = uevent_event_get_devpath(event);
+	const char *event_ifname = uevent_event_get_interface(event);
+	const char *event_devpath = uevent_event_get_devpath(event);
 	const char *prefix = uevent_event_get_devtype(event);
 
 	char *new_ifname = NULL;
@@ -312,7 +312,7 @@ hotplug_netdev_move(uevent_event_t *event)
 	char macstr[MAC_STR_LEN];
 	uevent_event_t *newevent = NULL;
 	container_pnet_cfg_t *pnet_cfg_c0 = NULL;
-	char *event_ifname = uevent_event_get_interface(event);
+	const char *event_ifname = uevent_event_get_interface(event);
 
 	if (network_get_mac_by_ifname(event_ifname, iface_mac)) {
 		ERROR("Iface '%s' with no mac, skipping!", event_ifname);
@@ -430,7 +430,7 @@ hotplug_handle_uevent_cb(unsigned actions, uevent_event_t *event, UNUSED void *d
 	/* move network ifaces to containers */
 	if (actions & UEVENT_ACTION_ADD && !strcmp(uevent_event_get_subsystem(event), "net") &&
 	    !strstr(uevent_event_get_devpath(event), "virtual")) {
-		char *if_name = uevent_event_get_interface(event);
+		const char *if_name = uevent_event_get_interface(event);
 
 		bool found = false;
 		for (list_t *l = hotplug_container_netdev_mapping_list; l; l = l->next) {
