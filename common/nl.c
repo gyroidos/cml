@@ -38,16 +38,19 @@
 
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
+#include "bounds_safety.h"
 #include "macro.h"
 #include "mem.h"
 
-static inline struct nlmsghdr *
-nl_nlmsg_next(struct nlmsghdr *nlh, int *len)
+static inline struct nlmsghdr *__sized_by(*len)
+nl_nlmsg_next(struct nlmsghdr *__sized_by(*len) nlh, int *len)
 {
 	int consumed = (int)NLMSG_ALIGN(nlh->nlmsg_len);
 	/* An unaligned final message can round consumed past the tracked remainder;
-	 * clamp the advance so the walk terminates instead of reading out of bounds
-	 * (and *len can never go negative). */
+	 * clamp the advance so it stays within nlh's bounds (at most one-past-end)
+	 * and the walk terminates instead of reading out of bounds. The
+	 * __sized_by(*len) pointer/count pair is updated together, so the returned
+	 * pointer simply inherits the shrunk bounds. */
 	if (consumed > *len)
 		consumed = *len;
 	struct nlmsghdr *next = (struct nlmsghdr *)(void *)((char *)nlh + consumed);
@@ -100,7 +103,7 @@ struct nl_msg {
 	size_t capacity;	  //!< allocated buffer size in bytes (not the wire nlmsg_len)
 	struct nlmsghdr nlmsghdr; //!< netlink header — start of the wire message
 	/* family header (see nl_msg_set_*_req) followed by TLV attributes */
-	uint8_t payload[];
+	uint8_t payload[] __counted_by(capacity - sizeof(struct nlmsghdr));
 };
 
 /**
@@ -133,7 +136,7 @@ nl_msg_set_len(nl_msg_t *msg, const size_t len)
  * @return failure: -1, success: 0
  */
 static int
-nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t size)
+nl_msg_add_attr(nl_msg_t *msg, const int type, const void *__sized_by(size) data, const size_t size)
 {
 	ASSERT((msg && !(size > 0 && !data)));
 
@@ -397,7 +400,7 @@ nl_msg_end_nested_attr(nl_msg_t *msg, struct nlattr *attr)
 }
 
 int
-nl_msg_add_buffer(nl_msg_t *msg, int type, const char *buffer, size_t len)
+nl_msg_add_buffer(nl_msg_t *msg, int type, const char *__counted_by(len) buffer, size_t len)
 {
 	ASSERT(msg && buffer);
 
@@ -410,7 +413,9 @@ nl_msg_add_string(nl_msg_t *msg, const int type, const char *str)
 	ASSERT(msg && str);
 
 	/* attribute payload includes the terminating NUL */
-	return nl_msg_add_attr(msg, type, str, strlen(str) + 1);
+	size_t len = strlen(str) + 1;
+	return nl_msg_add_attr(msg, type, __unsafe_forge_bidi_indexable(const void *, str, len),
+			       len);
 }
 
 int
@@ -471,8 +476,12 @@ nl_msg_attr_get_u16(const struct nlattr *nlattr, uint16_t *val)
 	/* the attribute must declare enough length to hold the value */
 	if (nlattr->nla_len < NLA_HDRLEN + sizeof(*val))
 		return false;
-	/* payload starts NLA_HDRLEN bytes past the attribute header */
-	memcpy(val, (const char *)nlattr + NLA_HDRLEN, sizeof(*val));
+	/* payload starts NLA_HDRLEN bytes past the attribute header; the length
+	 * check above guarantees sizeof(*val) valid bytes there. */
+	memcpy(val,
+	       __unsafe_forge_bidi_indexable(const void *, (uintptr_t)nlattr + NLA_HDRLEN,
+					     sizeof(*val)),
+	       sizeof(*val));
 	return true;
 }
 
@@ -483,25 +492,33 @@ nl_msg_attr_get_str(const struct nlattr *nlattr)
 		return NULL; /* no payload */
 
 	size_t payload_len = nlattr->nla_len - NLA_HDRLEN;
-	const char *payload = (const char *)nlattr + NLA_HDRLEN;
+	const char *payload = __unsafe_forge_bidi_indexable(
+		const char *, (uintptr_t)nlattr + NLA_HDRLEN, payload_len);
 	/* the value must contain a NUL within its declared length, otherwise the
-	 * string would run past the attribute */
+	 * string would run past the attribute; memchr having found it makes the
+	 * forge below a verified assertion rather than a blind one */
 	if (!memchr(payload, '\0', payload_len))
 		return NULL;
-	return payload;
+	return __unsafe_forge_null_terminated(const char *, payload);
 }
 
 static int
 nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 {
-	struct cmsghdr *cmsg = CMSG_FIRSTHDR(uevent_msg);
+	/* CMSG_FIRSTHDR returns an __unsafe_indexable pointer into the control
+	 * buffer; treat it as a single header object we only read fields from. */
+	struct cmsghdr *__single cmsg =
+		__unsafe_forge_single(struct cmsghdr *, CMSG_FIRSTHDR(uevent_msg));
 
 	if (cmsg == NULL || cmsg->cmsg_type != SCM_CREDENTIALS) {
 		/* ignoring netlink message with no sender credentials */
 		return -1;
 	}
 
-	struct ucred *cred = (struct ucred *)(void *)CMSG_DATA(cmsg);
+	/* CMSG_DATA expands to a flexible-array access the checker rejects; forge
+	 * the credentials struct from the known control-message data offset. */
+	struct ucred *cred = __unsafe_forge_single(
+		struct ucred *, (void *)((uintptr_t)cmsg + CMSG_ALIGN(sizeof(struct cmsghdr))));
 	if (cred->uid != 0) {
 		/* ignoring netlink message from non-root user */
 		return -1;
@@ -526,7 +543,8 @@ nl_verify_uevent_source(struct msghdr *uevent_msg, struct sockaddr_nl nladdr)
 }
 
 static int
-nl_msg_receive(const nl_sock_t *nl, void *buf, const size_t len, bool receive_uevent, bool ucred)
+nl_msg_receive(const nl_sock_t *nl, void *__sized_by(len) buf, const size_t len,
+	       bool receive_uevent, bool ucred)
 {
 	int received;
 	struct sockaddr_nl nladdr;
@@ -587,13 +605,14 @@ error:
 }
 
 int
-nl_msg_receive_kernel(const nl_sock_t *nl, void *buf, size_t len, bool receive_uevent)
+nl_msg_receive_kernel(const nl_sock_t *nl, void *__sized_by(len) buf, size_t len,
+		      bool receive_uevent)
 {
 	return nl_msg_receive(nl, buf, len, receive_uevent, true);
 }
 
 int
-nl_msg_receive_nocred(const nl_sock_t *nl, void *buf, const size_t len)
+nl_msg_receive_nocred(const nl_sock_t *nl, void *__sized_by(len) buf, const size_t len)
 {
 	return nl_msg_receive(nl, buf, len, false, false);
 }
@@ -821,7 +840,7 @@ nl_msg_set_rule_req(nl_msg_t *msg, const struct fib_rule_hdr *rule)
 }
 
 int
-nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size)
+nl_msg_set_buf_unaligned(nl_msg_t *msg, char *__counted_by(size) buf, size_t size)
 {
 	ASSERT(msg);
 
@@ -874,14 +893,15 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 	return ret;
 }
 
-static struct nlattr *
-nl_nla_next(const struct nlattr *nla, int *rem)
+static struct nlattr *__sized_by_or_null(*rem)
+nl_nla_next(const struct nlattr *__sized_by(*rem) nla, int *rem)
 {
 	if (nla->nla_len > *rem || nla->nla_len < sizeof(struct nlattr))
 		return NULL;
 	int consumed = (int)NLA_ALIGN(nla->nla_len);
 	/* clamp the advance to the remainder (an aligned length may round past it)
-	 * so the walk terminates instead of reading out of bounds */
+	 * so it stays within bounds; the pointer/count pair updates together and the
+	 * shrunk bounds carry into the returned pointer. */
 	if (consumed > *rem)
 		consumed = *rem;
 	struct nlattr *next = (struct nlattr *)(void *)((char *)nla + consumed);
@@ -977,7 +997,8 @@ nl_genl_family_getid(const char *family_name)
 				      nla->nla_type, len);
 				switch (nla->nla_type & NLA_TYPE_MASK) {
 				case CTRL_ATTR_FAMILY_NAME: {
-					const char *name = nl_msg_attr_get_str(nla);
+					const char *__null_terminated name =
+						nl_msg_attr_get_str(nla);
 					if (name && !strcmp(family_name, name)) {
 						INFO("Found family name %s", name);
 						nl80211 = true;
