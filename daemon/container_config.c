@@ -24,8 +24,9 @@
 //#define LOGF_LOG_MIN_PRIO LOGF_PRIO_TRACE
 
 #include "container_config.h"
-
 #include "container.pb-c.h"
+
+#include "mount.h"
 
 #include "common/macro.h"
 #include "common/mem.h"
@@ -357,7 +358,7 @@ container_config_fill_mount(const container_config_t *config, mount_t *mnt)
 		}
 
 		// update alternative image file name if container provides containerspecific image
-		// e.g. in guestos mige file name is ids but container should use ids-core
+		// e.g. in guestos image file name is ids but container should use ids-core
 		mount_entry_set_img(mntent, file);
 
 		if ((mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) ||
@@ -763,6 +764,11 @@ container_config_has_userns(UNUSED const container_config_t *config)
 {
 	return true;
 }
+
+void
+container_config_fill_volumes(UNUSED const container_config_t *cfg, UNUSED mount_t *mnt)
+{
+}
 #else
 uint32_t
 container_config_get_color(const container_config_t *config)
@@ -794,5 +800,22 @@ container_config_has_userns(const container_config_t *config)
 	ASSERT(config);
 	ASSERT(config->cfg);
 	return config->cfg->userns;
+}
+
+void
+container_config_fill_volumes(const container_config_t *config, mount_t *mnt)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+	ASSERT(mnt);
+
+	ContainerConfig *cfg = config->cfg;
+	for (size_t i = 0; i < cfg->n_volumes; i++) {
+		VolumeMount *m = cfg->volumes[i];
+		if (file_exists(m->path)) {
+			mount_add_entry(mnt, m->ro ? MOUNT_TYPE_BIND_FILE : MOUNT_TYPE_BIND_FILE_RW,
+					m->path, m->mount_point, "none", 0);
+		}
+	}
 }
 #endif /* CC_MODE */
