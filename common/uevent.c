@@ -96,30 +96,35 @@ struct uevent_event {
 		struct udev_monitor_netlink_header nlh;
 		char raw[UEVENT_BUF_LEN]; //!< The raw string that we get from the kernel
 	} msg;
-	size_t msg_len;	       //!< The length of the uevent
-	char *action;	       //!< The uevent ACTION, points inside of raw
-	char *subsystem;       //!< The uevent SUBSYSTEM, points inside of raw
-	char *devname;	       //!< The uevent DEVNAME, points inside of raw
-	char *devpath;	       //!< The uevent DEVPATH, points inside of raw
-	char *devtype;	       //!< The uevent DEVTYPE, points inside of raw
-	char *driver;	       //!< The uevent DRIVER, points inside of raw
-	int major;	       //!< The major number of the device
-	int minor;	       //!< The minor number of the device
-	char *type;	       //!< The uevent TYPE, points inside of raw
-	char *product;	       //!< The uevent PRODUCT, points inside of raw (usb relevant)
-	uint16_t id_vendor_id; //!< The udev event ID_VENDOR_ID inside of raw (usb relevenat)
-	uint16_t id_model_id;  //!< The udev event ID_MODEL_ID of the device (usb relevant)
-	char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)
-	char *interface;       //!< The uevent INTERFACE, points inside of raw
-	char *synth_uuid;      //!< The uevent SYNTH_UUID, points inside of raw (coldboot relevant)
+	size_t msg_len; //!< The length of the uevent
+	/*
+	 * The following pointers all point inside of msg.raw at null-terminated
+	 * substrings. They are const (read-only views into the buffer).
+	 */
+	const char *action;	     //!< The uevent ACTION, points inside of raw
+	const char *subsystem;	     //!< The uevent SUBSYSTEM, points inside of raw
+	const char *devname;	     //!< The uevent DEVNAME, points inside of raw
+	const char *devpath;	     //!< The uevent DEVPATH, points inside of raw
+	const char *devtype;	     //!< The uevent DEVTYPE, points inside of raw
+	const char *driver;	     //!< The uevent DRIVER, points inside of raw
+	int major;		     //!< The major number of the device
+	int minor;		     //!< The minor number of the device
+	const char *type;	     //!< The uevent TYPE, points inside of raw
+	const char *product;	     //!< The uevent PRODUCT, points inside of raw (usb relevant)
+	uint16_t id_vendor_id;	     //!< The udev event ID_VENDOR_ID inside of raw (usb relevenat)
+	uint16_t id_model_id;	     //!< The udev event ID_MODEL_ID of the device (usb relevant)
+	const char *id_serial_short; //!< The udev event ID_SERIAL_SHORT of the device (usb relevant)
+	const char *interface;	     //!< The uevent INTERFACE, points inside of raw
+	const char *synth_uuid; //!< The uevent SYNTH_UUID, points inside of raw (coldboot relevant)
 	unsigned long long seqnum; //!< The seuqunze number of the uevent
 };
 
 static void
-uevent_trace(uevent_event_t *uevent, char *raw_p)
+uevent_trace(uevent_event_t *uevent, size_t start_off)
 {
 	int i = 0;
-	char *_raw_p = raw_p;
+	/* _raw_p is a local cursor into msg.raw starting at start_off */
+	char *_raw_p = uevent->msg.raw + start_off;
 	while (*_raw_p || _raw_p < uevent->msg.raw + uevent->msg_len) {
 		TRACE("uevent_raw[%d] '%s'", i++, _raw_p);
 		/* advance to after the next \0 */
@@ -131,14 +136,18 @@ uevent_trace(uevent_event_t *uevent, char *raw_p)
 static bool
 uevent_event_is_udev(const uevent_event_t *event)
 {
-	return !strncmp(event->msg.nlh.prefix, "libudev", event->msg_len);
+	/*
+	 * The "libudev" magic prefix lives in the fixed-size prefix[8] field.
+	 * Clamp the compared length to that field so we never read past it
+	 * (event->msg_len may be much larger, up to the whole raw buffer).
+	 */
+	return !strncmp(event->msg.nlh.prefix, "libudev",
+			MIN(sizeof(event->msg.nlh.prefix), event->msg_len));
 }
 
 static int
-uevent_parse(uevent_event_t *uevent, char *raw_p_hint)
+uevent_parse(uevent_event_t *uevent, size_t start_off)
 {
-	char *raw_p;
-
 	uevent->action = "";
 	uevent->devpath = "";
 	uevent->devname = "";
@@ -153,13 +162,14 @@ uevent_parse(uevent_event_t *uevent, char *raw_p_hint)
 	uevent->id_serial_short = "";
 	uevent->interface = "";
 	uevent->synth_uuid = "";
+	uevent->driver = "";
+	uevent->type = "";
+	uevent->seqnum = 0;
 
-	if (raw_p_hint)
-		raw_p = raw_p_hint;
-	else
-		raw_p = uevent->msg.raw;
+	/* raw_p is a local cursor into msg.raw starting at start_off */
+	char *raw_p = uevent->msg.raw + start_off;
 
-	uevent_trace(uevent, raw_p);
+	uevent_trace(uevent, start_off);
 
 	/* Parse the uevent->raw buffer and set the pointer in the uevent
 	 * struct to point into the buffer at the correct locations */
@@ -233,7 +243,13 @@ uevent_parse_from_string_new(const char *uev)
 {
 	IF_NULL_RETVAL_ERROR(uev, NULL);
 
-	int len = strlen(uev);
+	size_t len = strlen(uev);
+
+	// guard against overflowing the fixed-size raw buffer
+	if (len >= UEVENT_BUF_LEN) {
+		WARN("uevent string too long (%zu >= %d), truncating", len, UEVENT_BUF_LEN);
+		len = UEVENT_BUF_LEN - 1;
+	}
 
 	uevent_event_t *event = mem_new0(uevent_event_t, 1);
 
@@ -241,13 +257,13 @@ uevent_parse_from_string_new(const char *uev)
 	event->msg_len = len;
 
 	// replace newlines by null bytes
-	for (int i = 0; i < len; i++) {
+	for (size_t i = 0; i < len; i++) {
 		if ('\n' == event->msg.raw[i]) {
 			event->msg.raw[i] = '\0';
 		}
 	}
 
-	uevent_parse(event, NULL);
+	uevent_parse(event, 0);
 
 	return event;
 }
@@ -258,6 +274,7 @@ uevent_parse_nl(uevent_event_t *uevent)
 	ASSERT(uevent);
 
 	char *raw_p = uevent->msg.raw;
+	size_t start_off;
 
 	// skip header
 	if (uevent_event_is_udev(uevent)) {
@@ -267,27 +284,33 @@ uevent_parse_nl(uevent_event_t *uevent)
 			     htonl(UDEV_MONITOR_MAGIC));
 			return -1;
 		}
-		if (uevent->msg.nlh.properties_off + 32 > uevent->msg_len) {
-			WARN("message smaller than expected (%u > %zd)",
-			     uevent->msg.nlh.properties_off + 32, uevent->msg_len);
+		/*
+		 * properties_off is attacker-controlled; compute the bound
+		 * without the 32-bit unsigned overflow that "properties_off + 32"
+		 * would suffer (a near-UINT_MAX offset would wrap and pass).
+		 */
+		if (uevent->msg_len < 32 ||
+		    (size_t)uevent->msg.nlh.properties_off > uevent->msg_len - 32) {
+			WARN("message smaller than expected (properties_off=%u, msg_len=%zd)",
+			     uevent->msg.nlh.properties_off, uevent->msg_len);
 			return -1;
 		}
-		raw_p += uevent->msg.nlh.properties_off;
+		start_off = uevent->msg.nlh.properties_off;
 	} else if (strchr(raw_p, '@')) {
 		/* kernel message */
 		TRACE("kernel uevent: %s", raw_p ? raw_p : "NULL");
-		raw_p += strlen(raw_p) + 1;
+		start_off = strlen(raw_p) + 1;
 	} else {
 		/* kernel message */
 		TRACE("no uevent: %s", raw_p);
 		return -1;
 	}
 
-	return uevent_parse(uevent, raw_p);
+	return uevent_parse(uevent, start_off);
 }
 
 uevent_event_t *
-uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newmember)
+uevent_replace_member(const uevent_event_t *uevent, const char *oldmember, const char *newmember)
 {
 	ASSERT(uevent);
 	ASSERT(oldmember > uevent->msg.raw && oldmember < uevent->msg.raw + uevent->msg_len);
@@ -297,6 +320,15 @@ uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newme
 	int diff_len = strlen(newmember) - strlen(oldmember);
 
 	newevent->msg_len = uevent->msg_len + diff_len;
+
+	// bail out if the replacement would overflow the fixed-size raw buffer;
+	// this must be checked before the copies below write into it. We need
+	// room for msg_len content bytes plus the terminating null char, i.e.
+	// msg_len must be strictly less than UEVENT_BUF_LEN.
+	if (newevent->msg_len >= UEVENT_BUF_LEN) {
+		ERROR("Replaced uevent too large (%zu >= %d)", newevent->msg_len, UEVENT_BUF_LEN);
+		goto error;
+	}
 
 	//copy netlink header to cloned uevent
 	if (!memcpy(&newevent->msg.nlh, &uevent->msg.nlh,
@@ -323,17 +355,25 @@ uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newme
 	size_t off_after_old = off_member + strlen(oldmember) + 1;
 	size_t off_after_new = off_member + strlen(newmember) + 1;
 
+	/*
+	 * Guard against oldmember not being terminated within the message: if
+	 * its NUL sits at msg_len (the buffer's trailing zero), off_after_old
+	 * is msg_len + 1 and "msg_len - off_after_old" would underflow to a
+	 * huge size_t, turning the memcpy below into a massive over-read/write.
+	 */
+	if (off_after_old > uevent->msg_len) {
+		ERROR("oldmember not terminated within uevent");
+		goto error;
+	}
+
 	if (!memcpy(newevent->msg.raw + off_after_new, uevent->msg.raw + off_after_old,
 		    uevent->msg_len - off_after_old)) {
 		ERROR("Failed to copy remainder of uevent");
 		goto error;
 	}
 
-	// add termianting null char
-	if (newevent->msg_len > UEVENT_BUF_LEN)
-		newevent->msg.raw[UEVENT_BUF_LEN - 1] = '\0';
-	else
-		newevent->msg.raw[newevent->msg_len] = '\0';
+	// add termianting null char (msg_len < UEVENT_BUF_LEN guaranteed above)
+	newevent->msg.raw[newevent->msg_len] = '\0';
 
 	IF_TRUE_GOTO_ERROR(uevent_parse_nl(newevent) == -1, error);
 
@@ -373,42 +413,42 @@ uevent_event_get_usb_product(const uevent_event_t *uevent)
 	return id_product;
 }
 
-char *
+const char *
 uevent_event_get_synth_uuid(const uevent_event_t *event)
 {
 	ASSERT(event);
 	return event->synth_uuid;
 }
 
-char *
+const char *
 uevent_event_get_devname(const uevent_event_t *event)
 {
 	ASSERT(event);
 	return event->devname;
 }
 
-char *
+const char *
 uevent_event_get_devtype(const uevent_event_t *event)
 {
 	ASSERT(event);
 	return event->devtype;
 }
 
-char *
+const char *
 uevent_event_get_devpath(const uevent_event_t *event)
 {
 	ASSERT(event);
 	return event->devpath;
 }
 
-char *
+const char *
 uevent_event_get_subsystem(const uevent_event_t *event)
 {
 	ASSERT(event);
 	return event->subsystem;
 }
 
-char *
+const char *
 uevent_event_get_interface(const uevent_event_t *event)
 {
 	ASSERT(event);
@@ -430,7 +470,7 @@ uevent_event_get_major(const uevent_event_t *event)
 }
 
 uevent_event_t *
-uevent_event_replace_synth_uuid_new(const uevent_event_t *event, char *uuid_string)
+uevent_event_replace_synth_uuid_new(const uevent_event_t *event, const char *uuid_string)
 {
 	ASSERT(event);
 	uevent_event_t *event_new = uevent_replace_member(event, event->synth_uuid, uuid_string);
@@ -565,11 +605,15 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 	uevent_event_t *uev = mem_new0(uevent_event_t, 1);
 
 	// read uevent into raw buffer and assure that last char is '\0'
-	if ((uev->msg_len = nl_msg_receive_kernel(uevent_netlink_sock, uev->msg.raw,
-						  sizeof(uev->msg.raw) - 1, true)) <= 0) {
+	// (use a signed temporary: msg_len is size_t, so the <= 0 error check
+	// must not be done on the assignment result, where -1 becomes SIZE_MAX)
+	int msg_len = nl_msg_receive_kernel(uevent_netlink_sock, uev->msg.raw,
+					    sizeof(uev->msg.raw) - 1, true);
+	if (msg_len <= 0) {
 		WARN("could not read uevent");
 		goto err;
 	}
+	uev->msg_len = msg_len;
 
 	IF_TRUE_GOTO_TRACE(uevent_parse_nl(uev) == -1, err);
 
