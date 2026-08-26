@@ -49,8 +49,6 @@
 
 #define UUID_LEN 37
 
-extern struct dm_cmd_table cmd_table[];
-
 /* https://gitlab.com/cryptsetup/cryptsetup/wikis/DMVerity#verity-superblock-format */
 typedef struct __attribute__((packed)) {
 	uint8_t signature[8];
@@ -125,6 +123,15 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 
 	char *verity_params = (char *)(io + 1) + sizeof(struct dm_target_spec);
 
+	/*
+	 * salt_size comes from the on-disk verity superblock (untrusted); it must
+	 * not exceed the fixed salt[] field or convert_bin_to_hex_new() over-reads
+	 */
+	if (sb->salt_size > sizeof(sb->salt)) {
+		ERROR("verity superblock salt_size %u exceeds %zu", sb->salt_size,
+		      sizeof(sb->salt));
+		return -1;
+	}
 	char *salt = convert_bin_to_hex_new(sb->salt, sb->salt_size);
 	uint32_t offset = 1;
 	snprintf(verity_params, len - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
@@ -253,7 +260,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 
 	// Make sure that dm-verity device does not already exist
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+	int ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_TABLE_STATUS), dmi);
 	if (ioctl_ret == 0 || errno != ENXIO) {
 		ERROR("Cannot create dm-verity device %s: Device already exists", name);
 		goto dm_control;
@@ -294,7 +301,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	// Create verity device
 	dm_ioctl_init(dmi, INDEX_DM_DEV_CREATE, sizeof(buf), name, dev_uuid, DM_EXISTS_FLAG, 0, 0,
 		      0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_CREATE].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_DEV_CREATE), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_DEV_CREATE ioctl returned %d", ioctl_ret);
 		goto loop_dev_hash;
@@ -310,7 +317,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 						root_hash)) {
 		goto verity_dev;
 	}
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_LOAD].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_TABLE_LOAD), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_LOAD ioctl returned %d", ioctl_ret);
 		goto verity_dev;
@@ -319,7 +326,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	// Run dev-suspend command
 	flags = DM_READONLY_FLAG | DM_EXISTS_FLAG | DM_SECURE_DATA_FLAG;
 	dm_ioctl_init(dmi, INDEX_DM_DEV_SUSPEND, sizeof(buf), name, NULL, flags, 0, 0, 0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_SUSPEND].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_DEV_SUSPEND), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_DEV_SUSPEND ioctl returned %d", ioctl_ret);
 		goto verity_dev;
@@ -327,7 +334,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 
 	// Check that verity device activation was successful
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_TABLE_STATUS), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_STATUS ioctl returned %d", ioctl_ret);
 		goto verity_dev;
