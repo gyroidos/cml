@@ -41,6 +41,8 @@
 #include "mem.h"
 #include "dm.h"
 
+#include "bounds_safety.h"
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 #define IOCTL_RETRIES 10
@@ -79,9 +81,9 @@ dm_ioctl(int fd, unsigned long int request, ...)
 #endif
 
 int
-dm_ioctl_init(struct dm_ioctl *io, enum dm_cmd_index idx, size_t data_size, const char *name,
-	      const char *uuid, unsigned flags, unsigned long long dev, unsigned int target_count,
-	      unsigned int event_nr)
+dm_ioctl_init(struct dm_ioctl *__sized_by(data_size) io, enum dm_cmd_index idx, size_t data_size,
+	      const char *name, const char *uuid, unsigned flags, unsigned long long dev,
+	      unsigned int target_count, unsigned int event_nr)
 {
 	if (idx > ARRAY_SIZE(cmd_table)) {
 		ERROR("Failed to lookup ioctl command");
@@ -198,7 +200,7 @@ dm_list_versions(int fd)
 	return 0;
 }
 
-char *
+char *__null_terminated
 dm_get_target_type_new(int fd, const char *name)
 {
 	ASSERT(strlen(name) <= DM_NAME_LEN);
@@ -211,7 +213,7 @@ dm_get_target_type_new(int fd, const char *name)
 	int ret = dm_ioctl(fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
 	if (ret) {
 		// Integrity devices get a "-integrity" postfix, try again with postfix
-		char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
+		char *__null_terminated integrity_dev_name = mem_printf("%s-%s", name, "integrity");
 		dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), integrity_dev_name, NULL,
 			      DM_EXISTS_FLAG, 0, 0, 0);
 		int ret = dm_ioctl(fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
@@ -226,10 +228,10 @@ dm_get_target_type_new(int fd, const char *name)
 	struct dm_target_spec *tgt;
 	tgt = (struct dm_target_spec *)&buf[sizeof(struct dm_ioctl)];
 
-	return mem_strdup(tgt->target_type);
+	return mem_strdup(__unsafe_null_terminated_from_indexable(tgt->target_type));
 }
 
-char *
+char *__null_terminated
 dm_get_device_path_new(const char *label)
 {
 	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
@@ -240,7 +242,7 @@ dm_delete_blk_dev(int fd, const char *name)
 {
 	struct dm_ioctl io;
 	int i;
-	char *device = NULL;
+	char *__null_terminated device = NULL;
 
 	if (dm_ioctl_init(&io, INDEX_DM_DEV_REMOVE, sizeof(io), name, NULL, 0, 0, 0, 0)) {
 		ERROR("Malformed input (name = '%s') for dm_ioctl!", name);
