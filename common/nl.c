@@ -44,8 +44,15 @@
 static inline struct nlmsghdr *
 nl_nlmsg_next(struct nlmsghdr *nlh, int *len)
 {
-	*len -= (int)NLMSG_ALIGN(nlh->nlmsg_len);
-	return (struct nlmsghdr *)(void *)((char *)nlh + NLMSG_ALIGN(nlh->nlmsg_len));
+	int consumed = (int)NLMSG_ALIGN(nlh->nlmsg_len);
+	/* An unaligned final message can round consumed past the tracked remainder;
+	 * clamp the advance so the walk terminates instead of reading out of bounds
+	 * (and *len can never go negative). */
+	if (consumed > *len)
+		consumed = *len;
+	struct nlmsghdr *next = (struct nlmsghdr *)(void *)((char *)nlh + consumed);
+	*len -= consumed;
+	return next;
 }
 
 /**
@@ -55,10 +62,6 @@ nl_nlmsg_next(struct nlmsghdr *nlh, int *len)
 #define NL_DEFAULT_SOCK_RCVBUF_SIZE 32768
 #define NL_DEFAULT_SOCK_SNDBUF_SIZE 32768
 #define NL_UEVENT_SOCK_RCVBUF_SIZE (256 * 1024)
-
-#define NLA_DATA(nla) ((void *)((char *)(nla) + NLA_HDRLEN))
-
-#define NL_HDR_OFFSET(len) len + NLMSG_ALIGN(len);
 
 // only trust udev messages from this pid
 static pid_t trusted_udevd_pid = -1;
@@ -78,22 +81,37 @@ struct nl_sock {
 };
 
 /**
- * Netlink message
+ * Netlink message buffer.
+ *
+ * On the wire a netlink message is the fixed header followed by an optional
+ * message-type-specific "family" header and then a list of variable-length,
+ * possibly nested TLV attributes, everything padded to NLMSG_ALIGN/NLA_ALIGN:
+ *
+ *   [ struct nlmsghdr ][ family header ][ struct nlattr + value ][ ... ]
+ *
+ * The family header (e.g. struct ifinfomsg/ifaddrmsg/rtmsg/genlmsghdr, written
+ * by nl_msg_set_*_req()) and the attributes (appended by nl_msg_add_*()) share
+ * one polymorphic, variable-length region, so they are held as a raw byte
+ * buffer rather than typed members. Only from nlmsghdr onwards is sent to the
+ * kernel (see nl_msg_send_kernel()); `capacity` is our allocation size and is
+ * not part of the wire message.
  */
 struct nl_msg {
-	size_t size;		  //!< Size of the message
-	struct nlmsghdr nlmsghdr; //!< Netlink message header
+	size_t capacity;	  //!< allocated buffer size in bytes (not the wire nlmsg_len)
+	struct nlmsghdr nlmsghdr; //!< netlink header — start of the wire message
+	/* family header (see nl_msg_set_*_req) followed by TLV attributes */
+	uint8_t payload[];
 };
 
 /**
- * Sets the pointer of a netlink message header to the top end of the given netlink message.
- * NLMSG_ALIGN rounds the length of a netlink message up to align it properly.
- * @param A pointer to a netlink message header
+ * Byte offset of the message tail within payload[], i.e. where the next attribute
+ * is written. NLMSG_ALIGN rounds the current message length up to the netlink
+ * alignment; the header is excluded since payload[] is laid out right after it.
  */
-static inline void *
-nl_msg_top(const struct nlmsghdr *hdr)
+static inline size_t
+nl_msg_tail_off(const nl_msg_t *msg)
 {
-	return (void *)(((char *)hdr) + NLMSG_ALIGN(hdr->nlmsg_len));
+	return NLMSG_ALIGN(msg->nlmsghdr.nlmsg_len) - sizeof(struct nlmsghdr);
 }
 
 /**
@@ -126,19 +144,19 @@ nl_msg_add_attr(nl_msg_t *msg, const int type, const void *data, const size_t si
 	nlmsg = &msg->nlmsghdr;
 
 	/* Check for overflow in message buffer */
-	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(NLA_HDRLEN + size) > msg->size) {
+	if (NLMSG_ALIGN(nlmsg->nlmsg_len) + NLA_ALIGN(NLA_HDRLEN + size) > msg->capacity) {
 		errno = EOVERFLOW;
 		return -1;
 	}
 
 	/* Set the attribute metadata */
-	nla = (struct nlattr *)nl_msg_top(nlmsg);
+	nla = (struct nlattr *)(void *)(msg->payload + nl_msg_tail_off(msg));
 	nla->nla_type = type;
 	nla->nla_len = NLMSG_ALIGN(NLA_HDRLEN) + size;
 
 	/* Copy the attribute payload */
 	if (data != NULL)
-		memcpy(NLA_DATA(nla), data, size);
+		memcpy((uint8_t *)nla + NLA_HDRLEN, data, size);
 
 	/* Adjust message length */
 	nlmsg->nlmsg_len =
@@ -359,7 +377,7 @@ nl_msg_start_nested_attr(nl_msg_t *msg, int type)
 	/* Get pointer to the tail of the message payload.
 	 * nl_msg_add_attr assures that the message's size is large
 	 * enough to host the nested attribute. */
-	nested = (struct nlattr *)nl_msg_top(&msg->nlmsghdr);
+	nested = (struct nlattr *)(void *)(msg->payload + nl_msg_tail_off(msg));
 
 	/* Create an additional attribute with a NULL payload */
 	if (nl_msg_add_attr(msg, type, NULL, 0))
@@ -373,7 +391,7 @@ nl_msg_end_nested_attr(nl_msg_t *msg, struct nlattr *attr)
 {
 	ASSERT(msg && attr);
 
-	attr->nla_len = (size_t)((long)nl_msg_top(&msg->nlmsghdr) - (long)attr);
+	attr->nla_len = (size_t)(msg->payload + nl_msg_tail_off(msg) - (uint8_t *)attr);
 
 	return 0;
 }
@@ -391,6 +409,7 @@ nl_msg_add_string(nl_msg_t *msg, const int type, const char *str)
 {
 	ASSERT(msg && str);
 
+	/* attribute payload includes the terminating NUL */
 	return nl_msg_add_attr(msg, type, str, strlen(str) + 1);
 }
 
@@ -418,9 +437,9 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 	TRACE("Sending message on socket with fd %d to kernel", nl->fd);
 
 	TRACE("Message for transmission:");
-	TRACE("nl_msg{size:%zu,nlmsghdr:nlmsg_len: %u, nlmsg_type: %u,nlmsg_flags: %u, "
+	TRACE("nl_msg{capacity:%zu,nlmsghdr:nlmsg_len: %u, nlmsg_type: %u,nlmsg_flags: %u, "
 	      "nlmsg_seq: %u, nlmsg_pid: %d",
-	      msg->size, msg->nlmsghdr.nlmsg_len, msg->nlmsghdr.nlmsg_type,
+	      msg->capacity, msg->nlmsghdr.nlmsg_len, msg->nlmsghdr.nlmsg_type,
 	      msg->nlmsghdr.nlmsg_flags, msg->nlmsghdr.nlmsg_seq, msg->nlmsghdr.nlmsg_pid);
 
 	TRACE("Socket for transmisstion:");
@@ -446,18 +465,30 @@ nl_msg_send_kernel(const nl_sock_t *nl, const nl_msg_t *msg)
 	return sendmsg(nl->fd, &m, 0);
 }
 
-static uint16_t
-nl_msg_attr_get_u16(struct nlattr *nlattr)
+static bool
+nl_msg_attr_get_u16(const struct nlattr *nlattr, uint16_t *val)
 {
-	uint16_t val;
-	memcpy(&val, NLA_DATA(nlattr), sizeof(val));
-	return val;
+	/* the attribute must declare enough length to hold the value */
+	if (nlattr->nla_len < NLA_HDRLEN + sizeof(*val))
+		return false;
+	/* payload starts NLA_HDRLEN bytes past the attribute header */
+	memcpy(val, (const char *)nlattr + NLA_HDRLEN, sizeof(*val));
+	return true;
 }
 
-static char *
-nl_msg_attr_get_str(struct nlattr *nlattr)
+static const char *
+nl_msg_attr_get_str(const struct nlattr *nlattr)
 {
-	return NLA_DATA(nlattr);
+	if (nlattr->nla_len <= NLA_HDRLEN)
+		return NULL; /* no payload */
+
+	size_t payload_len = nlattr->nla_len - NLA_HDRLEN;
+	const char *payload = (const char *)nlattr + NLA_HDRLEN;
+	/* the value must contain a NUL within its declared length, otherwise the
+	 * string would run past the attribute */
+	if (!memchr(payload, '\0', payload_len))
+		return NULL;
+	return payload;
 }
 
 static int
@@ -556,7 +587,7 @@ error:
 }
 
 int
-nl_msg_receive_kernel(const nl_sock_t *nl, void *buf, const size_t len, bool receive_uevent)
+nl_msg_receive_kernel(const nl_sock_t *nl, void *buf, size_t len, bool receive_uevent)
 {
 	return nl_msg_receive(nl, buf, len, receive_uevent, true);
 }
@@ -703,8 +734,8 @@ nl_msg_new(void)
 		return NULL;
 	}
 
-	/* Remember the size of the message */
-	ret->size = NLMSG_ALIGN(size);
+	/* Remember the capacity of the message buffer */
+	ret->capacity = NLMSG_ALIGN(size);
 
 	TRACE("Netlink message allocated, size: %d, location: %p", ret->nlmsghdr.nlmsg_len,
 	      (void *)&ret->nlmsghdr);
@@ -754,10 +785,9 @@ nl_msg_set_link_req(nl_msg_t *msg, const struct ifinfomsg *ifmsg)
 {
 	ASSERT(msg);
 
-	int size = sizeof(struct ifinfomsg);
-	memcpy(NLMSG_DATA(&msg->nlmsghdr), ifmsg, size);
+	memcpy(msg->payload, ifmsg, sizeof(struct ifinfomsg));
 
-	return nl_msg_set_len(msg, size);
+	return nl_msg_set_len(msg, sizeof(struct ifinfomsg));
 }
 
 int
@@ -765,10 +795,9 @@ nl_msg_set_ip_req(nl_msg_t *msg, const struct ifaddrmsg *ifmsg)
 {
 	ASSERT(msg);
 
-	int size = sizeof(struct ifaddrmsg);
-	memcpy(NLMSG_DATA(&msg->nlmsghdr), ifmsg, size);
+	memcpy(msg->payload, ifmsg, sizeof(struct ifaddrmsg));
 
-	return nl_msg_set_len(msg, size);
+	return nl_msg_set_len(msg, sizeof(struct ifaddrmsg));
 }
 
 int
@@ -776,10 +805,9 @@ nl_msg_set_rt_req(nl_msg_t *msg, const struct rtmsg *rtmsg)
 {
 	ASSERT(msg);
 
-	int size = sizeof(struct rtmsg);
-	memcpy(NLMSG_DATA(&msg->nlmsghdr), rtmsg, size);
+	memcpy(msg->payload, rtmsg, sizeof(struct rtmsg));
 
-	return nl_msg_set_len(msg, size);
+	return nl_msg_set_len(msg, sizeof(struct rtmsg));
 }
 
 int
@@ -787,10 +815,9 @@ nl_msg_set_rule_req(nl_msg_t *msg, const struct fib_rule_hdr *rule)
 {
 	ASSERT(msg);
 
-	int size = sizeof(struct fib_rule_hdr);
-	memcpy(NLMSG_DATA(&msg->nlmsghdr), rule, size);
+	memcpy(msg->payload, rule, sizeof(struct fib_rule_hdr));
 
-	return nl_msg_set_len(msg, size);
+	return nl_msg_set_len(msg, sizeof(struct fib_rule_hdr));
 }
 
 int
@@ -799,12 +826,12 @@ nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size)
 	ASSERT(msg);
 
 	/* Check for overflow in message buffer */
-	if (NLMSG_LENGTH(size) > msg->size) {
-		TRACE("size: %zu, msg->size %zu", size, msg->size);
+	if (NLMSG_LENGTH(size) > msg->capacity) {
+		TRACE("size: %zu, msg->capacity %zu", size, msg->capacity);
 		errno = EOVERFLOW;
 		return -1;
 	}
-	memcpy(NLMSG_DATA(&msg->nlmsghdr), buf, size);
+	memcpy(msg->payload, buf, size);
 
 	return nl_msg_set_len(msg, size);
 }
@@ -814,7 +841,7 @@ nl_msg_set_genl_hdr(nl_msg_t *msg, const struct genlmsghdr *hdr)
 {
 	ASSERT(msg);
 
-	memcpy(NLMSG_DATA(&msg->nlmsghdr), hdr, GENL_HDRLEN);
+	memcpy(msg->payload, hdr, GENL_HDRLEN);
 
 	return nl_msg_set_len(msg, GENL_HDRLEN);
 }
@@ -850,11 +877,15 @@ nl_msg_receive_and_check_kernel(const nl_sock_t *nl)
 static struct nlattr *
 nl_nla_next(const struct nlattr *nla, int *rem)
 {
-	struct nlattr *next = NULL;
-	if (nla->nla_len <= *rem && nla->nla_len >= sizeof(struct nlattr)) {
-		next = (struct nlattr *)(void *)((char *)nla + NLA_ALIGN(nla->nla_len));
-		*rem = *rem - NLA_ALIGN(nla->nla_len);
-	}
+	if (nla->nla_len > *rem || nla->nla_len < sizeof(struct nlattr))
+		return NULL;
+	int consumed = (int)NLA_ALIGN(nla->nla_len);
+	/* clamp the advance to the remainder (an aligned length may round past it)
+	 * so the walk terminates instead of reading out of bounds */
+	if (consumed > *rem)
+		consumed = *rem;
+	struct nlattr *next = (struct nlattr *)(void *)((char *)nla + consumed);
+	*rem -= consumed;
 	return next;
 }
 static bool
@@ -945,24 +976,27 @@ nl_genl_family_getid(const char *family_name)
 				TRACE("nla->nla_len %u, nla->nla_type %u, len %d", nla->nla_len,
 				      nla->nla_type, len);
 				switch (nla->nla_type & NLA_TYPE_MASK) {
-				case CTRL_ATTR_FAMILY_NAME:
-					if (!strcmp(family_name, nl_msg_attr_get_str(nla))) {
-						INFO("Found family name %s",
-						     nl_msg_attr_get_str(nla));
+				case CTRL_ATTR_FAMILY_NAME: {
+					const char *name = nl_msg_attr_get_str(nla);
+					if (name && !strcmp(family_name, name)) {
+						INFO("Found family name %s", name);
 						nl80211 = true;
 					} else {
-						TRACE("Skip wrong family with name %s",
-						      nl_msg_attr_get_str(nla));
+						TRACE("Skip family attribute (name %s)",
+						      name ? name : "(invalid)");
 						nl80211 = false;
 					}
 					break;
-				case CTRL_ATTR_FAMILY_ID:
-					if (nl80211) {
-						ret = nl_msg_attr_get_u16(nla);
+				}
+				case CTRL_ATTR_FAMILY_ID: {
+					uint16_t id;
+					if (nl80211 && nl_msg_attr_get_u16(nla, &id)) {
+						ret = id;
 						INFO("Found id %u for family '%s'", ret,
 						     family_name);
 					}
 					break;
+				}
 				default:
 					break;
 				}
