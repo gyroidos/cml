@@ -94,6 +94,15 @@ dm_ioctl_init(struct dm_ioctl *__sized_by(dataSize) io, enum dm_cmd_index idx, s
 	      unsigned int target_count, unsigned int event_nr);
 
 /**
+ * Look up the device-mapper ioctl command number for a command index.
+ *
+ * @param idx The command index (enum dm_cmd_index)
+ * @return unsigned The ioctl command (e.g. DM_TABLE_STATUS)
+ */
+unsigned
+dm_cmd(enum dm_cmd_index idx);
+
+/**
  * Opens /dev/mapper/control
  *
  * @return int 0 in case of success, -1 in case of failure

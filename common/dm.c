@@ -47,7 +47,7 @@
 
 #define IOCTL_RETRIES 10
 
-struct dm_cmd_table cmd_table[] = {
+static struct dm_cmd_table cmd_table[] = {
 	{ DM_DEV_CREATE, { 4, 0, 0 } },	  { DM_TABLE_LOAD, { 4, 0, 0 } },
 	{ DM_DEV_REMOVE, { 4, 0, 0 } },	  { DM_REMOVE_ALL, { 4, 0, 0 } },
 	{ DM_DEV_SUSPEND, { 4, 0, 0 } },  { DM_DEV_STATUS, { 4, 0, 0 } },
@@ -108,6 +108,13 @@ dm_ioctl_init(struct dm_ioctl *__sized_by(data_size) io, enum dm_cmd_index idx, 
 		strncpy(io->uuid, uuid, sizeof(io->uuid) - 1);
 
 	return 0;
+}
+
+unsigned
+dm_cmd(enum dm_cmd_index idx)
+{
+	ASSERT(idx < ARRAY_SIZE(cmd_table));
+	return cmd_table[idx].cmd;
 }
 
 int
