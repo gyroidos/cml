@@ -681,7 +681,7 @@ static int
 c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 {
 	int ret = -1;
-	char *img, *dev, *img_meta, *dev_meta, *dir, *img_hash;
+	char *img, *dev, *img_meta, *dev_meta, *dir, *img_hash, *img_initializing;
 	int fd = 0, fd_meta = 0;
 	bool new_image = false;
 	bool encrypted = mount_entry_is_encrypted(mntent);
@@ -694,7 +694,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 	// default mountflags for most image types
 	unsigned long mountflags = setup_mode ? MS_NOATIME : MS_NOATIME | MS_NODEV;
 
-	img = dev = img_meta = dev_meta = dir = img_hash = NULL;
+	img = dev = img_meta = dev_meta = dir = img_hash = img_initializing = NULL;
 
 	if (mount_entry_get_dir(mntent)[0] == '/')
 		dir = mem_printf("%s%s", root, mount_entry_get_dir(mntent));
@@ -702,8 +702,25 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		dir = mem_printf("%s/%s", root, mount_entry_get_dir(mntent));
 
 	img = c_vol_image_path_new(vol, mntent);
+	if (img != NULL) {
+		img_initializing = mem_printf("%s.initializing", img);
+	}
+
 	if (!img)
 		goto error;
+
+	if (file_exists(img_initializing)) {
+		WARN("The image %s was not fully initialized before the reboot. Removing the image and triggering initialization again",
+		     img);
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent);
+		if (img != NULL && img_meta != NULL) {
+			if (unlink(img) == -1 && unlink(img_meta) == -1 &&
+			    unlink(img_initializing) == -1) {
+				WARN("Could not unlink image files of the corrupted image %s", img);
+			}
+			INFO("Deleted corrupted image files of image %s", img);
+		}
+	}
 
 	TRACE("Mount entry type: %d", mount_entry_get_type(mntent));
 
@@ -783,6 +800,11 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	if (c_vol_check_image(vol, img) < 0) {
 		new_image = true;
+		if (file_touch(img_initializing)) {
+			ERROR_ERRNO("Failed to create image initializing marker");
+			goto error;
+		}
+		INFO("Created image initialization marker for image %s", img);
 		if (c_vol_create_image(vol, img, mntent) < 0) {
 			goto error;
 		}
@@ -1055,6 +1077,11 @@ final:
 final_noshift:
 	ret = 0;
 
+	if (file_exists(img_initializing)) {
+		unlink(img_initializing);
+		INFO("Deleted initialization marker for image %s", img);
+	}
+
 error:
 	if (dev)
 		loopdev_free(dev);
@@ -1072,6 +1099,8 @@ error:
 		close(fd_meta);
 	if (img_hash)
 		mem_free0(img_hash);
+	if (img_initializing)
+		mem_free0(img_initializing);
 	return ret;
 }
 
