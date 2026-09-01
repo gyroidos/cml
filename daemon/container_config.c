@@ -189,12 +189,9 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 	ASSERT(file);
 	off_t conf_len = len;
 
-	char *prefix = mem_strdup(file);
-	size_t file_len = strlen(file);
-
-	IF_TRUE_GOTO(file_len < 5 || strcmp(file + file_len - 5, ".conf"), out);
-
-	prefix[file_len - 5] = '\0';
+	char *prefix = file_remove_extension(file, ".conf");
+	if (!prefix)
+		goto out;
 
 	// check if config comes from buffer or needs to be read from file
 	if (buf == NULL) {
@@ -226,21 +223,6 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 		goto out;
 	}
 
-	// if config was provided by buf, update all files according to buffers
-	if (buf) {
-		if (-1 == file_write(file, (char *)buf, conf_len)) {
-			WARN("Could not store configuration in file \"%s\".", file);
-		} else if (cmld_uses_signed_configs()) {
-			char *sig_file = mem_printf("%s.sig", prefix);
-			char *cert_file = mem_printf("%s.cert", prefix);
-
-			if (-1 == file_write(sig_file, (char *)sig_buf, sig_len))
-				WARN("Could not update sig_file '%s'", sig_file);
-			if (-1 == file_write(cert_file, (char *)cert_buf, cert_len))
-				WARN("Could not update cert_file '%s'", cert_file);
-		}
-	}
-
 	config = mem_new0(container_config_t, 1);
 	config->file = mem_strdup(file);
 	config->cfg = ccfg;
@@ -260,14 +242,48 @@ container_config_free(container_config_t *config)
 }
 
 int
-container_config_write(const container_config_t *config)
+container_config_write(const container_config_t *config, const uint8_t *buf, size_t len,
+		       uint8_t *sig_buf, size_t sig_len, uint8_t *cert_buf, size_t cert_len)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	ASSERT(config->file);
 
 	if (cmld_uses_signed_configs()) {
-		INFO("Signed configuration is enabled, skip writing in memory structure to disk!");
+		// if config was provided by buf, update all files according to buffers
+		if (buf) {
+			if (-1 == file_write(config->file, (char *)buf, len)) {
+				WARN("Could not store configuration in file \"%s\".", config->file);
+				return -1;
+			} else {
+				int ret = -1;
+
+				char *sig_file = NULL;
+				char *cert_file = NULL;
+				char *prefix = file_remove_extension(config->file, ".conf");
+				if (!prefix)
+					goto out_err;
+
+				sig_file = mem_printf("%s.sig", prefix);
+				cert_file = mem_printf("%s.cert", prefix);
+
+				if (-1 == file_write(sig_file, (char *)sig_buf, sig_len)) {
+					WARN("Could not update sig_file '%s'", sig_file);
+					goto out_err;
+				}
+				if (-1 == file_write(cert_file, (char *)cert_buf, cert_len)) {
+					WARN("Could not update cert_file '%s'", cert_file);
+					goto out_err;
+				}
+				ret = 0;
+			out_err:
+				mem_free0(prefix);
+				mem_free0(sig_file);
+				mem_free0(cert_file);
+
+				return ret;
+			}
+		}
 		return 0;
 	}
 

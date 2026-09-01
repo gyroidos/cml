@@ -552,7 +552,7 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	if (c) {
 		// overwrite image sizes of mount table
 		container_config_fill_mount(conf, container_get_mnt(c));
-		container_config_write(conf);
+		container_config_write(conf, config, config_len, sig, sig_len, cert, cert_len);
 	}
 
 out_config:
@@ -691,12 +691,9 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 	 * might not be synced to the device from the mdm, but the config files
 	 * should be always there
 	 */
-	size_t len = strlen(name);
-	if (len < 5 || strcmp(name + len - 5, ".conf"))
+	char *prefix = file_remove_extension(name, ".conf");
+	if (!prefix)
 		return 0;
-
-	char *prefix = mem_strdup(name);
-	prefix[len - 5] = '\0';
 
 	int res = 0;
 	char *dir = mem_printf("%s/%s", path, prefix);
@@ -1820,6 +1817,7 @@ cmld_container_create_from_config(const uint8_t *config, size_t config_len, uint
 	mem_free0(path);
 	return c;
 err:
+	audit_log_event(NULL, FSA, CMLD, CONTAINER_MGMT, "container-create", NULL, 0);
 	container_destroy(c);
 	container_free(c);
 	mem_free0(path);
@@ -2160,7 +2158,8 @@ cmld_update_config(container_t *container, uint8_t *buf, size_t buf_len, uint8_t
 				    out);
 	}
 
-	ret = container_config_write(conf);
+	ret = container_config_write(conf, buf, buf_len, sig_buf, sig_len, cert_buf, cert_len);
+	IF_TRUE_GOTO_ERROR(ret, out);
 	container_set_sync_state(container, false);
 
 	// Wipe container if USB token serial changed
@@ -2224,7 +2223,7 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
-	container_config_write(conf);
+	container_config_write(conf, NULL, 0, NULL, 0, NULL, 0);
 	container_config_free(conf);
 	return 0;
 }
@@ -2240,7 +2239,7 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_remove_net_ifaces(conf, iface);
-	container_config_write(conf);
+	container_config_write(conf, NULL, 0, NULL, 0, NULL, 0);
 	container_config_free(conf);
 	return 0;
 }
