@@ -410,6 +410,26 @@ file_get_extension(const char *file)
 	return ext;
 }
 
+char *
+file_remove_extension(const char *file, const char *extension)
+{
+	ASSERT(file);
+
+	if (extension == NULL)
+		extension = file_get_extension(file);
+
+	size_t file_len = strlen(file);
+	size_t extension_len = strlen(extension);
+
+	if (file_len < extension_len || strcmp(file + file_len - extension_len, extension))
+		return NULL;
+
+	char *prefix = mem_strdup(file);
+	prefix[file_len - extension_len] = '\0';
+
+	return prefix;
+}
+
 int
 file_touch(const char *file)
 {

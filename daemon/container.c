@@ -706,13 +706,10 @@ container_destroy(container_t *container)
 	if (unlink(config_file))
 		WARN_ERRNO("Can't delete config file!");
 
-	char *prefix = mem_strdup(config_file);
-	size_t file_len = strlen(config_file);
-
-	IF_TRUE_GOTO(file_len < 5 || strcmp(config_file + file_len - 5, ".conf"), out);
-
-	prefix[file_len - 5] = '\0';
-
+	char *prefix = file_remove_extension(config_file, ".conf");
+	if (!prefix) {
+		goto out;
+	}
 	char *sig_file = mem_printf("%s.sig", prefix);
 	char *cert_file = mem_printf("%s.cert", prefix);
 

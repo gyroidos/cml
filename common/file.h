@@ -156,6 +156,16 @@ char *
 file_get_extension(const char *file);
 
 /**
+ * Return file name with the given extension removed.
+ * Note: passing NULL as the extension, will use the file extension
+ * returned by the file_get_extension function
+ * @ param file The file name
+ * @ param extension The file extension
+ */
+char *
+file_remove_extension(const char *file, const char *extension);
+
+/**
  * creates an empty file
  * @param file The file name
  * @return -1 on error else 0

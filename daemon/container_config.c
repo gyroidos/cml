@@ -189,12 +189,9 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 	ASSERT(file);
 	off_t conf_len = len;
 
-	char *prefix = mem_strdup(file);
-	size_t file_len = strlen(file);
-
-	IF_TRUE_GOTO(file_len < 5 || strcmp(file + file_len - 5, ".conf"), out);
-
-	prefix[file_len - 5] = '\0';
+	char *prefix = file_remove_extension(file, ".conf");
+	if (!prefix)
+		goto out;
 
 	// check if config comes from buffer or needs to be read from file
 	if (buf == NULL) {
@@ -260,17 +257,12 @@ container_config_write(const container_config_t *config, const uint8_t *buf, siz
 				return -1;
 			} else {
 				int ret = -1;
-				char *prefix = mem_strdup(config->file);
-				size_t file_len = strlen(config->file);
 
 				char *sig_file = NULL;
 				char *cert_file = NULL;
-
-				IF_TRUE_GOTO(file_len < 5 ||
-						     strcmp(config->file + file_len - 5, ".conf"),
-					     out_err);
-
-				prefix[file_len - 5] = '\0';
+				char *prefix = file_remove_extension(config->file, ".conf");
+				if (!prefix)
+					goto out_err;
 
 				sig_file = mem_printf("%s.sig", prefix);
 				cert_file = mem_printf("%s.cert", prefix);

@@ -691,12 +691,9 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 	 * might not be synced to the device from the mdm, but the config files
 	 * should be always there
 	 */
-	size_t len = strlen(name);
-	if (len < 5 || strcmp(name + len - 5, ".conf"))
+	char *prefix = file_remove_extension(name, ".conf");
+	if (!prefix)
 		return 0;
-
-	char *prefix = mem_strdup(name);
-	prefix[len - 5] = '\0';
 
 	int res = 0;
 	char *dir = mem_printf("%s/%s", path, prefix);
