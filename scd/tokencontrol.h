@@ -28,7 +28,7 @@
 typedef struct tokencontrol tctrl_t;
 
 tctrl_t *
-tokencontrol_new(const token_t *token);
+tokencontrol_new(token_t *token);
 
 void
 tokencontrol_free(tctrl_t *tctrl);
