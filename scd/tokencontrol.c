@@ -70,7 +70,7 @@ tokencontrol_handle_message(const ContainerToToken *msg, int fd, void *data)
 		DEBUG("Handle CONTAINER_TO_TOKEN__COMMAND__UNLOCK_TOKEN");
 		len = token_reset_auth(tctrl->token, brsp, MAX_APDU_BUF_LEN);
 		if (len < 0) {
-			WARN("GET_ATR failed wit code %d", len);
+			WARN("token_reset_auth failed wit code %d", len);
 			goto err;
 		}
 		goto out;
@@ -229,7 +229,7 @@ tokencontrol_cb_accept(int fd, unsigned events, UNUSED event_io_t *io, void *dat
 }
 
 tctrl_t *
-tokencontrol_new(const token_t *token)
+tokencontrol_new(token_t *token)
 {
 	ASSERT(token);
 
@@ -238,7 +238,7 @@ tokencontrol_new(const token_t *token)
 	tctrl_t *tctrl = mem_new0(tctrl_t, 1);
 	IF_NULL_GOTO_ERROR(tctrl, err);
 	tctrl->cfd = -1; // preset to signal unconnected client
-
+	tctrl->token = token;
 	tctrl->lsock_path = mem_printf("%s/%s.sock", SCD_TOKENCONTROL_SOCKET,
 				       uuid_string(token_get_uuid(token)));
 	IF_NULL_GOTO_ERROR(tctrl->lsock_path, err_tctrl);
