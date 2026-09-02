@@ -84,7 +84,7 @@ struct usbtoken {
 	event_timer_t *se_comm_watchdog_timer; // timer to check if card is removed
 
 	struct cardService *cs; // API of underlying SE
-	const token_t *token;	// parent token
+	token_t *token;		// parent token
 	tctrl_t *tctrl;		// tokencontrol structure
 };
 
@@ -1014,7 +1014,7 @@ static token_operations_t usbtoken_ops = {
  * Initializes a usb token
  */
 void *
-usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial)
+usbtoken_new(token_t *token, token_operations_t **ops, const char *serial)
 {
 	ASSERT(serial);
 
@@ -1029,6 +1029,7 @@ usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial)
 	IF_NULL_RETVAL_ERROR(token, NULL);
 
 	usb_token->se_comm = false;
+	usb_token->token = token;
 	usb_token->ctn = ctn_get_unused();
 	usb_token->serial = mem_strdup(serial);
 	IF_NULL_GOTO_ERROR(usb_token->serial, err);
@@ -1040,11 +1041,10 @@ usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial)
 		ctn_set_available(usb_token->ctn);
 		goto err_serial;
 	}
-	usb_token->tctrl = tokencontrol_new(token);
+	usb_token->tctrl = tokencontrol_new(usb_token->token);
 	IF_NULL_GOTO_ERROR(usb_token->tctrl, err_serial);
 
 	TRACE("Usbtoken initialized");
-	usb_token->token = token;
 	*ops = &usbtoken_ops;
 	return usb_token;
 
