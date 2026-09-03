@@ -21,7 +21,8 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#include "tpm2d.h"
+#include "tpm2d_common.h"
+#include "tpm2d_ibmtss.h"
 
 #include "common/mem.h"
 #include "common/macro.h"
@@ -36,7 +37,7 @@
 
 #include <ibmtss/tssprint.h>
 
-#include "tpm2d_write_openssl.h"
+#include "tpm2d_write_openssl_ibmtss.h"
 
 #include <openssl/evp.h>
 
@@ -79,48 +80,6 @@ tss2_destroy(void)
 		FATAL("Cannot destroy tss context error code: %08x", ret);
 
 	tss_context = NULL;
-}
-
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length)
-{
-	size_t len = MUL_WITH_OVERFLOW_CHECK(length, (size_t)2);
-	len = MUL_WITH_OVERFLOW_CHECK(len, sizeof(char));
-	len = ADD_WITH_OVERFLOW_CHECK(len, 1);
-	char *hex = mem_alloc0(len);
-
-	for (int i = 0; i < length; ++i) {
-		// remember snprintf additionally writs a '0' byte
-		snprintf(hex + i * 2, 3, "%.2x", bin[i]);
-	}
-
-	return hex;
-}
-
-uint8_t *
-convert_hex_to_bin_new(const char *hex_str, int *out_length)
-{
-	int len = strlen(hex_str);
-	int i = 0, j = 0;
-	*out_length = (len + 1) / 2;
-
-	uint8_t *bin = mem_alloc0(*out_length);
-
-	if (len % 2 == 1) {
-		// odd length -> we need to pad
-		IF_FALSE_GOTO(sscanf(&(hex_str[0]), "%1hhx", &(bin[0])) == 1, err);
-		i = j = 1;
-	}
-
-	for (; i < len; i += 2, j++) {
-		IF_FALSE_GOTO(sscanf(&(hex_str[i]), "%2hhx", &(bin[j])) == 1, err);
-	}
-
-	return bin;
-err:
-	ERROR("Converstion of hex string to bin failed!");
-	mem_free0(bin);
-	return NULL;
 }
 
 #ifndef TPM2D_NVMCRYPT_ONLY

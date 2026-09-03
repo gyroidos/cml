@@ -33,7 +33,7 @@
 #include <ibmtss/tsscryptoh.h>
 
 #include "tpm2-asn.h"
-#include "tpm2d_write_openssl.h"
+#include "tpm2d_write_openssl_ibmtss.h"
 #include "common/mem.h"
 
 static int

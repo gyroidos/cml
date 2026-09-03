@@ -28,7 +28,13 @@
 #include "tpm2d.pb-c.h"
 #endif
 
-#include "tpm2d.h"
+#include "tss_backends.h"
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
+#include "tpm2d_ibmtss.h"
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+#include "tpm2d_tss2.h"
+#endif
+#include "tpm2d_common.h"
 #include "nvmcrypt.h"
 #include "ml.h"
 #include "ek.h"
@@ -96,6 +102,7 @@ tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 	}
 }
 
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 static TPM_ALG_ID
 tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 {
@@ -113,6 +120,25 @@ tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 		return TPM_ALG_NULL;
 	}
 }
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+static TPM2_ALG_ID
+tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
+{
+	INFO("Get algid for hash_len: %d", hash_alg_len);
+
+	switch (hash_alg_len) {
+	case HASH_ALG_LEN__SHA1:
+		return TPM2_ALG_SHA1;
+	case HASH_ALG_LEN__SHA256:
+		return TPM2_ALG_SHA256;
+	case HASH_ALG_LEN__SHA384:
+		return TPM2_ALG_SHA384;
+	default:
+		ERROR("Unsupported value for HashAlgLen: %d", hash_alg_len);
+		return TPM2_ALG_NULL;
+	}
+}
+#endif
 
 static int
 tpm2d_control_get_fdekeylen_from_proto(ControllerToTpm__FdeKeyType type)
@@ -202,7 +228,11 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
 		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
 		out.has_response = true;
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 		int ret = tpm2_hierarchychangeauth(TPM_RH_OWNER, msg->password, msg->password_new);
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+		int ret = tpm2_hierarchychangeauth(ESYS_TR_RH_OWNER, msg->password, msg->password_new);
+#endif
 		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
