@@ -40,7 +40,7 @@ typedef struct usbtoken usbtoken_t;
  * @return pointer to the usbtoken structure on success or NULL on error
  */
 void *
-usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial);
+usbtoken_new(token_t *token, token_operations_t **ops, const char *serial);
 
 #endif // SC_CARDSERVICE
 
