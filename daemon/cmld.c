@@ -83,6 +83,7 @@
 // clang-format on
 
 #define CMLD_SUSPEND_TIMEOUT 5000
+#define SYSTEM_REBOOT_TIMEOUT 25000
 
 // files and directories in cmld's home path /data/cml
 #define CMLD_PATH_DEVICE_CONF "device.conf"
@@ -133,6 +134,8 @@ static bool cmld_signed_configs = false;
 static bool cmld_device_provisioned = false;
 
 static enum command cmld_device_reboot = POWER_OFF;
+
+static event_timer_t *system_reboot_timer = NULL;
 
 typedef enum {
 	CMLD_INIT_STAGE_ZERO = 0,
@@ -1187,6 +1190,24 @@ cmld_handle_device_shutdown(void)
 	exit(0);
 }
 
+static void
+cmld_handle_device_shutdown_cb(event_timer_t *timer, void *data)
+{
+	WARN("Reboot timeout of %dms exceeded, rebooting now", SYSTEM_REBOOT_TIMEOUT);
+
+	container_t *container = data;
+	ASSERT(container);
+
+	event_remove_timer(timer);
+	event_timer_free(timer);
+	timer = NULL;
+
+	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "force-reboot",
+			uuid_string(container_get_uuid(container)), 0);
+
+	cmld_handle_device_shutdown();
+}
+
 /**
  * This observer callback is attached to each container in order to check for other running containers.
  * It ensures that as soon as the last container went down, the device is shut down.
@@ -2120,6 +2141,18 @@ cmld_reboot_device(void)
 
 	container_t *c0 = cmld_containers_get_c0();
 	IF_NULL_RETURN(c0);
+
+	if (NULL == system_reboot_timer) {
+		system_reboot_timer = event_timer_new(SYSTEM_REBOOT_TIMEOUT, 1,
+						      &cmld_handle_device_shutdown_cb, c0);
+
+		if (NULL == system_reboot_timer) {
+			WARN("system_reboot_timer is NULL, skipping timer creation");
+		} else {
+			DEBUG("Registered timer to force reboot in %dms", SYSTEM_REBOOT_TIMEOUT);
+			event_add_timer(system_reboot_timer);
+		}
+	}
 
 	// stopping c0 also stops other containers.
 	cmld_container_stop(c0);
