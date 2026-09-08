@@ -285,7 +285,6 @@ crypto_cb(int fd, unsigned events, event_io_t *io, void *data)
 			}
 			ERROR("Missing hash_value in CRYPTO_HASH_OK response!"); // fallthrough
 		case TOKEN_TO_DAEMON__CODE__CRYPTO_HASH_ERROR:
-			task->hash_complete(NULL, task->hash_file, task->hash_algo, task->data);
 			if (task->hash_complete)
 				task->hash_complete(NULL, task->hash_file, task->hash_algo,
 						    task->data);
