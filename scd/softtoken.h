@@ -43,6 +43,6 @@ typedef struct softtoken softtoken_t;
  * @return pointer to the softtoken structure on success or NULL on error
  */
 void *
-softtoken_new(token_t *token, token_operations_t **ops, const char *softtoken_dir);
+softtoken_new(token_t const *token, token_operations_t **ops, const char *softtoken_dir);
 
 #endif /* SOFTTOKEN_H */
