@@ -71,9 +71,19 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 void
 container_config_free(container_config_t *config);
 
+/**
+ * checks if the file given by the path is part of an incomplete config write operation
+ * and finish it accordingly.
+ * 
+ * @param path the full path to the file to be checked
+ */
+int
+container_config_check_incomplete_write(const char *path);
+
 int
 container_config_write(const container_config_t *config, const uint8_t *buf, size_t len,
-		       uint8_t *sig_buf, size_t sig_len, uint8_t *cert_buf, size_t cert_len);
+		       const uint8_t *sig_buf, size_t sig_len, const uint8_t *cert_buf,
+		       size_t cert_len);
 
 /*************************/
 /* GETTER + SETTER       */
