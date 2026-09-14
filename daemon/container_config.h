@@ -72,7 +72,8 @@ void
 container_config_free(container_config_t *config);
 
 int
-container_config_write(const container_config_t *config);
+container_config_write(const container_config_t *config, const uint8_t *buf, size_t len,
+		       uint8_t *sig_buf, size_t sig_len, uint8_t *cert_buf, size_t cert_len);
 
 /*************************/
 /* GETTER + SETTER       */
