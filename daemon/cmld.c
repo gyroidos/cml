@@ -727,9 +727,27 @@ cleanup:
 	return res;
 }
 
+/**
+ * Checks if a given file is part of an incompleted config write operation, if that is the case,
+ * start the recovering process.
+ */
+static int
+cmld_check_incomplete_config_writes_cb(const char *dir, const char *name, UNUSED void *data)
+{
+	char *path = mem_printf("%s/%s", dir, name);
+	container_config_check_incomplete_write(path);
+	mem_free0(path);
+	return 0;
+}
+
 static int
 cmld_load_containers(const char *path)
 {
+	if (dir_foreach(path, &cmld_check_incomplete_config_writes_cb, NULL) < 0) {
+		WARN("Could not open %s to load containers", path);
+		return -1;
+	}
+
 	if (dir_foreach(path, &cmld_load_containers_cb, NULL) < 0) {
 		WARN("Could not open %s to load containers", path);
 		return -1;
