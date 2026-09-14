@@ -150,10 +150,20 @@ file_size(const char *file);
 /**
  * Return file extension of a given file including '.'.
  * Note: fails if path contains a '.' and file has no ending
- * @ param file The file name
+ * @param file The file name
  */
 const char *
 file_get_extension(const char *file);
+
+/**
+ * Return file name with the given extension removed.
+ * Note: passing NULL as the extension, will use the file extension
+ * returned by the file_get_extension function
+ * @param file The file name
+ * @param extension The file extension
+ */
+char *
+file_get_prefix_new(const char *file, const char *extension);
 
 /**
  * creates an empty file
