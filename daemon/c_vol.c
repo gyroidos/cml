@@ -2022,8 +2022,24 @@ c_vol_cleanup(void *volp, bool is_rebooting)
 		WARN("Could not umount all images properly");
 
 	// keep dm crypt/integrity device up for reboot
-	if (!is_rebooting && c_vol_cleanup_dm(vol))
-		WARN("Could not remove mounts properly");
+	if (is_rebooting)
+		return;
+
+	// try to asyncronously remove dm devices
+	pid_t pid = fork();
+	if (pid == 0) {
+		event_reset();
+		if (c_vol_cleanup_dm(vol))
+			WARN("Could not remove mounts properly");
+		_exit(0);
+	} else if (pid > 0) {
+		// wait for child
+		container_wait_for_child(vol->container, "vol-dm-cleanup", pid);
+	} else {
+		WARN_ERRNO("forking of helper child failed, remove dm_devices synchronously");
+		if (c_vol_cleanup_dm(vol))
+			WARN("Could not remove mounts properly");
+	}
 }
 
 static compartment_module_t c_vol_module = {
