@@ -171,4 +171,13 @@ dm_list_versions(int fd);
 char *
 dm_get_target_type_new(int fd, const char *name);
 
+/**
+ * Get the full path of a device mapper device with the specified name
+ *
+ * @param label The name to get the path for
+ * @return char* The device path in case of success, otherwise NULL
+ */
+char *
+dm_get_device_path_new(const char *label);
+
 #endif // DM_H
