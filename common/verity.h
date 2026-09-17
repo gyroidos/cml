@@ -25,15 +25,6 @@
 #define VERITY_H
 
 /**
- * @brief Returns the path for a dm-verity device
- *
- * @param label The verity device name
- * @return char* The path, must be freed
- */
-char *
-verity_get_device_path_new(const char *label);
-
-/**
  * Open a device-mapper verity device
  *
  * @param name The name of the device to be created
