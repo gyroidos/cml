@@ -226,3 +226,9 @@ dm_get_target_type_new(int fd, const char *name)
 
 	return mem_strdup(tgt->target_type);
 }
+
+char *
+dm_get_device_path_new(const char *label)
+{
+	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
+}
