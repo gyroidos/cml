@@ -79,12 +79,6 @@ static const char *cryptfs_crypto_type = NULL;
 static unsigned long
 get_provided_data_sectors(const char *real_blk_name);
 
-char *
-cryptfs_get_device_path_new(const char *label)
-{
-	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
-}
-
 void
 cryptfs_set_crypto_type(const char *type)
 {
@@ -274,7 +268,7 @@ create_device_node(const char *name)
 		goto errout;
 	}
 
-	device = cryptfs_get_device_path_new(name);
+	device = dm_get_device_path_new(name);
 
 	if (mknod(device, S_IFBLK | 00777, io->dev) != 0 && errno != EEXIST) {
 		ERROR_ERRNO("Cannot mknod device %s", device);

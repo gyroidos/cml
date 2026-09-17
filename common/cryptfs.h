@@ -57,15 +57,6 @@ void
 cryptfs_set_crypto_type(const char *type);
 
 /**
- * Get the full path of a cryptfs device with the specified name
- *
- * @param label The name to get the path for
- * @return char* The device path in case of success, otherwise NULL
- */
-char *
-cryptfs_get_device_path_new(const char *label);
-
-/**
  * Create a new cryptfs device with the specified name,
  *
  * @param label The name of the volume
