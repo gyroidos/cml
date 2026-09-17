@@ -800,7 +800,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		TRACE("Creating dm-verity device");
 		char *label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 					 mount_entry_get_img(mntent));
-		char *verity_dev = verity_get_device_path_new(label);
+		char *verity_dev = dm_get_device_path_new(label);
 		if (file_is_blk(verity_dev) || file_links_to_blk(verity_dev)) {
 			INFO("Using existing mapper device: %s", verity_dev);
 		} else {
@@ -871,7 +871,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 
-		crypt = cryptfs_get_device_path_new(label);
+		crypt = dm_get_device_path_new(label);
 		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
