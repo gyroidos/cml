@@ -139,7 +139,7 @@ event_remove_io(event_io_t *io);
  * the event_loop() call currently executing will exit
  */
 void
-event_reset();
+event_reset(void);
 
 // TODO: doxygen for event_inotify*
 

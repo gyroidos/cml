@@ -811,7 +811,7 @@ network_route_localnet(const char *interface, bool enable)
  * Bring up the loopback interface and shrink its subnet.
  */
 int
-network_setup_loopback()
+network_setup_loopback(void)
 {
 	int ret = 0;
 
@@ -861,7 +861,7 @@ network_interface_is_wifi(const char *if_name)
 }
 
 list_t *
-network_get_interfaces_new()
+network_get_interfaces_new(void)
 {
 	struct if_nameindex *if_ni, *i;
 	if_ni = if_nameindex();
@@ -878,7 +878,7 @@ network_get_interfaces_new()
 }
 
 list_t *
-network_get_physical_interfaces_new()
+network_get_physical_interfaces_new(void)
 {
 	struct if_nameindex *if_ni, *i;
 	if_ni = if_nameindex();

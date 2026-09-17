@@ -47,7 +47,7 @@
  * @returns 0 if root privileges were successfully acquired
  */
 int
-namespace_setuid0();
+namespace_setuid0(void);
 
 /**
  * This function forks a new child, joins the given namespaces and executes the given function

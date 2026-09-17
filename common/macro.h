@@ -780,6 +780,13 @@
 #define UNUSED __attribute__((unused))
 
 /**
+ * Aligns a declaration to the alignment of type @p x.
+ * Used in prefix notation like UNUSED, e.g., to align a byte buffer that is
+ * cast to a struct pointer: @code uint8_t ALIGNED(struct dm_ioctl) buf[N] @endcode
+ */
+#define ALIGNED(x) __attribute__((aligned(__alignof__(x))))
+
+/**
  * Indicates that a function is executed in constructor context before main.
  * We use this to handle optional modules during build
  */
@@ -841,9 +848,9 @@
 #ifndef ADD_WITH_OVERFLOW_CHECK
 #define ADD_WITH_OVERFLOW_CHECK(x, y)                                                              \
 	__extension__({                                                                            \
-		typeof(x) _x = (x);                                                                \
-		typeof(y) _y = (y);                                                                \
-		typeof(x + y) _res;                                                                \
+		__typeof__(x) _x = (x);                                                            \
+		__typeof__(y) _y = (y);                                                            \
+		__typeof__(x + y) _res;                                                            \
 		if (__builtin_add_overflow(_x, _y, &_res)) {                                       \
 			FATAL("Detected addition integer overflow.");                              \
 		}                                                                                  \
@@ -865,9 +872,9 @@
 #ifndef SUB_WITH_OVERFLOW_CHECK
 #define SUB_WITH_OVERFLOW_CHECK(x, y)                                                              \
 	__extension__({                                                                            \
-		typeof(x) _x = (x);                                                                \
-		typeof(y) _y = (y);                                                                \
-		typeof(x - y) _res;                                                                \
+		__typeof__(x) _x = (x);                                                            \
+		__typeof__(y) _y = (y);                                                            \
+		__typeof__(x - y) _res;                                                            \
 		if (__builtin_sub_overflow(_x, _y, &_res)) {                                       \
 			FATAL("Detected subtraction integer overflow.");                           \
 		}                                                                                  \
@@ -889,9 +896,9 @@
 #ifndef MUL_WITH_OVERFLOW_CHECK
 #define MUL_WITH_OVERFLOW_CHECK(x, y)                                                              \
 	__extension__({                                                                            \
-		typeof(x) _x = (x);                                                                \
-		typeof(y) _y = (y);                                                                \
-		typeof(x * y) _res;                                                                \
+		__typeof__(x) _x = (x);                                                            \
+		__typeof__(y) _y = (y);                                                            \
+		__typeof__(x * y) _res;                                                            \
 		if (__builtin_mul_overflow(_x, _y, &_res)) {                                       \
 			FATAL("Detected multiplication integer overflow.");                        \
 		}                                                                                  \

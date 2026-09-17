@@ -399,12 +399,12 @@ file_size(const char *file)
 	return s.st_size;
 }
 
-char *
+const char *
 file_get_extension(const char *file)
 {
 	ASSERT(file);
 
-	char *ext = strrchr(file, '.');
+	const char *ext = strrchr(file, '.');
 	if (!ext)
 		return "";
 	return ext;

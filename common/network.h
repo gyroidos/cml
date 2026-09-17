@@ -179,7 +179,7 @@ network_set_flag(const char *ifi_name, const uint32_t flag);
  * Bring up the loopback interface and shrink its subnet.
  */
 int
-network_setup_loopback();
+network_setup_loopback(void);
 
 /*
  * This functions sets a new rule to do all lookups through routing table main

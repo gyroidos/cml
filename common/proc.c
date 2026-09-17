@@ -386,7 +386,7 @@ struct proc_meminfo {
 };
 
 proc_meminfo_t *
-proc_meminfo_new()
+proc_meminfo_new(void)
 {
 	proc_meminfo_t *meminfo;
 	char *buf, *tmp;

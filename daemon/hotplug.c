@@ -146,7 +146,7 @@ hotplug_container_netdev_mapping_new(container_t *container, container_pnet_cfg_
 static char *
 hotplug_replace_devpath_new(const char *str, const char *oldstr, const char *newstr)
 {
-	char *ptr_old = NULL;
+	const char *ptr_old = NULL;
 	int len_diff = strlen(newstr) - strlen(oldstr);
 	if (!(ptr_old = strstr(str, oldstr))) {
 		DEBUG("Could not find %s in %s", oldstr, str);

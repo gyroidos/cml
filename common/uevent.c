@@ -589,7 +589,7 @@ err:
 }
 
 static int
-uevent_init()
+uevent_init(void)
 {
 	if (uevent_netlink_sock != NULL) {
 		ERROR("Uevent netlink_socket already exists.");
@@ -626,7 +626,7 @@ uevent_init()
 }
 
 static void
-uevent_deinit()
+uevent_deinit(void)
 {
 	if (uevent_io_event) {
 		event_remove_io(uevent_io_event);

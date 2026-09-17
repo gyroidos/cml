@@ -67,7 +67,7 @@ nl_sock_uevent_new(pid_t udevd_pid);
  * @return Pointer to nl_sock; NULL in case of failure
  */
 nl_sock_t *
-nl_sock_routing_new();
+nl_sock_routing_new(void);
 
 /**
  * Allocates, opens and returns a nl_sock object of family NETLINK_XFRM with various netlink options.
@@ -77,7 +77,7 @@ nl_sock_routing_new();
  * @return Pointer to nl_sock; NULL in case of failure
  */
 nl_sock_t *
-nl_sock_xfrm_new();
+nl_sock_xfrm_new(void);
 
 /**
  * Allocates, opens and returns a nl_sock object of family NETLINK_ROUTING with various netlink options.
@@ -87,7 +87,7 @@ nl_sock_xfrm_new();
  * @return Pointer to nl_sock; NULL in case of failure
  */
 nl_sock_t *
-nl_sock_ifaddr_new();
+nl_sock_ifaddr_new(void);
 
 /**
  * Allocates, opens and returns a nl_sock object of a different netlink family than the other
@@ -126,7 +126,7 @@ nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
  * @return In case of failure, return -1, in case of success, return num of bytes received
  */
 int
-nl_msg_receive_kernel(const nl_sock_t *sock, char *buf, size_t len, bool receive_uevent);
+nl_msg_receive_kernel(const nl_sock_t *sock, void *buf, size_t len, bool receive_uevent);
 
 /**
  * Transmit a message with ACKNOWLEDGEMENT flag
@@ -145,7 +145,7 @@ nl_msg_send_kernel_verify(const nl_sock_t *sock, const nl_msg_t *req);
  *	    in case of success, return the allocated message.
  */
 nl_msg_t *
-nl_msg_new();
+nl_msg_new(void);
 
 /**
  * Free a netlink message

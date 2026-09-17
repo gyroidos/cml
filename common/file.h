@@ -152,7 +152,7 @@ file_size(const char *file);
  * Note: fails if path contains a '.' and file has no ending
  * @ param file The file name
  */
-char *
+const char *
 file_get_extension(const char *file);
 
 /**
