@@ -180,4 +180,15 @@ dm_get_target_type_new(int fd, const char *name);
 char *
 dm_get_device_path_new(const char *label);
 
+/**
+ * Delete a dm-device
+ *
+ * @param fd The /dev/mapper/control file descripter (can be retrieved
+ * 				via dm_open_control)
+ * @param name The name of the dm-device
+ * @return int 0 in case of success, -1 in case of failure
+ */
+int
+dm_delete_blk_dev(int fd, const char *name);
+
 #endif // DM_H

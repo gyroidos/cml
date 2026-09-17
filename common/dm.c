@@ -43,6 +43,8 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
+#define IOCTL_RETRIES 10
+
 struct dm_cmd_table cmd_table[] = {
 	{ DM_DEV_CREATE, { 4, 0, 0 } },	  { DM_TABLE_LOAD, { 4, 0, 0 } },
 	{ DM_DEV_REMOVE, { 4, 0, 0 } },	  { DM_REMOVE_ALL, { 4, 0, 0 } },
@@ -231,4 +233,48 @@ char *
 dm_get_device_path_new(const char *label)
 {
 	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
+}
+
+int
+dm_delete_blk_dev(int fd, const char *name)
+{
+	struct dm_ioctl io;
+	int i;
+	char *device = NULL;
+
+	if (dm_ioctl_init(&io, INDEX_DM_DEV_REMOVE, sizeof(io), name, NULL, 0, 0, 0, 0)) {
+		ERROR("Malformed input (name = '%s') for dm_ioctl!", name);
+		return -1;
+	}
+
+	for (i = 0; i < IOCTL_RETRIES; i++) {
+		if (dm_ioctl(fd, cmd_table[INDEX_DM_DEV_REMOVE].cmd, &io) == 0) {
+			/* remove successful, no more retry needed */
+			break;
+		}
+		if (errno == ENXIO) {
+			/* device does not exist, just remove device node */
+			goto out;
+		}
+		if (errno != EBUSY) {
+			ERROR_ERRNO("Cannot remove dm device '%s'", name);
+			return -1;
+		}
+		/* something is blocking device, sleep and retry */
+		NANOSLEEP(0, 500000000);
+	}
+
+	if (i == IOCTL_RETRIES) {
+		/* We failed to delete the device, return an error */
+		ERROR_ERRNO("Cannot remove dm device '%s'", name);
+		return -1;
+	}
+out:
+	/* remove device node if necessary */
+	device = dm_get_device_path_new(name);
+	unlink(device);
+	mem_free0(device);
+
+	DEBUG("Successfully deleted dm device '%s'", name);
+	return 0;
 }
