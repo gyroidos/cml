@@ -144,12 +144,6 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 	return 0;
 }
 
-char *
-verity_get_device_path_new(const char *label)
-{
-	return mem_printf("%s/%s", DM_PATH_PREFIX, label);
-}
-
 static int
 create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
 {
@@ -180,7 +174,7 @@ create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
 	}
 
 	targetpath = mem_printf("%s/%s", DEVFS_PATH, devptr);
-	linkpath = verity_get_device_path_new(name);
+	linkpath = dm_get_device_path_new(name);
 
 	DEBUG("Creating symlink for verity device %s (%u:%u): %s -> %s", name, major(devt),
 	      minor(devt), linkpath, targetpath);
