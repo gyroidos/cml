@@ -1093,26 +1093,20 @@ c_vol_cleanup_dm(c_vol_t *vol)
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				   mount_entry_get_img(mntent));
 
-		DEBUG("Cleanup: Checking target type of %s\n", label);
-
-		char *type = dm_get_target_type_new(fd, label);
-		if (type == NULL) {
-			WARN("Failed to get target type of %s\n", label);
+		if (mount_entry_get_verity_sha256(mntent)) {
+			DEBUG("Cleanup: removing block device %s of type verity\n", label);
+			if (dm_delete_blk_dev(fd, label) < 0)
+				WARN("Could not delete dm-verity dev %s", label);
+		} else if (mount_entry_is_encrypted(mntent)) {
+			DEBUG("Cleanup: removing block device %s of type cryptfs\n", label);
+			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
+				WARN("Could not delete cryptfs dev %s", label);
+		} else {
 			mem_free0(label);
 			continue;
 		}
 
-		DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
-
-		if (!strcmp(type, "crypt") || !strcmp(type, "integrity")) {
-			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
-				WARN("Could not delete dm-%s dev %s", type, label);
-		} else if (!strcmp(type, "verity")) {
-			if (verity_delete_blk_dev(label) < 0)
-				WARN("Could not delete dm-verity dev %s", label);
-		}
 		mem_free0(label);
-		mem_free0(type);
 	}
 	dm_close_control(fd);
 
