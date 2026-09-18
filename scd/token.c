@@ -67,9 +67,19 @@ token_unlock(token_t *token, char *passwd, unsigned char *pairing_secret, size_t
 {
 	ASSERT(token);
 	ASSERT(token->ops->unlock);
+
+	if (!token_is_locked(token)) {
+		WARN("Token is alread unlocked, returning");
+		return TOKEN_ERR_OK;
+	} else if (token_is_locked_till_reboot(token)) {
+		WARN("Token is locked till reboot, returning");
+		return TOKEN_ERR_LOCKED_TILL_REBOOT;
+	}
+
 	int res = token->ops->unlock(token->int_token, passwd, pairing_secret, pairing_sec_len);
 	if (res == 0) {
 		token->locked = false;
+		token->wrong_unlock_attempts = 0;
 	} else if (res == TOKEN_ERR_PW) {
 		token->wrong_unlock_attempts++;
 	}
@@ -141,7 +151,18 @@ token_reset_auth(token_t *token, unsigned char *brsp, size_t brsp_len)
 		TRACE("token_reset_auth not implemented for this tokentype");
 		return TOKEN_ERR_OK;
 	}
-	return token->ops->reset_auth(token->int_token, brsp, brsp_len);
+
+	if (token_is_locked_till_reboot(token)) {
+		WARN("Token is locked till reboot, returning");
+		return TOKEN_ERR_LOCKED_TILL_REBOOT;
+	}
+
+	int res = token->ops->reset_auth(token->int_token, brsp, brsp_len);
+	if (res >= 0) {
+		token->locked = false;
+		token->wrong_unlock_attempts = 0;
+	}
+	return res;
 }
 
 token_err_t

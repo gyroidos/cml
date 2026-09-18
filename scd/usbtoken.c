@@ -84,7 +84,7 @@ struct usbtoken {
 	event_timer_t *se_comm_watchdog_timer; // timer to check if card is removed
 
 	struct cardService *cs; // API of underlying SE
-	const token_t *token;	// parent token
+	token_t *token;		// parent token
 	tctrl_t *tctrl;		// tokencontrol structure
 };
 
@@ -805,16 +805,6 @@ usbtoken_unlock(void *int_token, char *passwd, unsigned char *pairing_secret,
 	ASSERT(usb_token);
 	ASSERT(passwd);
 
-	if (!token_is_locked(usb_token->token)) {
-		WARN("Token is already unlocked, returning");
-		return TOKEN_ERR_OK;
-	}
-
-	if (token_is_locked_till_reboot(usb_token->token)) {
-		WARN("Token is locked till reboot, returning");
-		return TOKEN_ERR_LOCKED_TILL_REBOOT;
-	}
-
 	if (!usb_token->se_comm && (!usbtoken_se_reconnect(usb_token))) {
 		ERROR("SE not present!");
 		usb_token->se_comm = false;
@@ -862,11 +852,6 @@ usbtoken_reset_auth(void *int_token, unsigned char *brsp, size_t brsp_len)
 
 	DEBUG("usbtoken_reset_auth");
 
-	if (token_is_locked(usb_token->token)) {
-		WARN("Token is locked till reboot, returning");
-		return TOKEN_ERR_LOCKED;
-	}
-
 	if ((!usb_token->auth_code) || (usb_token->auth_code_len <= 0)) {
 		ERROR("Authentication code not available to reset usbtoken");
 		return TOKEN_ERR_FATAL;
@@ -879,14 +864,9 @@ usbtoken_reset_auth(void *int_token, unsigned char *brsp, size_t brsp_len)
 	}
 
 	rc = authenticateUser(usb_token);
-	if (rc == TOKEN_ERR_PW) { // wrong password
-		ERROR("Usbtoken authentication reset failed (wrong PW). This should not happen");
-	} else if (rc == TOKEN_ERR_OK) {
-		DEBUG("Usbtoken authentication reset successful");
-	} else {
-		ERROR("Usbtoken reset failed");
-	}
-
+	if (rc != TOKEN_ERR_OK)
+		return rc;
+	DEBUG("Usbtoken authentication reset successful");
 	return lr;
 }
 
@@ -1014,7 +994,7 @@ static token_operations_t usbtoken_ops = {
  * Initializes a usb token
  */
 void *
-usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial)
+usbtoken_new(token_t *token, token_operations_t **ops, const char *serial)
 {
 	ASSERT(serial);
 
@@ -1029,6 +1009,7 @@ usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial)
 	IF_NULL_RETVAL_ERROR(token, NULL);
 
 	usb_token->se_comm = false;
+	usb_token->token = token;
 	usb_token->ctn = ctn_get_unused();
 	usb_token->serial = mem_strdup(serial);
 	IF_NULL_GOTO_ERROR(usb_token->serial, err);
@@ -1040,11 +1021,10 @@ usbtoken_new(const token_t *token, token_operations_t **ops, const char *serial)
 		ctn_set_available(usb_token->ctn);
 		goto err_serial;
 	}
-	usb_token->tctrl = tokencontrol_new(token);
+	usb_token->tctrl = tokencontrol_new(usb_token->token);
 	IF_NULL_GOTO_ERROR(usb_token->tctrl, err_serial);
 
 	TRACE("Usbtoken initialized");
-	usb_token->token = token;
 	*ops = &usbtoken_ops;
 	return usb_token;
 
