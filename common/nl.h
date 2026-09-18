@@ -123,7 +123,9 @@ nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
  * called when you know that there is a message on the socket.
  * @param buf Netlink message header, which must be preallocated and large enough.
  * The buffer is filled with the message content
- * @return In case of failure, return -1, in case of success, return num of bytes received
+ * @return In case of failure, return -1 (errno of the failed read is preserved),
+ * in case of success, return num of bytes received. If receive_uevent is set,
+ * 0 is returned for messages discarded by the uevent source verification.
  */
 int
 nl_msg_receive_kernel(const nl_sock_t *sock, void *buf, size_t len, bool receive_uevent);
