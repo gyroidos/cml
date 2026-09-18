@@ -521,14 +521,16 @@ nl_msg_receive(const nl_sock_t *nl, void *buf, const size_t len, bool receive_ue
 			TRACE("recvmsg failed");
 			if (errno == EINTR)
 				continue;
-			goto error;
+			/* preserve errno of the failed recvmsg() for the caller */
+			mem_memset0(buf, len);
+			return -1;
 		}
 		break;
 	}
 
 	if (receive_uevent && nl_verify_uevent_source(&m, nladdr)) {
-		TRACE("Detected possibly malicious uevent");
-		goto error;
+		TRACE("Filtered untrusted netlink message");
+		goto filtered;
 	}
 
 	TRACE("Received a message from kernel");
@@ -548,9 +550,14 @@ nl_msg_receive(const nl_sock_t *nl, void *buf, const size_t len, bool receive_ue
 
 	return received;
 
+filtered:
+	/* message rejected by policy, this is not a read error */
+	mem_memset0(buf, len);
+	return 0;
+
 error:
 	TRACE("Purged netlink message, as it did not pass sanity checks");
-	mem_memset(buf, 0, len);
+	mem_memset0(buf, len);
 	errno = EIO;
 	return -1;
 }
