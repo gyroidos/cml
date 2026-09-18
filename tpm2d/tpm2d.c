@@ -21,7 +21,17 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
-#include "tpm2d.h"
+#include "tss_backends.h"
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
+#include "tpm2d_ibmtss.h"
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+#include "tpm2d_tss2.h"
+
+// these are undefed at the end of the file
+#define TPM_RC_SUCCESS TPM2_RC_SUCCESS
+#define TPM_RH_NULL ESYS_TR_RH_NULL
+#endif
+
 #include "tpm2d_shared.h"
 #include "nvmcrypt.h"
 
@@ -372,3 +382,8 @@ main(UNUSED int argc, char **argv)
 
 	return 0;
 }
+
+#if TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+#undef TPM_RC_SUCCESS
+#undef TPM_RH_NULL
+#endif

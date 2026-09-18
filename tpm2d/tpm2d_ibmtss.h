@@ -28,6 +28,8 @@
 
 #include <stdbool.h>
 
+#include "tpm2d_common.h"
+
 //#define TPM2D_ASYM_ALGORITHM		TPM_ALG_ECC
 #define TPM2D_ASYM_ALGORITHM TPM_ALG_RSA
 #define TPM2D_CURVE_ID TPM_ECC_NIST_P256
@@ -57,14 +59,6 @@ typedef struct tpm2d_quote {
 
 #endif // ifndef TPM2D_NVMCRYPT_ONLY
 
-typedef enum tpm2d_key_type {
-	TPM2D_KEY_TYPE_STORAGE_U = 1,
-	TPM2D_KEY_TYPE_STORAGE_R,
-	TPM2D_KEY_TYPE_SIGNING_U,
-	TPM2D_KEY_TYPE_SIGNING_R,
-	TPM2D_KEY_TYPE_SIGNING_EK
-} tpm2d_key_type_t;
-
 typedef struct tpm2d_pcr {
 	size_t pcr_size;
 	TPM_ALG_ID halg_id;
@@ -72,9 +66,6 @@ typedef struct tpm2d_pcr {
 } tpm2d_pcr_t;
 
 /*****************************************************************************/
-void
-tpm2d_exit(void);
-
 TPMI_DH_OBJECT
 tpm2d_get_salt_key_handle(void);
 
@@ -83,31 +74,6 @@ tss2_init(void);
 
 void
 tss2_destroy(void);
-
-/**
- * Helper function to convert a binary buffer to an hex string
- *
- * This function allocates a new buffer containing the
- * resulting hex representation containing a terminating '\0'
- * of the binary buffer.
- *
- * @param bin binary buffer
- * @param length of the binary buffer
- */
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length);
-
-/**
- * Helper function to convert a hex string into binary
- *
- * This function allocates a new buffer containing the
- * resulting binary representation of the string.
- *
- * @param hex_str buffer containing the hex string representation
- * @param out_length in this pointer the size of result is returned
- */
-uint8_t *
-convert_hex_to_bin_new(const char *hex_str, int *out_length);
 
 /**
  * Function to powerup the simulator

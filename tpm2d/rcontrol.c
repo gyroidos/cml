@@ -31,7 +31,12 @@
 #include "attestation.pb-c.h"
 #endif
 
-#include "tpm2d.h"
+#include "tss_backends.h"
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
+#include "tpm2d_ibmtss.h"
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+#include "tpm2d_tss2.h"
+#endif
 #include "tpm2d_shared.h"
 #include "ml.h"
 #include "ek.h"
@@ -55,6 +60,7 @@ struct tpm2d_rcontrol {
 /**
  * Returns the HashAlgLen (proto) for the given TPM_ALG_ID alg_id.
  */
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 static HashAlgLen
 tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
 {
@@ -70,6 +76,23 @@ tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
 		return -1;
 	}
 }
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+static HashAlgLen
+tpm2d_rcontrol_hash_algo_get_len_proto(TPM2_ALG_ID alg_id)
+{
+	switch (alg_id) {
+	case TPM2_ALG_SHA1:
+		return HASH_ALG_LEN__SHA1;
+	case TPM2_ALG_SHA256:
+		return HASH_ALG_LEN__SHA256;
+	case TPM2_ALG_SHA384:
+		return HASH_ALG_LEN__SHA384;
+	default:
+		ERROR("Unsupported value for TPM2_ALG_ID: %d", alg_id);
+		return -1;
+	}
+}
+#endif
 
 static void
 tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t *rcontrol)
@@ -106,8 +129,13 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		int index = 0;
 
 		TPMI_DH_OBJECT att_key_handle = tpm2d_get_as_key_handle();
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 		if (att_key_handle == TPM_RH_NULL)
 			goto err_att_req;
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+		if (att_key_handle == ESYS_TR_RH_NULL)
+			goto err_att_req;
+#endif
 
 		Tpm2dToRemote out = TPM2D_TO_REMOTE__INIT;
 		out.code = TPM2D_TO_REMOTE__CODE__ATTESTATION_RES;

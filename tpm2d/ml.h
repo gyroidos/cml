@@ -24,12 +24,24 @@
 #ifndef ML_H
 #define ML_H
 
-#include "tpm2d.h"
+#include "tss_backends.h"
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
+#include "tpm2d_ibmtss.h"
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+#include "tpm2d_tss2.h"
+#endif
+#include "tpm2d_common.h"
 
 #ifndef TPM2D_NVMCRYPT_ONLY
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 int
 ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
 			   size_t datahash_len);
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+int
+ml_measurement_list_append(const char *filename, TPM2_ALG_ID algid, const uint8_t *datahash,
+			   size_t datahash_len);
+#endif
 
 /**
  * Return the IMA measurement list in binary format as a buffer
@@ -57,12 +69,21 @@ ml_container_list_free(MlContainerEntry **entries, size_t len);
 #else
 #include "common/macro.h"
 
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 static inline int
 ml_measurement_list_append(UNUSED const char *filename, UNUSED TPM_ALG_ID algid,
 			   UNUSED const uint8_t *datahash, UNUSED size_t datahash_len)
 {
 	return 0;
 }
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+static inline int
+ml_measurement_list_append(UNUSED const char *filename, UNUSED TPM2_ALG_ID algid,
+			   UNUSED const uint8_t *datahash, UNUSED size_t datahash_len)
+{
+	return 0;
+}
+#endif
 
 static inline uint8_t *
 ml_get_ima_list_new(UNUSED size_t *len)
