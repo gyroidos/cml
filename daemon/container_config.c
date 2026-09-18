@@ -43,6 +43,7 @@
 #include "guestos_mgr.h"
 #include "network.h"
 #include "hotplug.h"
+#include <unistd.h>
 
 struct container_config {
 	char *file;
@@ -57,6 +58,8 @@ struct container_config {
 #ifndef C_CONFIG_DEFAULT_VETH_NAME
 #define C_CONFIG_DEFAULT_VETH_NAME "host0"
 #endif
+
+#define TMP_FILE_SUFFIX "~"
 
 /**
  * The usual identity map between two corresponding C and protobuf enums.
@@ -189,12 +192,9 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 	ASSERT(file);
 	off_t conf_len = len;
 
-	char *prefix = mem_strdup(file);
-	size_t file_len = strlen(file);
-
-	IF_TRUE_GOTO(file_len < 5 || strcmp(file + file_len - 5, ".conf"), out);
-
-	prefix[file_len - 5] = '\0';
+	char *prefix = file_get_prefix_new(file, ".conf");
+	if (!prefix)
+		goto out;
 
 	// check if config comes from buffer or needs to be read from file
 	if (buf == NULL) {
@@ -226,21 +226,6 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 		goto out;
 	}
 
-	// if config was provided by buf, update all files according to buffers
-	if (buf) {
-		if (-1 == file_write(file, (char *)buf, conf_len)) {
-			WARN("Could not store configuration in file \"%s\".", file);
-		} else if (cmld_uses_signed_configs()) {
-			char *sig_file = mem_printf("%s.sig", prefix);
-			char *cert_file = mem_printf("%s.cert", prefix);
-
-			if (-1 == file_write(sig_file, (char *)sig_buf, sig_len))
-				WARN("Could not update sig_file '%s'", sig_file);
-			if (-1 == file_write(cert_file, (char *)cert_buf, cert_len))
-				WARN("Could not update cert_file '%s'", cert_file);
-		}
-	}
-
 	config = mem_new0(container_config_t, 1);
 	config->file = mem_strdup(file);
 	config->cfg = ccfg;
@@ -260,23 +245,158 @@ container_config_free(container_config_t *config)
 }
 
 int
-container_config_write(const container_config_t *config)
+container_config_finish_incomplete_write(const char *prefix)
+{
+	ASSERT(prefix);
+
+	int ret = 0;
+
+	char *config_file = mem_printf("%s.conf", prefix);
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", config_file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
+	char *marker = mem_printf("%s%s", prefix, TMP_FILE_SUFFIX);
+
+	if (file_exists(marker)) {
+		if (file_exists(conf_file_tmp) && 0 > rename(conf_file_tmp, config_file)) {
+			ERROR_ERRNO("Could not rename %s to %s", conf_file_tmp, config_file);
+			ret = -1;
+			goto out;
+		}
+		if (file_exists(sig_file_tmp) && 0 > rename(sig_file_tmp, sig_file)) {
+			ERROR_ERRNO("Could not rename %s to %s", sig_file_tmp, sig_file);
+			ret = -1;
+			goto out;
+		}
+		if (file_exists(cert_file_tmp) && 0 > rename(cert_file_tmp, cert_file)) {
+			ERROR_ERRNO("Could not rename %s to %s", cert_file_tmp, cert_file);
+			ret = -1;
+			goto out;
+		}
+
+		unlink(marker);
+	} else {
+		if (file_exists(conf_file_tmp))
+			unlink(conf_file_tmp);
+		if (file_exists(sig_file_tmp))
+			unlink(sig_file_tmp);
+		if (file_exists(cert_file_tmp))
+			unlink(cert_file_tmp);
+	}
+out:
+	mem_free0(config_file);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+	mem_free0(marker);
+
+	return ret;
+}
+
+int
+container_config_write(const container_config_t *config, const uint8_t *buf, size_t len,
+		       const uint8_t *sig_buf, size_t sig_len, const uint8_t *cert_buf,
+		       size_t cert_len)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	ASSERT(config->file);
 
 	if (cmld_uses_signed_configs()) {
-		INFO("Signed configuration is enabled, skip writing in memory structure to disk!");
-		return 0;
+		if (!buf || !sig_buf || !cert_buf)
+			return 0;
 	}
 
-	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *)config->cfg) < 0) {
-		WARN("Could not write container config to \"%s\"", config->file);
+	int ret = 0;
+	char *prefix = file_get_prefix_new(config->file, ".conf");
+	if (!prefix)
 		return -1;
+
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", config->file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
+	char *marker = mem_printf("%s%s", prefix, TMP_FILE_SUFFIX);
+
+	if (!cmld_uses_signed_configs()) {
+		if (protobuf_message_write_to_file(conf_file_tmp, (ProtobufCMessage *)config->cfg) <
+		    0) {
+			ERROR("Could not write container config to \"%s\"", conf_file_tmp);
+			ret = -1;
+			goto out;
+		}
+	} else {
+		if (-1 == file_write(conf_file_tmp, (char *)buf, len)) {
+			ERROR("Could not store configuration in file \"%s\".", conf_file_tmp);
+			ret = -1;
+			goto out;
+		}
+		if (-1 == file_write(sig_file_tmp, (char *)sig_buf, sig_len)) {
+			ERROR("Could not store sig_file \"%s\".", sig_file_tmp);
+			ret = -1;
+			goto out;
+		}
+		if (-1 == file_write(cert_file_tmp, (char *)cert_buf, cert_len)) {
+			ERROR("Could not store cert_file \"%s\".", cert_file_tmp);
+			ret = -1;
+			goto out;
+		}
 	}
 
-	return 0;
+	file_syncfs(conf_file_tmp);
+
+	if (-1 == file_touch(marker)) {
+		ret = -1;
+		goto out;
+	}
+
+	file_syncfs(marker);
+
+out:
+	if (-1 == container_config_finish_incomplete_write(prefix)) {
+		ret = -1;
+	}
+
+	mem_free0(prefix);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+	mem_free0(marker);
+
+	return ret;
+}
+
+int
+container_config_check_incomplete_write(const char *path)
+{
+	char *file = NULL;
+	char *prefix = NULL;
+	int ret = -1;
+
+	/* check if the given file is part of an incomplete config write and calculate the files
+	 * full path without the file extensions.
+	 */
+	file = file_get_prefix_new(path, TMP_FILE_SUFFIX);
+	if (!file)
+		goto out;
+
+	prefix = file_get_prefix_new(file, NULL);
+	if (!prefix)
+		goto out;
+
+	ret = container_config_finish_incomplete_write(prefix);
+
+out:
+	mem_free0(file);
+	mem_free0(prefix);
+	return ret;
 }
 
 const char *
