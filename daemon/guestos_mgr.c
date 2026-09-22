@@ -106,8 +106,6 @@ guestos_mgr_load_operatingsystems_cb(const char *path, const char *name, UNUSED 
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-locally-signed", name, 0);
 		// fallthrough
 	default:
-		guestos_verified = GUESTOS_UNSIGNED;
-
 		audit_log_event(NULL, FSA, CMLD, GUESTOS_MGMT, "verify-failed", name, 0);
 
 		ERROR("Signature verification failed (%d) while loading GuestOS config %s, skipping.",
