@@ -101,7 +101,6 @@ c_seccomp_get_module_dependencies_new(const char *module_name)
 	TRACE("Searching for (_)mod_name '%s' and '%s'", mod_name, _mod_name);
 
 	bool mod_found_in_line = false;
-	ssize_t n;
 	/*
 	 * Sample lines in modules.dep may look like:
 	 *
@@ -112,7 +111,7 @@ c_seccomp_get_module_dependencies_new(const char *module_name)
 	 * so we have to match only the first token. If we only use strstr() on
 	 * 'line' we would also match the first line if module name was twofish_common
 	 */
-	while ((n = getline(&line, &len, fp)) != -1) {
+	while (getline(&line, &len, fp) != -1) {
 		char *_line = mem_strdup(line);
 		char *mod_tok = strtok(_line, ":");
 		if (strstr(mod_tok, mod_name) || strstr(mod_tok, _mod_name)) {
