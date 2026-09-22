@@ -66,8 +66,8 @@ c_seccomp_do_mount_fork(const void *data)
 	ASSERT(params);
 
 	DEBUG("Executing mount(source:%s, target:%s, fs:%s, flags:%lu, data:%s) in mountns of container",
-	      params->source, params->target, params->filesystem, params->mountflags,
-	      params->data ? (char *)params->data : "null");
+	      params->source ? params->source : "null", params->target ? params->target : "null",
+	      params->filesystem, params->mountflags, params->data ? (char *)params->data : "null");
 
 	if (-1 == mount(params->source, params->target, params->filesystem, params->mountflags,
 			params->data)) {
@@ -98,8 +98,8 @@ c_seccomp_emulate_mount(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	resp->val = 0;
 	resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
 
-	/* We only handle mount if filesystem is set */
-	if (0 == req->data.args[2])
+	/* We only handle mount if filesystem and target is set */
+	if ((0 == req->data.args[1]) || (0 == req->data.args[2]))
 		goto out;
 
 	TRACE("Got mount() from pid %d, const char *source: %p, const char *target: %p, "
@@ -137,12 +137,10 @@ c_seccomp_emulate_mount(c_seccomp_t *seccomp, struct seccomp_notif *req,
 		}
 	}
 
-	if (req->data.args[1]) {
-		if (!(target = (char *)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[1], max_len))) {
-			ERROR_ERRNO("Failed to fetch target string");
-			goto out;
-		}
+	if (!(target = (char *)c_seccomp_fetch_vm_new(
+		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[1], max_len))) {
+		ERROR_ERRNO("Failed to fetch target string");
+		goto out;
 	}
 
 	/*
