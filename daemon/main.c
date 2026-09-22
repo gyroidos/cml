@@ -141,7 +141,7 @@ main(int argc, char **argv)
 	INFO("Starting...");
 
 	if (argc >= 2)
-		path = strdup(argv[1]);
+		path = argv[1];
 	else
 		path = DEFAULT_BASE_PATH;
 
