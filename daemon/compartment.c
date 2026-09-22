@@ -813,7 +813,7 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			if (compartment->pid == -1)
 				compartment_cleanup(compartment, false);
 
-			INFO("exit status: %d, %d", WEXITSTATUS(status), status);
+			INFO("pid %d: exit status: %d, %d", pid, WEXITSTATUS(status), status);
 
 			if ((WIFEXITED(status) &&
 			     WEXITSTATUS(status) == COMPARTMENT_ERROR_VOL_CORRUPTED))
