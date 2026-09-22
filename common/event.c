@@ -325,7 +325,7 @@ wrapped_remove_signal(void *elem)
 static void
 wrapped_remove_inotify(void *elem)
 {
-	event_inotify_list = list_unlink(event_inotify_list, elem);
+	event_inotify_list = list_remove(event_inotify_list, elem);
 	event_inotify_free(elem);
 }
 
