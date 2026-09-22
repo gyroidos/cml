@@ -217,7 +217,6 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	// kernel cmdline and modparams are restricted to 1024 chars
 	int param_max_len = 1024;
-	param_values = mem_alloc0(param_max_len);
 	if (!(param_values = (char *)c_seccomp_fetch_vm_new(
 		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[1], param_max_len))) {
 		ERROR_ERRNO("Failed to fetch module parameters string");
@@ -228,7 +227,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	 * unitl we do not have a proper module parameters sanity checking,
 	 * we white out parameters, since there may be dangerous ones.
 	 */
-	param_values = mem_strdup("");
+	mem_memset0(param_values, param_max_len);
 
 	DEBUG("Executing finit_module on behalf of container using module %s"
 	      " with parameters '%s' from CML",
