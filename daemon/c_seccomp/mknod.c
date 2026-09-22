@@ -140,7 +140,6 @@ c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	int pathname_max_len = PATH_MAX;
-	pathname = mem_alloc0(pathname_max_len);
 	if (!(pathname = (char *)c_seccomp_fetch_vm_new(
 		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[0 + arg_offset],
 		      pathname_max_len))) {
