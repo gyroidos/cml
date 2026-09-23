@@ -72,7 +72,7 @@ enum ContainerTokenType {
 }
 
 message ContainerConfig {
-	reserved 10, 20, 22; // legacy or only available in non-CC Mode
+	reserved 10, 20, 22, 33; // legacy or only available in non-CC Mode
 	// user configurable, non unique
 	required string name = 1;
 	// name of GuestOS, e.g. android
