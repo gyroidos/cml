@@ -52,6 +52,7 @@ audit_record_new(const char *type, const char *subject_id, int meta_length,
 
 	if (s->timestamp == (time_t)-1 && EFAULT == errno) {
 		ERROR_ERRNO("Failed to get current time");
+		mem_free0(s);
 		return NULL;
 	}
 
