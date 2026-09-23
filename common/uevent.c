@@ -664,7 +664,9 @@ uevent_init(void)
 
 	if (fd_make_non_blocking(nl_sock_get_fd(uevent_netlink_sock))) {
 		ERROR("Could not set fd of netlink sockt to non blocking!");
+		// the global doubles as the "initialized" flag, and deinit frees it
 		nl_sock_free(uevent_netlink_sock);
+		uevent_netlink_sock = NULL;
 		return -1;
 	}
 
