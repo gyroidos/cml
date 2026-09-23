@@ -304,7 +304,7 @@ c_service_cleanup(void *servicep, UNUSED bool is_rebooting)
 	for (list_t *l = service->event_io_sock_connected_list; l; l = l->next) {
 		event_io_t *event_io_sock_connected = l->data;
 		event_remove_io(event_io_sock_connected);
-		if (close(event_io_get_fd(event_io_sock_connected) < 0)) {
+		if (close(event_io_get_fd(event_io_sock_connected)) < 0) {
 			WARN_ERRNO("Failed to close connected service socket");
 		}
 		event_io_free(event_io_sock_connected);
