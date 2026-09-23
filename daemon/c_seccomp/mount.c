@@ -33,7 +33,7 @@
 #include "../compartment.h"
 #include "../container.h"
 
-#include <common/file.h>
+#include <common/proc.h>
 #include <common/macro.h>
 #include <common/mem.h>
 #include <common/ns.h>
@@ -144,32 +144,40 @@ c_seccomp_emulate_mount(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	/*
-	 * some user space payload such as systemd privat devices, use proc related symlinks,
-	 * e.g. /proc/self/fd/4, as path. We have to read the link and put the real path as
-	 * target in those cases.
+	 * some user space payload such as systemd privat devices, use proc related
+	 * symlinks relative to the calling process, e.g. /proc/self/fd/4, as path.
+	 * Since the mount is executed by a forked helper which is no member of the
+	 * caller's pid namespace, such paths have to be rewritten to the
+	 * corresponding /proc/<pid>/ path. The path is resolved by mount() inside
+	 * the container's mountns where /proc is the container's procfs; thus, the
+	 * caller's pid in the container's pid namespace has to be used (using the
+	 * caller's innermost NSpid entry would address a wrong process for callers
+	 * in nested pid namespaces). Literal /proc/<pid>/ targets are left
+	 * untouched on purpose, as they are already interpreted in the container's
+	 * pid namespace this way.
 	 */
-	if (strstr(target, "/proc")) {
-		char buf[PATH_MAX] = { 0 };
+	const char *proc_path = NULL;
+	if (!strncmp(target, "/proc/self/", sizeof("/proc/self/") - 1))
+		proc_path = target + sizeof("/proc/self/") - 1;
+	else if (!strncmp(target, "/proc/thread-self/", sizeof("/proc/thread-self/") - 1))
+		proc_path = target + sizeof("/proc/thread-self/") - 1;
 
+	if (proc_path) {
 		TRACE("Sanitize proc related path: %s", target);
 
-		if (1 == sscanf(target, "/proc/self/%s", buf)) {
-			mem_free0(target);
-			target = mem_printf("/proc/%d/%s", req->pid, buf);
-
-			TRACE("Sanitized new path: %s", target);
-
-			if (file_is_link(target)) {
-				if (readlink(target, buf, PATH_MAX) < 0)
-					TRACE_ERRNO("Readlink of %s failed.", target);
-				else {
-					mem_free0(target);
-					target = mem_strdup(buf);
-				}
-			}
-
-			TRACE("Sanitized new path real target: %s", target);
+		pid_t nspid = proc_get_pid_in_pidns_of(req->pid,
+						       compartment_get_pid(seccomp->compartment));
+		if (nspid < 0) {
+			ERROR("Failed to get pid of %d in container's pidns, continue syscall in kernel",
+			      req->pid);
+			goto out;
 		}
+
+		char *sanitized_target = mem_printf("/proc/%d/%s", nspid, proc_path);
+		mem_free0(target);
+		target = sanitized_target;
+
+		TRACE("Sanitized new path: %s", target);
 	}
 
 	if (req->data.args[4]) {
