@@ -246,14 +246,12 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 
 		if (0 > (current = getline(&line, &n, file))) {
 			ERROR_ERRNO("Failed to read line from file");
-			fclose(file);
 			mem_free0(line);
 			goto out;
 		}
 
 		if (read + current > (size_t)size) {
 			ERROR("File was changed while reading");
-			fclose(file);
 			mem_free0(line);
 			goto out;
 		}
