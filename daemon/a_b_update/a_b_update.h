@@ -83,6 +83,14 @@ char *
 a_b_update_get_flash_path_new(const char *partition);
 
 /**
+ * Get the platform specific path of the kernel binary for the given boot
+ * option. Note that the kernel image files use a different naming scheme
+ * than a_b_update_get_path_new (e.g. the A image has no file suffix on EFI).
+ */
+const char *
+a_b_update_get_kernel_path(a_b_update_kernel_path_t p);
+
+/**
  * Migrate a non-redundant installation duplicating kernel and device.conf,
  * setting the boot switch mechanism (e.g. efivars) and removing the original
  * files.

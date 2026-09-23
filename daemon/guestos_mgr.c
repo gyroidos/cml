@@ -29,6 +29,7 @@
 #include "cmld.h"
 #include "crypto.h"
 #include "download.h"
+#include "a_b_update/a_b_update.h"
 
 #include "common/macro.h"
 #include "common/list.h"
@@ -194,24 +195,24 @@ guestos_mgr_is_this_guestos_kernel_used_by_boot_option(guestos_t *os)
 	mount_entry_t *e = mount_get_entry_by_img(mnt, "kernel");
 	IF_NULL_GOTO(e, out_mnt);
 
-	char *mount_point_a = mem_printf("%s.A", mount_entry_get_dir(e));
-	char *mount_point_b = mem_printf("%s.B", mount_entry_get_dir(e));
+	const char *kernel_path_a = a_b_update_get_kernel_path(KERNEL_BINARY_A);
+	const char *kernel_path_b = a_b_update_get_kernel_path(KERNEL_BINARY_B);
 
-	char *hash_a = crypto_hash_file_block_new(mount_point_a, SHA256);
-	IF_NULL_GOTO(hash_a, out_mnt_points);
+	char *hash_a = crypto_hash_file_block_new(kernel_path_a, SHA256);
+	IF_NULL_GOTO(hash_a, out_mnt);
 
-	char *hash_b = crypto_hash_file_block_new(mount_point_b, SHA256);
+	char *hash_b = crypto_hash_file_block_new(kernel_path_b, SHA256);
 	IF_NULL_GOTO(hash_b, out_hash_a);
 
 	if (!strcmp(hash_a, mount_entry_get_sha256(e))) {
 		INFO("GuestOS kernel-%" PRIu64 " is in use at %s", guestos_get_version(os),
-		     mount_point_a);
+		     kernel_path_a);
 		goto out_hash_b;
 	}
 
 	if (!strcmp(hash_b, mount_entry_get_sha256(e))) {
 		INFO("GuestOS kernel-%" PRIu64 " is in use at %s", guestos_get_version(os),
-		     mount_point_b);
+		     kernel_path_b);
 		goto out_hash_b;
 	}
 
@@ -219,12 +220,9 @@ guestos_mgr_is_this_guestos_kernel_used_by_boot_option(guestos_t *os)
 	ret = false;
 
 out_hash_b:
-	mem_free0(hash_a);
-out_hash_a:
 	mem_free0(hash_b);
-out_mnt_points:
-	mem_free0(mount_point_a);
-	mem_free0(mount_point_b);
+out_hash_a:
+	mem_free0(hash_a);
 out_mnt:
 	mount_free(mnt);
 	return ret;
