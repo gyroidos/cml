@@ -267,7 +267,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	resp->val = ret_finit_module;
 
 out:
-	if (cml_mod_fd > 0)
+	if (cml_mod_fd >= 0)
 		close(cml_mod_fd);
 	if (param_values)
 		mem_free0(param_values);
