@@ -439,6 +439,11 @@ c_service_audit_send_record(void *servicep, const uint8_t *buf, uint32_t buf_len
 	c_service_t *service = servicep;
 	ASSERT(service);
 
+	if (service->sock_connected < 0) {
+		WARN("Trying to send packed audit record, but service socket is not connected.");
+		return -1;
+	}
+
 	TRACE("Trying to send packed audit record of size %u to container %s", buf_len,
 	      uuid_string(container_get_uuid(service->container)));
 
@@ -462,6 +467,11 @@ c_service_audit_notify(void *servicep, uint64_t remaining_storage)
 {
 	c_service_t *service = servicep;
 	ASSERT(service);
+
+	if (service->sock_connected < 0) {
+		TRACE("Service socket not connected, skipping audit notify");
+		return 0;
+	}
 
 	TRACE("Notifying container %s about stored audit events, remaining storage: %" PRIu64,
 	      uuid_string(container_get_uuid(service->container)), remaining_storage);
