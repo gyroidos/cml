@@ -53,6 +53,12 @@ platform_init_boot_entries();
 /*****************************************************************************/
 /* Generic functions */
 
+const char *
+a_b_update_get_kernel_path(a_b_update_kernel_path_t p)
+{
+	return platform_get_file_path(p);
+}
+
 a_b_update_init_stage_t
 a_b_update_get_init_stage(void)
 {
