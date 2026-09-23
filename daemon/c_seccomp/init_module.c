@@ -183,6 +183,10 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
+	if (!mod_filename) {
+		ERROR("Module to fd %d in process %d not found!", fd_in_target, req->pid);
+		goto out;
+	}
 
 	// Check against list of allowed modules
 	bool module_allowed = false;
