@@ -93,6 +93,7 @@ c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	int arg_offset = 0;
 	char *pathname = NULL;
 	char *cwd = NULL;
+	int pidfd = -1;
 	int cml_dirfd = -1;
 
 	/*
@@ -149,8 +150,8 @@ c_seccomp_emulate_mknodat(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	cml_dirfd = AT_FDCWD;
 	if (dirfd != AT_FDCWD) {
-		int pidfd;
-		if (-1 == (pidfd = pidfd_open(req->pid, 0))) {
+		pidfd = pidfd_open(req->pid, 0);
+		if (pidfd < 0) {
 			ERROR_ERRNO("Could not open pidfd for emulating %s()", syscall_name);
 			goto out;
 		}
@@ -192,6 +193,8 @@ out:
 		mem_free0(pathname);
 	if ((AT_FDCWD != cml_dirfd) && (cml_dirfd >= 0))
 		close(cml_dirfd);
+	if (pidfd >= 0)
+		close(pidfd);
 
 	return ret_mknodat;
 }
