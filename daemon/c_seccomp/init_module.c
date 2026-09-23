@@ -112,15 +112,17 @@ c_seccomp_get_module_dependencies_new(const char *module_name)
 	 * 'line' we would also match the first line if module name was twofish_common
 	 */
 	while (getline(&line, &len, fp) != -1) {
-		char *_line = mem_strdup(line);
-		char *mod_tok = strtok(_line, ":");
-		if (strstr(mod_tok, mod_name) || strstr(mod_tok, _mod_name)) {
-			mod_found_in_line = true;
+		char *sep = strchr(line, ':');
+		if (NULL == sep)
+			continue;
+		// restrict matching to the first token of line
+		*sep = '\0';
+		mod_found_in_line = strstr(line, mod_name) || strstr(line, _mod_name);
+		*sep = ':';
+		if (mod_found_in_line) {
 			TRACE("found line '%s'", line);
-			mem_free(_line);
 			break;
 		}
-		mem_free(_line);
 	}
 
 	mem_free0(mod_name);
