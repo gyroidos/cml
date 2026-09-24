@@ -16,10 +16,10 @@ ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
 
 	TPMI_RH_NV_INDEX cert_index;
 	switch (alg) {
-	case TPM_ALG_RSA:
+	case TPM2D_ALG_RSA:
 		cert_index = EK_CERT_RSA_INDEX;
 		break;
-	case TPM_ALG_ECC:
+	case TPM2D_ALG_ECC:
 		cert_index = EK_CERT_EC_INDEX;
 		break;
 	default:
@@ -33,7 +33,7 @@ ek_get_certificate_new(TPMI_ALG_PUBLIC alg, size_t *cert_len)
 	}
 
 	uint8_t *cert_raw = mem_new0(uint8_t, *cert_len);
-	if (tpm2_nv_read(TPM_RH_NULL, cert_index, NULL, cert_raw, cert_len)) {
+	if (tpm2_nv_read(TPM2D_TPM_RH_NULL, cert_index, NULL, cert_raw, cert_len)) {
 		ERROR("Reading Index of EK cert failed!");
 		mem_free0(cert_raw);
 		return NULL;

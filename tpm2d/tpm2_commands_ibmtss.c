@@ -22,6 +22,7 @@
  */
 
 #include "tpm2d.h"
+#include "tpm2d_ibmtss.h"
 
 #include "common/mem.h"
 #include "common/macro.h"
