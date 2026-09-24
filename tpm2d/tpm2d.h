@@ -1,6 +1,6 @@
 /*
  * This file is part of GyroidOS
- * Copyright(c) 2013 - 2017 Fraunhofer AISEC
+ * Copyright(c) 2013 - 2026 Fraunhofer AISEC
  * Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -24,20 +24,25 @@
 #ifndef TPM2D_H
 #define TPM2D_H
 
-#include <ibmtss/tss.h>
+#include "tss_backends.h"
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
+#include "tpm2d_ibmtss.h"
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+#include "tpm2d_tss2.h"
+#endif
 
 #include <stdbool.h>
 
-//#define TPM2D_ASYM_ALGORITHM		TPM_ALG_ECC
-#define TPM2D_ASYM_ALGORITHM TPM_ALG_RSA
-#define TPM2D_CURVE_ID TPM_ECC_NIST_P256
-#define TPM2D_HASH_ALGORITHM TPM_ALG_SHA256
-//#define TPM2D_HASH_ALGORITHM		TPM_ALG_SHA1
+//#define TPM2D_ASYM_ALGORITHM		TPM2D_ALG_ECC
+#define TPM2D_ASYM_ALGORITHM TPM2D_ALG_RSA
+#define TPM2D_CURVE_ID TPM2D_ECC_NIST_P256
+#define TPM2D_HASH_ALGORITHM TPM2D_ALG_SHA256
+//#define TPM2D_HASH_ALGORITHM		TPM2D_ALG_SHA1
 #define TPM2D_DIGEST_SIZE 32
 //#define TPM2D_DIGEST_SIZE		20
-#define TPM2D_SYM_SESSION_ALGORITHM TPM_ALG_AES
+#define TPM2D_SYM_SESSION_ALGORITHM TPM2D_ALG_AES
 
-#define TPM2D_KEY_HIERARCHY TPM_RH_OWNER
+#define TPM2D_KEY_HIERARCHY TPM2D_TPM_RH_OWNER
 
 #define TPM2D_FDE_NV_HANDLE 0x01000000
 
@@ -48,7 +53,7 @@
 #define TPM2D_ENDORSEMENT_KEY_PERSIST_HANDLE 0x81010000
 
 typedef struct tpm2d_quote {
-	TPM_ALG_ID halg_id;
+	TPM2D_ALG_ID halg_id;
 	size_t quoted_size;
 	uint8_t *quoted_value;
 	size_t signature_size;
@@ -67,7 +72,7 @@ typedef enum tpm2d_key_type {
 
 typedef struct tpm2d_pcr {
 	size_t pcr_size;
-	TPM_ALG_ID halg_id;
+	TPM2D_ALG_ID halg_id;
 	uint8_t *pcr_value;
 } tpm2d_pcr_t;
 
@@ -90,7 +95,7 @@ tss2_destroy(void);
  * This function only may used for simulator. On a real TPM this
  * is done in hardware and would fail.
  */
-TPM_RC
+TPM2D_RC
 tpm2_powerup(void);
 
 /**
@@ -101,13 +106,13 @@ tpm2_powerup(void);
  *
  * @param startup_type type value for startup
  */
-TPM_RC
-tpm2_startup(TPM_SU startup_type);
+TPM2D_RC
+tpm2_startup(TPM2D_TPM_SU startup_type);
 
 /**
  * Funtion to check if TPM is usable.
  */
-TPM_RC
+TPM2D_RC
 tpm2_selftest(void);
 
 /**
@@ -118,7 +123,7 @@ tpm2_selftest(void);
  *
  * @param lockout_pwd passord for the lockout handle
  */
-TPM_RC
+TPM2D_RC
 tpm2_clear(const char *lockout_pwd);
 
 /**
@@ -126,13 +131,13 @@ tpm2_clear(const char *lockout_pwd);
  *
  * @param lockout_pwd passord for the lockout handle
  */
-TPM_RC
+TPM2D_RC
 tpm2_dictionaryattacklockreset(const char *lockout_pwd);
 
 /**
  * Function to generate the primary key of an hierarchy
  */
-TPM_RC
+TPM2D_RC
 tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 			const char *hierachy_pwd, const char *key_pwd,
 			const char *file_name_pub_key, uint32_t *out_handle);
@@ -140,7 +145,7 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 /**
  * Function to flush loaded objects out of the transient memory of the TPM
  */
-TPM_RC
+TPM2D_RC
 tpm2_flushcontext(TPMI_DH_CONTEXT handle);
 
 #ifndef TPM2D_NVMCRYPT_ONLY
@@ -150,12 +155,12 @@ tpm2_flushcontext(TPMI_DH_CONTEXT handle);
  * file_name_priv/public_key for the private/public key, and as a blob loadable by
  * the openssl tpm engine designated by file_name_tss_key
  */
-TPM_RC
+TPM2D_RC
 tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32_t object_vals,
 		 const char *parent_pwd, const char *key_pwd, const char *file_name_priv_key,
 		 const char *file_name_pub_key, const char *file_name_tss_key);
 
-TPM_RC
+TPM2D_RC
 tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd, const char *file_name_priv_key,
 	  const char *file_name_pub_key, uint32_t *out_handle);
 
@@ -165,7 +170,7 @@ tpm2d_get_as_key_handle(void);
 void
 tpm2d_flush_as_key_handle(void);
 
-TPM_RC
+TPM2D_RC
 tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len);
 
 tpm2d_quote_t *
@@ -175,20 +180,20 @@ tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_k
 void
 tpm2_quote_free(tpm2d_quote_t *quote);
 
-TPM_RC
+TPM2D_RC
 tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char *auth_pwd, TPMI_DH_OBJECT obj_handle,
 		  TPMI_DH_PERSISTENT persist_handle);
 
-TPM_RC
+TPM2D_RC
 tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 		uint8_t *out_buffer, size_t *out_length);
 
-TPM_RC
+TPM2D_RC
 tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buffer,
 		size_t in_length, uint8_t *out_buffer, size_t *out_length);
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 
-TPM_RC
+TPM2D_RC
 tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd, const char *new_pwd);
 
 tpm2d_pcr_t *
@@ -203,37 +208,37 @@ tpm2_getrandom_new(size_t rand_length);
 size_t
 tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle);
 
-TPM_RC
+TPM2D_RC
 tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle, size_t nv_size,
 		    const char *hierarchy_pwd, const char *nv_pwd, uint8_t *policy_digest);
-TPM_RC
+TPM2D_RC
 tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
 		      const char *hierarchy_pwd);
 
-TPM_RC
+TPM2D_RC
 tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd, uint8_t *data,
 	      size_t data_length);
 
-TPM_RC
+TPM2D_RC
 tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
 	     uint8_t *out_buffer, size_t *out_length);
 
-TPM_RC
+TPM2D_RC
 tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd);
 
-TPM_RC
-tpm2_startauthsession(TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
+TPM2D_RC
+tpm2_startauthsession(TPM2D_TPM_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
 		      TPMI_DH_OBJECT bind_handle, const char *bind_pwd);
-TPM_RC
+TPM2D_RC
 tpm2_policyauthvalue(TPMI_SH_POLICY se_handle);
 
-TPM_RC
+TPM2D_RC
 tpm2_policypcr(TPMI_SH_POLICY se_handle, uint32_t pcr_mask, tpm2d_pcr_t *pcrs[], size_t pcrs_size);
 
-TPM_RC
+TPM2D_RC
 tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest, size_t out_digest_len);
 
-TPM_RC
+TPM2D_RC
 tpm2_policyrestart(TPMI_SH_POLICY se_handle);
 
 #endif // TPM2D_H

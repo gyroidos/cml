@@ -56,14 +56,14 @@ struct tpm2d_rcontrol {
  * Returns the HashAlgLen (proto) for the given TPM_ALG_ID alg_id.
  */
 static HashAlgLen
-tpm2d_rcontrol_hash_algo_get_len_proto(TPM_ALG_ID alg_id)
+tpm2d_rcontrol_hash_algo_get_len_proto(TPM2D_ALG_ID alg_id)
 {
 	switch (alg_id) {
-	case TPM_ALG_SHA1:
+	case TPM2D_ALG_SHA1:
 		return HASH_ALG_LEN__SHA1;
-	case TPM_ALG_SHA256:
+	case TPM2D_ALG_SHA256:
 		return HASH_ALG_LEN__SHA256;
-	case TPM_ALG_SHA384:
+	case TPM2D_ALG_SHA384:
 		return HASH_ALG_LEN__SHA384;
 	default:
 		ERROR("Unsupported value for TPM_ALG_ID: %d", alg_id);
@@ -106,7 +106,7 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		int index = 0;
 
 		TPMI_DH_OBJECT att_key_handle = tpm2d_get_as_key_handle();
-		if (att_key_handle == TPM_RH_NULL)
+		if (att_key_handle == TPM2D_TPM_RH_NULL)
 			goto err_att_req;
 
 		Tpm2dToRemote out = TPM2D_TO_REMOTE__INIT;
