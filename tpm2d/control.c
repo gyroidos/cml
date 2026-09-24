@@ -40,6 +40,7 @@
 #include "common/event.h"
 #include "common/list.h"
 #include "common/file.h"
+#include "common/hex.h"
 #include "common/protobuf.h"
 #include "common/protobuf-text.h"
 
