@@ -28,7 +28,7 @@
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
+ml_measurement_list_append(const char *filename, TPM2D_ALG_ID algid, const uint8_t *datahash,
 			   size_t datahash_len);
 
 /**
@@ -58,7 +58,7 @@ ml_container_list_free(MlContainerEntry **entries, size_t len);
 #include "common/macro.h"
 
 static inline int
-ml_measurement_list_append(UNUSED const char *filename, UNUSED TPM_ALG_ID algid,
+ml_measurement_list_append(UNUSED const char *filename, UNUSED TPM2D_ALG_ID algid,
 			   UNUSED const uint8_t *datahash, UNUSED size_t datahash_len)
 {
 	return 0;
