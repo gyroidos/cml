@@ -2253,8 +2253,21 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 	if (res || !persistent)
 		return res;
 
-	container_config_t *conf = container_config_new(container_get_config_filename(container),
-							NULL, 0, NULL, 0, NULL, 0);
+	if (persistent && cmld_uses_signed_configs()) {
+		WARN("Can not persist config changes for signed configs");
+		return res;
+	}
+
+	const char *config_file = container_get_config_filename(container);
+	container_config_t *conf =
+		config_file ? container_config_new(config_file, NULL, 0, NULL, 0, NULL, 0) : NULL;
+
+	if (!conf) {
+		WARN("Could not load config for container %s, not persisting net iface",
+		     container_get_name(container));
+		return res;
+	}
+
 	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
 	container_config_write(conf, NULL, 0, NULL, 0, NULL, 0);
 	container_config_free(conf);
@@ -2269,8 +2282,21 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	if (res || !persistent)
 		return res;
 
-	container_config_t *conf = container_config_new(container_get_config_filename(container),
-							NULL, 0, NULL, 0, NULL, 0);
+	if (persistent && cmld_uses_signed_configs()) {
+		WARN("Can not persist config changes for signed configs");
+		return res;
+	}
+
+	const char *config_file = container_get_config_filename(container);
+	container_config_t *conf =
+		config_file ? container_config_new(config_file, NULL, 0, NULL, 0, NULL, 0) : NULL;
+
+	if (!conf) {
+		WARN("Could not load config for container %s, not persisting net iface removal",
+		     container_get_name(container));
+		return res;
+	}
+
 	container_config_remove_net_ifaces(conf, iface);
 	container_config_write(conf, NULL, 0, NULL, 0, NULL, 0);
 	container_config_free(conf);
