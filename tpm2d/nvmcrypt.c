@@ -30,6 +30,7 @@
 
 #include "common/macro.h"
 #include "common/mem.h"
+#include "common/hex.h"
 #include "common/file.h"
 #include "common/cryptfs.h"
 

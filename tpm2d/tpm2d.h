@@ -85,31 +85,6 @@ void
 tss2_destroy(void);
 
 /**
- * Helper function to convert a binary buffer to an hex string
- *
- * This function allocates a new buffer containing the
- * resulting hex representation containing a terminating '\0'
- * of the binary buffer.
- *
- * @param bin binary buffer
- * @param length of the binary buffer
- */
-char *
-convert_bin_to_hex_new(const uint8_t *bin, int length);
-
-/**
- * Helper function to convert a hex string into binary
- *
- * This function allocates a new buffer containing the
- * resulting binary representation of the string.
- *
- * @param hex_str buffer containing the hex string representation
- * @param out_length in this pointer the size of result is returned
- */
-uint8_t *
-convert_hex_to_bin_new(const char *hex_str, int *out_length);
-
-/**
  * Function to powerup the simulator
  *
  * This function only may used for simulator. On a real TPM this
