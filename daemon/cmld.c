@@ -2253,6 +2253,11 @@ cmld_container_add_net_iface(container_t *container, container_pnet_cfg_t *pnet_
 	if (res || !persistent)
 		return res;
 
+	if (persistent && cmld_uses_signed_configs()) {
+		WARN("Can not persist config changes for signed configs");
+		return res;
+	}
+
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
 	container_config_append_net_ifaces(conf, pnet_cfg->pnet_name);
@@ -2268,6 +2273,11 @@ cmld_container_remove_net_iface(container_t *container, const char *iface, bool 
 	int res = container_remove_net_interface(container, iface);
 	if (res || !persistent)
 		return res;
+
+	if (persistent && cmld_uses_signed_configs()) {
+		WARN("Can not persist config changes for signed configs");
+		return res;
+	}
 
 	container_config_t *conf = container_config_new(container_get_config_filename(container),
 							NULL, 0, NULL, 0, NULL, 0);
