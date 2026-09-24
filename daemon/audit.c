@@ -775,7 +775,7 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		int msg_len;
 		if ((msg_len = nl_msg_receive_kernel(audit_sock, buf, MAX_AUDIT_MESSAGE_LENGTH,
 						     false)) <= 0) {
-			WARN("could not read audit meassge.");
+			WARN("could not read audit message. received msg_len = '%d'", msg_len);
 			goto out;
 		}
 
