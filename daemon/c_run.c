@@ -442,8 +442,7 @@ do_pty_exec(void *data)
 		goto error;
 	}
 
-	const char *current_pty = ctermid(NULL);
-	TRACE("[EXEC] Current controlling PTY is: %s\n", current_pty);
+	TRACE("[EXEC] Current controlling PTY is: %s\n", ctermid(NULL));
 
 	if (-1 == ioctl(STDIN_FILENO, TIOCNOTTY)) {
 		TRACE("[EXEC] Failed to release current controlling pty.\n");

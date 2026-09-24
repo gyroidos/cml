@@ -151,9 +151,11 @@ c_seccomp_emulate_ioctl(c_seccomp_t *seccomp, struct seccomp_notif *req,
 			struct seccomp_notif_resp *resp)
 {
 	int ret_ioctl = 0;
+	int pidfd = -1;
 	int fd_in_target = -1;
 	unsigned int cmd = 0;
 	unsigned long param = 0;
+	void *p_param = NULL;
 
 	/*
 	 * in any case of error just continue the syscall in the kernel,
@@ -177,27 +179,30 @@ c_seccomp_emulate_ioctl(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	switch (cmd) {
 	case RTC_EPOCH_SET:
 		TRACE("handling RTC_EPOCH_SET!");
-		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[2],
-			      sizeof(unsigned long)))) {
-			ERROR_ERRNO("Failed to fetch struct rtc_time");
-		}
+		// by-value ioctl -> third param directly is the value of epoch
+		param = (unsigned long)req->data.args[2];
 		break;
 	case RTC_SET_TIME:
 		TRACE("handling RTC_SET_TIME!");
-		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[2],
-			      sizeof(struct rtc_time)))) {
+		// third param is ioctl pointer argument (struct rtc_time)
+		if (!(p_param = c_seccomp_fetch_vm_new(seccomp, req->pid,
+						       CAST_UINT_VOIDPTR req->data.args[2],
+						       sizeof(struct rtc_time)))) {
 			ERROR_ERRNO("Failed to fetch struct rtc_time");
+			goto out;
 		}
+		param = (unsigned long)p_param;
 		break;
 	case RTC_PARAM_SET:
 		TRACE("handling RTC_PARAM_SET!");
-		if (!(param = (unsigned long)c_seccomp_fetch_vm_new(
-			      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[2],
-			      sizeof(struct rtc_param)))) {
-			ERROR_ERRNO("Failed to fetch struct rtc_time");
+		// third param is ioctl pointer argument (struct rtc_param)
+		if (!(p_param = c_seccomp_fetch_vm_new(seccomp, req->pid,
+						       CAST_UINT_VOIDPTR req->data.args[2],
+						       sizeof(struct rtc_param)))) {
+			ERROR_ERRNO("Failed to fetch struct rtc_param");
+			goto out;
 		}
+		param = (unsigned long)p_param;
 		break;
 	default:
 		ERROR("cmd %d != RTC_EPOCH_SET, RTC_SET_TIME, RTC_PARAM_SET not handled by us",
@@ -205,7 +210,7 @@ c_seccomp_emulate_ioctl(c_seccomp_t *seccomp, struct seccomp_notif *req,
 		goto out;
 	}
 
-	int pidfd = pidfd_open(req->pid, 0);
+	pidfd = pidfd_open(req->pid, 0);
 	IF_TRUE_GOTO_ERROR(-1 == pidfd, out);
 
 	fd_in_target = pidfd_getfd(pidfd, req->data.args[0], 0);
@@ -253,8 +258,14 @@ c_seccomp_emulate_ioctl(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	resp->flags = 0;
 
 out:
-	if (fd_in_target > 0)
+	if (fd_in_target >= 0)
 		close(fd_in_target);
+
+	if (pidfd >= 0)
+		close(pidfd);
+
+	if (p_param)
+		mem_free0(p_param);
 
 	return ret_ioctl;
 }

@@ -40,6 +40,9 @@
 
 #include "pidfd.h"
 
+// maximum nesting depth of pid namespaces (MAX_PID_NS_LEVEL in the kernel)
+#define PROC_NSPID_MAX_DEPTH 32
+
 struct proc_killall {
 	pid_t ppid;
 	const char *name;
@@ -67,6 +70,8 @@ struct proc_status {
 	gid_t fgid;
 	uint64_t cap_prm;
 	uint64_t cap_eff;
+	pid_t nspid[PROC_NSPID_MAX_DEPTH];
+	int nspid_depth;
 };
 
 proc_status_t *
@@ -125,6 +130,30 @@ proc_status_new(pid_t pid)
 	TRACE("Parsed gid for %d: %u %u %u %u", pid, status->rgid, status->egid, status->sgid,
 	      status->fgid);
 
+	/*
+	 * NSpid line: the pid of the process at each pid namespace level, from
+	 * the level of the calling process down to the process' own namespace
+	 */
+	tmp = strstr(tmp, "\nNSpid:");
+	IF_NULL_GOTO(tmp, error);
+	tmp += sizeof("\nNSpid:") - 1;
+	char *eol = strchr(tmp, '\n');
+	IF_NULL_GOTO(eol, error);
+	*eol = '\0';
+	while (status->nspid_depth < PROC_NSPID_MAX_DEPTH) {
+		char *end;
+		long val = strtol(tmp, &end, 10);
+		if (end == tmp)
+			break;
+		status->nspid[status->nspid_depth++] = (pid_t)val;
+		tmp = end;
+	}
+	IF_TRUE_GOTO(0 == status->nspid_depth, error);
+	*eol = '\n';
+	tmp = eol;
+	TRACE("Parsed NSpid for %d: depth %d, innermost pid %d", pid, status->nspid_depth,
+	      status->nspid[status->nspid_depth - 1]);
+
 	tmp = strstr(tmp, "\nCapPrm:");
 	IF_NULL_GOTO(tmp, error);
 	n = sscanf(tmp, "\nCapPrm:\t%" SCNx64 "\n", &status->cap_prm);
@@ -163,6 +192,30 @@ proc_status_get_ppid(const proc_status_t *status)
 {
 	ASSERT(status);
 	return status->ppid;
+}
+
+pid_t
+proc_get_pid_in_pidns_of(pid_t pid, pid_t ns_pid)
+{
+	pid_t ret = -1;
+	proc_status_t *status = NULL;
+
+	proc_status_t *ns_status = proc_status_new(ns_pid);
+	IF_NULL_RETVAL(ns_status, -1);
+
+	status = proc_status_new(pid);
+	IF_NULL_GOTO(status, out);
+
+	int ns_depth = ns_status->nspid_depth;
+	IF_TRUE_GOTO(status->nspid_depth < ns_depth, out);
+
+	ret = status->nspid[ns_depth - 1];
+	TRACE("pid %d has pid %d at pid namespace level %d of pid %d", pid, ret, ns_depth, ns_pid);
+out:
+	if (status)
+		proc_status_free(status);
+	proc_status_free(ns_status);
+	return ret;
 }
 
 uint64_t

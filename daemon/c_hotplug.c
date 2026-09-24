@@ -142,8 +142,9 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 		TRACE("%s len=%d", buf, len);
 		TRACE("%s len=%zu", container_usbdev_get_i_serial(usbdev),
 		      strlen(container_usbdev_get_i_serial(usbdev)));
-		found &= (0 == strncmp(buf, container_usbdev_get_i_serial(usbdev),
-				       strlen(container_usbdev_get_i_serial(usbdev))));
+		found &= ((len > 0) &&
+			  (0 == strncmp(buf, container_usbdev_get_i_serial(usbdev),
+					strlen(container_usbdev_get_i_serial(usbdev)))));
 		TRACE("found: %d", found);
 	} else {
 		buf[0] = '\0';

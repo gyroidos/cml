@@ -101,7 +101,6 @@ c_seccomp_get_module_dependencies_new(const char *module_name)
 	TRACE("Searching for (_)mod_name '%s' and '%s'", mod_name, _mod_name);
 
 	bool mod_found_in_line = false;
-	ssize_t n;
 	/*
 	 * Sample lines in modules.dep may look like:
 	 *
@@ -112,16 +111,18 @@ c_seccomp_get_module_dependencies_new(const char *module_name)
 	 * so we have to match only the first token. If we only use strstr() on
 	 * 'line' we would also match the first line if module name was twofish_common
 	 */
-	while ((n = getline(&line, &len, fp)) != -1) {
-		char *_line = mem_strdup(line);
-		char *mod_tok = strtok(_line, ":");
-		if (strstr(mod_tok, mod_name) || strstr(mod_tok, _mod_name)) {
-			mod_found_in_line = true;
+	while (getline(&line, &len, fp) != -1) {
+		char *sep = strchr(line, ':');
+		if (NULL == sep)
+			continue;
+		// restrict matching to the first token of line
+		*sep = '\0';
+		mod_found_in_line = strstr(line, mod_name) || strstr(line, _mod_name);
+		*sep = ':';
+		if (mod_found_in_line) {
 			TRACE("found line '%s'", line);
-			mem_free(_line);
 			break;
 		}
-		mem_free(_line);
 	}
 
 	mem_free0(mod_name);
@@ -184,6 +185,10 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	}
 
 	mod_filename = proc_get_filename_of_fd_new(req->pid, fd_in_target);
+	if (!mod_filename) {
+		ERROR("Module to fd %d in process %d not found!", fd_in_target, req->pid);
+		goto out;
+	}
 
 	// Check against list of allowed modules
 	bool module_allowed = false;
@@ -217,7 +222,6 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 
 	// kernel cmdline and modparams are restricted to 1024 chars
 	int param_max_len = 1024;
-	param_values = mem_alloc0(param_max_len);
 	if (!(param_values = (char *)c_seccomp_fetch_vm_new(
 		      seccomp, req->pid, CAST_UINT_VOIDPTR req->data.args[1], param_max_len))) {
 		ERROR_ERRNO("Failed to fetch module parameters string");
@@ -228,7 +232,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	 * unitl we do not have a proper module parameters sanity checking,
 	 * we white out parameters, since there may be dangerous ones.
 	 */
-	param_values = mem_strdup("");
+	mem_memset0(param_values, param_max_len);
 
 	DEBUG("Executing finit_module on behalf of container using module %s"
 	      " with parameters '%s' from CML",
@@ -263,7 +267,7 @@ c_seccomp_emulate_finit_module(c_seccomp_t *seccomp, struct seccomp_notif *req,
 	resp->val = ret_finit_module;
 
 out:
-	if (cml_mod_fd > 0)
+	if (cml_mod_fd >= 0)
 		close(cml_mod_fd);
 	if (param_values)
 		mem_free0(param_values);

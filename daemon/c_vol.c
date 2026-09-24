@@ -395,7 +395,8 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	int ret = 0;
 	char *token = mem_strdup(mount_data);
 	char *subvol = strtok(token, "=");
-	subvol = strtok(NULL, "=");
+	if (subvol)
+		subvol = strtok(NULL, "=");
 	if (NULL == subvol) {
 		mem_free0(token);
 		return -1;
@@ -424,8 +425,10 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 			INFO("Created new suvol %s on btrfs device %s", subvol, dev);
 		}
 	}
-	if (-1 == (ret = umount(tmp_mount))) {
+	// preserve ret from btrfs list or create
+	if (-1 == umount(tmp_mount)) {
 		ERROR_ERRNO("Could not umount temporary mount of btrfs root volume %s!", dev);
+		ret = -1;
 	}
 out:
 	if (tmp_mount)

@@ -41,6 +41,16 @@ proc_status_get_name(const proc_status_t *status);
 pid_t
 proc_status_get_ppid(const proc_status_t *status);
 
+/**
+ * Returns the pid of the process pid as seen in the pid namespace of
+ * the process ns_pid, taken from the entry of the NSpid line of
+ * /proc/<pid>/status at the pid namespace level (depth) of ns_pid.
+ * Returns -1 on error, e.g., if pid is not in (a descendant namespace
+ * of) the pid namespace of ns_pid.
+ */
+pid_t
+proc_get_pid_in_pidns_of(pid_t pid, pid_t ns_pid);
+
 uint64_t
 proc_status_get_cap_prm(const proc_status_t *status);
 

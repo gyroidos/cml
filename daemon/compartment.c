@@ -126,7 +126,9 @@ struct compartment {
 	// indicate if the compartment is synced with its config
 	bool is_synced;
 
-	list_t *helper_child_list; // helper children spawned during startup
+	list_t *helper_child_list;  // helper children spawned during startup
+	event_signal_t *helper_sig; // sigchld handler owned by the helper child list
+	event_signal_t *main_sig;   // sigchld handler for the compartment's children
 	bool is_doing_cleanup;
 	bool is_rebooting;
 };
@@ -454,6 +456,18 @@ compartment_free(compartment_t *compartment)
 	if (compartment->debug_log_dir)
 		mem_free0(compartment->debug_log_dir);
 
+	if (compartment->main_sig) {
+		event_remove_signal(compartment->main_sig);
+		event_signal_free(compartment->main_sig);
+	}
+	if (compartment->helper_sig) {
+		event_remove_signal(compartment->helper_sig);
+		event_signal_free(compartment->helper_sig);
+	}
+	for (list_t *l = compartment->helper_child_list; l; l = l->next)
+		compartment_helper_child_free(l->data);
+	list_delete(compartment->helper_child_list);
+
 	for (list_t *l = compartment->observer_list; l; l = l->next)
 		mem_free0(l->data);
 	list_delete(compartment->observer_list);
@@ -675,7 +689,7 @@ compartment_cleanup(compartment_t *compartment, bool is_rebooting)
 }
 
 void
-compartment_sigchld_handle_helpers(compartment_t *compartment, event_signal_t *sig)
+compartment_sigchld_handle_helpers(compartment_t *compartment)
 {
 	int status = 0;
 
@@ -692,11 +706,24 @@ compartment_sigchld_handle_helpers(compartment_t *compartment, event_signal_t *s
 		l = next;
 	}
 
-	if (!compartment->helper_child_list && compartment->is_doing_cleanup) {
+	if (compartment->helper_child_list)
+		return;
+
+	/* all helpers are reaped, remove the dedicated helper sigchld handler */
+	if (compartment->helper_sig) {
+		event_remove_signal(compartment->helper_sig);
+		event_signal_free(compartment->helper_sig);
+		compartment->helper_sig = NULL;
+	}
+
+	if (compartment->is_doing_cleanup) {
 		DEBUG("CLEANUP DONE, all pending helpers reaped!");
 		/* remove the sigchld callback for this compartment from the event loop */
-		event_remove_signal(sig);
-		event_signal_free(sig);
+		if (compartment->main_sig) {
+			event_remove_signal(compartment->main_sig);
+			event_signal_free(compartment->main_sig);
+			compartment->main_sig = NULL;
+		}
 		compartment->is_doing_cleanup = false;
 		compartment_state_t state = compartment->is_rebooting ?
 						    COMPARTMENT_STATE_REBOOTING :
@@ -706,8 +733,20 @@ compartment_sigchld_handle_helpers(compartment_t *compartment, event_signal_t *s
 	}
 }
 
+static void
+compartment_sigchld_helper_cb(UNUSED int signum, UNUSED event_signal_t *sig, void *data)
+{
+	compartment_t *compartment = data;
+	ASSERT(compartment);
+
+	TRACE("SIGCHLD handler called for helper children of compartment %s",
+	      compartment_get_description(compartment));
+
+	compartment_sigchld_handle_helpers(compartment);
+}
+
 void
-compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
+compartment_sigchld_cb(UNUSED int signum, UNUSED event_signal_t *sig, void *data)
 {
 	ASSERT(data);
 
@@ -720,7 +759,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 		TRACE("All processes of container %s already reaped, check for remaining helpers.",
 		      compartment_get_description(compartment));
 
-		compartment_sigchld_handle_helpers(compartment, sig);
+		compartment_sigchld_handle_helpers(compartment);
 		return;
 	}
 
@@ -784,7 +823,7 @@ compartment_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 	}
 
 	// reap any open helper child and set state accordingly
-	compartment_sigchld_handle_helpers(compartment, sig);
+	compartment_sigchld_handle_helpers(compartment);
 
 	TRACE("No more children to reap. Callback exiting...");
 }
@@ -813,7 +852,7 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 			if (compartment->pid == -1)
 				compartment_cleanup(compartment, false);
 
-			INFO("exit status: %d, %d", WEXITSTATUS(status), status);
+			INFO("pid %d: exit status: %d, %d", pid, WEXITSTATUS(status), status);
 
 			if ((WIFEXITED(status) &&
 			     WEXITSTATUS(status) == COMPARTMENT_ERROR_VOL_CORRUPTED))
@@ -822,9 +861,6 @@ compartment_sigchld_early_cb(UNUSED int signum, event_signal_t *sig, void *data)
 				compartment_set_state(compartment, COMPARTMENT_STATE_STOPPED);
 		}
 	}
-
-	// reap any open helper child and set state accordingly
-	compartment_sigchld_handle_helpers(compartment, sig);
 }
 
 static int
@@ -1352,8 +1388,8 @@ compartment_start_post_clone_early_cb(int fd, unsigned events, event_io_t *io, v
 	/* register SIGCHILD handler which sets the state and
 	 * calls the appropriate cleanup functions if the child
 	 * dies */
-	event_signal_t *sig = event_signal_new(SIGCHLD, compartment_sigchld_cb, compartment);
-	event_add_signal(sig);
+	compartment->main_sig = event_signal_new(SIGCHLD, compartment_sigchld_cb, compartment);
+	event_add_signal(compartment->main_sig);
 
 	/*********************************************************/
 	/* POST CLONE HOOKS */
@@ -1905,6 +1941,14 @@ void
 compartment_wait_for_child(compartment_t *compartment, char *name, pid_t pid)
 {
 	ASSERT(compartment);
+
+	/* make sure helper children are reaped even if no sigchld handler
+	 * for the main or early start child is registered (anymore) */
+	if (NULL == compartment->helper_sig) {
+		compartment->helper_sig =
+			event_signal_new(SIGCHLD, compartment_sigchld_helper_cb, compartment);
+		event_add_signal(compartment->helper_sig);
+	}
 
 	compartment_helper_child_t *child = compartment_helper_child_new(name, pid);
 	compartment->helper_child_list = list_append(compartment->helper_child_list, child);
