@@ -53,13 +53,13 @@ static tpm2d_rcontrol_t *tpm2d_rcontrol_attest = NULL;
 static logf_handler_t *tpm2d_logfile_handler = NULL;
 static void *tpm2d_logfile_p = NULL;
 
-static uint32_t tpm2d_salt_key_handle = TPM_RH_NULL;
+static uint32_t tpm2d_salt_key_handle = TPM2D_TPM_RH_NULL;
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 // transient (tr) attestation key (as) handle
-static uint32_t tpm2d_as_key_handle_tr = TPM_RH_NULL;
+static uint32_t tpm2d_as_key_handle_tr = TPM2D_TPM_RH_NULL;
 // transient (tr) parent handle (pt) for attestation key (as)
-static uint32_t tpm2d_as_key_handle_pt_tr = TPM_RH_NULL;
+static uint32_t tpm2d_as_key_handle_pt_tr = TPM2D_TPM_RH_NULL;
 // persistent (ps) parent handle (pt) for attestation key (as)
 static uint32_t tpm2d_as_key_handle_pt_ps = TPM2D_STORAGE_KEY_PERSIST_HANDLE;
 // auth for attestation
@@ -83,9 +83,9 @@ tpm2d_setup_salt_key(void)
 {
 	// create primary key in NULL hierarchy wwhcih is used for session encryption
 	int ret;
-	if (TPM_RC_SUCCESS !=
-	    (ret = tpm2_createprimary_asym(TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R, NULL, NULL, NULL,
-					   &tpm2d_salt_key_handle))) {
+	if (TPM2D_RC_SUCCESS !=
+	    (ret = tpm2_createprimary_asym(TPM2D_TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R, NULL, NULL,
+					   NULL, &tpm2d_salt_key_handle))) {
 		FATAL("Failed to create primary key for session encryption with error code: %08x",
 		      ret);
 	}
@@ -101,15 +101,15 @@ tpm2d_get_salt_key_handle(void)
 TPMI_DH_OBJECT
 tpm2d_get_as_key_handle(void)
 {
-	if (TPM_RH_NULL == tpm2d_as_key_handle_tr) {
+	if (TPM2D_TPM_RH_NULL == tpm2d_as_key_handle_tr) {
 		int ret;
 		// load attestation key
-		if (TPM_RC_SUCCESS !=
+		if (TPM2D_RC_SUCCESS !=
 		    (ret = tpm2_load(tpm2d_as_key_handle_pt_ps, tpm2d_as_key_pwd_pt,
 				     TPM2D_ATT_PRIV_FILE, TPM2D_ATT_PUB_FILE,
 				     &tpm2d_as_key_handle_tr))) {
 			ERROR("Failed to load attestation key with error code: %08x", ret);
-			return TPM_RH_NULL;
+			return TPM2D_TPM_RH_NULL;
 		} else {
 			INFO("Loaded signing key for attestation with handle %08x from parent handle %08x.",
 			     tpm2d_as_key_handle_tr, tpm2d_as_key_handle_pt_ps);
@@ -121,9 +121,9 @@ tpm2d_get_as_key_handle(void)
 void
 tpm2d_flush_as_key_handle(void)
 {
-	if (tpm2d_as_key_handle_tr != TPM_RH_NULL) {
+	if (tpm2d_as_key_handle_tr != TPM2D_TPM_RH_NULL) {
 		tpm2_flushcontext(tpm2d_as_key_handle_tr);
-		tpm2d_as_key_handle_tr = TPM_RH_NULL;
+		tpm2d_as_key_handle_tr = TPM2D_TPM_RH_NULL;
 	}
 }
 
@@ -147,7 +147,7 @@ tpm2d_setup_keys(void)
 	}
 retry:
 	// create attestation key based on a persistent parent key
-	if (TPM_RC_SUCCESS !=
+	if (TPM2D_RC_SUCCESS !=
 	    (ret = tpm2_create_asym(tpm2d_as_key_handle_pt_ps, TPM2D_KEY_TYPE_STORAGE_U,
 				    (TPMA_OBJECT_FIXEDTPM | TPMA_OBJECT_FIXEDPARENT),
 				    tpm2d_as_key_pwd_pt, TPM2D_ATT_KEY_PW, TPM2D_ATT_PRIV_FILE,
@@ -155,7 +155,7 @@ retry:
 		if (handle_possibly_uninit) {
 			INFO("Attestation parent possibly unitialized, trying to create and persist a primary key");
 			// create primary key
-			if (TPM_RC_SUCCESS !=
+			if (TPM2D_RC_SUCCESS !=
 			    (ret = tpm2_createprimary_asym(
 				     TPM2D_KEY_HIERARCHY, TPM2D_KEY_TYPE_STORAGE_R, NULL,
 				     tpm2d_as_key_pwd_pt, TPM2D_ATT_PARENT_PUB_FILE,
@@ -166,7 +166,7 @@ retry:
 			}
 			INFO("Created att primary key with handle %08x", tpm2d_as_key_handle_pt_tr);
 
-			if (TPM_RC_SUCCESS !=
+			if (TPM2D_RC_SUCCESS !=
 			    (ret = tpm2_evictcontrol(TPM2D_KEY_HIERARCHY, NULL,
 						     tpm2d_as_key_handle_pt_tr,
 						     tpm2d_as_key_handle_pt_ps))) {
@@ -178,7 +178,7 @@ retry:
 			     tpm2d_as_key_handle_pt_tr, tpm2d_as_key_handle_pt_ps);
 			handle_possibly_uninit = false;
 
-			if (TPM_RC_SUCCESS !=
+			if (TPM2D_RC_SUCCESS !=
 			    (ret = tpm2_flushcontext(tpm2d_as_key_handle_pt_tr))) {
 				ERROR("Failed to flush transient object handle of att primary key");
 			}
@@ -229,7 +229,7 @@ tpm2d_init(void)
 
 	tss2_init();
 
-	if (TPM_RC_SUCCESS != (ret = tpm2_selftest()))
+	if (TPM2D_RC_SUCCESS != (ret = tpm2_selftest()))
 		FATAL("selftest failed with error code: %08x", ret);
 
 	// create salt key for session encryption
@@ -257,10 +257,10 @@ tpm2d_exit(void)
 	INFO("Cleaning up tss2 and exit");
 	// When called tss2 library context may not be
 	tss2_init();
-	if (tpm2d_salt_key_handle != TPM_RH_NULL)
+	if (tpm2d_salt_key_handle != TPM2D_TPM_RH_NULL)
 		tpm2_flushcontext(tpm2d_salt_key_handle);
 #ifndef TPM2D_NVMCRYPT_ONLY
-	if (tpm2d_as_key_handle_tr != TPM_RH_NULL)
+	if (tpm2d_as_key_handle_tr != TPM2D_TPM_RH_NULL)
 		tpm2_flushcontext(tpm2d_as_key_handle_tr);
 #endif
 

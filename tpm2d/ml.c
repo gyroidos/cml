@@ -42,7 +42,7 @@
 
 typedef struct ml_elem {
 	char *filename;
-	TPM_ALG_ID algid;
+	TPM2D_ALG_ID algid;
 	int hash_len;
 	uint8_t *datahash;
 	tpm2d_pcr_t *template;
@@ -52,7 +52,7 @@ static list_t *measurement_list = NULL;
 static size_t measurement_list_len = 0;
 
 int
-ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t *datahash,
+ml_measurement_list_append(const char *filename, TPM2D_ALG_ID algid, const uint8_t *datahash,
 			   size_t datahash_len)
 {
 	// input checks
@@ -95,14 +95,14 @@ ml_measurement_list_append(const char *filename, TPM_ALG_ID algid, const uint8_t
 }
 
 static const char *
-halg_id_to_ima_string(TPM_ALG_ID alg_id)
+halg_id_to_ima_string(TPM2D_ALG_ID alg_id)
 {
 	switch (alg_id) {
-	case TPM_ALG_SHA1:
+	case TPM2D_ALG_SHA1:
 		return "sha1";
-	case TPM_ALG_SHA256:
+	case TPM2D_ALG_SHA256:
 		return "sha256";
-	case TPM_ALG_SHA384:
+	case TPM2D_ALG_SHA384:
 		return "sha384";
 	default:
 		return "none";
