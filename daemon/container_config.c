@@ -43,6 +43,7 @@
 #include "guestos_mgr.h"
 #include "network.h"
 #include "hotplug.h"
+#include <unistd.h>
 
 struct container_config {
 	char *file;
@@ -57,6 +58,8 @@ struct container_config {
 #ifndef C_CONFIG_DEFAULT_VETH_NAME
 #define C_CONFIG_DEFAULT_VETH_NAME "host0"
 #endif
+
+#define TMP_FILE_SUFFIX ".tmp"
 
 /**
  * The usual identity map between two corresponding C and protobuf enums.
@@ -241,58 +244,385 @@ container_config_free(container_config_t *config)
 	mem_free0(config);
 }
 
+/**
+ * Reads the temp file belonging to the given file if it exists, otherwise the file itself.
+ *
+ * @param file the path to the file to read
+ * @param len out: number of bytes in @param buf, or 0 if there are none
+ * @param buf out: newly allocated buffer holding the read data, to be freed by the
+ *			  caller, or NULL if there is nothing to read. Overwritten unconditionally,
+ *			  so it must not already own an allocation.
+ * @returns
+ *	false if an error was encountered and the config processing should be aborted.
+ *		  Both out parameters are cleared in this case.
+ *	true if the file is in a valid state. This covers three cases: the file was read
+ *		  (@param buf non-NULL), neither the file nor its temp exists, or the file that
+ *		  was chosen is zero-length. In the latter two @param buf is NULL and
+ *		  @param len is 0, and the caller must treat that as "nothing committable here".
+ */
+static bool
+container_config_read_temp_file_new(const char *file, size_t *len, uint8_t **buf)
+{
+	ASSERT(file);
+	ASSERT(len);
+	ASSERT(buf);
+
+	off_t size = 0;
+	*len = 0;
+	*buf = NULL;
+	bool ret = false;
+
+	char *file_tmp = mem_printf("%s%s", file, TMP_FILE_SUFFIX);
+	const char *read_file = NULL;
+	if (file_exists(file_tmp)) {
+		read_file = file_tmp;
+	} else if (file_exists(file)) {
+		read_file = file;
+	} else {
+		// neither file nor file.tmp exist, this can only occur on incomplete writes during container creation.
+		ret = true;
+		goto out;
+	}
+
+	size = file_size(read_file);
+	if (size < 0) {
+		ERROR("Could not determine size of '%s'!", read_file);
+		goto out;
+	}
+
+	if (size > 0) {
+		*buf = mem_alloc(size);
+		if (size != file_read(read_file, (char *)*buf, size)) {
+			ERROR("Failed to read '%s'!", read_file);
+			mem_free0(*buf);
+			goto out;
+		}
+		*len = size;
+	}
+	ret = true;
+
+out:
+	mem_free0(file_tmp);
+	return ret;
+}
+
+/**
+ * Tries to complete an incomplete config write by checking the existence of config tmp files and
+ * committing them if they are valid, otherwise the tmp files are deleted.
+ * 
+ * @param prefix the prefix of the config files
+ * @returns
+ *   0 on success,
+ *  -1 if the temp files were kept because the commit could not be completed or because
+ *     verification could not be performed at all, so the active config may be inconsistent
+ *     and the operation has to be retried at the next reload,
+ *   1 if the temp files were not committable and have been deleted, leaving the active
+ *     config untouched
+ */
+static int
+container_config_finish_incomplete_write(const char *prefix)
+{
+	ASSERT(prefix);
+
+	int ret = 0;
+
+	char *config_file = mem_printf("%s.conf", prefix);
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", config_file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
+	uint8_t *conf_buf = NULL;
+	uint8_t *sig_buf = NULL;
+	uint8_t *cert_buf = NULL;
+
+	if (file_exists(conf_file_tmp)) {
+		if (0 == file_size(conf_file_tmp)) {
+			ERROR("Temp config file '%s' is empty", conf_file_tmp);
+			ret = 1;
+			goto cleanup_tmp;
+		}
+		ProtobufCMessage *conf = protobuf_message_new_from_textfile(
+			conf_file_tmp, &container_config__descriptor);
+		if (conf == NULL) {
+			ERROR("Parsing of temp config file '%s' failed", conf_file_tmp);
+			ret = 1;
+			goto cleanup_tmp;
+		}
+		protobuf_free_message(conf);
+	}
+
+	if (cmld_uses_signed_configs()) {
+		size_t conf_len = 0;
+		size_t sig_len = 0;
+		size_t cert_len = 0;
+
+		if (!container_config_read_temp_file_new(config_file, &conf_len, &conf_buf) ||
+		    !container_config_read_temp_file_new(sig_file, &sig_len, &sig_buf) ||
+		    !container_config_read_temp_file_new(cert_file, &cert_len, &cert_buf)) {
+			ret = -1;
+			goto out;
+		}
+
+		if (conf_buf && sig_buf && cert_buf) {
+			crypto_verify_result_t verify_result =
+				crypto_verify_buf_block(conf_buf, conf_len, sig_buf, sig_len,
+							cert_buf, cert_len,
+							C_CONFIG_VERIFY_HASH_ALGO);
+			switch (verify_result) {
+			case VERIFY_GOOD:
+				goto apply_tmp;
+			case VERIFY_ERROR:
+				ERROR("Error while verifying temp config files with prefix '%s'",
+				      prefix);
+				ret = -1;
+				goto out;
+			case VERIFY_BAD_CERTIFICATE:
+			case VERIFY_BAD_SIGNATURE:
+			case VERIFY_LOCALLY_SIGNED:
+			default:
+				ERROR("Verify of signed temp config files with prefix '%s' failed",
+				      prefix);
+				ret = 1;
+				goto cleanup_tmp;
+			}
+		}
+		ret = 1;
+		goto cleanup_tmp;
+	}
+
+apply_tmp:
+	if (!cmld_uses_signed_configs()) {
+		/*
+		* Signed configs are disabled, so nothing above validated a sig or cert
+		* temp file. They can only be left over from an interrupted write made
+		* while signed configs were enabled, and renaming them over the active
+		* files would publish unvalidated content. Drop them instead.
+		*/
+		if (file_exists(sig_file_tmp) && unlink(sig_file_tmp))
+			WARN_ERRNO("Could not remove %s", sig_file_tmp);
+		if (file_exists(cert_file_tmp) && unlink(cert_file_tmp))
+			WARN_ERRNO("Could not remove %s", cert_file_tmp);
+	}
+
+	DEBUG("Apply temp config files for %s", prefix);
+	/*
+    * The temp files are valid and consistent, so they can be renamed. The order
+    * mirrors the staging order in container_config_write() and must keep the
+    * signature last for the same reason - see the comment there. Not renaming all
+    * of them leaves the active config inconsistent, so on failure the temp files
+    * are kept and the rename is completed at the next reload.
+    */
+	if (file_exists(cert_file_tmp) && 0 > rename(cert_file_tmp, cert_file)) {
+		ERROR_ERRNO("Could not rename %s to %s", cert_file_tmp, cert_file);
+		ret = -1;
+		goto out;
+	}
+	if (file_exists(conf_file_tmp) && 0 > rename(conf_file_tmp, config_file)) {
+		ERROR_ERRNO("Could not rename %s to %s", conf_file_tmp, config_file);
+		ret = -1;
+		goto out;
+	}
+	if (file_exists(sig_file_tmp) && 0 > rename(sig_file_tmp, sig_file)) {
+		ERROR_ERRNO("Could not rename %s to %s", sig_file_tmp, sig_file);
+		ret = -1;
+		goto out;
+	}
+
+	// temp config was successfully verified and renamed, so no temp files exist at this point.
+	goto out;
+
+cleanup_tmp:
+	WARN("Cleaning up temp config files for %s", prefix);
+	if (file_exists(sig_file_tmp) && unlink(sig_file_tmp))
+		WARN_ERRNO("Could not remove %s", sig_file_tmp);
+	if (file_exists(conf_file_tmp) && unlink(conf_file_tmp))
+		WARN_ERRNO("Could not remove %s", conf_file_tmp);
+	if (file_exists(cert_file_tmp) && unlink(cert_file_tmp))
+		WARN_ERRNO("Could not remove %s", cert_file_tmp);
+
+out:
+	mem_free0(conf_buf);
+	mem_free0(sig_buf);
+	mem_free0(cert_buf);
+	mem_free0(config_file);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+
+	return ret;
+}
+
 int
 container_config_write(const container_config_t *config, const uint8_t *buf, size_t len,
-		       uint8_t *sig_buf, size_t sig_len, uint8_t *cert_buf, size_t cert_len)
+		       const uint8_t *sig_buf, size_t sig_len, const uint8_t *cert_buf,
+		       size_t cert_len)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	ASSERT(config->file);
 
 	if (cmld_uses_signed_configs()) {
-		// if config was provided by buf, update all files according to buffers
-		if (buf) {
-			if (-1 == file_write(config->file, (char *)buf, len)) {
-				WARN("Could not store configuration in file \"%s\".", config->file);
-				return -1;
-			} else {
-				int ret = -1;
+		IF_FALSE_RETVAL_ERROR(buf && sig_buf && cert_buf, -1);
+	}
 
-				char *sig_file = NULL;
-				char *cert_file = NULL;
-				char *prefix = file_get_prefix_new(config->file, ".conf");
-				if (!prefix)
-					goto out_err;
+	int ret = 0;
+	char *prefix = file_get_prefix_new(config->file, ".conf");
+	IF_FALSE_RETVAL_ERROR(prefix, -1);
 
-				sig_file = mem_printf("%s.sig", prefix);
-				cert_file = mem_printf("%s.cert", prefix);
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", config->file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
 
-				if (-1 == file_write(sig_file, (char *)sig_buf, sig_len)) {
-					WARN("Could not update sig_file '%s'", sig_file);
-					goto out_err;
-				}
-				if (-1 == file_write(cert_file, (char *)cert_buf, cert_len)) {
-					WARN("Could not update cert_file '%s'", cert_file);
-					goto out_err;
-				}
-				ret = 0;
-			out_err:
-				mem_free0(prefix);
-				mem_free0(sig_file);
-				mem_free0(cert_file);
+	// finish previous incompleted writes and only continue if all tmp files were either applied
+	// or removed to prevent entering an irrecoverable state
+	if (-1 == container_config_check_incomplete_write(config->file)) {
+		ret = -1;
+		goto cleanup;
+	}
 
-				return ret;
+	if (!cmld_uses_signed_configs()) {
+		if (protobuf_message_write_to_file(conf_file_tmp, (ProtobufCMessage *)config->cfg) <
+		    0) {
+			ERROR("Could not write container config to \"%s\"", conf_file_tmp);
+			ret = -1;
+			goto discard_tmp;
+		}
+	} else {
+		// The staging order is critical: the signature must be written last.
+		// Recovery assembles a candidate set by selecting either the temporary
+		// file or the active file for each component. This set is only committed
+		// if it verifies. By writing the signature last, any interrupted or
+		// failed write leaves an outdated signature that cannot validate the new
+		// configuration, causing the set to be rejected. For consistency the same
+		// order is used for the renames and its reverse order is used for deletion
+		if (-1 == file_write(cert_file_tmp, (char *)cert_buf, cert_len)) {
+			ERROR("Could not store cert_file \"%s\".", cert_file_tmp);
+			ret = -1;
+			goto discard_tmp;
+		}
+		if (-1 == file_write(conf_file_tmp, (char *)buf, len)) {
+			ERROR("Could not store configuration in file \"%s\".", conf_file_tmp);
+			ret = -1;
+			goto discard_tmp;
+		}
+		if (-1 == file_write(sig_file_tmp, (char *)sig_buf, sig_len)) {
+			ERROR("Could not store sig_file \"%s\".", sig_file_tmp);
+			ret = -1;
+			goto discard_tmp;
+		}
+	}
+
+	file_syncfs(conf_file_tmp);
+
+	if (container_config_finish_incomplete_write(prefix)) {
+		ret = -1;
+	}
+
+	goto cleanup;
+
+discard_tmp:
+	WARN("Discarding temp config files of failed write for %s", prefix);
+	if (file_exists(sig_file_tmp) && unlink(sig_file_tmp))
+		WARN_ERRNO("Could not remove %s", sig_file_tmp);
+	if (file_exists(conf_file_tmp) && unlink(conf_file_tmp))
+		WARN_ERRNO("Could not remove %s", conf_file_tmp);
+	if (file_exists(cert_file_tmp) && unlink(cert_file_tmp))
+		WARN_ERRNO("Could not remove %s", cert_file_tmp);
+
+cleanup:
+	mem_free0(prefix);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+
+	return ret;
+}
+
+int
+container_config_check_incomplete_write(const char *path)
+{
+	char *file = NULL;
+	char *prefix = NULL;
+	char *conf_file_tmp = NULL;
+	char *sig_file_tmp = NULL;
+	char *cert_file_tmp = NULL;
+	int ret = 0;
+
+	/* A container config consists of conf, sig and cert files and possibly their temp counterparts.
+	 * The given path could point to any of these files, so we need to handle all of these cases correctly.
+	 * First remove the temp file suffix if it exists and then remove the file extensions expected for config files.
+	 * The resulting prefix can then be used to calculate the paths of all files belonging to this containers config and
+	 * to check for and complete previous writes.
+	 */
+	file = file_get_prefix_new(path, TMP_FILE_SUFFIX);
+	if (!file)
+		file = mem_strdup(path);
+
+	prefix = file_get_prefix_new(file, ".conf");
+	if (prefix)
+		goto check;
+	prefix = file_get_prefix_new(file, ".sig");
+	if (prefix)
+		goto check;
+	prefix = file_get_prefix_new(file, ".cert");
+	if (prefix)
+		goto check;
+
+	goto out;
+
+check:
+	conf_file_tmp = mem_printf("%s%s%s", prefix, ".conf", TMP_FILE_SUFFIX);
+	sig_file_tmp = mem_printf("%s%s%s", prefix, ".sig", TMP_FILE_SUFFIX);
+	cert_file_tmp = mem_printf("%s%s%s", prefix, ".cert", TMP_FILE_SUFFIX);
+
+	if (file_exists(conf_file_tmp) || file_exists(sig_file_tmp) || file_exists(cert_file_tmp)) {
+		if (-1 == container_config_finish_incomplete_write(prefix)) {
+			ret = -1;
+		}
+	}
+
+out:
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+	mem_free0(file);
+	mem_free0(prefix);
+	return ret;
+}
+
+int
+container_config_unlink_files(const char *prefix)
+{
+	ASSERT(prefix);
+
+	int ret = 0;
+
+	char *suffixes[] = { ".sig",
+			     ".conf",
+			     ".cert",
+			     ".sig" TMP_FILE_SUFFIX,
+			     ".conf" TMP_FILE_SUFFIX,
+			     ".cert" TMP_FILE_SUFFIX };
+	int size = sizeof(suffixes) / sizeof(suffixes[0]);
+
+	for (int i = 0; i < size; i++) {
+		char *file = mem_printf("%s%s", prefix, suffixes[i]);
+		if (file_exists(file)) {
+			if (unlink(file)) {
+				ERROR_ERRNO("Can't delete %s file!", file);
+				ret = -1;
 			}
 		}
-		return 0;
+		mem_free0(file);
 	}
-
-	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *)config->cfg) < 0) {
-		WARN("Could not write container config to \"%s\"", config->file);
-		return -1;
-	}
-
-	return 0;
+	return ret;
 }
 
 const char *
@@ -403,6 +733,10 @@ container_config_set_guestos_version(container_config_t *config, uint64_t guesto
 	ASSERT(config->cfg);
 	config->cfg->has_guestos_version = true;
 	config->cfg->guestos_version = guestos_version;
+
+	if (!cmld_uses_signed_configs && config->file) {
+		container_config_write(config, NULL, 0, NULL, 0, NULL, 0);
+	}
 }
 
 list_t *
