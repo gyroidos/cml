@@ -250,15 +250,15 @@ container_config_free(container_config_t *config)
  * @param file the path to the file to read
  * @param len out: number of bytes in @param buf, or 0 if there are none
  * @param buf out: newly allocated buffer holding the read data, to be freed by the
- *			  caller, or NULL if there is nothing to read. Overwritten unconditionally,
- *			  so it must not already own an allocation.
+ *            caller, or NULL if there is nothing to read. Overwritten unconditionally,
+ *            so it must not already own an allocation.
  * @returns
- *	false if an error was encountered and the config processing should be aborted.
- *		  Both out parameters are cleared in this case.
- *	true if the file is in a valid state. This covers three cases: the file was read
- *		  (@param buf non-NULL), neither the file nor its temp exists, or the file that
- *		  was chosen is zero-length. In the latter two @param buf is NULL and
- *		  @param len is 0, and the caller must treat that as "nothing committable here".
+ *     false if an error was encountered and the config processing should be aborted.
+ *           Both out parameters are cleared in this case.
+ *     true  if the file is in a valid state. This covers three cases: the file was read
+ *           (@param buf non-NULL), neither the file nor its temp exists, or the file that
+ *           was chosen is zero-length. In the latter two @param buf is NULL and
+ *           @param len is 0, and the caller must treat that as "nothing committable here".
  */
 static bool
 container_config_read_temp_file_new(const char *file, size_t *len, uint8_t **buf)
@@ -734,7 +734,7 @@ container_config_set_guestos_version(container_config_t *config, uint64_t guesto
 	config->cfg->has_guestos_version = true;
 	config->cfg->guestos_version = guestos_version;
 
-	if (!cmld_uses_signed_configs && config->file) {
+	if (!cmld_uses_signed_configs() && config->file) {
 		container_config_write(config, NULL, 0, NULL, 0, NULL, 0);
 	}
 }
