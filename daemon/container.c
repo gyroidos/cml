@@ -30,6 +30,7 @@
 #include "common/dir.h"
 #include "common/uuid.h"
 #include "compartment.h"
+#include "container_config.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -702,33 +703,20 @@ container_destroy(container_t *container)
 	}
 
 	const char *config_file = container_get_config_filename(container);
-	/* remove config files */
-	if (unlink(config_file))
-		ERROR_ERRNO("Can't delete config file!");
 
+	IF_NULL_RETVAL(config_file, ret);
+
+	// if the config filename has the .conf extension, the container config consists of
+	// a .conf, .sig and a .cert file as well as their temp counterparts, otherwise it is
+	// an OCI container with a .json config, which needs to be unlinked directly.
 	char *prefix = file_get_prefix_new(config_file, ".conf");
-	if (!prefix) {
-		goto out;
-	}
-	char *sig_file = mem_printf("%s.sig", prefix);
-	char *cert_file = mem_printf("%s.cert", prefix);
-
-	if (file_exists(sig_file)) {
-		if (unlink(sig_file)) {
-			ERROR_ERRNO("Can't delete %s file!", sig_file);
-		}
+	if (prefix) {
+		ret = container_config_unlink_files(prefix);
+	} else if (file_exists(config_file) && unlink(config_file)) {
+		ERROR_ERRNO("Could not delete config file %s.", config_file);
+		ret = -1;
 	}
 
-	if (file_exists(cert_file)) {
-		if (unlink(cert_file)) {
-			ERROR_ERRNO("Can't delete %s file!", cert_file);
-		}
-	}
-
-	mem_free0(sig_file);
-	mem_free0(cert_file);
-
-out:
 	mem_free0(prefix);
 	return ret;
 }
