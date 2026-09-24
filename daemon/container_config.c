@@ -43,6 +43,7 @@
 #include "guestos_mgr.h"
 #include "network.h"
 #include "hotplug.h"
+#include <unistd.h>
 
 struct container_config {
 	char *file;
@@ -57,6 +58,8 @@ struct container_config {
 #ifndef C_CONFIG_DEFAULT_VETH_NAME
 #define C_CONFIG_DEFAULT_VETH_NAME "host0"
 #endif
+
+#define TMP_FILE_SUFFIX ".tmp"
 
 /**
  * The usual identity map between two corresponding C and protobuf enums.
@@ -241,58 +244,328 @@ container_config_free(container_config_t *config)
 	mem_free0(config);
 }
 
+uint8_t *
+container_config_read_temp_file_new(const char *file, size_t *len)
+{
+	ASSERT(file);
+	ASSERT(len);
+
+	uint8_t *buf = NULL;
+
+	char *file_tmp = mem_printf("%s%s", file, TMP_FILE_SUFFIX);
+	const char *read_file = NULL;
+	if (file_exists(file_tmp)) {
+		read_file = file_tmp;
+	} else if (file_exists(file)) {
+		read_file = file;
+	} else {
+		goto cleanup;
+	}
+
+	*len = file_size(read_file);
+	if (*len > 0) {
+		buf = mem_alloc(*len);
+		if (-1 == file_read(read_file, (char *)buf, *len)) {
+			ERROR("Failed to read '%s'!", read_file);
+			mem_free0(buf);
+		}
+	}
+
+cleanup:
+	if (!buf)
+		*len = 0;
+	mem_free0(file_tmp);
+	return buf;
+}
+
+/**
+ * tries to complete an incomplete config write by checking the existence of config tmp files and
+ * commiting them if they are valid, otherwise the tmp files are deleted.
+ * 
+ * @param prefix the prefix of the config files
+ * @returns 
+ *   0 on success,
+ *  -1 if the tmp files are valid but were not fully moved to the live paths, possibly leaving it inconsistent,
+ *   1 if the tmp files could not be verified and were deleted, leaving the live config untouched
+ */
+int
+container_config_finish_incomplete_write(const char *prefix)
+{
+	ASSERT(prefix);
+
+	int ret = 0;
+
+	char *config_file = mem_printf("%s.conf", prefix);
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", config_file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
+
+	if (file_exists(conf_file_tmp)) {
+		ProtobufCMessage *conf = protobuf_message_new_from_textfile(
+			conf_file_tmp, &container_config__descriptor);
+		if (conf == NULL) {
+			ERROR("Verify of temp config file '%s' failed", conf_file_tmp);
+			ret = 1;
+			goto err;
+		}
+		protobuf_free_message(conf);
+	}
+
+	if (cmld_uses_signed_configs()) {
+		uint8_t *conf_buf, *sig_buf, *cert_buf;
+		size_t conf_len = 0;
+		size_t sig_len = 0;
+		size_t cert_len = 0;
+
+		conf_buf = container_config_read_temp_file_new(config_file, &conf_len);
+		sig_buf = container_config_read_temp_file_new(sig_file, &sig_len);
+		cert_buf = container_config_read_temp_file_new(cert_file, &cert_len);
+
+		if (conf_buf && sig_buf && cert_buf) {
+			if (!container_config_verify(prefix, conf_buf, conf_len, sig_buf, sig_len,
+						     cert_buf, cert_len)) {
+				ERROR("Verify of signed temp config files with prefix '%s' failed",
+				      prefix);
+				ret = 1;
+			}
+		} else {
+			ret = 1;
+		}
+
+		mem_free0(conf_buf);
+		mem_free0(sig_buf);
+		mem_free0(cert_buf);
+
+		if (ret)
+			goto err;
+	}
+
+	DEBUG("Apply temp config files for %s", prefix);
+	// config, sig and cert temp files are valid and consistent, so now they can be renamed.
+	// not renaming all three files will leave the live config inconsistent, so the temp files
+	// should not be removed, so the rename can be completed at the next relaod.
+	if (file_exists(conf_file_tmp) && 0 > rename(conf_file_tmp, config_file)) {
+		ERROR_ERRNO("Could not rename %s to %s", conf_file_tmp, config_file);
+		ret = -1;
+		goto out;
+	}
+	if (file_exists(sig_file_tmp) && 0 > rename(sig_file_tmp, sig_file)) {
+		ERROR_ERRNO("Could not rename %s to %s", sig_file_tmp, sig_file);
+		ret = -1;
+		goto out;
+	}
+	if (file_exists(cert_file_tmp) && 0 > rename(cert_file_tmp, cert_file)) {
+		ERROR_ERRNO("Could not rename %s to %s", cert_file_tmp, cert_file);
+		ret = -1;
+		goto out;
+	}
+
+err:
+	DEBUG("Cleaning up temp config files for %s", prefix);
+	if (file_exists(conf_file_tmp))
+		unlink(conf_file_tmp);
+	if (file_exists(sig_file_tmp))
+		unlink(sig_file_tmp);
+	if (file_exists(cert_file_tmp))
+		unlink(cert_file_tmp);
+
+out:
+	mem_free0(config_file);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+
+	return ret;
+}
+
 int
 container_config_write(const container_config_t *config, const uint8_t *buf, size_t len,
-		       uint8_t *sig_buf, size_t sig_len, uint8_t *cert_buf, size_t cert_len)
+		       const uint8_t *sig_buf, size_t sig_len, const uint8_t *cert_buf,
+		       size_t cert_len)
 {
 	ASSERT(config);
 	ASSERT(config->cfg);
 	ASSERT(config->file);
 
 	if (cmld_uses_signed_configs()) {
-		// if config was provided by buf, update all files according to buffers
-		if (buf) {
-			if (-1 == file_write(config->file, (char *)buf, len)) {
-				WARN("Could not store configuration in file \"%s\".", config->file);
-				return -1;
-			} else {
-				int ret = -1;
-
-				char *sig_file = NULL;
-				char *cert_file = NULL;
-				char *prefix = file_get_prefix_new(config->file, ".conf");
-				if (!prefix)
-					goto out_err;
-
-				sig_file = mem_printf("%s.sig", prefix);
-				cert_file = mem_printf("%s.cert", prefix);
-
-				if (-1 == file_write(sig_file, (char *)sig_buf, sig_len)) {
-					WARN("Could not update sig_file '%s'", sig_file);
-					goto out_err;
-				}
-				if (-1 == file_write(cert_file, (char *)cert_buf, cert_len)) {
-					WARN("Could not update cert_file '%s'", cert_file);
-					goto out_err;
-				}
-				ret = 0;
-			out_err:
-				mem_free0(prefix);
-				mem_free0(sig_file);
-				mem_free0(cert_file);
-
-				return ret;
-			}
-		}
-		return 0;
+		if (!buf || !sig_buf || !cert_buf)
+			return -1;
 	}
 
-	if (protobuf_message_write_to_file(config->file, (ProtobufCMessage *)config->cfg) < 0) {
-		WARN("Could not write container config to \"%s\"", config->file);
+	int ret = 0;
+	char *prefix = file_get_prefix_new(config->file, ".conf");
+	if (!prefix)
 		return -1;
+
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", config->file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
+
+	// finish previous incompleted writes and only continue if all tmp files were either applied
+	// or removed to prevent entering an irrecoverable state
+	if (-1 == container_config_check_incomplete_write(config->file)) {
+		ret = -1;
+		goto cleanup;
 	}
 
-	return 0;
+	if (!cmld_uses_signed_configs()) {
+		if (protobuf_message_write_to_file(conf_file_tmp, (ProtobufCMessage *)config->cfg) <
+		    0) {
+			ERROR("Could not write container config to \"%s\"", conf_file_tmp);
+			ret = -1;
+			goto out;
+		}
+	} else {
+		if (-1 == file_write(conf_file_tmp, (char *)buf, len)) {
+			ERROR("Could not store configuration in file \"%s\".", conf_file_tmp);
+			ret = -1;
+			goto out;
+		}
+		if (-1 == file_write(sig_file_tmp, (char *)sig_buf, sig_len)) {
+			ERROR("Could not store sig_file \"%s\".", sig_file_tmp);
+			ret = -1;
+			goto out;
+		}
+		if (-1 == file_write(cert_file_tmp, (char *)cert_buf, cert_len)) {
+			ERROR("Could not store cert_file \"%s\".", cert_file_tmp);
+			ret = -1;
+			goto out;
+		}
+	}
+
+	file_syncfs(conf_file_tmp);
+
+out:
+	if (container_config_finish_incomplete_write(prefix)) {
+		ret = -1;
+	}
+
+cleanup:
+	mem_free0(prefix);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+
+	return ret;
+}
+
+int
+container_config_check_incomplete_write(const char *path)
+{
+	char *file = NULL;
+	char *prefix = NULL;
+	char *conf_file_tmp = NULL;
+	char *sig_file_tmp = NULL;
+	char *cert_file_tmp = NULL;
+	int ret = 0;
+
+	/* check if the given file is part of an incomplete config write and calculate the files
+	 * full path without the file extensions.
+	 */
+	file = file_get_prefix_new(path, TMP_FILE_SUFFIX);
+	if (!file)
+		file = mem_strdup(path);
+
+	prefix = file_get_prefix_new(file, ".conf");
+	if (prefix)
+		goto check;
+	prefix = file_get_prefix_new(file, ".sig");
+	if (prefix)
+		goto check;
+	prefix = file_get_prefix_new(file, ".cert");
+	if (prefix)
+		goto check;
+
+	goto out;
+
+check:
+	conf_file_tmp = mem_printf("%s%s%s", prefix, ".conf", TMP_FILE_SUFFIX);
+	sig_file_tmp = mem_printf("%s%s%s", prefix, ".sig", TMP_FILE_SUFFIX);
+	cert_file_tmp = mem_printf("%s%s%s", prefix, ".cert", TMP_FILE_SUFFIX);
+
+	if (file_exists(conf_file_tmp) || file_exists(sig_file_tmp) || file_exists(cert_file_tmp)) {
+		if (-1 == container_config_finish_incomplete_write(prefix)) {
+			ret = -1;
+		}
+	}
+
+out:
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+	mem_free0(file);
+	mem_free0(prefix);
+	return ret;
+}
+
+int
+container_config_unlink_files(const char *prefix)
+{
+	char *conf_file = mem_printf("%s.conf", prefix);
+	char *sig_file = mem_printf("%s.sig", prefix);
+	char *cert_file = mem_printf("%s.cert", prefix);
+	char *conf_file_tmp = mem_printf("%s%s", conf_file, TMP_FILE_SUFFIX);
+	char *sig_file_tmp = mem_printf("%s%s", sig_file, TMP_FILE_SUFFIX);
+	char *cert_file_tmp = mem_printf("%s%s", cert_file, TMP_FILE_SUFFIX);
+	int ret = 0;
+
+	if (file_exists(conf_file)) {
+		if (unlink(conf_file)) {
+			ERROR_ERRNO("Can't delete %s file!", conf_file);
+			ret = -1;
+		}
+	}
+
+	if (file_exists(sig_file)) {
+		if (unlink(sig_file)) {
+			ERROR_ERRNO("Can't delete %s file!", sig_file);
+			ret = -1;
+		}
+	}
+
+	if (file_exists(cert_file)) {
+		if (unlink(cert_file)) {
+			ERROR_ERRNO("Can't delete %s file!", cert_file);
+			ret = -1;
+		}
+	}
+
+	if (file_exists(conf_file_tmp)) {
+		if (unlink(conf_file_tmp)) {
+			ERROR_ERRNO("Can't delete %s file!", conf_file_tmp);
+			ret = -1;
+		}
+	}
+
+	if (file_exists(sig_file_tmp)) {
+		if (unlink(sig_file_tmp)) {
+			ERROR_ERRNO("Can't delete %s file!", sig_file_tmp);
+			ret = -1;
+		}
+	}
+
+	if (file_exists(cert_file_tmp)) {
+		if (unlink(cert_file_tmp)) {
+			ERROR_ERRNO("Can't delete %s file!", cert_file_tmp);
+			ret = -1;
+		}
+	}
+
+	mem_free0(conf_file);
+	mem_free0(sig_file);
+	mem_free0(cert_file);
+	mem_free0(conf_file_tmp);
+	mem_free0(sig_file_tmp);
+	mem_free0(cert_file_tmp);
+	return ret;
 }
 
 const char *
