@@ -401,11 +401,12 @@ cmld_set_device_provisioned(void)
  * @return The new container object or NULL if something went wrong.
  */
 static container_t *
-cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config,
-		   size_t config_len, uint8_t *sig, size_t sig_len, uint8_t *cert, size_t cert_len)
+cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const uint8_t *config_buf,
+		   size_t config_len, uint8_t *sig_buf, size_t sig_len, uint8_t *cert_buf,
+		   size_t cert_len)
 {
 	ASSERT(store_path);
-	ASSERT(existing_uuid || config);
+	ASSERT(existing_uuid || config_buf);
 
 	const char *name;
 	bool ns_usr;
@@ -444,8 +445,8 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	/********************************
 	 * Translate High Level Config into low-level parameters for internal
 	 * constructor */
-	container_config_t *conf = container_config_new(config_filename, config, config_len, sig,
-							sig_len, cert, cert_len);
+	container_config_t *conf = container_config_new(config_filename, config_buf, config_len,
+							sig_buf, sig_len, cert_buf, cert_len);
 
 	if (!conf) {
 		WARN("Could not read config file %s", config_filename);
@@ -555,7 +556,16 @@ cmld_container_new(const char *store_path, const uuid_t *existing_uuid, const ui
 	if (c) {
 		// overwrite image sizes of mount table
 		container_config_fill_mount(conf, container_get_mnt(c));
-		container_config_write(conf, config, config_len, sig, sig_len, cert, cert_len);
+		// only try to write the container config for new containers and skip it for reloads
+		if (!existing_uuid) {
+			if (-1 == container_config_write(conf, config_buf, config_len, sig_buf,
+							 sig_len, cert_buf, cert_len)) {
+				container_destroy(c);
+				container_free(c);
+				c = NULL;
+				goto out_config;
+			}
+		}
 	}
 
 out_config:
@@ -690,16 +700,26 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 {
 	uuid_t *uuid = NULL;
 
+	char *prefix = NULL;
+	char *dir = NULL;
+	char *file = mem_printf("%s/%s", path, name);
+	int res = 0;
+
+	if (-1 == container_config_check_incomplete_write(file)) {
+		WARN("incomplete config for %s could not be recovered, skipping", file);
+		goto cleanup;
+	}
+
 	/* we should check for config files here, because the images
 	 * might not be synced to the device from the mdm, but the config files
 	 * should be always there
 	 */
-	char *prefix = file_get_prefix_new(name, ".conf");
-	if (!prefix)
-		return 0;
+	prefix = file_get_prefix_new(name, ".conf");
+	if (!prefix) {
+		goto cleanup;
+	}
 
-	int res = 0;
-	char *dir = mem_printf("%s/%s", path, prefix);
+	dir = mem_printf("%s/%s", path, prefix);
 
 	if (file_exists(dir) && !file_is_dir(dir)) {
 		WARN("%s exists but is not a directory!", dir);
@@ -722,6 +742,7 @@ cmld_load_containers_cb(const char *path, const char *name, UNUSED void *data)
 cleanup:
 	if (uuid)
 		uuid_free(uuid);
+	mem_free0(file);
 	mem_free0(dir);
 	mem_free0(prefix);
 	return res;
