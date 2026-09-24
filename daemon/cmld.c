@@ -1178,6 +1178,25 @@ cmld_c0_boot_complete_cb(container_t *container, container_callback_t *cb, UNUSE
 static void
 cmld_handle_device_shutdown(void)
 {
+	const char *operation = NULL;
+	switch (cmld_device_reboot) {
+	case POWER_OFF:
+		operation = "power-off";
+		break;
+	case REBOOT:
+		operation = "reboot";
+		break;
+	case REBOOT_FORCE:
+		operation = "force-reboot";
+		break;
+	default:
+		operation = "unknown";
+		break;
+	}
+
+	audit_log_event(NULL, SSA, CMLD, CONTAINER_MGMT, "shutdown", NULL, 2, "op", operation,
+			NULL);
+
 #ifdef NO_REBOOT_ON_EXIT
 	if (cmld_device_reboot == POWER_OFF) {
 		DEBUG("Device shutdown: keep CML running, just exit cmld for debugging.");
@@ -1202,8 +1221,7 @@ cmld_handle_device_shutdown_cb(event_timer_t *timer, void *data)
 	event_timer_free(timer);
 	timer = NULL;
 
-	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "force-reboot",
-			uuid_string(container_get_uuid(container)), 0);
+	cmld_device_reboot = REBOOT_FORCE;
 
 	cmld_handle_device_shutdown();
 }
@@ -1237,10 +1255,8 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	IF_TRUE_RETURN_TRACE(cmld_hostedmode);
 
 	/* all containers are down, so shut down */
-	DEBUG("Device shutdown: last container down; shutdown now");
-
-	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "shutdown",
-			uuid_string(container_get_uuid(container)), 0);
+	INFO("Device shutdown: last container %s down; shutdown now",
+	     uuid_string(container_get_uuid(container)));
 
 	cmld_handle_device_shutdown();
 }
@@ -1293,9 +1309,7 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 
 	if (shutdown_now && !cmld_hostedmode) {
 		/* all containers are down, so shut down */
-		DEBUG("Device shutdown: all containers already down; shutdown now");
-		audit_log_event(container_get_uuid(c0), SSA, CMLD, CONTAINER_MGMT, "shutdown",
-				uuid_string(container_get_uuid(c0)), 0);
+		INFO("Device shutdown: all containers already down; shutdown now");
 
 		cmld_handle_device_shutdown();
 	}
