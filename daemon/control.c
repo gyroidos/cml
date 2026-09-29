@@ -370,21 +370,21 @@ control_container_status_free(ContainerStatus *c_status)
 static ssize_t
 control_read_send(int cfd, int fd)
 {
-	uint8_t buf[1024];
+	/* keep chunks large so a full-screen redraw (vim/less) fits in one
+	 * message; the payload is raw binary pty output */
+	uint8_t buf[64 * 1024];
 	ssize_t count = -1;
 
 	TRACE("Trying to read data from console socket.");
 
-	if ((count = read(fd, buf, 1023)) > 0) {
-		buf[count] = 0;
-
+	if ((count = read(fd, buf, sizeof(buf))) > 0) {
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_OUTPUT;
 		out.has_exec_output = true;
 		out.exec_output.len = count;
 		out.exec_output.data = buf;
 
-		TRACE("[CONTROL] Read %zd bytes: %s. Sending to control client...", count, buf);
+		TRACE("[CONTROL] Read %zd bytes. Sending to control client...", count);
 
 		if (protobuf_send_message(cfd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
