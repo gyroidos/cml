@@ -525,6 +525,13 @@ CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_inpu
 				 int session_fd)
 
 /**
+ * Registers the corresponding handler for container_set_exec_winsize,
+ * which sets the window size of the exec pty for the given session.
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(set_exec_winsize, int, uint16_t rows, uint16_t cols,
+				 int session_fd)
+
+/**
  * Freeze a container.
  *
  * @return 0 if ok, negative values indicate errors.
