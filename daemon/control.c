@@ -1781,17 +1781,15 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 			TRACE("Sent notification of command termination to control client");
 			break;
-
-		} else {
-			DEBUG("Registering read callback for cmld console socket");
-			int *cfd = mem_new(int, 1);
-			*cfd = fd;
-			event_io_t *event =
-				event_io_new(container_get_console_sock_cmld(container, fd),
-					     EVENT_IO_READ | EVENT_IO_EXCEPT,
-					     control_cb_read_console, cfd);
-			event_add_io(event);
 		}
+
+		DEBUG("Registering read callback for cmld console socket");
+		int *cfd = mem_new(int, 1);
+		*cfd = fd;
+		event_io_t *event =
+			event_io_new(container_get_console_sock_cmld(container, fd),
+				     EVENT_IO_READ | EVENT_IO_EXCEPT, control_cb_read_console, cfd);
+		event_add_io(event);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT: {
@@ -1815,6 +1813,19 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		} else if ((size_t)res < len) {
 			WARN("Exec'ed process does not read its input, dropped %zu bytes",
 			     len - (size_t)res);
+		}
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_WINSIZE: {
+		IF_NULL_RETURN(container);
+
+		if (!msg->has_exec_winsize_rows || !msg->has_exec_winsize_cols) {
+			WARN("EXEC_WINSIZE without complete window size, ignoring");
+			break;
+		}
+		if (container_set_exec_winsize(container, msg->exec_winsize_rows,
+					       msg->exec_winsize_cols, fd) < 0) {
+			ERROR("Failed to set window size of exec'ed process");
 		}
 	} break;
 
