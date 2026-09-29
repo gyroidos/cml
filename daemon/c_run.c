@@ -55,7 +55,11 @@
 
 #define CLONE_STACK_SIZE 8192
 
-#define SESSION_WBUF_SIZE 1024
+/*
+ * pty pump buffer size; large enough to hold a full-screen redraw in one
+ * chunk so terminals stay snappy under vim/less.
+ */
+#define SESSION_WBUF_SIZE (64 * 1024)
 
 typedef struct c_run {
 	container_t *container;
@@ -532,62 +536,62 @@ error:
 	_exit(EXIT_FAILURE);
 }
 
+/*
+ * Binary byte pump: drains from_fd (non-blocking) and writes to to_fd. Any
+ * unwritten tail after a short write is stashed in *buf / *count for the next
+ * call. The stream must not be reframed in any way -- the payload is a raw
+ * pty byte stream carrying terminal escape sequences, and any injected bytes
+ * (previously a trailing NUL) corrupt vim/less rendering and keyboard input.
+ */
 static int
 readloop(int from_fd, int to_fd, char *buf, int *count)
 {
-	TRACE("[EXEC] Starting read loop in process %d; from fd %d, to fd %d, PPID: %d", getpid(),
-	      from_fd, to_fd, getppid());
-
-	// write pending null
-	if (*count == -1) {
-		if (write(to_fd, "\0", 1) < 0) {
+	// flush any tail left over from a previous short write
+	if (*count > 0) {
+		ssize_t written = write(to_fd, buf, *count);
+		if (written < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				return 0;
 			TRACE_ERRNO("[READLOOP] write failed.");
 			return -1;
+		}
+		if (written < *count) {
+			memmove(buf, buf + written, *count - written);
+			*count -= written;
+			return 0;
 		}
 		*count = 0;
 	}
 
-	// write pending data
-	if (*count > 0) {
-		TRACE("[READLOOP] Pending %d bytes from fd: %d: %s", *count, from_fd, buf);
-		IF_TRUE_RETVAL(*count + 1 > SESSION_WBUF_SIZE, -1);
-
-		if (write(to_fd, buf, *count + 1) < 0) {
-			if (errno == EAGAIN)
-				return 0; // try again;
-
-			TRACE_ERRNO("[READLOOP] write failed.");
+	for (;;) {
+		ssize_t n = read(from_fd, buf, SESSION_WBUF_SIZE);
+		if (n < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				*count = 0;
+				return 0;
+			}
+			TRACE_ERRNO("[READLOOP] read failed.");
 			return -1;
 		}
-	}
-
-	while (0 < (*count = read(from_fd, buf, SESSION_WBUF_SIZE - 1))) {
-		buf[*count] = 0;
-		TRACE("[READLOOP] Read %d bytes from fd: %d: %s", *count, from_fd, buf);
-		int written = write(to_fd, buf, *count + 1);
-		if (written < 0) {
-			if (errno == EAGAIN)
-				return 0; // try again;
-
-			TRACE_ERRNO("[READLOOP] write failed.");
+		if (n == 0) // peer closed
 			return -1;
-		}
-		if (written == *count) {
-			*count = -1;
-		} else if (written < *count + 1) {
-			*count -= written;
-			memmove(buf, buf + written, written);
+
+		ssize_t off = 0;
+		while (off < n) {
+			ssize_t written = write(to_fd, buf + off, n - off);
+			if (written < 0) {
+				if (errno == EAGAIN || errno == EWOULDBLOCK) {
+					// stash unwritten tail
+					memmove(buf, buf + off, n - off);
+					*count = n - off;
+					return 0;
+				}
+				TRACE_ERRNO("[READLOOP] write failed.");
+				return -1;
+			}
+			off += written;
 		}
 	}
-	if (*count < 0 && errno != EAGAIN) {
-		TRACE_ERRNO("[READLOOP] read failed.");
-		return -1;
-	}
-
-	// all pending data written to to_fd, reset input/output parameter count
-	*count = 0;
-
-	return 0;
 }
 
 static void
