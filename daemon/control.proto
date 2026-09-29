@@ -168,8 +168,11 @@ message ControllerToDaemon {
 		// Execute command inside container
 		CONTAINER_EXEC_CMD = 113;
 
-		//Send input to exec'ed porgram
+		// Send input to exec'ed porgram
 		CONTAINER_EXEC_INPUT = 114;
+
+		// Set windows size of terminal exec'ed porgram with pty
+		CONTAINER_EXEC_WINSIZE = 119;
 
 		// Starts a container. Also needs ontainer_config_file.
 		CONTAINER_UPDATE_CONFIG = 115;
@@ -203,6 +206,8 @@ message ControllerToDaemon {
 	optional bool exec_pty = 16 [ default = false ]; // assign pty to command
 	optional string exec_input = 17; // input (string) to be sent to already executing command
 	optional bytes exec_input_raw = 47; // input (raw) to be sent to already executing command
+	optional uint32 exec_winsize_rows = 48; // rows of terminal window size for CONTAINER_EXEC_WINSIZE
+	optional uint32 exec_winsize_cols = 49; // cols of terminal window size for CONTAINER_EXEC_WINSIZE
 	optional string device_pin = 42;	// pin for token for CONTAINER_CHANGE_TOKEN_PIN
 	optional string device_newpin = 43;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN)
 	optional string dev_rule = 44; // device access rule n form of dev-type major:minor read-write-mknod, e.g., "c 42:42 rwm"

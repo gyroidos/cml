@@ -31,6 +31,7 @@
 #include <sys/prctl.h>
 #include <fcntl.h>
 #include <pty.h>
+#include <termios.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <linux/limits.h>
@@ -328,6 +329,26 @@ c_run_write_exec_input(void *runp, const uint8_t *exec_input, size_t len, int se
 		total += n;
 	}
 	return total;
+}
+
+static int
+c_run_set_exec_winsize(void *runp, uint16_t rows, uint16_t cols, int session_fd)
+{
+	c_run_t *run = runp;
+	ASSERT(run);
+
+	c_run_session_t *session = c_run_get_session_by_fd(run, session_fd);
+	IF_NULL_RETVAL(session, -1);
+
+	if (session->pty_master < 0)
+		return -1;
+
+	struct winsize ws = { .ws_row = rows, .ws_col = cols };
+	if (ioctl(session->pty_master, TIOCSWINSZ, &ws) < 0) {
+		WARN_ERRNO("Could not set winsize (%hu x %hu) on pty master", rows, cols);
+		return -1;
+	}
+	return 0;
 }
 
 static void
@@ -653,6 +674,32 @@ c_run_prepare_exec(c_run_session_t *session)
 		TRACE("Created new pty with fd: %i, slave name: %s\n", pty_master,
 		      session->pty_slave_name);
 
+		/*
+		 * set sane default termios on the pty so the executed shell sees
+		 * a functional line discipline (echo, canonical mode, ISIG on
+		 * for ^C/^Z, ONLCR, etc.); the client sets its own tty to raw
+		 * and forwards the input bytes verbatim
+		 */
+		struct termios tio;
+		if (tcgetattr(pty_master, &tio) == 0) {
+			tio.c_iflag |= ICRNL | IXON;
+			tio.c_iflag &= ~IGNCR;
+			tio.c_oflag |= OPOST | ONLCR;
+			tio.c_lflag |=
+				ECHO | ECHOE | ECHOK | ECHOKE | ECHOCTL | ISIG | ICANON | IEXTEN;
+			tio.c_cflag |= CREAD;
+			// control chars: ^C, ^\, DEL, ^U, ^D, ^Z
+			tio.c_cc[VINTR] = 3;
+			tio.c_cc[VQUIT] = 28;
+			tio.c_cc[VERASE] = 127;
+			tio.c_cc[VKILL] = 21;
+			tio.c_cc[VEOF] = 4;
+			tio.c_cc[VSUSP] = 26;
+			tio.c_cc[VMIN] = 1;
+			tio.c_cc[VTIME] = 0;
+			tcsetattr(pty_master, TCSANOW, &tio);
+		}
+
 		fd_make_non_blocking(session->pty_master);
 
 		/*
@@ -785,6 +832,7 @@ c_run_init(void)
 	// register relevant handlers implemented by this module
 	container_register_run_handler(MOD_NAME, c_run_exec_process);
 	container_register_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
+	container_register_set_exec_winsize_handler(MOD_NAME, c_run_set_exec_winsize);
 	container_register_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
 }
 
@@ -794,6 +842,7 @@ c_run_deinit(void)
 	// unregister handlers implemented by this module
 	container_unregister_run_handler(MOD_NAME, c_run_exec_process);
 	container_unregister_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
+	container_unregister_set_exec_winsize_handler(MOD_NAME, c_run_set_exec_winsize);
 	container_unregister_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
 
 	// unregister this module from container.c
