@@ -27,6 +27,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <fcntl.h>
 #include <pty.h>
 #include <sys/wait.h>
@@ -68,6 +70,8 @@ typedef struct c_run_session {
 	int pty_master;
 	char *pty_slave_name;
 	int pty_slave_fd;
+	event_io_t *pty_master_io;
+	event_io_t *console_sock_container_io;
 	int create_pty;
 	char *cmd;
 	ssize_t argc;
@@ -100,11 +104,11 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 		return NULL;
 	}
 
-	/* Create a socketpair for communication with the console task */
+	// Create a socketpair for communication with the console task
 	TRACE("Setting up sockets");
 	int cfd[2];
 
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, cfd)) {
+	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, cfd)) {
 		ERROR_ERRNO("Could not create socketpair for communication with console task!");
 		return NULL;
 	}
@@ -116,6 +120,8 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 	session->active_exec_pid = -1;
 	session->pty_slave_name = NULL;
 	session->pty_slave_fd = -1;
+	session->pty_master_io = NULL;
+	session->console_sock_container_io = NULL;
 
 	session->console_sock_cmld = cfd[0];
 	session->console_sock_container = cfd[1];
@@ -188,23 +194,36 @@ c_run_session_cleanup(c_run_session_t *session)
 		}
 	}
 
-	if (session->pty_master != -1) {
-		TRACE("Shutting down PTY master: %d", session->pty_master);
-		shutdown(session->pty_master, SHUT_WR);
-		TRACE("Shuttind down read direction of console container socket: %d",
-		      session->console_sock_container);
-		shutdown(session->console_sock_container, SHUT_RD);
-
-		TRACE("Shutting down console_sock_container: %d", session->console_sock_container);
-		shutdown(session->console_sock_container, SHUT_RDWR);
-		TRACE("Shutting down console_sock_cmld: %d", session->console_sock_cmld);
-		shutdown(session->console_sock_cmld, SHUT_RDWR);
-		TRACE("Finished socket shutdown. Exiting cleanup.");
-	} else {
-		TRACE("Shutting down console sockets");
-		shutdown(session->console_sock_container, SHUT_RDWR);
-		shutdown(session->console_sock_cmld, SHUT_RDWR);
+	if (session->pty_master_io) {
+		event_remove_io(session->pty_master_io);
+		event_io_free(session->pty_master_io);
+		session->pty_master_io = NULL;
 	}
+	if (session->console_sock_container_io) {
+		event_remove_io(session->console_sock_container_io);
+		event_io_free(session->console_sock_container_io);
+		session->console_sock_container_io = NULL;
+	}
+
+	/*
+	 * closing the last master reference hangs up the pty: the shell, which
+	 * is session leader inside the pidns, and its jobs receive SIGHUP
+	 */
+	if (session->pty_master != -1) {
+		TRACE("Closing PTY master: %d", session->pty_master);
+		close(session->pty_master);
+		session->pty_master = -1;
+	}
+	if (session->pty_slave_fd != -1) {
+		close(session->pty_slave_fd);
+		session->pty_slave_fd = -1;
+	}
+
+	TRACE("Shutting down console sockets");
+	if (session->console_sock_container != -1)
+		shutdown(session->console_sock_container, SHUT_RDWR);
+	if (session->console_sock_cmld != -1)
+		shutdown(session->console_sock_cmld, SHUT_RDWR);
 
 	session->console_sock_container_wbuf_count = 0;
 	session->pty_master_wbuf_count = 0;
@@ -233,7 +252,7 @@ do_clone(int (*func)(void *), unsigned long flags, void *data)
 {
 	int ret = 0;
 	void *exec_stack = NULL;
-	/* Allocate node stack */
+	// Allocate node stack
 
 	if (MAP_FAILED == (exec_stack = mmap(NULL, CLONE_STACK_SIZE, PROT_READ | PROT_WRITE,
 					     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0))) {
@@ -309,17 +328,17 @@ c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 
 	TRACE("SIGCHLD handler called for c_run injected process in container %s with PID %d",
 	      container_get_description(run->container), container_get_pid(run->container));
-	/* The exec loop is started in a new session having it's PID as PGID.
-	 * Therefore wait for this PGID. If a descendant process call setsid it doesn't
-	 * get reaped by this handler. This enables the user to inject processes who
-	 * continue running after the command injected by control exits */
+	/*
+	 * Wait for the exec helper (active_exec_pid) only. The command itself
+	 * runs as the helper's child inside the pidns and is reaped by the
+	 * helper, which then exits with the command's status.
+	 */
 	pid_t exec_pid = session->active_exec_pid;
 	pid_t pid = 0;
 	int status = 0;
 	while ((pid = waitpid(session->active_exec_pid, &status, WNOHANG))) {
 		TRACE("Got exited child with PID: %d, exec pid: %d", pid, exec_pid);
 
-		//if (pid == exec_pid || pid == run->pty_master_read_pid || run->pty_master_write_pid) {
 		if (pid == exec_pid) {
 			TRACE("Injected process exited. Cleaning up.");
 			if (WIFEXITED(status)) {
@@ -333,11 +352,11 @@ c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 				continue;
 			}
 
-			/* remove the sigchld callback for this container from the event loop */
+			// remove the sigchld callback for this container from the event loop
 			event_remove_signal(sig);
 			event_signal_free(sig);
 
-			/* Close sockets of the session */
+			// Close sockets of the session
 			run->sessions = list_remove(run->sessions, session);
 			c_run_session_cleanup(session);
 			c_run_session_free(session);
@@ -382,6 +401,50 @@ error:
 	return -1;
 }
 
+/*
+ * Runs in the innermost child (the one that actually execs the shell), i.e.,
+ * the one which is in the container's pid namespace. Only from here setsid()
+ * and TIOCSCTTY produce a session/foreground process group inside the pidns,
+ * as job control in the executed shell expects. Any failure is fatal: the
+ * command must never run on cmld's inherited stdio.
+ */
+static void
+do_pty_setup_in_child(c_run_session_t *session)
+{
+	if (!session->create_pty)
+		return;
+
+	/*
+	 * the slave was opened by cmld before joining the container mnt ns
+	 * (the pts host node is only visible there) and inherited down here
+	 */
+	if (session->pty_slave_fd < 0) {
+		ERROR("[EXEC] pty slave fd not inherited into shell child");
+		_exit(EXIT_FAILURE);
+	}
+
+	// setsid() also detaches from any controlling tty inherited from cmld
+	if (setsid() < 0) {
+		ERROR_ERRNO("[EXEC] setsid in shell child failed");
+		_exit(EXIT_FAILURE);
+	}
+
+	// TIOCSCTTY makes our pgrp the tty's initial foreground process group
+	if (ioctl(session->pty_slave_fd, TIOCSCTTY, 0) < 0) {
+		ERROR_ERRNO("[EXEC] TIOCSCTTY in shell child failed");
+		_exit(EXIT_FAILURE);
+	}
+
+	if (dup2(session->pty_slave_fd, STDIN_FILENO) < 0 ||
+	    dup2(session->pty_slave_fd, STDOUT_FILENO) < 0 ||
+	    dup2(session->pty_slave_fd, STDERR_FILENO) < 0) {
+		ERROR_ERRNO("[EXEC] dup2 pty slave in shell child failed");
+		_exit(EXIT_FAILURE);
+	}
+	if (session->pty_slave_fd > STDERR_FILENO)
+		close(session->pty_slave_fd);
+}
+
 static int
 do_exec(void *data)
 {
@@ -393,73 +456,40 @@ do_exec(void *data)
 	TRACE("[EXEC]: Executing command %s in process with PID: %d, PGID: %d, PPID: %d",
 	      session->cmd, getpid(), getpgid(getpid()), getppid());
 
-	if (session->create_pty) {
-		if (-1 == dup2(session->pty_slave_fd, STDIN_FILENO)) {
-			ERROR("Failed to redirect stdin to cmld socket. Exiting...");
-			goto error;
-		}
-
-		if (-1 == dup2(session->pty_slave_fd, STDOUT_FILENO)) {
-			ERROR("Failed to redirect stdout to cmld socket. Exiting...");
-			goto error;
-		}
-
-		if (-1 == dup2(session->pty_slave_fd, STDERR_FILENO)) {
-			ERROR("Failed to redirect stderr to cmld. Exiting...");
-			goto error;
-		}
+	/*
+	 * fork again to also join the pidns, since setns does not switch the
+	 * current process into the pidns but sets the childs to be created in
+	 * the new ns. Only the inner child sets up the pty as its controlling
+	 * terminal, so job control in the executed shell works.
+	 */
+	pid_t child = fork();
+	if (child < 0) {
+		ERROR_ERRNO("fork for pidns join failed");
+		goto error;
+	}
+	if (child == 0) {
+		/*
+		 * cmld only knows this helper's pid; when it kills the helper on
+		 * session cleanup, hang up the command as a closed terminal would
+		 */
+		if (prctl(PR_SET_PDEATHSIG, SIGHUP) < 0)
+			WARN_ERRNO("Could not set parent death signal for %s", session->argv[0]);
+		do_pty_setup_in_child(session);
+		if (setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1) < 0)
+			WARN_ERRNO("Could not set PATH for %s", session->argv[0]);
+		execvp(session->argv[0], session->argv);
+		_exit(127);
 	}
 
-	/*
-	 * fork again to also join the pidns, since setns does not switch
-	 * the current process into the pidns but sets the childs to be created
-	 * in the new ns.
-	 */
-	IF_TRUE_GOTO(proc_fork_and_execvp((const char *const *)session->argv) < 0, error);
-	_exit(EXIT_SUCCESS);
+	int status = 0;
+	if (proc_waitpid(child, &status, 0) < 0) {
+		ERROR_ERRNO("waitpid for shell child failed");
+		_exit(EXIT_FAILURE);
+	}
+	_exit(WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status));
 
 error:
 	ERROR_ERRNO("An error occured while trying to execute command. Giving up...");
-	_exit(EXIT_FAILURE);
-}
-
-static int
-do_pty_exec(void *data)
-{
-	ASSERT(data);
-	c_run_session_t *session = data;
-
-	session->active_exec_pid = getpid();
-
-	TRACE("[EXEC] Prepare command execution in process with PID: %d, PGID: %d", getpid(),
-	      getpgid(getpid()));
-	session->pty_slave_fd = -1;
-
-	// open PTY slave
-	if (-1 == (session->pty_slave_fd = open(session->pty_slave_name, O_RDWR))) {
-		TRACE("Failed to open pty slave: %s\n", session->pty_slave_name);
-		//TODO avoid access to pty master from child ?
-		goto error;
-	}
-
-	TRACE("[EXEC] Current controlling PTY is: %s\n", ctermid(NULL));
-
-	if (-1 == ioctl(STDIN_FILENO, TIOCNOTTY)) {
-		TRACE("[EXEC] Failed to release current controlling pty.\n");
-	}
-
-	// make process session leader
-	// necessary for TIOCSCTTY
-	setsid();
-
-	if (-1 == ioctl(session->pty_slave_fd, TIOCSCTTY, NULL)) {
-		ERROR("[EXEC] Failed to set controlling pty slave\n");
-		goto error;
-	}
-
-	do_exec(session);
-error:
-	TRACE("An error occurred. Exiting...");
 	_exit(EXIT_FAILURE);
 }
 
@@ -531,7 +561,9 @@ c_run_cb_read_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 		TRACE("Exception on reading pty fd %d", fd);
 		event_remove_io(io);
 		event_io_free(io);
+		session->pty_master_io = NULL;
 		close(fd);
+		session->pty_master = -1;
 		return;
 	}
 
@@ -554,7 +586,9 @@ c_run_cb_write_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 		TRACE("Exception on console socket fd %d", fd);
 		event_remove_io(io);
 		event_io_free(io);
+		session->console_sock_container_io = NULL;
 		close(fd);
+		session->console_sock_container = -1;
 		return;
 	}
 
@@ -569,16 +603,20 @@ c_run_cb_write_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 static int
 c_run_prepare_exec(c_run_session_t *session)
 {
-	//create new PTY
+	// create new PTY
 	if (session->create_pty) {
 		TRACE("[EXEC] Starting to create new pty");
 
 		int pty_master = 0;
 
-		if (-1 == (pty_master = posix_openpt(O_RDWR))) {
+		// CLOEXEC: the command must not inherit its own pty master
+		if (-1 == (pty_master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC))) {
 			ERROR("[EXEC] Failed to get new PTY master fd\n");
 			goto error;
 		}
+
+		TRACE("Storing PTY master fd to c_run_t: %d", pty_master);
+		session->pty_master = pty_master;
 
 		if (0 != grantpt(pty_master)) {
 			ERROR("Failed to grantpt()\n");
@@ -597,38 +635,53 @@ c_run_prepare_exec(c_run_session_t *session)
 		TRACE("Created new pty with fd: %i, slave name: %s\n", pty_master,
 		      session->pty_slave_name);
 
-		TRACE("Storing PTY master fd to c_run_t: %d", pty_master);
-		session->pty_master = pty_master;
-
 		fd_make_non_blocking(session->pty_master);
 
-		DEBUG("Registering read callback for PTY master fd");
-		event_io_t *pty_master_write_io =
-			event_io_new(session->console_sock_container,
-				     EVENT_IO_READ | EVENT_IO_EXCEPT, c_run_cb_write_pty, session);
-		event_add_io(pty_master_write_io);
+		/*
+		 * open the pts slave right here in cmld (host mount ns);
+		 * the container's mount ns has an empty /dev/pts, so any child
+		 * that already joined it cannot open the slave by name
+		 */
+		// CLOEXEC is dropped by the dup2() onto stdio in the shell child
+		session->pty_slave_fd =
+			open(session->pty_slave_name, O_RDWR | O_NOCTTY | O_CLOEXEC);
+		if (session->pty_slave_fd < 0) {
+			ERROR_ERRNO("Failed to open pty slave %s", session->pty_slave_name);
+			goto error;
+		}
 
-		DEBUG("Registering read callback for console socket");
-		event_io_t *pty_master_read_io =
-			event_io_new(session->pty_master, EVENT_IO_READ | EVENT_IO_EXCEPT,
-				     c_run_cb_read_pty, session);
-		event_add_io(pty_master_read_io);
-
-		//clone child to execute command
+		// clone child to execute command
 		TRACE("clone child process to execute command with PTY");
-		session->active_exec_pid = do_clone(do_pty_exec, SIGCHLD, (void *)session);
+		session->active_exec_pid = do_clone(do_exec, SIGCHLD, (void *)session);
 
 		if (session->active_exec_pid == -1) {
 			TRACE("Failed to fork() ...\n");
 			goto error;
 		}
 
+		// the exec child inherited the slave fd; cmld no longer needs it
+		close(session->pty_slave_fd);
+		session->pty_slave_fd = -1;
+
+		// register the pump watchers only once there is a child to serve
+		DEBUG("Registering read callback for console socket");
+		session->console_sock_container_io =
+			event_io_new(session->console_sock_container,
+				     EVENT_IO_READ | EVENT_IO_EXCEPT, c_run_cb_write_pty, session);
+		event_add_io(session->console_sock_container_io);
+
+		DEBUG("Registering read callback for PTY master fd");
+		session->pty_master_io = event_io_new(session->pty_master,
+						      EVENT_IO_READ | EVENT_IO_EXCEPT,
+						      c_run_cb_read_pty, session);
+		event_add_io(session->pty_master_io);
+
 		return 0;
 	} else {
 		// attach executed process directly to console socket
 		TRACE("Executing without PTY");
 
-		//clone child to execute command
+		// clone child to execute command
 		TRACE("Clone child process to execute command without PTY");
 		session->active_exec_pid = do_clone(do_exec, SIGCHLD, (void *)session);
 
