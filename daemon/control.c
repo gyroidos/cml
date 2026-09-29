@@ -1796,11 +1796,25 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT: {
 		IF_NULL_RETURN(container);
-		TRACE("Got input for exec'ed process. Sending message on fd");
 
-		int ret = container_write_exec_input(container, msg->exec_input, fd);
-		if (ret < 0) {
+		const uint8_t *input = NULL;
+		size_t len = 0;
+		if (msg->has_exec_input_raw) {
+			input = msg->exec_input_raw.data;
+			len = msg->exec_input_raw.len;
+		} else if (msg->exec_input) {
+			input = (const uint8_t *)msg->exec_input;
+			len = strlen(msg->exec_input);
+		} else {
+			// no input ignore data nothing to handle
+			break;
+		}
+		res = container_write_exec_input(container, input, len, fd);
+		if (res < 0) {
 			ERROR_ERRNO("Failed to write input to exec'ed process");
+		} else if ((size_t)res < len) {
+			WARN("Exec'ed process does not read its input, dropped %zu bytes",
+			     len - (size_t)res);
 		}
 	} break;
 

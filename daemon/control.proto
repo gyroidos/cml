@@ -201,7 +201,8 @@ message ControllerToDaemon {
 	optional string exec_command = 14; // command to execute in container context
 	repeated string exec_args = 15; // arguments for command to be executed
 	optional bool exec_pty = 16 [ default = false ]; // assign pty to command
-	optional string exec_input = 17; // input to be sent to already executing command
+	optional string exec_input = 17; // input (string) to be sent to already executing command
+	optional bytes exec_input_raw = 47; // input (raw) to be sent to already executing command
 	optional string device_pin = 42;	// pin for token for CONTAINER_CHANGE_TOKEN_PIN
 	optional string device_newpin = 43;	// new pin for token  for CONTAINER_CHANGE_TOKEN_PIN)
 	optional string dev_rule = 44; // device access rule n form of dev-type major:minor read-write-mknod, e.g., "c 42:42 rwm"

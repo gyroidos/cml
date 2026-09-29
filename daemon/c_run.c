@@ -295,7 +295,7 @@ c_run_get_console_sock_cmld(void *runp, int session_fd)
 }
 
 static int
-c_run_write_exec_input(void *runp, char *exec_input, int session_fd)
+c_run_write_exec_input(void *runp, const uint8_t *exec_input, size_t len, int session_fd)
 {
 	c_run_t *run = runp;
 	ASSERT(run);
@@ -303,13 +303,31 @@ c_run_write_exec_input(void *runp, char *exec_input, int session_fd)
 	c_run_session_t *session = c_run_get_session_by_fd(run, session_fd);
 	IF_NULL_RETVAL(session, -1);
 
-	if (session->active_exec_pid != -1) {
-		TRACE("Write message \"%s\" to fd: %d", exec_input, session->console_sock_cmld);
-		return write(session->console_sock_cmld, exec_input, strlen(exec_input));
-	} else {
-		WARN("Currently no process executing. Can't write input");
+	if (session->active_exec_pid == -1) {
+		ERROR("Currently no process executing. Can't write input");
 		return -1;
 	}
+	if (len == 0)
+		return 0;
+
+	/*
+	 * console_sock_cmld is non-blocking; if the pty side is not draining
+	 * and the socket buffer is full, report the partial write to the caller
+	 * instead of stalling cmld or pretending the tail was delivered
+	 */
+	ssize_t total = 0;
+	while ((size_t)total < len) {
+		ssize_t n = write(session->console_sock_cmld, exec_input + total, len - total);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				break;
+			return -1;
+		}
+		total += n;
+	}
+	return total;
 }
 
 static void
