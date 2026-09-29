@@ -1239,8 +1239,8 @@ cmld_shutdown_container_cb(container_t *container, container_callback_t *cb, UNU
 	/* all containers are down, so shut down */
 	DEBUG("Device shutdown: last container down; shutdown now");
 
-	audit_log_event(container_get_uuid(container), SSA, CMLD, CONTAINER_MGMT, "shutdown",
-			uuid_string(container_get_uuid(container)), 0);
+	audit_log_event(NULL, SSA, CMLD, CONTAINER_MGMT, "shutdown", NULL, 2, "last-container",
+			uuid_string(container_get_uuid(container)), NULL);
 
 	cmld_handle_device_shutdown();
 }
@@ -1294,9 +1294,8 @@ cmld_shutdown_c0_cb(container_t *c0, container_callback_t *cb, UNUSED void *data
 	if (shutdown_now && !cmld_hostedmode) {
 		/* all containers are down, so shut down */
 		DEBUG("Device shutdown: all containers already down; shutdown now");
-		audit_log_event(container_get_uuid(c0), SSA, CMLD, CONTAINER_MGMT, "shutdown",
-				uuid_string(container_get_uuid(c0)), 0);
-
+		audit_log_event(NULL, SSA, CMLD, CONTAINER_MGMT, "shutdown", NULL, 2,
+				"last-container", uuid_string(container_get_uuid(c0)), NULL);
 		cmld_handle_device_shutdown();
 	}
 }
