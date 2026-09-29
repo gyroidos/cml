@@ -865,16 +865,15 @@ send_message:
 		} else if (pid == 0) {
 			TRACE("[CLIENT] User input reading child forked, PID: %i", getpid());
 
-			char buf[128];
-			unsigned int count;
+			uint8_t buf[4096];
+			ssize_t count;
 
 			while (1) {
 				TRACE("[CLIENT] Trying to read input for exec'ed process");
 
-				if ((count = read(STDIN_FILENO, buf, 127)) > 0) {
-					buf[count] = 0;
-
-					TRACE("[CLIENT] Got input for exec'ed process: %s", buf);
+				if ((count = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
+					TRACE("[CLIENT] Got %zd input bytes for exec'ed process",
+					      count);
 
 					ControllerToDaemon inputmsg = CONTROLLER_TO_DAEMON__INIT;
 					inputmsg.container_uuids = mem_new(char *, 1);
@@ -882,16 +881,19 @@ send_message:
 					inputmsg.n_container_uuids = 1;
 					inputmsg.command =
 						CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
-					inputmsg.exec_input = buf;
-
-					TRACE("[CLIENT] Sending input for exec'ed process in container %s",
-					      argv[optind]);
+					/* binary-safe input; keeps NULs, ^D, arrow keys, etc. */
+					inputmsg.has_exec_input_raw = true;
+					inputmsg.exec_input_raw.data = buf;
+					inputmsg.exec_input_raw.len = count;
 
 					send_message(sock, &inputmsg);
 					mem_free0(inputmsg.container_uuids);
 					TRACE("[CLIENT] Sent input to cmld");
+				} else if (count == 0 || (count < 0 && errno != EINTR)) {
+					break;
 				}
 			}
+			_exit(0);
 		} else {
 			TRACE("[CLIENT] Exec'ed process outputreceiving  child forked, PID: %i",
 			      getpid());

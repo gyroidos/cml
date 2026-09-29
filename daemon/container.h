@@ -521,7 +521,8 @@ CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t ar
 /**
  * Registers the corresponding handler for container_write_exec_input
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, char *exec_input, int session_fd)
+CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_input, size_t len,
+				 int session_fd)
 
 /**
  * Freeze a container.
