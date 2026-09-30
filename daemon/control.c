@@ -1769,7 +1769,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		if (container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args,
-				  msg->exec_args, fd) < 0) {
+				  msg->exec_args, msg->exec_term, fd) < 0) {
 			ERROR("Failed to exec");
 
 			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;

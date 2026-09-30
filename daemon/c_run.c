@@ -81,6 +81,7 @@ typedef struct c_run_session {
 	char *cmd;
 	ssize_t argc;
 	char **argv;
+	char *env_term;
 	char *console_sock_container_wbuf;
 	int console_sock_container_wbuf_count;
 	char *pty_master_wbuf;
@@ -102,7 +103,7 @@ c_run_new(compartment_t *compartment)
 
 static c_run_session_t *
 c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv,
-		  int session_fd)
+		  char *term, int session_fd)
 {
 	if (argv == NULL || argc < 1) {
 		ERROR("No command was specified to execute.");
@@ -138,6 +139,7 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 	session->cmd = mem_strdup(cmd);
 	session->argc = argc;
 	session->create_pty = create_pty;
+	session->env_term = term ? mem_printf("TERM=%s", term) : NULL;
 
 	ssize_t i = 0;
 	size_t total_len = ADD_WITH_OVERFLOW_CHECK(session->argc, (size_t)1);
@@ -168,6 +170,8 @@ c_run_session_free(c_run_session_t *session)
 	if (session->pty_slave_name)
 		mem_free0(session->pty_slave_name);
 	mem_free_array((void *)session->argv, session->argc);
+	if (session->env_term)
+		mem_free0(session->env_term);
 	if (session->console_sock_container_wbuf)
 		mem_free0(session->console_sock_container_wbuf);
 	if (session->pty_master_wbuf)
@@ -517,10 +521,17 @@ do_exec(void *data)
 		 */
 		if (prctl(PR_SET_PDEATHSIG, SIGHUP) < 0)
 			WARN_ERRNO("Could not set parent death signal for %s", session->argv[0]);
+
 		do_pty_setup_in_child(session);
-		if (setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1) < 0)
-			WARN_ERRNO("Could not set PATH for %s", session->argv[0]);
-		execvp(session->argv[0], session->argv);
+
+		/*
+		 * start from a clean environment: only PATH plus the client's
+		 * TERM (if any), nothing inherited from cmld; a NULL env_term
+		 * simply terminates the array early
+		 */
+		char *const envp[] = { "PATH=/usr/sbin:/usr/bin:/sbin:/bin", session->env_term,
+				       NULL };
+		execvpe(session->argv[0], session->argv, envp);
 		_exit(127);
 	}
 
@@ -768,7 +779,8 @@ error:
 }
 
 static int
-c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **argv, int session_fd)
+c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **argv, char *term,
+		   int session_fd)
 {
 	c_run_t *run = runp;
 	ASSERT(run);
@@ -787,7 +799,7 @@ c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **a
 	ASSERT(cmd);
 	TRACE("Trying to excute command \"%s\" inside container", cmd);
 
-	c_run_session_t *session = c_run_session_new(run, create_pty, cmd, argc, argv, session_fd);
+	c_run_session_t *session = c_run_session_new(run, create_pty, cmd, argc, argv, term, session_fd);
 	IF_NULL_RETVAL(session, -1);
 
 	run->sessions = list_append(run->sessions, session);

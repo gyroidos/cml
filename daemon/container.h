@@ -516,7 +516,7 @@ CONTAINER_MODULE_WRAPPER_DECLARE(is_encrypted, bool)
  * @return session id of the running session in the container, -1 on error
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t argc, char **argv,
-				 int session_fd)
+				 char *term, int session_fd)
 
 /**
  * Registers the corresponding handler for container_write_exec_input
