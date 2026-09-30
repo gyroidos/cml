@@ -229,7 +229,7 @@ get_container_uuid_new(const char *identifier, int sock, bool system)
 		if (valid_uuid == NULL)
 			uuid_free(uuid);
 	} else {
-		INFO("Retrying with name");
+		TRACE("Retrying with name");
 		for (size_t i = 0; i < resp->n_container_status; ++i) {
 			TRACE("name %s", resp->container_status[i]->name);
 			if (0 == strcmp(resp->container_status[i]->name, identifier)) {
