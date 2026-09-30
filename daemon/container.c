@@ -1087,8 +1087,8 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_cap_current_process, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(set_cap_current_process, int, 0)
 
 /* Functions usually implemented and registered by c_run module */
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(run, int, void *, int, char *, ssize_t, char **, int)
-CONTAINER_MODULE_FUNCTION_WRAPPER6_IMPL(run, int, -1, int, char *, ssize_t, char **, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(run, int, void *, int, char *, ssize_t, char **, char *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER7_IMPL(run, int, -1, int, char *, ssize_t, char **, char *, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(write_exec_input, int, void *, const uint8_t *, size_t, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(write_exec_input, int, -1, const uint8_t *, size_t, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_exec_winsize, int, void *, uint16_t, uint16_t, int)
