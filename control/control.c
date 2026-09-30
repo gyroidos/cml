@@ -812,6 +812,7 @@ main(int argc, char *argv[])
 			optind++;
 		} else {
 			msg.exec_pty = 1;
+			msg.exec_term = getenv("TERM");
 		}
 
 		if (optind > argc - 1)
