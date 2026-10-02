@@ -115,7 +115,7 @@ convert_key_to_hex_ascii(unsigned char *master_key, unsigned int keysize,
 
 static int
 load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta_blk_name,
-			     const char *integrity_key_ascii, const char *name, int fs_size,
+			     const char *integrity_key_ascii, const char *name, uint64_t fs_size,
 			     bool stacked)
 {
 	// General variables
@@ -186,7 +186,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 
 static int
 load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_key_ascii,
-			  const char *name, int fs_size, bool integrity)
+			  const char *name, uint64_t fs_size, bool integrity)
 {
 	struct dm_ioctl *io = mem_alloc0(DM_CRYPT_BUF_SIZE);
 	struct dm_target_spec *tgt;
@@ -203,8 +203,8 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	int i;
 	int ioctl_ret;
 
-	TRACE("Loading crypto mapping table (%s,%s,%s,%s,%d,%d)", real_blk_name, crypto_type,
-	      master_key_ascii, name, fs_size, fd);
+	TRACE("Loading crypto mapping table (%s,%s,%s,%s,%" PRIu64 ",%d)", real_blk_name,
+	      crypto_type, master_key_ascii, name, fs_size, fd);
 
 	/* Load the mapping table for this device */
 	tgt = (struct dm_target_spec *)(io + 1);
@@ -298,7 +298,7 @@ errout:
  */
 static char *
 create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *key,
-			 const char *name, const unsigned long fs_size, bool stacked)
+			 const char *name, const uint64_t fs_size, bool stacked)
 {
 	int fd;
 	int ioctl_ret;
@@ -382,7 +382,7 @@ dm_control:
 
 static char *
 create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name,
-		      unsigned long fs_size, bool integrity)
+		      uint64_t fs_size, bool integrity)
 {
 	char ALIGNED(struct dm_ioctl) buffer[DM_CRYPT_BUF_SIZE];
 	struct dm_ioctl *io;
