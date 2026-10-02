@@ -125,6 +125,15 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 
 	char *verity_params = (char *)(io + 1) + sizeof(struct dm_target_spec);
 
+	/*
+	 * salt_size comes from the on-disk verity superblock (untrusted); it must
+	 * not exceed the fixed salt[] field or convert_bin_to_hex_new() over-reads
+	 */
+	if (sb->salt_size > sizeof(sb->salt)) {
+		ERROR("verity superblock salt_size %u exceeds %zu", sb->salt_size,
+		      sizeof(sb->salt));
+		return -1;
+	}
 	char *salt = convert_bin_to_hex_new(sb->salt, sb->salt_size);
 	uint32_t offset = 1;
 	snprintf(verity_params, len - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
