@@ -203,14 +203,6 @@ softtoken_unlock(void *int_token, char *passphrase, UNUSED unsigned char *pairin
 	softtoken_t *st_token = int_token;
 	ASSERT(st_token);
 
-	if (!token_is_locked(st_token->token)) {
-		WARN("Token is alread unlocked, returning");
-		return TOKEN_ERR_OK;
-	} else if (token_is_locked_till_reboot(st_token->token)) {
-		WARN("Token is locked till reboot, returning");
-		return TOKEN_ERR_LOCKED_TILL_REBOOT;
-	}
-
 	if (!file_exists(st_token->token_file)) {
 		ERROR("No token present");
 		return TOKEN_ERR_FATAL;
@@ -264,7 +256,7 @@ static token_operations_t softtoken_ops = {
 };
 
 void *
-softtoken_new(token_t *token, token_operations_t **ops, const char *softtoken_dir)
+softtoken_new(token_t const *token, token_operations_t **ops, const char *softtoken_dir)
 {
 	ASSERT(token);
 	ASSERT(softtoken_dir);
