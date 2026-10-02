@@ -189,17 +189,137 @@ c_vol_hash_image_path_new(c_vol_t *vol, const mount_entry_t *mntent)
 	return mem_printf("%s/%s.hash.img", dir, mount_entry_get_img(mntent));
 }
 
+static char *
+c_vol_initializing_path_new(const char *img)
+{
+	ASSERT(img);
+	return mem_printf("%s.initializing", img);
+}
+
+static int
+c_vol_create_image_initializing_marker(const char *img)
+{
+	char *img_initialization = NULL;
+	int ret;
+	ASSERT(img);
+
+	img_initialization = c_vol_initializing_path_new(img);
+
+	ret = file_touch(img_initialization);
+	if (ret < 0) {
+		ERROR("Failed to create initialization marker for image %s", img);
+	} else {
+		INFO("Created initialization marker for image %s", img);
+	}
+
+	mem_free0(img_initialization);
+	return ret;
+}
+
+static int
+c_vol_cleanup_dm_image(c_vol_t *vol, int fd, const mount_entry_t *mntent)
+{
+	char *type;
+	char *label;
+	int ret = 0;
+
+	ASSERT(vol);
+	ASSERT(mntent);
+
+	label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
+			   mount_entry_get_img(mntent));
+
+	DEBUG("Cleanup: Checking target type of %s\n", label);
+
+	type = dm_get_target_type_new(fd, label);
+	if (type == NULL) {
+		WARN("Failed to get target type of %s\n", label);
+		ret = -1;
+		goto cleanup;
+	}
+
+	DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
+
+	if (!strcmp(type, "crypt")) {
+		if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0) {
+			DEBUG("Could not delete dm-crypt dev %s", label);
+			ret = -1;
+		}
+	} else if (!strcmp(type, "verity")) {
+		if (verity_delete_blk_dev(label) < 0) {
+			DEBUG("Could not delete dm-verity dev %s", label);
+			ret = -1;
+		}
+	}
+
+cleanup:
+	mem_free0(label);
+	mem_free0(type);
+	return ret;
+}
+
+static int
+c_vol_remove_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
+{
+	char *img_meta = NULL;
+	char *img_initializing = NULL;
+
+	ASSERT(vol);
+	ASSERT(mntent);
+	ASSERT(img);
+
+	img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
+	img_initializing = c_vol_initializing_path_new(img);
+
+	if (unlink(img) < 0)
+		WARN("Could not unlink image %s", img);
+	if (unlink(img_meta) < 0)
+		WARN("Could not unlink image meta %s", img_meta);
+	if (unlink(img_initializing) < 0)
+		WARN("Could not unlink initialization marker %s", img_initializing);
+
+	int fd = dm_open_control();
+	if (fd > 0) {
+		if (c_vol_cleanup_dm_image(vol, fd, mntent) < 0) {
+			WARN("Could not delete dm dev for image %s", img);
+		}
+		dm_close_control(fd);
+	} else {
+		ERROR("Failed to open /dev/mapper/control\n");
+	}
+
+	mem_free0(img_meta);
+	mem_free0(img_initializing);
+	return 0;
+}
+
 /**
  * Check wether a container image is ready to be mounted.
  * @return On error -1 is returned, otherwise 0.
  */
 static int
-c_vol_check_image(c_vol_t *vol, const char *img)
+c_vol_check_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 {
+	char *img_initializing = NULL;
 	int ret;
 
 	ASSERT(vol);
 	ASSERT(img);
+	ASSERT(mntent);
+
+	img_initializing = c_vol_initializing_path_new(img);
+
+	if (file_exists(img_initializing)) {
+		WARN("The image %s was not fully initialized. Removing the image and doing the initialization again.",
+		     img);
+		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
+		c_vol_remove_image(vol, img, mntent);
+		INFO("Deleted corrupted image files of image %s", img);
+
+		mem_free0(img_meta);
+		mem_free0(img_initializing);
+		return -1;
+	}
 
 	ret = access(img, F_OK);
 
@@ -208,6 +328,7 @@ c_vol_check_image(c_vol_t *vol, const char *img)
 	else
 		DEBUG("Image file %s seems to be fine", img);
 
+	mem_free0(img_initializing);
 	return ret;
 }
 
@@ -350,6 +471,7 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 		return 0;
 	case MOUNT_TYPE_OVERLAY_RW:
 	case MOUNT_TYPE_EMPTY: {
+		c_vol_create_image_initializing_marker(img);
 		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
 		int ret = c_vol_create_image_empty(img, img_meta, mount_entry_get_size(mntent));
 		mem_free0(img_meta);
@@ -358,9 +480,11 @@ c_vol_create_image(c_vol_t *vol, const char *img, const mount_entry_t *mntent)
 	case MOUNT_TYPE_FLASH:
 		return -1; // we cannot create such image files
 	case MOUNT_TYPE_COPY:
+		c_vol_create_image_initializing_marker(img);
 		return c_vol_create_image_copy(vol, img, mntent);
 	case MOUNT_TYPE_DEVICE:
 	case MOUNT_TYPE_DEVICE_RW:
+		c_vol_create_image_initializing_marker(img);
 		return c_vol_create_image_device(vol, img, mntent);
 	default:
 		ERROR("Unsupported operating system mount type %d for %s",
@@ -784,7 +908,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		}
 	}
 
-	if (c_vol_check_image(vol, img) < 0) {
+	if (c_vol_check_image(vol, img, mntent) < 0) {
 		new_image = true;
 		if (c_vol_create_image(vol, img, mntent) < 0) {
 			goto error;
@@ -793,7 +917,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 
 	if (mount_entry_get_type(mntent) == MOUNT_TYPE_EMPTY) {
 		char *img_meta = c_vol_meta_image_path_new(vol, mntent, NULL);
-		if (c_vol_check_image(vol, img_meta) < 0) {
+		if (access(img_meta, F_OK) < 0) {
 			vol->corrupted_image = true;
 			goto error;
 		}
@@ -1057,6 +1181,14 @@ final:
 
 final_noshift:
 	ret = 0;
+	char *img_initializing = c_vol_initializing_path_new(img);
+	if (file_exists(img_initializing)) {
+		if (unlink(img_initializing) < 0)
+			WARN("Could not delete initialization marker %s", img_initializing);
+		else
+			INFO("Deleted initialization marker marker for image %s", img);
+	}
+	mem_free0(img_initializing);
 
 error:
 	if (dev)
@@ -1089,27 +1221,9 @@ c_vol_cleanup_dm(c_vol_t *vol)
 	n = mount_get_count(vol->mnt);
 	for (i = n - 1; i >= 0; i--) {
 		const mount_entry_t *mntent;
-		char *label;
 
 		mntent = mount_get_entry(vol->mnt, i);
-
-		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
-				   mount_entry_get_img(mntent));
-
-		if (mount_entry_get_verity_sha256(mntent)) {
-			DEBUG("Cleanup: removing block device %s of type verity\n", label);
-			if (dm_delete_blk_dev(fd, label) < 0)
-				WARN("Could not delete dm-verity dev %s", label);
-		} else if (mount_entry_is_encrypted(mntent)) {
-			DEBUG("Cleanup: removing block device %s of type cryptfs\n", label);
-			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
-				WARN("Could not delete cryptfs dev %s", label);
-		} else {
-			mem_free0(label);
-			continue;
-		}
-
-		mem_free0(label);
+		c_vol_cleanup_dm_image(vol, fd, mntent);
 	}
 	dm_close_control(fd);
 
