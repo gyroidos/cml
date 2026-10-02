@@ -47,9 +47,9 @@
 #include "cryptfs.h"
 #include "dm.h"
 
-#define UUID_LEN 37
+#include "bounds_safety.h"
 
-extern struct dm_cmd_table cmd_table[];
+#define UUID_LEN 37
 
 /* https://gitlab.com/cryptsetup/cryptsetup/wikis/DMVerity#verity-superblock-format */
 typedef struct __attribute__((packed)) {
@@ -68,16 +68,18 @@ typedef struct __attribute__((packed)) {
 } verity_sb_t;
 
 static int
-verity_create_uuid(const char *name, const char *uuid_str, char *buf, size_t buflen)
+verity_create_uuid(const char *name, const char *uuid_str, char *__counted_by(buflen) buf,
+		   size_t buflen)
 {
 	ASSERT(uuid_str);
 
-	// Strip '-' charaters
+	// Strip '-' charaters (uuid_str is __null_terminated, so walk it by pointer)
 	char uuid_stripped[UUID_LEN] = { 0 };
 	char *p = uuid_stripped;
-	for (int i = 0; i < UUID_LEN; i++) {
-		if (uuid_str[i] != '-') {
-			*p = uuid_str[i];
+	const char *__null_terminated src = uuid_str;
+	for (int i = 0; i < UUID_LEN && *src; i++, src++) {
+		if (*src != '-') {
+			*p = *src;
 			p++;
 		}
 	}
@@ -92,8 +94,9 @@ verity_create_uuid(const char *name, const char *uuid_str, char *buf, size_t buf
 }
 
 static void
-uuid_bytes_to_string(char *str, uint8_t uuid[16])
+uuid_bytes_to_string(char *__counted_by(len) str, size_t len, uint8_t uuid[16])
 {
+	ASSERT(len >= 37); // 32 hex digits + 4 dashes + NUL
 	char const hex[] = "0123456789abcdef";
 
 	char *p = str;
@@ -109,8 +112,9 @@ uuid_bytes_to_string(char *str, uint8_t uuid[16])
 }
 
 static int
-generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t *sb, char *fs_dev,
-				    uint64_t fs_size, char *hash_dev, const char *root_hash)
+generate_dm_table_load_extra_params(struct dm_ioctl *__sized_by(len) io, size_t len,
+				    verity_sb_t *sb, char *fs_dev, uint64_t fs_size, char *hash_dev,
+				    const char *root_hash)
 {
 	if (len < sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec)) {
 		ERROR("Failed to generate dm_table_load extra params: Buffer too small");
@@ -125,6 +129,15 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 
 	char *verity_params = (char *)(io + 1) + sizeof(struct dm_target_spec);
 
+	/*
+	 * salt_size comes from the on-disk verity superblock (untrusted); it must
+	 * not exceed the fixed salt[] field or convert_bin_to_hex_new() over-reads
+	 */
+	if (sb->salt_size > sizeof(sb->salt)) {
+		ERROR("verity superblock salt_size %u exceeds %zu", sb->salt_size,
+		      sizeof(sb->salt));
+		return -1;
+	}
 	char *salt = convert_bin_to_hex_new(sb->salt, sb->salt_size);
 	uint32_t offset = 1;
 	snprintf(verity_params, len - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
@@ -136,8 +149,15 @@ generate_dm_table_load_extra_params(struct dm_ioctl *io, size_t len, verity_sb_t
 
 	// Set pointer behind parameter
 	verity_params += strlen(verity_params) + 1;
-	// Align to an 8 byte boundary
-	verity_params = (char *)ALIGN((uintptr_t)verity_params, 8);
+	/*
+	 * Align to an 8 byte boundary. Advance by the misalignment delta rather
+	 * than casting ALIGN()'s integer result back to a pointer: forging a
+	 * pointer from an integer discards the bounds that -fbounds-safety
+	 * tracks for verity_params.
+	 */
+	size_t misalign = (uintptr_t)verity_params & 7;
+	if (misalign)
+		verity_params += 8 - misalign;
 	// Set tgt->next right behind dm_target_spec
 	tgt->next = (unsigned int)(verity_params - (char *)tgt);
 
@@ -148,9 +168,12 @@ static int
 create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
 {
 	int ret = -1;
-	uevent_event_t *uev = NULL;
-	char *targetpath = NULL, *linkpath = NULL, *buf = NULL;
-	char *uev_path = mem_printf("/sys/dev/block/%u:%u/uevent", major(devt), minor(devt));
+	uevent_event_t *__single uev = NULL;
+	char *__null_terminated targetpath = NULL;
+	char *__null_terminated linkpath = NULL;
+	char *__null_terminated buf = NULL;
+	char *__null_terminated uev_path =
+		mem_printf("/sys/dev/block/%u:%u/uevent", major(devt), minor(devt));
 
 	DEBUG("Creating symlink for verity device %s (%u:%u)", name, major(devt), minor(devt));
 
@@ -166,7 +189,7 @@ create_dm_symlink(const char *name, const dev_t devt, bool enforce_symlinks)
 		goto out;
 	}
 
-	const char *devptr = uevent_event_get_devname(uev);
+	const char *__null_terminated devptr = uevent_event_get_devname(uev);
 
 	if (!devptr) {
 		ERROR_ERRNO("Failed to parse devname from uevent");
@@ -240,8 +263,9 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	// Create dm-verity format uuid
 	char uuid[40] = { 0 };
 	char dev_uuid[DM_UUID_LEN] = { 0 };
-	uuid_bytes_to_string(uuid, sb.uuid);
-	if (verity_create_uuid(name, uuid, dev_uuid, sizeof(dev_uuid))) {
+	uuid_bytes_to_string(uuid, sizeof(uuid), sb.uuid);
+	if (verity_create_uuid(name, __unsafe_null_terminated_from_indexable(uuid), dev_uuid,
+			       sizeof(dev_uuid))) {
 		ERROR("Failed to create uuid for dm-verity device %s", name);
 		return -1;
 	}
@@ -253,7 +277,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 
 	// Make sure that dm-verity device does not already exist
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	int ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+	int ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_TABLE_STATUS), dmi);
 	if (ioctl_ret == 0 || errno != ENXIO) {
 		ERROR("Cannot create dm-verity device %s: Device already exists", name);
 		goto dm_control;
@@ -292,9 +316,9 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	}
 
 	// Create verity device
-	dm_ioctl_init(dmi, INDEX_DM_DEV_CREATE, sizeof(buf), name, dev_uuid, DM_EXISTS_FLAG, 0, 0,
-		      0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_CREATE].cmd, dmi);
+	dm_ioctl_init(dmi, INDEX_DM_DEV_CREATE, sizeof(buf), name,
+		      __unsafe_null_terminated_from_indexable(dev_uuid), DM_EXISTS_FLAG, 0, 0, 0);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_DEV_CREATE), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_DEV_CREATE ioctl returned %d", ioctl_ret);
 		goto loop_dev_hash;
@@ -310,7 +334,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 						root_hash)) {
 		goto verity_dev;
 	}
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_LOAD].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_TABLE_LOAD), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_LOAD ioctl returned %d", ioctl_ret);
 		goto verity_dev;
@@ -319,7 +343,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 	// Run dev-suspend command
 	flags = DM_READONLY_FLAG | DM_EXISTS_FLAG | DM_SECURE_DATA_FLAG;
 	dm_ioctl_init(dmi, INDEX_DM_DEV_SUSPEND, sizeof(buf), name, NULL, flags, 0, 0, 0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_DEV_SUSPEND].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_DEV_SUSPEND), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_DEV_SUSPEND ioctl returned %d", ioctl_ret);
 		goto verity_dev;
@@ -327,7 +351,7 @@ verity_create_blk_dev(const char *name, const char *fs_img_name, const char *has
 
 	// Check that verity device activation was successful
 	dm_ioctl_init(dmi, INDEX_DM_TABLE_STATUS, sizeof(buf), name, NULL, DM_EXISTS_FLAG, 0, 0, 0);
-	ioctl_ret = dm_ioctl(control_fd, cmd_table[INDEX_DM_TABLE_STATUS].cmd, dmi);
+	ioctl_ret = dm_ioctl(control_fd, dm_cmd(INDEX_DM_TABLE_STATUS), dmi);
 	if (ioctl_ret != 0) {
 		ERROR_ERRNO("DM_TABLE_STATUS ioctl returned %d", ioctl_ret);
 		goto verity_dev;

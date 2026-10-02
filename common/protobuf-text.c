@@ -21,6 +21,7 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#include "bounds_safety.h"
 #include "protobuf.h"
 #include "protobuf-text.h"
 #include <errno.h>
@@ -43,7 +44,7 @@ protobuf_dump_message(int fd, const ProtobufCMessage *message)
 {
 	ASSERT(message);
 
-	char *string;
+	char *__null_terminated string;
 	size_t msg_len = protobuf_string_from_message(&string, message, NULL);
 	if (NULL == string) {
 		WARN("Failed to serialize text protobuf message to string.");
@@ -67,12 +68,13 @@ protobuf_message_new_from_textfile(const char *filename,
 
 	ProtobufCTextError res;
 	mem_memset(&res, 0, sizeof(res));
-	FILE *file = fopen(filename, "r");
+	FILE *__single file = __unsafe_forge_single(FILE *, fopen(filename, "r"));
 	if (!file) {
 		WARN_ERRNO("Could not open file \"%s\" for reading.", filename);
 		return NULL;
 	}
-	ProtobufCMessage *msg = protobuf_c_text_from_file(descriptor, file, &res, NULL);
+	ProtobufCMessage *__single msg = __unsafe_forge_single(
+		ProtobufCMessage *, protobuf_c_text_from_file(descriptor, file, &res, NULL));
 	fclose(file);
 	if (!msg) {
 		ERROR("Failed to parse text protobuf message (%s) from file \"%s\". Reason: %s.",
@@ -92,7 +94,7 @@ protobuf_message_new_from_textfile(const char *filename,
 }
 
 ProtobufCMessage *
-protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor *descriptor)
+protobuf_message_new_from_string(const char *string, const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(string);
 	ASSERT(descriptor);
@@ -101,7 +103,9 @@ protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor 
 
 	ProtobufCTextError res;
 	mem_memset(&res, 0, sizeof(res));
-	ProtobufCMessage *msg = protobuf_c_text_from_string(descriptor, string, &res, NULL);
+	ProtobufCMessage *__single msg = __unsafe_forge_single(
+		ProtobufCMessage *,
+		protobuf_c_text_from_string(descriptor, (char *)string, &res, NULL));
 	if (!msg) {
 		ERROR("Failed to parse text protobuf message (%s) from string. Reason: %s.",
 		      descriptor->name ? descriptor->name : "UNKNOWN",
@@ -124,7 +128,7 @@ protobuf_message_new_from_string(char *string, const ProtobufCMessageDescriptor 
 }
 
 ProtobufCMessage *
-protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
+protobuf_message_new_from_buf(const uint8_t *__counted_by(buflen) buf, size_t buflen,
 			      const ProtobufCMessageDescriptor *descriptor)
 {
 	ASSERT(buf);
@@ -136,7 +140,8 @@ protobuf_message_new_from_buf(const uint8_t *buf, size_t buflen,
 	memcpy(string, buf, buflen);
 	string[buflen] = '\0';
 
-	ProtobufCMessage *msg = protobuf_message_new_from_string(string, descriptor);
+	ProtobufCMessage *msg = protobuf_message_new_from_string(
+		__unsafe_null_terminated_from_indexable(string), descriptor);
 
 	mem_free0(string);
 	return msg;
@@ -148,14 +153,14 @@ protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *mes
 	ASSERT(filename);
 	ASSERT(message);
 
-	char *string;
+	char *__null_terminated string;
 	size_t msg_len = protobuf_string_from_message(&string, message, NULL);
 	if (!string) {
 		ERROR("Failed to serialize text protobuf message to string.");
 		return -1;
 	}
 
-	int res = file_write(filename, string, msg_len);
+	int res = file_write(filename, __null_terminated_to_indexable(string), msg_len);
 	free(string);
 	if (res < 0) {
 		ERROR("Failed to write serialized text protobuf message to file \"%s\".", filename);
@@ -165,13 +170,14 @@ protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *mes
 }
 
 size_t
-protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage *message,
-			     ProtobufCAllocator *allocator)
+protobuf_string_from_message(char *__null_terminated *buffer_proto_string,
+			     const ProtobufCMessage *message, ProtobufCAllocator *allocator)
 {
 	ASSERT(message);
 	size_t proto_len = -1;
 
-	char *tmp_string = protobuf_c_text_to_string(message, allocator);
+	char *__null_terminated tmp_string = __unsafe_forge_null_terminated(
+		char *, protobuf_c_text_to_string(message, allocator));
 	if (!tmp_string) {
 		ERROR("Failed to serialize text protobuf message to string.");
 		goto error;

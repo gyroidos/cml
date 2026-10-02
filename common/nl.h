@@ -43,6 +43,8 @@
 #include <linux/genetlink.h>
 #include <stdbool.h>
 
+#include "bounds_safety.h"
+
 /* Define some missing netlink defines in BIONIC */
 #ifndef VETH_INFO_PEER
 #define VETH_INFO_PEER (0x01)
@@ -126,7 +128,8 @@ nl_msg_send_kernel(const nl_sock_t *sock, const nl_msg_t *msg);
  * @return In case of failure, return -1, in case of success, return num of bytes received
  */
 int
-nl_msg_receive_kernel(const nl_sock_t *sock, void *buf, size_t len, bool receive_uevent);
+nl_msg_receive_kernel(const nl_sock_t *sock, void *__sized_by(len) buf, size_t len,
+		      bool receive_uevent);
 
 /**
  * Transmit a message with ACKNOWLEDGEMENT flag
@@ -230,7 +233,7 @@ nl_msg_expand_len(nl_msg_t *msg, size_t len);
  * @return failure: -1, success: 0
  */
 int
-nl_msg_add_buffer(nl_msg_t *msg, int type, const char *buffer, size_t len);
+nl_msg_add_buffer(nl_msg_t *msg, int type, const char *__counted_by(len) buffer, size_t len);
 
 /**
  * This function adds a string attribute of a certain type
@@ -254,7 +257,7 @@ nl_msg_add_u32(nl_msg_t *msg, int type, uint32_t val);
  * @return failure: -1, success: 0
  */
 int
-nl_msg_set_buf_unaligned(nl_msg_t *msg, char *buf, size_t size);
+nl_msg_set_buf_unaligned(nl_msg_t *msg, char *__counted_by(size) buf, size_t size);
 
 /**
  * Sets the request according to the given struct genlmsghdr
