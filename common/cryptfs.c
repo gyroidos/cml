@@ -50,6 +50,8 @@
 #include "dm.h"
 #include "fd.h"
 
+#include "bounds_safety.h"
+
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
 /* Magic of the dm-integrity superblock, see SB_MAGIC in the kernel's dm-integrity.c */
@@ -127,7 +129,7 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	struct dm_ioctl *mapping_io = mem_alloc0(DM_INTEGRITY_BUF_SIZE);
 	struct dm_target_spec *tgt;
 	char *integrity_params;
-	char *extra_params =
+	char *__null_terminated extra_params =
 		stacked ? mem_printf("1 meta_device:%s", meta_blk_name) :
 			  mem_printf("3 meta_device:%s internal_hash:%s:%s allow_discards",
 				     meta_blk_name, INTEGRITY_TYPE, integrity_key_ascii);
@@ -146,22 +148,23 @@ load_integrity_mapping_table(int fd, const char *real_blk_name, const char *meta
 	strcpy(tgt->target_type, "integrity");
 
 	// Write the intergity parameters at the end after dm_target_spec
-	integrity_params = (char *)(mapping_io + 1) + sizeof(struct dm_target_spec);
+	size_t params_off = sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec);
+	integrity_params = (char *)mapping_io + params_off;
 
 	// Write parameter
 	// these parameters are used in [1] as well as by dmsetup when traced with strace
-	snprintf(integrity_params,
-		 DM_INTEGRITY_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
-		 "%s 0 %d J %s", real_blk_name, INTEGRITY_TAG_SIZE, extra_params);
+	snprintf(integrity_params, DM_INTEGRITY_BUF_SIZE - params_off, "%s 0 %d J %s",
+		 real_blk_name, INTEGRITY_TAG_SIZE, extra_params);
 
 	mem_free0(extra_params);
 
-	// Set pointer behind parameter
-	integrity_params += strlen(integrity_params) + 1;
-	// Byte align the parameter
-	integrity_params = (char *)ALIGN((uintptr_t)integrity_params, 8);
-	// Set tgt->next right behind dm_target_spec
-	tgt->next = (unsigned int)(integrity_params - (char *)tgt);
+	/*
+	 * Set tgt->next to the 8 byte aligned offset right behind the parameters.
+	 * Computing it as an offset into the buffer rather than reconstructing a
+	 * pointer from an integer keeps the buffer's bounds attached to it.
+	 */
+	size_t next_off = ALIGN(params_off + strlen(integrity_params) + 1, 8);
+	tgt->next = (unsigned int)(next_off - sizeof(struct dm_ioctl));
 
 	for (mapping_counter = 0; mapping_counter < TABLE_LOAD_RETRIES; mapping_counter++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, mapping_io);
@@ -191,10 +194,11 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	struct dm_ioctl *io = mem_alloc0(DM_CRYPT_BUF_SIZE);
 	struct dm_target_spec *tgt;
 	char *crypt_params;
-	char *extra_params = integrity ? mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE) :
-					 mem_printf("1 allow_discards");
+	char *__null_terminated extra_params =
+		integrity ? mem_printf("1 integrity:%d:aead", INTEGRITY_TAG_SIZE) :
+			    mem_printf("1 allow_discards");
 
-	const char *crypto_type = NULL;
+	const char *__null_terminated crypto_type = NULL;
 	if (cryptfs_crypto_type)
 		crypto_type = cryptfs_crypto_type;
 	else
@@ -217,15 +221,19 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	tgt->length = fs_size;
 	strcpy(tgt->target_type, "crypt");
 
-	crypt_params = (char *)(io + 1) + sizeof(struct dm_target_spec);
-	snprintf(crypt_params,
-		 DM_CRYPT_BUF_SIZE - sizeof(struct dm_ioctl) - sizeof(struct dm_target_spec),
-		 "%s %s 0 %s 0 %s", crypto_type, master_key_ascii, real_blk_name, extra_params);
+	size_t params_off = sizeof(struct dm_ioctl) + sizeof(struct dm_target_spec);
+	crypt_params = (char *)io + params_off;
+	snprintf(crypt_params, DM_CRYPT_BUF_SIZE - params_off, "%s %s 0 %s 0 %s", crypto_type,
+		 master_key_ascii, real_blk_name, extra_params);
 	mem_free0(extra_params);
 
-	crypt_params += strlen(crypt_params) + 1;
-	crypt_params = (char *)ALIGN((uintptr_t)crypt_params, 8); /* Align to an 8 byte boundary */
-	tgt->next = (unsigned int)(crypt_params - (char *)tgt);
+	/*
+	 * Set tgt->next to the 8 byte aligned offset right behind the parameters.
+	 * Computing it as an offset into the buffer rather than reconstructing a
+	 * pointer from an integer keeps the buffer's bounds attached to it.
+	 */
+	size_t next_off = ALIGN(params_off + strlen(crypt_params) + 1, 8);
+	tgt->next = (unsigned int)(next_off - sizeof(struct dm_ioctl));
 
 	for (i = 0; i < TABLE_LOAD_RETRIES; i++) {
 		ioctl_ret = dm_ioctl(fd, DM_TABLE_LOAD, io);
@@ -246,11 +254,11 @@ load_crypto_mapping_table(int fd, const char *real_blk_name, const char *master_
 	}
 }
 
-static char *
+static char *__null_terminated
 create_device_node(const char *name)
 {
 	struct dm_ioctl *io = mem_alloc0(DEVMAPPER_BUFFER_SIZE);
-	char *device = NULL;
+	char *__null_terminated device = NULL;
 	int fd = -1;
 
 	if ((fd = dm_open_control()) < 0) {
@@ -298,7 +306,7 @@ errout:
  *
  * @return device name if successful, otherwise NULL
  */
-static char *
+static char *__null_terminated
 create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, const char *key,
 			 const char *name, const uint64_t fs_size, bool stacked)
 {
@@ -308,7 +316,7 @@ create_integrity_blk_dev(const char *real_blk_name, const char *meta_blk_name, c
 	char ALIGNED(struct dm_ioctl) create_buffer[DM_INTEGRITY_BUF_SIZE];
 	struct dm_ioctl *create_io;
 	int create_counter;
-	char *integrity_dev = NULL;
+	char *__null_terminated integrity_dev = NULL;
 
 	// Open device mapper
 	if ((fd = dm_open_control()) < 0) {
@@ -382,7 +390,7 @@ dm_control:
 	return NULL;
 }
 
-static char *
+static char *__null_terminated
 create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const char *name,
 		      uint64_t fs_size, bool integrity)
 {
@@ -392,7 +400,7 @@ create_crypto_blk_dev(const char *real_blk_name, const char *master_key, const c
 	int load_count;
 	int i;
 	int ioctl_ret;
-	char *crypto_blkdev = NULL;
+	char *__null_terminated crypto_blkdev = NULL;
 
 	DEBUG("Creating crypto blk device");
 
@@ -505,7 +513,7 @@ errout:
 }
 
 static int
-cryptfs_write_zeros(char *crypto_blkdev, size_t size)
+cryptfs_write_zeros(const char *crypto_blkdev, size_t size)
 {
 	int fd = -1, ret = -1;
 	char *zeros = NULL;
@@ -555,7 +563,7 @@ error:
 	return ret;
 }
 
-char *
+char *__null_terminated
 cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char *key,
 			 const char *meta_blkdev, cryptfs_mode_t mode)
 {
@@ -565,10 +573,10 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 
 	bool encrypt, integrity, stacked;
 
-	char *crypto_blkdev = NULL, *integrity_blkdev = NULL;
-	char *crypto_key = NULL, *integrity_key = NULL;
+	char *__null_terminated crypto_blkdev = NULL, *__null_terminated integrity_blkdev = NULL;
+	char *__null_terminated crypto_key = NULL, *__null_terminated integrity_key = NULL;
 	size_t crypto_key_len = 0, integrity_key_len = 0;
-	char *integrity_dev_label = NULL;
+	char *__null_terminated integrity_dev_label = NULL;
 	bool initial_format = false;
 
 	/* do parameter validation */
@@ -628,14 +636,22 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	/* validated parameters */
 
 	/*
+	 * The key is split by offset below, which a __null_terminated pointer does
+	 * not allow. Convert it to a bounds-checked view of its own length once;
+	 * the lengths validated above never exceed it.
+	 */
+	const char *key_bytes = __null_terminated_to_indexable(key);
+
+	/*
 	 * Use the first 128 hex digits (64 byte) of master key for 512 bit xts mode
 	 * or full master key for AUTHENC mode
 	 */
-	crypto_key = crypto_key_len > 0 ? mem_strndup(key, crypto_key_len) : NULL;
+	crypto_key = crypto_key_len > 0 ? mem_strndup(key_bytes, crypto_key_len) : NULL;
 
 	/* Use the following 64 hex digits (32 byte) of master key for 256 bit hmac */
-	integrity_key =
-		integrity_key_len > 0 ? mem_strndup(key + crypto_key_len, integrity_key_len) : NULL;
+	integrity_key = integrity_key_len > 0 ?
+				mem_strndup(key_bytes + crypto_key_len, integrity_key_len) :
+				NULL;
 
 	//DEBUG("KEYS:\n\t key:\t %s\n\t split:\t %s:%s", key, crypto_key ? crypto_key : "(null)",
 	//      integrity_key ? integrity_key : "(null)");
@@ -685,7 +701,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		}
 	}
 
-	char *top_blkdev = encrypt ? crypto_blkdev : integrity_blkdev;
+	char *__null_terminated top_blkdev = encrypt ? crypto_blkdev : integrity_blkdev;
 
 	if (initial_format) {
 		/*
@@ -725,11 +741,11 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 	}
 
 	if (crypto_key) {
-		mem_memset0(crypto_key, crypto_key_len);
+		mem_memset0(__null_terminated_to_indexable(crypto_key), crypto_key_len);
 		mem_free0(crypto_key);
 	}
 	if (integrity_key) {
-		mem_memset0(integrity_key, integrity_key_len);
+		mem_memset0(__null_terminated_to_indexable(integrity_key), integrity_key_len);
 		mem_free0(integrity_key);
 	}
 	if (integrity_dev_label)
@@ -741,11 +757,11 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 
 error:
 	if (crypto_key) {
-		mem_memset0(crypto_key, crypto_key_len);
+		mem_memset0(__null_terminated_to_indexable(crypto_key), crypto_key_len);
 		mem_free0(crypto_key);
 	}
 	if (integrity_key) {
-		mem_memset0(integrity_key, integrity_key_len);
+		mem_memset0(__null_terminated_to_indexable(integrity_key), integrity_key_len);
 		mem_free0(integrity_key);
 	}
 
@@ -802,7 +818,7 @@ cryptfs_delete_blk_dev(int fd, const char *name, cryptfs_mode_t mode)
 	}
 
 	if (integrity) {
-		char *integrity_dev_name = mem_printf("%s-%s", name, "integrity");
+		char *__null_terminated integrity_dev_name = mem_printf("%s-%s", name, "integrity");
 		if (dm_delete_blk_dev(fd, integrity_dev_name) < 0) {
 			ERROR("Failed to delete integrity dev: %s", integrity_dev_name);
 			mem_free0(integrity_dev_name);

@@ -34,6 +34,8 @@
 
 #include <stdbool.h>
 
+#include "bounds_safety.h"
+
 #define CRYPTFS_FDE_KEY_LEN 64
 
 /**
@@ -67,7 +69,7 @@ cryptfs_set_crypto_type(const char *type);
  *     with AEAD algorithm or individual dm-integrity and dm-crypt usage.
  * @return char* The path of the newly created volume
  */
-char *
+char *__null_terminated
 cryptfs_setup_volume_new(const char *label, const char *real_blk_dev, const char *ascii_key,
 			 const char *meta_blk_dev, cryptfs_mode_t mode);
 
