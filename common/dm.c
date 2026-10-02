@@ -83,7 +83,7 @@ dm_ioctl_init(struct dm_ioctl *io, enum dm_cmd_index idx, size_t data_size, cons
 	      const char *uuid, unsigned flags, unsigned long long dev, unsigned int target_count,
 	      unsigned int event_nr)
 {
-	if (idx > ARRAY_SIZE(cmd_table)) {
+	if (idx >= ARRAY_SIZE(cmd_table)) {
 		ERROR("Failed to lookup ioctl command");
 		return -1;
 	}
