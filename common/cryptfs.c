@@ -610,6 +610,7 @@ cryptfs_setup_volume_new(const char *label, const char *real_blkdev, const char 
 		stacked = false;
 		break;
 	case CRYPTFS_MODE_INTEGRITY_ONLY:
+		IF_NULL_RETVAL_ERROR(meta_blkdev, NULL);
 		IF_TRUE_RETVAL(strlen(key) != INTEGRITY_HEXKEY_LEN, NULL);
 		crypto_key_len = 0;
 		integrity_key_len = INTEGRITY_HEXKEY_LEN;
