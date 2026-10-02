@@ -615,8 +615,14 @@ uevent_handle(UNUSED int fd, UNUSED unsigned events, UNUSED event_io_t *io, UNUS
 	 */
 	int msg_len = nl_msg_receive_kernel(uevent_netlink_sock, uev->msg.raw,
 					    sizeof(uev->msg.raw) - 1, true);
-	if (msg_len <= 0) {
-		WARN("could not read uevent");
+	if (msg_len == 0) {
+		/* message rejected by the uevent source verification, e.g.,
+		 * an untrusted udevd broadcast; silently discard it */
+		TRACE("ignored filtered uevent");
+		goto err;
+	}
+	if (msg_len < 0) {
+		WARN_ERRNO("could not read uevent");
 		goto err;
 	}
 	uev->msg_len = msg_len;
