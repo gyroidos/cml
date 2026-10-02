@@ -47,14 +47,14 @@ typedef enum {
 	CRYPTFS_MODE_INTEGRITY_ONLY
 } cryptfs_mode_t;
 
-/**
- * Get the full path of a cryptfs device with the specified name
+/*
+ * Overwrite internal fixed algorithm strings
  *
- * @param label The name to get the path for
- * @return char* The device path in case of success, otherwise NULL
+ * e.g., use something like that "capi:cbc(paes)-essiv:sha256"
+ * if you need protected keys on hardware where xts is not available
  */
-char *
-cryptfs_get_device_path_new(const char *label);
+void
+cryptfs_set_crypto_type(const char *type);
 
 /**
  * Create a new cryptfs device with the specified name,

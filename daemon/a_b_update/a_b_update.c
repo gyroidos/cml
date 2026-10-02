@@ -43,8 +43,6 @@
 /*****************************************************************************/
 /* Platform functions that should not be exported outside the a_b_update code*/
 
-extern const char *
-platform_get_file_path(a_b_update_kernel_path_t p);
 extern bool
 platform_boot_entries_initialized(void);
 extern int
@@ -58,8 +56,8 @@ a_b_update_get_init_stage(void)
 {
 	a_b_update_init_stage_t ret = A_B_UPDATE_INIT_NONE;
 
-	IF_FALSE_GOTO(file_exists(platform_get_file_path(KERNEL_BINARY_A)), out);
-	IF_FALSE_GOTO(file_exists(platform_get_file_path(KERNEL_BINARY_B)), out);
+	IF_FALSE_GOTO(file_exists(a_b_update_get_kernel_path(KERNEL_BINARY_A)), out);
+	IF_FALSE_GOTO(file_exists(a_b_update_get_kernel_path(KERNEL_BINARY_B)), out);
 	IF_FALSE_GOTO(file_exists(DEVICE_CONF_A), out);
 	IF_FALSE_GOTO(file_exists(DEVICE_CONF_B), out);
 	IF_FALSE_GOTO(platform_boot_entries_initialized(), out);
@@ -90,13 +88,13 @@ a_b_update_init(void)
 
 	switch (stage) {
 	case A_B_UPDATE_INIT_NONE:
-		ret = file_copy(platform_get_file_path(KERNEL_BINARY_A),
-				platform_get_file_path(KERNEL_BINARY_B), -1, 1, 0);
+		ret = file_copy(a_b_update_get_kernel_path(KERNEL_BINARY_A),
+				a_b_update_get_kernel_path(KERNEL_BINARY_B), -1, 1, 0);
 		if (ret) {
 			ERROR("Copy of %s failed. Cleanup.",
-			      platform_get_file_path(KERNEL_BINARY_B));
-			if (file_exists(platform_get_file_path(KERNEL_BINARY_B))) {
-				unlink(platform_get_file_path(KERNEL_BINARY_B));
+			      a_b_update_get_kernel_path(KERNEL_BINARY_B));
+			if (file_exists(a_b_update_get_kernel_path(KERNEL_BINARY_B))) {
+				unlink(a_b_update_get_kernel_path(KERNEL_BINARY_B));
 			}
 			return;
 		}

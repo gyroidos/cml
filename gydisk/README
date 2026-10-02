@@ -1,0 +1,4 @@
+gydisk: GyroidOS Disk Encryptor
+
+gydisk is a small tool to setup a dm-crypt device using a hardware-bound
+trusted key, e.g. inside the CAAM module on NXP platforms.

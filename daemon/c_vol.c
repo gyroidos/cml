@@ -519,7 +519,8 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	int ret = 0;
 	char *token = mem_strdup(mount_data);
 	char *subvol = strtok(token, "=");
-	subvol = strtok(NULL, "=");
+	if (subvol)
+		subvol = strtok(NULL, "=");
 	if (NULL == subvol) {
 		mem_free0(token);
 		return -1;
@@ -548,8 +549,10 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 			INFO("Created new suvol %s on btrfs device %s", subvol, dev);
 		}
 	}
-	if (-1 == (ret = umount(tmp_mount))) {
+	// preserve ret from btrfs list or create
+	if (-1 == umount(tmp_mount)) {
 		ERROR_ERRNO("Could not umount temporary mount of btrfs root volume %s!", dev);
+		ret = -1;
 	}
 out:
 	if (tmp_mount)
@@ -924,7 +927,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		TRACE("Creating dm-verity device");
 		char *label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 					 mount_entry_get_img(mntent));
-		char *verity_dev = verity_get_device_path_new(label);
+		char *verity_dev = dm_get_device_path_new(label);
 		if (file_is_blk(verity_dev) || file_links_to_blk(verity_dev)) {
 			INFO("Using existing mapper device: %s", verity_dev);
 		} else {
@@ -995,7 +998,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 
-		crypt = cryptfs_get_device_path_new(label);
+		crypt = dm_get_device_path_new(label);
 		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
@@ -2130,8 +2133,24 @@ c_vol_cleanup(void *volp, bool is_rebooting)
 		WARN("Could not umount all images properly");
 
 	// keep dm crypt/integrity device up for reboot
-	if (!is_rebooting && c_vol_cleanup_dm(vol))
-		WARN("Could not remove mounts properly");
+	if (is_rebooting)
+		return;
+
+	// try to asyncronously remove dm devices
+	pid_t pid = fork();
+	if (pid == 0) {
+		event_reset();
+		if (c_vol_cleanup_dm(vol))
+			WARN("Could not remove mounts properly");
+		_exit(0);
+	} else if (pid > 0) {
+		// wait for child
+		container_wait_for_child(vol->container, "vol-dm-cleanup", pid);
+	} else {
+		WARN_ERRNO("forking of helper child failed, remove dm_devices synchronously");
+		if (c_vol_cleanup_dm(vol))
+			WARN("Could not remove mounts properly");
+	}
 }
 
 static compartment_module_t c_vol_module = {
