@@ -52,6 +52,8 @@
 
 #define TABLE_LOAD_RETRIES 10
 #define INTEGRITY_TAG_SIZE 32
+/* Magic of the dm-integrity superblock, see SB_MAGIC in the kernel's dm-integrity.c */
+#define SB_MAGIC "integrt"
 #define AUTHENC_KEY_LEN 96
 #define CRYPTO_TYPE_AUTHENC "capi:authenc(hmac(sha256),xts(aes))-random"
 #define CRYPTO_TYPE "aes-xts-plain64"
@@ -460,7 +462,12 @@ get_provided_data_sectors(const char *real_blk_name)
 {
 	int fd;
 	unsigned long provided_data_sectors = 0;
-	char magic[8]; // "integrt" on a valid superblock
+	/*
+	 * The magic field of the dm-integrity superblock. It holds "integrt" on a
+	 * valid superblock, but the bytes come from the (untrusted) on-disk image,
+	 * so they must not be treated as a NUL-terminated string.
+	 */
+	char magic[sizeof(SB_MAGIC)];
 
 	if ((fd = open(real_blk_name, O_RDONLY)) < 0) {
 		ERROR("Cannot open volume %s", real_blk_name);
@@ -468,12 +475,12 @@ get_provided_data_sectors(const char *real_blk_name)
 	}
 
 	int bytes_read = read(fd, magic, sizeof(magic));
-	DEBUG("Bytes read: %d, '%s'", bytes_read, magic);
+	DEBUG("Bytes read: %d", bytes_read);
 	if (bytes_read != sizeof(magic)) {
 		ERROR("Cannot read superblock type from volume %s", real_blk_name);
 		goto errout;
 	}
-	if (strcmp(magic, "integrt") != 0) {
+	if (memcmp(magic, SB_MAGIC, sizeof(magic)) != 0) {
 		DEBUG("No existing integrity superblock detected on %s", real_blk_name);
 		provided_data_sectors = 1;
 		goto errout;
