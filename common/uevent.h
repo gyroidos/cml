@@ -109,22 +109,22 @@ uevent_event_get_usb_vendor(const uevent_event_t *uevent);
 uint16_t
 uevent_event_get_usb_product(const uevent_event_t *uevent);
 
-char *
+const char *
 uevent_event_get_synth_uuid(const uevent_event_t *event);
 
-char *
+const char *
 uevent_event_get_devname(const uevent_event_t *event);
 
-char *
+const char *
 uevent_event_get_devtype(const uevent_event_t *event);
 
-char *
+const char *
 uevent_event_get_devpath(const uevent_event_t *event);
 
-char *
+const char *
 uevent_event_get_subsystem(const uevent_event_t *event);
 
-char *
+const char *
 uevent_event_get_interface(const uevent_event_t *event);
 
 int
@@ -134,10 +134,10 @@ int
 uevent_event_get_minor(const uevent_event_t *event);
 
 uevent_event_t *
-uevent_event_replace_synth_uuid_new(const uevent_event_t *event, char *uuid_string);
+uevent_event_replace_synth_uuid_new(const uevent_event_t *event, const char *uuid_string);
 
 uevent_event_t *
-uevent_replace_member(const uevent_event_t *uevent, char *oldmember, char *newmember);
+uevent_replace_member(const uevent_event_t *uevent, const char *oldmember, const char *newmember);
 
 uevent_event_t *
 uevent_event_copy_new(const uevent_event_t *event);

@@ -395,7 +395,8 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 	int ret = 0;
 	char *token = mem_strdup(mount_data);
 	char *subvol = strtok(token, "=");
-	subvol = strtok(NULL, "=");
+	if (subvol)
+		subvol = strtok(NULL, "=");
 	if (NULL == subvol) {
 		mem_free0(token);
 		return -1;
@@ -424,8 +425,10 @@ c_vol_btrfs_create_subvol(const char *dev, const char *mount_data)
 			INFO("Created new suvol %s on btrfs device %s", subvol, dev);
 		}
 	}
-	if (-1 == (ret = umount(tmp_mount))) {
+	// preserve ret from btrfs list or create
+	if (-1 == umount(tmp_mount)) {
 		ERROR_ERRNO("Could not umount temporary mount of btrfs root volume %s!", dev);
+		ret = -1;
 	}
 out:
 	if (tmp_mount)
@@ -800,7 +803,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 		TRACE("Creating dm-verity device");
 		char *label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 					 mount_entry_get_img(mntent));
-		char *verity_dev = verity_get_device_path_new(label);
+		char *verity_dev = dm_get_device_path_new(label);
 		if (file_is_blk(verity_dev) || file_links_to_blk(verity_dev)) {
 			INFO("Using existing mapper device: %s", verity_dev);
 		} else {
@@ -871,7 +874,7 @@ c_vol_mount_image(c_vol_t *vol, const char *root, const mount_entry_t *mntent)
 			goto error;
 		}
 
-		crypt = cryptfs_get_device_path_new(label);
+		crypt = dm_get_device_path_new(label);
 		if (file_is_blk(crypt) || file_links_to_blk(crypt)) {
 			INFO("Using existing mapper device: %s", crypt);
 		} else {
@@ -1093,26 +1096,20 @@ c_vol_cleanup_dm(c_vol_t *vol)
 		label = mem_printf("%s-%s", uuid_string(container_get_uuid(vol->container)),
 				   mount_entry_get_img(mntent));
 
-		DEBUG("Cleanup: Checking target type of %s\n", label);
-
-		char *type = dm_get_target_type_new(fd, label);
-		if (type == NULL) {
-			WARN("Failed to get target type of %s\n", label);
+		if (mount_entry_get_verity_sha256(mntent)) {
+			DEBUG("Cleanup: removing block device %s of type verity\n", label);
+			if (dm_delete_blk_dev(fd, label) < 0)
+				WARN("Could not delete dm-verity dev %s", label);
+		} else if (mount_entry_is_encrypted(mntent)) {
+			DEBUG("Cleanup: removing block device %s of type cryptfs\n", label);
+			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
+				WARN("Could not delete cryptfs dev %s", label);
+		} else {
 			mem_free0(label);
 			continue;
 		}
 
-		DEBUG("Cleanup: removing block device %s of type %s\n", label, type);
-
-		if (!strcmp(type, "crypt") || !strcmp(type, "integrity")) {
-			if (cryptfs_delete_blk_dev(fd, label, vol->mode) < 0)
-				WARN("Could not delete dm-%s dev %s", type, label);
-		} else if (!strcmp(type, "verity")) {
-			if (verity_delete_blk_dev(label) < 0)
-				WARN("Could not delete dm-verity dev %s", label);
-		}
 		mem_free0(label);
-		mem_free0(type);
 	}
 	dm_close_control(fd);
 
@@ -2022,8 +2019,24 @@ c_vol_cleanup(void *volp, bool is_rebooting)
 		WARN("Could not umount all images properly");
 
 	// keep dm crypt/integrity device up for reboot
-	if (!is_rebooting && c_vol_cleanup_dm(vol))
-		WARN("Could not remove mounts properly");
+	if (is_rebooting)
+		return;
+
+	// try to asyncronously remove dm devices
+	pid_t pid = fork();
+	if (pid == 0) {
+		event_reset();
+		if (c_vol_cleanup_dm(vol))
+			WARN("Could not remove mounts properly");
+		_exit(0);
+	} else if (pid > 0) {
+		// wait for child
+		container_wait_for_child(vol->container, "vol-dm-cleanup", pid);
+	} else {
+		WARN_ERRNO("forking of helper child failed, remove dm_devices synchronously");
+		if (c_vol_cleanup_dm(vol))
+			WARN("Could not remove mounts properly");
+	}
 }
 
 static compartment_module_t c_vol_module = {

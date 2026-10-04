@@ -293,6 +293,7 @@ logf_current_log_cb(const char *path, const char *file, void *data)
 
 	// only process .current symlinks.
 	if ((!file_is_link(file_path)) || (strstr(file, ".current") == NULL)) {
+		mem_free0(file_path);
 		return 0;
 	}
 
@@ -301,6 +302,8 @@ logf_current_log_cb(const char *path, const char *file, void *data)
 
 	if (len < 0 || len > PATH_MAX - 1) {
 		ERROR_ERRNO("readlink on %s returned %zd", file_path, len);
+		mem_free0(file_path);
+		mem_free0(buffer);
 		return -1;
 	} else {
 		DEBUG("Adding currently used logfile to list %s", buffer);

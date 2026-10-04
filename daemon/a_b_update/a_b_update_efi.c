@@ -51,7 +51,7 @@ a_b_update_get_init_stage(void);
 /* EFI specific functions */
 
 const char *
-platform_get_file_path(a_b_update_kernel_path_t p)
+a_b_update_get_kernel_path(a_b_update_kernel_path_t p)
 {
 	switch (p) {
 	case KERNEL_BINARY_A:

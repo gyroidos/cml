@@ -279,7 +279,8 @@ c_seccomp_fetch_vm_new(c_seccomp_t *seccomp, int pid, void *rbuf, uint64_t size)
 	IF_NULL_RETVAL(rbuf, NULL);
 	IF_TRUE_RETVAL(pid < 0, NULL);
 
-	void *lbuf = mem_alloc0(size);
+	// ensure lbuf is NULL-terminated
+	void *lbuf = mem_alloc0(size + 1);
 	struct iovec local_iov[1];
 	struct iovec remote_iov[1];
 

@@ -246,14 +246,12 @@ audit_record_from_textfile_new(const char *filename, bool purge)
 
 		if (0 > (current = getline(&line, &n, file))) {
 			ERROR_ERRNO("Failed to read line from file");
-			fclose(file);
 			mem_free0(line);
 			goto out;
 		}
 
 		if (read + current > (size_t)size) {
 			ERROR("File was changed while reading");
-			fclose(file);
 			mem_free0(line);
 			goto out;
 		}
@@ -777,15 +775,15 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		int msg_len;
 		if ((msg_len = nl_msg_receive_kernel(audit_sock, buf, MAX_AUDIT_MESSAGE_LENGTH,
 						     false)) <= 0) {
-			WARN("could not read audit meassge.");
+			WARN("could not read audit message. received msg_len = '%d'", msg_len);
 			goto out;
 		}
 
 		struct nlmsghdr *nlmsg = (struct nlmsghdr *)buf;
 		uint16_t type = nlmsg->nlmsg_type;
+		log_record = NLMSG_DATA(nlmsg);
 
 		if (type == AUDIT_TRUSTED_APP) {
-			log_record = NLMSG_DATA(nlmsg);
 			int uid = -1;
 			int pid = -1;
 			sscanf(log_record, "%*s pid=%d uid=%d %*8970c", &pid, &uid);
@@ -803,7 +801,6 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 		} else if (type == AUDIT_USER || type == AUDIT_LOGIN || type == AUDIT_DM_CTRL ||
 			   (type >= AUDIT_FIRST_USER_MSG && type <= AUDIT_LAST_USER_MSG) ||
 			   (type >= AUDIT_FIRST_USER_MSG2 && type <= AUDIT_LAST_USER_MSG2)) {
-			log_record = NLMSG_DATA(nlmsg);
 			int uid = -1;
 			int pid = -1;
 			sscanf(log_record, "%*s pid=%d uid=%d %*8970c", &pid, &uid);
@@ -826,7 +823,6 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 			mem_free0(record_type);
 			TRACE("audit: type=%d %s", type, log_record);
 		} else if (type == AUDIT_DM_EVENT) {
-			log_record = NLMSG_DATA(nlmsg);
 			uuid_t *uuid = NULL;
 			char *dev_file = NULL;
 			char *op_buf = mem_new0(char, MAX_AUDIT_MESSAGE_LENGTH);
@@ -879,7 +875,6 @@ audit_cb_kernel_handle_log(int fd, unsigned events, UNUSED event_io_t *io, void 
 			TRACE("audit: type=%d %s", type, log_record);
 		} else if (type == AUDIT_KERNEL ||
 			   (type >= AUDIT_FIRST_EVENT && type <= AUDIT_INTEGRITY_LAST_MSG)) {
-			log_record = NLMSG_DATA(nlmsg);
 			TRACE("audit: type=%d %s", type, log_record);
 		}
 	}
