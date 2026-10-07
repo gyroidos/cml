@@ -40,6 +40,7 @@
 #include "common/event.h"
 #include "common/list.h"
 #include "common/file.h"
+#include "common/hex.h"
 #include "common/protobuf.h"
 #include "common/protobuf-text.h"
 
@@ -96,21 +97,21 @@ tpm2d_control_fdestate_to_proto(nvmcrypt_fde_state_t state)
 	}
 }
 
-static TPM_ALG_ID
+static TPM2D_ALG_ID
 tpm2d_control_get_algid_from_proto(HashAlgLen hash_alg_len)
 {
 	INFO("Get algid for hash_len: %d", hash_alg_len);
 
 	switch (hash_alg_len) {
 	case HASH_ALG_LEN__SHA1:
-		return TPM_ALG_SHA1;
+		return TPM2D_ALG_SHA1;
 	case HASH_ALG_LEN__SHA256:
-		return TPM_ALG_SHA256;
+		return TPM2D_ALG_SHA256;
 	case HASH_ALG_LEN__SHA384:
-		return TPM_ALG_SHA384;
+		return TPM2D_ALG_SHA384;
 	default:
 		ERROR("Unsupported value for HashAlgLen: %d", hash_alg_len);
-		return TPM_ALG_NULL;
+		return TPM2D_ALG_NULL;
 	}
 }
 
@@ -202,7 +203,8 @@ tpm2d_control_handle_message(const ControllerToTpm *msg, int fd, tpm2d_control_t
 		TpmToController out = TPM_TO_CONTROLLER__INIT;
 		out.code = TPM_TO_CONTROLLER__CODE__GENERIC_RESPONSE;
 		out.has_response = true;
-		int ret = tpm2_hierarchychangeauth(TPM_RH_OWNER, msg->password, msg->password_new);
+		int ret = tpm2_hierarchychangeauth(TPM2D_TPM_RH_OWNER, msg->password,
+						   msg->password_new);
 		out.response = tpm2d_control_resp_to_proto(ret ? CMD_FAILED : CMD_OK);
 		protobuf_send_message(fd, (ProtobufCMessage *)&out);
 	} break;
