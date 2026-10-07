@@ -156,7 +156,7 @@ protobuf_message_write_to_file(const char *filename, const ProtobufCMessage *mes
 	}
 
 	int res = file_write(filename, string, msg_len);
-	free(string);
+	mem_free0(string);
 	if (res < 0) {
 		ERROR("Failed to write serialized text protobuf message to file \"%s\".", filename);
 		return -1;
@@ -190,7 +190,9 @@ protobuf_string_from_message(char **buffer_proto_string, const ProtobufCMessage 
 	goto success;
 
 error:
-	free(tmp_string);
+	// set message buffer from caller to NULL
+	*buffer_proto_string = NULL;
+	mem_free0(tmp_string);
 success:
 	return proto_len;
 }
