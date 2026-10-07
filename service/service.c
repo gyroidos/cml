@@ -448,7 +448,6 @@ fork_service_message_handler()
 int
 main(int argc, char **argv)
 {
-	bool do_init;
 	int sock;
 
 	if (dir_mkdir_p(LOGFILE_DIR, 0755)) {
@@ -495,7 +494,7 @@ main(int argc, char **argv)
 	}
 
 	// if we are not running as init, just open the cml-service socket and handle messages
-	if (!(do_init = (getpid() == 1))) {
+	if (getpid() != 1) {
 		DEBUG("Not running as init, launching service message handler");
 		fork_service_message_handler();
 
