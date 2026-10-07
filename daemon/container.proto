@@ -71,6 +71,13 @@ enum ContainerTokenType {
 	USB = 3;
 }
 
+// Host Volumes file, directory or image
+message VolumeMount {
+	required string path = 1; // name of the image, file or directory
+	required string mount_point = 2; // mountpoint inside the container
+	required bool ro = 3 [ default = true ]; // read-only mount in container
+}
+
 message ContainerConfig {
 	reserved 20;
 
@@ -136,6 +143,9 @@ message ContainerConfig {
 
 	// enable module to support legacy xorg server
 	optional bool enable_xorg_compat = 32 [ default = false ];
+
+	// list of volumes inside the container
+	repeated VolumeMount volumes = 33;
 }
 
 /**
