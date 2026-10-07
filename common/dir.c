@@ -225,11 +225,14 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 	case S_IFBLK:
 	case S_IFCHR:
 		TRACE("Copying device node %s -> %s", file_src, file_dst);
-		if ((ret = mknod(file_dst, s.st_mode, s.st_rdev)) < 0)
+		if (mknod(file_dst, s.st_mode, s.st_rdev) < 0 && errno != EEXIST) {
 			ERROR_ERRNO("Could not mknod at %s", file_dst);
-		if ((ret = lchown(file_dst, s.st_uid, s.st_gid)) < 0)
+			ret = -1;
+		} else if (lchown(file_dst, s.st_uid, s.st_gid) < 0) {
 			ERROR_ERRNO("Could not chown node '%s' to (%d:%d)", file_dst, s.st_uid,
 				    s.st_gid);
+			ret = -1;
+		}
 		break;
 	case S_IFLNK: {
 		char *target = mem_alloc0(s.st_size + 1);
@@ -259,26 +262,26 @@ dir_copy_folder_contents_cb(const char *path, const char *name, void *data)
 	case S_IFDIR:
 		if (mkdir(file_dst, s.st_mode) < 0 && errno != EEXIST) {
 			ERROR_ERRNO("Could not mkdir target dir %s", file_dst);
-			ret--;
+			ret = -1;
 		} else if (lchown(file_dst, s.st_uid, s.st_gid) < 0) {
 			ERROR_ERRNO("Could not chown dir '%s' to (%d:%d)", file_dst, s.st_uid,
 				    s.st_gid);
-			ret--;
+			ret = -1;
 		}
 		if (dir_foreach(file_src, &dir_copy_folder_contents_cb, params) < 0) {
 			ERROR("Could not copy all dir contents of %s -> %s ", file_src, file_dst);
-			ret--;
+			ret = -1;
 		}
 		break;
 	case S_IFREG:
 		TRACE("Copying reg file %s -> %s", file_src, file_dst);
 		if (file_copy(file_src, file_dst, -1, 512, 0)) {
 			ERROR("Could not copy file %s -> %s", file_src, file_dst);
-			ret--;
+			ret = -1;
 		} else if (lchown(file_dst, s.st_uid, s.st_gid) < 0) {
 			ERROR_ERRNO("Could not chown file '%s' to (%d:%d)", file_dst, s.st_uid,
 				    s.st_gid);
-			ret--;
+			ret = -1;
 		} else if (chmod(file_dst, s.st_mode))
 			WARN_ERRNO("Could not preserve mode for file_dst %s", file_dst);
 	}
