@@ -27,6 +27,8 @@
 
 #include "uevent.h"
 
+#include "bounds_safety.h"
+
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -99,7 +101,8 @@ struct uevent_event {
 	size_t msg_len; //!< The length of the uevent
 	/*
 	 * The following pointers all point inside of msg.raw at null-terminated
-	 * substrings. They are const (read-only views into the buffer).
+	 * substrings. They are const (read-only views into the buffer) and thus
+	 * __null_terminated by default under -fbounds-safety.
 	 */
 	const char *action;	     //!< The uevent ACTION, points inside of raw
 	const char *subsystem;	     //!< The uevent SUBSYSTEM, points inside of raw
@@ -172,18 +175,21 @@ uevent_parse(uevent_event_t *uevent, size_t start_off)
 	uevent_trace(uevent, start_off);
 
 	/* Parse the uevent->raw buffer and set the pointer in the uevent
-	 * struct to point into the buffer at the correct locations */
+	 * struct to point into the buffer at the correct locations. The
+	 * assigned substrings are exposed as null-terminated C strings, so the
+	 * bidi cursor is converted to __null_terminated on assignment (the
+	 * upper bound of raw is preserved for runtime terminator checking). */
 	// TODO check if running out of the buffer
 	while (*raw_p) {
 		if (!strncmp(raw_p, "ACTION=", 7)) {
 			raw_p += 7;
-			uevent->action = raw_p;
+			uevent->action = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "DEVPATH=", 8)) {
 			raw_p += 8;
-			uevent->devpath = raw_p;
+			uevent->devpath = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "SUBSYSTEM=", 10)) {
 			raw_p += 10;
-			uevent->subsystem = raw_p;
+			uevent->subsystem = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "MAJOR=", 6)) {
 			raw_p += 6;
 			uevent->major = atoi(raw_p);
@@ -192,16 +198,16 @@ uevent_parse(uevent_event_t *uevent, size_t start_off)
 			uevent->minor = atoi(raw_p);
 		} else if (!strncmp(raw_p, "DEVNAME=", 8)) {
 			raw_p += 8;
-			uevent->devname = raw_p;
+			uevent->devname = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "DEVTYPE=", 8)) {
 			raw_p += 8;
-			uevent->devtype = raw_p;
+			uevent->devtype = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "DRIVER=", 7)) {
 			raw_p += 7;
-			uevent->driver = raw_p;
+			uevent->driver = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "PRODUCT=", 8)) {
 			raw_p += 8;
-			uevent->product = raw_p;
+			uevent->product = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "ID_VENDOR_ID=", 13)) {
 			raw_p += 13;
 			sscanf(raw_p, "%hx", &uevent->id_vendor_id);
@@ -210,13 +216,13 @@ uevent_parse(uevent_event_t *uevent, size_t start_off)
 			sscanf(raw_p, "%hx", &uevent->id_model_id);
 		} else if (!strncmp(raw_p, "ID_SERIAL_SHORT=", 16)) {
 			raw_p += 16;
-			uevent->id_serial_short = raw_p;
+			uevent->id_serial_short = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "INTERFACE=", 10)) {
 			raw_p += 10;
-			uevent->interface = raw_p;
+			uevent->interface = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "SYNTH_UUID=", 11)) {
 			raw_p += 11;
-			uevent->synth_uuid = raw_p;
+			uevent->synth_uuid = __unsafe_null_terminated_from_indexable(raw_p);
 		} else if (!strncmp(raw_p, "SEQNUM=", 7)) {
 			raw_p += 7;
 			uevent->seqnum = strtoull(raw_p, NULL, 10);
@@ -253,7 +259,7 @@ uevent_parse_from_string_new(const char *uev)
 
 	uevent_event_t *event = mem_new0(uevent_event_t, 1);
 
-	memcpy(event->msg.raw, uev, len);
+	memcpy(event->msg.raw, __null_terminated_to_indexable(uev), len);
 	event->msg_len = len;
 
 	// replace newlines by null bytes
@@ -314,7 +320,13 @@ uevent_event_t *
 uevent_replace_member(const uevent_event_t *uevent, const char *oldmember, const char *newmember)
 {
 	ASSERT(uevent);
-	ASSERT(oldmember > uevent->msg.raw && oldmember < uevent->msg.raw + uevent->msg_len);
+	/*
+	 * oldmember points into uevent->msg.raw. It is __null_terminated (const
+	 * char *), which forbids relational/difference arithmetic, so compute
+	 * the offset via the integer addresses.
+	 */
+	ASSERT((uintptr_t)oldmember > (uintptr_t)uevent->msg.raw &&
+	       (uintptr_t)oldmember < (uintptr_t)uevent->msg.raw + uevent->msg_len);
 
 	uevent_event_t *newevent = mem_new(uevent_event_t, 1);
 	//interface name is located in name and devpath members
@@ -342,14 +354,15 @@ uevent_replace_member(const uevent_event_t *uevent, const char *oldmember, const
 	newevent->msg.nlh.properties_len = uevent->msg.nlh.properties_len + diff_len;
 
 	//copy uevent up to position of interface string
-	int off_member = oldmember - uevent->msg.raw;
+	size_t off_member = (uintptr_t)oldmember - (uintptr_t)uevent->msg.raw;
 	if (!memcpy(newevent->msg.raw, uevent->msg.raw, off_member)) {
 		ERROR("Failed to copy beginning of uevent");
 		goto error;
 	}
 
-	//copy new member to uevent
-	if (!strcpy(newevent->msg.raw + off_member, newmember)) {
+	//copy new member to uevent (including its terminating null char)
+	if (!memcpy(newevent->msg.raw + off_member,
+		    __unsafe_null_terminated_to_indexable(newmember), strlen(newmember) + 1)) {
 		ERROR("Failed to new member to uevent");
 		goto error;
 	}
@@ -513,7 +526,7 @@ uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join
 		return -1;
 	} else if (pid == 0) {
 		if (join_userns) {
-			char *usrns = mem_printf("/proc/%d/ns/user", netns_pid);
+			char *__null_terminated usrns = mem_printf("/proc/%d/ns/user", netns_pid);
 			int usrns_fd = open(usrns, O_RDONLY);
 			if (usrns_fd == -1)
 				FATAL_ERRNO("Could not open userns file %s!", usrns);
@@ -530,17 +543,17 @@ uevent_event_inject_into_netns(uevent_event_t *event, pid_t netns_pid, bool join
 				FATAL_ERRNO("Could setgroups to root in user namespace of pid %d!",
 					    netns_pid);
 		}
-		char *netns = mem_printf("/proc/%d/ns/net", netns_pid);
+		char *__null_terminated netns = mem_printf("/proc/%d/ns/net", netns_pid);
 		int netns_fd = open(netns, O_RDONLY);
 		if (netns_fd == -1)
 			FATAL_ERRNO("Could not open netns file %s!", netns);
 		mem_free0(netns);
 		if (setns(netns_fd, CLONE_NEWNET) == -1)
 			FATAL_ERRNO("Could not join network namespace of pid %d!", netns_pid);
-		nl_sock_t *target = nl_sock_uevent_new(0);
+		nl_sock_t *__single target = nl_sock_uevent_new(0);
 		if (NULL == target)
 			FATAL("Could not connect to nl socket!");
-		nl_msg_t *nl_msg = nl_msg_new();
+		nl_msg_t *__single nl_msg = nl_msg_new();
 		if (NULL == nl_msg)
 			FATAL_ERRNO("Could not allocate nl_msg!");
 		if (nl_msg_set_type(nl_msg, UEVENT_SEND) < 0)
@@ -594,7 +607,7 @@ handle_uev_list(uevent_event_t *uevent, list_t *event_list)
 
 	/* handle registerd uev udev events */
 	for (list_t *l = event_list; l; l = l->next) {
-		uevent_uev_t *uev = l->data;
+		uevent_uev_t *__single uev = l->data;
 		unsigned action = uevent_action_from_string(uevent->action);
 		if (action & uev->actions)
 			uev->func(action, uevent, uev->data);
@@ -789,11 +802,11 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 	char buf[256];
 	int major, minor;
 
-	struct uevent_udev_coldboot_data *coldboot_data = data;
+	struct uevent_udev_coldboot_data *__single coldboot_data = data;
 	IF_NULL_RETVAL(coldboot_data, -1);
 
-	char *full_path = mem_printf("%s/%s", path, name);
-	char *dev_file = NULL;
+	char *__null_terminated full_path = mem_printf("%s/%s", path, name);
+	char *__null_terminated dev_file = NULL;
 
 	if (file_is_dir(full_path)) {
 		if (0 > dir_foreach(full_path, &uevent_trigger_coldboot_foreach_cb, data)) {
@@ -815,7 +828,8 @@ uevent_trigger_coldboot_foreach_cb(const char *path, const char *name, void *dat
 			IF_FALSE_GOTO_TRACE(
 				coldboot_data->filter(major, minor, coldboot_data->data), out);
 
-		char *trigger = mem_printf("add %s", uuid_string(coldboot_data->synth_uuid));
+		char *__null_terminated trigger =
+			mem_printf("add %s", uuid_string(coldboot_data->synth_uuid));
 		if (-1 == file_printf(full_path, "%s", trigger)) {
 			WARN("Could not trigger event %s <- %s", full_path, trigger);
 			ret--;
@@ -835,7 +849,7 @@ void
 uevent_udev_trigger_coldboot(const uuid_t *synth_uuid,
 			     bool (*filter)(int major, int minor, void *data), void *data)
 {
-	const char *sysfs_devices = "/sys/devices";
+	const char *__null_terminated sysfs_devices = "/sys/devices";
 	struct uevent_udev_coldboot_data coldboot_data = { .synth_uuid = synth_uuid,
 							   .filter = filter,
 							   .data = data };

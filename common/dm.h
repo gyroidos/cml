@@ -26,6 +26,8 @@
 
 #include <linux/dm-ioctl.h>
 
+#include "bounds_safety.h"
+
 #define DM_NAME_LEN 128
 #define DM_UUID_LEN 129
 
@@ -87,9 +89,18 @@ dm_ioctl(int fd, unsigned long int request, ...);
  * struct parameters
  */
 int
-dm_ioctl_init(struct dm_ioctl *io, enum dm_cmd_index idx, size_t dataSize, const char *name,
-	      const char *uuid, unsigned flags, unsigned long long dev, unsigned int target_count,
-	      unsigned int event_nr);
+dm_ioctl_init(struct dm_ioctl *__sized_by(dataSize) io, enum dm_cmd_index idx, size_t dataSize,
+	      const char *name, const char *uuid, unsigned flags, unsigned long long dev,
+	      unsigned int target_count, unsigned int event_nr);
+
+/**
+ * Look up the device-mapper ioctl command number for a command index.
+ *
+ * @param idx The command index (enum dm_cmd_index)
+ * @return unsigned The ioctl command (e.g. DM_TABLE_STATUS)
+ */
+unsigned
+dm_cmd(enum dm_cmd_index idx);
 
 /**
  * Opens /dev/mapper/control
@@ -168,7 +179,7 @@ dm_list_versions(int fd);
  * @param name The name of the dm-device
  * @return char* The target_type of the dm-device
  */
-char *
+char *__null_terminated
 dm_get_target_type_new(int fd, const char *name);
 
 /**
@@ -177,7 +188,7 @@ dm_get_target_type_new(int fd, const char *name);
  * @param label The name to get the path for
  * @return char* The device path in case of success, otherwise NULL
  */
-char *
+char *__null_terminated
 dm_get_device_path_new(const char *label);
 
 /**

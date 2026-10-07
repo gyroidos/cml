@@ -983,7 +983,8 @@ handle_resp:
 		str_t *file_str = str_new(str_buffer(log_dir));
 		str_append(file_str, resp->log_message->name);
 
-		if (file_write_append(str_buffer(file_str), resp->log_message->msg, -1) < 0) {
+		if (file_write_append(str_buffer(file_str), resp->log_message->msg,
+				      strlen(resp->log_message->msg)) < 0) {
 			INFO("logfile %s could not be written.", resp->log_message->name);
 		}
 		protobuf_free_message((ProtobufCMessage *)resp);
@@ -1006,7 +1007,8 @@ handle_resp:
 		str_t *file_str = str_new(str_buffer(log_dir));
 		str_append(file_str, resp->log_message->name);
 
-		if (file_write_append(str_buffer(file_str), resp->log_message->msg, -1) < 0) {
+		if (file_write_append(str_buffer(file_str), resp->log_message->msg,
+				      strlen(resp->log_message->msg)) < 0) {
 			INFO("logfile %s could not be written.", resp->log_message->name);
 		}
 		protobuf_free_message((ProtobufCMessage *)resp);
