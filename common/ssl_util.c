@@ -690,7 +690,6 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	p += len;
 	len = outlen;
 	memcpy(p, out, len);
-	p += len;
 
 	res = 0;
 cleanup:
