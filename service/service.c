@@ -177,16 +177,28 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 
 	int ret = -1;
 
+	if (!msg->audit_record) {
+		WARN("Got empty audit message from cmld");
+		return ret;
+	}
+
+	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
+		ERROR("Failed to create audit log directory");
+		return ret;
+	}
+
 	char tmpfile[] = "/tmp/audit_XXXXXX";
-	if (-1 == mkstemp(tmpfile)) {
+	int fd;
+	if (-1 == (fd = mkstemp(tmpfile))) {
 		ERROR_ERRNO("Failed to generate temporary filename");
-		return -1;
+		return ret;
 	}
 
 	//TODO find reason why received buffer contains trailing null byte
 	if (0 > file_write(tmpfile, (char *)buf, buf_len)) {
 		ERROR("Failed to write file");
 
+		close(fd);
 		if (unlink(tmpfile))
 			ERROR_ERRNO("Failed to unlink %s", tmpfile);
 
@@ -195,8 +207,9 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 
 	char *cmd = mem_printf("sha512sum /%s", tmpfile);
 	FILE *hash_file = popen(cmd, "r");
-	char *hash_buf = mem_alloc0(129);
+	IF_NULL_GOTO_ERROR(hash_file, out);
 
+	char *hash_buf = mem_alloc0(129);
 	if (!fgets(hash_buf, 129, hash_file)) {
 		ERROR("Hash length was smaller than 64 bytes");
 		pclose(hash_file);
@@ -205,26 +218,31 @@ process_audit_record(CmldToServiceMessage *msg, uint8_t *buf, uint32_t buf_len)
 	}
 	pclose(hash_file);
 
-	if (!file_is_dir(AUDIT_LOGDIR) && dir_mkdir_p(AUDIT_LOGDIR, 0600)) {
-		ERROR("Failed to create audit log directory");
-	} else if (msg->audit_record) {
-		char *record;
-		size_t msg_len = protobuf_string_from_message(
-			&record, (ProtobufCMessage *)msg->audit_record, NULL);
-		TRACE("Storing audit record %s", record);
-		file_write_append(AUDIT_LOGDIR "/audit.log", record, msg_len);
-
-		mem_free0(LAST_AUDIT_HASH);
-		LAST_AUDIT_HASH = hash_buf;
-		ret = 0;
-	} else {
-		WARN("Got empty audit message from cmld");
+	char *record;
+	size_t msg_len =
+		protobuf_string_from_message(&record, (ProtobufCMessage *)msg->audit_record, NULL);
+	if (!record) {
+		ERROR("protobuf parsing of record failed!");
+		mem_free0(hash_buf);
+		goto out;
 	}
 
+	TRACE("Storing audit record %s", record);
+	file_write_append(AUDIT_LOGDIR "/audit.log", record, msg_len);
+
+	mem_free0(LAST_AUDIT_HASH);
+	LAST_AUDIT_HASH = hash_buf;
+
+	mem_free0(record);
+
+	ret = 0;
+
 out:
+	close(fd);
 	if (unlink(tmpfile))
 		ERROR_ERRNO("Failed to unlink %s", tmpfile);
 
+	mem_free0(cmd);
 	return ret;
 }
 
