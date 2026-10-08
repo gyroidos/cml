@@ -208,7 +208,6 @@ scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_f
 		dir_foreach(TRUSTED_CA_STORE, scd_control_verify_cert_ca_cb, &cb_data);
 		if (cb_data.verified) {
 			verified = true;
-			ret = 0;
 		} else if (ret == -1) {
 			ERROR("Certificate not a valid ssig cert");
 			out_code = TOKEN_TO_DAEMON__CODE__CRYPTO_VERIFY_BAD_CERTIFICATE;
@@ -219,7 +218,9 @@ scd_control_handle_verify(const char *verify_data_file, const char *verify_sig_f
 	}
 	IF_TRUE_GOTO(verified, do_signature);
 
-	// Retry with Local CA
+	// Retry with Local CA if one exists
+	IF_FALSE_RETVAL(file_exists(LOCALCA_ROOT_CERT), out_code);
+
 	if ((ret = ssl_verify_certificate(verify_cert_file, LOCALCA_ROOT_CERT, ignore_time)) == 0) {
 		goto do_signature;
 	} else if (ret == -1) {
