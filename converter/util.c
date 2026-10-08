@@ -105,15 +105,22 @@ util_hash_image_file_new(const char *image_file, const EVP_MD *md)
 	EVP_DigestInit(ctx, md);
 
 	if (!(fp = fopen(image_file, "rb"))) {
-		ERROR_ERRNO("Error in file hasing, cannot open %s", image_file);
+		ERROR_ERRNO("Error in file hashing, cannot open %s", image_file);
 		return NULL;
 	}
 
 	int len = 0;
 	unsigned char buf[SIGN_HASH_BUFFER_SIZE];
 
-	while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
+	while (!ferror(fp) && (len = fread(buf, 1, sizeof(buf), fp)) > 0) {
 		EVP_DigestUpdate(ctx, buf, len);
+		if (feof(fp))
+			break;
+	}
+	if (ferror(fp)) {
+		ERROR("Error in file hashing, fread %s failed!", image_file);
+		fclose(fp);
+		return NULL;
 	}
 	fclose(fp);
 
