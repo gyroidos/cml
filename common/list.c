@@ -83,12 +83,14 @@ list_unlink(list_t *list, list_t *elem)
 	IF_FALSE_RETVAL_TRACE(list_contains(list, elem),
 			      list); // this also handles the case that list is NULL
 
-	list_t *head = list;
+	list_t *head;
+	if (elem == list)
+		head = elem->next;
+	else
+		head = list;
 
 	if (elem->prev)
 		elem->prev->next = elem->next;
-	else
-		head = elem->next; // elem was the head
 	if (elem->next)
 		elem->next->prev = elem->prev;
 	mem_free0(elem);
