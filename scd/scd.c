@@ -359,7 +359,7 @@ scd_token_new(tokentype_t type, const char *uuid, const char *token_info)
 
 	token_t *ntoken;
 
-	if (NULL != (ntoken = scd_get_token(type, uuid))) {
+	if (NULL != scd_get_token(type, uuid)) {
 		WARN("SCD: Token %s already exists. Aborting creation...", uuid);
 		return -1; // TODO: is this the correct behaviour?
 	}
