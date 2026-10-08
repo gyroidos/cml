@@ -690,7 +690,6 @@ ssl_wrap_key(EVP_PKEY *pkey, const unsigned char *plain_key, size_t plain_key_le
 	p += len;
 	len = outlen;
 	memcpy(p, out, len);
-	p += len;
 
 	res = 0;
 cleanup:
@@ -1261,17 +1260,31 @@ ssl_hash_file(const char *file_to_hash, unsigned int *calc_len, const char *hash
 		return NULL;
 	}
 
-	EVP_DigestInit(md_ctx, hash_fct);
+	if (!EVP_DigestInit(md_ctx, hash_fct)) {
+		ERROR("Error in file hashing (digest init failed)");
+		fclose(fp);
+		goto error;
+	}
 
 	int len = 0;
 	unsigned char buffer[SIGN_HASH_BUFFER_SIZE];
 
-	while ((len = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+	while (!ferror(fp) && (len = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
 		if (!EVP_DigestUpdate(md_ctx, buffer, len)) {
-			ERROR("Error in file hashing (reading/hashing file failed");
+			ERROR("Error in file hashing (hashing file failed)");
 			fclose(fp);
 			goto error;
 		}
+		// avoid last run of fread if fp is already at EOF
+		if (feof(fp))
+			break;
+	}
+
+	// fread() also may return 0 in case of an error.
+	if (ferror(fp)) {
+		ERROR("Error in file hashing (reading file failed)");
+		fclose(fp);
+		goto error;
 	}
 	fclose(fp);
 

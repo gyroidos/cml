@@ -272,11 +272,13 @@ create_device_node(const char *name)
 
 	device = dm_get_device_path_new(name);
 
-	if (mknod(device, S_IFBLK | 00777, io->dev) != 0 && errno != EEXIST) {
-		ERROR_ERRNO("Cannot mknod device %s", device);
-		mem_free0(device);
-	} else if (errno == EEXIST) {
-		DEBUG("Device %s already exists, continuing", device);
+	if (mknod(device, S_IFBLK | 00777, io->dev) != 0) {
+		if (errno != EEXIST) {
+			ERROR_ERRNO("Cannot mknod device %s", device);
+			mem_free0(device);
+		} else {
+			DEBUG("Device %s already exists, continuing", device);
+		}
 	}
 
 errout:

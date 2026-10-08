@@ -430,8 +430,7 @@ main(UNUSED int argc, char **argv)
 		docker_set_host_url(url);
 		image_name = argv[optind++];
 		INFO("imagename %s", image_name);
-	}
-	if (!strcasecmp(command, "login")) {
+	} else if (!strcasecmp(command, "login")) {
 		optind--;
 		char **login_argv = &argv[optind];
 		int login_argc = argc - optind;
@@ -465,6 +464,8 @@ main(UNUSED int argc, char **argv)
 		mem_free0(token_file);
 		mem_free0(docker_image_path);
 		return 0;
+	} else {
+		print_usage(argv[0]);
 	}
 
 	char *token = docker_get_curl_token_new(image_name, token_file);
