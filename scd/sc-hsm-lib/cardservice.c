@@ -140,7 +140,6 @@ processAPDU(int ctn, int todad, unsigned char CLA, unsigned char INS, unsigned c
 	scr[2] = P1;
 	scr[3] = P2;
 	po = scr + 4;
-	rv = 0;
 
 	if (OutData && OutLen) {
 		if ((OutLen <= 255) && (InLen <= 255)) {
