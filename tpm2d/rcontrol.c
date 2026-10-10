@@ -105,8 +105,8 @@ tpm2d_rcontrol_handle_message(const RemoteToTpm2d *msg, int fd, tpm2d_rcontrol_t
 		int pcr_regs = 0;
 		int index = 0;
 
-		TPMI_DH_OBJECT att_key_handle = tpm2d_get_as_key_handle();
-		if (att_key_handle == TPM2D_TPM_RH_NULL)
+		TPM2D_DH_OBJECT att_key_handle = tpm2d_get_as_key_handle();
+		if (att_key_handle == TPM2D_INVALID_HANDLE)
 			goto err_att_req;
 
 		Tpm2dToRemote out = TPM2D_TO_REMOTE__INIT;

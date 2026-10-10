@@ -23,6 +23,8 @@
 
 #include "tpm2d.h"
 #include "tpm2d_ibmtss.h"
+#include "ek.h"
+#include "nvmcrypt.h"
 
 #include "common/mem.h"
 #include "common/macro.h"
@@ -68,6 +70,12 @@ tss2_init(void)
 		FATAL("Cannot create tss context error code: %08x", ret);
 
 	TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
+
+	// set static raw TPM handles in submodules
+	nvmcrypt_set_fde_nv_handle(TPM2D_FDE_NV_RAW_HANDLE);
+	ek_set_cert_rsa_nv_handle(TPM2D_EK_CERT_RSA_NV_RAW_HANDLE);
+	ek_set_cert_ec_nv_handle(TPM2D_EK_CERT_EC_NV_RAW_HANDLE);
+	tpm2d_set_storage_key_handle(TPM2D_STORAGE_KEY_PERSIST_RAW_HANDLE);
 }
 
 void
@@ -584,7 +592,7 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs,
 TPM_RC
 tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 			const char *hierachy_pwd, const char *key_pwd,
-			const char *file_name_pub_key, uint32_t *out_handle)
+			const char *file_name_pub_key, TPMI_DH_OBJECT *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 
@@ -731,7 +739,7 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32
 
 TPM_RC
 tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd, const char *file_name_priv_key,
-	  const char *file_name_pub_key, uint32_t *out_handle)
+	  const char *file_name_pub_key, TPMI_DH_OBJECT *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	Load_In in;
@@ -891,7 +899,7 @@ tpm2_quote_free(tpm2d_quote_t *quote)
 
 TPM_RC
 tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char *auth_pwd, TPMI_DH_OBJECT obj_handle,
-		  TPMI_DH_PERSISTENT persist_handle)
+		  TPMI_DH_PERSISTENT persist_handle, TPMI_DH_PERSISTENT *out_handle)
 {
 	TPM_RC rc = TPM_RC_SUCCESS;
 	EvictControl_In in;
@@ -907,8 +915,12 @@ tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char *auth_pwd, TPMI_DH_OBJECT obj_han
 				 TPM_CC_EvictControl, TPM_RS_PW, auth_pwd, 0, TPM_RH_NULL, NULL, 0);
 	} while (TPM_RC_RETRY == rc);
 
-	if (TPM_RC_SUCCESS != rc)
+	if (TPM_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_EvictControl");
+		*out_handle = 0;
+	} else {
+		*out_handle = persist_handle;
+	}
 
 	return rc;
 }
@@ -1215,7 +1227,8 @@ tpm2_nv_get_max_buffer_size(TSS_CONTEXT *tss_context)
 
 TPM_RC
 tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle, size_t nv_size,
-		    const char *hierarchy_pwd, const char *nv_pwd, uint8_t *policy_digest)
+		    const char *hierarchy_pwd, const char *nv_pwd, uint8_t *policy_digest,
+		    TPMI_RH_NV_INDEX *out_handle)
 {
 	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
 	TPMI_SH_AUTH_SESSION se_handle;
@@ -1299,8 +1312,10 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
 	if (TPM_RC_SUCCESS != rc) {
+		*out_handle = 0;
 		TSS_TPM_CMD_ERROR(rc, "CC_NV_DefineSpace");
 	} else {
+		*out_handle = nv_index_handle;
 		rc = rc_flush;
 	}
 

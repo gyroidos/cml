@@ -31,6 +31,7 @@
 #ifndef NVMCRYPT_H
 #define NVMCRYPT_H
 
+#include "tpm2d.h"
 #include <stdbool.h>
 
 /**
@@ -57,6 +58,9 @@ typedef enum nvmcrypt_fde_state {
  */
 void
 nvmcrypt_init(bool use_secure_boot_policy);
+
+void
+nvmcrypt_set_fde_nv_handle(TPM2D_DH_NV_INDEX handle);
 
 /**
  * Cleanup nvmcrypt submodule
