@@ -53,15 +53,15 @@ static tpm2d_rcontrol_t *tpm2d_rcontrol_attest = NULL;
 static logf_handler_t *tpm2d_logfile_handler = NULL;
 static void *tpm2d_logfile_p = NULL;
 
-static uint32_t tpm2d_salt_key_handle = TPM2D_TPM_RH_NULL;
+static TPM2D_DH_OBJECT tpm2d_salt_key_handle = TPM2D_INVALID_HANDLE;
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 // transient (tr) attestation key (as) handle
-static uint32_t tpm2d_as_key_handle_tr = TPM2D_TPM_RH_NULL;
+static TPM2D_DH_OBJECT tpm2d_as_key_handle_tr = TPM2D_INVALID_HANDLE;
 // transient (tr) parent handle (pt) for attestation key (as)
-static uint32_t tpm2d_as_key_handle_pt_tr = TPM2D_TPM_RH_NULL;
+static TPM2D_DH_OBJECT tpm2d_as_key_handle_pt_tr = TPM2D_INVALID_HANDLE;
 // persistent (ps) parent handle (pt) for attestation key (as)
-static uint32_t tpm2d_as_key_handle_pt_ps = TPM2D_STORAGE_KEY_PERSIST_HANDLE;
+static TPM2D_DH_PERSISTENT tpm2d_as_key_handle_pt_ps = TPM2D_INVALID_HANDLE;
 // auth for attestation
 static char *tpm2d_as_key_pwd_pt = TPM2D_PRIMARY_STORAGE_KEY_PW;
 #endif
@@ -81,7 +81,7 @@ tpm2d_logfile_rename_cb(UNUSED event_timer_t *timer, UNUSED void *data)
 static void
 tpm2d_setup_salt_key(void)
 {
-	// create primary key in NULL hierarchy wwhcih is used for session encryption
+	// create primary key in NULL hierarchy which is used for session encryption
 	int ret;
 	if (TPM2D_RC_SUCCESS !=
 	    (ret = tpm2_createprimary_asym(TPM2D_TPM_RH_NULL, TPM2D_KEY_TYPE_STORAGE_R, NULL, NULL,
@@ -91,17 +91,23 @@ tpm2d_setup_salt_key(void)
 	}
 }
 
-TPMI_DH_OBJECT
+void
+tpm2d_set_storage_key_handle(TPM2D_DH_PERSISTENT handle)
+{
+	tpm2d_as_key_handle_pt_ps = handle;
+}
+
+TPM2D_DH_OBJECT
 tpm2d_get_salt_key_handle(void)
 {
 	return tpm2d_salt_key_handle;
 }
 
 #ifndef TPM2D_NVMCRYPT_ONLY
-TPMI_DH_OBJECT
+TPM2D_DH_OBJECT
 tpm2d_get_as_key_handle(void)
 {
-	if (TPM2D_TPM_RH_NULL == tpm2d_as_key_handle_tr) {
+	if (TPM2D_INVALID_HANDLE == tpm2d_as_key_handle_tr) {
 		int ret;
 		// load attestation key
 		if (TPM2D_RC_SUCCESS !=
@@ -109,7 +115,7 @@ tpm2d_get_as_key_handle(void)
 				     TPM2D_ATT_PRIV_FILE, TPM2D_ATT_PUB_FILE,
 				     &tpm2d_as_key_handle_tr))) {
 			ERROR("Failed to load attestation key with error code: %08x", ret);
-			return TPM2D_TPM_RH_NULL;
+			return TPM2D_INVALID_HANDLE;
 		} else {
 			INFO("Loaded signing key for attestation with handle %08x from parent handle %08x.",
 			     tpm2d_as_key_handle_tr, tpm2d_as_key_handle_pt_ps);
@@ -121,9 +127,9 @@ tpm2d_get_as_key_handle(void)
 void
 tpm2d_flush_as_key_handle(void)
 {
-	if (tpm2d_as_key_handle_tr != TPM2D_TPM_RH_NULL) {
+	if (tpm2d_as_key_handle_tr != TPM2D_INVALID_HANDLE) {
 		tpm2_flushcontext(tpm2d_as_key_handle_tr);
-		tpm2d_as_key_handle_tr = TPM2D_TPM_RH_NULL;
+		tpm2d_as_key_handle_tr = TPM2D_INVALID_HANDLE;
 	}
 }
 
@@ -169,7 +175,8 @@ retry:
 			if (TPM2D_RC_SUCCESS !=
 			    (ret = tpm2_evictcontrol(TPM2D_KEY_HIERARCHY, NULL,
 						     tpm2d_as_key_handle_pt_tr,
-						     tpm2d_as_key_handle_pt_ps))) {
+						     TPM2D_STORAGE_KEY_PERSIST_RAW_HANDLE,
+						     &tpm2d_as_key_handle_pt_ps))) {
 				dir_delete_folder(TPM2D_BASE_DIR, TPM2D_TOKEN_DIR);
 				FATAL("Failed to persist att primary key with error code: %08x",
 				      ret);
@@ -257,10 +264,10 @@ tpm2d_exit(void)
 	INFO("Cleaning up tss2 and exit");
 	// When called tss2 library context may not be
 	tss2_init();
-	if (tpm2d_salt_key_handle != TPM2D_TPM_RH_NULL)
+	if (tpm2d_salt_key_handle != TPM2D_INVALID_HANDLE)
 		tpm2_flushcontext(tpm2d_salt_key_handle);
 #ifndef TPM2D_NVMCRYPT_ONLY
-	if (tpm2d_as_key_handle_tr != TPM2D_TPM_RH_NULL)
+	if (tpm2d_as_key_handle_tr != TPM2D_INVALID_HANDLE)
 		tpm2_flushcontext(tpm2d_as_key_handle_tr);
 #endif
 

@@ -37,10 +37,11 @@
 static nvmcrypt_fde_state_t fde_state = FDE_RESET;
 static bool secure_boot = false;
 static uint8_t *nvmcrypt_nvindex_policy = NULL;
+static TPM2D_DH_NV_INDEX fde_nv_handle = TPM2D_INVALID_HANDLE;
 
 static TPM2D_RC
-nvmcrypt_start_policy_session(TPM2D_TPM_SE session_type, TPMI_SH_AUTH_SESSION *session_handle,
-			      TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
+nvmcrypt_start_policy_session(TPM2D_TPM_SE session_type, TPM2D_SH_AUTH_SESSION *session_handle,
+			      TPM2D_DH_OBJECT bind_handle, const char *bind_pwd)
 {
 	TPM2D_RC ret;
 	tpm2d_pcr_t **pcrs = NULL;
@@ -77,7 +78,7 @@ static TPM2D_RC
 nvmcrypt_create_policy(void)
 {
 	TPM2D_RC ret;
-	TPMI_SH_AUTH_SESSION se_trial;
+	TPM2D_SH_AUTH_SESSION se_trial;
 
 	if (NULL == nvmcrypt_nvindex_policy)
 		nvmcrypt_nvindex_policy = mem_new(uint8_t, TPM2D_DIGEST_SIZE);
@@ -98,13 +99,13 @@ nvmcrypt_create_policy(void)
 static uint8_t *
 nvmcrypt_load_key_new(const char *fde_key_pw)
 {
-	TPMI_SH_AUTH_SESSION se_handle;
+	TPM2D_SH_AUTH_SESSION se_handle;
 	int ret = 0;
 	size_t key_len = CRYPTFS_FDE_KEY_LEN;
 	uint8_t *fde_key;
 
 	// check if nv index exists by requesting size of index which does a nv_read_public
-	if (tpm2_nv_get_data_size(TPM2D_FDE_NV_HANDLE) != 0) {
+	if (tpm2_nv_get_data_size(fde_nv_handle) != 0) {
 		if (secure_boot) {
 			//ret = nvmcrypt_start_policy_session(TPM_SE_POLICY, &se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw);
 			ret = nvmcrypt_start_policy_session(TPM2D_TPM_SE_POLICY, &se_handle,
@@ -116,8 +117,7 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 		}
 		if (TPM2D_RC_SUCCESS == ret) {
 			fde_key = mem_new(uint8_t, CRYPTFS_FDE_KEY_LEN);
-			ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key,
-					   &key_len);
+			ret = tpm2_nv_read(se_handle, fde_nv_handle, fde_key_pw, fde_key, &key_len);
 
 			if (TPM2D_RC_SUCCESS == ret) {
 				fde_state = FDE_OK;
@@ -144,7 +144,7 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 		}
 	}
 
-	INFO("The Handle %x does not yet exist, creating a new FDE Key", TPM2D_FDE_NV_HANDLE);
+	INFO("The Handle %x does not yet exist, creating a new FDE Key", fde_nv_handle);
 
 	// generate 64 byte random data as input for 512bit AES-XTS key
 	fde_key = tpm2_getrandom_new(key_len);
@@ -158,14 +158,14 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 	}
 
 	if (TPM2D_RC_SUCCESS !=
-	    (ret = tpm2_nv_definespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE, key_len, NULL,
-				       fde_key_pw, nvmcrypt_nvindex_policy))) {
+	    (ret = tpm2_nv_definespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_RAW_HANDLE, key_len, NULL,
+				       fde_key_pw, nvmcrypt_nvindex_policy, &fde_nv_handle))) {
 		ERROR("Failed to generate nv area for fde key with error code: %08x", ret);
 		goto err;
 	}
 
 	if (TPM2D_RC_SUCCESS !=
-	    (ret = tpm2_nv_write(TPM2D_FDE_NV_HANDLE, fde_key_pw, fde_key, key_len))) {
+	    (ret = tpm2_nv_write(fde_nv_handle, fde_key_pw, fde_key, key_len))) {
 		ERROR("Failed to write fde key to nv area with error code: %08x", ret);
 		goto err;
 	}
@@ -183,7 +183,7 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 		se_handle = TPM2D_TPM_RH_NULL;
 	}
 
-	if (TPM2D_RC_SUCCESS != (ret = tpm2_nv_read(se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw,
+	if (TPM2D_RC_SUCCESS != (ret = tpm2_nv_read(se_handle, fde_nv_handle, fde_key_pw,
 						    verify_key, &verify_key_len))) {
 		ERROR("Failed to read fde key from nv area with error code: %08x", ret);
 		goto err;
@@ -250,7 +250,7 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len)
 nvmcrypt_fde_state_t
 nvmcrypt_dm_lock(const char *fde_pw)
 {
-	if (TPM2D_RC_SUCCESS == tpm2_nv_readlock(TPM2D_FDE_NV_HANDLE, fde_pw))
+	if (TPM2D_RC_SUCCESS == tpm2_nv_readlock(fde_nv_handle, fde_pw))
 		fde_state = FDE_KEY_ACCESS_LOCKED;
 	return fde_state;
 }
@@ -259,8 +259,10 @@ nvmcrypt_fde_state_t
 nvmcrypt_dm_reset(const char *hierarchy_pw)
 {
 	if (TPM2D_RC_SUCCESS ==
-	    tpm2_nv_undefinespace(TPM2D_KEY_HIERARCHY, TPM2D_FDE_NV_HANDLE, hierarchy_pw))
+	    tpm2_nv_undefinespace(TPM2D_KEY_HIERARCHY, fde_nv_handle, hierarchy_pw)) {
+		fde_nv_handle = TPM2D_INVALID_HANDLE;
 		fde_state = FDE_RESET;
+	}
 	return fde_state;
 }
 
@@ -273,6 +275,12 @@ nvmcrypt_init(bool use_secure_boot_policy)
 		if (TPM2D_RC_SUCCESS != nvmcrypt_create_policy())
 			FATAL("Cannot setup nvmcrypt policy!");
 	}
+}
+
+void
+nvmcrypt_set_fde_nv_handle(TPM2D_DH_NV_INDEX handle)
+{
+	fde_nv_handle = handle;
 }
 
 void

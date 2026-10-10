@@ -22,6 +22,8 @@
  */
 
 #include "tpm2d.h"
+#include "ek.h"
+#include "nvmcrypt.h"
 
 #include "common/mem.h"
 #include "common/macro.h"
@@ -44,6 +46,19 @@ static ESYS_CONTEXT *esys_context = NULL;
 		ERROR("%s failed, rc %08x: %s\n", cc_string, rc, msg);                             \
 	}
 
+static ESYS_TR
+tss2_resolve_raw(TPM2_HANDLE handle)
+{
+	ESYS_TR tr = ESYS_TR_NONE;
+	TPM2_RC rc = Esys_TR_FromTPMPublic(esys_context, handle, ESYS_TR_NONE, ESYS_TR_NONE,
+					   ESYS_TR_NONE, &tr);
+	if (rc != TPM2_RC_SUCCESS) {
+		DEBUG("TPM object %08x not present (rc %08x)", handle, rc);
+		return ESYS_TR_NONE;
+	}
+	return tr;
+}
+
 /************************************************************************************/
 
 void
@@ -58,6 +73,12 @@ tss2_init(void)
 
 	if (TPM2_RC_SUCCESS != (ret = Esys_Initialize(&esys_context, NULL, NULL)))
 		FATAL("Cannot create esys context error code: %08x", ret);
+
+	// initialize dynamic handles of esys api for raw TPM handles
+	nvmcrypt_set_fde_nv_handle(tss2_resolve_raw(TPM2D_FDE_NV_RAW_HANDLE));
+	ek_set_cert_rsa_nv_handle(tss2_resolve_raw(TPM2D_EK_CERT_RSA_NV_RAW_HANDLE));
+	ek_set_cert_ec_nv_handle(tss2_resolve_raw(TPM2D_EK_CERT_EC_NV_RAW_HANDLE));
+	tpm2d_set_storage_key_handle(tss2_resolve_raw(TPM2D_STORAGE_KEY_PERSIST_RAW_HANDLE));
 
 	// TODO: trace level?
 	// TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
@@ -324,12 +345,11 @@ tpm2_dictionaryattacklockreset(const char *lockout_pwd)
 }
 
 TPM2_RC
-tpm2_startauthsession(TPM2_SE session_type, TPMI_SH_AUTH_SESSION *out_session_handle,
-		      TPMI_DH_OBJECT bind_handle, const char *bind_pwd)
+tpm2_startauthsession(TPM2_SE session_type, ESYS_TR *out_session_handle, ESYS_TR bind_handle,
+		      const char *bind_pwd)
 {
 	TPM2_RC rc;
 	ESYS_TR tpmKey;
-	ESYS_TR bind;
 	TPM2_SE sessionType;
 	TPMT_SYM_DEF symmetric;
 	TPMI_ALG_HASH authHash;
@@ -340,9 +360,8 @@ tpm2_startauthsession(TPM2_SE session_type, TPMI_SH_AUTH_SESSION *out_session_ha
 	sessionType = session_type;
 
 	/* bind password */
-	bind = bind_handle;
-	if (bind != ESYS_TR_RH_NULL) {
-		rc = esys_set_auth_pw(bind_pwd, bind);
+	if (bind_handle != ESYS_TR_RH_NULL) {
+		rc = esys_set_auth_pw(bind_pwd, bind_handle);
 		IF_TRUE_RETVAL(rc != TPM2_RC_SUCCESS, rc);
 	}
 
@@ -369,7 +388,7 @@ tpm2_startauthsession(TPM2_SE session_type, TPMI_SH_AUTH_SESSION *out_session_ha
 	/* authHash */
 	authHash = TPM2D_HASH_ALGORITHM;
 
-	rc = Esys_StartAuthSession(esys_context, tpmKey, bind, ESYS_TR_NONE, ESYS_TR_NONE,
+	rc = Esys_StartAuthSession(esys_context, tpmKey, bind_handle, ESYS_TR_NONE, ESYS_TR_NONE,
 				   ESYS_TR_NONE, /* nonceCaller (not required) */ NULL, sessionType,
 				   &symmetric, authHash, &sessionHandle);
 
@@ -385,7 +404,7 @@ tpm2_startauthsession(TPM2_SE session_type, TPMI_SH_AUTH_SESSION *out_session_ha
 }
 
 TPM2_RC
-tpm2_policyauthvalue(TPMI_SH_POLICY se_handle)
+tpm2_policyauthvalue(ESYS_TR se_handle)
 {
 	TPM2_RC rc;
 
@@ -401,8 +420,7 @@ tpm2_policyauthvalue(TPMI_SH_POLICY se_handle)
 }
 
 TPM2_RC
-tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask, tpm2d_pcr_t *pcrs[],
-	       size_t pcrs_size)
+tpm2_policypcr(ESYS_TR se_handle, uint32_t pcr_mask, tpm2d_pcr_t *pcrs[], size_t pcrs_size)
 {
 	TPM2_RC rc = TPM2_RC_HASH;
 	ESYS_TR policySession;
@@ -473,18 +491,15 @@ out:
 }
 
 TPM2_RC
-tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest, size_t out_digest_len)
+tpm2_policygetdigest(ESYS_TR se_handle, uint8_t *out_digest, size_t out_digest_len)
 {
 	TPM2_RC rc;
-	ESYS_TR policySession;
 	TPM2B_DIGEST *policyDigest = NULL;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
-	policySession = se_handle;
-
-	rc = Esys_PolicyGetDigest(esys_context, policySession, ESYS_TR_NONE, ESYS_TR_NONE,
-				  ESYS_TR_NONE, &policyDigest);
+	rc = Esys_PolicyGetDigest(esys_context, se_handle, ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+				  &policyDigest);
 
 	if (TPM2_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_PolicyGetDigest");
@@ -511,7 +526,7 @@ err:
 }
 
 TPM2_RC
-tpm2_policyrestart(TPMI_SH_POLICY se_handle)
+tpm2_policyrestart(ESYS_TR se_handle)
 {
 	TPM2_RC rc;
 
@@ -526,7 +541,7 @@ tpm2_policyrestart(TPMI_SH_POLICY se_handle)
 }
 
 TPM2_RC
-tpm2_flushcontext(TPMI_DH_CONTEXT handle)
+tpm2_flushcontext(ESYS_TR handle)
 {
 	TPM2_RC rc;
 
@@ -695,12 +710,10 @@ tpm2_public_area_helper(TPMT_PUBLIC *out_public_area, TPMA_OBJECT object_attrs,
 }
 
 TPM2_RC
-tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
-			const char *hierachy_pwd, const char *key_pwd,
-			const char *file_name_pub_key, uint32_t *out_handle)
+tpm2_createprimary_asym(ESYS_TR hierarchy, tpm2d_key_type_t key_type, const char *hierachy_pwd,
+			const char *key_pwd, const char *file_name_pub_key, ESYS_TR *out_handle)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR primaryHandle;
 	TPM2B_SENSITIVE_CREATE inSensitive;
 	TPM2B_PUBLIC inPublic;
 	TPM2B_DATA outsideInfo;
@@ -727,8 +740,6 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	object_attrs |= TPMA_OBJECT_FIXEDTPM;
 	object_attrs |= TPMA_OBJECT_FIXEDPARENT;
 
-	primaryHandle = hierachy;
-
 	// Table 134 - Definition of TPM2B_SENSITIVE_CREATE inSensitive
 	if (key_pwd == NULL) {
 		inSensitive.sensitive.userAuth.size = 0;
@@ -748,9 +759,9 @@ tpm2_createprimary_asym(TPMI_RH_HIERARCHY hierachy, tpm2d_key_type_t key_type,
 	// Table 102 - TPML_PCR_SELECTION creationPCR
 	creationPCR.count = 0;
 
-	rc = esys_set_auth_pw(hierachy_pwd, primaryHandle);
+	rc = esys_set_auth_pw(hierachy_pwd, hierarchy);
 	IF_TRUE_RETVAL(rc != TPM2_RC_SUCCESS, rc);
-	rc = Esys_CreatePrimary(esys_context, primaryHandle, ESYS_TR_PASSWORD, ESYS_TR_NONE,
+	rc = Esys_CreatePrimary(esys_context, hierarchy, ESYS_TR_PASSWORD, ESYS_TR_NONE,
 				ESYS_TR_NONE, &inSensitive, &inPublic, &outsideInfo, &creationPCR,
 				&objectHandle, &outPublic, &creationData, &creationHash,
 				&creationTicket);
@@ -778,12 +789,11 @@ err:
 
 #ifndef TPM2D_NVMCRYPT_ONLY
 TPM2_RC
-tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32_t object_vals,
+tpm2_create_asym(ESYS_TR parent_handle, tpm2d_key_type_t key_type, uint32_t object_vals,
 		 const char *parent_pwd, const char *key_pwd, const char *file_name_priv_key,
 		 const char *file_name_pub_key, const char *file_name_tss_key)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR parentHandle;
 	TPM2B_SENSITIVE_CREATE inSensitive;
 	TPM2B_PUBLIC inPublic;
 	TPM2B_DATA outsideInfo;
@@ -797,7 +807,6 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
-	parentHandle = parent_handle;
 	object_attrs = object_vals;
 
 	// Table 134 - Definition of TPM2B_SENSITIVE_CREATE inSensitive
@@ -819,9 +828,9 @@ tpm2_create_asym(TPMI_DH_OBJECT parent_handle, tpm2d_key_type_t key_type, uint32
 	// Table 102 - TPML_PCR_SELECTION creationPCR
 	creationPCR.count = 0;
 
-	rc = esys_set_auth_pw(parent_pwd, parentHandle);
+	rc = esys_set_auth_pw(parent_pwd, parent_handle);
 	IF_TRUE_RETVAL(rc != TPM2_RC_SUCCESS, rc);
-	rc = Esys_Create(esys_context, parentHandle, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+	rc = Esys_Create(esys_context, parent_handle, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
 			 &inSensitive, &inPublic, &outsideInfo, &creationPCR, &outPrivate,
 			 &outPublic, &creationData, &creationHash, &creationTicket);
 
@@ -873,18 +882,15 @@ err:
 }
 
 TPM2_RC
-tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd, const char *file_name_priv_key,
-	  const char *file_name_pub_key, uint32_t *out_handle)
+tpm2_load(ESYS_TR parent_handle, const char *parent_pwd, const char *file_name_priv_key,
+	  const char *file_name_pub_key, ESYS_TR *out_handle)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR parentHandle;
 	TPM2B_PRIVATE inPrivate;
 	TPM2B_PUBLIC inPublic;
 	ESYS_TR objectHandle;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
-
-	parentHandle = parent_handle;
 
 	if (TPM2_RC_SUCCESS !=
 	    (rc = tss_file_read_structure_tpm2b_private(&inPrivate, file_name_priv_key)))
@@ -894,9 +900,9 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd, const char *file
 	    (rc = tss_file_read_structure_flag_tpm2b_public(&inPublic, false, file_name_pub_key)))
 		return rc;
 
-	rc = esys_set_auth_pw(parent_pwd, parentHandle);
+	rc = esys_set_auth_pw(parent_pwd, parent_handle);
 	IF_TRUE_RETVAL(rc != TPM2_RC_SUCCESS, rc);
-	rc = Esys_Load(esys_context, parentHandle, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+	rc = Esys_Load(esys_context, parent_handle, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
 		       &inPrivate, &inPublic, &objectHandle);
 
 	if (TPM2_RC_SUCCESS != rc) {
@@ -911,10 +917,9 @@ tpm2_load(TPMI_DH_OBJECT parent_handle, const char *parent_pwd, const char *file
 }
 
 TPM2_RC
-tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len)
+tpm2_pcrextend(ESYS_TR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *data, size_t data_len)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR pcrHandle;
 	TPML_DIGEST_VALUES digests;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
@@ -924,8 +929,6 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 		return EXIT_FAILURE;
 	}
 
-	pcrHandle = pcr_index;
-
 	// extend one bank
 	digests.count = 1;
 
@@ -934,7 +937,7 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 	mem_memset((uint8_t *)&digests.digests[0].digest, 0, sizeof(TPMU_HA));
 	memcpy((uint8_t *)&digests.digests[0].digest, data, data_len);
 
-	rc = Esys_PCR_Extend(esys_context, pcrHandle, ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+	rc = Esys_PCR_Extend(esys_context, pcr_index, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
 			     &digests);
 
 	if (TPM2_RC_SUCCESS != rc)
@@ -944,11 +947,10 @@ tpm2_pcrextend(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg, const uint8_t *dat
 }
 
 tpm2d_quote_t *
-tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_key_handle,
+tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, ESYS_TR sig_key_handle,
 	       const char *sig_key_pwd, uint8_t *qualifying_data, size_t qualifying_data_len)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR signHandle;
 	TPM2B_DATA qualifyingData;
 	TPMT_SIG_SCHEME inScheme;
 	TPML_PCR_SELECTION PCRselect;
@@ -969,7 +971,6 @@ tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_k
 		PCRselect.pcrSelections[0].pcrSelect[i] = pcr_bitmap[i];
 	}
 
-	signHandle = sig_key_handle;
 	if (TPM2D_ASYM_ALGORITHM == TPM2_ALG_RSA) {
 		inScheme.scheme = TPM2_ALG_RSASSA;
 		inScheme.details.rsassa.hashAlg = TPM2D_HASH_ALGORITHM;
@@ -992,11 +993,11 @@ tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_k
 	}
 
 	do {
-		rc = esys_set_auth_pw(sig_key_pwd, signHandle);
+		rc = esys_set_auth_pw(sig_key_pwd, sig_key_handle);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_Quote(esys_context, signHandle, ESYS_TR_PASSWORD, ESYS_TR_NONE,
-					ESYS_TR_NONE, &qualifyingData, &inScheme, &PCRselect,
-					&quoted, &signature);
+			rc = Esys_Quote(esys_context, sig_key_handle, ESYS_TR_PASSWORD,
+					ESYS_TR_NONE, ESYS_TR_NONE, &qualifyingData, &inScheme,
+					&PCRselect, &quoted, &signature);
 		}
 	} while (TPM2_RC_RETRY == rc);
 
@@ -1052,43 +1053,38 @@ tpm2_quote_free(tpm2d_quote_t *quote)
 }
 
 TPM2_RC
-tpm2_evictcontrol(TPMI_RH_HIERARCHY auth, char *auth_pwd, TPMI_DH_OBJECT obj_handle,
-		  TPMI_DH_PERSISTENT persist_handle)
+tpm2_evictcontrol(ESYS_TR auth, char *auth_pwd, ESYS_TR obj_handle, TPM2_HANDLE persist_handle,
+		  ESYS_TR *out_handle)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR in_auth;
-	ESYS_TR objectHandle;
-	TPMI_DH_PERSISTENT persistentHandle;
 	ESYS_TR new_obj_handle;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
-	// TOOD: convert to ESYS_TR?
-	in_auth = auth;
-	objectHandle = obj_handle;
-	persistentHandle = persist_handle;
-
 	do {
-		rc = esys_set_auth_pw(auth_pwd, in_auth);
+		rc = esys_set_auth_pw(auth_pwd, auth);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_EvictControl(esys_context, in_auth, objectHandle,
-					       ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
-					       persistentHandle, &new_obj_handle);
+			rc = Esys_EvictControl(esys_context, auth, obj_handle, ESYS_TR_PASSWORD,
+					       ESYS_TR_NONE, ESYS_TR_NONE, persist_handle,
+					       &new_obj_handle);
 		}
 	} while (TPM2_RC_RETRY == rc);
 
-	if (TPM2_RC_SUCCESS != rc)
+	if (TPM2_RC_SUCCESS != rc) {
 		TSS_TPM_CMD_ERROR(rc, "CC_EvictControl");
+		*out_handle = 0;
+	} else {
+		*out_handle = new_obj_handle;
+	}
 
 	return rc;
 }
 
 TPM2_RC
-tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
-		uint8_t *out_buffer, size_t *out_length)
+tpm2_rsaencrypt(ESYS_TR key_handle, uint8_t *in_buffer, size_t in_length, uint8_t *out_buffer,
+		size_t *out_length)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR keyHandle;
 	TPM2B_PUBLIC_KEY_RSA message;
 	TPMT_RSA_DECRYPT inScheme;
 	TPM2B_DATA label;
@@ -1101,7 +1097,6 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 		return TSS2_BASE_RC_INSUFFICIENT_BUFFER;
 	}
 
-	keyHandle = key_handle;
 	/* Table 158 - Definition of {RSA} TPM2B_PUBLIC_KEY_RSA Structure */
 	message.size = (uint16_t)in_length;
 	memcpy(message.buffer, in_buffer, in_length);
@@ -1112,7 +1107,7 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 	label.size = 0;
 
 	do {
-		rc = Esys_RSA_Encrypt(esys_context, keyHandle, ESYS_TR_NONE, ESYS_TR_NONE,
+		rc = Esys_RSA_Encrypt(esys_context, key_handle, ESYS_TR_NONE, ESYS_TR_NONE,
 				      ESYS_TR_NONE, &message, &inScheme, &label, &outData);
 	} while (TPM2_RC_RETRY == rc);
 
@@ -1127,20 +1122,20 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 	if (outData->size > *out_length) {
 		ERROR("Output buffer (size=%zu) is to small for encrypted data of size %u\n",
 		      *out_length, outData->size);
-		return TSS2_BASE_RC_INSUFFICIENT_BUFFER;
+		rc = TSS2_BASE_RC_INSUFFICIENT_BUFFER;
+		goto err;
 	}
 	memcpy(out_buffer, outData->buffer, outData->size);
-
+err:
 	Esys_Free(outData);
 	return rc;
 }
 
 TPM2_RC
-tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buffer,
-		size_t in_length, uint8_t *out_buffer, size_t *out_length)
+tpm2_rsadecrypt(ESYS_TR key_handle, const char *key_pwd, uint8_t *in_buffer, size_t in_length,
+		uint8_t *out_buffer, size_t *out_length)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	ESYS_TR keyHandle;
 	TPM2B_PUBLIC_KEY_RSA cipherText;
 	TPMT_RSA_DECRYPT inScheme;
 	TPM2B_DATA label;
@@ -1154,7 +1149,6 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 		return TSS2_BASE_RC_INSUFFICIENT_BUFFER;
 	}
 
-	keyHandle = key_handle;
 	/* Table 158 - Definition of {RSA} TPM2B_PUBLIC_KEY_RSA Structure */
 	cipherText.size = (uint16_t)in_length;
 	memcpy(cipherText.buffer, in_buffer, in_length);
@@ -1165,9 +1159,9 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 	label.size = 0;
 
 	do {
-		rc = esys_set_auth_pw(key_pwd, keyHandle);
+		rc = esys_set_auth_pw(key_pwd, key_handle);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_RSA_Decrypt(esys_context, keyHandle, ESYS_TR_PASSWORD,
+			rc = Esys_RSA_Decrypt(esys_context, key_handle, ESYS_TR_PASSWORD,
 					      ESYS_TR_NONE, ESYS_TR_NONE, &cipherText, &inScheme,
 					      &label, &message);
 		}
@@ -1199,16 +1193,13 @@ err:
 #endif // ndef TPM2D_NVMCRYPT_ONLY
 
 TPM2_RC
-tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd, const char *new_pwd)
+tpm2_hierarchychangeauth(ESYS_TR hierarchy, const char *old_pwd, const char *new_pwd)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
-	ESYS_TR authHandle;
+	ESYS_TR se_handle;
 	TPM2B_AUTH newAuth;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
-
-	authHandle = hierarchy;
 
 	if (new_pwd == NULL) {
 		newAuth.size = 0;
@@ -1226,7 +1217,7 @@ tpm2_hierarchychangeauth(TPMI_RH_HIERARCHY hierarchy, const char *old_pwd, const
 					       TPMA_SESSION_DECRYPT | TPMA_SESSION_CONTINUESESSION,
 					       TPMA_SESSION_DECRYPT | TPMA_SESSION_CONTINUESESSION);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_HierarchyChangeAuth(esys_context, authHandle, se_handle,
+			rc = Esys_HierarchyChangeAuth(esys_context, hierarchy, se_handle,
 						      ESYS_TR_NONE, ESYS_TR_NONE, &newAuth);
 		}
 	} while (TPM2_RC_RETRY == rc);
@@ -1245,7 +1236,7 @@ uint8_t *
 tpm2_getrandom_new(size_t rand_length)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
+	ESYS_TR se_handle;
 	UINT16 bytesRequested;
 	TPM2B_DIGEST *out = NULL;
 
@@ -1266,7 +1257,7 @@ tpm2_getrandom_new(size_t rand_length)
 		if (rc != TPM2_RC_SUCCESS) {
 			break;
 		}
-		rc = Esys_GetRandom(esys_context, ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+		rc = Esys_GetRandom(esys_context, se_handle, ESYS_TR_NONE, ESYS_TR_NONE,
 				    bytesRequested, &out);
 		if (rc != TPM2_RC_SUCCESS)
 			break;
@@ -1290,7 +1281,7 @@ tpm2_getrandom_new(size_t rand_length)
 }
 
 tpm2d_pcr_t *
-tpm2_pcrread_new(TPMI_DH_PCR pcr_index, TPMI_ALG_HASH hash_alg)
+tpm2_pcrread_new(ESYS_TR pcr_index, TPMI_ALG_HASH hash_alg)
 {
 	TPM2_RC rc = TPM2_RC_SUCCESS;
 	TPML_PCR_SELECTION pcrSelectionIn;
@@ -1355,7 +1346,7 @@ tpm2_pcrread_free(tpm2d_pcr_t *pcr)
 }
 
 size_t
-tpm2_nv_get_data_size(TPMI_RH_NV_INDEX nv_index_handle)
+tpm2_nv_get_data_size(ESYS_TR nv_index_handle)
 {
 	TPM2B_NV_PUBLIC *nv_public = NULL;
 	TPM2B_NAME *nv_name = NULL;
@@ -1397,7 +1388,7 @@ tpm2_nv_get_max_buffer_size(ESYS_CONTEXT *esys_context)
 	UINT32 property;
 	UINT32 propertyCount;
 	TPMI_YES_NO more_data;
-	TPMS_CAPABILITY_DATA *capability_data;
+	TPMS_CAPABILITY_DATA *capability_data = NULL;
 
 	capability = TPM2_CAP_TPM_PROPERTIES;
 	property = TPM2_PT_NV_BUFFER_MAX;
@@ -1411,7 +1402,6 @@ tpm2_nv_get_max_buffer_size(ESYS_CONTEXT *esys_context)
 	if (TPM2_RC_SUCCESS != Esys_GetCapability(esys_context, ESYS_TR_NONE, ESYS_TR_NONE,
 						  ESYS_TR_NONE, capability, property, propertyCount,
 						  &more_data, &capability_data)) {
-		Esys_Free(capability_data);
 		ERROR("GetCapability failed, returning default value %zd", buffer_size);
 		return buffer_size;
 	}
@@ -1430,12 +1420,12 @@ tpm2_nv_get_max_buffer_size(ESYS_CONTEXT *esys_context)
 }
 
 TPM2_RC
-tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle, size_t nv_size,
-		    const char *hierarchy_pwd, const char *nv_pwd, uint8_t *policy_digest)
+tpm2_nv_definespace(ESYS_TR hierarchy, TPM2_HANDLE nv_index_handle, size_t nv_size,
+		    const char *hierarchy_pwd, const char *nv_pwd, uint8_t *policy_digest,
+		    ESYS_TR *out_handle)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
-	ESYS_TR authHandle;
+	ESYS_TR se_handle;
 	TPM2B_AUTH auth;
 	TPM2B_NV_PUBLIC publicInfo;
 	ESYS_TR nvHandle;
@@ -1452,8 +1442,6 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 		auth.size = 0;
 	else if (TPM2_RC_SUCCESS != (rc = tss_tpm2b_auth_strcpy(&auth, nv_pwd, sizeof(TPMU_HA))))
 		return rc;
-
-	authHandle = hierarchy;
 
 	nv_attr = 0;
 	if (hierarchy == ESYS_TR_RH_PLATFORM) {
@@ -1503,7 +1491,7 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 
 	publicInfo.nvPublic.attributes = nv_attr;
 
-	// since we use this to store symetric keys, start an encrypted transport */
+	// since we use this to store symetric keys, start an encrypted transport
 	rc = tpm2_startauthsession(TPM2_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
 	if (TPM2_RC_SUCCESS != rc)
 		goto err;
@@ -1520,7 +1508,7 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 					       TPMA_SESSION_DECRYPT | TPMA_SESSION_CONTINUESESSION,
 					       TPMA_SESSION_DECRYPT | TPMA_SESSION_CONTINUESESSION);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_NV_DefineSpace(esys_context, authHandle, se_handle, ESYS_TR_NONE,
+			rc = Esys_NV_DefineSpace(esys_context, hierarchy, se_handle, ESYS_TR_NONE,
 						 ESYS_TR_NONE, &auth, &publicInfo, &nvHandle);
 		}
 	} while (TPM2_RC_RETRY == rc);
@@ -1528,8 +1516,10 @@ tpm2_nv_definespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handl
 	rc_flush = tpm2_flushcontext(se_handle);
 err:
 	if (TPM2_RC_SUCCESS != rc) {
+		*out_handle = ESYS_TR_NONE;
 		TSS_TPM_CMD_ERROR(rc, "CC_NV_DefineSpace");
 	} else {
+		*out_handle = nvHandle;
 		rc = rc_flush;
 	}
 
@@ -1537,13 +1527,10 @@ err:
 }
 
 TPM2_RC
-tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_handle,
-		      const char *hierarchy_pwd)
+tpm2_nv_undefinespace(ESYS_TR hierarchy, ESYS_TR nv_index_handle, const char *hierarchy_pwd)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
 	TPMI_SH_AUTH_SESSION se_handle;
-	ESYS_TR authHandle;
-	ESYS_TR nvIndex;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
@@ -1552,10 +1539,7 @@ tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_han
 		return TPM2_RC_HANDLE;
 	}
 
-	authHandle = hierarchy;
-	nvIndex = nv_index_handle;
-
-	// since we use this to store symetric keys, start an encrypted transport */
+	// since we use this to store symetric keys, start an encrypted transport
 	rc = tpm2_startauthsession(TPM2_SE_HMAC, &se_handle, hierarchy, hierarchy_pwd);
 	if (TPM2_RC_SUCCESS != rc)
 		goto err;
@@ -1565,8 +1549,8 @@ tpm2_nv_undefinespace(TPMI_RH_HIERARCHY hierarchy, TPMI_RH_NV_INDEX nv_index_han
 					       TPMA_SESSION_CONTINUESESSION,
 					       TPMA_SESSION_CONTINUESESSION);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_NV_UndefineSpace(esys_context, authHandle, nvIndex, se_handle,
-						   ESYS_TR_NONE, ESYS_TR_NONE);
+			rc = Esys_NV_UndefineSpace(esys_context, hierarchy, nv_index_handle,
+						   se_handle, ESYS_TR_NONE, ESYS_TR_NONE);
 		}
 	} while (TPM2_RC_RETRY == rc);
 
@@ -1582,13 +1566,11 @@ err:
 }
 
 TPM2_RC
-tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd, uint8_t *data,
-	      size_t data_length)
+tpm2_nv_write(ESYS_TR nv_index_handle, const char *nv_pwd, uint8_t *data, size_t data_length)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
+	ESYS_TR se_handle;
 	ESYS_TR authHandle;
-	ESYS_TR nvIndex;
 	TPM2B_MAX_NV_BUFFER in_data;
 	UINT16 offset;
 
@@ -1599,7 +1581,6 @@ tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd, uint8_t *dat
 	}
 
 	authHandle = nv_index_handle;
-	nvIndex = nv_index_handle;
 	offset = 0;
 
 	size_t buffer_max = tpm2_nv_get_max_buffer_size(esys_context);
@@ -1611,7 +1592,7 @@ tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd, uint8_t *dat
 	memcpy(in_data.buffer, data, data_length);
 	in_data.size = data_length;
 
-	// since we use this to read symetric keys, start an encrypted transport */
+	// since we use this to read symetric keys, start an encrypted transport
 	rc = tpm2_startauthsession(TPM2_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
 	if (TPM2_RC_SUCCESS != rc)
 		goto err;
@@ -1621,7 +1602,7 @@ tpm2_nv_write(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd, uint8_t *dat
 					       TPMA_SESSION_DECRYPT | TPMA_SESSION_CONTINUESESSION,
 					       TPMA_SESSION_DECRYPT | TPMA_SESSION_CONTINUESESSION);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_NV_Write(esys_context, authHandle, nvIndex, se_handle,
+			rc = Esys_NV_Write(esys_context, authHandle, nv_index_handle, se_handle,
 					   ESYS_TR_NONE, ESYS_TR_NONE, &in_data, offset);
 		}
 	} while (TPM2_RC_RETRY == rc);
@@ -1637,14 +1618,13 @@ err:
 }
 
 TPM2_RC
-tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd,
-	     uint8_t *out_buffer, size_t *out_length)
+tpm2_nv_read(ESYS_TR se_handle, ESYS_TR nv_index_handle, const char *nv_pwd, uint8_t *out_buffer,
+	     size_t *out_length)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION auth_se_handle;
+	ESYS_TR auth_se_handle;
 
 	ESYS_TR authHandle;
-	ESYS_TR nvIndex;
 	UINT16 size;
 	UINT16 offset;
 	TPM2B_MAX_NV_BUFFER *data = NULL;
@@ -1657,7 +1637,6 @@ tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const c
 	}
 
 	authHandle = nv_index_handle;
-	nvIndex = nv_index_handle;
 
 	size_t data_size = tpm2_nv_get_data_size(nv_index_handle);
 	size_t buffer_max = tpm2_nv_get_max_buffer_size(esys_context);
@@ -1686,12 +1665,13 @@ tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const c
 
 		do {
 			rc = Esys_TRSess_SetAttributes(
-				esys_context, se_handle,
+				esys_context, auth_se_handle,
 				TPMA_SESSION_ENCRYPT | TPMA_SESSION_CONTINUESESSION,
 				TPMA_SESSION_ENCRYPT | TPMA_SESSION_CONTINUESESSION);
 			if (rc == TPM2_RC_SUCCESS) {
-				rc = Esys_NV_Read(esys_context, authHandle, nvIndex, se_handle,
-						  ESYS_TR_NONE, ESYS_TR_NONE, size, offset, &data);
+				rc = Esys_NV_Read(esys_context, authHandle, nv_index_handle,
+						  auth_se_handle, ESYS_TR_NONE, ESYS_TR_NONE, size,
+						  offset, &data);
 			}
 		} while (TPM2_RC_RETRY == rc);
 
@@ -1724,12 +1704,11 @@ err:
 }
 
 TPM2_RC
-tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
+tpm2_nv_readlock(ESYS_TR nv_index_handle, const char *nv_pwd)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
+	ESYS_TR se_handle;
 	ESYS_TR authHandle;
-	ESYS_TR nvIndex;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
@@ -1739,7 +1718,6 @@ tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
 	}
 
 	authHandle = nv_index_handle;
-	nvIndex = nv_index_handle;
 
 	// since we use this to read symetric keys, start an encrypted transport
 	rc = tpm2_startauthsession(TPM2_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
@@ -1751,7 +1729,7 @@ tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
 					       TPMA_SESSION_CONTINUESESSION,
 					       TPMA_SESSION_CONTINUESESSION);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_NV_ReadLock(esys_context, authHandle, nvIndex, se_handle,
+			rc = Esys_NV_ReadLock(esys_context, authHandle, nv_index_handle, se_handle,
 					      ESYS_TR_NONE, ESYS_TR_NONE);
 		}
 	} while (TPM2_RC_RETRY == rc);
