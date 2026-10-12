@@ -207,25 +207,6 @@ esys_set_auth_pw(const char *password, ESYS_TR handle)
 	return rc;
 }
 
-// prints the buffer in the same format as ibmtss's TSS_PrintAll function
-static void
-tss_print_all(const char *string, const unsigned char *buff, uint32_t length)
-{
-	if (buff == NULL) {
-		printf(" %s null\n", string);
-		return;
-	}
-
-	printf(" %s length %u\n ", string, length);
-	for (uint32_t i = 0; i < length; i++) {
-		if (i != 0 && (i % 16) == 0) {
-			printf("\n ");
-		}
-		printf("%.2x ", buff[i]);
-	}
-	printf("\n");
-}
-
 static TPM2_RC
 tss_file_write_structure_tpm2b_public(const TPM2B_PUBLIC *src, const char *file_name)
 {
@@ -513,7 +494,7 @@ tpm2_policypcr(ESYS_TR se_handle, uint32_t pcr_mask, tpm2d_pcr_t *pcrs[], size_t
 		IF_FALSE_GOTO(EVP_DigestFinal(mdctx, pcrDigest.buffer, &md_size), out);
 		pcrDigest.size = md_size;
 
-		tss_print_all("PCR digest: ", pcrDigest.buffer, pcrDigest.size);
+		tss2_print_all("PCR digest: ", pcrDigest.buffer, pcrDigest.size);
 	}
 
 	rc = Esys_PolicyPCR(esys_context, policySession, ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
@@ -545,7 +526,7 @@ tpm2_policygetdigest(ESYS_TR se_handle, uint8_t *out_digest, size_t out_digest_l
 		goto err;
 	}
 
-	tss_print_all("policy digest: ", policyDigest->buffer, policyDigest->size);
+	tss2_print_all("policy digest: ", policyDigest->buffer, policyDigest->size);
 
 	//rc = TSS_File_WriteBinaryFile(out.policyDigest.t.buffer, out.policyDigest.t.size, out_file);
 
@@ -1068,8 +1049,8 @@ tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, ESYS_TR sig_key_hand
 	quote->signature_size = signature_size;
 
 	if (inScheme.scheme == TPM2_ALG_RSASSA) {
-		tss_print_all("RSA signature", signature->signature.rsassa.sig.buffer,
-			      signature->signature.rsassa.sig.size);
+		tss2_print_all("RSA signature", signature->signature.rsassa.sig.buffer,
+			       signature->signature.rsassa.sig.size);
 	}
 	goto out;
 
@@ -1155,7 +1136,7 @@ tpm2_rsaencrypt(ESYS_TR key_handle, uint8_t *in_buffer, size_t in_length, uint8_
 		return rc;
 	}
 
-	tss_print_all("RSA encrypted data", outData->buffer, outData->size);
+	tss2_print_all("RSA encrypted data", outData->buffer, outData->size);
 
 	// return handle to just created object
 	if (outData->size > *out_length) {
@@ -1211,7 +1192,7 @@ tpm2_rsadecrypt(ESYS_TR key_handle, const char *key_pwd, uint8_t *in_buffer, siz
 		goto err;
 	}
 
-	tss_print_all("RSA Decrypted message", message->buffer, message->size);
+	tss2_print_all("RSA Decrypted message", message->buffer, message->size);
 
 	msg_size = message->size;
 
@@ -1724,7 +1705,7 @@ tpm2_nv_read(ESYS_TR se_handle, ESYS_TR nv_index_handle, const char *nv_pwd, uin
 
 	} while (data_size > 0);
 
-	tss_print_all("nv_read data: ", out_buffer, *out_length);
+	tss2_print_all("nv_read data: ", out_buffer, *out_length);
 
 flush:
 	rc_flush = tpm2_flushcontext(auth_se_handle);

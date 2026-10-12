@@ -377,7 +377,7 @@ tpm2_policypcr(TPMI_SH_AUTH_SESSION se_handle, uint32_t pcr_mask, tpm2d_pcr_t *p
 		IF_FALSE_GOTO(EVP_DigestFinal(mdctx, in.pcrDigest.b.buffer, &md_size), out);
 		in.pcrDigest.b.size = md_size;
 
-		TSS_PrintAll("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
+		tss2_print_all("PCR digest: ", in.pcrDigest.b.buffer, in.pcrDigest.b.size);
 	}
 
 	rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL, TPM_CC_PolicyPCR,
@@ -412,7 +412,7 @@ tpm2_policygetdigest(TPMI_SH_POLICY se_handle, uint8_t *out_digest, size_t out_d
 		return rc;
 	}
 
-	TSS_PrintAll("policy digest: ", out.policyDigest.t.buffer, out.policyDigest.t.size);
+	tss2_print_all("policy digest: ", out.policyDigest.t.buffer, out.policyDigest.t.size);
 
 	//rc = TSS_File_WriteBinaryFile(out.policyDigest.t.buffer, out.policyDigest.t.size, out_file);
 
@@ -908,8 +908,8 @@ tpm2_quote_new(uint8_t *pcr_bitmap, size_t size_pcr_bitmap, TPMI_DH_OBJECT sig_k
 	quote->signature_size = signature_size;
 
 	if (in.inScheme.scheme == TPM_ALG_RSASSA) {
-		TSS_PrintAll("RSA signature", out.signature.signature.rsassa.sig.t.buffer,
-			     out.signature.signature.rsassa.sig.t.size);
+		tss2_print_all("RSA signature", out.signature.signature.rsassa.sig.t.buffer,
+			       out.signature.signature.rsassa.sig.t.size);
 	}
 	return quote;
 err:
@@ -991,7 +991,7 @@ tpm2_rsaencrypt(TPMI_DH_OBJECT key_handle, uint8_t *in_buffer, size_t in_length,
 		return rc;
 	}
 
-	TSS_PrintAll("RSA encrypted data", out.outData.t.buffer, out.outData.t.size);
+	tss2_print_all("RSA encrypted data", out.outData.t.buffer, out.outData.t.size);
 
 	// return handle to just created object
 	if (out.outData.t.size > *out_length) {
@@ -1040,7 +1040,7 @@ tpm2_rsadecrypt(TPMI_DH_OBJECT key_handle, const char *key_pwd, uint8_t *in_buff
 		return rc;
 	}
 
-	TSS_PrintAll("RSA Decrypted message", out.message.t.buffer, out.message.t.size);
+	tss2_print_all("RSA Decrypted message", out.message.t.buffer, out.message.t.size);
 
 	// return handle to just created object
 	if (out.message.t.size > *out_length) {
@@ -1506,7 +1506,7 @@ tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const c
 
 	} while (data_size > 0);
 
-	TSS_PrintAll("nv_read data: ", out_buffer, *out_length);
+	tss2_print_all("nv_read data: ", out_buffer, *out_length);
 
 flush:
 	rc_flush = tpm2_flushcontext(auth_se_handle);

@@ -24,6 +24,8 @@
 #ifndef TPM2D_H
 #define TPM2D_H
 
+#include "common/macro.h"
+
 #include "tss_backends.h"
 #if TSS_BACKEND == TSS_BACKEND_IBMTSS
 #include "tpm2d_ibmtss.h"
@@ -98,6 +100,16 @@ tss2_init(void);
 
 void
 tss2_destroy(void);
+
+#ifdef TSS_DEBUG_TRACE
+void
+tss2_print_all(const char *string, const unsigned char *buff, uint32_t length);
+#else
+static inline void
+tss2_print_all(UNUSED const char *string, UNUSED const unsigned char *buff, UNUSED uint32_t length)
+{
+}
+#endif
 
 /**
  * Function to powerup the simulator
