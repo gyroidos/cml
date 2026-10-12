@@ -90,6 +90,9 @@ tpm2d_exit(void);
 TPM2D_DH_OBJECT
 tpm2d_get_salt_key_handle(void);
 
+int
+tss2_device_init(bool no_setup_keys, bool use_simulator, const char *session_dir);
+
 void
 tss2_init(void);
 
