@@ -1354,10 +1354,8 @@ tpm2_nv_get_data_size(ESYS_TR nv_index_handle)
 
 	IF_NULL_RETVAL_WARN(esys_context, 0);
 
-	if ((nv_index_handle >> 24) != TPM2_HT_NV_INDEX) {
-		ERROR("bad index handle %x", nv_index_handle);
-		return -1;
-	}
+	if (nv_index_handle == ESYS_TR_NONE)
+		return 0;
 
 	if (TPM2_RC_SUCCESS != Esys_NV_ReadPublic(esys_context, nv_index_handle, ESYS_TR_NONE,
 						  ESYS_TR_NONE, ESYS_TR_NONE, &nv_public,
@@ -1534,8 +1532,8 @@ tpm2_nv_undefinespace(ESYS_TR hierarchy, ESYS_TR nv_index_handle, const char *hi
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
-	if ((nv_index_handle >> 24) != TPM2_HT_NV_INDEX) {
-		ERROR("bad index handle %x", nv_index_handle);
+	if (nv_index_handle == ESYS_TR_NONE) {
+		ERROR("NV index not resolved (ESYS_TR_NONE)");
 		return TPM2_RC_HANDLE;
 	}
 
@@ -1575,8 +1573,9 @@ tpm2_nv_write(ESYS_TR nv_index_handle, const char *nv_pwd, uint8_t *data, size_t
 	UINT16 offset;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
-	if ((nv_index_handle >> 24) != TPM2_HT_NV_INDEX) {
-		ERROR("bad index handle %x", nv_index_handle);
+
+	if (nv_index_handle == ESYS_TR_NONE) {
+		ERROR("NV index not resolved (ESYS_TR_NONE)");
 		return TPM2_RC_HANDLE;
 	}
 
@@ -1631,8 +1630,8 @@ tpm2_nv_read(ESYS_TR se_handle, ESYS_TR nv_index_handle, const char *nv_pwd, uin
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
-	if ((nv_index_handle >> 24) != TPM2_HT_NV_INDEX) {
-		ERROR("bad index handle %x", nv_index_handle);
+	if (nv_index_handle == ESYS_TR_NONE) {
+		ERROR("NV index not resolved (ESYS_TR_NONE)");
 		return TPM2_RC_HANDLE;
 	}
 
@@ -1712,8 +1711,8 @@ tpm2_nv_readlock(ESYS_TR nv_index_handle, const char *nv_pwd)
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
 
-	if ((nv_index_handle >> 24) != TPM2_HT_NV_INDEX) {
-		ERROR("bad index handle %x", nv_index_handle);
+	if (nv_index_handle == ESYS_TR_NONE) {
+		ERROR("NV index not resolved (ESYS_TR_NONE)");
 		return TPM2_RC_HANDLE;
 	}
 
