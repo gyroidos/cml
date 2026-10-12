@@ -28,6 +28,7 @@ SANITIZERS ?= n
 WCAST_ALIGN ?= y
 NVMCRYPT_ONLY ?= n
 TPM_BACKEND ?= ibmtss
+TSS_DEBUG_TRACE ?= n
 
 tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
@@ -67,6 +68,9 @@ else ifeq ($(TPM_BACKEND),tss2)
 	LOCAL_CFLAGS += -DTSS_BACKEND=TSS_BACKEND_TPM2_TSS
 endif
 
+ifeq ($(TSS_DEBUG_TRACE),y)
+	LOCAL_CFLAGS += -DTSS_DEBUG_TRACE
+endif
 
 LOCAL_LFLAGS := -lc -lprotobuf-c -lprotobuf-c-text -lcrypto -Lcommon -lcommon_full
 ifeq ($(TPM_BACKEND),ibmtss)
@@ -89,9 +93,17 @@ SRC_FILES := \
 ifeq ($(TPM_BACKEND),ibmtss)
 	SRC_FILES += \
 		tpm2_commands_ibmtss.c
+ifeq ($(TSS_DEBUG_TRACE),y)
+	SRC_FILES += \
+		tpm2_debug_ibmtss.c
+endif
 else ifeq ($(TPM_BACKEND),tss2)
 	SRC_FILES += \
 		tpm2_commands_tss2.c
+ifeq ($(TSS_DEBUG_TRACE),y)
+	SRC_FILES += \
+		tpm2_debug_tss2.c
+endif
 endif
 
 ifeq ($(NVMCRYPT_ONLY),n)
