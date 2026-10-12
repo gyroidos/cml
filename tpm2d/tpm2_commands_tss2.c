@@ -32,12 +32,14 @@
 #include <tss2/tss2_esys.h>
 #include <tss2/tss2_rc.h>
 #include <tss2/tss2_mu.h>
+#include <tss2/tss2_tctildr.h>
 
 #include "tpm2d_write_openssl.h"
 
 #include <openssl/evp.h>
 
 static ESYS_CONTEXT *esys_context = NULL;
+static TSS2_TCTI_CONTEXT *tcti_context = NULL;
 
 // TODO: free msg?
 #define TSS_TPM_CMD_ERROR(rc, cc_string)                                                           \
@@ -61,6 +63,34 @@ tss2_resolve_raw(TPM2_HANDLE handle)
 
 /************************************************************************************/
 
+int
+tss2_device_init(bool no_setup_keys, bool use_simulator, UNUSED const char *session_dir)
+{
+	char *device;
+
+	// if real hw tpm exists, use it
+	const char *tpmdev = no_setup_keys ? "/dev/tpm0" : "/dev/tpmrm0";
+	if (file_exists(tpmdev) && !use_simulator) {
+		device = mem_printf("device:%s", tpmdev);
+	} else {
+		device = mem_strdup("swtpm:host=localhost,port=2321");
+	}
+
+	/* 0 = don't override user setting */
+	if (setenv("TSS2_LOG", "all+NONE", 0) < 0)
+		WARN_ERRNO("Could not set TSS2_LOG");
+
+	TSS2_RC rc = Tss2_TctiLdr_Initialize(device, &tcti_context);
+	if (rc != TSS2_RC_SUCCESS) {
+		ERROR("Tss2_TctiLdr_Initialize('%s') failed: %08x", device, rc);
+		mem_free0(device);
+		return -1;
+	}
+
+	mem_free0(device);
+	return 0;
+}
+
 void
 tss2_init(void)
 {
@@ -71,7 +101,10 @@ tss2_init(void)
 		return;
 	}
 
-	if (TPM2_RC_SUCCESS != (ret = Esys_Initialize(&esys_context, NULL, NULL)))
+	if (tcti_context == NULL)
+		FATAL("Low-level device not connected!");
+
+	if (TPM2_RC_SUCCESS != (ret = Esys_Initialize(&esys_context, tcti_context, NULL)))
 		FATAL("Cannot create esys context error code: %08x", ret);
 
 	// initialize dynamic handles of esys api for raw TPM handles
@@ -79,9 +112,6 @@ tss2_init(void)
 	ek_set_cert_rsa_nv_handle(tss2_resolve_raw(TPM2D_EK_CERT_RSA_NV_RAW_HANDLE));
 	ek_set_cert_ec_nv_handle(tss2_resolve_raw(TPM2D_EK_CERT_EC_NV_RAW_HANDLE));
 	tpm2d_set_storage_key_handle(tss2_resolve_raw(TPM2D_STORAGE_KEY_PERSIST_RAW_HANDLE));
-
-	// TODO: trace level?
-	// TSS_SetProperty(NULL, TPM_TRACE_LEVEL, "1");
 }
 
 void
@@ -89,7 +119,16 @@ tss2_destroy(void)
 {
 	// We do nothing here because destroying the esys_context would invalidate all TPM resource
 	// handles, including the ones that we use for the entire runtime of tpm2d such as
-	// `tpm2d_salt_key_handle`
+	// `tpm2d_salt_key_handle`. Thus, we implement a deinit function for this TPM backend
+}
+
+static void DEINIT
+tss2_deinit(void)
+{
+	if (esys_context)
+		Esys_Finalize(&esys_context);
+	if (tcti_context)
+		Tss2_TctiLdr_Finalize(&tcti_context);
 }
 
 #ifndef TPM2D_NVMCRYPT_ONLY

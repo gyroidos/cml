@@ -72,7 +72,7 @@ LOCAL_LFLAGS := -lc -lprotobuf-c -lprotobuf-c-text -lcrypto -Lcommon -lcommon_fu
 ifeq ($(TPM_BACKEND),ibmtss)
 	LOCAL_LFLAGS += -libmtss
 else ifeq ($(TPM_BACKEND),tss2)
-	LOCAL_LFLAGS += -ltss2-esys -ltss2-mu -ltss2-rc
+	LOCAL_LFLAGS += -ltss2-esys -ltss2-mu -ltss2-rc -ltss2-tctildr
 endif
 
 
