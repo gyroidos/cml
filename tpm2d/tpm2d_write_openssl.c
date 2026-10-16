@@ -25,20 +25,14 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
-#include <ibmtss/tss.h>
-#include <ibmtss/tssutils.h>
-#include <ibmtss/tssmarshal.h>
-#include <ibmtss/Unmarshal_fp.h>
-#include <ibmtss/tsscrypto.h>
-#include <ibmtss/tsscryptoh.h>
-
+#include "tpm2d.h"
 #include "tpm2-asn.h"
 #include "tpm2d_write_openssl.h"
 #include "common/mem.h"
 
 static int
 openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey,
-		      int privkey_len, int empty_auth, TPM_HANDLE parent,
+		      int privkey_len, int empty_auth, TPM2D_TPM_HANDLE parent,
 		      STACK_OF(TSSOPTPOLICY) * sk, int version, TPM2B_ENCRYPTED_SECRET *secret)
 {
 	union {
@@ -74,7 +68,11 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *priv
 		if (secret) {
 			k.tpk.type = OBJ_txt2obj(OID_importableKey, 1);
 			k.tpk.secret = ASN1_OCTET_STRING_new();
+#if TSS_BACKEND == TSS_BACKEND_IBMTSS
 			ASN1_STRING_set(k.tpk.secret, secret->t.secret, secret->t.size);
+#elif TSS_BACKEND == TSS_BACKEND_TPM2_TSS
+			ASN1_STRING_set(k.tpk.secret, secret->secret, secret->size);
+#endif
 		} else {
 			k.tpk.type = OBJ_txt2obj(OID_loadableKey, 1);
 		}
@@ -104,7 +102,7 @@ openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *priv
 
 int
 tpm2d_openssl_write_tpmfile(const char *file, BYTE *pubkey, int pubkey_len, BYTE *privkey,
-			    int privkey_len, int empty_auth, TPM_HANDLE parent,
+			    int privkey_len, int empty_auth, TPM2D_TPM_HANDLE parent,
 			    TPM2B_ENCRYPTED_SECRET *secret)
 {
 	return openssl_write_tpmfile(file, pubkey, pubkey_len, privkey, privkey_len, empty_auth,

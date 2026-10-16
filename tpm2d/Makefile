@@ -27,6 +27,8 @@ AGGRESSIVE_WARNINGS ?= y
 SANITIZERS ?= n
 WCAST_ALIGN ?= y
 NVMCRYPT_ONLY ?= n
+TPM_BACKEND ?= ibmtss
+TSS_DEBUG_TRACE ?= n
 
 tss_cflags := \
         -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
@@ -60,18 +62,49 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
+ifeq ($(TPM_BACKEND),ibmtss)
+	LOCAL_CFLAGS += -DTSS_BACKEND=TSS_BACKEND_IBMTSS
+else ifeq ($(TPM_BACKEND),tss2)
+	LOCAL_CFLAGS += -DTSS_BACKEND=TSS_BACKEND_TPM2_TSS
+endif
+
+ifeq ($(TSS_DEBUG_TRACE),y)
+	LOCAL_CFLAGS += -DTSS_DEBUG_TRACE
+endif
+
+LOCAL_LFLAGS := -lc -lprotobuf-c -lprotobuf-c-text -lcrypto -Lcommon -lcommon_full
+ifeq ($(TPM_BACKEND),ibmtss)
+	LOCAL_LFLAGS += -libmtss
+else ifeq ($(TPM_BACKEND),tss2)
+	LOCAL_LFLAGS += -ltss2-esys -ltss2-mu -ltss2-rc -ltss2-tctildr
+endif
 
 
 SRC_FILES := \
 	attestation.pb-c.c \
 	tpm2d.pb-c.c \
 	control.c \
-	tpm2_commands.c \
 	nvmcrypt.c \
 	ek.c \
 	tpm2-asn.c \
 	tpm2d.c \
 	tpm2d_write_openssl.c
+
+ifeq ($(TPM_BACKEND),ibmtss)
+	SRC_FILES += \
+		tpm2_commands_ibmtss.c
+ifeq ($(TSS_DEBUG_TRACE),y)
+	SRC_FILES += \
+		tpm2_debug_ibmtss.c
+endif
+else ifeq ($(TPM_BACKEND),tss2)
+	SRC_FILES += \
+		tpm2_commands_tss2.c
+ifeq ($(TSS_DEBUG_TRACE),y)
+	SRC_FILES += \
+		tpm2_debug_tss2.c
+endif
+endif
 
 ifeq ($(NVMCRYPT_ONLY),n)
 SRC_FILES += \
@@ -92,7 +125,7 @@ libcommon:
 	$(MAKE) -C common libcommon_full
 
 tpm2d: libcommon $(SRC_FILES)
-	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) -lc -lprotobuf-c -lprotobuf-c-text -libmtss -lcrypto -Lcommon -lcommon_full -o tpm2d
+	$(CC) $(LOCAL_CFLAGS) $(SRC_FILES) $(LOCAL_LFLAGS) -o tpm2d
 
 .PHONY: clean
 clean:
