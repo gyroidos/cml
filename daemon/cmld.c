@@ -1928,7 +1928,7 @@ cmld_container_stop(container_t *container)
 	int ret = container_stop(container);
 	if (ret < 0) {
 		char *argv[] = { "halt", NULL };
-		if (container_run(container, false, argv[0], 1, argv, -1)) {
+		if (container_run(container, false, argv[0], 1, argv, NULL, -1)) {
 			audit_log_event(container_get_uuid(container), FSA, CMLD, CONTAINER_MGMT,
 					"request-clean-shutdown",
 					uuid_string(container_get_uuid(container)), 0);

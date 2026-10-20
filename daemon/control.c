@@ -370,21 +370,21 @@ control_container_status_free(ContainerStatus *c_status)
 static ssize_t
 control_read_send(int cfd, int fd)
 {
-	uint8_t buf[1024];
+	/* keep chunks large so a full-screen redraw (vim/less) fits in one
+	 * message; the payload is raw binary pty output */
+	uint8_t buf[64 * 1024];
 	ssize_t count = -1;
 
 	TRACE("Trying to read data from console socket.");
 
-	if ((count = read(fd, buf, 1023)) > 0) {
-		buf[count] = 0;
-
+	if ((count = read(fd, buf, sizeof(buf))) > 0) {
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_OUTPUT;
 		out.has_exec_output = true;
 		out.exec_output.len = count;
 		out.exec_output.data = buf;
 
-		TRACE("[CONTROL] Read %zd bytes: %s. Sending to control client...", count, buf);
+		TRACE("[CONTROL] Read %zd bytes. Sending to control client...", count);
 
 		if (protobuf_send_message(cfd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
@@ -1769,7 +1769,7 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 		if (container_run(container, msg->exec_pty, msg->exec_command, msg->n_exec_args,
-				  msg->exec_args, fd) < 0) {
+				  msg->exec_args, msg->exec_term, fd) < 0) {
 			ERROR("Failed to exec");
 
 			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
@@ -1781,26 +1781,51 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 
 			TRACE("Sent notification of command termination to control client");
 			break;
-
-		} else {
-			DEBUG("Registering read callback for cmld console socket");
-			int *cfd = mem_new(int, 1);
-			*cfd = fd;
-			event_io_t *event =
-				event_io_new(container_get_console_sock_cmld(container, fd),
-					     EVENT_IO_READ | EVENT_IO_EXCEPT,
-					     control_cb_read_console, cfd);
-			event_add_io(event);
 		}
+
+		DEBUG("Registering read callback for cmld console socket");
+		int *cfd = mem_new(int, 1);
+		*cfd = fd;
+		event_io_t *event =
+			event_io_new(container_get_console_sock_cmld(container, fd),
+				     EVENT_IO_READ | EVENT_IO_EXCEPT, control_cb_read_console, cfd);
+		event_add_io(event);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT: {
 		IF_NULL_RETURN(container);
-		TRACE("Got input for exec'ed process. Sending message on fd");
 
-		int ret = container_write_exec_input(container, msg->exec_input, fd);
-		if (ret < 0) {
+		const uint8_t *input = NULL;
+		size_t len = 0;
+		if (msg->has_exec_input_raw) {
+			input = msg->exec_input_raw.data;
+			len = msg->exec_input_raw.len;
+		} else if (msg->exec_input) {
+			input = (const uint8_t *)msg->exec_input;
+			len = strlen(msg->exec_input);
+		} else {
+			// no input ignore data nothing to handle
+			break;
+		}
+		res = container_write_exec_input(container, input, len, fd);
+		if (res < 0) {
 			ERROR_ERRNO("Failed to write input to exec'ed process");
+		} else if ((size_t)res < len) {
+			WARN("Exec'ed process does not read its input, dropped %zu bytes",
+			     len - (size_t)res);
+		}
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_WINSIZE: {
+		IF_NULL_RETURN(container);
+
+		if (!msg->has_exec_winsize_rows || !msg->has_exec_winsize_cols) {
+			WARN("EXEC_WINSIZE without complete window size, ignoring");
+			break;
+		}
+		if (container_set_exec_winsize(container, msg->exec_winsize_rows,
+					       msg->exec_winsize_cols, fd) < 0) {
+			ERROR("Failed to set window size of exec'ed process");
 		}
 	} break;
 
