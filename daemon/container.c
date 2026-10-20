@@ -30,6 +30,7 @@
 #include "common/dir.h"
 #include "common/uuid.h"
 #include "compartment.h"
+#include "container_config.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -701,10 +702,12 @@ container_destroy(container_t *container)
 			WARN("Could not delete leftover container dir");
 	}
 
-	/* remove config files */
-	if (unlink(container_get_config_filename(container)))
-		WARN_ERRNO("Can't delete config file!");
+	const char *config_file = container_get_config_filename(container);
+	char *prefix = file_get_prefix_new(config_file, ".conf");
 
+	ret = container_config_unlink_files(prefix);
+
+	mem_free0(prefix);
 	return ret;
 }
 
