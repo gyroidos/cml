@@ -27,6 +27,7 @@
 
 #include "macro.h"
 #include "mem.h"
+#include "bounds_safety.h"
 
 #include <ctype.h>
 #include <unistd.h>
@@ -242,7 +243,7 @@ sock_inet_connect_addrinfo(struct addrinfo *addrinfo)
 int
 sock_inet_create_and_connect(int type, const char *node, const char *service)
 {
-	struct addrinfo hints, *res = NULL;
+	struct addrinfo hints, *__single res = NULL;
 	int sock = -1;
 
 	mem_memset(&hints, 0, sizeof hints);
@@ -267,7 +268,7 @@ sock_inet_create_and_connect(int type, const char *node, const char *service)
 		if (sock != -1) {
 			break;
 		}
-		cur = cur->ai_next;
+		cur = __unsafe_forge_single(struct addrinfo *, cur->ai_next);
 	}
 
 out:
@@ -307,26 +308,28 @@ sock_unix_get_peer_pid(int sock, uint32_t *peer_pid)
 	return 0;
 }
 
-static char *
+static char *__null_terminated
 sock_get_env_var_name_new(const char *sock_name)
 {
 	// sock name: "cml-control" -> env var name: "CML_CONTROL"
 
-	char *env_var = mem_strdup(sock_name);
-	for (size_t i = 0; i < strlen(sock_name); i++)
-		env_var[i] = (sock_name[i] == '-') ? '_' : toupper(sock_name[i]);
+	char *__null_terminated env_var = mem_strdup(sock_name);
+	char *__null_terminated dst = env_var;
+	const char *__null_terminated src = sock_name;
+	for (; *src; src++, dst++)
+		*dst = (*src == '-') ? '_' : toupper(*src);
 
 	return env_var;
 }
 
-char *
+char *__null_terminated
 sock_get_path_new(const char *sock_name)
 {
-	char *sock_path = NULL;
-	char *env_var = sock_get_env_var_name_new(sock_name);
+	char *__null_terminated sock_path = NULL;
+	char *__null_terminated env_var = sock_get_env_var_name_new(sock_name);
 	IF_NULL_GOTO(env_var, out);
 
-	char *env_path = getenv(env_var);
+	char *__null_terminated env_path = __unsafe_forge_null_terminated(char *, getenv(env_var));
 	if (NULL == env_path) {
 		mem_free0(env_var);
 		goto out;

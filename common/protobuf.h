@@ -37,22 +37,38 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+#include "bounds_safety.h"
+
 // The protobuf default byte size limit is 64MB
 #define PROTOBUF_MAX_MESSAGE_SIZE 1024 * 1024 * 64
 #define PROTOBUF_MAX_OVERHEAD 1024
 
 /**
+ * Packed protobuf message with bounds-safe buffer.
+ * Returned by protobuf_pack_message_new(); free with protobuf_pack_message_free().
+ */
+typedef struct {
+	uint8_t *__sized_by(len) buf;
+	uint32_t len;
+} protobuf_packed_msg_t;
+
+/**
  * Packs the given protobuf message struct
  * and returns it's binary serialized form.
  *
- * The serialized message is prefixed with the length of the actual data.
- *
  * @param message   the protobuf message struct to serialize and write
- * @param ptr       the location to store a pointer to the serialized representation
- * @return          the length of the serialized message (without length prefix) or -1 on error
+ * @return          packed message with buffer and length; buf is NULL on error
  */
-uint32_t
-protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr);
+protobuf_packed_msg_t
+protobuf_pack_message_new(const ProtobufCMessage *message);
+
+/**
+ * Frees the buffer inside a packed message and zeros both fields.
+ *
+ * @param msg   pointer to the packed message struct (may be NULL)
+ */
+void
+protobuf_pack_message_free(protobuf_packed_msg_t *msg);
 
 /**
  * Writes the given, serialized protobuf message struct to the given file descriptor
@@ -65,7 +81,7 @@ protobuf_pack_message_new(const ProtobufCMessage *message, uint8_t **ptr);
  * @return          the length of the given message (without length prefix)
  */
 ssize_t
-protobuf_send_message_packed(int fd, const uint8_t *buf, uint32_t buflen);
+protobuf_send_message_packed(int fd, const uint8_t *__counted_by(buflen) buf, uint32_t buflen);
 
 /**
  * Writes the given protobuf message struct to the given file descriptor
@@ -117,8 +133,8 @@ protobuf_recv_message_packed_new(int fd, ssize_t *msg_len);
  * @return the unpacked protobuf message message message to free
  */
 ProtobufCMessage *
-protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor, uint8_t *buf,
-			uint32_t buf_len);
+protobuf_unpack_message(const ProtobufCMessageDescriptor *descriptor,
+			uint8_t *__counted_by(buf_len) buf, uint32_t buf_len);
 
 /**
  * Frees an unpacked protobuf message struct (e.g. created by protobuf_recv_message()).
