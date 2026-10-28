@@ -98,6 +98,28 @@ err:
 	return -1;
 }
 
+static char *
+c_hotplug_read_serial(const char *serial_path)
+{
+	char *serial = NULL;
+	if (file_exists(serial_path))
+		serial = file_read_new(serial_path, 255);
+
+	if (!serial || strlen(serial) < 1) {
+		TRACE("Failed to read serial of usb device");
+		goto err;
+	}
+
+	if ('\n' == serial[strlen(serial) - 1]) {
+		serial[strlen(serial) - 1] = 0;
+	}
+
+	return serial;
+err:
+	mem_free0(serial);
+	return NULL;
+}
+
 static int
 c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data)
 {
@@ -106,6 +128,7 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 	int len;
 	bool found;
 	int dev[2];
+	char *serial = NULL;
 
 	container_usbdev_t *usbdev = data;
 	IF_NULL_RETVAL(usbdev, -1);
@@ -137,14 +160,13 @@ c_hotplug_usbdev_sysfs_foreach_cb(const char *path, const char *name, void *data
 	found &= (id_vendor == container_usbdev_get_id_vendor(usbdev));
 	TRACE("found: %d", found);
 
-	if (file_exists(i_serial_file)) {
-		len = file_read(i_serial_file, buf, sizeof(buf));
-		TRACE("%s len=%d", buf, len);
+	serial = c_hotplug_read_serial(i_serial_file);
+
+	if (serial) {
 		TRACE("%s len=%zu", container_usbdev_get_i_serial(usbdev),
 		      strlen(container_usbdev_get_i_serial(usbdev)));
-		found &= ((len > 0) &&
-			  (0 == strncmp(buf, container_usbdev_get_i_serial(usbdev),
-					strlen(container_usbdev_get_i_serial(usbdev)))));
+		found &= (0 == strncmp(serial, container_usbdev_get_i_serial(usbdev),
+				       strlen(container_usbdev_get_i_serial(usbdev))));
 		TRACE("found: %d", found);
 	} else {
 		buf[0] = '\0';
@@ -170,6 +192,8 @@ out:
 	mem_free0(id_vendor_file);
 	mem_free0(i_serial_file);
 	mem_free0(dev_file);
+	if (serial)
+		mem_free0(serial);
 	return found ? 1 : 0;
 }
 
@@ -298,10 +322,16 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 		int major = uevent_event_get_major(event);
 		int minor = uevent_event_get_minor(event);
 
+		serial = c_hotplug_read_serial(serial_path);
+		mem_free0(serial_path);
+
+		IF_FALSE_RETVAL_TRACE(serial, false);
+
 		for (list_t *l = c_hotplug_token_list; l; l = l->next) {
 			container_usbdev_t *ud = l->data;
-			if ((container_usbdev_get_major(ud) == major) &&
-			    (container_usbdev_get_minor(ud) == minor) &&
+			if ((vendor_id == container_usbdev_get_id_vendor(ud)) &&
+			    (product_id == container_usbdev_get_id_product(ud)) &&
+			    (0 == strcmp(serial, container_usbdev_get_i_serial(ud))) &&
 			    container_is_device_allowed(hotplug->container, 'c', major, minor)) {
 				INFO("Deny token device node %d:%d -> container %s", major, minor,
 				     container_get_name(hotplug->container));
@@ -317,20 +347,6 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 				// signal calling handler to deny device access
 				ret = true;
 			}
-		}
-
-		if (file_exists(serial_path))
-			serial = file_read_new(serial_path, 255);
-
-		mem_free0(serial_path);
-
-		if (!serial || strlen(serial) < 1) {
-			TRACE("Failed to read serial of usb device");
-			return false;
-		}
-
-		if ('\n' == serial[strlen(serial) - 1]) {
-			serial[strlen(serial) - 1] = 0;
 		}
 
 		for (list_t *l = container_get_usbdev_list(hotplug->container); l; l = l->next) {
