@@ -1478,7 +1478,7 @@ tpm2_nv_read(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const c
 		if (TPM_RC_SUCCESS != rc)
 			goto err;
 	} else {
-		INFO("Using provided se_handle");
+		TRACE("Using provided se_handle");
 		auth_se_handle = se_handle;
 	}
 
@@ -1521,10 +1521,10 @@ err:
 }
 
 TPM_RC
-tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
+tpm2_nv_readlock(TPMI_SH_POLICY se_handle, TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
 {
 	TPM_RC rc, rc_flush = TPM_RC_SUCCESS;
-	TPMI_SH_AUTH_SESSION se_handle;
+	TPMI_SH_AUTH_SESSION auth_se_handle;
 	NV_ReadLock_In in;
 
 	IF_NULL_RETVAL_ERROR(tss_context, TSS_RC_NULL_PARAMETER);
@@ -1537,19 +1537,23 @@ tpm2_nv_readlock(TPMI_RH_NV_INDEX nv_index_handle, const char *nv_pwd)
 	in.authHandle = nv_index_handle;
 	in.nvIndex = nv_index_handle;
 
-	// since we use this to read symetric keys, start an encrypted transport
-	rc = tpm2_startauthsession(TPM_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
-	if (TPM_RC_SUCCESS != rc)
-		goto err;
+	// start an encrypted transport
+	if (se_handle == TPM_RH_NULL) {
+		rc = tpm2_startauthsession(TPM_SE_HMAC, &auth_se_handle, nv_index_handle, nv_pwd);
+		if (TPM_RC_SUCCESS != rc)
+			goto err;
+	} else {
+		TRACE("Using provided se_handle");
+		auth_se_handle = se_handle;
+	}
 
 	do {
 		rc = TSS_Execute(tss_context, NULL, (COMMAND_PARAMETERS *)&in, NULL,
-				 TPM_CC_NV_ReadLock,
-				 //TPM_RS_PW, nv_pwd, 0,
-				 se_handle, 0, TPMA_SESSION_CONTINUESESSION, TPM_RH_NULL, NULL, 0);
+				 TPM_CC_NV_ReadLock, auth_se_handle, 0,
+				 TPMA_SESSION_CONTINUESESSION, TPM_RH_NULL, NULL, 0);
 	} while (TPM_RC_RETRY == rc);
 
-	rc_flush = tpm2_flushcontext(se_handle);
+	rc_flush = tpm2_flushcontext(auth_se_handle);
 
 err:
 	if (TPM_RC_SUCCESS != rc) {

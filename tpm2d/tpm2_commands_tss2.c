@@ -1672,7 +1672,7 @@ tpm2_nv_read(ESYS_TR se_handle, ESYS_TR nv_index_handle, const char *nv_pwd, uin
 		if (TPM2_RC_SUCCESS != rc)
 			goto err;
 	} else {
-		INFO("Using provided se_handle");
+		TRACE("Using provided se_handle");
 		auth_se_handle = se_handle;
 	}
 
@@ -1722,10 +1722,10 @@ err:
 }
 
 TPM2_RC
-tpm2_nv_readlock(ESYS_TR nv_index_handle, const char *nv_pwd)
+tpm2_nv_readlock(ESYS_TR se_handle, ESYS_TR nv_index_handle, const char *nv_pwd)
 {
 	TPM2_RC rc, rc_flush = TPM2_RC_SUCCESS;
-	ESYS_TR se_handle;
+	ESYS_TR auth_se_handle;
 	ESYS_TR authHandle;
 
 	IF_NULL_RETVAL_ERROR(esys_context, TSS2_BASE_RC_BAD_REFERENCE);
@@ -1737,22 +1737,27 @@ tpm2_nv_readlock(ESYS_TR nv_index_handle, const char *nv_pwd)
 
 	authHandle = nv_index_handle;
 
-	// since we use this to read symetric keys, start an encrypted transport
-	rc = tpm2_startauthsession(TPM2_SE_HMAC, &se_handle, nv_index_handle, nv_pwd);
-	if (TPM2_RC_SUCCESS != rc)
-		goto err;
+	// start an encrypted transport
+	if (se_handle == ESYS_TR_RH_NULL) {
+		rc = tpm2_startauthsession(TPM2_SE_HMAC, &auth_se_handle, nv_index_handle, nv_pwd);
+		if (TPM2_RC_SUCCESS != rc)
+			goto err;
+	} else {
+		TRACE("Using provided se_handle");
+		auth_se_handle = se_handle;
+	}
 
 	do {
-		rc = Esys_TRSess_SetAttributes(esys_context, se_handle,
+		rc = Esys_TRSess_SetAttributes(esys_context, auth_se_handle,
 					       TPMA_SESSION_CONTINUESESSION,
 					       TPMA_SESSION_CONTINUESESSION);
 		if (rc == TPM2_RC_SUCCESS) {
-			rc = Esys_NV_ReadLock(esys_context, authHandle, nv_index_handle, se_handle,
-					      ESYS_TR_NONE, ESYS_TR_NONE);
+			rc = Esys_NV_ReadLock(esys_context, authHandle, nv_index_handle,
+					      auth_se_handle, ESYS_TR_NONE, ESYS_TR_NONE);
 		}
 	} while (TPM2_RC_RETRY == rc);
 
-	rc_flush = tpm2_flushcontext(se_handle);
+	rc_flush = tpm2_flushcontext(auth_se_handle);
 
 err:
 	if (TPM2_RC_SUCCESS != rc) {

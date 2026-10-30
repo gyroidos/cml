@@ -107,7 +107,6 @@ nvmcrypt_load_key_new(const char *fde_key_pw)
 	// check if nv index exists by requesting size of index which does a nv_read_public
 	if (tpm2_nv_get_data_size(fde_nv_handle) != 0) {
 		if (secure_boot) {
-			//ret = nvmcrypt_start_policy_session(TPM_SE_POLICY, &se_handle, TPM2D_FDE_NV_HANDLE, fde_key_pw);
 			ret = nvmcrypt_start_policy_session(TPM2D_TPM_SE_POLICY, &se_handle,
 							    TPM2D_TPM_RH_NULL, NULL);
 		} else {
@@ -250,7 +249,23 @@ nvmcrypt_dm_setup(const char *device_path, const char *fde_pw, int max_key_len)
 nvmcrypt_fde_state_t
 nvmcrypt_dm_lock(const char *fde_pw)
 {
-	if (TPM2D_RC_SUCCESS == tpm2_nv_readlock(fde_nv_handle, fde_pw))
+	TPM2D_SH_AUTH_SESSION se_handle;
+
+	if (secure_boot) {
+		TPM2D_RC ret;
+		if (TPM2D_RC_SUCCESS !=
+		    (ret = nvmcrypt_start_policy_session(TPM2D_TPM_SE_POLICY, &se_handle,
+							 TPM2D_TPM_RH_NULL, NULL))) {
+			ERROR("Failed to start policy session for nv_readlock! with error code: %08x",
+			      ret);
+			return fde_state;
+		}
+	} else {
+		// let nv_readlock do its own auth session
+		se_handle = TPM2D_TPM_RH_NULL;
+	}
+
+	if (TPM2D_RC_SUCCESS == tpm2_nv_readlock(se_handle, fde_nv_handle, fde_pw))
 		fde_state = FDE_KEY_ACCESS_LOCKED;
 	return fde_state;
 }
