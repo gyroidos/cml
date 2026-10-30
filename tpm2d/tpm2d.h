@@ -248,7 +248,7 @@ tpm2_nv_read(TPM2D_SH_POLICY se_handle, TPM2D_DH_NV_INDEX nv_index_handle, const
 	     uint8_t *out_buffer, size_t *out_length);
 
 TPM2D_RC
-tpm2_nv_readlock(TPM2D_DH_NV_INDEX nv_index_handle, const char *nv_pwd);
+tpm2_nv_readlock(TPM2D_SH_POLICY se_handle, TPM2D_DH_NV_INDEX nv_index_handle, const char *nv_pwd);
 
 TPM2D_RC
 tpm2_startauthsession(TPM2D_TPM_SE session_type, TPM2D_SH_AUTH_SESSION *out_session_handle,
