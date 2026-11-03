@@ -253,4 +253,12 @@ container_config_get_usb_pin_entry(const container_config_t *config);
 bool
 container_config_get_enable_xorg_compat(const container_config_t *config);
 
+/**
+ * Fills the given mount struct with the volumes provided by the given Container config.
+ * @param cfg the container_config_t instance
+ * @param mnt the mount_t struct to fill
+ */
+void
+container_config_fill_volumes(const container_config_t *cfg, mount_t *mnt);
+
 #endif /* C_CONFIG_H */
