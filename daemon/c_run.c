@@ -82,6 +82,8 @@ typedef struct c_run_session {
 	ssize_t argc;
 	char **argv;
 	char *env_term;
+	int seccomp_sock_cmld;
+	int seccomp_sock_child;
 	char *console_sock_container_wbuf;
 	int console_sock_container_wbuf_count;
 	char *pty_master_wbuf;
@@ -102,8 +104,8 @@ c_run_new(compartment_t *compartment)
 }
 
 static c_run_session_t *
-c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv,
-		  char *term, int session_fd)
+c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **argv, char *term,
+		  int session_fd)
 {
 	if (argv == NULL || argc < 1) {
 		ERROR("No command was specified to execute.");
@@ -119,6 +121,16 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 		return NULL;
 	}
 
+	// socketpair to receive the seccomp notify fd number from the exec child
+	int sfd[2];
+
+	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sfd)) {
+		ERROR_ERRNO("Could not create socketpair for seccomp notify fd handover!");
+		close(cfd[0]);
+		close(cfd[1]);
+		return NULL;
+	}
+
 	c_run_session_t *session = mem_new0(c_run_session_t, 1);
 	session->fd = session_fd;
 	session->run = run;
@@ -131,6 +143,9 @@ c_run_session_new(c_run_t *run, int create_pty, char *cmd, ssize_t argc, char **
 
 	session->console_sock_cmld = cfd[0];
 	session->console_sock_container = cfd[1];
+
+	session->seccomp_sock_cmld = sfd[0];
+	session->seccomp_sock_child = sfd[1];
 
 	TRACE("Making cmld console socket nonblocking");
 	fd_make_non_blocking(session->console_sock_cmld);
@@ -176,6 +191,10 @@ c_run_session_free(c_run_session_t *session)
 		mem_free0(session->console_sock_container_wbuf);
 	if (session->pty_master_wbuf)
 		mem_free0(session->pty_master_wbuf);
+	if (session->seccomp_sock_cmld != -1)
+		close(session->seccomp_sock_cmld);
+	if (session->seccomp_sock_child != -1)
+		close(session->seccomp_sock_child);
 	mem_free0(session);
 }
 
@@ -500,6 +519,14 @@ do_exec(void *data)
 
 	IF_TRUE_GOTO(-1 == c_run_join_container(session->run), error);
 
+	int notify_fd = container_exec_seccomp_install(session->run->container);
+	IF_TRUE_GOTO(-1 == notify_fd, error);
+
+	if (fd_write(session->seccomp_sock_child, (char *)&notify_fd, sizeof(notify_fd)) < 0) {
+		ERROR_ERRNO("Could not send seccomp notify fd number to cmld");
+		goto error;
+	}
+
 	TRACE("[EXEC]: Executing command %s in process with PID: %d, PGID: %d, PPID: %d",
 	      session->cmd, getpid(), getpgid(getpid()), getppid());
 
@@ -654,6 +681,35 @@ c_run_cb_write_pty(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 	}
 }
 
+/*
+ * Runs in cmld directly after cloning the exec helper
+ */
+static int
+c_run_seccomp_attach(c_run_session_t *session)
+{
+	int notify_fd = -1;
+
+	// close the child's end in cmld, so the read below hits EOF if the child dies early
+	close(session->seccomp_sock_child);
+	session->seccomp_sock_child = -1;
+
+	if (sizeof(notify_fd) !=
+	    fd_read(session->seccomp_sock_cmld, (char *)&notify_fd, sizeof(notify_fd))) {
+		ERROR("Failed to receive seccomp notify fd number of exec'ed process");
+		return -1;
+	}
+
+	close(session->seccomp_sock_cmld);
+	session->seccomp_sock_cmld = -1;
+
+	// syscall emulation is not active for this container
+	if (0 == notify_fd)
+		return 0;
+
+	return container_exec_seccomp_attach(session->run->container, session->active_exec_pid,
+					     notify_fd);
+}
+
 static int
 c_run_prepare_exec(c_run_session_t *session)
 {
@@ -739,6 +795,9 @@ c_run_prepare_exec(c_run_session_t *session)
 			goto error;
 		}
 
+		// confine the exec'ed process with the container's seccomp filter
+		IF_TRUE_GOTO(c_run_seccomp_attach(session) < 0, error);
+
 		// the exec child inherited the slave fd; cmld no longer needs it
 		close(session->pty_slave_fd);
 		session->pty_slave_fd = -1;
@@ -751,9 +810,9 @@ c_run_prepare_exec(c_run_session_t *session)
 		event_add_io(session->console_sock_container_io);
 
 		DEBUG("Registering read callback for PTY master fd");
-		session->pty_master_io = event_io_new(session->pty_master,
-						      EVENT_IO_READ | EVENT_IO_EXCEPT,
-						      c_run_cb_read_pty, session);
+		session->pty_master_io =
+			event_io_new(session->pty_master, EVENT_IO_READ | EVENT_IO_EXCEPT,
+				     c_run_cb_read_pty, session);
 		event_add_io(session->pty_master_io);
 
 		return 0;
@@ -769,6 +828,9 @@ c_run_prepare_exec(c_run_session_t *session)
 			TRACE("Failed to fork() ...\n");
 			goto error;
 		}
+
+		// confine the exec'ed process with the container's seccomp filter
+		IF_TRUE_GOTO(c_run_seccomp_attach(session) < 0, error);
 
 		return 0;
 	}
@@ -799,7 +861,8 @@ c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **a
 	ASSERT(cmd);
 	TRACE("Trying to excute command \"%s\" inside container", cmd);
 
-	c_run_session_t *session = c_run_session_new(run, create_pty, cmd, argc, argv, term, session_fd);
+	c_run_session_t *session =
+		c_run_session_new(run, create_pty, cmd, argc, argv, term, session_fd);
 	IF_NULL_RETVAL(session, -1);
 
 	run->sessions = list_append(run->sessions, session);
