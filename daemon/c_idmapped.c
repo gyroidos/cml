@@ -188,11 +188,11 @@ c_idmapped_mount_ovl(const char *overlayfs_mount_dir, const char *target, const 
 
 	// needed for tmpfs of fallback mechanism where lower image is read only and a temporary
 	// upper tmpfs for chowning is used
-	if (dir_mkdir_p(upper_dir, 0777) < 0) {
+	if (dir_mkdir_p(upper_dir, 0755) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
 		goto error;
 	}
-	if (dir_mkdir_p(work_dir, 0777) < 0) {
+	if (dir_mkdir_p(work_dir, 0700) < 0) {
 		ERROR_ERRNO("Could not mkdir work dir %s", work_dir);
 		goto error;
 	}
