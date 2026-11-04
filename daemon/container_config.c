@@ -213,6 +213,11 @@ container_config_new(const char *file, const uint8_t *buf, size_t len, uint8_t *
 		memcpy(buf_internal, buf, conf_len);
 	}
 
+	if (!buf_internal) {
+		ERROR("Failed to read container config from file %s.", file);
+		goto out;
+	}
+
 	if (!container_config_verify(prefix, buf_internal, conf_len, sig_buf, sig_len, cert_buf,
 				     cert_len)) {
 		ERROR("Failed verify signature of container config for file \"%s\".", file);
