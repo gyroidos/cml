@@ -29,6 +29,7 @@
 #include <limits.h>
 #include <unistd.h>
 
+#include "bounds_safety.h"
 #include "macro.h"
 #include "mem.h"
 
@@ -48,8 +49,8 @@ struct uuid {
 	 * a uint64_t for easier usability. */
 	uint64_t node;
 
-	/* The string representation of the UUID */
-	char *string;
+	/* The string representation of the UUID (fixed 36 chars + NUL) */
+	char *__counted_by(37) string;
 };
 
 static int
@@ -82,7 +83,6 @@ static int
 uuid_fill_from_hex_string(uuid_t *uuid, const char *string)
 {
 	int ret = 0;
-	char *str;
 	int offset = 0;
 
 	TRACE("Trying to fill UUID from string: %s", string);
@@ -91,27 +91,31 @@ uuid_fill_from_hex_string(uuid_t *uuid, const char *string)
 		goto error;
 	}
 
-	str = mem_strndup(string + offset, 8);
+	/* string is __null_terminated; take one safe indexable view so the fixed-width
+	 * fields can be sliced out. The length check above guarantees >= 32 readable bytes. */
+	const char *buf = __null_terminated_to_indexable(string);
+
+	char *__null_terminated str = mem_strndup(buf + offset, 8);
 	ret += sscanf(str, "%" SCNx32, &uuid->time_low);
-	mem_free(str);
+	mem_free0(str);
 	offset += 8;
 
-	str = mem_strndup(string + offset, 4);
+	str = mem_strndup(buf + offset, 4);
 	ret += sscanf(str, "%" SCNx16, &uuid->time_mid);
-	mem_free(str);
+	mem_free0(str);
 	offset += 4;
 
-	str = mem_strndup(string + offset, 4);
+	str = mem_strndup(buf + offset, 4);
 	ret += sscanf(str, "%" SCNx16, &uuid->time_hi_and_version);
-	mem_free(str);
+	mem_free0(str);
 	offset += 4;
 
-	str = mem_strndup(string + offset, 4);
+	str = mem_strndup(buf + offset, 4);
 	ret += sscanf(str, "%" SCNx16, &uuid->clock_seq);
-	mem_free(str);
+	mem_free0(str);
 	offset += 4;
 
-	str = mem_strndup(string + offset, 12);
+	str = mem_strndup(buf + offset, 12);
 	ret += sscanf(str, "%" SCNx64, &uuid->node);
 	mem_free0(str);
 
@@ -153,7 +157,8 @@ uuid_new(char const *uuid)
 			0x8000; // Set reserved bits to 10 indicating UUID conforming to RFC 4122
 #else				/* LINUX */
 		// get a uuid string from /proc/kernel/random/uuid
-		FILE *f = fopen("/proc/sys/kernel/random/uuid", "r");
+		FILE *__single f =
+			__unsafe_forge_single(FILE *, fopen("/proc/sys/kernel/random/uuid", "r"));
 		if (!f) {
 			WARN_ERRNO("Could not open UUID providing file in sys filesystem");
 			goto error;
@@ -165,7 +170,9 @@ uuid_new(char const *uuid)
 			goto error;
 		}
 		fclose(f);
-		int ret = uuid_fill_from_string(u, buf);
+		/* buf is a fixed array; fgets above null-terminated it. Convert to the
+		 * __null_terminated param type (terminator verified within the array bounds). */
+		int ret = uuid_fill_from_string(u, __unsafe_null_terminated_from_indexable(buf));
 		if (ret < 0) {
 			goto error;
 		}
@@ -221,7 +228,10 @@ uuid_free(uuid_t *uuid)
 {
 	IF_NULL_RETURN(uuid);
 
-	mem_free0(uuid->string);
+	/* uuid->string is __counted_by(37): mem_free0() would null the pointer without
+	 * clearing the constant count, which -fbounds-safety rejects. Free without nulling
+	 * -- the containing struct is freed on the next line anyway. */
+	mem_free(uuid->string);
 	mem_free0(uuid);
 }
 
@@ -229,7 +239,7 @@ const char *
 uuid_string(const uuid_t *uuid)
 {
 	IF_NULL_RETVAL(uuid, NULL);
-	return uuid->string;
+	return __unsafe_null_terminated_from_indexable(uuid->string);
 }
 
 uint64_t

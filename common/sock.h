@@ -36,6 +36,8 @@
 #include <errno.h>
 #include <stdint.h>
 
+#include "bounds_safety.h"
+
 #ifdef ANDROID
 #include <cutils/sockets.h>
 #endif
@@ -242,7 +244,7 @@ sock_unix_get_peer_pid(int sock, uint32_t *peer_pid);
  * @param sock_name     The name of the socket
  * @return              The path of the socket 
 */
-char *
+char *__null_terminated
 sock_get_path_new(const char *sock_name);
 
 #endif // SOCK_H
