@@ -1096,6 +1096,12 @@ CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(set_exec_winsize, int, -1, uint16_t, uin
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_console_sock_cmld, int, void *, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(get_console_sock_cmld, int, -1, int)
 
+/* Functions usually implemented and registered by c_seccomp module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_seccomp_install, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(exec_seccomp_install, int, 0)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_seccomp_attach, int, void *, pid_t, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(exec_seccomp_attach, int, -1, pid_t, int)
+
 /* Functions usually implemented and registered by c_audit module */
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(audit_get_last_ack, const char *, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(audit_get_last_ack, const char *, "")
