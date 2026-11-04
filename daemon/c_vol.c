@@ -595,9 +595,22 @@ c_vol_mount_overlay(c_vol_t *vol, const char *target_dir, const char *upper_fsty
 
 	TRACE("Creating upper dir %s and work dir %s\n", upper_dir, work_dir);
 
-	// create mountpoint for upper dev
-	if (dir_mkdir_p(upper_dir, 0700) < 0) {
+	/*
+	 * create mountpoint for upper dev
+	 *
+	 * overlayfs takes mode and ownership of the merged root dir from the
+	 * upper dir. The merged mount is visible inside the container (its '/'
+	 * for root mounts) and thus must stay traversable for unprivileged
+	 * guest uids. Explicitly chmod() since dir_mkdir_p() leaves an
+	 * existing dir untouched; skip ro mounts where the upper fs is
+	 * read-only.
+	 */
+	if (dir_mkdir_p(upper_dir, 0755) < 0) {
 		ERROR_ERRNO("Could not mkdir upper dir %s", upper_dir);
+		goto error;
+	}
+	if (!(mount_flags & MS_RDONLY) && chmod(upper_dir, 0755) < 0) {
+		ERROR_ERRNO("Could not set permissions of upper dir %s", upper_dir);
 		goto error;
 	}
 	if (dir_mkdir_p(work_dir, 0700) < 0) {
