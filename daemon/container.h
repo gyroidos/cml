@@ -516,12 +516,20 @@ CONTAINER_MODULE_WRAPPER_DECLARE(is_encrypted, bool)
  * @return session id of the running session in the container, -1 on error
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t argc, char **argv,
-				 int session_fd)
+				 char *term, int session_fd)
 
 /**
  * Registers the corresponding handler for container_write_exec_input
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, char *exec_input, int session_fd)
+CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_input, size_t len,
+				 int session_fd)
+
+/**
+ * Registers the corresponding handler for container_set_exec_winsize,
+ * which sets the window size of the exec pty for the given session.
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(set_exec_winsize, int, uint16_t rows, uint16_t cols,
+				 int session_fd)
 
 /**
  * Freeze a container.
