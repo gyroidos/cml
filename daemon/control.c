@@ -75,8 +75,9 @@ struct control {
 
 static list_t *control_list = NULL;
 
-#define CONTROL_EXEC_FLAG_ATTACH 0x00000001 // persistent attach session
-#define CONTROL_EXEC_FLAG_DEAD 0x00000002   // torn down, awaiting deferred free
+#define CONTROL_EXEC_FLAG_ATTACH 0x00000001  // persistent attach session
+#define CONTROL_EXEC_FLAG_DEAD 0x00000002    // torn down, awaiting deferred free
+#define CONTROL_EXEC_FLAG_CONSOLE 0x00000004 // container console session (c_console)
 
 /*
  * Bridge between a control client connection and the console socket of an
@@ -98,6 +99,13 @@ control_exec_is_attach(control_exec_t *exec)
 {
 	ASSERT(exec);
 	return exec->flags & CONTROL_EXEC_FLAG_ATTACH;
+}
+
+static bool
+control_exec_is_console(control_exec_t *exec)
+{
+	ASSERT(exec);
+	return exec->flags & CONTROL_EXEC_FLAG_CONSOLE;
 }
 
 static bool
@@ -422,6 +430,18 @@ control_exec_attach_by_container(const container_t *container)
 	return NULL;
 }
 
+static control_exec_t *
+control_exec_console_by_container(const container_t *container)
+{
+	for (list_t *l = control_exec_list; l; l = l->next) {
+		control_exec_t *exec = l->data;
+		if (!control_exec_is_dead(exec) && control_exec_is_console(exec) &&
+		    exec->container == container)
+			return exec;
+	}
+	return NULL;
+}
+
 static void
 control_exec_free_cb(event_timer_t *timer, void *data)
 {
@@ -524,15 +544,18 @@ control_cb_read_console(int fd, unsigned events, UNUSED event_io_t *io, void *da
 		TRACE("Sent notification of command termination to client");
 
 		/*
-		 * stop bridging, then let c_run tear the session down and close
-		 * its own fd (console_sock_cmld). The bridge is unregistered
-		 * first so the event loop never operates on a fd c_run then
-		 * closes.
+		 * stop bridging, then let the owning module tear the session
+		 * down and close its own fd: c_run frees the exec session and
+		 * closes console_sock_cmld, while c_console keeps the console
+		 * pty master. The bridge is unregistered first so the event
+		 * loop never operates on a fd the module then closes.
 		 */
 		container_t *exec_container = exec->container;
 		int exec_client_fd = exec->client_fd;
+		bool is_console = control_exec_is_console(exec);
 		control_exec_shutdown(exec);
-		container_exec_detach(exec_container, exec_client_fd);
+		if (!is_console)
+			container_exec_detach(exec_container, exec_client_fd);
 	}
 }
 
@@ -544,11 +567,14 @@ control_exec_new(int fd, container_t *container, uint32_t flags)
 	exec->client_fd = fd;
 	exec->container = container;
 	exec->flags = flags;
-	int forward_fd = container_get_console_sock_cmld(container, fd);
+	int forward_fd = control_exec_is_console(exec) ?
+				 container_console_get_master(container) :
+				 container_get_console_sock_cmld(container, fd);
 
 	/*
-	 * the forwarded fd is the exec session's console socket (owned by
-	 * c_run); it is only read/written here, never closed
+	 * the forwarded fd is the console pty master for a console session
+	 * (owned by c_console) or the exec session's console socket (owned by
+	 * c_run); both are only read/written here, never closed
 	 */
 	exec->console_io = event_io_new(forward_fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
 					control_cb_read_console, exec);
@@ -1942,6 +1968,36 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 		control_exec_list = list_append(control_exec_list, exec);
 	} break;
 
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CONSOLE_ATTACH: {
+		IF_NULL_RETURN(container);
+		TRACE("Got console attach request for container");
+
+		// steal an existing console client: notify it, then rebind below
+		control_exec_t *prev = control_exec_console_by_container(container);
+		if (prev) {
+			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+			out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+			if (protobuf_send_message(prev->client_fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not notify stolen console client");
+			control_exec_shutdown(prev);
+		}
+
+		if (container_console_attach(container, fd) < 0) {
+			ERROR("Failed to attach to console");
+
+			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+			out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send exec end to control client");
+			break;
+		}
+
+		DEBUG("Registering read callback for container console master");
+		control_exec_t *exec = control_exec_new(
+			fd, container, CONTROL_EXEC_FLAG_ATTACH | CONTROL_EXEC_FLAG_CONSOLE);
+		control_exec_list = list_append(control_exec_list, exec);
+	} break;
+
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT: {
 		IF_NULL_RETURN(container);
 
@@ -1957,7 +2013,11 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			// no input ignore data nothing to handle
 			break;
 		}
-		res = container_write_exec_input(container, input, len, fd);
+		control_exec_t *exec = control_exec_by_client_fd(fd);
+		if (exec && control_exec_is_console(exec))
+			res = container_console_write_input(container, input, len, fd);
+		else
+			res = container_write_exec_input(container, input, len, fd);
 		if (res < 0) {
 			ERROR_ERRNO("Failed to write input to exec'ed process");
 		} else if ((size_t)res < len) {
@@ -1973,10 +2033,14 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			WARN("EXEC_WINSIZE without complete window size, ignoring");
 			break;
 		}
-		if (container_set_exec_winsize(container, msg->exec_winsize_rows,
-					       msg->exec_winsize_cols, fd) < 0) {
+		control_exec_t *exec = control_exec_by_client_fd(fd);
+		int wres = (exec && control_exec_is_console(exec)) ?
+				   container_console_set_winsize(container, msg->exec_winsize_rows,
+								 msg->exec_winsize_cols, fd) :
+				   container_set_exec_winsize(container, msg->exec_winsize_rows,
+							      msg->exec_winsize_cols, fd);
+		if (wres < 0)
 			ERROR("Failed to set window size of exec'ed process");
-		}
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN: {
@@ -2079,15 +2143,20 @@ connection_err:
 	cmld_container_ctrl_with_input_abort();
 
 	/*
-	 * if this connection was bridging an exec session, stop forwarding and
-	 * let c_run kill an ephemeral run session or detach the persistent one
+	 * if this connection was bridging a session, stop forwarding and let
+	 * the owning module react: c_run kills an ephemeral run session or
+	 * detaches the persistent one, c_console detaches the console
 	 */
 	control_exec_t *exec = control_exec_by_client_fd(fd);
 	if (exec) {
 		container_t *exec_container = exec->container;
+		bool was_console = control_exec_is_console(exec);
 		control_exec_shutdown(exec);
 		// the owning module closes its fd; cmld only stops bridging
-		container_exec_detach(exec_container, fd);
+		if (was_console)
+			container_console_detach(exec_container, fd);
+		else
+			container_exec_detach(exec_container, fd);
 	}
 
 	event_remove_io(io);

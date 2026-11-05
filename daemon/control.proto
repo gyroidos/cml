@@ -177,6 +177,9 @@ message ControllerToDaemon {
 		// Attach to the container's persistent exec session (attach)
 		CONTAINER_EXEC_ATTACH = 120;
 
+		// Attach to the container's console (attach to /dev/console)
+		CONTAINER_CONSOLE_ATTACH = 121;
+
 		// Starts a container. Also needs ontainer_config_file.
 		CONTAINER_UPDATE_CONFIG = 115;
 
