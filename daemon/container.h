@@ -519,6 +519,32 @@ CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t ar
 				 char *term, int session_fd)
 
 /**
+ * Attach to the container's persistent (docker-attach-like) exec session.
+ *
+ * Unlike container_run(), the attach session is not bound to the control
+ * client connection: it survives a client disconnect and can be rebound by a
+ * later attach. On first attach the session is created (with a pty and the
+ * given command, or a default shell if @p cmd is NULL); a later attach with
+ * an already existing session rebinds it to @p session_fd.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_attach, int, char *cmd, ssize_t argc, char **argv, char *term,
+				 int session_fd)
+
+/**
+ * Detach the exec session bound to @p session_fd, called when the control
+ * client connection is closed.
+ *
+ * An ephemeral container_run() session is killed; the persistent attach
+ * session is detached (kept running, its output discarded) until reattached.
+ * It is a no-op if no session is bound to @p session_fd.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_detach, int, int session_fd)
+
+/**
  * Registers the corresponding handler for container_write_exec_input
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_input, size_t len,
