@@ -142,6 +142,9 @@ print_usage(const char *cmd)
 	printf("   attach <container-uuid> [<command> [<arg_1> ... <arg_n>]]\n"
 	       "        Attaches to the container's persistent session, starting it (with the given\n"
 	       "        command or a default shell) on first use. The session survives disconnects.\n\n");
+	printf("   console <container-uuid>\n"
+	       "        Attaches to the container's console (its init and getty on /dev/console).\n"
+	       "        Reconnectable across disconnects.\n\n");
 	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
 	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the\n"
 	       "        given directory. If the 'remove' option was given, all log files are removed upon\n"
@@ -867,6 +870,15 @@ main(int argc, char *argv[])
 		}
 		msg.n_exec_args = argcount;
 
+	} else if (!strcasecmp(command, "console")) {
+		optind++;
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CONSOLE_ATTACH;
+
+		// the console is a pty; it takes no command, only a window size
+		msg.has_exec_pty = true;
+		msg.exec_pty = 1;
+
 	} else if (!strcasecmp(command, "change_pin")) {
 		char *newpin_verify = NULL;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN;
@@ -902,8 +914,9 @@ send_message:
 		sock = sock_connect(socket_file);
 	send_message(sock, &msg);
 
-	if (!strcasecmp(command, "run") || !strcasecmp(command, "attach")) {
-		TRACE("[CLIENT] Processing response for run/attach command");
+	if (!strcasecmp(command, "run") || !strcasecmp(command, "attach") ||
+	    !strcasecmp(command, "console")) {
+		TRACE("[CLIENT] Processing response for run/attach/console command");
 
 		if (msg.exec_pty) {
 			/*
