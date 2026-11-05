@@ -75,6 +75,38 @@ struct control {
 
 static list_t *control_list = NULL;
 
+#define CONTROL_EXEC_FLAG_ATTACH 0x00000001 // persistent attach session
+#define CONTROL_EXEC_FLAG_DEAD 0x00000002   // torn down, awaiting deferred free
+
+/*
+ * Bridge between a control client connection and the console socket of an
+ * exec session (container_run or the persistent attach session). Tracked in
+ * control_exec_list so the bridge can be found and torn down when the client
+ * connection is closed.
+ */
+typedef struct control_exec {
+	int client_fd;		// control client connection fd
+	event_io_t *console_io; // forwards console output to the client
+	container_t *container; // container the session belongs to
+	uint32_t flags;		// flags to distinguish between several types/states of the bridge
+} control_exec_t;
+
+static list_t *control_exec_list = NULL;
+
+static bool
+control_exec_is_attach(control_exec_t *exec)
+{
+	ASSERT(exec);
+	return exec->flags & CONTROL_EXEC_FLAG_ATTACH;
+}
+
+static bool
+control_exec_is_dead(control_exec_t *exec)
+{
+	ASSERT(exec);
+	return exec->flags & CONTROL_EXEC_FLAG_DEAD;
+}
+
 struct log_cb_data {
 	int fd;
 	list_t *current_logs;
@@ -367,6 +399,64 @@ control_container_status_free(ContainerStatus *c_status)
 	mem_free0(c_status);
 }
 
+static control_exec_t *
+control_exec_by_client_fd(int client_fd)
+{
+	for (list_t *l = control_exec_list; l; l = l->next) {
+		control_exec_t *exec = l->data;
+		if (!control_exec_is_dead(exec) && exec->client_fd == client_fd)
+			return exec;
+	}
+	return NULL;
+}
+
+static control_exec_t *
+control_exec_attach_by_container(const container_t *container)
+{
+	for (list_t *l = control_exec_list; l; l = l->next) {
+		control_exec_t *exec = l->data;
+		if (!control_exec_is_dead(exec) && control_exec_is_attach(exec) &&
+		    exec->container == container)
+			return exec;
+	}
+	return NULL;
+}
+
+static void
+control_exec_free_cb(event_timer_t *timer, void *data)
+{
+	control_exec_t *exec = data;
+
+	event_remove_timer(timer);
+	event_timer_free(timer);
+
+	control_exec_list = list_remove(control_exec_list, exec);
+	if (exec->console_io)
+		event_io_free(exec->console_io);
+	mem_free0(exec);
+}
+
+/*
+ * Tear down an exec bridge. The console io is unregistered now so no new
+ * events fire, but the struct and io are freed from a 0ms timer: the current
+ * epoll batch may still hold a stale event for console_io, and its callback
+ * bails on the dead flag instead of touching freed memory (see the event loop
+ * dispatching a snapshot of the batch).
+ */
+static void
+control_exec_shutdown(control_exec_t *exec)
+{
+	IF_NULL_RETURN(exec);
+	if (control_exec_is_dead(exec))
+		return;
+	exec->flags |= CONTROL_EXEC_FLAG_DEAD;
+
+	if (exec->console_io)
+		event_remove_io(exec->console_io);
+
+	event_timer_t *timer = event_timer_new(0, 1, control_exec_free_cb, exec);
+	event_add_timer(timer);
+}
 static ssize_t
 control_read_send(int cfd, int fd)
 {
@@ -397,9 +487,12 @@ control_read_send(int cfd, int fd)
 }
 
 static void
-control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
+control_cb_read_console(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 {
-	int *cfd = data;
+	control_exec_t *exec = data;
+
+	// stale event in the current batch for an already torn-down bridge
+	IF_TRUE_RETURN(control_exec_is_dead(exec));
 
 	TRACE("Console callback called, events: read: %u, write: %u, except: %u",
 	      (events & EVENT_IO_READ), (events & EVENT_IO_WRITE), (events & EVENT_IO_EXCEPT));
@@ -412,7 +505,7 @@ control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 		// necessary to get all output from interactive commands
 		do {
 			TRACE("Trying to read all available data from socket");
-			count = control_read_send(*cfd, fd);
+			count = control_read_send(exec->client_fd, fd);
 
 			TRACE_ERRNO("Response from read was %d", count);
 		} while (count > 0);
@@ -421,20 +514,47 @@ control_cb_read_console(int fd, unsigned events, event_io_t *io, void *data)
 	if ((events & EVENT_IO_EXCEPT)) {
 		TRACE("Detected termination of executed command. Stop listening.");
 
-		event_remove_io(io);
-		event_io_free(io);
-		close(fd);
-
 		DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
 		out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
 
-		if (protobuf_send_message(*cfd, (ProtobufCMessage *)&out) < 0) {
+		if (protobuf_send_message(exec->client_fd, (ProtobufCMessage *)&out) < 0) {
 			WARN("Could not send exec output to MDM");
 		}
 
 		TRACE("Sent notification of command termination to client");
-		mem_free0(cfd);
+
+		/*
+		 * stop bridging, then let c_run tear the session down and close
+		 * its own fd (console_sock_cmld). The bridge is unregistered
+		 * first so the event loop never operates on a fd c_run then
+		 * closes.
+		 */
+		container_t *exec_container = exec->container;
+		int exec_client_fd = exec->client_fd;
+		control_exec_shutdown(exec);
+		container_exec_detach(exec_container, exec_client_fd);
 	}
+}
+
+static control_exec_t *
+control_exec_new(int fd, container_t *container, uint32_t flags)
+{
+	control_exec_t *exec = mem_new0(control_exec_t, 1);
+
+	exec->client_fd = fd;
+	exec->container = container;
+	exec->flags = flags;
+	int forward_fd = container_get_console_sock_cmld(container, fd);
+
+	/*
+	 * the forwarded fd is the exec session's console socket (owned by
+	 * c_run); it is only read/written here, never closed
+	 */
+	exec->console_io = event_io_new(forward_fd, EVENT_IO_READ | EVENT_IO_EXCEPT,
+					control_cb_read_console, exec);
+	event_add_io(exec->console_io);
+
+	return exec;
 }
 
 static container_t *
@@ -1783,13 +1903,43 @@ control_handle_message(control_t *control, const ControllerToDaemon *msg, int fd
 			break;
 		}
 
-		DEBUG("Registering read callback for cmld console socket");
-		int *cfd = mem_new(int, 1);
-		*cfd = fd;
-		event_io_t *event =
-			event_io_new(container_get_console_sock_cmld(container, fd),
-				     EVENT_IO_READ | EVENT_IO_EXCEPT, control_cb_read_console, cfd);
-		event_add_io(event);
+		DEBUG("Registering read callback for cmld console socket (c_run)");
+		control_exec_t *exec = control_exec_new(fd, container, 0);
+		control_exec_list = list_append(control_exec_list, exec);
+	} break;
+
+	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_ATTACH: {
+		IF_NULL_RETURN(container);
+		TRACE("Got attach request for container");
+
+		/*
+		 * steal an existing attach bridge: tell the previous client its
+		 * session ended so it detaches, then rebind below
+		 */
+		control_exec_t *prev = control_exec_attach_by_container(container);
+		if (prev) {
+			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+			out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+			if (protobuf_send_message(prev->client_fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not notify stolen attach client");
+			control_exec_shutdown(prev);
+		}
+
+		char *cmd = msg->n_exec_args > 0 || msg->exec_command ? msg->exec_command : NULL;
+		if (container_exec_attach(container, cmd, msg->n_exec_args, msg->exec_args,
+					  msg->exec_term, fd) < 0) {
+			ERROR("Failed to attach");
+
+			DaemonToController out = DAEMON_TO_CONTROLLER__INIT;
+			out.code = DAEMON_TO_CONTROLLER__CODE__EXEC_END;
+			if (protobuf_send_message(fd, (ProtobufCMessage *)&out) < 0)
+				WARN("Could not send exec end to control client");
+			break;
+		}
+
+		DEBUG("Registering read callback for cmld console socket (attach, c_run)");
+		control_exec_t *exec = control_exec_new(fd, container, CONTROL_EXEC_FLAG_ATTACH);
+		control_exec_list = list_append(control_exec_list, exec);
 	} break;
 
 	case CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT: {
@@ -1927,6 +2077,19 @@ control_cb_recv_message_local(int fd, unsigned events, event_io_t *io, void *dat
 
 connection_err:
 	cmld_container_ctrl_with_input_abort();
+
+	/*
+	 * if this connection was bridging an exec session, stop forwarding and
+	 * let c_run kill an ephemeral run session or detach the persistent one
+	 */
+	control_exec_t *exec = control_exec_by_client_fd(fd);
+	if (exec) {
+		container_t *exec_container = exec->container;
+		control_exec_shutdown(exec);
+		// the owning module closes its fd; cmld only stops bridging
+		container_exec_detach(exec_container, fd);
+	}
+
 	event_remove_io(io);
 	event_io_free(io);
 	if (close(fd) < 0)
