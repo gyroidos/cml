@@ -141,10 +141,12 @@ print_usage(const char *cmd)
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
 	printf("   attach <container-uuid> [<command> [<arg_1> ... <arg_n>]]\n"
 	       "        Attaches to the container's persistent session, starting it (with the given\n"
-	       "        command or a default shell) on first use. The session survives disconnects.\n\n");
+	       "        command or a default shell) on first use. The session survives disconnects.\n"
+	       "        Press Ctrl-a then q to detach without ending the session.\n\n");
 	printf("   console <container-uuid>\n"
 	       "        Attaches to the container's console (its init and getty on /dev/console).\n"
-	       "        Reconnectable across disconnects.\n\n");
+	       "        Reconnectable across disconnects.\n"
+	       "        Press Ctrl-a then q to detach without ending the session.\n\n");
 	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
 	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the\n"
 	       "        given directory. If the 'remove' option was given, all log files are removed upon\n"
@@ -918,6 +920,15 @@ send_message:
 	    !strcasecmp(command, "console")) {
 		TRACE("[CLIENT] Processing response for run/attach/console command");
 
+		/*
+		 * detachable sessions survive a disconnect, so offer an escape
+		 * sequence to leave them without killing the session: Ctrl-a then
+		 * 'q' detaches, Ctrl-a Ctrl-a sends a literal Ctrl-a (like lxc
+		 * console)
+		 */
+		bool detach_escape =
+			!strcasecmp(command, "attach") || !strcasecmp(command, "console");
+
 		if (msg.exec_pty) {
 			/*
 			 * send the client tty's initial window size to cmld as an
@@ -965,9 +976,18 @@ send_message:
 			sigprocmask(SIG_BLOCK, &winch_mask, &ppoll_mask);
 			sigdelset(&ppoll_mask, SIGWINCH);
 
+			// detach escape: Ctrl-a ('q' to detach, Ctrl-a for a literal)
+			const uint8_t escape_char = 0x01;
+
 			uint8_t buf[4096];
+			// may hold one escape char carried over from the previous read
+			uint8_t out[sizeof(buf) + 1];
 			ssize_t count;
 			struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN };
+
+			// escape sequence state
+			bool escape_pending = false;
+			bool detach = false;
 
 			while (1) {
 				if (run_input_winch) {
@@ -983,10 +1003,46 @@ send_message:
 
 				TRACE("[CLIENT] Trying to read input for exec'ed process");
 
-				if ((count = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-					TRACE("[CLIENT] Got %zd input bytes for exec'ed process",
-					      count);
+				count = read(STDIN_FILENO, buf, sizeof(buf));
+				if (count == 0 || (count < 0 && errno != EINTR))
+					break;
+				if (count < 0)
+					continue;
 
+				// filter the escape sequence out of the forwarded bytes
+				size_t out_len = 0;
+				for (ssize_t i = 0; i < count; i++) {
+					uint8_t b = buf[i];
+
+					if (!detach_escape) {
+						out[out_len++] = b;
+						continue;
+					}
+
+					if (escape_pending) {
+						escape_pending = false;
+						if (b == 'q' || b == 'Q') {
+							detach = true;
+							break;
+						}
+						// emit the held escape char (literal on a repeat)
+						out[out_len++] = escape_char;
+						if (b == escape_char)
+							continue;
+						// not a command: pass the following byte through
+						out[out_len++] = b;
+						continue;
+					}
+
+					if (b == escape_char) {
+						escape_pending = true; // hold, may start an escape
+						continue;
+					}
+
+					out[out_len++] = b;
+				}
+
+				if (out_len > 0) {
 					ControllerToDaemon inputmsg = CONTROLLER_TO_DAEMON__INIT;
 					inputmsg.container_uuids = mem_new(char *, 1);
 					inputmsg.container_uuids[0] = (char *)uuid_string(uuid);
@@ -995,13 +1051,20 @@ send_message:
 						CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
 					/* binary-safe input; keeps NULs, ^D, arrow keys, etc. */
 					inputmsg.has_exec_input_raw = true;
-					inputmsg.exec_input_raw.data = buf;
-					inputmsg.exec_input_raw.len = count;
+					inputmsg.exec_input_raw.data = out;
+					inputmsg.exec_input_raw.len = out_len;
 
 					send_message(sock, &inputmsg);
 					mem_free0(inputmsg.container_uuids);
 					TRACE("[CLIENT] Sent input to cmld");
-				} else if (count == 0 || (count < 0 && errno != EINTR)) {
+				}
+
+				if (detach) {
+					printf("\r\n[detached]\r\n");
+					fflush(stdout);
+					// drop the connection; cmld detaches the session, the
+					// output parent sees EOF and restores the terminal
+					shutdown(sock, SHUT_RDWR);
 					break;
 				}
 			}
@@ -1012,7 +1075,22 @@ send_message:
 
 			while (1) {
 				TRACE("[CLIENT] Waiting for command output message from cmld");
-				DaemonToController *resp = recv_message(sock);
+				/*
+				 * read directly (not via recv_message, which treats EOF
+				 * as fatal) so a closed connection, e.g. after the input
+				 * child detached, exits cleanly and restores the terminal
+				 */
+				DaemonToController *resp =
+					(DaemonToController *)protobuf_recv_message(
+						sock, &daemon_to_controller__descriptor);
+
+				// connection closed (e.g. detached by the input child)
+				if (!resp) {
+					TRACE("[CLIENT] Connection closed, exiting");
+					kill(pid, SIGTERM);
+					waitpid(pid, NULL, 0);
+					goto exit;
+				}
 
 				TRACE("[CLIENT] Got message from exec'ed process\n");
 
