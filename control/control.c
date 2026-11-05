@@ -1215,6 +1215,18 @@ exit:
 	close(sock);
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
 
+	/*
+	 * a program in the container may have left the terminal in an unusual
+	 * state (hidden cursor, alternate screen, set attributes); on detach it
+	 * is still running and never restores it, so reset the common modes:
+	 * leave alternate screen, show cursor, reset attributes
+	 */
+	if (msg.has_exec_pty && msg.exec_pty) {
+		const char reset[] = "\033[?1049l\033[?25h\033[0m";
+		if (write(STDOUT_FILENO, reset, sizeof(reset) - 1) < 0)
+			TRACE_ERRNO("Could not reset terminal");
+	}
+
 	if (msg.has_container_config_file)
 		mem_free0(msg.container_config_file.data);
 	if (msg.has_guestos_rootcert)
