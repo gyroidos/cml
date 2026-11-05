@@ -61,6 +61,8 @@
  */
 #define SESSION_WBUF_SIZE (64 * 1024)
 
+extern logf_handler_t *cml_daemon_logfile_handler;
+
 typedef struct c_run {
 	container_t *container;
 	list_t *sessions;
@@ -523,6 +525,16 @@ do_exec(void *data)
 			WARN_ERRNO("Could not set parent death signal for %s", session->argv[0]);
 
 		do_pty_setup_in_child(session);
+
+		/*
+		 * do not execute child if some of the main processes fds are still
+		 * open to avoid data leaks
+		 */
+		if (close_range(STDERR_FILENO + 1, ~0U, 0) == -1) {
+			ERROR_ERRNO("Could not close fds! Stopping to execute child!");
+			_exit(EXIT_FAILURE);
+		}
+		logf_unregister(cml_daemon_logfile_handler);
 
 		/*
 		 * start from a clean environment: only PATH plus the client's
