@@ -30,6 +30,7 @@
 #include "common/dir.h"
 #include "common/uuid.h"
 #include "compartment.h"
+#include "container_config.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -701,10 +702,22 @@ container_destroy(container_t *container)
 			WARN("Could not delete leftover container dir");
 	}
 
-	/* remove config files */
-	if (unlink(container_get_config_filename(container)))
-		WARN_ERRNO("Can't delete config file!");
+	const char *config_file = container_get_config_filename(container);
 
+	IF_NULL_RETVAL(config_file, ret);
+
+	// if the config filename has the .conf extension, the container config consists of
+	// a .conf, .sig and a .cert file as well as their temp counterparts, otherwise it is
+	// an OCI container with a .json config, which needs to be unlinked directly.
+	char *prefix = file_get_prefix_new(config_file, ".conf");
+	if (prefix) {
+		ret = container_config_unlink_files(prefix);
+	} else if (file_exists(config_file) && unlink(config_file)) {
+		ERROR_ERRNO("Could not delete config file %s.", config_file);
+		ret = -1;
+	}
+
+	mem_free0(prefix);
 	return ret;
 }
 
