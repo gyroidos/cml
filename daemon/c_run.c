@@ -63,9 +63,13 @@
 
 extern logf_handler_t *cml_daemon_logfile_handler;
 
+/* default command of a persistent attach session created without a command */
+#define C_RUN_ATTACH_DEFAULT_CMD "/bin/sh"
+
 typedef struct c_run {
 	container_t *container;
 	list_t *sessions;
+	struct c_run_session *attach_session; /* the single persistent attach session, or NULL */
 } c_run_t;
 
 typedef struct c_run_session {
@@ -79,6 +83,10 @@ typedef struct c_run_session {
 	int pty_slave_fd;
 	event_io_t *pty_master_io;
 	event_io_t *console_sock_container_io;
+	event_io_t *console_drain_io; /* discards console output while detached */
+	bool persistent;	      /* attach session: survives client disconnect */
+	bool exited;		      /* the exec'ed command has terminated and been reaped */
+	bool released;		      /* no client/drain references the session anymore */
 	int create_pty;
 	char *cmd;
 	ssize_t argc;
@@ -190,6 +198,31 @@ c_run_free(void *runp)
 }
 
 static void
+c_run_session_cleanup(c_run_session_t *session);
+static void
+c_run_session_free(c_run_session_t *session);
+
+/*
+ * Free the session once it is both exited (command reaped) and released (no
+ * control bridge and no drain reference it). Whichever of the two events
+ * happens last triggers the free, so c_run alone owns and closes the console
+ * sockets, with no watcher left to notify.
+ */
+static void
+c_run_session_try_free(c_run_session_t *session)
+{
+	IF_NULL_RETURN(session);
+
+	if (!session->exited || !session->released)
+		return;
+
+	if (session->run)
+		session->run->sessions = list_remove(session->run->sessions, session);
+	c_run_session_cleanup(session);
+	c_run_session_free(session);
+}
+
+static void
 c_run_session_cleanup(c_run_session_t *session)
 {
 	IF_NULL_RETURN(session);
@@ -215,6 +248,15 @@ c_run_session_cleanup(c_run_session_t *session)
 		event_io_free(session->console_sock_container_io);
 		session->console_sock_container_io = NULL;
 	}
+	if (session->console_drain_io) {
+		event_remove_io(session->console_drain_io);
+		event_io_free(session->console_drain_io);
+		session->console_drain_io = NULL;
+	}
+
+	// this persistent attach session is going away; forget it in the module
+	if (session->run && session->run->attach_session == session)
+		session->run->attach_session = NULL;
 
 	/*
 	 * closing the last master reference hangs up the pty: the shell, which
@@ -230,11 +272,20 @@ c_run_session_cleanup(c_run_session_t *session)
 		session->pty_slave_fd = -1;
 	}
 
-	TRACE("Shutting down console sockets");
-	if (session->console_sock_container != -1)
-		shutdown(session->console_sock_container, SHUT_RDWR);
-	if (session->console_sock_cmld != -1)
-		shutdown(session->console_sock_cmld, SHUT_RDWR);
+	/*
+	 * cleanup runs only once the session is fully released (no control
+	 * bridge and no drain watch console_sock_cmld), so c_run owns closing
+	 * both console socket ends here
+	 */
+	TRACE("Closing console sockets");
+	if (session->console_sock_container != -1) {
+		close(session->console_sock_container);
+		session->console_sock_container = -1;
+	}
+	if (session->console_sock_cmld != -1) {
+		close(session->console_sock_cmld);
+		session->console_sock_cmld = -1;
+	}
 
 	session->console_sock_container_wbuf_count = 0;
 	session->pty_master_wbuf_count = 0;
@@ -282,15 +333,23 @@ do_clone(int (*func)(void *), unsigned long flags, void *data)
 }
 
 static c_run_session_t *
-c_run_get_session_by_fd(const c_run_t *run, int session_fd)
+c_run_find_session_by_fd(const c_run_t *run, int session_fd)
 {
 	for (list_t *l = run->sessions; l; l = l->next) {
 		c_run_session_t *session = l->data;
 		if (session_fd == session->fd)
 			return session;
 	}
-	ERROR("Session for fd=%d does not exist!", session_fd);
 	return NULL;
+}
+
+static c_run_session_t *
+c_run_get_session_by_fd(const c_run_t *run, int session_fd)
+{
+	c_run_session_t *session = c_run_find_session_by_fd(run, session_fd);
+	if (!session)
+		ERROR("Session for fd=%d does not exist!", session_fd);
+	return session;
 }
 
 static int
@@ -401,14 +460,23 @@ c_run_sigchld_cb(UNUSED int signum, event_signal_t *sig, void *data)
 				continue;
 			}
 
-			// remove the sigchld callback for this container from the event loop
+			// remove the sigchld callback for this session from the event loop
 			event_remove_signal(sig);
 			event_signal_free(sig);
 
-			// Close sockets of the session
-			run->sessions = list_remove(run->sessions, session);
-			c_run_session_cleanup(session);
-			c_run_session_free(session);
+			session->exited = true;
+			session->active_exec_pid = -1;
+
+			/*
+			 * hang up console_sock_cmld by closing our pump end, so
+			 * the control bridge or the drain notices the session
+			 * ended; the session is freed once it is also released
+			 */
+			if (session->console_sock_container != -1) {
+				close(session->console_sock_container);
+				session->console_sock_container = -1;
+			}
+			c_run_session_try_free(session);
 			break;
 		} else {
 			DEBUG("Reaped a descendant process with PID %d of injected process in container %s",
@@ -791,30 +859,28 @@ error:
 	return -1;
 }
 
-static int
-c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **argv, char *term,
-		   int session_fd)
+static bool
+c_run_container_is_running(const c_run_t *run)
 {
-	c_run_t *run = runp;
-	ASSERT(run);
-
 	switch (container_get_state(run->container)) {
 	case COMPARTMENT_STATE_BOOTING:
 	case COMPARTMENT_STATE_RUNNING:
 	case COMPARTMENT_STATE_SETUP:
-		break;
+		return true;
 	default:
 		WARN("Container %s is not running thus no command could be exec'ed",
 		     container_get_description(run->container));
-		return -1;
+		return false;
 	}
+}
 
-	ASSERT(cmd);
-	TRACE("Trying to excute command \"%s\" inside container", cmd);
-
-	c_run_session_t *session = c_run_session_new(run, create_pty, cmd, argc, argv, term, session_fd);
-	IF_NULL_RETVAL(session, -1);
-
+/*
+ * Register the session, clone the exec helper and install its SIGCHLD
+ * handler. On error the session is cleaned up and freed.
+ */
+static int
+c_run_session_start(c_run_t *run, c_run_session_t *session)
+{
 	run->sessions = list_append(run->sessions, session);
 
 	IF_TRUE_GOTO(c_run_prepare_exec(session) < 0, error);
@@ -831,6 +897,149 @@ error:
 	c_run_session_cleanup(session);
 	c_run_session_free(session);
 	return -1;
+}
+
+static int
+c_run_exec_process(void *runp, int create_pty, char *cmd, ssize_t argc, char **argv, char *term,
+		   int session_fd)
+{
+	c_run_t *run = runp;
+	ASSERT(run);
+
+	IF_FALSE_RETVAL(c_run_container_is_running(run), -1);
+
+	ASSERT(cmd);
+	TRACE("Trying to excute command \"%s\" inside container", cmd);
+
+	c_run_session_t *session =
+		c_run_session_new(run, create_pty, cmd, argc, argv, term, session_fd);
+	IF_NULL_RETVAL(session, -1);
+
+	return c_run_session_start(run, session);
+}
+
+/*
+ * Discards all output of a detached persistent attach session so the pty
+ * inside the container never blocks while no client is attached. On reattach
+ * the handler is removed and control takes over the console socket again.
+ */
+static void
+c_run_console_drain_cb(int fd, unsigned events, UNUSED event_io_t *io, void *data)
+{
+	ASSERT(data);
+	c_run_session_t *session = data;
+
+	if (events & EVENT_IO_EXCEPT) {
+		/*
+		 * the console socket hung up while detached, i.e. the command
+		 * exited; the drain was the last reference, so release the
+		 * session and let it be freed
+		 */
+		TRACE("Exception on drained console socket fd %d", fd);
+		event_remove_io(session->console_drain_io);
+		event_io_free(session->console_drain_io);
+		session->console_drain_io = NULL;
+		session->released = true;
+		c_run_session_try_free(session);
+		return;
+	}
+
+	IF_FALSE_RETURN(events & EVENT_IO_READ);
+
+	uint8_t buf[SESSION_WBUF_SIZE];
+	ssize_t n;
+	while ((n = read(fd, buf, sizeof(buf))) > 0)
+		; // drop output while detached
+}
+
+static int
+c_run_exec_attach(void *runp, char *cmd, ssize_t argc, char **argv, char *term, int session_fd)
+{
+	c_run_t *run = runp;
+	ASSERT(run);
+
+	IF_FALSE_RETVAL(c_run_container_is_running(run), -1);
+
+	// reattach: rebind the existing persistent session to the new client
+	if (run->attach_session) {
+		c_run_session_t *session = run->attach_session;
+		TRACE("Reattaching to persistent session of container %s",
+		      container_get_description(run->container));
+
+		// stop discarding output; control takes over the console socket
+		if (session->console_drain_io) {
+			event_remove_io(session->console_drain_io);
+			event_io_free(session->console_drain_io);
+			session->console_drain_io = NULL;
+		}
+
+		session->fd = session_fd;
+		if (session->env_term)
+			mem_free0(session->env_term);
+		session->env_term = term ? mem_printf("TERM=%s", term) : NULL;
+
+		return 0;
+	}
+
+	// first attach: create the persistent session with a pty
+	char *default_argv[] = { C_RUN_ATTACH_DEFAULT_CMD, NULL };
+	if (!cmd) {
+		cmd = C_RUN_ATTACH_DEFAULT_CMD;
+		argv = default_argv;
+		argc = 1;
+	}
+	TRACE("Creating persistent attach session \"%s\" in container %s", cmd,
+	      container_get_description(run->container));
+
+	c_run_session_t *session = c_run_session_new(run, 1, cmd, argc, argv, term, session_fd);
+	IF_NULL_RETVAL(session, -1);
+
+	session->persistent = true;
+	run->attach_session = session;
+
+	return c_run_session_start(run, session);
+}
+
+static int
+c_run_exec_detach(void *runp, int session_fd)
+{
+	c_run_t *run = runp;
+	ASSERT(run);
+
+	c_run_session_t *session = c_run_find_session_by_fd(run, session_fd);
+	// no session bound to this connection; nothing to do
+	IF_NULL_RETVAL(session, 0);
+
+	session->fd = -1;
+
+	/*
+	 * a still-running attach session survives the disconnect: keep it and
+	 * discard its output via a drain until a client reattaches
+	 */
+	if (session->persistent && !session->exited) {
+		DEBUG("Detaching persistent session of container %s",
+		      container_get_description(run->container));
+		if (session->console_sock_cmld != -1 && !session->console_drain_io) {
+			session->console_drain_io = event_io_new(session->console_sock_cmld,
+								 EVENT_IO_READ | EVENT_IO_EXCEPT,
+								 c_run_console_drain_cb, session);
+			event_add_io(session->console_drain_io);
+		}
+		return 0;
+	}
+
+	/*
+	 * the session is ending: an ephemeral run, or a session whose command
+	 * already exited. Release it; if the command is still running, kill it
+	 * and let the SIGCHLD handler complete the free.
+	 */
+	TRACE("Releasing exec session on client disconnect");
+	session->released = true;
+	if (!session->exited && session->active_exec_pid != -1)
+		kill(session->active_exec_pid, SIGKILL);
+	c_run_session_try_free(session);
+
+	return 0;
 }
 
 static compartment_module_t c_run_module = {
@@ -860,6 +1069,8 @@ c_run_init(void)
 
 	// register relevant handlers implemented by this module
 	container_register_run_handler(MOD_NAME, c_run_exec_process);
+	container_register_exec_attach_handler(MOD_NAME, c_run_exec_attach);
+	container_register_exec_detach_handler(MOD_NAME, c_run_exec_detach);
 	container_register_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
 	container_register_set_exec_winsize_handler(MOD_NAME, c_run_set_exec_winsize);
 	container_register_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
@@ -870,6 +1081,8 @@ c_run_deinit(void)
 {
 	// unregister handlers implemented by this module
 	container_unregister_run_handler(MOD_NAME, c_run_exec_process);
+	container_unregister_exec_attach_handler(MOD_NAME, c_run_exec_attach);
+	container_unregister_exec_detach_handler(MOD_NAME, c_run_exec_detach);
 	container_unregister_write_exec_input_handler(MOD_NAME, c_run_write_exec_input);
 	container_unregister_set_exec_winsize_handler(MOD_NAME, c_run_set_exec_winsize);
 	container_unregister_get_console_sock_cmld_handler(MOD_NAME, c_run_get_console_sock_cmld);
