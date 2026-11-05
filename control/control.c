@@ -139,6 +139,9 @@ print_usage(const char *cmd)
 	       "        Prints the list of network interfaces assigned to the specified container.\n\n");
 	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
+	printf("   attach <container-uuid> [<command> [<arg_1> ... <arg_n>]]\n"
+	       "        Attaches to the container's persistent session, starting it (with the given\n"
+	       "        command or a default shell) on first use. The session survives disconnects.\n\n");
 	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
 	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the\n"
 	       "        given directory. If the 'remove' option was given, all log files are removed upon\n"
@@ -839,6 +842,31 @@ main(int argc, char *argv[])
 		msg.n_exec_args = argcount;
 		TRACE("after set n_exec_args");
 
+	} else if (!strcasecmp(command, "attach")) {
+		optind++;
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_ATTACH;
+
+		// attach always uses a pty; carry the client's terminal type
+		msg.has_exec_pty = true;
+		msg.exec_pty = 1;
+		msg.exec_term = getenv("TERM");
+
+		// optional command; without one cmld starts a default shell
+		int argcount = 0;
+		if (optind < argc) {
+			msg.exec_command = argv[optind];
+
+			size_t len = MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(char *), argc);
+			msg.exec_args = mem_alloc(len);
+			while (optind < argc) {
+				msg.exec_args[argcount] = mem_strdup(argv[optind]);
+				optind++;
+				argcount++;
+			}
+		}
+		msg.n_exec_args = argcount;
+
 	} else if (!strcasecmp(command, "change_pin")) {
 		char *newpin_verify = NULL;
 		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CHANGE_TOKEN_PIN;
@@ -874,8 +902,8 @@ send_message:
 		sock = sock_connect(socket_file);
 	send_message(sock, &msg);
 
-	if (!strcasecmp(command, "run")) {
-		TRACE("[CLIENT] Processing response for run command");
+	if (!strcasecmp(command, "run") || !strcasecmp(command, "attach")) {
+		TRACE("[CLIENT] Processing response for run/attach command");
 
 		if (msg.exec_pty) {
 			/*
