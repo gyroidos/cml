@@ -545,6 +545,55 @@ CONTAINER_MODULE_WRAPPER_DECLARE(exec_attach, int, char *cmd, ssize_t argc, char
 CONTAINER_MODULE_WRAPPER_DECLARE(exec_detach, int, int session_fd)
 
 /**
+ * Attach a control client to the container's console.
+ *
+ * The console pty is allocated at container start and its slave is the
+ * container's /dev/console; the master is held by cmld and drained until a
+ * client attaches. This marks @p session_fd as the attached client and stops
+ * discarding console output. Any previously attached client is stolen.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_attach, int, int session_fd)
+
+/**
+ * Detach the control client bound to @p session_fd from the container's
+ * console, called when the control client connection is closed.
+ *
+ * The console pty keeps running with its output discarded until a later
+ * attach. It is a no-op if @p session_fd is not the attached client.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_detach, int, int session_fd)
+
+/**
+ * Get the master fd of the container's console pty, used by the control
+ * module to forward console output to an attached client.
+ *
+ * @return the console master fd, or -1 if no console is available
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_get_master, int)
+
+/**
+ * Write input from the attached control client to the container's console.
+ * Ignored unless @p session_fd is the attached client.
+ *
+ * @return the number of bytes written, or -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_write_input, int, const uint8_t *input, size_t len,
+				 int session_fd)
+
+/**
+ * Set the window size of the container's console pty from the attached
+ * control client. Ignored unless @p session_fd is the attached client.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_set_winsize, int, uint16_t rows, uint16_t cols,
+				 int session_fd)
+
+/**
  * Registers the corresponding handler for container_write_exec_input
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_input, size_t len,
