@@ -98,6 +98,16 @@ typedef struct c_run_session {
 	int pty_master_wbuf_count;
 } c_run_session_t;
 
+#if !defined(__GLIBC__)
+#include <sys/syscall.h>
+
+static int
+close_range(unsigned int first, unsigned int last, int flags)
+{
+	return syscall(SYS_close_range, first, last, flags);
+}
+#endif
+
 static void *
 c_run_new(compartment_t *compartment)
 {
