@@ -576,6 +576,22 @@ error:
 }
 
 static int
+c_idmapped_start_post_clone(void *idmappedp)
+{
+	c_idmapped_t *idmapped = idmappedp;
+	ASSERT(idmapped);
+
+	// explicitly close mapped tree fds which are now handled by child
+	for (list_t *l = idmapped->mapped_mnts; l; l = l->next) {
+		struct c_idmapped_mnt *mnt = l->data;
+		if (mnt->mapped_tree_fd > 0)
+			close(mnt->mapped_tree_fd);
+	}
+
+	return 0;
+}
+
+static int
 c_idmapped_umount_dir_cb(const char *path, const char *file, UNUSED void *data)
 {
 	char *file_to_umount = mem_printf("%s/%s", path, file);
@@ -618,6 +634,13 @@ c_idmapped_cleanup(void *idmappedp, UNUSED bool is_rebooting)
 		mem_printf("%s/%s/src", IDMAPPED_SRC_DIR,
 			   uuid_string(container_get_uuid(idmapped->container)));
 
+	// explicitly close dangling mapped tree fds
+	for (list_t *l = idmapped->mapped_mnts; l; l = l->next) {
+		struct c_idmapped_mnt *mnt = l->data;
+		if (mnt->mapped_tree_fd > 0)
+			close(mnt->mapped_tree_fd);
+	}
+
 	// release bindmounts to src directories in root ns
 	if (dir_foreach(src_compartment_dir, &c_idmapped_umount_dir_cb, NULL) < 0) {
 		WARN("Could not umount srcs on %s", src_compartment_dir);
@@ -644,7 +667,7 @@ static compartment_module_t c_idmapped_module = {
 	.start_post_clone_early = NULL,
 	.start_child_early = NULL,
 	.start_pre_clone = NULL,
-	.start_post_clone = NULL,
+	.start_post_clone = c_idmapped_start_post_clone,
 	.start_pre_exec = NULL,
 	.start_post_exec = NULL,
 	.start_child = c_idmapped_start_child,
