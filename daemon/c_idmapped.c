@@ -319,6 +319,12 @@ c_idmapped_prepare_dir(c_idmapped_t *idmapped, struct c_idmapped_mnt *mnt, const
 		return -1;
 	}
 
+	// do not propagete anything benath 'src/<no>'
+	if (mount(NULL, mnt->src, NULL, MS_PRIVATE, NULL) < 0) {
+		WARN_ERRNO("Could not make %s a private mount", mnt->src);
+		return -1;
+	}
+
 	if (!mount_is_idmapping_supported())
 		return 0;
 
