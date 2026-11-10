@@ -341,6 +341,10 @@ c_hotplug_handle_usb_hotplug(unsigned actions, uevent_event_t *event, c_hotplug_
 							     container_usbdev_get_id_product(ud),
 							     container_usbdev_get_i_serial(ud),
 							     container_usbdev_is_assigned(ud));
+
+				container_usbdev_set_major(ud_plugged, major);
+				container_usbdev_set_minor(ud_plugged, minor);
+
 				hotplug->allow_on_unplug_list =
 					list_append(hotplug->allow_on_unplug_list, ud_plugged);
 
@@ -673,6 +677,10 @@ c_hotplug_usbdev_deny(c_hotplug_t *hotplug, container_usbdev_t *usbdev)
 		container_usbdev_get_type(usbdev), container_usbdev_get_id_vendor(usbdev),
 		container_usbdev_get_id_product(usbdev), container_usbdev_get_i_serial(usbdev),
 		container_usbdev_is_assigned(usbdev));
+
+	container_usbdev_set_major(ud_plugged, major);
+	container_usbdev_set_minor(ud_plugged, minor);
+
 	hotplug->allow_on_unplug_list = list_append(hotplug->allow_on_unplug_list, ud_plugged);
 }
 
