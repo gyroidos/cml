@@ -27,7 +27,14 @@ GYROIDOS_TEST_PASSWD_PKI="test1234" openssl pkcs12 -export -out token.p12 -inkey
 cp testpki_untrusted/ssig_rootca.cert untrusted_chain_including_rootca.cert
 cat testpki_untrusted/ssig_cml.cert >> untrusted_chain_including_rootca.cert
 
-
+########## Malformed certificates ##########
+# garbage.cert is not PEM at all.
+# ssig_cml_corrupt_body.cert keeps the PEM framing but sets the third
+# base64 character of the body to 'A', which turns the DER length byte
+# into 0x80 (indefinite length)
+echo "Creating malformed certificates"
+echo 'this is not a certificate' > garbage.cert
+sed '2s/^MI./MIA/' testpki/ssig_cml.cert > ssig_cml_corrupt_body.cert
 
 ########## Digests and Signatures ##########
 # Create test-quote
