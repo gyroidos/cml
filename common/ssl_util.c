@@ -990,7 +990,7 @@ ssl_verify_certificate(const char *test_cert_file, const char *root_cert_file, b
 
 	if (!PEM_read_bio_X509(stackbio, &test_cert, 0, NULL)) {
 		ERROR("Failed to load cert from certificate under test");
-		ret = -2;
+		ret = -1;
 		goto end;
 	}
 

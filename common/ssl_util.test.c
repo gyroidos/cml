@@ -691,6 +691,27 @@ test_ssl_verify_cert_null_untrusted_complete_chain(UNUSED const MunitParameter p
 	return MUNIT_OK;
 }
 
+// Test <garbage, not a cert> against <trusted rootca>
+static MunitResult
+test_ssl_verify_cert_garbage_trusted_rootca(UNUSED const MunitParameter params[], UNUSED void *data)
+{
+	munit_assert(-1 == ssl_verify_certificate("testdata/garbage.cert",
+						  "testdata/testpki/ssig_rootca.cert", false));
+
+	return MUNIT_OK;
+}
+
+// Test <valid cert with single corrupted character in body> against <trusted rootca>
+static MunitResult
+test_ssl_verify_cert_corrupt_body_trusted_rootca(UNUSED const MunitParameter params[],
+						 UNUSED void *data)
+{
+	munit_assert(-1 == ssl_verify_certificate("testdata/ssig_cml_corrupt_body.cert",
+						  "testdata/testpki/ssig_rootca.cert", false));
+
+	return MUNIT_OK;
+}
+
 static MunitResult
 test_ssl_aes_ecb_pad_success(UNUSED const MunitParameter params[], UNUSED void *data)
 {
@@ -1030,6 +1051,12 @@ static MunitTest tests[] = {
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_verify_cert_null_untrusted_complete_chain",
 	  test_ssl_verify_cert_null_untrusted_complete_chain, setup, tear_down,
+	  MUNIT_TEST_OPTION_NONE, NULL },
+	{ "test_ssl_verify_cert_garbage_trusted_rootca",
+	  test_ssl_verify_cert_garbage_trusted_rootca, setup, tear_down, MUNIT_TEST_OPTION_NONE,
+	  NULL },
+	{ "test_ssl_verify_cert_corrupt_body_trusted_rootca",
+	  test_ssl_verify_cert_corrupt_body_trusted_rootca, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },
 	{ "test_ssl_aes_ecb_pad_success", test_ssl_aes_ecb_pad_success, setup, tear_down,
 	  MUNIT_TEST_OPTION_NONE, NULL },

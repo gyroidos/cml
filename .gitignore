@@ -37,3 +37,5 @@ tags
 /common/testdata/token_pss.p12
 /common/testdata/untrusted_chain_including_rootca.cer
 /common/testdata/untrusted_chain_including_rootca.cert
+/common/testdata/garbage.cert
+/common/testdata/ssig_cml_corrupt_body.cert
