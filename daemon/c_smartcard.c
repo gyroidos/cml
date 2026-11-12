@@ -23,6 +23,9 @@
 
 #define MOD_NAME "c_smartcard"
 
+#define _GNU_SOURCE
+#include <fcntl.h>
+
 #include "scd.pb-c.h"
 
 #include "cmld.h"
@@ -192,6 +195,18 @@ c_smartcard_token_paired_file_new(c_smartcard_t *smartcard)
 	ASSERT(smartcard);
 	return mem_printf("%s/%s", container_get_images_dir(smartcard->container),
 			  TOKEN_IS_PAIRED_FILE_NAME);
+}
+
+/**
+ * Returns the path to the container specific tokencontrol socket visible in
+ * the scd unit.
+ */
+static char *
+c_smartcard_tokencontrol_src_path_new(c_smartcard_t *smartcard)
+{
+	ASSERT(smartcard);
+	return mem_printf("%s/%s/%s.sock", unit_get_sock_dir(scd_get_unit()), SCD_TOKENCONTROL_DIR,
+			  uuid_string(container_get_uuid(smartcard->container)));
 }
 
 /**
@@ -834,10 +849,29 @@ c_smartcard_scd_token_remove_block(c_smartcard_t *smartcard)
 {
 	ASSERT(smartcard);
 	container_t *container = smartcard->container;
+	ASSERT(container);
+
+	if (smartcard->token_type == CONTAINER_TOKEN_TYPE_USB) {
+		/*
+		 * restore uid to root of tokencontrol sock before triggering the token
+		 * removal in scd, thus uid mapping in unit is valid for cleanup there
+		 */
+		char *src_path = c_smartcard_tokencontrol_src_path_new(smartcard);
+		int fd = open(src_path, O_PATH | O_NOFOLLOW);
+		if (fd < 0) {
+			WARN_ERRNO("Failed to open token socket for fchown() at %s", src_path);
+		} else {
+			if (fchownat(fd, "", 0, 0, AT_EMPTY_PATH))
+				WARN_ERRNO("Failed to chown token socket at %s to 0", src_path);
+			else
+				DEBUG("Successfully chowned token socket at %s to 0", src_path);
+			close(fd);
+		}
+		mem_free0(src_path);
+	}
 
 	TRACE("CML: request scd to remove the token associated to %s from its list",
 	      uuid_string(container_get_uuid(container)));
-	ASSERT(container);
 
 	DaemonToToken out = DAEMON_TO_TOKEN__INIT;
 	out.code = DAEMON_TO_TOKEN__CODE__TOKEN_REMOVE;
@@ -1202,9 +1236,7 @@ c_smartcard_bind_token(c_smartcard_t *smartcard)
 	int ret = -1;
 	uid_t uid = container_get_uid(smartcard->container);
 
-	char *src_path =
-		mem_printf("%s/%s/%s.sock", unit_get_sock_dir(scd_get_unit()), SCD_TOKENCONTROL_DIR,
-			   uuid_string(container_get_uuid(smartcard->container)));
+	char *src_path = c_smartcard_tokencontrol_src_path_new(smartcard);
 	char *dest_dir = mem_printf("%s/dev/tokens", container_get_rootdir(smartcard->container));
 
 	if (NULL == smartcard->token_relay_path)
