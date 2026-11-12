@@ -87,6 +87,10 @@ container_config_proto_to_token_type(ContainerTokenType type)
 		return CONTAINER_TOKEN_TYPE_SOFT;
 	case CONTAINER_TOKEN_TYPE__USB:
 		return CONTAINER_TOKEN_TYPE_USB;
+#ifndef CC_MODE
+	case CONTAINER_TOKEN_TYPE__PKCS11:
+		return CONTAINER_TOKEN_TYPE_PKCS11;
+#endif // CC_MODE
 	default:
 		FATAL("Unhandled value for ContainerTokenType: %d", type);
 	}
@@ -728,6 +732,19 @@ container_config_get_enable_xorg_compat(const container_config_t *config)
 	ASSERT(config->cfg);
 
 	return config->cfg->enable_xorg_compat;
+}
+
+const char *
+container_config_get_pkcs11_module(const container_config_t *config)
+{
+	ASSERT(config);
+	ASSERT(config->cfg);
+#ifdef CC_MODE
+	// not supported in CC Mode
+	return NULL;
+#else
+	return config->cfg->pkcs11_module;
+#endif // CC_MODE
 }
 
 // hardcode some restricted config otpions in CC Mode
