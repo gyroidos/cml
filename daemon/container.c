@@ -1087,10 +1087,30 @@ CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_cap_current_process, int, void *)
 CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(set_cap_current_process, int, 0)
 
 /* Functions usually implemented and registered by c_run module */
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(run, int, void *, int, char *, ssize_t, char **, int)
-CONTAINER_MODULE_FUNCTION_WRAPPER6_IMPL(run, int, -1, int, char *, ssize_t, char **, int)
-CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(write_exec_input, int, void *, char *, int)
-CONTAINER_MODULE_FUNCTION_WRAPPER3_IMPL(write_exec_input, int, -1, char *, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(run, int, void *, int, char *, ssize_t, char **, char *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER7_IMPL(run, int, -1, int, char *, ssize_t, char **, char *, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_attach, int, void *, char *, ssize_t, char **, char *,
+				       int)
+CONTAINER_MODULE_FUNCTION_WRAPPER6_IMPL(exec_attach, int, -1, char *, ssize_t, char **, char *, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(exec_detach, int, void *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(exec_detach, int, 0, int)
+
+/* Functions usually implemented and registered by c_console module */
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(console_attach, int, void *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(console_attach, int, -1, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(console_detach, int, void *, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(console_detach, int, 0, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(console_get_master, int, void *)
+CONTAINER_MODULE_FUNCTION_WRAPPER_IMPL(console_get_master, int, -1)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(console_write_input, int, void *, const uint8_t *, size_t,
+				       int)
+CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(console_write_input, int, -1, const uint8_t *, size_t, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(console_set_winsize, int, void *, uint16_t, uint16_t, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(console_set_winsize, int, -1, uint16_t, uint16_t, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(write_exec_input, int, void *, const uint8_t *, size_t, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(write_exec_input, int, -1, const uint8_t *, size_t, int)
+CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(set_exec_winsize, int, void *, uint16_t, uint16_t, int)
+CONTAINER_MODULE_FUNCTION_WRAPPER4_IMPL(set_exec_winsize, int, -1, uint16_t, uint16_t, int)
 CONTAINER_MODULE_REGISTER_WRAPPER_IMPL(get_console_sock_cmld, int, void *, int)
 CONTAINER_MODULE_FUNCTION_WRAPPER2_IMPL(get_console_sock_cmld, int, -1, int)
 

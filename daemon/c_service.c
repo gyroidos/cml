@@ -345,7 +345,7 @@ c_service_stop(void *servicep)
 		return 0;
 
 	char *argv[] = { "halt", NULL };
-	if (container_run(service->container, false, argv[0], 1, argv, -1))
+	if (container_run(service->container, false, argv[0], 1, argv, NULL, -1))
 		return -COMPARTMENT_ERROR_SERVICE;
 
 	return 0;

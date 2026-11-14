@@ -516,12 +516,95 @@ CONTAINER_MODULE_WRAPPER_DECLARE(is_encrypted, bool)
  * @return session id of the running session in the container, -1 on error
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t argc, char **argv,
+				 char *term, int session_fd)
+
+/**
+ * Attach to the container's persistent (docker-attach-like) exec session.
+ *
+ * Unlike container_run(), the attach session is not bound to the control
+ * client connection: it survives a client disconnect and can be rebound by a
+ * later attach. On first attach the session is created (with a pty and the
+ * given command, or a default shell if @p cmd is NULL); a later attach with
+ * an already existing session rebinds it to @p session_fd.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_attach, int, char *cmd, ssize_t argc, char **argv, char *term,
+				 int session_fd)
+
+/**
+ * Detach the exec session bound to @p session_fd, called when the control
+ * client connection is closed.
+ *
+ * An ephemeral container_run() session is killed; the persistent attach
+ * session is detached (kept running, its output discarded) until reattached.
+ * It is a no-op if no session is bound to @p session_fd.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_detach, int, int session_fd)
+
+/**
+ * Attach a control client to the container's console.
+ *
+ * The console pty is allocated at container start and its slave is the
+ * container's /dev/console; the master is held by cmld and drained until a
+ * client attaches. This marks @p session_fd as the attached client and stops
+ * discarding console output. Any previously attached client is stolen.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_attach, int, int session_fd)
+
+/**
+ * Detach the control client bound to @p session_fd from the container's
+ * console, called when the control client connection is closed.
+ *
+ * The console pty keeps running with its output discarded until a later
+ * attach. It is a no-op if @p session_fd is not the attached client.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_detach, int, int session_fd)
+
+/**
+ * Get the master fd of the container's console pty, used by the control
+ * module to forward console output to an attached client.
+ *
+ * @return the console master fd, or -1 if no console is available
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_get_master, int)
+
+/**
+ * Write input from the attached control client to the container's console.
+ * Ignored unless @p session_fd is the attached client.
+ *
+ * @return the number of bytes written, or -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_write_input, int, const uint8_t *input, size_t len,
+				 int session_fd)
+
+/**
+ * Set the window size of the container's console pty from the attached
+ * control client. Ignored unless @p session_fd is the attached client.
+ *
+ * @return 0 on success, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(console_set_winsize, int, uint16_t rows, uint16_t cols,
 				 int session_fd)
 
 /**
  * Registers the corresponding handler for container_write_exec_input
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, char *exec_input, int session_fd)
+CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_input, size_t len,
+				 int session_fd)
+
+/**
+ * Registers the corresponding handler for container_set_exec_winsize,
+ * which sets the window size of the exec pty for the given session.
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(set_exec_winsize, int, uint16_t rows, uint16_t cols,
+				 int session_fd)
 
 /**
  * Freeze a container.
