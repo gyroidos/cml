@@ -31,7 +31,10 @@
 #ifndef FD_H
 #define FD_H
 
+#include "bounds_safety.h"
+
 #include <stddef.h>
+#include <sys/types.h>
 
 /**
  * Writes the given buffer of the given length to the given file descriptor,
@@ -42,7 +45,7 @@
  * @param len length of the buffer
  */
 ssize_t
-fd_write(const int fd, const char *buf, ssize_t len);
+fd_write(const int fd, const char *__counted_by(len) buf, size_t len);
 
 /*
  * Reads the specified amount of bytes from the given file descriptor to the given buffer,
@@ -53,7 +56,7 @@ fd_write(const int fd, const char *buf, ssize_t len);
  * @param number of bytes to read (must fit into given buffer!)
  */
 int
-fd_read(int fd, char *buf, size_t len);
+fd_read(int fd, char *__counted_by(len) buf, size_t len);
 
 /*
  * Reads blockwise from the given file descriptor to the given buffer, calling fd_read
@@ -68,7 +71,8 @@ fd_read(int fd, char *buf, size_t len);
  * @return number of bytes read on success, otherwise -1
  */
 ssize_t
-fd_read_blockwise(int fd, void *buf, size_t len, size_t block_size, size_t alignment);
+fd_read_blockwise(int fd, void *__sized_by(len) buf, size_t len, size_t block_size,
+		  size_t alignment);
 
 /**
  * Makes the given file descriptor non-blocking by setting the O_NONBLOCK flag.

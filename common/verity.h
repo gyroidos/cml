@@ -24,6 +24,8 @@
 #ifndef VERITY_H
 #define VERITY_H
 
+#include "bounds_safety.h"
+
 /**
  * Open a device-mapper verity device
  *

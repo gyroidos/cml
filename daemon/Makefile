@@ -67,6 +67,11 @@ ifeq ($(SANITIZERS),y)
     # to be installed on the build host
     LOCAL_CFLAGS += -lasan -fsanitize=address -fsanitize=undefined -fsanitize-recover=address
 endif
+BOUNDS_SAFETY ?= n
+ifeq ($(BOUNDS_SAFETY),y)
+    # requires bounds-safety-enabled Clang (swiftlang/llvm-project fork)
+    LOCAL_CFLAGS += -fbounds-safety
+endif
 ifeq ($(CC_MODE),y)
     LOCAL_CFLAGS += -DCC_MODE
 endif

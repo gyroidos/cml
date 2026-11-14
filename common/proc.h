@@ -24,6 +24,8 @@
 #ifndef PROC_H
 #define PROC_H
 
+#include "bounds_safety.h"
+
 #include <unistd.h>
 #include <stdint.h>
 
@@ -100,7 +102,7 @@ proc_stat_btime(unsigned long long *boottime_sec);
  * @param pid The pid of the process to be checked
  * @return subfolder in mounted cgroup hirachy, "" on v1 systems, NULL on error
  */
-char *
+char *__null_terminated
 proc_get_cgroups_path_new(pid_t pid);
 
 typedef struct proc_meminfo proc_meminfo_t;
@@ -153,7 +155,7 @@ proc_waitpid(pid_t pid, int *status, int options);
  * @param fd The file descriptor
  * @return path of the file when fd was opened, NULL on error
  */
-char *
+char *__null_terminated
 proc_get_filename_of_fd_new(pid_t pid, int fd);
 
 /**
@@ -161,7 +163,7 @@ proc_get_filename_of_fd_new(pid_t pid, int fd);
  * @param pid The pid of the process
  * @return path of the cwd of the process with pid pid, NULL on error
  */
-char *
+char *__null_terminated
 proc_get_cwd_new(pid_t pid);
 
 #endif /* PROC_H */
