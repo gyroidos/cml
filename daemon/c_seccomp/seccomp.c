@@ -339,26 +339,68 @@ c_seccomp_send_vm(c_seccomp_t *seccomp, int pid, void *lbuf, void *rbuf, uint64_
 	return 0;
 }
 
+/*
+ * A seccomp notify listener served for this container: either the one of the
+ * container's init process, installed on container start, or the one of a
+ * process attached by exec (c_run). All listeners share one handler; the
+ * emulation identifies the trapped task by the pid in each notification and
+ * is thus listener-agnostic.
+ */
+typedef struct c_seccomp_listener {
+	c_seccomp_t *seccomp;
+	event_io_t *event; /* holds the notify fd */
+} c_seccomp_listener_t;
+
+/*
+ * The listener of the container's init process is always the first in the
+ * list, as it is registered on container start before any exec can happen.
+ */
+static bool
+c_seccomp_is_init_listener(const c_seccomp_listener_t *listener)
+{
+	ASSERT(listener);
+
+	return listener->seccomp->notify_listeners &&
+	       listener->seccomp->notify_listeners->data == listener;
+}
+
+static void
+c_seccomp_listener_free(c_seccomp_listener_t *listener)
+{
+	ASSERT(listener);
+
+	event_remove_io(listener->event);
+	close(event_io_get_fd(listener->event));
+	event_io_free(listener->event);
+
+	mem_free0(listener);
+}
+
 static void
 c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *data)
 {
 	TRACE("Callback c_service_cb_receive_message has been invoked");
 	ASSERT(data);
 
-	c_seccomp_t *seccomp = data;
+	c_seccomp_listener_t *listener = data;
+	c_seccomp_t *seccomp = listener->seccomp;
+
 	if (events & EVENT_IO_EXCEPT) {
-		audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
-				"seccomp-exception-on-notify-fd",
-				compartment_get_name(seccomp->compartment), 0);
-		ERROR("Got exception on notify fd, unregistering handler");
-
-		event_remove_io(seccomp->event);
-		event_io_free(seccomp->event);
-		close(seccomp->notify_fd);
-
-		seccomp->event = NULL;
-		seccomp->notify_fd = -1;
-
+		if (c_seccomp_is_init_listener(listener)) {
+			audit_log_event(NULL, FSA, CMLD, CONTAINER_ISOLATION,
+					"seccomp-exception-on-notify-fd",
+					compartment_get_name(seccomp->compartment), 0);
+			ERROR("Got exception on init notify fd, removing listener");
+		} else {
+			/*
+			 * the kernel hangs up the notify fd once the last
+			 * process using the filter instance exited
+			 */
+			DEBUG("Exec'ed process(es) exited, removing seccomp notify listener on fd %d",
+			      fd);
+		}
+		seccomp->notify_listeners = list_remove(seccomp->notify_listeners, listener);
+		c_seccomp_listener_free(listener);
 		return;
 	}
 
@@ -467,6 +509,77 @@ c_seccomp_handle_notify(int fd, unsigned events, UNUSED event_io_t *io, void *da
 	mem_free(resp);
 }
 
+static c_seccomp_listener_t *
+c_seccomp_listener_new(c_seccomp_t *seccomp, int notify_fd)
+{
+	c_seccomp_listener_t *listener = mem_new0(c_seccomp_listener_t, 1);
+	listener->seccomp = seccomp;
+	listener->event =
+		event_io_new(notify_fd, EVENT_IO_READ, &c_seccomp_handle_notify, listener);
+	event_add_io(listener->event);
+
+	seccomp->notify_listeners = list_append(seccomp->notify_listeners, listener);
+
+	return listener;
+}
+
+static int
+c_seccomp_exec_filter_install(void *seccompp)
+{
+	c_seccomp_t *seccomp = seccompp;
+	ASSERT(seccomp);
+
+	/*
+	 * if no notify listener is served for this container, it runs without
+	 * syscall emulation (e.g., missing pidfd kernel support); do not
+	 * filter exec'ed processes either
+	 */
+	if (!seccomp->notify_listeners)
+		return 0;
+
+	int notify_fd = c_seccomp_install_filter(seccomp);
+	if (-1 == notify_fd) {
+		ERROR("Failed to install seccomp filter for exec'ed process");
+		return -1;
+	}
+
+	DEBUG("Installed seccomp filter for exec'ed process, notify fd %d", notify_fd);
+
+	return notify_fd;
+}
+
+static int
+c_seccomp_exec_notifier_attach(void *seccompp, pid_t pid, int notify_fd_exec)
+{
+	c_seccomp_t *seccomp = seccompp;
+	ASSERT(seccomp);
+
+	DEBUG("Attaching seccomp notify fd %d of exec'ed process with PID %d", notify_fd_exec, pid);
+
+	int pidfd = pidfd_open(pid, 0);
+	if (-1 == pidfd) {
+		ERROR_ERRNO("Failed to open pidfd on exec'ed process %d", pid);
+		return -1;
+	}
+
+	int notify_fd = pidfd_getfd(pidfd, notify_fd_exec, 0);
+	if (-1 == notify_fd) {
+		ERROR_ERRNO("Failed to receive notify fd from exec'ed process %d", pid);
+		close(pidfd);
+		return -1;
+	}
+
+	if (-1 == close(pidfd)) {
+		ERROR_ERRNO("Failed to close pidfd");
+		close(notify_fd);
+		return -1;
+	}
+
+	IF_NULL_RETVAL(c_seccomp_listener_new(seccomp, notify_fd), -1);
+
+	return 0;
+}
+
 static int
 c_seccomp_start_pre_exec_child_early(void *seccompp)
 {
@@ -538,13 +651,9 @@ c_seccomp_start_pre_exec(void *seccompp)
 		goto out;
 	}
 
-	seccomp->notify_fd = notify_fd;
+	DEBUG("Register event handler on notify fd %d", notify_fd);
 
-	DEBUG("Register event handler on notify fd %d", seccomp->notify_fd);
-
-	seccomp->event =
-		event_io_new(seccomp->notify_fd, EVENT_IO_READ, &c_seccomp_handle_notify, seccomp);
-	event_add_io(seccomp->event);
+	IF_NULL_RETVAL(c_seccomp_listener_new(seccomp, notify_fd), -1);
 
 	return 0;
 
@@ -568,7 +677,6 @@ c_seccomp_new(compartment_t *compartment)
 	c_seccomp_t *seccomp = mem_new0(c_seccomp_t, 1);
 
 	seccomp->notif_sizes = sizes;
-	seccomp->notify_fd = -1;
 	seccomp->compartment = compartment;
 	seccomp->container = compartment_get_extension_data(compartment);
 
@@ -605,16 +713,12 @@ c_seccomp_cleanup(void *seccompp, UNUSED bool is_rebooting)
 	c_seccomp_t *seccomp = (c_seccomp_t *)seccompp;
 	ASSERT(seccomp);
 
-	if (seccomp->event) {
-		event_remove_io(seccomp->event);
-		event_io_free(seccomp->event);
-		seccomp->event = NULL;
+	for (list_t *l = seccomp->notify_listeners; l; l = l->next) {
+		c_seccomp_listener_t *listener = l->data;
+		c_seccomp_listener_free(listener);
 	}
-
-	if (-1 != seccomp->notify_fd)
-		close(seccomp->notify_fd);
-
-	seccomp->notify_fd = -1;
+	list_delete(seccomp->notify_listeners);
+	seccomp->notify_listeners = NULL;
 }
 
 static compartment_module_t c_seccomp_module = {
@@ -641,11 +745,19 @@ c_seccomp_init(void)
 {
 	// register this module in container.c
 	container_register_compartment_module(&c_seccomp_module);
+
+	// register relevant handlers implemented by this module
+	container_register_exec_seccomp_install_handler(MOD_NAME, c_seccomp_exec_filter_install);
+	container_register_exec_seccomp_attach_handler(MOD_NAME, c_seccomp_exec_notifier_attach);
 }
 
 static void DEINIT
 c_seccomp_deinit(void)
 {
+	// unregister handlers implemented by this module
+	container_unregister_exec_seccomp_install_handler(MOD_NAME, c_seccomp_exec_filter_install);
+	container_unregister_exec_seccomp_attach_handler(MOD_NAME, c_seccomp_exec_notifier_attach);
+
 	// unregister this module from container.c
 	container_unregister_compartment_module(&c_seccomp_module);
 }

@@ -516,12 +516,43 @@ CONTAINER_MODULE_WRAPPER_DECLARE(is_encrypted, bool)
  * @return session id of the running session in the container, -1 on error
  */
 CONTAINER_MODULE_WRAPPER_DECLARE(run, int, int create_pty, char *cmd, ssize_t argc, char **argv,
-				 int session_fd)
+				 char *term, int session_fd)
 
 /**
  * Registers the corresponding handler for container_write_exec_input
  */
-CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, char *exec_input, int session_fd)
+CONTAINER_MODULE_WRAPPER_DECLARE(write_exec_input, int, const uint8_t *exec_input, size_t len,
+				 int session_fd)
+
+/**
+ * Registers the corresponding handler for container_set_exec_winsize,
+ * which sets the window size of the exec pty for the given session.
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(set_exec_winsize, int, uint16_t rows, uint16_t cols,
+				 int session_fd)
+
+/**
+ * Install the container's seccomp notify filter on the calling process.
+ *
+ * To be called by a process which is to be exec'ed in the context of the
+ * container, after it has joined the container's namespaces and before exec.
+ * The filter is inherited by all descendants across fork and exec.
+ *
+ * @return the new seccomp notify fd on success, 0 if syscall emulation is
+ *         not active for this container, -1 on error
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_seccomp_install, int)
+
+/**
+ * Attach the seccomp notify fd installed by an exec'ed process to the
+ * container's syscall emulation.
+ *
+ * To be called by cmld after the exec'ed process installed the filter with
+ * container_exec_seccomp_install(). The notify fd is referenced by the pid
+ * of the exec'ed process and the fd number within that process and is
+ * obtained via pidfd_getfd().
+ */
+CONTAINER_MODULE_WRAPPER_DECLARE(exec_seccomp_attach, int, pid_t pid, int notify_fd)
 
 /**
  * Freeze a container.

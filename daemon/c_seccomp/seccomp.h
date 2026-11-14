@@ -39,11 +39,10 @@
 typedef struct c_seccomp {
 	compartment_t *compartment;
 	struct seccomp_notif_sizes *notif_sizes;
-	int notify_fd;
-	event_io_t *event;
 	unsigned int enabled_features;
 	container_t *container;
-	list_t *module_list; /* names of modules loaded by this compartment */
+	list_t *module_list;	  /* names of modules loaded by this compartment */
+	list_t *notify_listeners; /* notify listeners served for this container (init + exec'ed) */
 } c_seccomp_t;
 
 bool
