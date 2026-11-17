@@ -1,7 +1,0 @@
-[Unit]
-Description = GyroidOS CML-SCD Socket
-
-[Socket]
-FileDescriptorName=scd_control
-Accept=no
-ListenSequentialPacket=/run/socket/cml-scd_control
