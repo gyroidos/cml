@@ -192,6 +192,7 @@ SRC_CSECCOMP = \
 SRC_CMODULES += \
 	c_net.c \
 	c_vol.c \
+	c_console.c \
 	c_service.c \
 	c_run.c \
 	c_fifo.c \

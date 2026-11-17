@@ -1800,24 +1800,6 @@ c_vol_start_post_clone(void *volp)
 	return -COMPARTMENT_ERROR_VOL;
 }
 
-struct tty_cb_data {
-	bool found;
-	char *name;
-};
-
-static int
-c_vol_dev_get_tty_cb(UNUSED const char *path, const char *file, void *data)
-{
-	struct tty_cb_data *tty_data = data;
-
-	if (!tty_data->found && strlen(file) >= 4 && strstr(file, "tty")) {
-		tty_data->name = mem_strdup(file);
-		INFO("Found tty: %s", tty_data->name);
-		tty_data->found = true;
-	}
-	return 0;
-}
-
 static int
 c_vol_start_pre_exec(void *volp)
 {
@@ -1830,17 +1812,6 @@ c_vol_start_pre_exec(void *volp)
 		ERROR_ERRNO("Could not populate /dev!");
 		mem_free0(dev_mnt);
 		return -COMPARTMENT_ERROR_VOL;
-	}
-
-	/* link first /dev/tty* to /dev/console for systemd containers */
-	struct tty_cb_data tty_data = { .found = false, .name = NULL };
-	dir_foreach(dev_mnt, c_vol_dev_get_tty_cb, &tty_data);
-	if (tty_data.name != NULL) {
-		char *lnk_path = mem_printf("%s/console", dev_mnt);
-		if (symlink(tty_data.name, lnk_path))
-			WARN_ERRNO("Could not link %s to /dev/console in container", tty_data.name);
-		mem_free0(lnk_path);
-		mem_free0(tty_data.name);
 	}
 
 	if (container_shift_ids(vol->container, dev_mnt, dev_mnt, NULL) < 0)

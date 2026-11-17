@@ -21,6 +21,8 @@
  * Fraunhofer AISEC <gyroidos@aisec.fraunhofer.de>
  */
 
+#define _GNU_SOURCE
+
 #ifdef ANDROID
 #include "device/fraunhofer/common/cml/control/control.pb-c.h"
 #include "device/fraunhofer/common/cml/control/container.pb-c.h"
@@ -43,6 +45,9 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <termios.h>
+#include <signal.h>
+#include <poll.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -134,6 +139,14 @@ print_usage(const char *cmd)
 	       "        Prints the list of network interfaces assigned to the specified container.\n\n");
 	printf("   run <container-uuid> <command> [<arg_1> ... <arg_n>]\n"
 	       "        Runs the specified command with the given arguments inside the specified container.\n\n");
+	printf("   attach <container-uuid> [<command> [<arg_1> ... <arg_n>]]\n"
+	       "        Attaches to the container's persistent session, starting it (with the given\n"
+	       "        command or a default shell) on first use. The session survives disconnects.\n"
+	       "        Press Ctrl-a then q to detach without ending the session.\n\n");
+	printf("   console <container-uuid>\n"
+	       "        Attaches to the container's console (its init and getty on /dev/console).\n"
+	       "        Reconnectable across disconnects.\n"
+	       "        Press Ctrl-a then q to detach without ending the session.\n\n");
 	printf("   retrieve_logs [<path_to_logstore_dir>] [--remove]\n"
 	       "        Retrieves logs from the directory defined in LOGFILE_DIR and stores them in the\n"
 	       "        given directory. If the 'remove' option was given, all log files are removed upon\n"
@@ -224,7 +237,7 @@ get_container_uuid_new(const char *identifier, int sock, bool system)
 		if (valid_uuid == NULL)
 			uuid_free(uuid);
 	} else {
-		INFO("Retrying with name");
+		TRACE("Retrying with name");
 		for (size_t i = 0; i < resp->n_container_status; ++i) {
 			TRACE("name %s", resp->container_status[i]->name);
 			if (0 == strcmp(resp->container_status[i]->name, identifier)) {
@@ -256,6 +269,34 @@ static const struct option assign_iface_options[] = { { "iface", required_argume
 static const struct option log_options[] = { { "remove", no_argument, 0, 'r' }, { 0, 0, 0, 0 } };
 
 static const struct option list_options[] = { { "system", no_argument, 0, 's' }, { 0, 0, 0, 0 } };
+
+// set by the SIGWINCH handler of the run input child, consumed by its read loop
+static volatile sig_atomic_t run_input_winch = 0;
+
+static void
+run_input_sigwinch_cb(UNUSED int sig)
+{
+	run_input_winch = 1;
+}
+
+static void
+send_winsize(int sock, const uuid_t *uuid)
+{
+	struct winsize ws = { 0 };
+	if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) != 0)
+		return;
+	ControllerToDaemon wmsg = CONTROLLER_TO_DAEMON__INIT;
+	wmsg.container_uuids = mem_new(char *, 1);
+	wmsg.container_uuids[0] = (char *)uuid_string(uuid);
+	wmsg.n_container_uuids = 1;
+	wmsg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_WINSIZE;
+	wmsg.has_exec_winsize_rows = true;
+	wmsg.exec_winsize_rows = ws.ws_row;
+	wmsg.has_exec_winsize_cols = true;
+	wmsg.exec_winsize_cols = ws.ws_col;
+	send_message(sock, &wmsg);
+	mem_free0(wmsg.container_uuids);
+}
 
 static char *
 get_password_new(const char *prompt)
@@ -779,6 +820,7 @@ main(int argc, char *argv[])
 			optind++;
 		} else {
 			msg.exec_pty = 1;
+			msg.exec_term = getenv("TERM");
 		}
 
 		if (optind > argc - 1)
@@ -804,6 +846,40 @@ main(int argc, char *argv[])
 		TRACE("[CLIENT] Done parsing arguments, got %d arguments", argcount);
 		msg.n_exec_args = argcount;
 		TRACE("after set n_exec_args");
+
+	} else if (!strcasecmp(command, "attach")) {
+		optind++;
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_ATTACH;
+
+		// attach always uses a pty; carry the client's terminal type
+		msg.has_exec_pty = true;
+		msg.exec_pty = 1;
+		msg.exec_term = getenv("TERM");
+
+		// optional command; without one cmld starts a default shell
+		int argcount = 0;
+		if (optind < argc) {
+			msg.exec_command = argv[optind];
+
+			size_t len = MUL_WITH_OVERFLOW_CHECK((size_t)sizeof(char *), argc);
+			msg.exec_args = mem_alloc(len);
+			while (optind < argc) {
+				msg.exec_args[argcount] = mem_strdup(argv[optind]);
+				optind++;
+				argcount++;
+			}
+		}
+		msg.n_exec_args = argcount;
+
+	} else if (!strcasecmp(command, "console")) {
+		optind++;
+
+		msg.command = CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_CONSOLE_ATTACH;
+
+		// the console is a pty; it takes no command, only a window size
+		msg.has_exec_pty = true;
+		msg.exec_pty = 1;
 
 	} else if (!strcasecmp(command, "change_pin")) {
 		char *newpin_verify = NULL;
@@ -840,15 +916,34 @@ send_message:
 		sock = sock_connect(socket_file);
 	send_message(sock, &msg);
 
-	if (!strcasecmp(command, "run")) {
-		TRACE("[CLIENT] Processing response for run command");
+	if (!strcasecmp(command, "run") || !strcasecmp(command, "attach") ||
+	    !strcasecmp(command, "console")) {
+		TRACE("[CLIENT] Processing response for run/attach/console command");
+
+		/*
+		 * detachable sessions survive a disconnect, so offer an escape
+		 * sequence to leave them without killing the session: Ctrl-a then
+		 * 'q' detaches, Ctrl-a Ctrl-a sends a literal Ctrl-a (like lxc
+		 * console)
+		 */
+		bool detach_escape =
+			!strcasecmp(command, "attach") || !strcasecmp(command, "console");
 
 		if (msg.exec_pty) {
-			TRACE("[CLIENT] Setting termios for PTY");
+			/*
+			 * send the client tty's initial window size to cmld as an
+			 * explicit EXEC_WINSIZE command (needed by curses apps, shell
+			 * PS1 wrapping, etc.)
+			 */
+			send_winsize(sock, uuid);
+			TRACE("[CLIENT] Setting client tty to raw mode");
+			/*
+			 * raw mode on the local terminal so the pty inside the
+			 * container is the sole line discipline: ISIG stays on
+			 * inside for job control (^C, ^Z, etc.)
+			 */
 			struct termios termios_run = termios_before;
-			termios_run.c_cflag &= ~(ICRNL | IXON | IXOFF);
-			termios_run.c_oflag &= ~(OPOST);
-			termios_run.c_lflag &= ~(ISIG | ICANON | ECHO | ECHOCTL);
+			cfmakeraw(&termios_run);
 			tcsetattr(STDIN_FILENO, TCSANOW, &termios_run);
 		}
 
@@ -865,40 +960,137 @@ send_message:
 		} else if (pid == 0) {
 			TRACE("[CLIENT] User input reading child forked, PID: %i", getpid());
 
-			char buf[128];
-			unsigned int count;
+			/*
+			 * forward SIGWINCH to cmld as an EXEC_WINSIZE command, keeping
+			 * the pty in sync with the client's terminal size. The handler
+			 * only sets a flag; the message is sent from the loop below.
+			 * SIGWINCH stays blocked except inside ppoll() so a resize can
+			 * neither interrupt send_message() nor slip past the flag check.
+			 */
+			struct sigaction sa = { 0 };
+			sa.sa_handler = run_input_sigwinch_cb;
+			sigaction(SIGWINCH, &sa, NULL);
+			sigset_t winch_mask, ppoll_mask;
+			sigemptyset(&winch_mask);
+			sigaddset(&winch_mask, SIGWINCH);
+			sigprocmask(SIG_BLOCK, &winch_mask, &ppoll_mask);
+			sigdelset(&ppoll_mask, SIGWINCH);
+
+			// detach escape: Ctrl-a ('q' to detach, Ctrl-a for a literal)
+			const uint8_t escape_char = 0x01;
+
+			uint8_t buf[4096];
+			// may hold one escape char carried over from the previous read
+			uint8_t out[sizeof(buf) + 1];
+			ssize_t count;
+			struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN };
+
+			// escape sequence state
+			bool escape_pending = false;
+			bool detach = false;
 
 			while (1) {
+				if (run_input_winch) {
+					run_input_winch = 0;
+					send_winsize(sock, uuid);
+				}
+
+				if (ppoll(&pfd, 1, NULL, &ppoll_mask) < 0) {
+					if (errno == EINTR)
+						continue;
+					break;
+				}
+
 				TRACE("[CLIENT] Trying to read input for exec'ed process");
 
-				if ((count = read(STDIN_FILENO, buf, 127)) > 0) {
-					buf[count] = 0;
+				count = read(STDIN_FILENO, buf, sizeof(buf));
+				if (count == 0 || (count < 0 && errno != EINTR))
+					break;
+				if (count < 0)
+					continue;
 
-					TRACE("[CLIENT] Got input for exec'ed process: %s", buf);
+				// filter the escape sequence out of the forwarded bytes
+				size_t out_len = 0;
+				for (ssize_t i = 0; i < count; i++) {
+					uint8_t b = buf[i];
 
+					if (!detach_escape) {
+						out[out_len++] = b;
+						continue;
+					}
+
+					if (escape_pending) {
+						escape_pending = false;
+						if (b == 'q' || b == 'Q') {
+							detach = true;
+							break;
+						}
+						// emit the held escape char (literal on a repeat)
+						out[out_len++] = escape_char;
+						if (b == escape_char)
+							continue;
+						// not a command: pass the following byte through
+						out[out_len++] = b;
+						continue;
+					}
+
+					if (b == escape_char) {
+						escape_pending = true; // hold, may start an escape
+						continue;
+					}
+
+					out[out_len++] = b;
+				}
+
+				if (out_len > 0) {
 					ControllerToDaemon inputmsg = CONTROLLER_TO_DAEMON__INIT;
 					inputmsg.container_uuids = mem_new(char *, 1);
 					inputmsg.container_uuids[0] = (char *)uuid_string(uuid);
 					inputmsg.n_container_uuids = 1;
 					inputmsg.command =
 						CONTROLLER_TO_DAEMON__COMMAND__CONTAINER_EXEC_INPUT;
-					inputmsg.exec_input = buf;
-
-					TRACE("[CLIENT] Sending input for exec'ed process in container %s",
-					      argv[optind]);
+					/* binary-safe input; keeps NULs, ^D, arrow keys, etc. */
+					inputmsg.has_exec_input_raw = true;
+					inputmsg.exec_input_raw.data = out;
+					inputmsg.exec_input_raw.len = out_len;
 
 					send_message(sock, &inputmsg);
 					mem_free0(inputmsg.container_uuids);
 					TRACE("[CLIENT] Sent input to cmld");
 				}
+
+				if (detach) {
+					printf("\r\n[detached]\r\n");
+					fflush(stdout);
+					// drop the connection; cmld detaches the session, the
+					// output parent sees EOF and restores the terminal
+					shutdown(sock, SHUT_RDWR);
+					break;
+				}
 			}
+			_exit(0);
 		} else {
 			TRACE("[CLIENT] Exec'ed process outputreceiving  child forked, PID: %i",
 			      getpid());
 
 			while (1) {
 				TRACE("[CLIENT] Waiting for command output message from cmld");
-				DaemonToController *resp = recv_message(sock);
+				/*
+				 * read directly (not via recv_message, which treats EOF
+				 * as fatal) so a closed connection, e.g. after the input
+				 * child detached, exits cleanly and restores the terminal
+				 */
+				DaemonToController *resp =
+					(DaemonToController *)protobuf_recv_message(
+						sock, &daemon_to_controller__descriptor);
+
+				// connection closed (e.g. detached by the input child)
+				if (!resp) {
+					TRACE("[CLIENT] Connection closed, exiting");
+					kill(pid, SIGTERM);
+					waitpid(pid, NULL, 0);
+					goto exit;
+				}
 
 				TRACE("[CLIENT] Got message from exec'ed process\n");
 
@@ -1022,6 +1214,18 @@ handle_resp:
 exit:
 	close(sock);
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_before);
+
+	/*
+	 * a program in the container may have left the terminal in an unusual
+	 * state (hidden cursor, alternate screen, set attributes); on detach it
+	 * is still running and never restores it, so reset the common modes:
+	 * leave alternate screen, show cursor, reset attributes
+	 */
+	if (msg.has_exec_pty && msg.exec_pty) {
+		const char reset[] = "\033[?1049l\033[?25h\033[0m";
+		if (write(STDOUT_FILENO, reset, sizeof(reset) - 1) < 0)
+			TRACE_ERRNO("Could not reset terminal");
+	}
 
 	if (msg.has_container_config_file)
 		mem_free0(msg.container_config_file.data);

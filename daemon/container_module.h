@@ -166,6 +166,20 @@
 		return container_## name ##_handler->handler_func(instance, a1, a2, a3, a4, a5); \
 	}
 
+#define CONTAINER_MODULE_FUNCTION_WRAPPER7_IMPL(name, type, unimpl, type_a1, type_a2, type_a3, type_a4, type_a5, type_a6) \
+	type container_## name(const container_t *container, type_a1 a1, type_a2 a2, type_a3 a3, type_a4 a4, type_a5 a5, type_a6 a6) \
+	{ \
+		ASSERT(container); \
+		if (!container_## name ##_handler) \
+			return unimpl; \
+		void *instance = compartment_module_get_instance_by_name( \
+			container->compartment, container_## name ##_handler->mod_name); \
+		/* no corresponding module registered and instantiated */ \
+		if (!instance) \
+			return unimpl; \
+		return container_## name ##_handler->handler_func(instance, a1, a2, a3, a4, a5, a6); \
+	}
+
 // clang-format on
 
 #endif /* CONTAINER_MODULE_H */
